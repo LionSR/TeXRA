@@ -56,6 +56,7 @@ export type { InlinePersona } from '@shared/schemas';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
+  AgentRuntimeEmitOptions,
   HostPresentation,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -158,7 +159,7 @@ export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
-export type { AgentEvent } from '@agent/trace';
+export type { AgentEvent, StreamChunkEvent, TraceArm } from '@agent/trace';
 
 // `RunEndResult` comes from its own module so declaration emit does not pull
 // the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
@@ -237,6 +238,7 @@ export type {
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
@@ -260,6 +262,8 @@ export {
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
+// The process's retry gate every model call (a helper call's too) waits on.
+export type { RouteRetries } from '@agent/runtime/run/invocation';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
@@ -365,11 +369,7 @@ export {
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services, switches and their seed.
-export {
-  ToolCatalog,
-  type ToolCatalogOwner,
-  type ToolCatalogShape,
-} from '@tools/liveTools';
+export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 export { seedDisabledToolDefaults } from '@tools/toolAvailability';
 // The harness's log output: where its entries go and how an entry reads.
 export {

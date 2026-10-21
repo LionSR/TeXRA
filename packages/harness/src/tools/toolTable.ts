@@ -13,8 +13,9 @@ import {
   type Path,
 } from 'effect';
 
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type {
   LogWriteError,
   SessionHandle,
@@ -129,6 +130,25 @@ export interface Continuation<R = never> {
 }
 
 /**
+ * A built-in plugin's {@link Continuation}, as its `Plugin` value carries it:
+ * opaque, because a continuation reads the session and only
+ * `defineBuiltinPlugin` makes one. An app's plugin reaches runs through its
+ * tools' `ChildRuns`, never the session.
+ */
+export interface PluginContinuation {
+  readonly _: unique symbol;
+}
+
+/** The continuation `defineBuiltinPlugin` gave `plugin`, if any: the one
+ *  maker of a `PluginContinuation` makes it from a `Continuation`. */
+export const continuationOf = (plugin: Plugin | null): Continuation | null => {
+  // cast: a `PluginContinuation` is a `Continuation` (`defineBuiltinPlugin`).
+  const continuation = plugin?.continuation as unknown as
+    Continuation | undefined;
+  return continuation ?? null;
+};
+
+/**
  * A plugin's section of each request's system text, rendered from the tool
  * names the request's step offers, whether the run is a child and its
  * workspace configuration ('' for none).
@@ -233,8 +253,9 @@ export function agentBlockOf<A>(
 export interface ToolTable {
   /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
-  /** The tool registered under `name` in any plugin. */
-  readonly get: (name: string) => ITool | undefined;
+  /** The tool registered under `name` in any plugin, typed as plugins
+   *  declare their tools (`Plugin.tools`). */
+  readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
   /** Each request kind's decision hook, from the plugin that owns it. */
   readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
@@ -252,7 +273,7 @@ export interface ToolTable {
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
-  const byName = new Map<string, ITool>();
+  const byName = new Map<string, ITool<Error, PluginToolServices>>();
   let continued: string | null = null;
   const decisions = new Map<string, RequestDecisionHook>();
   const refuse = (reason: string): never => {

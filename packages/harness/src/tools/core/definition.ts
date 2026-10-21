@@ -14,9 +14,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
 
-/** The run body a tool definition carries. */
-type ToolExecute<T, R> = (input: T) => Effect.Effect<ToolResult, Error, R>;
-
 /**
  * A defined tool: plain data plus a `call` that validates and normalizes
  * failures. An anonymous object type so the SDK's `.d.ts` inlines it.
@@ -57,7 +54,8 @@ export type DefineToolOptions<T, R = never> = Required<
      * tool already has, it never sets it.
      */
     guard?: ToolGuard<T, NoInfer<R>>;
-    execute: ToolExecute<T, R>;
+    /** The run body. */
+    execute: (input: T) => Effect.Effect<ToolResult, Error, R>;
   };
 
 /**

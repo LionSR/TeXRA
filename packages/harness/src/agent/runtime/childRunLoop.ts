@@ -126,7 +126,7 @@ export interface ChildRunBoundary<TTurn> {
 
 /** What every child strategy says of its turns; `R` names the services a
  *  turn reads, forwarded to the loop's caller. */
-interface ChildStrategyBase<TTurn, R> {
+export interface ChildStrategyBase<TTurn, R> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
   /** A turn that did not throw but reports an error (an SDK error result). */
@@ -197,7 +197,7 @@ export interface ProcessChildStrategy<
    *  and how the parent's model continues it; undefined cancels it. */
   pauseNotice?(): ChildRunPause | undefined;
   /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
+  onTurnSuccess?(turn: TTurn): void;
   /** Release provider-owned registry entries; called once, before a failed
    *  or interrupted delivery or at the end. */
   releaseSessionOwnership?(): void;
@@ -623,7 +623,7 @@ const settleInterim = <TTurn, R>(
       settleChildTurn(session, settlement, loop.trace, park),
     );
     if (park && turned.turn !== null && !loop.isInterrupted())
-      loop.process?.onTurnSuccess?.(turned.turn, session);
+      loop.process?.onTurnSuccess?.(turned.turn);
     yield* report;
     yield* wakeParent(session, settlement.delivery, loop.trace);
   });

@@ -829,7 +829,7 @@ describe('presentFollowUpResult', () => {
       presentFollowUpResult({ status: 'failed', reason: 'owned_elsewhere' }),
     ).toMatchObject({
       severity: 'warning',
-      message: expect.stringContaining('another TeXRA window'),
+      message: expect.stringContaining('another process'),
     });
   });
 });

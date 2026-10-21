@@ -39,10 +39,6 @@ import {
   type OpenToolUseCard,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type {
-  ChildRunPort,
-  ProcessChildStrategy,
-} from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type {
   RunId,
@@ -81,6 +77,7 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
+import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -338,7 +335,7 @@ export function runStreamedTurn(
  */
 function buildCodexLaunch(params: {
   thread: Thread;
-  childRun: ChildRunPort;
+  logger: AgentTrace;
   runId: RunId;
   initialPrompt: string;
   /**
@@ -352,15 +349,14 @@ function buildCodexLaunch(params: {
 }): Effect.Effect<ProcessChildStrategy<RunResult>> {
   const {
     thread,
-    childRun,
+    logger,
     runId,
     initialPrompt,
     resumeThreadId: fallbackThreadId,
     releaseFallbackClaim,
   } = params;
-  const { logger } = childRun;
   return buildAgentCliLaunch({
-    childRun,
+    logger,
     runId,
     stageLabel: 'Codex session',
     initialPrompt,
@@ -523,10 +519,10 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     prompt: input.prompt,
     modelRef: run.ref,
     registerFailedMessage: 'Failed to register Codex run.',
-    buildLaunch: ({ childRun, runId }) =>
+    buildLaunch: ({ logger, runId }) =>
       buildCodexLaunch({
         thread,
-        childRun,
+        logger,
         runId,
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,

@@ -23,9 +23,9 @@ import { z } from 'zod';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import type {
   PluginToolServices,
-  RuntimeTool,
   ToolServices,
 } from '@agent/runtime/ToolServices';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -48,6 +48,7 @@ import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
   Continuation,
+  PluginContinuation,
   PluginHold,
   ProcessPluginLayer,
   PromptSection,
@@ -108,9 +109,7 @@ export interface Plugin {
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
   /** Its tools, by registered name. */
-  readonly tools?: Readonly<
-    Record<string, RuntimeTool<Error, PluginToolServices>>
-  >;
+  readonly tools?: Readonly<Record<string, ITool<Error, PluginToolServices>>>;
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the
@@ -128,9 +127,9 @@ export interface Plugin {
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
-  /** Decides what a parked run of its category does next; a run's step pins
-   *  it while the plugin is switched on. */
-  readonly continuation?: Continuation;
+  /** A built-in's (`defineBuiltinPlugin`): decides what a parked run of its
+   *  category does next; a run's step pins it while the plugin is on. */
+  readonly continuation?: PluginContinuation;
   /** Its section of each request's system text; a run's step pins it while
    *  the plugin is switched on. */
   readonly prompt?: PromptSection;
@@ -150,7 +149,7 @@ export interface Plugin {
 }
 
 /**
- * A plugin as its author writes it: its tools, continuation and probe may
+ * A plugin as its author writes it: its tools, layers and probe may
  * require `ROut`, the services its own layers serve, beside the harness's.
  * `definePlugin` checks that at compile time (a tool that needs a service no
  * layer of its plugin serves does not compile) and erases it: the table
@@ -160,8 +159,7 @@ export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   Plugin,
   'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: Readonly<Record<string, RuntimeTool<Error, C | ROut>>>;
-  readonly continuation?: Continuation<ROut>;
+  readonly tools?: Readonly<Record<string, ITool<Error, C | ROut>>>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -178,9 +176,11 @@ export const definePlugin: <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ) => Plugin = erase;
 
-/** A built-in's value: its tools may read `ToolServices`, as no app's may. */
+/** A built-in's value: it may read `ToolServices` and continue parked runs. */
 export const defineBuiltinPlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut, ToolServices>,
+  plugin: PluginDefinition<ROut, ToolServices> & {
+    readonly continuation?: Continuation<ROut>;
+  },
 ) => Plugin = erase;
 
 const DisabledToolIdsSchema = z.array(z.string());

@@ -32,7 +32,14 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  type LogLevel,
+  ManagedRuntime,
+  Stream,
+} from 'effect';
 
 import {
   AgentDirectories,
@@ -46,7 +53,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
@@ -126,7 +132,7 @@ interface CliProcessRuntimeInstall {
   readonly appState?: StateStore;
   readonly globalDatabase?: Layer.Layer<GlobalDatabase>;
   /** The argv-selected diagnostics floor for this process runtime. */
-  readonly minimumLogLevel?: MinimumLogLevel;
+  readonly minimumLogLevel?: LogLevel.LogLevel;
   /**
    * The packaged resources root the CLI's built-in agent directories resolve
    * against. Absent only for the platform-less entries, which load no agents.

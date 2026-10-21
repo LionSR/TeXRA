@@ -53,9 +53,10 @@ export interface ToolSectionFile {
 }
 
 /** Which path vocabulary a {@link ToolFileSection} names. */
-type ToolFileNamespace = 'workspace' | 'memory' | 'run';
+export type ToolFileNamespace = 'workspace' | 'memory' | 'run';
 
-interface ToolSectionBase {
+/** What every tool-row section carries. */
+export interface ToolSectionBase {
   /** Display prefix (`Files:`, `Instruction:`); empty for an unlabeled body. */
   readonly label: string;
 }
@@ -72,7 +73,8 @@ export interface ToolCodeSection extends ToolSectionBase {
   readonly language: string | PayloadLanguage;
 }
 
-interface ToolIdentifierSection extends ToolSectionBase {
+/** A section naming one identifier (an agent, a model, a command). */
+export interface ToolIdentifierSection extends ToolSectionBase {
   readonly kind: 'identifier';
   readonly value: string;
   /** Parenthetical qualifier, e.g. the model an agent runs on. */
@@ -97,7 +99,8 @@ export interface ToolFileListSection extends ToolSectionBase {
   readonly files: readonly ToolSectionFile[];
 }
 
-interface ToolDiffSection extends ToolSectionBase {
+/** A section showing one hunk's old and new text. */
+export interface ToolDiffSection extends ToolSectionBase {
   readonly kind: 'diff';
   readonly oldText: string;
   readonly newText: string;
@@ -105,12 +108,14 @@ interface ToolDiffSection extends ToolSectionBase {
   readonly fileLabel?: string;
 }
 
-interface ToolBadgesSection extends ToolSectionBase {
+/** A section of short badges. */
+export interface ToolBadgesSection extends ToolSectionBase {
   readonly kind: 'badges';
   readonly badges: readonly string[];
 }
 
-interface ToolStatusSection extends ToolSectionBase {
+/** A section stating the call's status in words. */
+export interface ToolStatusSection extends ToolSectionBase {
   readonly kind: 'status';
   readonly status: string;
 }
@@ -134,7 +139,7 @@ export type ToolSection =
  * Why the generic output block carries nothing for this call. Absent when the
  * output is shown.
  */
-type ToolOutputSuppression =
+export type ToolOutputSuppression =
   | 'empty'
   | 'duplicate-of-header'
   | 'duplicate-of-error'

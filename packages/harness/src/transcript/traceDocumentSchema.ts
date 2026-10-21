@@ -25,7 +25,7 @@ export const TraceDocumentSchema = z.object({
 export type TraceDocument = Readonly<z.infer<typeof TraceDocumentSchema>>;
 
 /** A plugin row kind as an imported trace reads it: a `Plugin` arm. */
-interface TraceFactArm {
+export interface TraceFactArm {
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;

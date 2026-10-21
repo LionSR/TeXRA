@@ -15,11 +15,14 @@ export type {
   CompactionActivityRow,
   ContextManagementRow,
   ErrorRow,
+  ErrorRowDetail,
   FileListRow,
+  LoadedMediaRef,
   LogRow,
   ProgressStatusRow,
   StatItem,
   StreamingTextRow,
+  ToolCallFacts,
   ToolRow,
   TranscriptRow,
   TranscriptRowBase,
@@ -38,11 +41,21 @@ export {
 // A tool row's sections, and how a tool's name reads: its kind, its
 // display key, and an MCP call's server and tool.
 export type {
+  ToolBadgesSection,
+  ToolCodeSection,
+  ToolDiffSection,
   ToolFileGroupsSection,
   ToolFileListSection,
+  ToolFileNamespace,
   ToolFileSection,
+  ToolIdentifierSection,
+  ToolOutputSuppression,
+  ToolRowModel,
   ToolSection,
+  ToolSectionBase,
   ToolSectionFile,
+  ToolStatusSection,
+  ToolTextSection,
 } from '@shared/transcript/toolRowModel';
 export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
 export {
@@ -60,7 +73,6 @@ export {
 // A script's stages and calls, and the children a dispatch card lists.
 export {
   dispatchedChildren,
-  SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
   type ScriptCallStatus,
   type ScriptCallView,
@@ -84,7 +96,10 @@ export {
   compareBySeqNo,
 } from '@shared/runs/runOrdering';
 export { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-export type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+export type {
+  CompactionActivityBlock,
+  CompactionActivityStatus,
+} from '@shared/runs/compactionActivityProjection';
 // How the rows word what they count: a compact duration, a token count, a
 // USD cost, and a count with its noun. A host's own status line uses the
 // same wording.

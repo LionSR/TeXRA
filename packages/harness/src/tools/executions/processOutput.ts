@@ -22,7 +22,7 @@ import {
   getBackgroundBashOutputSource,
 } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
-import { formatRunStatus } from '../executionFormatters';
+import { describeRunNotice, formatRunStatus } from '../executionFormatters';
 
 /** Lines returned by /executions/{id}/output when no view_range is given. */
 const OUTPUT_TAIL_LINES = 200;
@@ -151,7 +151,7 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // rather than as one that recorded how it ended.
   const lead = isTerminalOutcomePhase(current.status)
     ? 'finished:'
-    : (current.statusDetail ??
+    : (describeRunNotice(current) ??
       `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
   const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
   const out: string[] = [

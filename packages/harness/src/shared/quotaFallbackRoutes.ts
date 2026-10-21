@@ -12,7 +12,7 @@ import type { ExhaustionReason } from './schemas/errors';
  * this module dependency-free lets the error formatter, the invoker, and the
  * CLI retry copy share one catalog.
  */
-type QuotaFallbackExhaustionReason = Extract<
+export type QuotaFallbackExhaustionReason = Extract<
   ExhaustionReason,
   | 'chatgpt-subscription'
   | 'xai-subscription'

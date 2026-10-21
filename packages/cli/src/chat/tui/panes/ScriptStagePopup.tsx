@@ -11,7 +11,6 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
 import {
-  SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
   type ScriptCallView,
 } from '@texra-ai/harness/transcript';
@@ -28,6 +27,7 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
+import { SCRIPT_CALL_STATUS_LABEL } from '@ui/copy/scriptStage';
 
 // Local imports - shared schemas and model
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';

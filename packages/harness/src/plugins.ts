@@ -47,10 +47,17 @@ export {
   ToolRegistry,
   type AgentBlock,
   type AgentBlockResult,
+  type PluginContinuation,
+  type PluginLayerServices,
   type ProcessPluginLayer,
+  type PromptSection,
   type RecipeChange,
   type RequestDecisionHook,
+  type SessionPluginLayer,
+  type ToolTable,
 } from '@tools/toolTable';
+export type { DefineToolOptions } from '@tools/core/definition';
+export type { ToolProbeFailed } from '@tools/toolProbes';
 export { errorResult, executed } from '@tools/core/result';
 export { ToolError } from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
@@ -76,12 +83,56 @@ export type { MemoryViewItem } from '@shared/tools/memoryView';
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
+  type CallServices,
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
-export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
+// What `ChildRuns` launches: an agent's child, or an external process's
+// with the strategy its loop runs.
+export type { ChildLaunch } from '@tools/delegation/AgentTool';
+export type { ProcessChildLaunch } from '@tools/delegation/detachedChildRun';
+export type {
+  ChildRunPause,
+  ChildStrategyBase,
+  ProcessChildStrategy,
+} from '@agent/runtime/childRunLoop';
+// A run's input as a plugin sends it, and how the send landed.
+export type {
+  FollowUpFailureReason,
+  RunInbox,
+  RunInboxSendOptions,
+  SubmitFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
+export type { InboxItem } from '@agent/followUp/Inbox';
+export type { FollowUpSenderInput } from '@agent/followUp/followUpSender';
+// What a call's requests and a decision hook's commits fail with.
+export type { LogWriteError } from '@agent/runtime/SessionHandle';
+export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
+export type { RunHistoryInconsistent } from '@shared/session/runStateFold';
+export type { StepRoot } from '@utils/files/externalRoots';
+// The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
+// policy, opening, trace and stages, model binding and run files.
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
-// A run's files under its session storage: its directory, the pre-run
-// snapshots and workspace mirrors it prepares, and output locations.
+export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
+export type {
+  TemplateInputs,
+  TemplateOpening,
+  TemplateVars,
+} from '@agent/prompt/templateInputs';
+export type {
+  AgentTrace,
+  LogOptions,
+  StageHandle,
+  StageOptions,
+  StreamHandle,
+  StreamOptions,
+} from '@agent/trace/AgentTrace';
+export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+export type {
+  ModelRetryGate,
+  RouteFailure,
+  RouteOptions,
+  RoutePolicy,
+} from '@agent/runtime/ModelRetryGate';
 export { RunFileService } from '@utils/files/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
@@ -90,7 +141,3 @@ export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 export { jitteredExponentialBackoffMs } from '@utils/core';
 export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 export { isTransientHttpStatus } from '@utils/core/httpStatus';
-// The capability a root launch requires (`ToolRun`'s session names it): a
-// composition root's alone, so no plugin's tool is given it. Hosts open
-// sessions through `Sessions` (root).
-export type { SessionOwner } from '@platform/processRuntime';

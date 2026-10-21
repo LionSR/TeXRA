@@ -79,7 +79,7 @@ export function configuredHooks(source: string, config: HooksConfig) {
     if (!isSupportedEvent(event)) {
       const count = groups.reduce((sum, group) => sum + group.hooks.length, 0);
       unsupported.push(
-        `${event}: ${count} hook(s), an event TeXRA does not run`,
+        `${event}: ${count} hook(s), an event this build does not run`,
       );
       continue;
     }
@@ -101,7 +101,7 @@ export function configuredHooks(source: string, config: HooksConfig) {
         const where = `${event}${matcher ? ` (${matcher})` : ''}`;
         let refused: string | null = null;
         if (handler.type !== 'command')
-          refused = `a ${handler.type} hook; TeXRA runs command hooks only`;
+          refused = `a ${handler.type} hook; only command hooks run`;
         else if (handler.command === undefined || handler.command === '')
           refused = 'a command hook with no command';
         else if (handler.async === true || handler.asyncRewake === true)

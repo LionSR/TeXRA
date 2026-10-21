@@ -133,7 +133,7 @@ export class FileSecrets implements PlatformSecrets {
     const { directory, onChanged } = this;
     const stopped = (reason: string) =>
       Effect.logWarning(
-        `Stopped watching ${directory}: keys another TeXRA window saves apply here after a restart (${reason})`,
+        `Stopped watching ${directory}: keys another process saves apply here after a restart (${reason})`,
       );
     const announceAll = this.listStoredKeys().pipe(
       Effect.flatMap((keys) =>

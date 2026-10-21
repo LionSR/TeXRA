@@ -101,10 +101,6 @@ import {
   type SessionEventDraft,
   type InquiryThreadSummary,
 } from '@shared/schemas';
-import {
-  RUN_DAMAGED_MESSAGE,
-  RUN_EARLIER_BUILD_MESSAGE,
-} from '@shared/runs/runStatusDisplay';
 import { runStateAppend } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
@@ -1721,7 +1717,7 @@ describe('the C1 event table and the C6 publisher', () => {
             Database.pipe(Effect.provide(substrate(storage))),
           );
           expect(failure._tag).toBe('DatabaseOpenFailed');
-          expect(failure.message).toContain('is not a TeXRA store');
+          expect(failure.message).toContain('is not a session store');
           expect(failure.message).toContain('application id');
           const stored = reader(storage);
           try {
@@ -1891,7 +1887,7 @@ describe('the C1 event table and the C6 publisher', () => {
             (yield* SubscriptionRef.get(view.ref)).runs.get(RUN),
           ).toMatchObject({
             readOnly: true,
-            statusDetail: RUN_DAMAGED_MESSAGE,
+            statusNotice: { kind: 'damaged' },
             actions: ['delete', 'openRunStorage', 'export', 'copy'],
           });
         }).pipe(
@@ -1964,8 +1960,8 @@ describe('the C1 event table and the C6 publisher', () => {
           const view = yield* SessionViewService;
           yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);
           expect(
-            (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.statusDetail,
-          ).toBe(RUN_EARLIER_BUILD_MESSAGE);
+            (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.statusNotice,
+          ).toStrictEqual({ kind: 'earlierBuild' });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,
@@ -1983,7 +1979,7 @@ describe('the C1 event table and the C6 publisher', () => {
         Database.pipe(Effect.provide(substrate(storage))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(failure.message).toContain('update TeXRA');
+      expect(failure.message).toContain('a newer build opens it');
       const stored = reader(storage);
       try {
         expect(stored.prepare('PRAGMA user_version').get()).toEqual({

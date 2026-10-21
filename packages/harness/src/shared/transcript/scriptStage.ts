@@ -61,18 +61,6 @@ export type ScriptCallStatus =
   | 'failed'
   | 'not run';
 
-export const SCRIPT_CALL_STATUS_LABEL = {
-  queued: 'Queued',
-  running: 'Running',
-  interrupted: 'Interrupted',
-  finished: 'Finished',
-  reused: 'Reused',
-  skipped: 'Skipped',
-  cancelled: 'Cancelled',
-  failed: 'Failed',
-  'not run': 'Not run',
-} as const satisfies Record<ScriptCallStatus, string>;
-
 const NOT_RUN_NOTE = 'The task ended before this call started.';
 const INTERRUPTED_NOTE = 'Stopped with its task. Resume the task to continue.';
 
@@ -101,8 +89,6 @@ export interface ScriptCallView {
    *  what its child last said, each cut to its first line. Never the
    *  delivery envelope or the instruction's later paragraphs. */
   readonly summary?: string;
-  /** `Running: drafter · gpt-5 — Wants bash: make` */
-  readonly line: string;
 }
 
 export interface ScriptPhaseView {
@@ -263,7 +249,6 @@ function callView(
       ? (answer ?? child?.latestLine)
       : child?.latestLine);
   const summary = said == null ? undefined : firstLine(said);
-  const suffix = facts.length > 0 ? ` · ${facts.join(' · ')}` : '';
   return {
     id: row.id,
     toolName: row.toolUse.toolName,
@@ -286,7 +271,6 @@ function callView(
       child !== undefined &&
       acceptsFollowUp(child, host),
     ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
-    line: `${SCRIPT_CALL_STATUS_LABEL[status]}: ${label}${suffix}${detail ? ` — ${detail.text}` : ''}`,
   };
 }
 

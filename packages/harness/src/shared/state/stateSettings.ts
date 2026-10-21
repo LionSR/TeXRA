@@ -77,7 +77,8 @@ export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
  * database), so a repository has one value on every host and in every
  * worktree.
  */
-type SettingStore = 'config' | 'workspaceState' | 'repoState' | 'globalState';
+export type SettingStore =
+  'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
   | 'agents'
@@ -91,7 +92,7 @@ export type SettingsViewSnapshot =
   | 'telemetry';
 
 /** One provider's control group in the Models tab. */
-interface ModelsTabSurface {
+export interface ModelsTabSurface {
   /** Canonical provider id whose expanded settings show this control. */
   readonly provider: string;
   readonly label: string;
@@ -102,7 +103,7 @@ interface ModelsTabSurface {
 }
 
 /** Catalog-driven UIs that render the row. Absent means no UI renders it. */
-interface SettingSurfaces {
+export interface SettingSurfaces {
   /**
    * Rendered by the extension/desktop settings view; the value names the
    * snapshot rebroadcast after a write. Presence also makes the row writable
@@ -116,7 +117,7 @@ interface SettingSurfaces {
 }
 
 /** Consequences of writing a row, declared once for every write path. */
-interface SettingWriteEffects {
+export interface SettingWriteEffects {
   /**
    * Catalog keys forced to `false` when this row is written `true` — mutually
    * exclusive routes. Applied by `writeSetting`, so every host inherits it.
@@ -411,13 +412,13 @@ const HARNESS_CONFIG_ROWS: Record<
   'debug.saveModelIO': {
     schema: z.boolean().prefault(false),
     description:
-      'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
+      'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
     title: 'Enable skills for agents',
     description:
-      'Expose enabled TeXRA and imported skills to agent prompts. Skills are off by default.',
+      'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
@@ -517,7 +518,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.boolean().prefault(true),
     title: 'Mark agent commits',
     description:
-      'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
+      'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
