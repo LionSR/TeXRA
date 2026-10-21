@@ -14,7 +14,10 @@ import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import { approvalPolicyDenialMessage } from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { type HostInteractions } from '@texra-ai/harness';
+import {
+  type HostInteractions,
+  type ToolEditApprovalRequest,
+} from '@texra-ai/harness';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -23,7 +26,6 @@ import type {
   UserQuestionAnswers,
   UserQuestionPermission,
 } from '@shared/schemas';
-import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,

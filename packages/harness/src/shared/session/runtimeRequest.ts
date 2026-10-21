@@ -142,11 +142,28 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
 
+/** One unified-diff hunk: the line ranges it spans on each side, and its
+ *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
+const DiffHunkSchema = z
+  .object({
+    oldStart: z.int(),
+    oldLines: z.int(),
+    newStart: z.int(),
+    newLines: z.int(),
+    lines: z.array(z.string()).readonly(),
+  })
+  .readonly();
+
 /** What a pending tool edit would change: the original and proposed
- *  content a host shows beside the request's path and line counts. */
-const ToolEditContentSchema = z.object({
+ *  content a host shows beside the request's path and line counts, and
+ *  the diff between them, computed once where the request is built: its
+ *  hunks and the 0-based line of the proposed text a diff view reveals
+ *  first (null when nothing changed). */
+export const ToolEditContentSchema = z.object({
   originalContent: z.string(),
   proposedContent: z.string(),
+  hunks: z.array(DiffHunkSchema).readonly(),
+  firstChangedLine: z.int().nonnegative().nullable(),
 });
 /** A pending tool edit's staged content (`request.preview`). */
 export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;

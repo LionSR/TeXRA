@@ -13,7 +13,6 @@ export const LineChangesSchema = z.object({
   added: LineCountSchema,
   removed: LineCountSchema,
 });
-export type LineChanges = z.infer<typeof LineChangesSchema>;
 
 /**
  * Schema for diff statistics where one side may be absent.
