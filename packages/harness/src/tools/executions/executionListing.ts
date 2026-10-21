@@ -3,6 +3,10 @@
  * each marked with where it stands relative to the caller and how much
  * input it has not read yet. Any listed tool-use run can be messaged
  * (tmux's `list-sessions`).
+ *
+ * Not `listRuns` in `@agent/storage/runListing`: that is the history list, the
+ * runs a user started themselves, with their records. This one is the live
+ * session's view of every run, for an agent to address.
  */
 
 // Third-party imports
@@ -28,9 +32,14 @@ const RELATION_NOUN: Record<Exclude<RunRelation, 'peer'>, string> = {
   sibling: 'sibling',
 };
 
-export const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
-  session: SessionHandle,
-  caller: RunId | undefined,
+/** The session to list and the run asking, whose relations the list marks. */
+interface ListingCaller {
+  readonly session: SessionHandle;
+  readonly runId: RunId | undefined;
+}
+
+export const listExecutions = Effect.fn('listExecutions')(function* (
+  { session, runId: caller }: ListingCaller,
   offset: number,
   limit: number,
 ) {
