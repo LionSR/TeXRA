@@ -134,28 +134,24 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
     );
   }
 
-  // The row above already proved the run is in the session's view; its
-  // output is read from the run's own committed rows.
+  // The status is the row read before the transcript: the session has one
+  // publisher, so a run the view shows terminal has every output row
+  // committed, and the log read after it is complete. A status read after
+  // the log could call finished a log that misses the final chunks.
   const { lines, chars } = projectProcessOutput(
     yield* session.log.display(runId).pipe(Effect.orDie),
   );
-  // The row above was read before the transcript, and a command that
-  // finished during that read must not be judged against it: the view is
-  // in memory, so one read of one run can afford a fresh row. Only a
-  // tombstone takes a run out of the view, and then the row this call
-  // already holds is the last honest reading of it.
-  const current = session.view.run(runId) ?? run;
   // The footer states the same reading as the header, and both come from
   // the fold: "no handle in this process" alone never justifies calling a
   // command finished, and a run whose owner is gone reads as interrupted
   // rather than as one that recorded how it ended.
-  const lead = isTerminalOutcomePhase(current.status)
+  const lead = isTerminalOutcomePhase(run.status)
     ? 'finished:'
-    : (describeRunNotice(current) ??
+    : (describeRunNotice(run) ??
       `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
   const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
   const out: string[] = [
-    `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+    `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
   ];
 
   if (lines.length === 0) {
