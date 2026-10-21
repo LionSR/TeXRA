@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { readDisabledSkills, skillDisplayItem } from '@skills/runtimeSkills';
+import { Skills } from '@texra-ai/harness';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -9,7 +9,6 @@ import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
   formatCliSkillList,
-  readCliSkills,
   readCliSkillsOffNotice,
 } from '../runtime/skills';
 
@@ -34,8 +33,8 @@ function listSkills(
   return Effect.gen(function* () {
     const services = yield* initCliPlatform(context);
     const roots = services.roots;
-    const result = yield* readCliSkills(context.cwd, roots, options);
-    const exitCode = result.errors.some(
+    const result = yield* Skills.enabled(roots, options);
+    const exitCode = result.issues.some(
       (issue) =>
         issue.code === 'missing_source' ||
         issue.code === 'invalid_source' ||
@@ -48,7 +47,7 @@ function listSkills(
     // them as `kind: skill-issue` records instead), so the stdout contract
     // stays scriptable with `jq '.[]'`.
     if (context.outputFormat !== 'ndjson') {
-      for (const issue of result.errors) {
+      for (const issue of result.issues) {
         writeTextStderr(formatCliSkillIssue(issue));
       }
       const offNotice = yield* readCliSkillsOffNotice(
@@ -63,15 +62,12 @@ function listSkills(
     // helper. The text list is suppressed on a usage error with no skills
     // (nothing useful to show); the helper skips the write for the
     // resulting empty string.
-    const disabled = yield* readDisabledSkills(roots);
-    const items = result.skills.map((entry) =>
-      skillDisplayItem(entry, disabled),
-    );
+    const items = result.skills.map(({ display }) => display);
     emitCliResult(context, {
       json: items,
       ndjson: [
         ...items.map((skill) => ({ kind: 'skill' as const, skill })),
-        ...result.errors.map((issue) => ({
+        ...result.issues.map((issue) => ({
           kind: 'skill-issue' as const,
           issue,
         })),

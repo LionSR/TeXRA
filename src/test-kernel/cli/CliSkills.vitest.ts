@@ -5,11 +5,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, expect } from 'vitest';
 
-import {
-  formatCliSkillList,
-  readCliSkills as readCliSkillsEffect,
-} from '@cli/runtime/skills';
-import { installPlugins, removePlugin } from '@common/plugins/installedPlugins';
+import { InstalledPlugins, Skills } from '@texra-ai/harness';
+import { formatCliSkillList } from '@cli/runtime/skills';
 import { pluginDataDir } from '@common/plugins/pluginHooks';
 import {
   disablePlugin,
@@ -19,11 +16,7 @@ import {
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
-import {
-  loadRuntimeSkillCatalog,
-  readDisabledSkills,
-  skillDisplayItem,
-} from '@skills/runtimeSkills';
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -35,6 +28,15 @@ const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores('cli').stores;
+/** The roots of a listing for `workspace`, its user skills under no root. */
+const rootsAt = (
+  workspace: string,
+  stores: typeof settings = settings,
+): Parameters<typeof Skills.enabled>[0] => ({
+  ...stores,
+  workspace,
+  storageRoot: path.join(workspace, 'no-storage-root'),
+});
 async function writeSkill(
   root: string,
   dirName: string,
@@ -64,6 +66,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
     const sources = foldSkillSources(hostSkillContributions([]), {
       cwd: path.resolve(path.sep, 'tmp', 'project'),
       home: path.resolve(path.sep, 'tmp', 'home'),
+      storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),
       resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       options: { additionalPaths: ['.texra/skills'] },
       plugins: [],
@@ -82,6 +85,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       foldSkillSources(hostSkillContributions(['lean4', 'lean4']), {
         cwd: path.resolve(path.sep, 'tmp', 'project'),
         home: path.resolve(path.sep, 'tmp', 'home'),
+        storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
         options: {},
         plugins: [],
@@ -113,14 +117,11 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       );
 
       initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
-      const result = yield* readCliSkillsEffect(resources, settings, {
+      const result = yield* Skills.enabled(rootsAt(resources), {
         additionalPaths: [custom],
       });
 
-      const disabled = yield* readDisabledSkills(settings);
-      expect(
-        result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-      ).toMatchObject([
+      expect(result.skills.map(({ display }) => display)).toMatchObject([
         {
           name: 'custom-only',
           description: 'The custom-only skill.',
@@ -137,7 +138,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       expect(formatted).not.toContain(
         'bundled\tshared-skill\tThe bundled skill.',
       );
-      expect(result.errors).toContainEqual(
+      expect(result.issues).toContainEqual(
         expect.objectContaining({
           code: 'duplicate_name',
           name: 'shared-skill',
@@ -152,16 +153,13 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         { resourcesPath: path.resolve(path.sep, 'tmp', 'resources') },
         [],
       );
-      const result = yield* readCliSkillsEffect(
-        path.resolve(path.sep, 'tmp', 'project'),
-        settings,
-        {
-          additionalPaths: ['missing-skills'],
-        },
+      const result = yield* Skills.enabled(
+        rootsAt(path.resolve(path.sep, 'tmp', 'project')),
+        { additionalPaths: ['missing-skills'] },
       );
 
       expect(result.skills).toEqual([]);
-      expect(result.errors).toContainEqual(
+      expect(result.issues).toContainEqual(
         expect.objectContaining({
           severity: 'error',
           code: 'missing_source',
@@ -199,9 +197,9 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           makeTempDir('texra-cli-skills-', tempRoots),
         );
         initializeNodeRuntimeSkills({ resourcesPath: resources }, pluginIds);
-        const result = yield* readCliSkillsEffect(workspace, settings, {});
+        const result = yield* Skills.enabled(rootsAt(workspace), {});
         const bundled = result.skills.filter(
-          (entry) => entry.source.scope === 'bundled',
+          ({ display }) => display.scope === 'bundled',
         );
         const shipped = [
           ...(yield* pluginSkillDirs('skills')),
@@ -210,26 +208,29 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           )).flat(),
         ].toSorted((a, b) => a.localeCompare(b));
 
-        expect(bundled.map((entry) => entry.skill.name)).toEqual(shipped);
+        expect(bundled.map(({ display }) => display.name)).toEqual(shipped);
         expect(
-          bundled.find((entry) => entry.skill.name === 'lean-search')?.source,
-        ).toEqual({
+          bundled.find(({ display }) => display.name === 'lean-search')
+            ?.display,
+        ).toMatchObject({
           scope: 'bundled',
           label: 'bundled',
-          path: path.join(resources, 'plugins', 'lean4', 'skills'),
-          plugin: 'lean4',
+          sourcePath: path.join(resources, 'plugins', 'lean4', 'skills'),
         });
-        expect(result.errors).toEqual([]);
+        expect(result.issues).toEqual([]);
 
         // A switched-off plugin is one unit: its skills go with its tools.
         const { stores } = makeFakeSettingsStores('cli');
         yield* stores.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
           'lean4',
         ]);
-        const withLeanOff = yield* readCliSkillsEffect(workspace, stores, {});
+        const withLeanOff = yield* Skills.enabled(
+          rootsAt(workspace, stores),
+          {},
+        );
         expect(
           withLeanOff.skills.some(
-            (entry) => entry.skill.name === 'lean-search',
+            ({ display }) => display.name === 'lean-search',
           ),
         ).toBe(false);
       }),
@@ -295,8 +296,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         const catalogNow = () =>
           Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>
             loadRuntimeSkillCatalog({
-              workspacePath: resources,
-              settings: stores,
+              roots: rootsAt(resources, stores),
               plugins,
             }),
           );
@@ -306,7 +306,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         };
         initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
 
-        const [installed] = yield* installPlugins(
+        const [installed] = yield* InstalledPlugins.install(
           { kind: 'local', path: plugin },
           [],
           env,
@@ -369,7 +369,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           'plugin paper-protocol',
         );
 
-        yield* removePlugin('paper-protocol', env);
+        yield* InstalledPlugins.remove('paper-protocol', env);
         const after = yield* catalogNow();
         expect(JSON.stringify(after.catalog)).not.toContain(
           'plugin paper-protocol',
@@ -385,7 +385,9 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         // again, though the plugin directory is already gone.
         const orphan = pluginDataDir(env.globalStorage, 'paper-protocol');
         yield* Effect.promise(() => fs.mkdir(orphan, { recursive: true }));
-        expect(yield* removePlugin('paper-protocol', env)).toMatchObject({
+        expect(
+          yield* InstalledPlugins.remove('paper-protocol', env),
+        ).toMatchObject({
           leftover: true,
         });
         yield* Effect.promise(() =>

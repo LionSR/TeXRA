@@ -82,7 +82,8 @@ export function formatProviderApiKeySummary(
 
 interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
-  readonly statusView?: ProviderApiKeyStatusView;
+  /** Each provider's key status, shown beside its row; never the key. */
+  readonly statusView: ProviderApiKeyStatusView;
   /** The key write as a program; this form owns its one run. It yields the
    *  extra notice a provider needs, if any. */
   readonly onSave: (
@@ -109,14 +110,7 @@ export function ProviderApiKeyForm(
       <ListForm
         title="Add provider API key"
         availableRows={props.availableRows}
-        items={
-          props.statusView
-            ? buildProviderApiKeyItems(props.statusView)
-            : API_KEY_PROVIDER_IDS.map((candidate) => ({
-                value: candidate,
-                label: providerApiKeyFormLabel(candidate),
-              }))
-        }
+        items={buildProviderApiKeyItems(props.statusView)}
         description={
           <Text dimColor>Choose the service that issued the key.</Text>
         }

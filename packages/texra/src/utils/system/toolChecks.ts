@@ -10,6 +10,12 @@ import { Effect, Option } from 'effect';
 
 // Local imports
 import { ToolMissingReporter } from '@texra-ai/harness';
+import {
+  executeCommand,
+  type ExecuteCommandBaseOptions,
+  withExtendedPath,
+} from '@texra-ai/harness/node';
+import which from 'which';
 import type { ExecResult } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
@@ -24,11 +30,6 @@ import {
   TEXFMT_INSTALL_GUIDE,
   getInstallGuide,
 } from '@texra/shared/constants/latexToolchain';
-import {
-  executeCommand,
-  type ExecuteCommandBaseOptions,
-} from '@utils/system/execUtils';
-import { IS_WINDOWS, whichOnExtendedPath } from '@utils/system/platformPaths';
 import { IMAGE_TOOL_COMMANDS, probeTool } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -121,9 +122,10 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
     'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
       GHOSTSCRIPT_INSTRUCTIONS,
     {
-      command: IS_WINDOWS
-        ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
-        : 'gs --version',
+      command:
+        process.platform === 'win32'
+          ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
+          : 'gs --version',
     },
   ),
   // Probe only: the wolfram plugin's manifest entry owns the install copy.
@@ -290,7 +292,12 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  const available = whichOnExtendedPath(name) !== null;
+  const available =
+    which.sync(name, {
+      nothrow: true,
+      path: withExtendedPath({ PATH: process.env.PATH }).PATH,
+      pathExt: process.env.PATHEXT,
+    }) !== null;
   packageManagerAvailability.set(name, available);
   return available;
 }

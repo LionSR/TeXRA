@@ -5,7 +5,7 @@
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches, and the installed plugins enabled and
- * trusted from any host, to the live catalog (`@tools/liveTools`), pins its
+ * trusted from any host, to the live catalog (`ToolCatalog`), pins its
  * current generations, and resolves from them
  * the tools the run is offered (`resolveStepTools`), the continuation of a
  * parked run, if any plugin on contributes one, and the prompt
@@ -306,8 +306,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const catalog =
       listing || names.length > 0
         ? yield* loadRuntimeSkillCatalog({
-            workspacePath: roots.workspace,
-            settings: roots,
+            roots,
             plugins: { loadable: skills.plugins, withheld: [] },
             named: [...names, ...(recordedSkills ?? [])],
           })
@@ -518,8 +517,7 @@ export const resolveActivations = Effect.fn('Step.resolveActivations')(
     if (open === null || names.length === 0) return [...names];
     const { roots } = run.session;
     const { named } = yield* loadRuntimeSkillCatalog({
-      workspacePath: roots.workspace,
-      settings: roots,
+      roots,
       plugins: { loadable: open.skills.plugins, withheld: [] },
       named: names,
     });

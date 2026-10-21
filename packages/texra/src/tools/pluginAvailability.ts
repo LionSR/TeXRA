@@ -6,7 +6,7 @@
 
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect, Option } from 'effect';
+import { Effect, Option, Config } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
@@ -16,6 +16,7 @@ import {
   type ToolProbeServices,
   withLogChannel,
 } from '@texra-ai/harness';
+import { findCommand } from '@texra-ai/harness/node';
 import {
   importCodexClass,
   findCodexBinaryPath,
@@ -47,8 +48,6 @@ import {
   type SdkBinaryStatus,
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
-import { envVar } from '@utils/system/envFlags';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 const CHANNEL = 'pluginAvailability';
 
@@ -112,7 +111,7 @@ export const lean4Availability = (setup: SetupPlatformShape) =>
         const servers = yield* leanServers;
         const extensionAvailable =
           setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-        const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
+        const lakeAvailable = (yield* findCommand('lake')) !== null;
         // Only the VS Code build drives Lean through the extension.
         const requiresExtension = inputs.host === 'vscode';
         return {
@@ -269,13 +268,23 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
           `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
-          Effect.andThen(envVar(anthropicApiKeyEnv)),
-          Effect.map((value) => (value ? ('env' as const) : ('none' as const))),
+          Effect.andThen(
+            Config.String(anthropicApiKeyEnv).pipe(Config.option, Effect.orDie),
+          ),
+          Effect.map((value) =>
+            Option.isSome(value) && value.value
+              ? ('env' as const)
+              : ('none' as const),
+          ),
         ),
       ),
     );
-    const hasOauthToken =
-      (yield* envVar('CLAUDE_CODE_OAUTH_TOKEN')) !== undefined;
+    const hasOauthToken = Option.isSome(
+      yield* Config.String('CLAUDE_CODE_OAUTH_TOKEN').pipe(
+        Config.option,
+        Effect.orDie,
+      ),
+    );
     const authBits: string[] = [];
     if (keyOrigin === 'secret') {
       authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);

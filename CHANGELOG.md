@@ -618,6 +618,19 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
+  Each subscription model now takes the input window the Codex backend
+  grants it (500K for GPT-6.1 Sol, 272K for the others) instead of one
+  272K default for all. Settings → Subscriptions → ChatGPT → Advanced →
+  Input token budget is now an override: leave it empty for each model's
+  own window, or set a value for every model, as before.
+- **Gemini 4 Argon is in the default model list, and Claude Haiku 5.5 is
+  available.** The model catalog (llm-zoo 3.0.0) also updates Claude
+  Sonnet 5.5's cache price and MiniMax prices and retirements, and marks
+  Claude Haiku 4.5 deprecated. GPT-5.5, GPT-5.4 and GPT-5.4 mini no longer
+  route through a ChatGPT subscription, since the Codex backend no longer
+  serves them.
+
 - **Claude Max and Team plans' API credits are pointed out where you add an
   Anthropic key.** The welcome card, the Anthropic row in Settings → API
   keys, and the terminal's key entry note that these plans include monthly
@@ -1084,6 +1097,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **`texra`'s `/key` picker shows which providers already have a key.** Each
+  provider row reads "Key set", "Env" or "Not set", as the API-keys page of
+  `/config` already did. If the key store cannot be read, the rows read
+  "Status unavailable" and the error is reported in the transcript. The keys
+  themselves are never shown.
+- **ChatGPT-subscription models answer again.** After a change on
+  ChatGPT's side, every call through a ChatGPT subscription failed with
+  "The model returned an unsupported event". The extra information
+  ChatGPT now sends alongside an answer is skipped, and answers arrive as
+  before.
 - **A `codex`/`claude_code` call no longer fails as "This run has finished"
   while another call resumes the same session.** When two calls resumed the
   same stale thread or session id at once, the second could be woken

@@ -1,19 +1,13 @@
 /**
  * Tool-name normalization and display labels, shared by every host that
- * renders individual tool calls: the CLI chat TUI
- * (`packages/cli/src/chat/tui/panes/toolRenderers.tsx`) and the VS Code
- * progress view
- * (`packages/extension/src/progressView/frontend/formatters/`).
+ * renders individual tool calls.
  *
  * A tool name reaches a renderer in three shapes: the canonical registry name
  * (`bash`), a provider-namespaced name from a delegated sub-agent
  * (`claude:Edit`), and an MCP tool's name: the harness's own
  * (`mcp__<server>__<tool>`) or the one a plugin reports for an external
  * agent's MCP call (`mcp:<server>/<tool>`, built by `buildMcpToolName`).
- * Normalization used to be host-local, so the
- * progress view showed a namespaced name verbatim and missed every
- * name-keyed display rule the CLI applied. This browser-safe module is the
- * single source of truth for both halves: the canonical lookup key and the
+ * This browser-safe module is the single source of truth for both halves: the canonical lookup key and the
  * label a user sees.
  */
 

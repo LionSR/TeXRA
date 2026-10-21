@@ -26,6 +26,7 @@ import { Settings } from '@texra-ai/harness';
 
 import { Effect, type FileSystem } from 'effect';
 
+import { inheritedEnv } from '@texra-ai/harness/node';
 import type { CodexSandboxMode } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
@@ -34,8 +35,6 @@ import {
   importForeignSdk,
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
-import { inheritedEnv } from '@utils/system/envFlags';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness';
 
@@ -114,7 +113,7 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
 };
 
 /** Native CLI binary filename for the current platform. */
-const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
+const CODEX_BINARY_NAME = process.platform === 'win32' ? 'codex.exe' : 'codex';
 
 /**
  * Locate the native Codex binary inside a resolved package directory.

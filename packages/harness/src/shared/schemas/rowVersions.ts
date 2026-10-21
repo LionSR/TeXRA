@@ -9,14 +9,15 @@
  * higher one, or a kind this registry lacks and never retired, refuses the
  * whole store (`storeGate`) and is never rewritten.
  *
- * The release watermark is the frozen schemas, `config/storage/frozen/`
- * (`npm run storage:freeze` at a release; `rowVersions.vitest.ts`): a
+ * The release watermark is the schemas frozen at a release: a
  * version frozen there never changes in place. Before 1.0 a kind changes with
  * no upcaster; its version is bumped when an older build's row would read
  * wrong (or fail): such a row then reads as an earlier build's
  * (`DatabaseRowEarlier`, its whole run listed as written by an earlier
  * build), never as damaged or silently stripped.
  */
+// The frozen schemas live in `config/storage/frozen/`, written by
+// `npm run storage:freeze` at a release and checked by `rowVersions.vitest.ts`.
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
 
@@ -77,7 +78,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: a script's handed-down call commits in the run's opening batch (no
   // upcaster: a v2 script run cut before its handed-down row would resume
   // into a model call instead of its script).
-  'run.config': { version: 3, upcast: [] },
+  // v4: media-only tasks can produce outputs; earlier readers reject those
+  // configurations because they count only text inputs (no upcaster).
+  'run.config': { version: 4, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
@@ -124,7 +127,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // earlier build's v1 row refuses its run as written by that build).
   // v3: dispatch facts carry no `ordinal` (a call's place is its index) and
   // no `stageId` (no upcaster, as v2).
-  'model.message': { version: 3, upcast: [] },
+  // v4: stateless Google responses may have a null provider ID. Older builds
+  // must refuse the newer store rather than parse those rows as corrupt.
+  'model.message': { version: 4, upcast: [] },
   'context.edit': V1,
   'tool.intent': V1,
   'script.call': V1,

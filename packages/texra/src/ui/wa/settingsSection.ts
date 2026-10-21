@@ -119,7 +119,9 @@ export function renderSettingsToggleRow(
 export interface SettingsNumberRowOptions {
   readonly label: string;
   readonly description: string;
-  readonly value: number;
+  /** `undefined` shows an empty field with {@link placeholder}. */
+  readonly value: number | undefined;
+  readonly placeholder?: string;
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
@@ -133,6 +135,8 @@ export interface SettingsNumberRowOptions {
    * and posts that value.
    */
   readonly revertOnEmpty?: boolean;
+  /** Present when a cleared field resets the setting; it wins over `revertOnEmpty`. */
+  readonly onClear?: () => void;
   readonly onChange: (value: number) => void;
 }
 
@@ -147,11 +151,12 @@ export function renderSettingsNumberRow(
   options: SettingsNumberRowOptions,
 ): TemplateResult {
   const id = settingsRowId('number', options.label);
+  const shown = options.value === undefined ? '' : String(options.value);
 
   const commit = (input: WaInput, raw: string): void => {
     const parsed = Number(raw);
     if (Number.isNaN(parsed)) {
-      input.value = String(options.value);
+      input.value = shown;
       return;
     }
     const stepOrigin = options.min ?? 0;
@@ -172,13 +177,19 @@ export function renderSettingsNumberRow(
     const input = event.target as WaInput;
     const raw = input.value;
     if (typeof raw !== 'string' || raw.trim() === '') {
+      // A number input reads empty for unparseable text too; only a field
+      // the user emptied clears the setting.
+      if (options.onClear && !input.input.validity.badInput) {
+        options.onClear();
+        return;
+      }
       if (options.revertOnEmpty === false) {
         commit(input, '0');
         return;
       }
       // Treat a cleared field as "no change" — `Number('')` would silently
       // coerce to 0/min and overwrite the saved value.
-      input.value = String(options.value);
+      input.value = shown;
       return;
     }
     commit(input, raw);
@@ -195,7 +206,8 @@ export function renderSettingsNumberRow(
           id=${id}
           class="setting-number-input"
           type="number"
-          .value=${live(String(options.value))}
+          .value=${live(shown)}
+          placeholder=${options.placeholder ?? nothing}
           min=${options.min ?? nothing}
           max=${options.max ?? nothing}
           step=${options.step ?? nothing}

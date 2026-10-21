@@ -55,7 +55,8 @@ import type {
   SessionPluginLayer,
 } from '@tools/toolTable';
 
-/** What a transition rule reads of a plugin row: value and parent edge. */
+/** One stored row of a plugin's kind, as its arm's transition rule reads
+ *  it: the row's decoded value and the run it is parented to, if any. */
 export interface PluginRow {
   readonly value: JsonValue;
   readonly parent: RunId | null;

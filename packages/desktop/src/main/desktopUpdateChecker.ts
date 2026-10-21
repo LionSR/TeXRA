@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { envFlag } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
@@ -7,7 +8,6 @@ import {
   UPDATE_CHECK_SKIP_ENV,
   runDailyUpdateCheck,
 } from '@texra/utils/system/updateCheck';
-import { envFlag } from '@utils/system/envFlags';
 import type { HttpClient } from 'effect/http';
 
 /**

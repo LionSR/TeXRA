@@ -1993,6 +1993,11 @@ describe('native OpenAI Responses protocol', () => {
           item_id: 'msg_1',
           delta: 'I will check.',
         });
+        // The ChatGPT backend's side-channel notice adds nothing to the turn.
+        frames.splice(1, 0, {
+          type: 'response.metadata',
+          metadata: { openai_chatgpt_moderation_metadata: {} },
+        });
         const fetch = vi
           .fn<typeof globalThis.fetch>()
           .mockResolvedValueOnce(response(frames))

@@ -1,10 +1,10 @@
+import { Skills } from '@texra-ai/harness';
 import {
   APPROVAL_POLICIES,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
-import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
@@ -114,7 +114,7 @@ export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
   'include-interop': {
     type: 'boolean',
     description: `Also include ${formatCommaList(
-      INTEROP_SKILL_DIRS.map((dir) => `${dir}/skills`),
+      Skills.interopDirs.map((dir) => `${dir}/skills`),
     )} from the workspace and home directory`,
   },
   source: {

@@ -1,12 +1,11 @@
 import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, Config, Option } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { envVar } from '@utils/system/envFlags';
 
 /** No resources candidate holds every bundled agent directory. */
 class DesktopResourcesNotFound extends Data.TaggedError(
@@ -33,8 +32,12 @@ interface ResourcesPathOptions {
  */
 export const resolveDesktopDataRoot = Effect.fn('resolveDesktopDataRoot')(
   function* (userDataPath: string) {
-    const e2eUserDataPath = yield* envVar('TEXRA_DESKTOP_E2E_USER_DATA_PATH');
-    return e2eUserDataPath?.trim() ? userDataPath : defaultNodeStorageRoot();
+    const e2eUserDataPath = yield* Config.String(
+      'TEXRA_DESKTOP_E2E_USER_DATA_PATH',
+    ).pipe(Config.option, Effect.orDie);
+    return Option.getOrUndefined(e2eUserDataPath)?.trim()
+      ? userDataPath
+      : defaultNodeStorageRoot();
   },
 );
 

@@ -13,12 +13,9 @@ import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { withProcessServices } from '@platform/processRuntime';
-import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 
-/** The default budget in tokens; the setting itself is stored in thousands. */
-const DEFAULT_INPUT_LIMIT =
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
+/** The input window the Codex backend grants the fixture model. */
+const CODEX_INPUT_LIMIT = 272_000;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
@@ -29,7 +26,14 @@ const chatgptConfig = (config: ModelConfig) =>
   readModelSettings(hostStores()).pipe(
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
-      routeConfig(config, { kind: 'chatgpt-subscription' }, facts),
+      routeConfig(
+        config,
+        {
+          kind: 'chatgpt-subscription',
+          contextWindow: config.codexSubscription?.contextWindow ?? Number.NaN,
+        },
+        facts,
+      ),
     ),
   );
 
@@ -43,13 +47,13 @@ const gpt55Config: ModelConfig = {
   inputPrice: 5,
   outputPrice: 30,
   contextWindow: 1_050_000,
-  // Codex eligibility comes from the registry's codexSubscription flag
-  // (see `isCodexSubscriptionEligible` in models/modelRoute.ts), not from
+  // Codex eligibility comes from the registry's codexSubscription entry
+  // (see `codexSubscriptionOf` in models/modelRoute.ts), not from
   // tier/naming heuristics.
   capabilities: DEFAULT_MODEL_CAPABILITIES,
   reasoning: { efforts: [ReasoningEffort.XHIGH] },
   openRouterOnly: false,
-  codexSubscription: true,
+  codexSubscription: { contextWindow: CODEX_INPUT_LIMIT },
 };
 
 const signedInSession: CodexSession = {
@@ -91,7 +95,7 @@ describe('provider capabilities', () => {
         const capabilities = yield* chatgptConfig(gpt55Config);
 
         expect(capabilities).toMatchObject({
-          contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+          contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
           inputPrice: 0,
           outputPrice: 0,
         });
@@ -99,19 +103,20 @@ describe('provider capabilities', () => {
   );
 
   it.effect.each([
-    'openai/gpt-5.6-sol',
-    'openai/gpt-5.6-terra',
-    'openai/gpt-5.6-luna',
+    ['openai/gpt-5.6-sol', 272_000],
+    ['openai/gpt-5.6-terra', 272_000],
+    ['openai/gpt-5.6-luna', 272_000],
+    ['openai/gpt-6.1-sol', 500_000],
   ] as const)(
-    'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
-    (id) =>
+    'caps ChatGPT-subscription %s to the input window Codex grants it (%i)',
+    ([id, window]) =>
       Effect.gen(function* () {
         const model = MODEL_CONFIGS[id];
         const capabilities = yield* chatgptConfig(model);
 
-        expect(model.codexSubscription).toBe(true);
+        expect(model.codexSubscription).toEqual({ contextWindow: window });
         expect(capabilities).toMatchObject({
-          contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
+          contextWindow: window + model.maxOutputTokens,
         });
       }),
   );
@@ -152,7 +157,7 @@ describe('provider capabilities', () => {
           );
 
           expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
-            contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+            contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
           });
         }),
     );
@@ -163,7 +168,7 @@ describe('ChatGPT subscription model routing', () => {
   const prospectiveRoute = () =>
     withProcessServices(
       testRuntime(),
-      readModelOptions(hostStores(), ['openai/gpt-5.5-2026-04-23']).pipe(
+      readModelOptions(hostStores(), ['openai/gpt-5.6-sol']).pipe(
         Effect.map(([option]) => option?.usageRoute),
       ),
     );

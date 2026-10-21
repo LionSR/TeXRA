@@ -380,9 +380,7 @@ export const responsesContent = Effect.fn('llm.responses.content')(function* (
  * bytes, read against one clock reading for the whole lowering.
  */
 export interface DocumentAccess {
-  /** The route takes input files at all. */
   readonly accepted: boolean;
-  /** The live file id this binding holds for some bytes, or `null`. */
   readonly fileIdFor: (base64: string) => string | null;
 }
 
@@ -421,7 +419,8 @@ const DELTA_CHANNELS = new Map<string, Append['channel']>([
   ['response.reasoning_summary_text.delta', 'summary'],
   ['response.reasoning_text.delta', 'reasoning'],
 ]);
-// Framing that owns no content: output_item.done carries the item.
+// Events that own no content: framing (output_item.done carries the item) and
+// the Codex backend's response.metadata notices (serving model, safety hints).
 const FRAMING_EVENTS = new Set([
   'response.content_part.added',
   'response.content_part.done',
@@ -433,6 +432,7 @@ const FRAMING_EVENTS = new Set([
   'response.reasoning_text.done',
   'response.function_call_arguments.delta',
   'response.function_call_arguments.done',
+  'response.metadata',
 ]);
 
 /** One decoded Responses event: its sequence, its parts, whether it settles. */

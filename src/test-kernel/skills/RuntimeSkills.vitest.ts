@@ -4,11 +4,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
+import { Skills } from '@texra-ai/harness';
 import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   activatedSkillNames,
-  formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -22,8 +22,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
 const runCatalog = (workspacePath: string) => ({
-  workspacePath,
-  settings: testWorkspaceRoots(),
+  roots: { ...testWorkspaceRoots(), workspace: workspacePath },
   plugins: { loadable: [], withheld: [] },
 });
 
@@ -69,28 +68,37 @@ afterEach(async () => {
 });
 
 describe('runtime skills', () => {
-  it('formats selected skills for activation with skill directory substitution', () => {
-    const activation = formatRuntimeSkillActivation({
-      skill: {
-        name: 'proof-audit',
-        description: 'Review mathematical proof steps.',
-        body: 'Read ${TEXRA_SKILL_DIR}/references/checklist.md first & compare <proof>.',
-        baseDir: '/tmp/proof-audit',
-        path: '/tmp/proof-audit/SKILL.md',
-      },
-      source: {
-        scope: 'project',
-        path: '/tmp/.texra/skills',
-        label: 'project',
-      },
-    });
+  it.effect(
+    'formats an enabled skill for activation with skill directory substitution',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(createTempRoot);
+        yield* Effect.promise(() =>
+          writeSkill(
+            root,
+            'proof-audit',
+            {
+              name: 'proof-audit',
+              description: 'Review mathematical proof steps.',
+            },
+            'Read ${TEXRA_SKILL_DIR}/references/checklist.md first & compare <proof>.',
+          ),
+        );
+        installTestSkillRoots([{ tier: 'project', path: root }]);
 
-    expect(activation).toContain('<skill name="proof-audit">');
-    expect(activation).toContain('<source>project</source>');
-    expect(activation).toContain(
-      'Read /tmp/proof-audit/references/checklist.md first &amp; compare &lt;proof>.',
-    );
-  });
+        const { skills } = yield* Skills.enabled({
+          ...testWorkspaceRoots(),
+          workspace: WORKSPACE_ROOT,
+        });
+        const [skill] = skills;
+
+        expect(skill?.activation).toContain('<skill name="proof-audit">');
+        expect(skill?.activation).toContain('<source>project</source>');
+        expect(skill?.activation).toContain(
+          `Read ${path.dirname(skill?.display.path ?? '')}/references/checklist.md first &amp; compare &lt;proof>.`,
+        );
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
   it('formats configured runtime skills for prompt injection', async () => {
     const root = await createTempRoot();

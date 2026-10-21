@@ -76,7 +76,7 @@ export class UsageLog extends Context.Service<
       env?: Readonly<Record<string, string | undefined>>,
     ) => Effect.Effect<void>;
   }
->()('@texra/UsageLog') {
+>()('@texra-ai/harness/UsageLog') {
   static readonly disabled = Layer.succeed(UsageLog)({
     log: () => Effect.void,
   });

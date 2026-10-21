@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { findCommand } from '@texra-ai/harness/node';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
@@ -9,7 +10,6 @@ import {
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 import type { SetupPlatformShape } from './platform';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -38,11 +38,13 @@ export const locateTool = Effect.fn('locateTool')(function* (
   // probe kills the processes — several at once, since the core tools are
   // probed concurrently — instead of leaving them to run out their timeout.
   const knownInstalled = yield* checkToolInstalled(name, false);
-  const resolvedPath = yield* findToolInCommonPaths(name);
+  // Fresh: a setup probe follows an install, so a recent miss is searched
+  // for again.
+  const found = yield* findCommand(name, { fresh: true });
   return {
     name,
-    installed: knownInstalled || resolvedPath !== null,
-    path: resolvedPath ?? undefined,
+    installed: knownInstalled || found !== null,
+    path: found?.resolvedPath,
   };
 });
 
