@@ -136,8 +136,6 @@ export type RunState = RunPosition &
     readonly lastEdit: number | null;
     /** The latest `tools.offered` row's set; `null` before the first. */
     readonly offeredTools: readonly OfferedTool[] | null;
-    /** The plugin whose continuation the latest `tools.offered` row pinned. */
-    readonly offeredContinuation: string | null;
     /** The names of the skills it listed. */
     readonly offeredSkills: readonly string[];
     /** The address of the system text the run's context froze. */
@@ -227,7 +225,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...NO_FACTS,
   lastEdit: null,
   offeredTools: null,
-  offeredContinuation: null,
   offeredSkills: [],
   offeredSystem: null,
   offeredContext: null,
@@ -446,7 +443,6 @@ const GRAMMAR: { readonly [K in FoldedRowType]: Transition<K> } = {
       Result.succeed({
         ...state,
         offeredTools: payload.tools,
-        offeredContinuation: payload.continuation,
         offeredSkills: payload.skills,
         offeredSystem: payload.system,
         offeredContext: payload.context,

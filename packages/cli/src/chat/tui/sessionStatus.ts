@@ -16,12 +16,6 @@ import type { RunView, SessionView } from '@texra-ai/harness';
 import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
-const GOAL_OBJECTIVE_STATUS_LENGTH = 160;
-
-interface CliSessionGoalStatus {
-  readonly status: string;
-  readonly objective: string;
-}
 
 export interface CliSessionStatusInput {
   readonly agent: string;
@@ -32,7 +26,6 @@ export interface CliSessionStatusInput {
   /** The fold's status label for the reported stream; undefined before a run. */
   readonly statusLabel: string | undefined;
   readonly activeChildSessions?: number;
-  readonly goal?: CliSessionGoalStatus | null;
   /** Skill names in effect for the focused tool-use stream, newest snapshot. */
   readonly activeSkills: readonly string[];
   readonly queuedFollowUpMessages: readonly string[];
@@ -137,15 +130,6 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       : []),
     ...(input.activeSkills.length > 0
       ? [`skills: ${input.activeSkills.join(', ')}`]
-      : []),
-    ...(input.goal
-      ? [
-          `goal: ${input.goal.status}`,
-          `goal objective: ${truncateSummary(
-            input.goal.objective,
-            GOAL_OBJECTIVE_STATUS_LENGTH,
-          )}`,
-        ]
       : []),
     ...(input.sessionId
       ? [

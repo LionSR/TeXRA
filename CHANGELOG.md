@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Goal mode is a script.** **Run as goal** on a plan now launches a goal
+  run beside the conversation, on the same agent: it runs the agent in
+  rounds, each on a fresh context, until a round verifies the objective,
+  a round needs you, or the rounds reach the spend cap, and its result
+  arrives in the conversation. The conversation no longer keeps itself
+  going, so the run header's goal chip and `/status`'s goal lines are gone.
+  The commands or agent work a goal auto-approves are approved in the goal
+  run, and the conversation's own approvals stay as they were. The spend cap
+  (`texra.goal.maxCostUsd`) counts what the goal's rounds spend, and a goal
+  stops after 24 hours. The `plan` tool takes only `objective`: its `pause`
+  and `complete` commands are gone. Runs written by an earlier build are
+  listed as such and are not resumed.
+- **SDK: a parked run never continues itself.** `Plugin.continuation`,
+  `PluginContinuation`, and `goalStateOf` and `GoalState` in
+  `@texra-ai/harness/schemas` are gone, and the built-in plugins own no row
+  kinds. A recipe's `script.block` is null for a program that runs no task.
+  A recipe run offers the tools its plugin listed instead of narrowing them
+  to its parent's, and its own `agent` calls narrow to that list.
+
 - **A document task's latexdiff results and missing outputs moved out of
   its log.** `texra run --output-format ndjson` no longer streams them as separate log
   records; they arrive with the task's documents, in its `plugin.fact`
@@ -618,14 +637,12 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
-- **A script can launch a goal.** `agent(objective, { agentName, goal: true })`
-  runs the agent as an autonomous goal on the objective: it keeps working
-  turn after turn until it verifies the objective is done, pauses for
-  input, or reaches the goal spend cap, and the call resolves when the
-  goal ends, with `goal: 'completed'` or `'paused'` in its result. The
-  same option works on a direct `agent` call in a one-shot run (`texra run`).
-  A goal launched this way approves nothing on its own; the child's
-  commands and edits follow the run's approval policy, as every child's do.
+- **Agents and scripts can launch a goal.** The `goal` tool, and
+  `goal(objective, { agentName })` in a script, run an agent as a goal and
+  resolve to `{ status, rounds, report, cost }` when it ends, with `status`
+  `'completed'` or `'paused'`. Such a goal approves nothing on its own: its
+  commands and edits follow the run's approval policy. A child's structured
+  value now reaches its parent in the result it delivers.
 - **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
   Each subscription model now takes the input window the Codex backend
   grants it (500K for GPT-6.1 Sol, 272K for the others) instead of one

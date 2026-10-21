@@ -10,6 +10,7 @@
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -212,7 +213,12 @@ export const agentRunLayer = (
       // tools stay out, and its turns get the model's whole output budget.
       const textOnly =
         script === null && !inherits && persona.tools.length === 0;
-      const parentOffered = ctx.toolPolicy.parentOffered;
+      // A trusted recipe offers the tools its plugin listed, approved with
+      // its launch; any other child keeps only what its parent was offered.
+      // The recipe's own `agent` calls narrow to that list in turn.
+      const parentOffered = isTrustedScript(config)
+        ? undefined
+        : ctx.toolPolicy.parentOffered;
       // A script run offers its script; an inheriting plugin agent what its
       // parent was offered (or the defaults); anyone else its persona's.
       let tools = persona.tools;

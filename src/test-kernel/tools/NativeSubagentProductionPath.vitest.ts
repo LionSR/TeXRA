@@ -1244,12 +1244,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
           },
         ];
+        // The parent's model answers the parent; the task's revision, which
+        // its recipe runs on whatever model delegation resolves, the child's.
         bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(
                 input.config,
-                input.config.ref === CHILD_MODEL ? childTurns : parentTurns,
+                input.config.ref === PARENT_MODEL ? parentTurns : childTurns,
                 observedRequests,
               ),
             ),

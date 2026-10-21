@@ -88,6 +88,14 @@ export function formatSubagentDelivery(
         '</touched-files>',
       );
     }
+    // A schema's value, or a program's return value (a goal's verdict).
+    if (output.structured !== undefined) {
+      lines.push(
+        '<structured>',
+        escapeText(JSON.stringify(output.structured, null, 2)),
+        '</structured>',
+      );
+    }
   }
 
   return formatDelivery({

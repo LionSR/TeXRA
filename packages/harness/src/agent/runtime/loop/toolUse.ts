@@ -29,7 +29,6 @@
 
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
-import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
@@ -131,17 +130,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // The text the turn answers with, reported with its end.
   let response = '';
 
-  // A resumed root's first continuation-pinning step stands it down first.
-  let resumeUnseen = start.resume;
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, kind, isChild(), openingSystem), (step) => {
-      if (!resumeUnseen || step.continuation === null || isChild())
-        return Effect.void;
-      resumeUnseen = false;
-      return step.continuation
-        .onResume({ session, runId })
-        .pipe(Effect.provide(step.tools.services));
-    });
+    stepFor(run, state, kind, isChild(), openingSystem);
 
   // ------------------------------------------------------------ host port
   let live = false;
@@ -460,42 +450,28 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
           restoring &&= queued;
-          // A park opens a step, which pins (and records) its continuation:
-          // a child's or a one-shot run's too, whose goal continues it as
-          // a conversation's does. Queued input outranks the continuation.
-          const step = yield* openStep(state, 'park');
-          if (step.rows.length > 0) state = yield* cell.append(step.rows);
-          const next =
-            queued || step.continuation === null
-              ? null
-              : yield* step.continuation
-                  .atIdle({ session, runId, state })
-                  .pipe(Effect.provide(step.tools.services));
+          // A root's park opens a step, recorded like a request's; a
+          // child's idle is its parent's.
+          if (!isChild()) {
+            const step = yield* openStep(state, 'park');
+            if (step.rows.length > 0) state = yield* cell.append(step.rows);
+          }
           // Every park is idle, a failed turn's too: a resume acks the first.
           run.callbacks.onIdle?.();
-          // A one-shot run ends at its park unless its continuation opens
-          // the next turn.
-          if (run.toolPolicy.stopAfterCycle && next === null) {
+          if (run.toolPolicy.stopAfterCycle) {
             return finish(
               state,
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
             );
           }
-          // A queued follow-up outranks the policy's synthetic turn.
-          let batch: FollowUpBatch | null =
-            next !== null && !(yield* followUps.hasQueued)
-              ? { kind: 'synthetic', text: next }
-              : null;
+          // The host port stays attached: `/model`, `/compact` land here.
+          const batch = yield* followUps.wait;
           if (batch === null) {
-            // The host port stays attached: `/model`, `/compact` land here.
-            batch = yield* followUps.wait;
-            if (batch === null) {
-              // The input ended under the parked loop: a cancellation.
-              return finish(
-                state,
-                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-              );
-            }
+            // The input ended under the parked loop: a cancellation.
+            return finish(
+              state,
+              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+            );
           }
           // A reset or handoff replaces the view a background summary
           // was computed from: that summary lands, or stops, first.
@@ -559,9 +535,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (block !== null) continue;
-        // Every turn ends at the park, a one-shot run's too: its
-        // continuation may open the next turn there, and with none the
-        // one-shot run ends there, as a handed-down call's run does.
+        // A one-shot run ends with its completed turn; a handed-down call's
+        // run ends at its park, however its turn ended.
+        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+          return finish(state, turn.outcome);
         if (settlement !== null)
           yield* Effect.uninterruptible(settlement.settled);
       }

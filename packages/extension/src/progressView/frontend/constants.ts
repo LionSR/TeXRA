@@ -38,7 +38,6 @@ export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
-  GOAL_CHIP: 'goalChip',
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',

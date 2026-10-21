@@ -50,7 +50,7 @@ import {
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-/** The harness's own plugin arms (`goal`) and the app's. */
+/** The app's plugin arms (the harness's built-ins own none). */
 const PLUGIN_ARM_MODULES =
   /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
@@ -183,7 +183,7 @@ describe('plugin rosters', () => {
       ['arxiv', ['arxiv_search', 'download_arxiv_source']],
       ['web', ['web_search', 'web_fetch']],
       ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan']],
+      ['goal', ['plan', 'goal']],
       ['wolfram', []],
       [
         'zotero',
@@ -254,7 +254,6 @@ describe('plugin rosters', () => {
       'documents/accepted',
       'documents/output',
       'external-inquiry/thread',
-      'goal/state',
     ]);
   });
 
@@ -266,7 +265,7 @@ describe('plugin rosters', () => {
       ],
       ['web', ['web_search', 'web_fetch']],
       ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan']],
+      ['goal', ['plan', 'goal']],
       ['multi-agent', ['agent']],
       ['codemode', ['script']],
     ]);

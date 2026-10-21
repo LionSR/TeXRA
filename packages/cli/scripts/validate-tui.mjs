@@ -1970,19 +1970,13 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['r', '/status', '\r'],
     frame: 'viewport',
-    expect: [
-      'PLAN-GOAL',
-      'auto-approvals: commands',
-      'status: Running',
-      'goal: active',
-      'goal objective: Coordinate a short math proof through CLI chat.',
-      '/ commands',
-    ],
-    unexpect: ['Approve plan?', '1 approval'],
+    expect: ['PLAN-GOAL', 'status: Running', '/ commands'],
+    // The goal's grants are its own run's: the chat's stay as they were.
+    unexpect: ['Approve plan?', '1 approval', 'auto-approvals'],
   },
   {
     // `a`, the card grammar's broad approval, runs the plan as a goal that
-    // approves edits and agent work too.
+    // approves edits and agent work too, on the goal's own run.
     name: 'plan-approval-approve-goal-all',
     env: {
       HARNESS_ENTRIES: '4',
@@ -1991,8 +1985,8 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['PLAN-GOAL', 'auto-approvals: edits, commands, agent work'],
-    unexpect: ['Approve plan?', '1 approval'],
+    expect: ['PLAN-GOAL-ALL'],
+    unexpect: ['Approve plan?', '1 approval', 'auto-approvals'],
   },
   {
     name: 'plan-approval-ctrl-r-ignored',

@@ -52,11 +52,11 @@ import {
   type SubagentProgressUpdate,
   type ToolResult,
 } from '@shared/schemas';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import { delegatedChildGrants } from '@tools/approval';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
-import { goalOf, startGoal } from '@tools/goal';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -77,6 +77,7 @@ import {
 } from './inputFields';
 import { decideDelegation, requireAgent, scriptRequest } from './proposalFlow';
 import {
+  type ApprovalMeta,
   describeSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';
@@ -122,12 +123,6 @@ const LAUNCH_FIELDS = {
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
-  goal: z
-    .boolean()
-    .nullish()
-    .describe(
-      "Run the child as an autonomous goal whose objective is the prompt: it keeps working turn after turn until it verifies the objective is done (`plan` complete), pauses for input, or reaches the goal spend cap; its approvals follow the run's policy as any child's do. The call waits for it: from a script without `background`, or in a one-shot run. Bound it with `timeoutMs`.",
-    ),
 };
 
 /**
@@ -177,10 +172,6 @@ export interface ChildLaunch {
   readonly id: string | null | undefined;
   readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-  /** An `agent` launch's goal, armed on the awaited child as it is
-   *  admitted, with the prompt as its objective; a task launch (a recipe,
-   *  which ends with its script) has none. */
-  readonly goal?: boolean | null;
   readonly files: {
     readonly inputFiles: readonly string[];
     readonly contextFiles: readonly string[];
@@ -196,6 +187,15 @@ export interface ChildLaunch {
     ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
     readonly options: NonNullable<AgentProposal['options']>;
   } | null;
+  /** The program the child opens on instead of its prompt, built for the
+   *  agent the approval chose (a goal's rounds): it runs no task, so the
+   *  proposal is a plain agent's, and the prompt reaches it verbatim. */
+  readonly recipe?: (
+    chosen: AgentProposal,
+  ) => NonNullable<AgentConfig['script']>;
+  /** The grants of a launch its caller's own request already approved (a
+   *  plan the user ran as a goal): no proposal is asked. */
+  readonly approved?: ApprovalGrants;
 }
 
 /** The bytes behind a workflow call's files, hashed for its reuse key. */
@@ -305,7 +305,6 @@ const childResult = Effect.fn('AgentTool.childResult')(function* (
   agentName: string,
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
   key: string | undefined,
-  goal: boolean,
 ) {
   if (result.outcome === 'cancelled')
     return errorResult(
@@ -339,14 +338,6 @@ const childResult = Effect.fn('AgentTool.childResult')(function* (
       runId,
       outcome: result.outcome,
       cost: result.usage?.totalCost ?? 0,
-      // A goal child ends when its goal does: completed, or paused for
-      // input or at the spend cap, as its own goal row says.
-      ...(goal && {
-        goal:
-          goalOf(call.run.session, runId)?.status === 'paused'
-            ? 'paused'
-            : 'completed',
-      }),
     }),
     ...(key !== undefined && { reuseKey: key }),
   };
@@ -442,21 +433,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = run.toolPolicy.stopAfterCycle === true;
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
-  const goal = launch.goal === true;
-  // A goal ends with its child's end, which only a waiting call reads: a
-  // detached child reports each turn, and a goal takes many.
-  if (goal && !awaited)
-    return errorResult(
-      '`goal` needs a call that waits for the child: an `agent()` call of a script without `background`, or a direct call in a one-shot run. Drop `goal`, or launch the goal from a script.',
-      { summary: `'${agent.name}' not launched: a goal is awaited` },
-    );
-  // A goal ends by the goal plugin's `plan` tool, which the child keeps
-  // only from this run's step: without it the goal would run to its cap.
-  if (goal && !(yield* offeredBy(run)).some(({ name }) => name === 'plan'))
-    return errorResult(
-      "`goal` needs the `plan` tool, which this run is not offered: goal mode is off, or this run is a task's script. Drop `goal`.",
-      { summary: `'${agent.name}' not launched: no plan tool for a goal` },
-    );
   // Q2: a completed call with the same prompt, options and file bytes. The
   // requested model, not the one availability resolves to, so a reuse does
   // not depend on which credentials are configured now.
@@ -481,7 +457,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
-          goal,
           files: fileBytes,
         })
       : undefined;
@@ -534,7 +509,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       return failedResult(agent.name, recovered.failure);
     const settled = recovered.success;
     if (settled.kind === 'ended')
-      return yield* childResult(call, agent.name, settled, key, goal);
+      return yield* childResult(call, agent.name, settled, key);
   }
 
   // An unavailable model fails this call, which a script may catch (Q6).
@@ -557,11 +532,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     memories: launch.memories,
     ...(workingDirectory !== undefined && { workingDirectory }),
     task: task !== null,
-    // A task's prompt is its instruction, a structured call answers through
-    // its schema, and a trusted script's call reaches the agent verbatim:
-    // none takes a hand-off.
+    // A task's or a program's prompt is its instruction, a structured call
+    // answers through its schema, and a trusted script's call reaches the
+    // agent verbatim: none takes a hand-off.
     instruction:
-      task !== null || outputSchema !== undefined || trusted
+      task !== null ||
+      launch.recipe !== undefined ||
+      outputSchema !== undefined ||
+      trusted
         ? launch.prompt
         : withToolUseSubagentHandoffInstruction(
             launch.prompt,
@@ -576,13 +554,21 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     ...(task === null && { rootUserInstruction: call.instruction }),
   });
 
-  const decided = yield* decideDelegation(
-    call,
-    proposal,
-    script === undefined
-      ? undefined
-      : script.shared('agent:request', scriptRequest(call, script, proposal)),
-  );
+  // A launch its caller's request approved asks nothing more.
+  const preApproved: ApprovalMeta = { autoApproved: false };
+  const decided =
+    launch.approved !== undefined
+      ? { proposal, approvalMeta: preApproved }
+      : yield* decideDelegation(
+          call,
+          proposal,
+          script === undefined
+            ? undefined
+            : script.shared(
+                'agent:request',
+                scriptRequest(call, script, proposal),
+              ),
+        );
   if ('status' in decided) {
     // An approval opened for editing stops the script's calls: the script
     // cannot continue on a task the user took over.
@@ -615,12 +601,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (taskConfig === null)
     return errorResult(`'${approved.agent}' has no task block.`);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
-  const grants = delegatedChildGrants(childApproval);
+  const grants = launch.approved ?? delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.delegationAgentScope,
     ...taskConfig,
+    ...(launch.recipe !== undefined && {
+      script: launch.recipe(decided.proposal),
+    }),
   };
   const parentOffered = yield* offeredBy(run);
 
@@ -649,29 +638,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         parentCallId: call.callId,
         grants,
         notify,
-        // The goal is armed as the child is admitted, before its first
-        // turn, under the grants it registered with: the child's own goal
-        // row, which its loop's continuation reads at each park. A refused
-        // arm is logged by the admission and said on this card.
-        ...(goal && {
-          onAdmitted: (childRunId: RunId) =>
-            startGoal(session, childRunId, launch.prompt).pipe(
-              Effect.tapError((error) =>
-                Effect.sync(() =>
-                  call.emit(
-                    `The goal could not be armed on run ${childRunId}; '${approved.agent}' runs one turn: ${toErrorMessage(error)}\n`,
-                  ),
-                ),
-              ),
-              Effect.asVoid,
-            ),
-        }),
       }),
     ),
   );
   return Result.isFailure(launched)
     ? failedResult(approved.agent, launched.failure)
-    : yield* childResult(call, approved.agent, launched.success, key, goal);
+    : yield* childResult(call, approved.agent, launched.success, key);
 });
 
 /** The `agent` tool. */
@@ -687,15 +659,13 @@ export const agentTool = () =>
     scriptGlobal: { positional: 'prompt' },
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:
-      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; goal?: 'completed' | 'paused' } | { runId: string }",
+      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
     slow: true,
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
 From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost }\`. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
-
-With \`goal: true\` the awaited child runs as an autonomous goal on the prompt: it keeps working until it verifies the objective is done, and the result carries \`goal: 'completed'\`, or \`'paused'\` when it stopped for input or at the goal spend cap.
 
 It returns the agent's final reply, or a \`schema\` value. Pick the agent whose description fits the task.`,
     schema: AgentInputSchema,
@@ -711,7 +681,6 @@ It returns the agent's final reply, or a \`schema\` value. Pick the agent whose 
         id: input.id,
         timeoutMs: input.timeoutMs,
         background: input.background,
-        goal: input.goal,
         files: {
           inputFiles: [],
           contextFiles: [],

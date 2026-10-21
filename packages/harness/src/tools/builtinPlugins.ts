@@ -10,14 +10,13 @@ import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { agentTool } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
-import { goalContinuation } from '@tools/goal/goalContinuation';
+import { GoalTool } from '@tools/goal/GoalTool';
 import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
@@ -89,18 +88,16 @@ export const memoryWorkflow: Plugin = builtin({
 });
 
 /**
- * The `plan` tool owns planning and the goal lifecycle (update, pause,
- * complete), so any agent with tools can drive the goal loop while the plugin
- * is on; the synthetic turns are its continuation. Its rows are the `goal/state` arm.
+ * Plans and goals: the `plan` tool proposes a plan the user may run as a
+ * goal, and the `goal` tool launches one; both run the one goal program
+ * (`launchGoal`), a script whose rounds are `agent` calls.
  */
 export const goal: Plugin = builtin({
   id: 'goal',
-  tools: { plan: PlanTool },
-  injectedWhen: { plan: true },
+  tools: { plan: PlanTool, goal: GoalTool },
+  injectedWhen: { plan: true, goal: true },
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-  continuation: goalContinuation,
-  arms: HARNESS_PLUGIN_ARMS.goal,
 });
 
 /** Child agents: the `agent` tool. */

@@ -172,8 +172,8 @@ function goldenTurn(
         : text('Child result.'),
     );
   }
-  // The interactive chat: a plan run as a goal, the goal completed, replies
-  // after a `/model` switch and a `/compact`, told apart by what they say.
+  // The interactive chat: a plan run as a goal, its round and result, and
+  // replies after a `/model` and a `/compact`, told apart by what they say.
   if (system.includes('GOLDEN-CHAT')) {
     // A Codex child held until a stop; what is typed behind stays queued.
     if (said.includes('Hold this turn.'))
@@ -182,22 +182,26 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
-    const step = [
-      call('plan', {
-        command: 'update',
-        objective: 'Answer the golden chat, then stop.',
-      }),
-      call('plan', {
-        command: 'complete',
-        reason: 'The golden chat is answered.',
-      }),
-    ][results.length];
-    if (step !== undefined) return Effect.succeed([step]);
+    // The goal's round: the chat's agent, run by the goal's program, ends
+    // with its verdict.
+    if (turn.tools.some(({ name }) => name === 'submit_output'))
+      return Effect.succeed([
+        call('submit_output', {
+          status: 'done',
+          report: 'The golden chat is answered.',
+        }),
+      ]);
+    if (results.length === 0)
+      return Effect.succeed([
+        call('plan', { objective: 'Answer the golden chat, then stop.' }),
+      ]);
+    if (said.includes('After the model switch.'))
+      return Effect.succeed(text('Answered after the model switch.'));
     return Effect.succeed(
       text(
-        said.includes('After the model switch.')
-          ? 'Answered after the model switch.'
-          : 'Golden chat goal complete.',
+        said.includes('The golden chat is answered.')
+          ? 'Golden chat goal complete.'
+          : 'The plan runs as a goal.',
       ),
     );
   }
@@ -299,11 +303,7 @@ function goldenTurn(
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
-    () =>
-      call('plan', {
-        command: 'update',
-        objective: 'Read the notes and ask a child.',
-      }),
+    () => call('plan', { objective: 'Read the notes and ask a child.' }),
     () =>
       call('agent', {
         agentName: 'golden_child',

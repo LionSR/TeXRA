@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import {
   DisplaySessionEventSchema,
   pluginFactFloor,
@@ -35,7 +34,7 @@ export interface TraceFactArm {
 
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
- * against the harness's built-in arms and the app's `appArms`: a fact
+ * against the app's plugin arms (`appArms`): a fact
  * outside its arm's versions (`pluginFactFloor`), or whose value the arm's
  * schema refuses, throws, naming it; one whose plugin this build lacks is
  * left out. A trace is display data and runs no upcaster, so a version an
@@ -46,9 +45,10 @@ export function readTraceFacts(
   appArms: readonly TraceFactArm[],
 ): TraceDocument {
   const arms = new Map(
-    [...Object.values(HARNESS_PLUGIN_ARMS).flat(), ...appArms].map(
-      (arm): [string, TraceFactArm] => [`${arm.plugin}/${arm.kind}`, arm],
-    ),
+    appArms.map((arm): [string, TraceFactArm] => [
+      `${arm.plugin}/${arm.kind}`,
+      arm,
+    ]),
   );
   const events = document.events.filter((event) => {
     if (event.type !== 'plugin.fact') return true;

@@ -53,15 +53,14 @@ const OVERRIDE_CALL_ALLOWLIST = new Set([
  */
 const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/runApprovalQueue.ts',
-  'packages/harness/src/agent/runtime/loop/step.ts',
   // An Auto-approve launch's grants, on its `run.start`.
   'packages/harness/src/agent/runtime/rootLaunch.ts',
   // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   'packages/harness/src/tools/approval/index.ts',
   'packages/harness/src/tools/delegation/AgentTool.ts',
-  // A goal's grant, committed with its goal row.
-  'packages/harness/src/tools/goal/goalRows.ts',
+  // A plan run as a goal: the grants the person chose, on the goal's run.
+  'packages/harness/src/tools/goal/GoalTool.ts',
 ]);
 
 const EVALUATOR_CALL =

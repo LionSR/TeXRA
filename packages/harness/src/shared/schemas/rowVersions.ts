@@ -80,7 +80,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // into a model call instead of its script).
   // v4: media-only tasks can produce outputs; earlier readers reject those
   // configurations because they count only text inputs (no upcaster).
-  'run.config': { version: 4, upcast: [] },
+  // v5: a recipe's `block` may be null, a goal's program that runs no task
+  // (no upcaster: an earlier build refuses the store rather than read it).
+  'run.config': { version: 5, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
@@ -134,7 +136,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'tool.intent': V1,
   'script.call': V1,
   'tool.result': V1,
-  'tools.offered': V1,
+  // v2: no `continuation`: goal mode is a script, and a parked run never
+  // continues itself (no upcaster: an earlier build's row names a plugin
+  // continuation this build has none of).
+  'tools.offered': { version: 2, upcast: [] },
   'context.blob': V1,
   'hook.outcome': V1,
   'child.turn': V1,

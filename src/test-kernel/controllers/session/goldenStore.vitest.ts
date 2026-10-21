@@ -103,24 +103,28 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = RunIdSchema.parse('a00000000001');
 const CHAT = RunIdSchema.parse('a00000000008');
+/** The goal the chat's plan ran as, and its one round, named by the call of
+ *  the goal's program that launched it. */
+const GOAL = RunIdSchema.parse('a00000000000000000000009');
+const ROUND = '75eeb06409c87debe96fad7b';
 /** The chat's Codex child, detached by the user's stop. */
-const CODEX = RunIdSchema.parse('a00000000009');
-const SCRIPTED = RunIdSchema.parse('a0000000000a');
+const CODEX = RunIdSchema.parse('a0000000000b');
+const SCRIPTED = RunIdSchema.parse('a0000000000c');
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
-const FORK_SOURCE = RunIdSchema.parse('a0000000000b');
-const FORKED = RunIdSchema.parse('a0000000000c');
+const FORK_SOURCE = RunIdSchema.parse('a0000000000d');
+const FORKED = RunIdSchema.parse('a0000000000e');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = RunIdSchema.parse('a0000000000d');
-const TOMBSTONED = RunIdSchema.parse('a0000000000e');
+const KILLED = RunIdSchema.parse('a0000000000f');
+const TOMBSTONED = RunIdSchema.parse('a00000000010');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
-const SERVICE_TASK = RunIdSchema.parse('a0000000000f');
-const BACKGROUND = RunIdSchema.parse('a00000000010');
+const SERVICE_TASK = RunIdSchema.parse('a00000000011');
+const BACKGROUND = RunIdSchema.parse('a00000000012');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = RunIdSchema.parse('a00000000005');
-const REVISIONS = ['5fc0b51b6aa17245062995d1', '2690a561d6d483740d16c8e5'];
+const REVISIONS = ['8c9efa0618c2c1f19924ad00', '1bc5d202b0e5e88e1f4946ec'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -335,21 +339,29 @@ describe('the golden 1.0 store', () => {
         // Each revision is an `agent` call in the recipe's script.
         [DOCUMENT_TASK, 'script/1'],
         [DOCUMENT_TASK, 'script/6'],
+        // The goal is the plan call's child; its round, its program's.
+        [CHAT, 'validation-plan-1'],
+        [GOAL, 'script/0'],
         [CHAT, null],
         [SERVICE_TASK, null],
       ]);
-      // The plan the chat ran as a goal: the goal plugin's fact, active, then
-      // completed.
+      // The plan the chat ran as a goal: a run on the goal's program, its
+      // agent the chat's, that ends with what its one round verified.
+      const goal = qualifyAggregateId('run', GOAL);
       expect(
         events.flatMap((event) =>
-          event.type === 'plugin.fact' &&
-          event.aggregateId === chat &&
-          event.plugin === 'goal' &&
-          event.kind === 'state'
-            ? [(event.value as { active: boolean }).active]
+          event.type === 'run.end' && event.aggregateId === goal
+            ? [event.output.structured]
             : [],
         ),
-      ).toEqual([true, false]);
+      ).toEqual([
+        {
+          status: 'completed',
+          rounds: 1,
+          cost: expect.any(Number),
+          report: 'The golden chat is answered.',
+        },
+      ]);
       // Context blobs two runs share: one stored value, referenced by rows of
       // two aggregates.
       const shared = raw(storage, (db) =>
@@ -400,7 +412,13 @@ describe('the golden 1.0 store', () => {
         ),
         // The user stopped its held turn with Ctrl-C, which detached its
         // parked Codex child, then exited, which ended the child.
-        run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
+        run(CHAT, 'golden_chat', {
+          status: 'cancelled',
+          outcome: 'cancelled',
+          children: [GOAL],
+        }),
+        run(GOAL, 'golden_chat', { parent: CHAT, children: [ROUND] }),
+        run(ROUND, 'golden_chat', { parent: GOAL }),
         run(CODEX, 'codex', { status: 'cancelled', outcome: 'cancelled' }),
         run(SCRIPTED, 'golden_script'),
         run(FORK_SOURCE, 'golden_fork'),

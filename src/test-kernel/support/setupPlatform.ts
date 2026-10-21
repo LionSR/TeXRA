@@ -48,7 +48,6 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
@@ -60,7 +59,6 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -102,7 +100,7 @@ export const globalValuesOver = <E, R>(
 /** The plugin table a store or catalog suite runs over: every row kind and
  *  agent-file block TeXRA's plugins own, and no tool. */
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
-  toolTable([{ id: 'goal', arms: HARNESS_PLUGIN_ARMS.goal }, ...ARMED_PLUGINS]),
+  toolTable([...ARMED_PLUGINS]),
 );
 
 /**
@@ -381,7 +379,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The process's one route retry gate, as `processLayer` serves it.
     Layer.effect(RouteRetries, ModelRetryGate.make),
     // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation (and its switch) and the row kinds TeXRA's plugins own: a
+    // switch and the row kinds TeXRA's plugins own: a
     // suite that resolves a run's tools runs on the session graph's runtime
     // or provides `pluginCatalogLayer`.
     toolCatalogLayer(
@@ -390,8 +388,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           id: 'goal',
           toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
-          continuation: goalContinuation,
-          arms: HARNESS_PLUGIN_ARMS.goal,
         }),
         ...ARMED_PLUGINS,
       ]),

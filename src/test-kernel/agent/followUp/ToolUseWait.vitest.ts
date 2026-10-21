@@ -24,7 +24,6 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import { RunHistory } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
@@ -39,12 +38,10 @@ import {
   type ScriptedTurn,
 } from '@test/support/scriptedRunLayers';
 import {
-  createProcessSession,
   publishTestRunStart,
   queuedFollowUps,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
 import {
@@ -110,22 +107,6 @@ const runLoop = Effect.fn('test.runLoop')(function* (init: LoopInit) {
 });
 
 /**
- * Drive the loop until its scripted turns are spent: the scenario's script is
- * the run's whole life, and the loop stops where the script ends rather than
- * being torn down mid-turn.
- */
-const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
-  init: LoopInit,
-) {
-  const requests: InvokeRequest[] = [];
-  const exit = yield* Effect.exit(loopProgram(init, requests));
-  const state = yield* init.session.runHistory
-    .load(init.runId)
-    .pipe(Effect.orDie);
-  return { exit, requests, state };
-});
-
-/**
  * Start a run that parks, for scenarios that drive it while it waits. The
  * loop calls `onIdle` on its own fiber immediately before it blocks for
  * input, after the batch carrying the `waiting` step has committed, so one
@@ -162,19 +143,6 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   };
   return { fiber, requests, park };
 });
-
-/**
- * A session over the process roots: a goal is its run's own row, so a goal
- * scenario and the loop must share the session that carries it.
- */
-function goalSession(
-  overrides: Record<string, unknown> = {},
-): Effect.Effect<SessionHandle, SessionOpenError> {
-  return Effect.map(createProcessSession(), (session) => {
-    Effect.runSync(session.interactions.use({ emit: () => {}, ...overrides }));
-    return session;
-  });
-}
 
 const quietSession = (overrides: Record<string, unknown> = {}) =>
   sessionWithInteractions({ emit: () => {}, ...overrides });
@@ -866,190 +834,6 @@ describe('the batch a parked run consumes', () => {
             (f) => f.content.text,
           ),
         ).toEqual(['use this diagram']);
-      }),
-  );
-});
-
-describe('an active goal at the wait', () => {
-  it.effect('continues the run with a synthetic turn instead of blocking', () =>
-    Effect.gen(function* () {
-      const session = yield* goalSession();
-      const runId = startedRun(session);
-      const logger = new TraceEmitter();
-      const info = vi.spyOn(logger, 'info');
-      yield* startGoal(session, runId, 'Finish the autonomous proof audit.');
-
-      try {
-        const { requests, state } = yield* runUntilSpent({
-          runId,
-          session,
-          logger,
-          script: [textTurn('first'), textTurn('second')],
-        });
-
-        expect(
-          userTexts(state).some((text) =>
-            text.includes('Finish the autonomous proof audit.'),
-          ),
-        ).toBe(true);
-        // The run ran again instead of blocking for input, and a synthetic
-        // turn is not the user's: it is not logged as input.
-        expect(requests.length).toBeGreaterThan(1);
-        expect(info).not.toHaveBeenCalledWith(
-          expect.stringContaining('<goal_context>'),
-          expect.anything(),
-        );
-      } finally {
-        yield* clearGoal(session, runId);
-      }
-    }),
-  );
-
-  it.effect(
-    "continues a one-shot child, an awaited agent call's, past its cycle",
-    () =>
-      Effect.gen(function* () {
-        const session = yield* goalSession();
-        const parentRunId = generateRunId();
-        const runId = startedRun(session, parentRunId);
-        // A goal an `agent` call armed: its child ends with the goal, not
-        // with its first cycle.
-        yield* startGoal(session, runId, 'Prove the lemma.');
-
-        try {
-          const { requests, state } = yield* runUntilSpent({
-            runId,
-            session,
-            parentRunId,
-            stopAfterCycle: true,
-            script: [textTurn('first'), textTurn('second')],
-          });
-
-          expect(requests.length).toBeGreaterThan(1);
-          expect(
-            userTexts(state).some((text) => text.includes('Prove the lemma.')),
-          ).toBe(true);
-        } finally {
-          yield* clearGoal(session, runId);
-        }
-      }),
-  );
-
-  it.effect('lets queued user input win over the continuation', () =>
-    Effect.gen(function* () {
-      const session = yield* goalSession();
-      const runId = startedRun(session);
-      yield* startGoal(session, runId, 'Keep going autonomously.');
-      yield* enqueue(session, runId, [
-        { text: 'user correction', from: { kind: 'user' as const } },
-      ]);
-
-      try {
-        const { state } = yield* runUntilSpent({
-          runId,
-          session,
-          script: [textTurn('first'), textTurn('second')],
-        });
-
-        // The first thing the parked run consumed is the user's, not the
-        // goal's; the continuation only speaks for a queue with nothing in it.
-        expect(userTexts(state).at(1)).toBe('user correction');
-      } finally {
-        yield* clearGoal(session, runId);
-      }
-    }),
-  );
-
-  it.effect(
-    'is paused, with its approval bypasses cleared, after a failure',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* goalSession();
-        const runId = startedRun(session);
-        // Under the grant an approved plan makes; pausing ends it.
-        yield* startGoal(session, runId, 'finish the refactor', 'commands');
-        const recorded = recordSessionEvents(session);
-
-        try {
-          const { result } = yield* runLoop({
-            runId,
-            session,
-            stopAfterCycle: true,
-            script: [
-              { failWith: { message: 'cycle failed', userRetryable: false } },
-            ],
-          });
-
-          expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-          expect(goalOf(session, runId)?.status).toBe('paused');
-          // The goal's grant ends as the run's next grants row, the one
-          // record of it.
-          const policies = eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'approval.policy',
-          );
-          expect(policies.at(-1)?.snapshot).toEqual({ own: {}, goal: [] });
-        } finally {
-          yield* clearGoal(session, runId);
-          session.followUps.forget(runId);
-        }
-      }),
-  );
-
-  it.effect(
-    'is recovered, not paused, by a batch queued for its resumed turn',
-    () =>
-      Effect.gen(function* () {
-        // Regression #9443: input queued for the child's resumed turn reaches
-        // the model, so the error clears without pausing the goal or dropping
-        // its unattended approvals first.
-        const session = yield* goalSession();
-        const parentRunId = generateRunId();
-        const runId = startedRun(session, parentRunId);
-        yield* startGoal(session, runId, 'finish the autonomous proof');
-
-        try {
-          yield* runLoop({
-            runId,
-            session,
-            parentRunId,
-            script: [
-              {
-                failWith: {
-                  message: 'stale failure from the previous cycle',
-                  userRetryable: false,
-                },
-              },
-            ],
-          });
-          const recorded = recordSessionEvents(session);
-          yield* enqueue(session, runId, [
-            { text: 'try the other lemma', from: { kind: 'user' as const } },
-          ]);
-
-          const recovered = yield* forkLoop({
-            runId,
-            session,
-            parentRunId,
-            resume: true,
-            script: [textTurn('recovered'), textTurn('never reached')],
-          });
-          yield* recovered.park(1);
-          expect(userTexts(yield* session.runHistory.load(runId))).toContain(
-            'try the other lemma',
-          );
-          yield* Fiber.interrupt(recovered.fiber);
-          expect(goalOf(session, runId)?.status).toBe('active');
-          expect(
-            eventsOfType(
-              yield* Effect.promise(() => recorded.read()),
-              'approval.policy',
-            ),
-          ).toEqual([]);
-        } finally {
-          yield* clearGoal(session, runId);
-          session.followUps.forget(runId);
-        }
       }),
   );
 });

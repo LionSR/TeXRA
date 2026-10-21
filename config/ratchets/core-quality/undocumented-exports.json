@@ -115,7 +115,6 @@
   "packages/harness/src/tools/executions/toolInput.ts": 2,
   "packages/harness/src/tools/ExecutionsTool.ts": 1,
   "packages/harness/src/tools/glob.ts": 1,
-  "packages/harness/src/tools/goal/goalContinuation.ts": 1,
   "packages/harness/src/tools/grep.ts": 2,
   "packages/harness/src/tools/interruptedTasks.ts": 1,
   "packages/harness/src/tools/jsonRpc.ts": 2,

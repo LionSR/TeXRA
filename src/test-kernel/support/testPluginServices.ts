@@ -37,7 +37,7 @@ const unreadGitHubSubscriptions = new Proxy(
 );
 
 /** Every plugin's services over the session's `Runs`, as a step pins them. */
-export const testPluginServicesLayer = Layer.mergeAll(
+const testPluginServicesLayer = Layer.mergeAll(
   codeSandboxLayer,
   codexThreadsLayer,
   claudeAgentSessionsLayer,

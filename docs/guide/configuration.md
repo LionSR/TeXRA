@@ -156,24 +156,30 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-Approving a plan with **Run as goal** (press `r` in the terminal) lets the
-agent keep working turn after turn, and auto-approves shell commands (or all
-agent work, if you chose that) until it verifies the objective or needs you.
-On your own API key that has no natural end, so goal mode carries a spend
-cap: `texra.goal.maxCostUsd`, on the **Tools** page and in `/config`,
-defaults to $5 and is always a user-wide setting, never read from a project
-`.texra/config.json`. It counts everything the run and its subagents have spent,
-including turns before the goal started. When the total reaches the cap at
-the end of a turn, the goal pauses, auto-approval is withdrawn, and the
-transcript says why. Raise the cap and re-arm the goal to continue; `0`
-removes the cap. The cap is checked between turns, so a single long turn can
-overshoot it. Goal mode has no time or turn limit.
+A goal is a script that runs an agent in rounds. Each round starts from a
+fresh context, works toward the objective with the agent's own tools, and
+ends by submitting a verdict: done, keep going, or needs you. The next round
+reads the files and the last round's report. The goal ends when a round
+verifies the objective, when a round needs you, or at the spend cap, and
+its result says which, with the last report.
 
-A script can run an agent as a goal too: `agent(objective, { agentName, goal: true })`
-keeps that agent working until it verifies the objective, and the call
-resolves when the goal ends. Such a goal grants no auto-approval of its own;
-the child's commands and edits follow the run's approval policy. Read
-[Multi-agent workflows](./multi-agent-workflows.md#the-script-tool) for the call.
+Approving a plan with **Run as goal** (press `r` in the terminal) runs the
+plan as a goal on the same agent, as a run of its own beside the
+conversation. It auto-approves shell commands in the goal (or all agent
+work, if you chose that); the conversation's own approvals stay as they
+were. The goal's result arrives in the conversation when it ends. Agents
+can also launch a goal with the `goal` tool, or `goal(objective, { agentName })`
+in a script; such a goal approves nothing on its own, so its commands and
+edits follow the run's approval policy.
+
+On your own API key a goal has no natural end, so it carries a spend cap:
+`texra.goal.maxCostUsd`, on the **Tools** page and in `/config`, defaults to
+$5 and is always a user-wide setting, never read from a project
+`.texra/config.json`. It counts what the goal's rounds spend and is checked
+after each round, so a single long round can overshoot it. When the cap is
+reached the goal ends paused and says why; raise the cap and run the goal
+again to continue. `0` removes the cap. A goal has no round limit and stops
+after 24 hours.
 
 ## File discovery
 

@@ -11,7 +11,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { goalStateOf, type GoalState } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp } from '@texra-ai/harness/schemas';
 import { resolveBypass } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -180,20 +179,6 @@ export class RunHeader extends LitElement {
 
       .stop-button {
         color: var(--color-error);
-      }
-
-      .goal-chip::part(base) {
-        gap: var(--wa-space-3xs);
-        padding: 0 var(--wa-space-2xs);
-        font-weight: var(--font-weight-medium);
-      }
-
-      .goal-chip wa-icon {
-        font-size: var(--font-size-xs);
-      }
-
-      .goal-chip {
-        flex-shrink: 0;
       }
 
       .menu-status {
@@ -440,7 +425,6 @@ export class RunHeader extends LitElement {
       run.group !== 'waiting' &&
       acceptsFollowUp(run, { terminalBacked: false });
     const statusLabel = canContinue ? 'Ready' : runStatusLabel(run.statusKey);
-    const goal = goalStateOf(run);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const idle =
@@ -472,8 +456,7 @@ export class RunHeader extends LitElement {
           }
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
-        ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-        ${this.renderPassBadge(passLabel)}
+        ${this.renderRunElapsed(run)} ${this.renderPassBadge(passLabel)}
         <span class="header-spacer"></span>
         ${
           canGrant
@@ -646,23 +629,6 @@ export class RunHeader extends LitElement {
       </wa-dropdown>
       <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
     `;
-  }
-
-  private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {
-    if (!goal.active) return nothing;
-    const isPaused = goal.status === 'paused';
-    const label = isPaused ? 'Goal paused' : 'Goal';
-    const tooltip = goal.objective ? `${label}: ${goal.objective}` : label;
-    return html`<wa-badge
-        id=${ELEMENT_IDS.GOAL_CHIP}
-        class="goal-chip"
-        variant=${isPaused ? 'warning' : 'brand'}
-        appearance="filled"
-        aria-label=${tooltip}
-      >
-        ${waIcon('compass')} ${label}
-      </wa-badge>
-      <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {

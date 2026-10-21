@@ -1,17 +1,16 @@
 /**
- * The step: the one boundary where a run's tools, continuation and prompt
- * contributions change, and where the change is recorded (`2026-09-26-core-concepts.md`,
+ * The step: the one boundary where a run's tools and prompt contributions
+ * change, and where the change is recorded (`2026-09-26-core-concepts.md`,
  * invariant 7).
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches, and the installed plugins enabled and
  * trusted from any host, to the live catalog (`ToolCatalog`), pins its
  * current generations, and resolves from them
- * the tools the run is offered (`resolveStepTools`), the continuation of a
- * parked run, if any plugin on contributes one, and the prompt
+ * the tools the run is offered (`resolveStepTools`) and the prompt
  * contribution of each plugin on that makes one, with the process and
- * session services of the plugins it pinned: the only way a tool call or a
- * continuation reaches a plugin's services. The pin is held hand over hand: a
+ * session services of the plugins it pinned: the only way a tool call
+ * reaches a plugin's services. The pin is held hand over hand: a
  * step's generation, and its plugins' layers, stay up until the run's next
  * step has pinned its own, so the calls a response makes run against the
  * tools its request offered, and a generation no step holds drains.
@@ -20,8 +19,8 @@
  * the delegation targets its delegation tools can launch, frozen at the
  * first step and after a compaction, a later change appended to the history
  * as a system message. A tool's description never carries live state, so a
- * new credential or agent does not rewrite the cached tools. When the offered set, the
- * continuation, the hooks or that context differ from what the run last
+ * new credential or agent does not rewrite the cached tools. When the offered set,
+ * the hooks or that context differ from what the run last
  * recorded, the step returns a `tools.offered` row, preceded by the
  * `context.blob` rows of the content it names that the run has not stored
  * yet and followed by that message, which the loop appends before the
@@ -59,13 +58,11 @@ import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
-import { continuationOf, type Continuation } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
-import { goalGrant } from '../runApprovalQueue';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, rowAggregate } from './rows';
 import { stepHooks, type StepHook } from './hooks';
@@ -87,15 +84,14 @@ export interface StepTools {
   readonly hooks: readonly StepHook[];
 }
 
-/** The run's current step, the scope that holds its pin, the tools it
- *  withheld for approval, and its continuation. `holding` while only parks
+/** The run's current step, the scope that holds its pin, and the tools it
+ *  withheld for approval. `holding` while only parks
  *  have opened steps in a resumed activation: its hold on the record is not
  *  spent yet. */
 export interface OpenStep {
   readonly tools: StepTools;
   readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
-  readonly continuation: Continuation | null;
   /** The installed plugins it accepted and the plugins whose skills it
    *  draws on: what a skill the user activates meanwhile resolves against
    *  (`resolveActivations`). */
@@ -265,9 +261,7 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
     );
-    // The plugin continuing a parked run (one at most), and the sections.
-    const continuing =
-      pinned.plugins.find((plugin) => continuationOf(plugin) !== null) ?? null;
+    // The plugins whose sections the step's system text renders.
     const contributing = pinned.plugins.filter(
       ({ prompt }) => prompt !== undefined,
     );
@@ -275,7 +269,6 @@ const openStep = Effect.fn('Step.open')(function* (
     // nothing it does not offer.
     const used = new Set([
       ...tools.offered.map(({ plugin }) => plugin),
-      ...(continuing === null ? [] : [continuing.id]),
       ...contributing.map(({ id }) => id),
     ]);
     const services = yield* pinned.services(used).pipe(Scope.provide(scope));
@@ -352,7 +345,6 @@ const openStep = Effect.fn('Step.open')(function* (
         tools: resolved.withheldForApproval,
         policy,
       } as const,
-      continuing,
       skills,
       listed,
       contributing: contributing.toSorted(
@@ -365,15 +357,10 @@ const openStep = Effect.fn('Step.open')(function* (
     tools,
     scope,
     withheld: step.withheld,
-    continuation: continuationOf(step.continuing),
     skills: step.skills,
     holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
-  const continuation = step.continuing?.id ?? null;
-  // A goal grant ends with a step that has no continuation (plugin off).
-  if (continuation === null)
-    yield* run.session.approvals.change(run.runId, goalGrant([]));
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
@@ -401,7 +388,6 @@ const openStep = Effect.fn('Step.open')(function* (
   const changed =
     toolsChanged ||
     skillsChanged ||
-    state.offeredContinuation !== continuation ||
     state.offeredContext !== sha256(context) ||
     step.hooks.join('\0') !== state.offeredHooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
@@ -423,7 +409,6 @@ const openStep = Effect.fn('Step.open')(function* (
   }
   return {
     tools,
-    continuation: continuationOf(step.continuing),
     system,
     // The content the set names is stored before the row that names it.
     rows: changed
@@ -440,7 +425,6 @@ const openStep = Effect.fn('Step.open')(function* (
             aggregateId: rowAggregate(run.runId),
             payload: {
               tools: step.tools.offered,
-              continuation,
               skills,
               system: system === undefined ? null : sha256(system),
               context: sha256(context),
@@ -463,7 +447,8 @@ const openStep = Effect.fn('Step.open')(function* (
  * which records nothing. A call to a tool whose identity changed or that
  * left since it was offered is stale: it settles as `tool_unavailable`,
  * like a name the run was never offered, and the step names the tool. A
- * park opens a step for its continuation, recorded like a request's. The
+ * park opens a step too, recorded like a request's, so a parked run holds
+ * only what its plugins offer now. The
  * first request or dispatch step a resumed activation opens is held to the
  * record, and so is every park before it, which leaves the hold unspent.
  */
@@ -476,12 +461,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
 ) {
   const open = yield* SynchronizedRef.get(run.steps);
   if (open !== null && kind === 'dispatch')
-    return {
-      tools: open.tools,
-      continuation: open.continuation,
-      system: undefined,
-      rows: [],
-    };
+    return { tools: open.tools, system: undefined, rows: [] };
   const held = open === null || open.holding;
   const step = yield* openStep(
     run,

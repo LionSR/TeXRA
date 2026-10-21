@@ -47,7 +47,6 @@ export {
   ToolRegistry,
   type AgentBlock,
   type AgentBlockResult,
-  type PluginContinuation,
   type PluginLayerServices,
   type ProcessPluginLayer,
   type PromptSection,

@@ -29,8 +29,9 @@
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config` and a plugin's
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
- *   (`r` on the approval, the `goal` plugin fact) and the goal completed,
- *   then `/model` and a message, so the switch is recorded at the run's
+ *   (`r` on the approval), which launches the goal's program as a child
+ *   run whose one round submits its verdict, and the chat's turn on the
+ *   goal's result; then `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
  *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
@@ -548,18 +549,28 @@ async function generate(root) {
   };
   const chatRun = () =>
     query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
-  const waiting = (turn) =>
+  // The turn the chat parked after, once a park is its latest position, and
+  // the wait for a park after `turn`: the goal's progress and result each
+  // wake the chat, so which turn a step lands on is not fixed.
+  const parkedTurn = () => {
+    const [last] = query(
+      cli.store(),
+      `SELECT json_extract(e.data, '$.payload.at') AS at,
+         json_extract(e.data, '$.payload.turn') AS turn
+       FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'run.position'
+       ORDER BY e."commit" DESC LIMIT 1`,
+      [chatRun()],
+    );
+    return last?.at === 'waiting' ? last.turn : null;
+  };
+  const parkedAfter = (label, turn) =>
     until(
-      `the chat waiting after turn ${turn}`,
-      () =>
-        query(
-          cli.store(),
-          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'run.position'
-             AND json_extract(e.data, '$.payload.at') = 'waiting'
-             AND json_extract(e.data, '$.payload.turn') = ?`,
-          [chatRun(), turn],
-        ).length > 0,
+      label,
+      () => {
+        const parked = parkedTurn();
+        return parked !== null && parked > turn ? parked : null;
+      },
       tty,
     );
   // "Keep agents running" on, in `/config`: the user's stop detaches the
@@ -600,16 +611,19 @@ async function generate(root) {
     tty,
   );
   tty.write('r');
-  await waiting(1);
+  // The goal's result, delivered once its round has verified it, opens the
+  // chat's turn that reports it.
+  await shows("the goal's result", 'Golden chat goal complete.');
+  let turn = await parkedAfter('the chat parked on the goal result', 0);
   await send('/model gemini38f');
   await shows('the model switch notice', 'Model switched to gemini38f');
   await send('After the model switch.');
-  await waiting(2);
+  turn = await parkedAfter('the chat parked after the model switch', turn);
   // A `/compact` wakes the chat: its turn's request commits the
   // `context.edit` that replaces the history with its summary.
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
-  await waiting(3);
+  await parkedAfter('the chat parked after the compaction', turn);
   // A turn that launches a Codex child and is then held, a message typed
   // behind it, and the user's stop: the follow-up stays queued on the
   // stopped run, and the stop detaches the parked child.
@@ -650,12 +664,13 @@ async function generate(root) {
   tty.write('Queued behind the held turn.');
   await shows('the typed follow-up', '› Queued behind the held turn.');
   tty.write('\r');
-  // Two messages typed to the open chat, the Codex turn's result, and this.
+  // The goal's two progress notices and its result, two messages typed to
+  // the open chat, the Codex turn's result, and this.
   await until(
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 4,
+        AND json_extract(e.data, '$.control') IS NULL`) === 7,
     tty,
   );
   tty.write('\x03');
@@ -1013,8 +1028,6 @@ const NANO_KEYS = new Set([
   'operationId',
 ]);
 const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
-/** A goal's random id (`goal_` and 12 hex digits). */
-const GOAL_ID = /goal_[0-9a-f]{12}/g;
 /** Numbers that measure wall time. */
 const TIMING_KEYS = new Set([
   'wallTimeMs',
@@ -1051,7 +1064,6 @@ function normalize(file, root) {
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
   const nanos = tokens((n) => `golden${n.toString().padStart(15, '0')}`);
-  const goals = tokens((n) => `goal_${n.toString(16).padStart(12, '0')}`);
   const times = tokens((n) => new Date(BASE_AT + n * 1000).toISOString());
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
@@ -1066,7 +1078,6 @@ function normalize(file, root) {
     if (typeof value === 'string') {
       for (const match of value.match(UUID) ?? []) uuids.get(match);
       for (const match of value.match(ISO) ?? []) times.get(match);
-      for (const match of value.match(GOAL_ID) ?? []) goals.get(match);
       if (NANO_KEYS.has(key) && NANO.test(value))
         nanos.get(NANO.exec(value)[1]);
       return;
@@ -1155,7 +1166,6 @@ function normalize(file, root) {
     ...roots.map((prefix) => [prefix, '/golden']),
     // The bundle's own resources, which the system prompt lists.
     [realpathSync.native(validationRoot), '/texra'],
-    ...goals.seen,
     ...[...ids.seen].map(([from, to]) => [
       new RegExp(`(?<![0-9a-f])${from}(?![0-9a-f])`, 'g'),
       to,
