@@ -30,7 +30,7 @@
   "packages/harness/src/shared/session/sessionView.ts": 459,
   "packages/harness/src/tools/bash.ts": 548,
   "packages/harness/src/tools/delegation/AgentTool.ts": 729,
-  "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 426,
+  "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 425,
   "packages/harness/src/tools/ExecutionsTool.ts": 796,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 440,
   "packages/harness/src/tools/memory/MemoryTool.ts": 624,
@@ -41,6 +41,6 @@
   "packages/llm/src/api/openaiResponsesCodec.ts": 556,
   "packages/llm/src/api/openrouterChat.ts": 771,
   "packages/llm/src/message.ts": 450,
-  "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 418,
+  "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 415,
   "packages/llm/src/turn.ts": 797
 }
