@@ -23,10 +23,8 @@ import {
   RUN_OUTCOME,
   toRetryErrorInfo,
 } from '@shared/schemas';
-import {
-  getFirstRunDone,
-  setFirstRunDone,
-} from '@shared/state/onboardingState';
+import { Settings, StateFlagSchema } from '@shared/config/settings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle } from './RunHandle';
@@ -480,9 +478,10 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     const globalState = yield* AppState;
     // Best-effort by contract: the flag is a funnel input, so a refused
     // write is logged and the run still completes.
-    yield* getFirstRunDone(globalState).pipe(
+    const firstRunDone = GlobalStateKey.ONBOARDING_FIRST_RUN_DONE;
+    yield* Settings.state(globalState, firstRunDone, StateFlagSchema).pipe(
       Effect.flatMap((done) =>
-        done ? Effect.void : setFirstRunDone(globalState, true),
+        done ? Effect.void : globalState.update(firstRunDone, true),
       ),
       Effect.catch((error) =>
         logLifecycleWarning('Failed to record the first completed run', error),
