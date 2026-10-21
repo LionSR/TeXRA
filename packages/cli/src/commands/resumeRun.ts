@@ -4,14 +4,14 @@ import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { describeFollowUpFailure } from '@texra-ai/harness';
 import { pathExists } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import {
+  ensureError,
   agentKey,
   agentName,
   isTaskConfig,
   ownerIdentity,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 import { executeCliWorkflowConfig } from './workflow';

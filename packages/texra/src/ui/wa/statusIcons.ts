@@ -6,8 +6,8 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports
-import type { TeXRAIconName } from '@shared/iconNames';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/settingsViewMessages';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
@@ -19,9 +19,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 export type TerminalStatusKind =
   'cancelled' | 'completed' | 'failed' | 'running';
 
-const TERMINAL_STATUS_ICON: Readonly<
-  Record<TerminalStatusKind, TeXRAIconName>
-> = {
+const TERMINAL_STATUS_ICON: Readonly<Record<TerminalStatusKind, IconName>> = {
   failed: 'circle-exclamation',
   completed: 'check',
   cancelled: 'circle-stop',
@@ -29,7 +27,7 @@ const TERMINAL_STATUS_ICON: Readonly<
 };
 
 /** The steady wa-icon name for a terminal-run status bucket. */
-export function terminalStatusIcon(kind: TerminalStatusKind): TeXRAIconName {
+export function terminalStatusIcon(kind: TerminalStatusKind): IconName {
   return TERMINAL_STATUS_ICON[kind];
 }
 

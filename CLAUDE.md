@@ -96,12 +96,11 @@ Things the tree won't tell you:
   with the tagged error the path raises, `Error` at a host port, and
   `ensureError` at a foreign boundary) also pin single-authority invariants
   with hardcoded rules rather than baseline JSON.
-- **`packages/harness/src/utils/` is host-agnostic, not universally browser-safe.** Only the
-  `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/text/stringUtils`)
-  is browser-reachable: ESLint lets the webview frontends import only it at
-  runtime, and holds it to no Node built-ins. Path basics, error messages and
-  text primitives reach the frontends through `@texra-ai/harness/schemas`,
-  whose closure the browser build proves. The rest of `packages/harness/src/utils/` must not be assumed browser-safe.
+- **`packages/harness/src/utils/` is host-agnostic, not browser-safe.** The
+  webview frontends import no `@utils/*` module at runtime (ESLint refuses
+  it). Path basics, error messages, text primitives and escaping reach them
+  through `@texra-ai/harness/schemas`, and the transcript helpers through
+  `@texra-ai/harness/transcript`; the browser build proves both closures.
   Side-specific helpers still belong in `frontend/` or `common/`.
 - **`packages/harness/src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
   (auth, subscriptions, credentials, workspace-file writes). It is _not_

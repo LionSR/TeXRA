@@ -12,29 +12,33 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  withLogChannel,
+  hasExtension,
+  type ToolResult,
+} from '@texra-ai/harness';
+import {
+  toErrorMessage,
+  agentKeyOf,
+  DEFAULT_WORKFLOW_AGENT,
+  type AgentOptionData,
+  type FileListEntry,
+} from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
-import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
-  agentKeyOf,
-  DEFAULT_WORKFLOW_AGENT,
-  type AgentOptionData,
-  type FileListEntry,
-  type ToolResult,
-} from '@shared/schemas';
+  AGENT_TOOL_NAME,
+  buildTemplatePassthrough,
+} from '@texra-ai/harness/plugins';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 /** The document task `entry` defines, or null for a chat agent. */
 export const documentTaskOf = (
@@ -154,7 +158,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
 > {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
-    .filter(isNonEmptyString)
+    .filter((file) => file.trim() !== '')
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
@@ -183,7 +187,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
     if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes (${formatBytes(sizeBytes)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return errorResult(message, {
       summary: `Rejected oversized BibTeX attachment`,
       diagnostics: {

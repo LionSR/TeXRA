@@ -94,7 +94,11 @@ export {
 // A request's answer the tool does not accept, read as the refusal it is.
 export { refusalOf } from '@shared/session/approvalDecision';
 export type { RefusalDecision } from '@shared/schemas';
-export { ToolError } from '@shared/schemas';
+export {
+  ToolError,
+  type EditRecord,
+  type ToolFileAttachment,
+} from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
@@ -136,6 +140,11 @@ export type {
   ChildStrategyBase,
   ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
+// The XML a child's settled turn delivers to its parent.
+export {
+  formatDelivery,
+  type ChildRunDelivery,
+} from '@agent/runtime/deliveryEnvelope';
 // A run's input as a plugin sends it, and how the send landed.
 export type {
   FollowUpFailureReason,
@@ -144,7 +153,10 @@ export type {
   SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 export type { InboxItem } from '@agent/followUp/Inbox';
-export type { FollowUpSenderInput } from '@agent/followUp/followUpSender';
+export {
+  senderOf,
+  type FollowUpSenderInput,
+} from '@agent/followUp/followUpSender';
 // What a call's requests and a decision hook's commits fail with.
 export type { LogWriteError } from '@agent/runtime/SessionHandle';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
@@ -154,10 +166,13 @@ export type { StepRoot } from '@utils/files/externalRoots';
 // policy, opening, trace and stages, model binding and run files.
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
-export type {
-  TemplateInputs,
-  TemplateOpening,
-  TemplateVars,
+// Renders a prompt template (Nunjucks) with its variables.
+export { renderPrompt } from '@utils/prompt';
+export {
+  buildTemplatePassthrough,
+  type TemplateInputs,
+  type TemplateOpening,
+  type TemplateVars,
 } from '@agent/prompt/templateInputs';
 export type {
   AgentTrace,
@@ -166,6 +181,7 @@ export type {
   StageOptions,
   StreamHandle,
   StreamOptions,
+  ToolCardHandle,
 } from '@agent/trace/AgentTrace';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 export type {
@@ -174,7 +190,9 @@ export type {
   RouteOptions,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
-export { RunFileService } from '@utils/files/runStorage';
+// A run's files under its session storage: its directory, the pre-run
+// snapshots and workspace mirrors it prepares, and output locations.
+export { RunFileService, type RunStorageEntry } from '@utils/files/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

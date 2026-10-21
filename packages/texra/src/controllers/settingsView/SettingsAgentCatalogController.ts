@@ -3,20 +3,22 @@ import { Clock, Effect, Predicate, Result } from 'effect';
 
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
-import { planTeamRun } from '@common/teams/TeamPlan';
-import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import {
+  WorkspaceStateKey,
   agentKeyOf,
   agentMatchesIdentifier,
   parseAgentModePresets,
-  type AgentModePreset,
   type AgentSource,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { planTeamRun } from '@common/teams/TeamPlan';
+import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import type { WorkspaceAgentsController } from '@texra-ai/harness';
+import type {
+  WorkspaceAgentsController,
+  AgentModePreset,
+} from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';
 
 interface SettingsAgentCatalogEntry {

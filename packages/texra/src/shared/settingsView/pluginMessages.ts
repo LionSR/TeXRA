@@ -9,8 +9,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import { SkillNameSchema } from '@texra-ai/harness/schemas';
 // Local imports - shared contracts
-import { SkillNameSchema } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 /** One installed plugin as the Plugins page lists it. */

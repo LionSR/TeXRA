@@ -1,3 +1,4 @@
+import { Number as Num } from 'effect';
 import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   hiddenRowsText,
@@ -5,7 +6,6 @@ import {
   previousRowsText,
   scrollStatusText,
 } from '@cli/tui/overflowText';
-import { clamp } from '@utils/text/stringUtils';
 
 /**
  * Below this many content rows, a scrollable region degrades to a single
@@ -184,7 +184,7 @@ export function boundedScrollableLines<K extends string>({
 
   if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     const contentRows = Math.max(1, maxDisplayLines - 1);
-    const offset = clamp(scrollOffset, 0, maxOffset);
+    const offset = Num.clamp(scrollOffset, { minimum: 0, maximum: maxOffset });
 
     if (maxDisplayLines === 1) {
       return [

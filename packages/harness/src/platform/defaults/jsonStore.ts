@@ -36,7 +36,9 @@ function storageError(error: PlatformError.PlatformError): Error {
   return ensureError(error.reason.cause ?? error);
 }
 
-interface JsonStoreOptions {
+/** How {@link JsonStore.open} treats a file it cannot read, and whether the
+ *  store follows other writers. */
+export interface JsonStoreOptions {
   /**
    * When set, a file that exists but cannot be read as a JSON object opens as
    * an empty view and reports the cause here instead of failing the open.
@@ -296,7 +298,7 @@ export class JsonStore {
     );
   }
 
-  snapshot(): JsonRecord {
+  snapshot(): Record<string, unknown> {
     return { ...this.current() };
   }
 

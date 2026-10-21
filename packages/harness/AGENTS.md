@@ -8,7 +8,7 @@ quality bar, and tool input schemas.
 ## Directory organization
 
 - `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
-- `packages/harness/src/utils/` is host-agnostic; only the `BROWSER_SAFE_UTILS` modules in `eslint.config.mjs` are browser-reachable (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to one of them must stay browser-safe.
+- `packages/harness/src/utils/` is host-agnostic, not browser-safe: browser code reaches its helpers only through the `./schemas` and `./transcript` entries, whose closures the browser build proves (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to a module in either entry's closure must stay browser-safe.
   - `utils/core/` - Path basics, abort and failure helpers, and id minting (`normalizeFilePath`, `getBasename`, `getFileStem`, `generateRunId`)
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
 

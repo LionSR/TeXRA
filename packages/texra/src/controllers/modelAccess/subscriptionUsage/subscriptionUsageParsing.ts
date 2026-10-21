@@ -1,10 +1,9 @@
-import { Duration, Effect, Predicate } from 'effect';
+import { Duration, Effect, Number as Num, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 
-import { clamp } from '@utils/text/stringUtils';
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
 
@@ -131,9 +130,10 @@ export function usageWindow(
 ): SubscriptionUsageWindow | undefined {
   let percentUsed: number | undefined;
   if (usage.used !== undefined) {
-    percentUsed = clamp(usage.used, 0, 100);
+    percentUsed = Num.clamp(usage.used, { minimum: 0, maximum: 100 });
   } else if (usage.remaining !== undefined) {
-    percentUsed = 100 - clamp(usage.remaining, 0, 100);
+    percentUsed =
+      100 - Num.clamp(usage.remaining, { minimum: 0, maximum: 100 });
   }
   if (percentUsed === undefined) return undefined;
   return {

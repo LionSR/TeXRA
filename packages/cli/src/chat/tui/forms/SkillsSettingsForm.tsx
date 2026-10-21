@@ -1,18 +1,18 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import {
+  WorkspaceStateKey,
+  ActiveSkillSourceScopeSchema,
+  type ActiveSkillSourceScope,
+} from '@texra-ai/harness/schemas';
 import {
   Settings,
   Skills,
   type ProcessRuntime,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
-import {
-  ActiveSkillSourceScopeSchema,
-  type ActiveSkillSourceScope,
   type SkillDisplayItem,
-} from '@shared/schemas';
+} from '@texra-ai/harness';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 import { AsyncListForm } from './_shared/ListForm';

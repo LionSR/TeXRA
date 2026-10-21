@@ -11,7 +11,12 @@ import {
   hasExtension,
   isPathWithin,
 } from '@texra-ai/harness';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  fileLocationDisplayPath,
+  type FileLocation,
+  type RunStorageFileLocation,
+} from '@texra-ai/harness/schemas';
 import {
   callerRun,
   resolveToolPath,
@@ -19,16 +24,11 @@ import {
   nullishWithDefault,
   executed,
   RunFileService,
+  ToolError,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { pathToLocationIn } from '@texra-ai/harness';
-import {
-  fileLocationDisplayPath,
-  ToolError,
-  type FileLocation,
-  type RunStorageFileLocation,
-} from '@shared/schemas';
 
 // Local file imports
 import { EditorHost, type EditorCapabilities } from './editorHost';

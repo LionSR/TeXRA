@@ -6,8 +6,6 @@
  */
 import { z } from 'zod';
 
-import { RunIdSchema } from './identifiers';
-
 // ============================================================================
 // Identifiers + session links (canonical home)
 // ============================================================================
@@ -22,34 +20,6 @@ export const InquiryThreadIdSchema = z
   .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
   .transform((value) => value.toLowerCase());
 export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
-
-// ============================================================================
-// Status + summary
-// ============================================================================
-
-const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
-export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
-
-export const InquiryThreadSummarySchema = z.object({
-  threadId: InquiryThreadIdSchema,
-  /** The run the last question was asked under; continuations flow back to it. */
-  parentRunId: RunIdSchema.nullable(),
-  status: InquiryThreadStatusSchema,
-  lastQuestionPreview: z.string(),
-  lastActivityIso: z.iso.datetime(),
-  turnCount: z.int().nonnegative(),
-});
-export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
-
-// ============================================================================
-// Draft persistence — open-turn textarea state, debounced
-// ============================================================================
-
-export const InquiryDraftSchema = z.object({
-  answer: z.string(),
-  sessionLinks: z.string(),
-});
-export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
 
 /** Full global inquiry records, independent of project display lifetimes. */
 const InquiryTurnBaseShape = {

@@ -107,8 +107,7 @@ describe('MemoryTool view with an omitted path', () => {
     'preserves the model-facing directory listing bytes and depth limit',
     () =>
       Effect.gen(function* () {
-        // Only the system clock is pinned (the MODIFIED column is relative to
-        // now); the walk runs on Effect's scheduler, which needs live
+        // Only the system clock is pinned; the walk runs on Effect's scheduler, which needs live
         // setImmediate/setTimeout to make progress.
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
@@ -177,11 +176,11 @@ describe('MemoryTool view with an omitted path', () => {
           output: [
             'Contents of /memories (showing 1–5 of 5, up to 2 levels deep):',
             'SIZE\tMODIFIED\tBY\tPATH',
-            '0 B\tyesterday\t-\t/memories',
-            '0 B\tyesterday\t-\t/memories/alpha',
-            `${Buffer.byteLength(PINNED_FRONTMATTER)} B\tyesterday\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
-            '0 B\tyesterday\t-\t/memories/alpha/beta',
-            `${Buffer.byteLength(TEST_FRONTMATTER)} B\tyesterday\ttest-agent\t/memories/root.md`,
+            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories',
+            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories/alpha',
+            `${Buffer.byteLength(PINNED_FRONTMATTER)} bytes\t2026-01-01T00:00:00.000Z\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
+            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories/alpha/beta',
+            `${Buffer.byteLength(TEST_FRONTMATTER)} bytes\t2026-01-01T00:00:00.000Z\ttest-agent\t/memories/root.md`,
           ].join('\n'),
         });
       }),

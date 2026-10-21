@@ -7,7 +7,11 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import type { RunId } from '@shared/schemas';
+import {
+  type CommitOrdinal,
+  qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
 import type { InboxItem, SendOptions } from './Inbox';
 
 /**
@@ -169,14 +173,20 @@ export function resumeOnSession(
         }),
       );
   });
-  return Effect.flatMap(registryOf(session.runs).fork(attempt), Fiber.join);
+  // The attempt is the session's from the fork on; the join is observation
+  // only, so it stays interruptible even where the caller is masked (a
+  // child's boundary settlement waits here for its parent's whole resumed
+  // turn, and a stop of that child must land before the parent parks).
+  return Effect.flatMap(registryOf(session.runs).fork(attempt), (fiber) =>
+    Effect.interruptible(Fiber.join(fiber)),
+  );
 }
 
 /**
  * Wake a run whose follow-up row is already durable: true when a generation
- * here reads it, either one already live (the wake was owed when the row
- * landed, and another has started since) or the one the resume
- * ({@link resumeOnSession}) started.
+ * here reads it, either one already live (it takes the row at its next
+ * park, or its exit owes the wake: {@link wakeAfterGeneration}) or the one
+ * the resume ({@link resumeOnSession}) started.
  */
 export function startFollowUpWake(
   runId: RunId,
@@ -191,6 +201,56 @@ export function startFollowUpWake(
         ),
   );
 }
+
+/**
+ * The wake a run's last liveness arm here owes as it ends. A row landing
+ * while a generation (or a hold) is live is left to it: `Sent.wake` is
+ * false and its sender resumes nothing. But a loop stops reading before its
+ * fiber ends (the description join, the terminal rows), and a hold reads
+ * nothing at all, so a row landing then has no reader. The registry calls
+ * this as the arm ends, with `since`, the commit the arm began at; once
+ * every job enqueued before has committed (every such row is durable), a
+ * run nobody here holds, with a message queued since then on an open input,
+ * is resumed. A row queued before the arm began is not owed: the arm was its
+ * wake (a resume that failed leaves it to the next explicit Resume), or its
+ * sender saw no live arm and woke the run itself; the one resume per run
+ * (`Inbox.resumeOnce`) joins the two. A failure to read is logged.
+ */
+export const wakeAfterGeneration = (
+  runId: RunId,
+  session: SessionHandle,
+  since: CommitOrdinal,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* session.log.settled;
+    if (session.runs.get(runId)?.live === true) return;
+    const input = yield* session.followUps.read(runId);
+    if (input.closed) return;
+    const queued = new Set(
+      input.followUps.flatMap((f) =>
+        f.control === undefined ? [f.followUpId] : [],
+      ),
+    );
+    const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
+      'followup.queued',
+    ]);
+    const landedSince = rows.some(
+      (row) =>
+        row.type === 'followup.queued' &&
+        row.commit > since &&
+        queued.has(row.followUpId),
+    );
+    if (landedSince) yield* startFollowUpWake(runId, session);
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning(
+        `Run ${runId} was not woken as its generation left; an explicit Resume delivers what is queued`,
+      ).pipe(
+        Effect.annotateLogs({ data: Cause.squash(cause) }),
+        withLogChannel(CHANNEL),
+      ),
+    ),
+  );
 
 type Admission =
   SubmitFollowUpResult | { readonly resume: Effect.Effect<boolean> };

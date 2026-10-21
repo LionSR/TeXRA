@@ -30,18 +30,20 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import { rollupOf } from '@texra-ai/harness/schemas';
+import { rollupOf, type RunId } from '@texra-ai/harness/schemas';
 import {
   dispatchedChildren,
   formatCompactDuration,
   formatResultCount,
 } from '@texra-ai/harness/transcript';
-import type { TeXRAIconName } from '@shared/iconNames';
-import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
-import { inquiryThreadsUnder } from '@texra/shared/plugins/externalInquiry';
+import {
+  inquiryThreadsUnder,
+  type InquiryThreadSummary,
+} from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
+import type { IconName } from '@ui/wa/iconNames';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -54,7 +56,7 @@ import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
-const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
+const TONE_ICONS: Record<RunView['tone'], IconName> = {
   running: 'circle',
   success: 'circle-check',
   danger: 'circle-xmark',

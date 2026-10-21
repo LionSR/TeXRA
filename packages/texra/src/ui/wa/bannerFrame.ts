@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
@@ -22,7 +22,7 @@ export function renderBannerFrame(options: {
   readonly variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
   readonly appearance?: 'accent' | 'filled' | 'outlined' | 'plain';
   readonly size?: 's' | 'm' | 'l';
-  readonly icon?: TeXRAIconName;
+  readonly icon?: IconName;
   readonly frameClassName?: string;
   readonly calloutClassName?: string;
   readonly role?: string;

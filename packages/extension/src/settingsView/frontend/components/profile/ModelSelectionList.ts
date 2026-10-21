@@ -5,8 +5,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { providerDisplayName } from '@texra-ai/llm';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
+import {
+  GlobalStateKey,
+  MODEL_AVAILABILITY_STATUS,
+} from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import {
@@ -33,7 +36,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 // Local imports - profile view styles and events
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';

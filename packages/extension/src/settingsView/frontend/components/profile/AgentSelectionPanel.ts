@@ -1,6 +1,11 @@
 /** Master-detail panel of the agent library, grouped by source. */
 
-import { getBasename } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  AGENT_SOURCE,
+  agentKeyOf,
+  isPackagedAgentSource,
+} from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
@@ -9,15 +14,10 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  AGENT_SOURCE,
-  agentKeyOf,
-  isPackagedAgentSource,
-} from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
+import type { IconName } from '@ui/wa/iconNames';
 import {
   commonViewStyles,
   designTokens,
@@ -47,7 +47,7 @@ import type { AgentSource } from '@texra-ai/harness/schemas';
  */
 function sourceMeta(source: AgentSource): {
   displayName: string;
-  badge?: { icon: TeXRAIconName; label: string };
+  badge?: { icon: IconName; label: string };
 } {
   const { properties } = AGENT_DECORATORS;
   if (!(source in properties)) {

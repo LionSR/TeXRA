@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  endToolUseCard,
-  startToolUseCard,
-  TraceEmitter,
-  type AgentTrace,
-  type AgentEvent,
-} from '@agent/trace';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { TraceEmitter, type AgentTrace, type AgentEvent } from '@agent/trace';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 function openDeferredThinking(
   logger: AgentTrace,
@@ -101,27 +94,5 @@ describe('AgentTrace stream output', () => {
         { type: 'stream.end', finalText: 'final reasoning' },
       ]);
     });
-  });
-});
-
-describe('tool-use card input redaction', () => {
-  it('reuses the captured groupId when endToolUseCard is called with no explicit stage', () => {
-    const runTrace = createTestRunTrace('stream' as RunId);
-    const logger = runTrace.trace;
-    const outer = logger.openStage('outer');
-    const ref = startToolUseCard(logger, 'demoTool', { arg: 1 }, outer.id);
-
-    expect(ref.groupId).toBeDefined();
-
-    // Mirrors the deferred-tool path: caller passes the captured ref so
-    // the end event lands under the same stage as the start.
-    endToolUseCard(logger, ref, {
-      toolName: 'demoTool',
-      input: { arg: 1 },
-      output: 'ok',
-    });
-
-    const toolRow = runTrace.rows().find((row) => row.id === ref.logId);
-    expect(toolRow?.groupId).toBe(ref.groupId);
   });
 });

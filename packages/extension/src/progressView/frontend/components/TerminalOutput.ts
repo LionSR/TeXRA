@@ -1,4 +1,5 @@
 // Third-party imports
+import { Number as Num } from 'effect';
 import { LitElement, css, html, unsafeCSS, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { FitAddon } from '@xterm/addon-fit';
@@ -6,7 +7,6 @@ import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
 import { resolveXtermTheme } from '@ui/wa/xtermTheme';
-import { clamp } from '@utils/text/stringUtils';
 
 const MIN_SCROLLBACK = 4_000;
 
@@ -225,7 +225,7 @@ export class TerminalOutput extends LitElement {
     const contentRows = buffer.baseY + buffer.cursorY + 1;
     const rows = this.fill
       ? (dims?.rows ?? this.terminal.rows)
-      : clamp(contentRows, 1, MAX_VISIBLE_ROWS);
+      : Num.clamp(contentRows, { minimum: 1, maximum: MAX_VISIBLE_ROWS });
 
     if (cols !== this.terminal.cols || rows !== this.terminal.rows) {
       this.terminal.resize(cols, rows);

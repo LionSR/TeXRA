@@ -7,7 +7,7 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - utils
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
@@ -18,7 +18,7 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 export interface SettingsSectionHeadingOptions {
   readonly title: string;
   readonly description?: string | TemplateResult;
-  readonly icon?: TeXRAIconName;
+  readonly icon?: IconName;
   readonly actions?: TemplateResult | typeof nothing;
   readonly id?: string;
 }

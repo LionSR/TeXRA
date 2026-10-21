@@ -9,8 +9,7 @@ import {
   ToolContext,
   withLogChannel,
 } from '@texra-ai/harness';
-import { executed } from '@texra-ai/harness/plugins';
-import { ToolError } from '@shared/schemas';
+import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { IMAGE_TOOL_LABEL } from '@texra/shared/constants/latexToolchain';
 

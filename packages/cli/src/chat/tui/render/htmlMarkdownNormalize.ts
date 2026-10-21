@@ -1,10 +1,10 @@
+import { Number as Num } from 'effect';
 import { summarizeEmbeddedSubagentFollowups } from '@texra-ai/harness/transcript';
 import {
   MATH_SPAN_PATTERNS,
   protectByPatterns,
 } from '@ui/markdown/latexPlaceholders';
 import { protectLatexMathSpansForNormalize } from '@ui/markdown/latexMathShield';
-import { clamp } from '@utils/text/stringUtils';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such
 // as `<strong-x>` remain literal transcript text.
@@ -214,7 +214,9 @@ function replaceBrWithQuotePrefixAt(
 
 function headingMarker(level: string): string {
   const parsed = Number.parseInt(level, 10);
-  const depth = Number.isFinite(parsed) ? clamp(parsed, 1, 6) : 3;
+  const depth = Number.isFinite(parsed)
+    ? Num.clamp(parsed, { minimum: 1, maximum: 6 })
+    : 3;
   return '#'.repeat(depth);
 }
 

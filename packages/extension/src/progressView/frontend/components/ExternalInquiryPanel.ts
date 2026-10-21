@@ -21,11 +21,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import type {
-  AnsweredInquiryTurn,
-  ExternalInquiryPermission,
+  InquiryThreadRecord,
   InquiryDraft,
-} from '@shared/schemas';
-import type { InquiryThreadRecord } from '@texra/shared/plugins/externalInquiry';
+} from '@texra/shared/plugins/externalInquiry';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -37,6 +35,10 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
+import type {
+  AnsweredInquiryTurn,
+  ExternalInquiryPermission,
+} from '@texra-ai/harness/schemas';
 
 const DRAFT_SAVE_DELAY_MS = 400;
 
