@@ -1,5 +1,5 @@
+import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 
 /** The CLI's handle on the one credential file under `storageRoot`, telling
  *  this process's surfaces about every key it writes. */

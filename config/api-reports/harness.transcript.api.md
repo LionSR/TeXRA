@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/transcriptEntry.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 72
+Exports: 74
 
 - `BASH_TOOL_DEFAULT_TIMEOUT_MS` — `const BASH_TOOL_DEFAULT_TIMEOUT_MS: 120000`
 - `buildMcpToolName` — `function buildMcpToolName: (server: string, tool: string) => string`
@@ -75,4 +75,6 @@ Exports: 72
 - `transcriptText` — `function transcriptText: (raw: string) => TranscriptText`
 - `TranscriptText` — `interface TranscriptText { readonly lineCount: number; readonly full: string; readonly oneLine: string; }`
 - `UserRow` — `interface UserRow extends TranscriptRowBase { readonly kind: 'user'; readonly text: TranscriptText; readonly summary: TranscriptText; readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>; readonly attachments?: readonly MediaAttachmentKind[]; readonly mediaFiles?: readonly string[]; readonly forkAt?: number; }`
+- `viewDiagnosticsLayer` — `const viewDiagnosticsLayer: Layer<never, never, never>`
 - `WebSearchRow` — `interface WebSearchRow extends TranscriptRowBase { readonly kind: 'webSearch'; readonly label: string; readonly query?: string; }`
+- `withForkFailureReporting` — `function withForkFailureReporting: <R, ER>(runtime: ManagedRuntime<R, ER>) => ManagedRuntime<R, ER>`

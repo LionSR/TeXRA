@@ -7,6 +7,7 @@
 
 // Third-party imports
 import { Duration, Effect, type FileSystem } from 'effect';
+import isWSL from 'is-wsl';
 
 // Local imports
 import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
@@ -18,7 +19,6 @@ import {
 } from '@texra/utils/system/toolChecks';
 import { scopedClient } from '@tools/timeouts';
 import { ToolProbeFailed } from '@tools/toolProbes';
-import { isWSL } from '@utils/system/wslDetect';
 import type {
   ToolAvailabilityChecks,
   ToolProbeError,

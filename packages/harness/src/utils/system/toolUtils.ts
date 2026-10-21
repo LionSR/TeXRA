@@ -81,7 +81,7 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
 
 /** What a probe found: whether the tool answered, and whether the probe
  *  itself failed rather than finding nothing. */
-interface ToolProbe {
+export interface ToolProbe {
   readonly installed: boolean;
   readonly probeFailed: boolean;
 }
@@ -147,7 +147,7 @@ export const probeTool = Effect.fn('toolUtils.probeTool')(function* (
 
 /** The version command of each image processor: GraphicsMagick has no
  *  `--version` flag. */
-export const IMAGE_TOOL_COMMANDS = {
+const IMAGE_TOOL_COMMANDS = {
   magick: 'magick --version',
   gm: 'gm version',
 } as const;

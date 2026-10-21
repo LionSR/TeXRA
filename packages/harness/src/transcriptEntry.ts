@@ -6,6 +6,12 @@
 // caller's transport serves.
 export { RemoteSessionView } from '@controllers/session/SessionView';
 export { SessionInputs } from '@shared/session/sessionInputs';
+// The runtime a view folds on: fork failures reported, and the redacting
+// log sink in place of the console logger.
+export {
+  viewDiagnosticsLayer,
+  withForkFailureReporting,
+} from '@platform/processRuntime';
 export type { CommitOrdinal, FoldInput } from '@shared/schemas';
 
 // The rows: one kind each, the headline a row is listed by, and the

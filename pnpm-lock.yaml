@@ -747,6 +747,9 @@ importers:
       identifiers-arxiv:
         specifier: 'catalog:'
         version: 0.1.1
+      is-wsl:
+        specifier: 'catalog:'
+        version: 3.1.1
       katex:
         specifier: ^0.19.0
         version: 0.19.0
