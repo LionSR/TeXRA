@@ -1,4 +1,4 @@
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { DeclinableUsageRoute } from './schemas/usage';
 import type { ExhaustionReason } from './schemas/errors';
 
@@ -33,13 +33,13 @@ const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] = Object.freeze([
     usageRoute: 'chatgpt-subscription',
     exhaustionReason: 'chatgpt-subscription',
     retryFallbackName: 'your own OpenAI API key',
-    retrySourceName: CHATGPT_AUTH.subscriptionLabel,
+    retrySourceName: SUBSCRIPTION_AUTH_NAMES.chatgpt.subscriptionLabel,
   }),
   Object.freeze({
     usageRoute: 'xai-subscription',
     exhaustionReason: 'xai-subscription',
     retryFallbackName: 'your own xAI API key',
-    retrySourceName: GROK_AUTH.subscriptionLabel,
+    retrySourceName: SUBSCRIPTION_AUTH_NAMES.grok.subscriptionLabel,
   }),
   Object.freeze({
     usageRoute: 'kimi-code-subscription',

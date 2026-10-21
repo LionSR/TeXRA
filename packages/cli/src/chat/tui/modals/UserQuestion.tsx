@@ -23,11 +23,6 @@ import {
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
-import type {
-  UserQuestionAnswers,
-  UserQuestionPermission,
-  UserQuestionPrompt,
-} from '@shared/schemas';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
@@ -35,6 +30,11 @@ import {
   updateUserQuestionAnswers,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
+import type {
+  UserQuestionAnswers,
+  UserQuestionPermission,
+  UserQuestionPrompt,
+} from '@texra-ai/harness/schemas';
 
 interface UserQuestionProps {
   readonly availableRows?: number;

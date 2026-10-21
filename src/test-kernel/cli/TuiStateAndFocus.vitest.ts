@@ -226,7 +226,7 @@ describe('CLI TUI session run state', () => {
     session.markRunPending(earlier);
     session.markRunCompleted(earlier);
     session.runId = root;
-    session.stopRequested = true;
+    session.askStop('user');
 
     session.markRunPending(startupSettled);
 
@@ -267,7 +267,7 @@ describe('CLI TUI session run state', () => {
     session.runId = root;
     session.interruptedRunId = root;
     session.runExitCode = CliExitCode.Interrupted;
-    session.stopRequested = true;
+    session.askStop('user');
 
     session.clearRunState();
 

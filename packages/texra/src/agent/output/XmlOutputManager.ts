@@ -1,16 +1,20 @@
 import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { entryTypeIn } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem } from 'effect';
 
 import { createExternalLocation } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
+import {
+  toErrorMessage,
+  fileLocationDisplayPath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,
@@ -23,8 +27,6 @@ import {
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
-import { RunFileService } from '@utils/files/runStorage';
-import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {
   assignByContentSimilarity,
@@ -36,6 +38,7 @@ import {
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { ConfigProvider } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

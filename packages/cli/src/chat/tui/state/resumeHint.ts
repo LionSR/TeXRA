@@ -1,12 +1,12 @@
 import { quote } from 'shell-quote';
 
-import { descendantRuns } from '@texra-ai/harness/schemas';
 import {
+  descendantRuns,
   isEmptyUsage,
   isLoopDriven,
   type RunId,
   type TokenUsageStats,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';

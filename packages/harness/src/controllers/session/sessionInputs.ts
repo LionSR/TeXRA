@@ -259,17 +259,16 @@ const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   damaged: LocalRuntimeState['unreadable'],
 ) =>
-  Effect.gen(function* () {
-    const local = yield* SubscriptionRef.get(ref);
+  // One atomic update against the other writers of this ref (the liveness
+  // prober's `dead`, `updateLocal`'s `resumeBlocked`).
+  SubscriptionRef.update(ref, (local) => {
     const known = new Set(local.unreadable.map(({ runId }) => runId));
     const fresh = damaged.filter(({ runId }) => !known.has(runId));
     // Only a new damaged run moves the level: an unchanged one would wake
     // this reader again for nothing, forever.
-    if (fresh.length > 0)
-      yield* SubscriptionRef.set(ref, {
-        ...local,
-        unreadable: [...local.unreadable, ...fresh],
-      });
+    return fresh.length > 0
+      ? { ...local, unreadable: [...local.unreadable, ...fresh] }
+      : local;
   });
 
 /** Closed sequence rows are no longer live, even while their tombstones remain stored. */

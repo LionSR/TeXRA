@@ -6,7 +6,13 @@ import {
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
+  type AgentModePreset,
 } from '@texra-ai/harness';
+import {
+  AGENT_MODE_PRESETS,
+  agentKeyOf,
+  STARTER_AGENT_MODE_PRESET,
+} from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
@@ -16,12 +22,6 @@ import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import {
-  AGENT_MODE_PRESETS,
-  agentKeyOf,
-  STARTER_AGENT_MODE_PRESET,
-  type AgentModePreset,
-} from '@shared/schemas';
 
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';

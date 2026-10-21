@@ -26,6 +26,7 @@ import {
   PlatformSecrets,
   LanguageModel,
 } from '@texra-ai/harness';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -35,7 +36,7 @@ import {
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -60,11 +61,10 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { type RunId } from '@shared/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
@@ -112,10 +112,6 @@ import {
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { getToolDocsPage } from '@texra/utils/system/toolChecks';
-import {
-  locateInWorkspace,
-  workspaceRelativePath,
-} from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -473,7 +469,7 @@ export function createExtensionHostRequests(
               ),
             );
           }
-          const sourceLocation = locateInWorkspace(
+          const sourceLocation = pathToLocationIn(
             roots.workspace,
             parsed.sourcePath,
           );
@@ -543,8 +539,7 @@ export function createExtensionHostRequests(
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
-    openPath: (file, line) =>
-      runHandler('openFile', openFile(roots, file, line)),
+    openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),

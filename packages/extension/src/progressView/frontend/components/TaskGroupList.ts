@@ -9,20 +9,23 @@ import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
-import { isInFlightPhase } from '@texra-ai/harness/schemas';
-import { taskGroupDisplayStatus } from '@texra-ai/harness/transcript';
+import {
+  isInFlightPhase,
+  type RunOutcome,
+  type RunLifecycleStatus,
+  type RunId,
+  type TaskGroup,
+} from '@texra-ai/harness/schemas';
+import {
+  taskGroupDisplayStatus,
+  pluralize,
+} from '@texra-ai/harness/transcript';
 import { compareBySeqNo } from '@texra-ai/harness/transcript';
 import {
   scriptStages,
   type ScriptStageView,
   type TranscriptRow,
 } from '@texra-ai/harness/transcript';
-import {
-  type RunOutcome,
-  type RunLifecycleStatus,
-  type RunId,
-  type TaskGroup,
-} from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
@@ -34,7 +37,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { formatDuration, pluralize } from '@utils/text/stringUtils';
+import { formatDuration } from '@ui/copy/format';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';

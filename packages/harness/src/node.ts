@@ -1,38 +1,31 @@
-import process from 'node:process';
-
-import { Effect } from 'effect';
-
-// Local imports - types
-import { SecretsFailed } from '@texra-ai/llm';
-import type { PlatformSecrets } from '@platform/secrets';
-
-// Local imports - platform defaults
-import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import {
-  settingsCatalog,
-  type StateSettingEntry,
-} from '@shared/state/stateSettings';
-import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
-
-import type { AgentPlatform } from './index.js';
+// The default platform of an SDK embedder.
+export {
+  nodePlatform,
+  type NodePlatformOptions,
+} from '@platform/defaults/sdkPlatform';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
-// composes its own platform: workspace roots over Node, the canonical
-// spelling of a workspace path, and the storage layout under a root.
+// composes its own platform: workspace roots over Node, the runtime skill
+// sources it registers once, the Node services a process serves (the file
+// system, paths and a supervised child-process spawner), the canonical
+// spelling of a workspace path, a path's workspace-relative form, and the
+// storage layout under a root.
 export {
   createNodeWorkspaceRoots,
+  initializeNodeRuntimeSkills,
+  type NodeRuntimeSkillOptions,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
-// The process's SQLite stores (the global root's handle, the project
-// connections every session borrows), the identity stamped on every row the
-// process appends, and what reading a process's start identity takes.
-export type {
+export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+// The process's SQLite stores (the global root's handle, which
+// `ProcessLayerOptions.globalDatabase` may replace, and the bound its input
+// history keeps; the project connections every session borrows), the
+// identity stamped on every row the process appends, and what reading a
+// process's start identity takes.
+export {
   GlobalDatabase,
-  ProjectDatabases,
+  INPUT_HISTORY_LIMIT,
+  type ProjectDatabases,
 } from '@shared/session/database';
 export type { ProcessIdentity } from '@shared/session/sessionEvents';
 export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -40,25 +33,51 @@ export {
   canonicalizeWorkspacePath,
   relativeToRoot,
 } from '@utils/system/nodeWorkspace';
+export { workspaceRelativePath } from '@utils/files/workspaceFS';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-// Running a program on this machine: find it, run it, and give any other
-// child the PATH the harness resolves tools on.
+// The global root's record of each workspace store under a storage root,
+// keyed by its storage directory's name: the root it serves.
+export { WORKSPACE_STORES } from '@shared/session/valueFamily';
+// Running a program on this machine: find it, run it, tell whether it is
+// installed, and give any other child the PATH the harness resolves tools on.
 export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
+export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
+export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export { withExtendedPath } from '@utils/system/platformPaths';
+export { runsInWsl } from '@utils/system/wslDetect';
 // The process environment as the harness reads it: a flag (any value but
-// unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
-// child agent CLI starts from (no provider key but the one it authenticates
-// with).
+// unset, empty, `0`, `false`, `no` or `off` is on), the environment a child
+// agent CLI starts from (no provider key but the one it authenticates
+// with), and the one a non-interactive git child starts from (no
+// helper-invoking key, no terminal prompt).
 export { envFlag, inheritedEnv } from '@utils/system/envFlags';
-// Crash-safe replace of a file.
-export { writeFileAtomic } from '@utils/files/fsDurability';
+export { makeMachineGitEnv } from '@utils/system/gitEnv';
+// The file reads `FileSystem` has no form for: crash-safe replace, existence
+// with a path under a file read as absent, text with a leading BOM kept and
+// line endings normalized, a listing that types each entry from its dirent
+// and drops one it cannot type, an entry's own (lstat) type, and the
+// failures a probe reads as absent (`NotFound`, or a parent that is a file).
+export {
+  readDirectoryTypedTolerant,
+  readNormalizedFile,
+  writeFileAtomic,
+} from '@utils/files/fsDurability';
+export {
+  absentReason,
+  entryTypeIn,
+  pathExists,
+} from '@utils/files/fsEntryExists';
+// The harness's log path as Effect diagnostics (its logger over the installed
+// sink, the minimum level, a bounded tracer), for a host program that runs
+// outside its process runtime: before it is built, or after it is gone.
+export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.
@@ -75,77 +94,12 @@ export {
   type ConfigStore,
   type JsonConfigProviderOptions,
 } from '@platform/defaults/jsonConfigProvider';
-
-/** Filesystem locations used by the default Node platform. */
-export interface NodePlatformOptions {
-  readonly agentsDir: string;
-  readonly workspaceDir?: string;
-  /**
-   * The directory this platform stores run history, checkpoints and its
-   * global state under, and reads its `mcp.json` from. Required: the package
-   * never falls back to a per-user default directory.
-   */
-  readonly storageDir: string;
-  /** The setting rows the embedder's plugins read, resolved beside the
-   *  harness's own by the platform's config. */
-  readonly settings?: readonly StateSettingEntry[];
-}
-
-const NO_PERSISTED_SECRETS =
-  'The default Node platform does not persist secrets.';
-
-const unpersisted = (operation: 'set' | 'delete', key: string) =>
-  Effect.fail(
-    new SecretsFailed({
-      reason: 'store-unavailable',
-      operation,
-      key,
-      message: NO_PERSISTED_SECRETS,
-    }),
-  );
-
-/** Holds nothing; an API key comes from its env var via `resolveCredential`. */
-const unpersistedSecrets: PlatformSecrets = {
-  get: () => Effect.succeed(undefined),
-  set: (key) => unpersisted('set', key),
-  delete: (key) => unpersisted('delete', key),
-  listStoredKeys: () => Effect.succeed([]),
-};
-
-/**
- * Construct the Node services required by the agent package: the process
- * platform plus the workspace roots of `workspaceDir`.
- *
- * Agent definitions are read from `agentsDir`; configuration and state are
- * process-local, while run artifacts use the ordinary Node storage layout.
- */
-export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
-  // Canonical once, here: the storage directory and `roots.workspace` both
-  // key on the physical root, as every other host's do.
-  const workspaceDir = canonicalizeWorkspacePath(
-    options.workspaceDir ?? process.cwd(),
-  );
-  const globalState = new MemoryStateStore();
-  return {
-    secrets: unpersistedSecrets,
-    // No editor behind this platform.
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    agentDirectories: {
-      custom: () => Effect.succeed(options.agentsDir),
-      customConfigured: () => Effect.succeed(true),
-      builtIn: () => Effect.succeed(''),
-    },
-    roots: createNodeWorkspaceRoots({
-      host: 'sdk',
-      workspacePath: workspaceDir,
-      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
-      storageRoot: options.storageDir,
-      // Process-local configuration: an embedder's settings must not be read
-      // from, or written to, the user's `.texra/config.json`.
-      config: new MemoryConfigProvider(settingsCatalog(options.settings ?? [])),
-      workspaceState: new MemoryStateStore(),
-      repoState: new MemoryStateStore(),
-      globalState,
-    }),
-  };
-}
+// The credential store every host keeps under its storage root, and the
+// file-backed JSON store a host's configuration files open as, with the
+// Node file services both write through.
+export { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
+export {
+  JsonStore,
+  nodeFileServices,
+  type JsonStoreOptions,
+} from '@platform/defaults/jsonStore';

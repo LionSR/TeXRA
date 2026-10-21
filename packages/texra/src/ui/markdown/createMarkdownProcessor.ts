@@ -7,7 +7,7 @@
 
 import { LRUCache } from 'lru-cache';
 
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import { escapeAttr, escapeText } from '@texra-ai/harness/schemas';
 
 import {
   createBegEndEnvironmentProbe,

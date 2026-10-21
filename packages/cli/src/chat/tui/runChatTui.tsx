@@ -23,6 +23,7 @@ import {
   qualifyAggregateId,
   type RunId,
   type AgentConfig,
+  RUN_PHASE,
 } from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
@@ -39,6 +40,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -69,9 +71,7 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { RUN_PHASE } from '@shared/schemas';
-import { getFirstRunDone } from '@shared/state/onboardingState';
+import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';

@@ -1,5 +1,8 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
+import * as path from 'node:path';
+
 import { Settings } from '@texra-ai/harness';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 import {
@@ -26,17 +29,22 @@ import {
   StateReadFailed,
   Unavailable,
   withLogChannel,
+  pathToLocationIn,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  isTaskConfig,
+  recipeBlockOf,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
+  CopilotRoutes,
+  presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
-import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import {
   validateRunRequest,
   type RunRequest,
@@ -55,11 +63,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { entryExists } from '@utils/files/fsEntryExists';
-import {
-  locateInWorkspace,
-  workspaceAbsolutePath,
-} from '@utils/files/workspaceFS';
 
 import {
   ApiKeyPromptFailed,
@@ -461,9 +464,23 @@ export const createHostRunActions = (
       // probes its candidates there rather than through the calling
       // context's ambient roots.
       workspace: {
-        locatePath: (target) => locateInWorkspace(roots.workspace, target),
+        locatePath: (target) => {
+          // With no folder open every path is outside it.
+          const location = roots.workspace
+            ? pathToLocationIn(roots.workspace, target)
+            : undefined;
+          return location?.kind === 'workspace'
+            ? location
+            : { kind: 'external' as const };
+        },
+        // Asked only of a path `locatePath` placed in the folder.
         exists: (relativePath) =>
-          entryExists(fs, workspaceAbsolutePath(roots.workspace, relativePath)),
+          roots.workspace
+            ? Effect.map(
+                entryTypeIn(fs, path.join(roots.workspace, relativePath)),
+                (type) => type !== undefined,
+              )
+            : Effect.succeed(false),
       },
     });
 
@@ -484,7 +501,7 @@ export const createHostRunActions = (
           );
           return;
         }
-        let fallback = getRuntimeModelDirectFallback(
+        let fallback = CopilotRoutes.directFallback(
           request.model,
           yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
@@ -503,7 +520,7 @@ export const createHostRunActions = (
           false,
         );
         if (!prepared || !isRetryPending(runId, requestId)) return;
-        const currentFallback = getRuntimeModelDirectFallback(
+        const currentFallback = CopilotRoutes.directFallback(
           request.model,
           yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
@@ -518,7 +535,7 @@ export const createHostRunActions = (
             false,
           );
           if (!prepared || !isRetryPending(runId, requestId)) return;
-          const finalFallback = getRuntimeModelDirectFallback(
+          const finalFallback = CopilotRoutes.directFallback(
             request.model,
             yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
           );
@@ -584,11 +601,17 @@ export const createHostRunActions = (
         const deliver = session
           .request({ kind: 'followUp.send', runId, text })
           .pipe(
-            Effect.flatMap((outcome) =>
-              outcome.kind === 'followUp' && outcome.wake === 'failed'
-                ? present(FOLLOW_UP_WAKE_FAILED_MESSAGE)
-                : Effect.void,
-            ),
+            Effect.flatMap((outcome) => {
+              if (outcome.kind !== 'followUp') return Effect.void;
+              const shown = presentFollowUpResult(
+                outcome.status === 'sent'
+                  ? { status: 'sent' }
+                  : { status: 'queued', wake: outcome.wake ?? undefined },
+              );
+              return shown.severity === 'none'
+                ? Effect.void
+                : present(shown.message);
+            }),
             Effect.catchCause((cause) => {
               const message = toErrorMessage(Cause.squash(cause));
               return Effect.logWarning(

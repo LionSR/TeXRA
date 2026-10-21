@@ -18,7 +18,7 @@ import {
   Secrets,
   type LanguageModel,
 } from '@texra-ai/harness';
-import { ToolError } from '@shared/schemas';
+import { ToolError } from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,

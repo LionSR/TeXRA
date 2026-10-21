@@ -2,8 +2,8 @@
  * Default in-process implementation of {@link AgentTrace}.
  *
  * This is the agent-general core: no app-specific sugar; `MessageType`
- * is the only product vocabulary it takes. Product-specific helpers are plain functions in `helpers.ts` /
- * `toolUseHelpers.ts` that operate on the emitted event stream.
+ * is the only product vocabulary it takes. Product-specific helpers are plain
+ * functions in `helpers.ts` that operate on the emitted event stream.
  *
  * Responsibilities at the emit boundary (one place, not many):
  *   - fan out to the sinks it was built with
@@ -18,6 +18,7 @@ import {
   type LogLevel,
   type MessageType,
   type RunOutcome,
+  type ToolUseLog,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { generateShortId } from '@utils/core';
@@ -32,6 +33,7 @@ import type {
   StageOptions,
   StreamHandle,
   StreamOptions,
+  ToolCardHandle,
 } from './AgentTrace';
 
 const CHANNEL = 'TraceEmitter';
@@ -130,6 +132,69 @@ export class TraceEmitter implements AgentTrace {
 
     emitStart();
     return new StreamHandleImpl(this, id, null);
+  }
+
+  // ─── Tool cards ────────────────────────────────────────────────────
+
+  openToolCard(log: ToolUseLog): ToolCardHandle {
+    const logId = generateShortId();
+    this.emit({
+      type: 'tool.start',
+      logId,
+      toolName: log.toolName ?? 'unknown',
+      input: toJsonValue(log.input),
+      ...(log.card ? { card: log.card } : {}),
+    });
+    if (log.status === undefined || log.status === 'in_progress')
+      return new ToolCardHandleImpl(this, logId, log, true);
+    this.emit({
+      type: 'tool.end',
+      logId,
+      status: log.status,
+      result: toJsonValue(log),
+    });
+    return new ToolCardHandleImpl(this, logId, log, false);
+  }
+}
+
+class ToolCardHandleImpl implements ToolCardHandle {
+  private readonly trace: TraceEmitter;
+  private readonly logId: string;
+  log: ToolUseLog;
+  private open: boolean;
+
+  constructor(
+    trace: TraceEmitter,
+    logId: string,
+    log: ToolUseLog,
+    open: boolean,
+  ) {
+    this.trace = trace;
+    this.logId = logId;
+    this.log = log;
+    this.open = open;
+  }
+
+  update(log: ToolUseLog): void {
+    const { status = 'completed', ...result } = log;
+    this.log = log;
+    this.open = status === 'in_progress';
+    this.trace.emit({
+      type: 'tool.end',
+      logId: this.logId,
+      status,
+      result: toJsonValue(result),
+    });
+  }
+
+  failIfOpen(): void {
+    if (!this.open) return;
+    const { status: _status, ...log } = this.log;
+    this.update({
+      ...log,
+      error: 'The turn ended before this tool reported.',
+      status: 'failed',
+    });
   }
 }
 

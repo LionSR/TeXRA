@@ -3,8 +3,7 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { escapeAttr } from '@shared/utils/xmlEscape';
+import { toErrorMessage, escapeAttr } from '@texra-ai/harness/schemas';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 
 /** A view's HTML template has no `<body>` to install the host bridge into. */

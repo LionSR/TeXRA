@@ -11,8 +11,7 @@ import { Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient } from '@tools/timeouts';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import { scopedClient } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import type { Headers, HttpClient } from 'effect/http';
@@ -49,10 +48,11 @@ export class GitHubPermanentError extends Data.TaggedError(
  * objects; fall back to a JSON-stringified form for any other shape.
  */
 function extractApiMessage(data: unknown, fallback: string): string {
-  if (isNonEmptyString(data)) return data;
+  if (typeof data === 'string' && data.trim() !== '') return data;
   if (data && typeof data === 'object') {
     const rec = data as { message?: unknown };
-    if (isNonEmptyString(rec.message)) return rec.message;
+    if (typeof rec.message === 'string' && rec.message.trim() !== '')
+      return rec.message;
     // `data` is a plain GitHub error object (already JSON-parsed), so
     // stringifying it can't realistically throw — no guard needed.
     return JSON.stringify(data);

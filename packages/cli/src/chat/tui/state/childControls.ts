@@ -5,7 +5,11 @@
  * here derives topology.
  */
 import { formatCompactDuration } from '@texra-ai/harness/transcript';
-import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
+import {
+  RUN_PHASE,
+  type RunPhase,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { runViewOf } from './sessionView';
 import type { RunView, SessionView } from '@texra-ai/harness';
 

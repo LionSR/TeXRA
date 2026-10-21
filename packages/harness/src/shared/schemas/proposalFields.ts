@@ -44,7 +44,7 @@ export const TaskProposalFieldsSchema = NullableFileFieldsSchema.omit({
 /** File fields shape consumed by {@link getProposalFileGroups} — the helper
  *  behind every proposal file list (tool-row model, ProposalRequestPanel,
  *  CLI AgentProposal modal, approval summaries). */
-interface FileFields {
+export interface ProposalFileFields {
   readonly inputFiles?: readonly string[];
   readonly contextFiles?: readonly string[];
   readonly mediaFiles?: readonly string[];
@@ -59,7 +59,9 @@ export interface ProposalFileGroup {
   clickable: boolean;
 }
 
-export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
+export function getProposalFileGroups(
+  data: ProposalFileFields,
+): ProposalFileGroup[] {
   return [
     {
       label: 'Input',

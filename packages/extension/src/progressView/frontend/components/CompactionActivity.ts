@@ -2,7 +2,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -10,7 +10,7 @@ import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
 
 const ACTIVITY_ICON: Record<
   Exclude<CompactionActivityStatus, 'running'>,
-  TeXRAIconName
+  IconName
 > = {
   completed: 'circle-check',
   failed: 'circle-xmark',

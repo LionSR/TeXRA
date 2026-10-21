@@ -10,9 +10,6 @@ import {
   taskGroupDisplayStatus,
   formatCompactDuration,
 } from '@texra-ai/harness/transcript';
-import { safeTerminalText } from '@cli/runtime/terminalText';
-import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
@@ -20,7 +17,10 @@ import {
   type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { safeTerminalText } from '@cli/runtime/terminalText';
+import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
   formatRoundLabel,
   latexdiffDisplayName,

@@ -5,7 +5,13 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/transcript';
 import { absurd, Predicate } from 'effect';
-import { runBypasses } from '@texra-ai/harness/schemas';
+import {
+  runBypasses,
+  type ContextStateData,
+  type RunId,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@texra-ai/harness/schemas';
 import { isActivePhase } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
@@ -16,12 +22,6 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
 import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
-import {
-  type ContextStateData,
-  type RunId,
-  type TokenUsageStats,
-  type UsageRoute,
-} from '@shared/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,

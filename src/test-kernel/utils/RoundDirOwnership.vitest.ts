@@ -27,10 +27,7 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import {
-  originalSnapshotPathUnder,
-  runDirUnder,
-} from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
@@ -97,11 +94,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       ),
     );
 
-    const snapshotPath = originalSnapshotPathUnder(
-      testWorkspaceRoots().storage,
-      runId,
-      'Draft/Draft.tex',
-    );
+    const snapshotPath = fileService.originalSnapshotPath('Draft/Draft.tex');
     await expect(readFile(snapshotPath, 'utf8')).resolves.toBe(
       workspaceOriginal,
     );
@@ -160,11 +153,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       ),
     );
 
-    const snapshotPath = originalSnapshotPathUnder(
-      testWorkspaceRoots().storage,
-      runId,
-      'macros.sty',
-    );
+    const snapshotPath = fileService.originalSnapshotPath('macros.sty');
     await expect(stat(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
     await runFileServiceProgram(

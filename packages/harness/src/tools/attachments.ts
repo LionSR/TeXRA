@@ -12,7 +12,6 @@ import {
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
@@ -123,7 +122,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   ToolContext | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
-  if (!isNonEmptyString(filePath)) {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
     return yield* Effect.fail(
       new ToolError('Attachment path must be provided.'),
     );
@@ -162,7 +161,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   if (stats.size > BigInt(ATTACHMENT_MAX_BYTES)) {
     return yield* Effect.fail(
       new ToolError(
-        `Attachment ${display} exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
+        `Attachment ${display} exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
       ),
     );
   }

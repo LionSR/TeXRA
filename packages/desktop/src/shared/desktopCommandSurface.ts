@@ -1,4 +1,3 @@
-import type { TeXRAIconName } from '@shared/iconNames';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
@@ -16,6 +15,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@texra/shared/commands/registry';
+import type { IconName } from '@ui/wa/iconNames';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,
@@ -127,13 +127,13 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showTools': 'cube',
   'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
-} as const satisfies Record<DesktopCommandId, TeXRAIconName>;
+} as const satisfies Record<DesktopCommandId, IconName>;
 
 export interface DesktopCommandMenuEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
-  icon: TeXRAIconName;
+  icon: IconName;
   accelerator?: string;
 }
 

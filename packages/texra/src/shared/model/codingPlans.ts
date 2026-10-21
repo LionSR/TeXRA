@@ -6,7 +6,7 @@
  * (`model/codingPlanSubscriptions.ts`). What a used-up plan falls back to is
  * the harness's retry copy (`quotaFallbackRouteFor`), not this catalog's.
  */
-import type { DeclinableUsageRoute } from '@shared/schemas';
+import type { DeclinableUsageRoute } from '@texra-ai/harness/schemas';
 
 /** One coding plan's identity and presentation, keyed by its usage route. */
 interface CodingPlanSubscriptionDescriptor {

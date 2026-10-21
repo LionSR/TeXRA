@@ -17,8 +17,8 @@ import {
 
 import {
   describeFollowUpFailure,
-  escapeText,
   hasErrorPresentationClaimed,
+  heldElsewhereBy,
   presentFollowUpResult,
   type PlatformSecrets,
   type ProcessRuntime,
@@ -34,7 +34,10 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
+  escapeText,
   generateRunId,
+  isTaskConfig,
+  type RunId,
 } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
@@ -49,8 +52,6 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
-import { heldElsewhereBy } from '@shared/session/database';
-import { isTaskConfig, type RunId } from '@shared/schemas';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
@@ -102,8 +103,6 @@ interface PreparingRoot {
   readonly slot: Deferred.Deferred<void, Error>;
   /** The slot's claim: what completing it names. */
   readonly claim: RootRunSettled;
-  /** The user stopped meanwhile: the stop lands on the run once it is live. */
-  stopped: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,9 +393,9 @@ export function createChatSessionController(
   let stopReason: RunStopReason = 'user';
   const requestStop = (reason: RunStopReason): void => {
     stopReason = reason;
-    session.stopRequested = true;
-    // A continuation of the stopped conversation stops with it.
-    if (preparingRoot) preparingRoot.stopped = true;
+    // The stop is a fact of the claim: a `user` stop is the turn's, and a
+    // shutdown carries into every claim taken while leaving.
+    session.askStop(reason);
   };
 
   // -----------------------------------------------------------------------
@@ -490,9 +489,11 @@ export function createChatSessionController(
   // startRootRun
   // -----------------------------------------------------------------------
 
-  const startRootRun = (config: AgentConfigPayload): void => {
+  const startRootRun = (
+    config: AgentConfigPayload,
+    runId: RunId = generateRunId(),
+  ): void => {
     session.interruptedRunId = undefined;
-    const runId = generateRunId();
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds the `await` of a `Deferred` the run chain completes.
@@ -502,8 +503,7 @@ export function createChatSessionController(
     const claim = Deferred.await(claimedRun);
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
-    session.markRunPending(claim);
-    session.runId = runId;
+    session.markRunPending(claim, runId);
     runtime.runFork(
       recoverRun(
         Effect.gen(function* () {
@@ -720,9 +720,8 @@ export function createChatSessionController(
   const claimPreparingRoot = (runId: RunId): PreparingRoot | undefined => {
     const slot = Deferred.makeUnsafe<void, Error>();
     const claim = Deferred.await(slot);
-    if (!session.tryClaimRootRunSlot(claim)) return undefined;
-    session.runId = runId;
-    preparingRoot = { runId, slot, claim, stopped: false };
+    if (!session.tryClaimRootRunSlot(claim, runId)) return undefined;
+    preparingRoot = { runId, slot, claim };
     return preparingRoot;
   };
 
@@ -768,16 +767,14 @@ export function createChatSessionController(
       preparingRoot?.runId === run.id ? preparingRoot : undefined;
     releasePreparingRoot(preparing);
     const claim = Deferred.await(adopted);
-    if (!session.tryClaimRootRunSlot(claim)) return;
-    session.runId = run.id;
+    if (!session.tryClaimRootRunSlot(claim, run.id)) return;
     if (session.interruptedRunId === run.id)
       session.interruptedRunId = undefined;
     rootRunId.set(run.id);
     focusRun(run.id);
-    if (preparing?.stopped) {
-      session.stopRequested = true;
-      interruptActiveRun();
-    }
+    // A stop asked while a continuation prepared is the claim's; a manual
+    // resume's stop landed at its adoption.
+    if (preparing !== undefined && session.stopRequested) interruptActiveRun();
     runtime.runFork(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
@@ -841,11 +838,15 @@ export function createChatSessionController(
       followUpQueue.clear();
       let started = false;
       // The slot is claimed before the program runs, the way every other launch
-      // path claims it: `startRootRun` below re-claims it for the run it mints,
-      // and a refusal on the way there settles this deferred instead.
+      // path claims it: `startRootRun` below re-claims it for the run, whose
+      // id is minted here so the claim names it from the first instant (a
+      // follow-up typed during the model selection below waits for that run
+      // to fold instead of reading an idless claim as a settled run), and a
+      // refusal on the way there settles this deferred instead.
+      const runId = generateRunId();
       const startSettled = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(startSettled);
-      session.markRunPending(claim);
+      session.markRunPending(claim, runId);
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
@@ -881,19 +882,24 @@ export function createChatSessionController(
             session.markRunCompleted(claim);
             return;
           }
-          startRootRun({
-            agent: meta.agent || initialAgent,
-            agentSource: meta.agentSource,
-            model: selection.model,
-            instruction,
-            ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-            workingDirectory: cwd,
-            ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-            ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
-            ...(meta.delegationAgentScope
-              ? { delegationAgentScope: meta.delegationAgentScope }
-              : {}),
-          });
+          startRootRun(
+            {
+              agent: meta.agent || initialAgent,
+              agentSource: meta.agentSource,
+              model: selection.model,
+              instruction,
+              ...(displayInstruction !== undefined
+                ? { displayInstruction }
+                : {}),
+              workingDirectory: cwd,
+              ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+              ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
+              ...(meta.delegationAgentScope
+                ? { delegationAgentScope: meta.delegationAgentScope }
+                : {}),
+            },
+            runId,
+          );
           started = true;
         }),
         (error) => {
@@ -1090,7 +1096,7 @@ export function createChatSessionController(
           );
           if (outcome.kind !== 'refused') return;
           if (followUpTarget === session.runId) {
-            session.stopRequested = true;
+            session.askStop('user');
           } else {
             appendLocalNotice(
               FOCUSED_AGENT.selectedNoLongerAccepting,

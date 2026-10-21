@@ -2,13 +2,12 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, withLogChannel } from '@texra-ai/harness';
-import { requireRun, executed } from '@texra-ai/harness/plugins';
+import { requireRun, executed, refusalOf } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
-} from '@shared/schemas';
-import type { UserQuestionPermission } from '@shared/schemas';
-import { refusalOf } from '@shared/session/approvalDecision';
+  type UserQuestionPermission,
+} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'UserQuestionTool';
 

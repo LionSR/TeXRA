@@ -4,9 +4,9 @@
  */
 import * as path from 'node:path';
 
+import { agentFileName, type RunId } from '@texra-ai/harness/schemas';
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { generateTimestamp } from '@housekeeping/utils';
-import { agentFileName, type RunId } from '@shared/schemas';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import {

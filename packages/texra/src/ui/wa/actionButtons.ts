@@ -6,7 +6,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from './spinner';
 import { waIcon } from './webAwesomeIcons';
 
@@ -36,7 +36,7 @@ const KIND_CLASS = {
 
 export interface IconActionButtonOptions {
   readonly id?: string;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly title?: string;
   readonly action?: string;
@@ -79,7 +79,7 @@ export interface LabeledActionButtonOptions extends Omit<
   IconActionButtonOptions,
   'label' | 'busy' | 'icon' | 'size'
 > {
-  readonly icon?: TeXRAIconName;
+  readonly icon?: IconName;
   readonly text: string;
   readonly label?: string;
   /** Let a containing Web Awesome primitive own the button's native chrome. */
@@ -90,7 +90,7 @@ interface ActionButtonBaseOptions extends Omit<
   IconActionButtonOptions,
   'icon' | 'label'
 > {
-  readonly icon?: TeXRAIconName;
+  readonly icon?: IconName;
   readonly label?: string;
   readonly text?: string;
   readonly nativeChrome?: boolean;

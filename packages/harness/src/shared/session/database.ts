@@ -44,7 +44,6 @@ export const InputHistoryRecordSchema = z.object({
 });
 export type InputHistoryRecord = z.infer<typeof InputHistoryRecordSchema>;
 export const INPUT_HISTORY_LIMIT = 1000;
-export const INPUT_HISTORY_LINE_LIMIT = 4000;
 
 /** Only an explicit single-run deletion may replace an unprovable owner. */
 export const DeletionModeSchema = z.enum(['single', 'bulk', 'automatic']);

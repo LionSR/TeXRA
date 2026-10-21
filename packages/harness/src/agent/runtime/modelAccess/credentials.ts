@@ -25,7 +25,7 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readProviderEndpoint } from '@model/modelSettings';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
-import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
 
@@ -99,7 +99,7 @@ function subscriptionUnavailable(
   error: Error,
 ): RouteUnavailable {
   const copy =
-    SUBSCRIPTION_AUTH_COPY[
+    SUBSCRIPTION_AUTH_NAMES[
       route === 'chatgpt-subscription' ? 'chatgpt' : 'grok'
     ];
   const turnOff = `turn off "${copy.subscriptionLabel}".`;
