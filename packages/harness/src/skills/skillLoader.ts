@@ -70,12 +70,11 @@ function skillReadErrorCode(err: unknown): SkillIssueCode {
 }
 
 function normalizeSkillName(
-  frontmatter: Record<string, unknown>,
+  rawName: unknown,
   directoryName: string,
   skillPath: string,
 ): { name?: string; errors: SkillLoadIssue[] } {
   const errors: SkillLoadIssue[] = [];
-  const rawName = frontmatter.name;
   const candidate = typeof rawName === 'string' ? rawName : directoryName;
   const parsed = SkillNameSchema.safeParse(candidate);
 
@@ -124,12 +123,11 @@ function normalizeSkillName(
 }
 
 function normalizeSkillDescription(
-  frontmatter: Record<string, unknown>,
+  rawDescription: unknown,
   skillPath: string,
   name: string,
 ): { description?: string; errors: SkillLoadIssue[] } {
   const errors: SkillLoadIssue[] = [];
-  const rawDescription = frontmatter.description;
   const description =
     typeof rawDescription === 'string'
       ? rawDescription.replaceAll(/\s+/g, ' ').trim()
@@ -185,7 +183,7 @@ export function loadCommandFile(
           ? parsed.success
           : {};
       const body = (split.kind === 'ok' ? split.body : content).trim();
-      const nameResult = normalizeSkillName({}, directoryName, file);
+      const nameResult = normalizeSkillName(undefined, directoryName, file);
       if (!nameResult.name) return { errors: nameResult.errors };
       if (!body)
         return {
@@ -201,7 +199,7 @@ export function loadCommandFile(
         .map((line) => line.replace(/^#+\s*/, '').trim())
         .find(Boolean);
       const descriptionResult = normalizeSkillDescription(
-        { description: frontmatter.description ?? firstLine },
+        frontmatter.description ?? firstLine,
         file,
         nameResult.name,
       );
@@ -267,7 +265,7 @@ export function loadSkillDirectory(
           }
 
           const nameResult = normalizeSkillName(
-            frontmatter,
+            frontmatter.name,
             directoryName,
             skillPath,
           );
@@ -275,7 +273,7 @@ export function loadSkillDirectory(
           if (!nameResult.name) return { errors };
 
           const descriptionResult = normalizeSkillDescription(
-            frontmatter,
+            frontmatter.description,
             skillPath,
             nameResult.name,
           );
