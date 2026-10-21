@@ -1,17 +1,17 @@
 /**
- * `texra serve`: the service's lifetime over its own socket. It refuses to
- * start beside a live service, listens on a socket only it uses, writes its
- * record, and then lives until one of four things ends it:
+ * `texra serve`: the service's lifetime over its own socket. It listens on
+ * a socket only it uses, claims the record (refusing to start beside a live
+ * service), and then lives until one of three things ends it:
  *
  * - a stop: `service.stop` without a drain, or the host's own shutdown;
  * - a drain (`service.stop` with `drain`, the upgrade path): the record is
  *   released at once, so a newer service can start and be found while this
  *   one finishes the tasks at work, and it exits when they end (a
  *   conversation parked here stops with it, resumable);
- * - replacement: another service's record took this one's place (two
- *   started at once), and nothing works here;
  * - idleness: no client connected and no task running for `idleAfter`.
  *
+ * Whichever ends it, it leaves as a drain does first: no task starts and
+ * the record is released, so no client finds a service that is exiting.
  * It never starts at login: a client starts it detached when none answers.
  * The sessions it opened are the host's to close once this returns.
  */
@@ -32,17 +32,17 @@ import {
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import {
-  probeRecordedService,
+  probeService,
+  retireService,
+  ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
-  type ServiceUnavailable,
 } from './client';
 import {
+  claimServiceRecord,
   prepareServiceDirectories,
-  readServiceRecord,
   removeDeadSockets,
   removeServiceFiles,
   servicePaths,
-  writeServiceRecord,
 } from './discovery';
 import {
   runningTasks,
@@ -77,7 +77,7 @@ export class ServiceListenFailed extends Data.TaggedError(
 }
 
 /** How a service run ended. */
-type ServeExit = 'stopped' | 'drained' | 'idle' | 'replaced';
+type ServeExit = 'stopped' | 'drained' | 'idle';
 
 interface ServeOptions {
   /** Exit after this long with no client and no running task. */
@@ -93,7 +93,7 @@ interface ServeOptions {
  *  (their framers cut every 16 ms) before the socket closes. */
 const FRAME_FLUSH = '250 millis';
 
-/** How often the idle and takeover checks run. */
+/** How often the idle and drain checks run. */
 const CHECK_INTERVAL = '1 second';
 
 /**
@@ -124,9 +124,6 @@ export const serve = Effect.fn('server.serve')(function* (
   yield* prepareServiceDirectories(paths).pipe(
     Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
   );
-  const existing = yield* probeRecordedService(projects.storageRoot);
-  if (existing !== null)
-    return yield* Effect.fail(new ServiceAlreadyRunning({ info: existing }));
   yield* removeDeadSockets(paths);
   // A socket of this pid is a dead process's whose pid this one reuses: no
   // other live process can have it.
@@ -138,7 +135,10 @@ export const serve = Effect.fn('server.serve')(function* (
 
   const startedAt = yield* Clock.currentTimeMillis;
   const ended = yield* Deferred.make<ServeExit>();
-  const draining = yield* Ref.make(false);
+  // Whether the service is leaving, and the task admissions under way: one
+  // value, so an admission is claimed in the same step that checks for a
+  // drain, and a drain never misses a start that is not a held run yet.
+  const admissions = yield* Ref.make({ draining: false, admitting: 0 });
   let clients: Effect.Effect<number> = Effect.succeed(0);
   // Once: a drain releases the record early, and the exit releases what is
   // left.
@@ -148,22 +148,36 @@ export const serve = Effect.fn('server.serve')(function* (
     released = true;
     return removeServiceFiles(paths, process.pid);
   }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+  // No task starts from here on, and the record goes first: a newer
+  // service can start and be found while this one finishes on the
+  // connections it already holds.
+  const leave = Ref.update(admissions, (state) => ({
+    ...state,
+    draining: true,
+  })).pipe(Effect.andThen(release));
   const control: Context.Service.Shape<typeof ServiceControl> = {
     version: BUILD_VERSION,
     socket,
     startedAt,
     clients: Effect.suspend(() => clients),
-    draining: Ref.get(draining),
+    draining: Effect.map(Ref.get(admissions), (state) => state.draining),
+    admission: Effect.acquireRelease(
+      Ref.modify(admissions, (state) =>
+        state.draining
+          ? [false, state]
+          : [true, { ...state, admitting: state.admitting + 1 }],
+      ),
+      (admitted) =>
+        admitted
+          ? Ref.update(admissions, (state) => ({
+              ...state,
+              admitting: state.admitting - 1,
+            }))
+          : Effect.void,
+    ),
     idleAfter: Duration.fromInputUnsafe(options.idleAfter),
     stop: (drain) =>
-      drain
-        ? Ref.set(draining, true).pipe(
-            // Release the record first: a newer service can start and be
-            // found while this one finishes its tasks on the connections
-            // it already holds.
-            Effect.andThen(release),
-          )
-        : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
+      drain ? leave : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
   };
   const protocol = yield* Layer.build(
     RpcServer.layerProtocolSocketServer.pipe(
@@ -190,15 +204,36 @@ export const serve = Effect.fn('server.serve')(function* (
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
   );
-  yield* writeServiceRecord(paths, {
-    pid: process.pid,
-    protocol: PROTOCOL_VERSION,
-    version: BUILD_VERSION,
-    socket,
-    startedAt,
-  }).pipe(
-    Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
+  // Claimed once it listens, so a record always names a socket that
+  // accepts: one nobody accepts on is a dead service's.
+  const holder = yield* claimServiceRecord(
+    paths,
+    {
+      pid: process.pid,
+      protocol: PROTOCOL_VERSION,
+      version: BUILD_VERSION,
+      socket,
+      startedAt,
+    },
+    {
+      probe: (record) => probeService(record.socket),
+      retire: (record) =>
+        retireService(record.socket).pipe(
+          Effect.mapError(
+            (error) =>
+              new ServiceUnavailable({
+                reason: `The TeXRA service (pid ${record.pid}) whose record this one displaced could not be retired: ${error.message}`,
+              }),
+          ),
+        ),
+    },
+  ).pipe(
+    Effect.catchTag('PlatformError', (cause) =>
+      Effect.fail(new ServiceListenFailed({ socket, cause })),
+    ),
   );
+  if (holder !== null)
+    return yield* Effect.fail(new ServiceAlreadyRunning({ info: holder }));
   yield* Effect.addFinalizer(() => release);
   yield* Effect.logInfo(
     `TeXRA service ${BUILD_VERSION} listening on ${socket}`,
@@ -207,27 +242,17 @@ export const serve = Effect.fn('server.serve')(function* (
   const idleAfter = Duration.toMillis(options.idleAfter);
   let idleSince: number | null = null;
   const check = Effect.gen(function* () {
+    // Read before the runs: once draining, no admission starts, and one
+    // that ended since this read holds its run.
+    const { draining, admitting } = yield* Ref.get(admissions);
     const running = yield* runningTasks(projects);
-    // A drained or replaced service waits for the tasks at work; a
-    // conversation parked here is stopped with the service, resumable.
+    // A drained service waits for the tasks at work; a conversation parked
+    // here is stopped with the service, resumable.
     const working = yield* runningTasks(projects, false);
     const now = yield* Clock.currentTimeMillis;
-    if (yield* Ref.get(draining)) {
-      if (working === 0) yield* Deferred.succeed(ended, 'drained');
-      return;
-    }
-    // Another service's record replaced this one's (two started at once):
-    // no new client finds this one, so it leaves once nothing works here
-    // and no client it already answered is connected. A record it cannot
-    // read is not a replacement.
-    const record = yield* readServiceRecord(paths);
-    if (
-      record !== null &&
-      record.pid !== process.pid &&
-      working === 0 &&
-      (yield* control.clients) === 0
-    ) {
-      yield* Deferred.succeed(ended, 'replaced');
+    if (draining) {
+      if (working === 0 && admitting === 0)
+        yield* Deferred.succeed(ended, 'drained');
       return;
     }
     const busy = running > 0 || (yield* control.clients) > 0;
@@ -245,6 +270,7 @@ export const serve = Effect.fn('server.serve')(function* (
   );
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);
+  yield* leave;
   yield* options.settle;
   yield* Effect.sleep(FRAME_FLUSH);
   return exit;

@@ -26,7 +26,6 @@ import {
   type RunModelDecisionReason,
   type RunStopReason,
   type RuntimeRequest,
-  type RunView,
   type Session,
   type SessionView,
 } from '@texra-ai/harness';
@@ -340,6 +339,18 @@ export function createChatSessionController(
   let preparingRoot: PreparingRoot | undefined;
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
+
+  /** A level that shows `runId` live here: the activation a continuation
+   *  resumed, which the view folds after the session answered. */
+  const liveHereAgain = (runId: RunId): Effect.Effect<void> =>
+    viewChanges.pipe(
+      Stream.filter((view) => {
+        const run = view.runs.get(runId);
+        return run !== undefined && run.ownedHere && isLiveRun(run);
+      }),
+      Stream.runHead,
+      Effect.asVoid,
+    );
 
   /** `runId` once the fold holds it, from the first view level that does. */
   const awaitRunFolded = (
@@ -757,29 +768,35 @@ export function createChatSessionController(
    * released. The resume itself is the session's; the chat only reacts. A run
    * counts from the level where it is live both in the registry and in the
    * view, so neither a child detached while running (live already) nor a
-   * stale terminal row is adopted.
+   * stale terminal row is adopted. A continuation the session took (a
+   * served chat's, which observes no resumes) hands its slot over the same
+   * way, from before the view shows the run live: `resumed` waits for that.
    */
-  const adoptResumedRoot = (run: RunView): void => {
+  const adoptResumedRoot = (
+    runId: RunId,
+    resumed: Effect.Effect<void> = Effect.void,
+  ): void => {
     const adopted = Deferred.makeUnsafe<void, Error>();
     // A continuation preparing this run hands its slot to the run, and a
     // stop the user asked of it meanwhile lands on the run.
     const preparing =
-      preparingRoot?.runId === run.id ? preparingRoot : undefined;
+      preparingRoot?.runId === runId ? preparingRoot : undefined;
     releasePreparingRoot(preparing);
     const claim = Deferred.await(adopted);
-    if (!session.tryClaimRootRunSlot(claim, run.id)) return;
-    if (session.interruptedRunId === run.id)
+    if (!session.tryClaimRootRunSlot(claim, runId)) return;
+    if (session.interruptedRunId === runId)
       session.interruptedRunId = undefined;
-    rootRunId.set(run.id);
-    focusRun(run.id);
+    rootRunId.set(runId);
+    focusRun(runId);
     // A stop asked while a continuation prepared is the claim's; a manual
     // resume's stop landed at its adoption.
     if (preparing !== undefined && session.stopRequested) interruptActiveRun();
     runtime.runFork(
       Effect.gen(function* () {
-        yield* adoptRunRecord(run.id);
-        yield* settledHere(run.id);
-        const status = runSession.view.current().runs.get(run.id)?.status;
+        yield* adoptRunRecord(runId);
+        yield* resumed;
+        yield* settledHere(runId);
+        const status = runSession.view.current().runs.get(runId)?.status;
         session.settleExitCode(
           claim,
           isTerminalOutcomePhase(status)
@@ -803,7 +820,7 @@ export function createChatSessionController(
       );
       for (const id of liveHere) {
         const run = view.runs.get(id);
-        if (!previous.has(id) && run?.parentId === null) adoptResumedRoot(run);
+        if (!previous.has(id) && run?.parentId === null) adoptResumedRoot(id);
       }
     });
   // A chat of the service adopts only the runs it launches or resumes: the
@@ -974,8 +991,27 @@ export function createChatSessionController(
       if (!started) restoreReservedSkillActivations();
       return;
     }
-    let delivered = false;
     let preparing: PreparingRoot | undefined;
+    // Sent, or handed back to the input: a message settles once.
+    let settled = false;
+    /**
+     * The message was not delivered: it goes back to the input, naming why
+     * when there is a reason, with the skill activations it reserved. Every
+     * end but a send comes here: a refusal, a delivery that stopped or
+     * failed, and one the queue dropped before it started.
+     */
+    const undelivered = (reason?: string): void => {
+      if (settled) return;
+      settled = true;
+      requestDraftRestore(line, images);
+      if (reason !== undefined) {
+        setTransientNotice(
+          `${reason} The message has been restored to the input.`,
+          { ttlMs: Infinity },
+        );
+      }
+      restoreReservedSkillActivations();
+    };
     /**
      * The delivery is an Effect program so the queue's scope reaches it: an
      * interrupted delivery stops at its next step instead of mutating the
@@ -1011,24 +1047,12 @@ export function createChatSessionController(
                 // wins this race with `undefined` so the draft is restored.
                 runSettled.pipe(Effect.exit, Effect.as(undefined)),
           )));
-      // Hand the message back to the input, naming why when there is a reason.
-      const restoreDraft = (reason?: string): void => {
-        requestDraftRestore(line, images);
-        if (reason !== undefined) {
-          setTransientNotice(
-            `${reason} The message has been restored to the input.`,
-            { ttlMs: Infinity },
-          );
-        }
-      };
       if (session.stopRequested) {
-        restoreDraft();
+        undelivered();
         return;
       }
       if (!followUpTarget) {
-        restoreDraft(
-          'The conversation ended before the message could be sent.',
-        );
+        undelivered('The conversation ended before the message could be sent.');
         return;
       }
       yield* Effect.uninterruptible(
@@ -1068,16 +1092,17 @@ export function createChatSessionController(
               ),
             );
           if (outcome.kind === 'sent') {
-            delivered = true;
+            settled = true;
             // The session took the message and resumed the run: it is no
-            // longer the stopped conversation, and the next message goes to
-            // it live rather than waiting for it to drain.
+            // longer the stopped conversation, and the slot passes to it, so
+            // the next message goes to it live rather than starting a second
+            // root beside it.
             if (
               continuing &&
               outcome.value.wake == null &&
               session.interruptedRunId === interrupted
             )
-              session.interruptedRunId = undefined;
+              adoptResumedRoot(followUpTarget, liveHereAgain(followUpTarget));
             const presentation = presentFollowUpResult(
               outcome.value.status === 'sent'
                 ? { status: 'sent' }
@@ -1091,7 +1116,7 @@ export function createChatSessionController(
           // Teardown mid-send is not a verdict on the message, and a defect is
           // no refusal (the run may be healthy): both hand the message back
           // without stopping the stream or retargeting the conversation.
-          restoreDraft(
+          undelivered(
             outcome.kind === 'interrupted' ? undefined : outcome.reason,
           );
           if (outcome.kind !== 'refused') return;
@@ -1114,7 +1139,7 @@ export function createChatSessionController(
         Effect.ensuring(
           Effect.sync(() => {
             releasePreparingRoot(preparing);
-            if (!delivered) restoreReservedSkillActivations();
+            undelivered();
           }),
         ),
         Effect.catchCause((cause) =>
@@ -1125,6 +1150,7 @@ export function createChatSessionController(
               ),
         ),
       ),
+      () => undelivered(),
     );
   });
 

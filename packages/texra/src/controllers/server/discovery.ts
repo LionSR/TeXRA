@@ -129,10 +129,21 @@ function ownDirectory(
 
 /** The record a running service wrote, or null when there is none. A
  *  record that does not parse is reported and read as none: the next
- *  service to start writes a fresh one. */
+ *  service to start moves it aside. */
 export function readServiceRecord(
   paths: ServicePaths,
 ): Effect.Effect<ServiceRecord | null, never, FileSystem.FileSystem> {
+  return Effect.map(readRecord(paths), (read) => read?.record ?? null);
+}
+
+/** The record file's text and what it parses to (null when it does not). */
+function readRecord(
+  paths: ServicePaths,
+): Effect.Effect<
+  { readonly text: string; readonly record: ServiceRecord | null } | null,
+  never,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(paths.record).pipe(
@@ -146,13 +157,23 @@ export function readServiceRecord(
       ),
     );
     if (text === null) return null;
-    const parsed = ServiceRecordSchema.safeParse(safeJson(text));
-    if (parsed.success) return parsed.data;
-    yield* Effect.logWarning(
-      `Ignoring the malformed service record ${paths.record}: ${z.prettifyError(parsed.error)}`,
-    );
-    return null;
+    return { text, record: yield* parseRecord(paths, text) };
   });
+}
+
+/** The record `text` holds, or null, reported, when it does not parse. */
+function parseRecord(
+  paths: ServicePaths,
+  text: string,
+): Effect.Effect<ServiceRecord | null> {
+  const parsed = ServiceRecordSchema.safeParse(safeJson(text));
+  if (parsed.success) return Effect.succeed(parsed.data);
+  return Effect.as(
+    Effect.logWarning(
+      `Ignoring the malformed service record ${paths.record}: ${z.prettifyError(parsed.error)}`,
+    ),
+    null,
+  );
 }
 
 function safeJson(text: string): unknown {
@@ -164,18 +185,80 @@ function safeJson(text: string): unknown {
   }
 }
 
-/** Write this service's record, readable by the user alone. */
-export function writeServiceRecord(
+/** How a claim treats the service whose record is in its place. */
+interface RecordHolder<A, E> {
+  /** The holder's answer when it is live, or null when it is dead. */
+  readonly probe: (record: ServiceRecord) => Effect.Effect<A | null, E>;
+  /** Retire a live holder whose record this claim displaced. */
+  readonly retire: (record: ServiceRecord) => Effect.Effect<void, E>;
+}
+
+/**
+ * Publish `record` as the storage root's service. Creating the record is
+ * the claim (a hard link, which fails where a record is), so of services
+ * that start at once only one is ever findable. A record in place is its
+ * holder's: a live holder's answer is returned (the caller does not start);
+ * a dead holder's record, or one that does not parse, is moved aside and
+ * the claim made again.
+ */
+export function claimServiceRecord<A, E>(
   paths: ServicePaths,
   record: ServiceRecord,
-): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  holder: RecordHolder<A, E>,
+): Effect.Effect<
+  A | null,
+  E | PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const staged = `${paths.record}.${record.pid}.tmp`;
+    const aside = `${paths.record}.${record.pid}.stale`;
+    /** Link `from` to the record unless one is there. */
+    const publish = (from: string) =>
+      fs.link(from, paths.record).pipe(
+        Effect.as(true),
+        Effect.catchIf(
+          (error) => error.reason._tag === 'AlreadyExists',
+          () => Effect.succeed(false),
+        ),
+      );
+    const claim: Effect.Effect<
+      A | null,
+      E | PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > = Effect.gen(function* () {
+      if (yield* publish(staged)) return null;
+      const held = yield* readRecord(paths);
+      // Released since the link failed.
+      if (held === null) return yield* claim;
+      const live =
+        held.record === null ? null : yield* holder.probe(held.record);
+      if (live !== null) return live;
+      const moved = yield* fs.rename(paths.record, aside).pipe(
+        Effect.as(true),
+        Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      );
+      const movedText = moved ? yield* fs.readFileString(aside) : held.text;
+      // Moved aside, not removed: a contender that took the dead record
+      // over first may have claimed since the read. Its record goes back,
+      // unless a third claimed in that instant: the third's stands, and the
+      // one displaced is retired.
+      if (movedText !== held.text && !(yield* publish(aside))) {
+        const displaced = yield* parseRecord(paths, movedText);
+        if (displaced !== null) yield* holder.retire(displaced);
+      }
+      yield* fs.remove(aside, { force: true });
+      return yield* claim;
+    });
     yield* fs.writeFileString(staged, `${JSON.stringify(record)}\n`, {
       mode: 0o600,
     });
-    yield* fs.rename(staged, paths.record);
+    return yield* claim.pipe(
+      Effect.ensuring(
+        Effect.ignore(fs.remove(staged, { force: true }), { log: 'Warn' }),
+      ),
+    );
   });
 }
 
