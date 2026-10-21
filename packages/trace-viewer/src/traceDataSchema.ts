@@ -11,11 +11,11 @@ import { z } from 'zod';
 
 import {
   readTraceFacts,
+  toErrorMessage,
   TraceDocumentSchema,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const INCOMPATIBLE =
   'Trace data does not match the expected schema — this trace file may ' +

@@ -7,13 +7,13 @@ import './shell.css';
 // page owns the mount (rather than the bundle's entry) because the scrubber
 // remounts it: a fresh shell is a fresh generation, and the bridge answers
 // that generation at the new cut.
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTraceCut, trace } from './traceHostBridge';
 import {
