@@ -13,7 +13,7 @@ import {
 import type { ProcessServices } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { fakeStores } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { setupPlatform } from '@test/support/setupPlatform';
 import type { RunModelDecisionReason } from '@texra-ai/harness';
 
@@ -73,7 +73,12 @@ function missingKeyModel(value: string): CliModelAccess {
  * The process stores every access lookup reads, threaded in by the caller the
  * way the CLI composition root threads its own.
  */
-const stores = { ...fakeStores(), runtime: testRuntime() };
+const fake = makeFakeSettingsStores();
+const stores = {
+  ...fake.stores,
+  secrets: fake.secrets,
+  runtime: testRuntime(),
+};
 
 /**
  * Model access returns Effects; this suite is their run boundary, the same

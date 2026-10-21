@@ -2,12 +2,11 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOG_CHANNEL, setLogSink, writeLogEntry } from '@logger/logSink';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
   readCliToolGuide: vi.fn(),
   setCliToolEnabled: vi.fn(),
   runForegroundCommand: vi.fn(),
@@ -15,15 +14,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@cli/runtime/foregroundCommand', () => ({
   runForegroundCommand: mocks.runForegroundCommand,
-}));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', () => ({
-  installCliProcessRuntime: mocks.installCliProcessRuntime,
-  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/runtime/tools', async (importOriginal) => {
@@ -52,10 +42,10 @@ describe('CLI tools command', () => {
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.initCliPlatform
+    cliInitPlatformMock.initCliPlatform
       .mockReset()
       .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
-    mocks.installCliProcessRuntime
+    cliInitPlatformMock.installCliProcessRuntime
       .mockReset()
       .mockImplementation(() => testRuntime());
     mocks.readCliToolGuide
@@ -128,7 +118,7 @@ describe('CLI tools command', () => {
     // first line of an NDJSON run was not a record and the stream would not
     // parse. The channel writer emits unconditionally now: no gate decides
     // whether such a line is written.
-    mocks.installCliProcessRuntime.mockImplementation(() => {
+    cliInitPlatformMock.installCliProcessRuntime.mockImplementation(() => {
       writeLogEntry({
         level: 'DEBUG',
         fiberId: '',

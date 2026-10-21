@@ -18,7 +18,7 @@ import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { Settings } from '@shared/config/settings';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { fakeConfig } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
@@ -59,18 +59,15 @@ describe('setWorkspaceCliChatAgent', () => {
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
-          installPlatform(
-            {},
-            {
-              config: new FakeConfigProvider({
-                'texra.model': 'deepseek/deepseek-v4-flash',
-                'texra.chat': {
-                  agent: 'chat',
-                  model: 'deepseek/deepseek-v4-flash',
-                },
-              }),
+          installPlatform({
+            config: {
+              'texra.model': 'deepseek/deepseek-v4-flash',
+              'texra.chat': {
+                agent: 'chat',
+                model: 'deepseek/deepseek-v4-flash',
+              },
             },
-          ),
+          }),
         );
         const chatSection = () =>
           Settings.get(testWorkspaceRoots(), 'texra.chat');
@@ -93,7 +90,7 @@ describe('setWorkspaceCliChatAgent', () => {
 
   it.effect('leaves a user-level model out of the workspace section', () =>
     Effect.gen(function* () {
-      const config = new FakeConfigProvider();
+      const config = fakeConfig();
       yield* Effect.promise(() => installPlatform({}, { config }));
       yield* config.update(
         'texra.chat',
@@ -111,9 +108,7 @@ describe('setWorkspaceCliChatAgent', () => {
 
   it.effect('refuses an empty agent rather than clearing the default', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({}, { config: new FakeConfigProvider() }),
-      );
+      yield* Effect.promise(() => installPlatform());
       const error = yield* Effect.flip(
         setWorkspaceCliChatAgent(testWorkspaceRoots(), '   '),
       );

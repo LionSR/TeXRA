@@ -5,7 +5,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { fakeConfig } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 type ChatDefaultsInit = Omit<
@@ -22,7 +22,7 @@ async function withConfig(layers: {
   readonly workspace?: Record<string, unknown>;
   readonly user?: Record<string, unknown>;
 }): Promise<void> {
-  const config = new FakeConfigProvider(layers.workspace ?? {});
+  const config = fakeConfig(layers.workspace);
   for (const [key, value] of Object.entries(layers.user ?? {})) {
     await Effect.runPromise(config.update(key, value, 'global'));
   }
