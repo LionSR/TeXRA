@@ -154,12 +154,13 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
         withLogChannel('Setup Credentials'),
       ),
       resolveGitHubTokenSource(secrets).pipe(
-        // A store the host cannot read is not a token; say so in the log
-        // rather than reporting "no token" as if it were an answer.
+        // A store the host cannot read is neither a token nor its absence:
+        // report it unknown (as a provider key's origin is) and log why, so
+        // an unreadable token is never listed as a blank, stale entry.
         Effect.catch((failure) =>
           Effect.logWarning(
-            `GitHub token check failed; reporting no token: ${failure.message}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as('none' as const)),
+            `GitHub token check failed; reporting it unknown: ${failure.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
         ),
       ),
       getChatGptSubscriptionStatus(roots).pipe(

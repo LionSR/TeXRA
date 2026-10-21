@@ -16,6 +16,7 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import * as setupCredentialAccess from '@texra/model/setupCredentialAccess';
+import * as githubAuth from '@texra/tools/github/githubAuth';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 import * as setupPlatformModule from '@texra/tools/setup/platform';
 
@@ -160,6 +161,35 @@ describe('setup credential reporting', () => {
         assert.equal(result.status, 'executed');
         assert.match(outputOf(result), /"storedSecrets": "unavailable"/);
         assert.match(outputOf(result), /credential store unreadable/);
+      }),
+  );
+
+  it.effect(
+    'reports an unreadable GitHub token as unknown, not as a stale entry',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.tryPromise(() =>
+          installPlatform(
+            { secrets: { 'github.token': 'stored-value' } },
+            { setup: createFakeSetupPlatform() },
+          ),
+        );
+        vi.spyOn(githubAuth, 'resolveGitHubTokenSource').mockReturnValue(
+          Effect.fail(
+            new SecretsFailed({
+              reason: 'io',
+              operation: 'get',
+              message: 'The token file could not be read',
+            }),
+          ),
+        );
+
+        const result = yield* ProbeEnvironmentTool.call({}).pipe(
+          Effect.provide(withSetup(nativeToolTestLayer())),
+        );
+
+        assert.match(outputOf(result), /"githubToken": "unknown"/);
+        assert.doesNotMatch(outputOf(result), /"github\.token"/);
       }),
   );
 
