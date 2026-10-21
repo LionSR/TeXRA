@@ -18,10 +18,10 @@ import {
   type SessionOpenError,
 } from '@texra-ai/harness';
 import { absentReason } from '@texra-ai/harness/node';
+import { serializeFilteredConfig } from '@texra-ai/harness/schemas';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
-import { serializeFilteredConfig } from '@tools/executions/configView';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';

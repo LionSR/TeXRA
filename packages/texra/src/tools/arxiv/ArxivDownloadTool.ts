@@ -17,10 +17,10 @@ import {
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
+import { getGitignoreMatcher } from '@texra-ai/harness/plugins';
+import { formatToolOutput } from '@texra-ai/harness/plugins';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { getGitignoreMatcher } from '@tools/gitignore';
-import { formatToolOutput } from '@tools/formatting';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);

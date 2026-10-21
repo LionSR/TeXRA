@@ -11,7 +11,7 @@ import { Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient } from '@tools/timeouts';
+import { scopedClient } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import type { Headers, HttpClient } from 'effect/http';

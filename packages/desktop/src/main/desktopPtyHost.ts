@@ -179,45 +179,36 @@ export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
-  let generation = 0;
 
   return {
     async create({ id, cols, rows, cwd }) {
       const existing = sessions.get(id);
       if (existing) return existing;
 
-      const creationGeneration = generation;
-      let pty: NodePtyModule;
-      try {
-        pty = await (options.loadPty?.() ?? loadNodePty());
-      } catch (error) {
-        if (creationGeneration !== generation) return undefined;
-        throw error;
-      }
-      // disposeAll marks every request begun by the old renderer as stale,
-      // including requests that had not yet reached the sessions map.
-      if (creationGeneration !== generation) return undefined;
-      // Two starts for the same renderer ID can share the module-load await.
-      // Whichever resumes second adopts the handle installed by the first.
-      const loadedExisting = sessions.get(id);
-      if (loadedExisting) return loadedExisting;
+      // The handle is the session's one owner from this synchronous step on,
+      // before the native module load suspends: a close (or `disposeAll`)
+      // that lands while the load is pending finds it in the map and marks
+      // it disposed, so the shell is never spawned for a tab that is gone.
+      // Input typed before the shell exists is held and replayed to it.
+      let child: PtyProcess | undefined = undefined;
+      let disposed = false;
 
-      const child = pty.spawn(defaultShell(), [], {
-        name: 'xterm-256color',
-        // A pty spawned at 0 columns makes shells emit unusable line wrapping,
-        // so clamp to a sane minimum until the renderer reports real bounds.
-        cols: Math.max(cols, 20),
-        rows: Math.max(rows, 5),
-        cwd: cwd ?? options.cwd?.() ?? process.cwd(),
-        env: ptyEnvironment(),
-      });
-
+      let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
+      const heldInput: string[] = [];
       const handle: PtySessionHandle = {
         id,
-        write: (data) => child.write(data),
+        write: (data) => {
+          if (child) child.write(data);
+          else heldInput.push(data);
+        },
         resize: (nextCols, nextRows) => {
+          // A pty spawned at 0 columns makes shells emit unusable line
+          // wrapping, so clamp to a sane minimum until the renderer reports
+          // real bounds.
+          size = { cols: Math.max(nextCols, 20), rows: Math.max(nextRows, 5) };
+          if (!child) return;
           try {
-            child.resize(Math.max(nextCols, 20), Math.max(nextRows, 5));
+            child.resize(size.cols, size.rows);
           } catch (error) {
             // Resizing a pty whose process already exited throws; the exit
             // handler has cleaned up, so this is not actionable.
@@ -225,7 +216,9 @@ export function createDesktopPtyHost(
           }
         },
         dispose: () => {
+          disposed = true;
           if (sessions.get(id) === handle) sessions.delete(id);
+          if (!child) return;
           try {
             child.kill();
           } catch (error) {
@@ -233,6 +226,25 @@ export function createDesktopPtyHost(
           }
         },
       };
+      sessions.set(id, handle);
+      // Until a shell runs, a failure (the module load, or the spawn itself:
+      // a helper that cannot execute) gives the id back, so a later start
+      // for it spawns again rather than finding a handle no shell ever backs.
+      try {
+        const pty = await (options.loadPty?.() ?? loadNodePty());
+        if (disposed) return undefined;
+        child = pty.spawn(defaultShell(), [], {
+          name: 'xterm-256color',
+          cols: size.cols,
+          rows: size.rows,
+          cwd: cwd ?? options.cwd?.() ?? process.cwd(),
+          env: ptyEnvironment(),
+        });
+      } catch (error) {
+        if (sessions.get(id) === handle) sessions.delete(id);
+        if (disposed) return undefined;
+        throw error;
+      }
       child.onData((data) => {
         if (sessions.get(id) !== handle) return;
         options.onData(id, data);
@@ -242,15 +254,16 @@ export function createDesktopPtyHost(
         sessions.delete(id);
         options.onExit(id, exitCode);
       });
-      sessions.set(id, handle);
+      for (const data of heldInput.splice(0)) child.write(data);
       return handle;
     },
 
     get: (id) => sessions.get(id),
 
     disposeAll() {
-      generation += 1;
-      // Copy first: dispose() mutates the map through the shared handle.
+      // Copy first: dispose() mutates the map through the shared handle. A
+      // creation still loading its module is in the map too, and its
+      // `disposed` flag abandons the spawn when the load resolves.
       for (const handle of [...sessions.values()]) handle.dispose();
       sessions.clear();
     },

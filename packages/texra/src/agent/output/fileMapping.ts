@@ -8,7 +8,7 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
 function normalizeLatexPath(value: string): string {

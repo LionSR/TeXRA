@@ -6,15 +6,17 @@ import { defineTool, ToolContext, type ToolResult } from '@texra-ai/harness';
 
 // Local imports - tools
 import { pathToLocationIn } from '@texra-ai/harness';
+import {
+  formatToolOutput,
+  type ToolFileAttachment,
+} from '@texra-ai/harness/plugins';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { formatToolOutput } from '@tools/formatting';
 import {
   buildLimitedAttachments,
   emptyExtractionResult,
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
-import type { ToolFileAttachment } from '@texra-ai/harness/plugins';
 import type { WorkspaceFs } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

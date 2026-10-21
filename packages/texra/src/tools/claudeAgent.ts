@@ -43,13 +43,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import {
-  emitToolUseCard,
-  endOpenToolUseCards,
-  endToolUseCard,
+  formatDelivery,
   type AgentTrace,
-  type OpenToolUseCard,
-} from '@agent/trace';
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+  type ToolCardHandle,
+} from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,
@@ -224,7 +221,7 @@ export function runStreamedTurn(params: {
     }
 
     const responseParts: string[] = [];
-    const toolLogRefs = new Map<string, OpenToolUseCard>();
+    const toolCards = new Map<string, ToolCardHandle>();
     const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
     let usage: TurnResult['usage'] = null;
     let sessionId: string | undefined;
@@ -239,13 +236,13 @@ export function runStreamedTurn(params: {
           handleAssistantBlocks(
             raw.message.content,
             logger,
-            toolLogRefs,
+            toolCards,
             responseParts,
           );
           break;
         case 'user':
           if (Array.isArray(raw.message.content)) {
-            handleToolResults(raw.message.content, logger, toolLogRefs);
+            handleToolResults(raw.message.content, toolCards);
           }
           break;
         case 'result':
@@ -289,7 +286,8 @@ export function runStreamedTurn(params: {
         Effect.sync(() => {
           params.signal.removeEventListener('abort', forwardAbort);
           backgroundTasks.finish();
-          endOpenToolUseCards(logger, toolLogRefs);
+          for (const card of toolCards.values()) card.failIfOpen();
+          toolCards.clear();
         }),
       ),
     );
@@ -324,7 +322,7 @@ export function runStreamedTurn(params: {
 function handleAssistantBlocks(
   blocks: SDKAssistantMessage['message']['content'],
   logger: AgentTrace,
-  refs: Map<string, OpenToolUseCard>,
+  cards: Map<string, ToolCardHandle>,
   responseParts: string[],
 ): void {
   for (const block of blocks) {
@@ -354,7 +352,7 @@ function handleAssistantBlocks(
           status: 'in_progress',
           trace: logger,
         });
-        refs.set(block.id, { ...emitToolUseCard(logger, toolLog), toolLog });
+        cards.set(block.id, logger.openToolCard(toolLog));
         break;
       }
     }
@@ -363,18 +361,16 @@ function handleAssistantBlocks(
 
 function handleToolResults(
   blocks: Exclude<SDKUserMessage['message']['content'], string>,
-  logger: AgentTrace,
-  refs: Map<string, OpenToolUseCard>,
+  cards: Map<string, ToolCardHandle>,
 ): void {
   for (const block of blocks) {
     if (block.type !== 'tool_result') continue;
     const id = block.tool_use_id;
     if (typeof id !== 'string') continue;
-    const ref = refs.get(id);
-    if (!ref) continue;
+    const card = cards.get(id);
+    if (!card) continue;
 
     const isError = block.is_error === true;
-    const { status: _status, ...baseLog } = ref.toolLog;
     const update: Partial<ToolUseLog> = {
       ...(block.content !== undefined && {
         output: block.content as ToolUseLog['output'],
@@ -383,13 +379,12 @@ function handleToolResults(
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
       }),
     };
-    endToolUseCard(
-      logger,
-      ref,
-      { ...baseLog, ...update },
-      isError ? 'failed' : 'completed',
-    );
-    refs.delete(id);
+    card.update({
+      ...card.log,
+      ...update,
+      status: isError ? 'failed' : 'completed',
+    });
+    cards.delete(id);
   }
 }
 

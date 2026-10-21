@@ -19,13 +19,13 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolContext, type ToolResult } from '@texra-ai/harness';
-import { ToolError } from '@texra-ai/harness/plugins';
 import {
   isTransportReason,
   scopedClient,
   scopedOkClient,
   withRequestTimeout,
-} from '@tools/timeouts';
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s

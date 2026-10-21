@@ -14,6 +14,7 @@ import {
   resolveModelSource,
 } from '@texra-ai/llm';
 import {
+  CopilotRoutes,
   getEnabledModels,
   getHelperModelName,
   reasoningEffortOverrides,
@@ -21,6 +22,7 @@ import {
   StateReadFailed,
   StateWriteFailed,
   supportsReasoningLevel,
+  type CopilotModelRoute,
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
@@ -29,10 +31,6 @@ import {
   GlobalStateKey,
   type ModelOptionData,
 } from '@texra-ai/harness/schemas';
-import {
-  preferredCopilotRouteModels,
-  type CopilotModelRoute,
-} from '@model/copilotRouting';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -57,7 +55,7 @@ interface SettingsModelSelectionControllerDeps<R> {
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
   /**
-   * The Copilot routes the editor offers now (`discoverCopilotRoutes` over
+   * The Copilot routes the editor offers now (`CopilotRoutes.discover` over
    * the host's language-model port). This controller composes the read and
    * hands the result back as one program the host settles at its message
    * boundary.
@@ -101,7 +99,7 @@ export class SettingsModelSelectionController<R = never> {
         ),
       );
       const preferredModels = new Set(
-        yield* preferredCopilotRouteModels(this.deps.stores.globalState),
+        yield* CopilotRoutes.preferred(this.deps.stores.globalState),
       );
       const models = yield* this.buildSelectionItems(routes, preferredModels);
       return {

@@ -15,7 +15,6 @@ import { Cause, Effect, FileSystem } from 'effect';
 import { createRunStorageLocation, pathToLocationIn } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -31,6 +30,7 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
 import type { OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

@@ -10,7 +10,6 @@ import { Effect, Predicate } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import type { AgentTrace } from '@agent/trace';
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -21,7 +20,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
-import type { ToolError } from '@texra-ai/harness/plugins';
+import type { AgentTrace, ToolError } from '@texra-ai/harness/plugins';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { ModelConfig } from 'llm-zoo';
 

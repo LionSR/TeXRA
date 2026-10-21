@@ -11,6 +11,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 
 import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
+import type { RunStopReason } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 /**
@@ -34,13 +35,24 @@ interface RootRunClaim {
   readonly runId: RunId | undefined;
   readonly runSettled: RootRunSettled | undefined;
   readonly runCompleted: boolean;
+  /** The stop asked of this claim's run, by reason, read by every path that
+   *  would start or continue it. A `user` stop is the turn's: the run it
+   *  stopped consumes it as it completes, and the conversation continues
+   *  after. A `shutdown` (`/exit`) stands until the state is cleared: no
+   *  claim taken while leaving starts or continues a run. */
+  readonly stop: RunStopReason | null;
 }
 
 const NO_CLAIM: RootRunClaim = {
   runId: undefined,
   runSettled: undefined,
   runCompleted: false,
+  stop: null,
 };
+
+/** What a later claim or a completion keeps of a stop: only a shutdown. */
+const standingStop = (stop: RunStopReason | null): RunStopReason | null =>
+  stop === 'shutdown' ? stop : null;
 
 const rootRunClaim = signal<RootRunClaim>(NO_CLAIM);
 registerCliStateResetHook(() => rootRunClaim.set(NO_CLAIM));
@@ -73,14 +85,24 @@ export class TuiSession {
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedRunId: RunId | undefined;
   runExitCode: CliExitCode = CliExitCode.Success;
-  stopRequested = false;
 
   get runId(): RunId | undefined {
     return rootRunClaim.get().runId;
   }
 
+  /** The held claim's run moves to the one a resume adopted (its parent). */
   set runId(runId: RunId | undefined) {
     rootRunClaim.set({ ...rootRunClaim.get(), runId });
+  }
+
+  get stopRequested(): boolean {
+    return rootRunClaim.get().stop !== null;
+  }
+
+  /** Ask the claim's run to stop; a shutdown is never downgraded. */
+  askStop(reason: RunStopReason): void {
+    const claim = rootRunClaim.get();
+    rootRunClaim.set({ ...claim, stop: standingStop(claim.stop) ?? reason });
   }
 
   get runSettled(): RootRunSettled | undefined {
@@ -95,13 +117,21 @@ export class TuiSession {
     rootRunClaim.set(NO_CLAIM);
     this.interruptedRunId = undefined;
     this.runExitCode = CliExitCode.Success;
-    this.stopRequested = false;
   }
 
-  markRunPending(runSettled: RootRunSettled): void {
-    rootRunClaim.set({ runId: undefined, runSettled, runCompleted: false });
+  /** Claim the slot for `runSettled`'s run, `runId`, in one write: a claim
+   *  held with no run id read to a follow-up as "the run already settled"
+   *  (`awaitRunFolded(undefined)`), so a message typed while the claimant
+   *  was still choosing its model was bounced as sent to an ended
+   *  conversation. Of the stop asked before, only a shutdown carries over. */
+  markRunPending(runSettled: RootRunSettled, runId?: RunId): void {
+    rootRunClaim.set({
+      runId,
+      runSettled,
+      runCompleted: false,
+      stop: standingStop(rootRunClaim.get().stop),
+    });
     this.runExitCode = CliExitCode.Success;
-    this.stopRequested = false;
   }
 
   /** The exit code a claim's run ends with, while the slot still holds that
@@ -121,7 +151,13 @@ export class TuiSession {
    *  free the claim that replaced it. */
   markRunCompleted(runSettled: RootRunSettled): void {
     if (!this.holdsClaim(runSettled)) return;
-    rootRunClaim.set({ ...rootRunClaim.get(), runCompleted: true });
+    const claim = rootRunClaim.get();
+    // The run consumed the turn's stop; a shutdown outlives it.
+    rootRunClaim.set({
+      ...claim,
+      runCompleted: true,
+      stop: standingStop(claim.stop),
+    });
   }
 
   /**
@@ -136,9 +172,9 @@ export class TuiSession {
    * instead — it never suspends before claiming, so it has no check-then-await
    * window for this primitive to close.
    */
-  tryClaimRootRunSlot(runSettled: RootRunSettled): boolean {
+  tryClaimRootRunSlot(runSettled: RootRunSettled, runId?: RunId): boolean {
     if (!chatTuiCanStartRootRun(this)) return false;
-    this.markRunPending(runSettled);
+    this.markRunPending(runSettled, runId);
     return true;
   }
 

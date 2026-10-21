@@ -182,8 +182,11 @@ export function createTerminalPane(
     },
 
     reportError(sessionId, message) {
-      const session = sessions.get(sessionId) ?? createSession(sessionId);
-      session.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
+      // A start that fails after the tab closed reports into nothing: the
+      // tab is gone, and a terminal created here would never be disposed.
+      sessions
+        .get(sessionId)
+        ?.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
     },
 
     layout() {

@@ -21,12 +21,12 @@ import {
   type ToolPathCall,
   executed,
 } from '@texra-ai/harness/plugins';
+import { formatToolOutput } from '@texra-ai/harness/plugins';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { formatToolOutput } from '@tools/formatting';
 import {
   emptyExtractionResult,
   resolveLatexFile,

@@ -50,7 +50,7 @@ import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
 } from '@texra-ai/harness/transcript';
-import { ChatExportInputSchema } from '@agent/export/schemas';
+import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
 import {
   EventsFrameSchema,

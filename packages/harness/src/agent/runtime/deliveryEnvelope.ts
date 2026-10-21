@@ -16,13 +16,7 @@
  */
 
 // Local imports
-import type { TokenUsageStats } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-
-interface DeliveryEnvelopeAttribute {
-  readonly name: string;
-  readonly value: string | number | boolean | null | undefined;
-}
 
 /** Maximum prompt length echoed back in a delivery/error XML attribute. */
 const DELIVERY_PROMPT_MAX = 200;
@@ -33,23 +27,29 @@ const DELIVERY_PROMPT_MAX = 200;
  * the fixed order declared below, so two drivers reporting the same fact
  * always render it the same way and in the same place.
  */
-interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `codex-error`, …). */
+export interface ChildRunDelivery {
+  /** Root element name (`subagent-result`, `background-error`, …). */
   readonly tag: string;
   readonly runId: string;
-  /** Echoed prompt attribute (agent-CLI deliveries); truncated before escaping. */
+  /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
   readonly prompt?: string;
   /**
    * Attributes rendered after id/prompt (`agent`, `status`, `thread-id`, …).
    * Null/undefined values are dropped by the envelope.
    */
-  readonly attributes?: readonly DeliveryEnvelopeAttribute[];
-  /** Pre-rendered wall-time body text, in seconds to a tenth (`1.2s`). */
+  readonly attributes?: readonly {
+    readonly name: string;
+    readonly value: string | number | boolean | null | undefined;
+  }[];
+  /** Pre-rendered wall-time body text (`1.2s`). */
   readonly wallTime?: string;
   /** Final assistant response as one inline element; empty → `(no response)`. */
   readonly response?: string;
   /** Token usage element; omitted when null/undefined. */
-  readonly usage?: Pick<TokenUsageStats, 'inputTokens' | 'outputTokens'> | null;
+  readonly usage?: {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+  } | null;
   /** Pre-rendered fact lines appended after the shared elements. */
   readonly lines?: readonly string[];
   /** Failure text; its presence is what makes this delivery an error report. */
@@ -61,7 +61,7 @@ interface ChildRunDelivery {
  * follow-up queue when a child run's turn settles.
  */
 export function formatDelivery(delivery: ChildRunDelivery): string {
-  const attributes: readonly DeliveryEnvelopeAttribute[] = [
+  const attributes = [
     { name: 'id', value: delivery.runId },
     { name: 'prompt', value: delivery.prompt?.slice(0, DELIVERY_PROMPT_MAX) },
     ...(delivery.attributes ?? []),

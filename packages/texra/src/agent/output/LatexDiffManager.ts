@@ -13,7 +13,6 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -37,6 +36,7 @@ import {
   resolveWorkspaceSourceDir,
 } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { RoundFileEntry, RoundFileMapping } from './types';

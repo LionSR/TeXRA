@@ -39,10 +39,17 @@ vi.mock('@texra-ai/llm/node', async (importOriginal) => ({
   codexLoginWithLoopback: mocks.loginWithLoopback,
 }));
 
-vi.mock('@model/subscriptionAccess', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@model/subscriptionAccess')>()),
-  setPreferSubscription: mocks.setPreferSubscription,
-}));
+vi.mock('@model/subscriptionAccess', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@model/subscriptionAccess')>();
+  return {
+    ...actual,
+    SubscriptionPreference: {
+      ...actual.SubscriptionPreference,
+      set: mocks.setPreferSubscription,
+    },
+  };
+});
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: mocks.showLoggedErrorMessage,

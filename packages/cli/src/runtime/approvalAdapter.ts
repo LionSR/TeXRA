@@ -31,6 +31,7 @@ import {
   askApproval,
   queueCliApprovalQuestion,
   warnApprovalDenied,
+  whilePrompting,
 } from './approval/approvalPrompts';
 import {
   buildAgentProposalApprovalContent,
@@ -83,29 +84,30 @@ const askHeadlessUserQuestion = Effect.fn(
   const asked = yield* Effect.result(
     Effect.forEach(payload.questions, (question) =>
       Effect.gen(function* () {
-        // The hook prepares the terminal and the two helpers parse caller
-        // content, so any of the three can throw. Left as bare calls their
-        // throw is a defect, which `Effect.result` does not capture — the
-        // fallback below would be skipped and the whole session would abort
-        // on what used to settle as a rejection. `Effect.try` puts them back
-        // in the failure channel, where interruption still passes through.
+        // The two helpers parse caller content, so either can throw. Left as
+        // bare calls their throw is a defect, which `Effect.result` does not
+        // capture — the fallback below would be skipped and the whole
+        // session would abort on what used to settle as a rejection.
+        // `Effect.try` puts them back in the failure channel, where
+        // interruption still passes through.
         const formatted = yield* Effect.try({
-          try: () => {
-            hooks.beforePrompt?.();
-            return formatUserQuestionPrompt({
+          try: () =>
+            formatUserQuestionPrompt({
               ...payload,
               questions: [question],
-            });
-          },
+            }),
           catch: ensureError,
         });
-        const answer = yield* queueCliApprovalQuestion(context, {
-          kind: 'approval',
-          summary: payload.context
-            ? `${payload.context}\n\n${formatted}`
-            : formatted,
-          prompt: 'Answer (blank to skip): ',
-        });
+        const answer = yield* whilePrompting(
+          hooks,
+          queueCliApprovalQuestion(context, {
+            kind: 'approval',
+            summary: payload.context
+              ? `${payload.context}\n\n${formatted}`
+              : formatted,
+            prompt: 'Answer (blank to skip): ',
+          }),
+        );
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
           catch: ensureError,
@@ -225,12 +227,17 @@ export function createHeadlessCliHostInteractions(
           yield* ask(buildAgentProposalApprovalContent(payload.data)),
         );
       case 'retry': {
-        // The pre-prompt hook fires here and again inside `askApproval`; that
-        // double call is pre-existing retry behavior, not a bug to "fix".
-        hooks.beforePrompt?.();
         const summary = formatRetryRequestMessage(payload.data);
-        writeTextStderr(summary);
-        const decision = yield* ask({ summary });
+        // The summary is written under the prompt's hold, so the status
+        // line it displaced cannot repaint between it and the question;
+        // `askApproval` holds again inside, which nests.
+        const decision = yield* whilePrompting(
+          hooks,
+          Effect.suspend(() => {
+            writeTextStderr(summary);
+            return ask({ summary });
+          }),
+        );
         if (decision.action === 'approve') {
           return yield* decide(runId, requestId, { action: 'retry' });
         }

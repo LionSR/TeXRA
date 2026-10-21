@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 
-/** The shortest interval between two diff refreshes. */
-const REFRESH_THRESHOLD_MS = 200;
+import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
+
+/** How long a burst of view-column changes settles before one refresh. */
+const REFRESH_SETTLE_MS = 200;
 
 interface DiffInfo {
   left: vscode.Uri;
@@ -11,17 +13,14 @@ interface DiffInfo {
 
 let refreshListener: vscode.Disposable | undefined;
 let diffInfo: DiffInfo | undefined;
-let lastRefresh = 0;
 
-function refreshDiff(): void {
+// Trailing-edge: a column move fires several events within a few
+// milliseconds, and a leading throttle that dropped the later ones left the
+// diff where the first event found it. The last event always refreshes.
+const refreshDiff = createFlushableDebounce(() => {
   if (!diffInfo) {
     return;
   }
-  const now = Date.now();
-  if (now - lastRefresh < REFRESH_THRESHOLD_MS) {
-    return;
-  }
-  lastRefresh = now;
   void vscode.commands.executeCommand(
     'vscode.diff',
     diffInfo.left,
@@ -29,7 +28,7 @@ function refreshDiff(): void {
     diffInfo.title,
     { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
   );
-}
+}, REFRESH_SETTLE_MS);
 
 export function registerDiffRefresh(
   left: vscode.Uri,
@@ -38,14 +37,14 @@ export function registerDiffRefresh(
 ): void {
   refreshListener?.dispose();
   diffInfo = { left, right, title };
-  // A new diff starts its own throttle window: keeping the previous diff's
-  // timestamp would swallow this diff's first refresh.
-  lastRefresh = 0;
-  refreshListener = vscode.window.onDidChangeTextEditorViewColumn(refreshDiff);
+  refreshListener = vscode.window.onDidChangeTextEditorViewColumn(() =>
+    refreshDiff.schedule(),
+  );
 }
 
 export function disposeDiffRefresh(): void {
   refreshListener?.dispose();
   refreshListener = undefined;
+  refreshDiff.cancel();
   diffInfo = undefined;
 }

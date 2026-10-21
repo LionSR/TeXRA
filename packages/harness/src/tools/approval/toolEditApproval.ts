@@ -82,7 +82,7 @@ export type ToolEditApprovalResult =
   | RefusalDecision;
 
 /** What a tool proposes; {@link requestToolEditApproval} derives the rest. */
-type ToolEditProposal = Omit<
+export type ToolEditProposal = Omit<
   ToolEditApprovalRequest,
   'permission' | 'roots' | 'hunks' | 'firstChangedLine'
 >;

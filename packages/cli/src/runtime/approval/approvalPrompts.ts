@@ -23,8 +23,28 @@ import type {
 const CHANNEL = 'cli.approval';
 
 export interface CliApprovalPromptHooks {
-  readonly beforePrompt?: () => void;
+  /** Called as a prompt opens, before anything is written for it; what it
+   *  returns is called once the prompt is answered. The headless renderer
+   *  holds its live status line off the terminal in between. */
+  readonly prompting?: () => (() => void) | undefined;
 }
+
+/**
+ * Run `ask` as the one prompt open under `hooks`: the hook's hold is taken
+ * first and released however `ask` ends. The hook prepares the terminal, so
+ * it can throw; `Effect.try` puts that in the failure channel, where the
+ * caller's `Effect.catch` settles it, instead of a defect that would abort
+ * the tool and the session.
+ */
+export const whilePrompting = <A, E, R>(
+  hooks: CliApprovalPromptHooks,
+  ask: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | Error, R> =>
+  Effect.acquireUseRelease(
+    Effect.try({ try: () => hooks.prompting?.(), catch: ensureError }),
+    () => ask,
+    (release) => Effect.sync(() => release?.()),
+  );
 
 export interface CliApprovalContent {
   readonly summary: string;
@@ -217,25 +237,22 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         ? 'Approve? [y/N, v view full, or n <feedback>] '
         : 'Approve? [y/N, or n <feedback>] ';
       let answer: string;
-      // The hook prepares the terminal and `content.details()` renders
-      // caller-supplied content, so either can throw. Left as bare calls
-      // inside the gen their throw is a defect, which the `Effect.catch`
-      // below does not see: the rejection decision it settles would be
-      // skipped and `runPromise` would abort the tool and the session, where
-      // the outer try/catch this replaced settled it. `Effect.try` puts them
-      // back in the failure channel, and unlike catching the whole cause it
-      // leaves interruption free to propagate.
-      const beforePrompt = Effect.try({
-        try: () => hooks.beforePrompt?.(),
-        catch: ensureError,
-      });
+      // `content.details()` renders caller-supplied content, so it can
+      // throw. Left as a bare call inside the gen its throw is a defect,
+      // which the `Effect.catch` below does not see: the rejection decision
+      // it settles would be skipped and `runPromise` would abort the tool
+      // and the session, where the outer try/catch this replaced settled it.
+      // `Effect.try` puts it back in the failure channel, and unlike catching
+      // the whole cause it leaves interruption free to propagate.
       while (true) {
-        yield* beforePrompt;
-        answer = yield* askCliApprovalQuestion(context, {
-          kind: 'approval',
-          summary: content.summary,
-          prompt,
-        });
+        answer = yield* whilePrompting(
+          hooks,
+          askCliApprovalQuestion(context, {
+            kind: 'approval',
+            summary: content.summary,
+            prompt,
+          }),
+        );
         const details = content.details;
         if (details == null || !isViewDetailsAnswer(answer)) {
           break;
@@ -249,12 +266,14 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       const parsed = parseApprovalAnswer(answer);
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-        yield* beforePrompt;
-        const feedbackAnswer = yield* askCliApprovalQuestion(context, {
-          kind: 'approval',
-          summary: '',
-          prompt: 'Rejection feedback (optional, Enter to skip): ',
-        });
+        const feedbackAnswer = yield* whilePrompting(
+          hooks,
+          askCliApprovalQuestion(context, {
+            kind: 'approval',
+            summary: '',
+            prompt: 'Rejection feedback (optional, Enter to skip): ',
+          }),
+        );
         feedback = feedbackAnswer.trim() || undefined;
       }
 

@@ -42,14 +42,14 @@ import {
   RunIdSchema,
   FileLocation,
 } from '@texra-ai/harness/schemas';
+import {
+  approvedWriteConflict,
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+} from '@texra-ai/harness/plugins';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
-import {
-  buildApprovalRejectedResult,
-  requestToolEditApproval,
-} from '@tools/approval/toolEditApproval';
-import { approvedWriteConflict } from '@tools/approval/approvedWrite';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**

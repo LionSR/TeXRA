@@ -32,14 +32,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@model/subscriptionAccess', async (importActual) => {
   const actual =
     await importActual<typeof import('@model/subscriptionAccess')>();
+  const { get } = actual.SubscriptionPreference;
   return {
     ...actual,
-    isPreferSubscription: (
-      ...args: Parameters<typeof actual.isPreferSubscription>
-    ) =>
-      args[0] === 'chatgpt'
-        ? mocks.preferSubscription
-        : actual.isPreferSubscription(...args),
+    SubscriptionPreference: {
+      ...actual.SubscriptionPreference,
+      get: (...args: Parameters<typeof get>) =>
+        args[0] === 'chatgpt' ? mocks.preferSubscription : get(...args),
+    },
   };
 });
 

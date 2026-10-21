@@ -20,7 +20,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { requireNonEmptyString } from '@tools/utils';
 
 type Category = Parameters<typeof catQuery>[0];
 
@@ -105,7 +104,10 @@ type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   input: ArxivSearchInput,
 ) {
-  const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
+  const trimmedQuery = input.query.trim();
+  if (!trimmedQuery) {
+    return yield* Effect.fail(new ToolError('Search query cannot be empty.'));
+  }
 
   // Select the query function based on the field parameter
   const fieldQueryFns = {

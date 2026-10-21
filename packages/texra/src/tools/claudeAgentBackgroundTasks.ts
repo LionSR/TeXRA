@@ -10,12 +10,7 @@
  */
 
 // Local imports
-import {
-  endToolUseCard,
-  startToolUseCard,
-  type AgentTrace,
-  type ToolUseCardRef,
-} from '@agent/trace';
+import type { AgentTrace, ToolCardHandle } from '@texra-ai/harness/plugins';
 import type { ToolUseLog } from '@texra-ai/harness/schemas';
 
 // Third-party type imports
@@ -36,8 +31,7 @@ function buildBackgroundTaskLog(tasks: BackgroundTasks): ToolUseLog {
 
 /** One-query tracker; construct a fresh instance whenever a CLI process starts. */
 export class ClaudeBackgroundTaskTracker {
-  private active:
-    { readonly ref: ToolUseCardRef; readonly log: ToolUseLog } | undefined;
+  private active: ToolCardHandle | undefined;
 
   constructor(private readonly logger: AgentTrace) {}
 
@@ -48,15 +42,9 @@ export class ClaudeBackgroundTaskTracker {
       return;
     }
 
-    const ref =
-      this.active?.ref ??
-      startToolUseCard(
-        this.logger,
-        CLAUDE_BACKGROUND_TASK_TOOL_NAME,
-        log.input,
-      );
-    endToolUseCard(this.logger, ref, log, 'in_progress');
-    this.active = { ref, log };
+    const card = this.active ?? this.logger.openToolCard(log);
+    card.update(log);
+    this.active = card;
   }
 
   /** Close the card because every query starts with an empty background set. */
@@ -67,13 +55,7 @@ export class ClaudeBackgroundTaskTracker {
 
   private settle(log: ToolUseLog, summary: string): void {
     if (!this.active) return;
-    const { status: _status, ...baseLog } = log;
-    endToolUseCard(
-      this.logger,
-      this.active.ref,
-      { ...baseLog, summary },
-      'completed',
-    );
+    this.active.update({ ...log, summary, status: 'completed' });
     this.active = undefined;
   }
 }

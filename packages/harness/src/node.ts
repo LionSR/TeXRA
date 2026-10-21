@@ -65,6 +65,10 @@ export {
   entryTypeIn,
   pathExists,
 } from '@utils/files/fsEntryExists';
+// The harness's log path as Effect diagnostics (its logger over the installed
+// sink, the minimum level, a bounded tracer), for a host program that runs
+// outside its process runtime: before it is built, or after it is gone.
+export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.

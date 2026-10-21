@@ -10,8 +10,8 @@ import {
   ToolError,
   type ToolFileAttachment,
 } from '@texra-ai/harness/plugins';
-import { buildFileAttachment } from '@tools/attachments';
-import { formatToolOutput } from '@tools/formatting';
+import { buildFileAttachment } from '@texra-ai/harness/plugins';
+import { formatToolOutput } from '@texra-ai/harness/plugins';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {

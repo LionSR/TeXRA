@@ -303,7 +303,7 @@ export function executeCliRequest(
       options.services.runtime,
       runContext,
       {
-        beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
+        prompting: () => presentationHost.holdForPrompt?.(),
         emit: (event, payload) => {
           if (event === 'requestShowError') failurePresented = true;
           presentationHost.emit(event, payload);
