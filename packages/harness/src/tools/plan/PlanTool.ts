@@ -32,7 +32,6 @@ import {
   startGoal,
   type GoalAutoApprovalScope,
 } from '@tools/goal';
-import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -40,9 +39,24 @@ import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const CHANNEL = 'PlanTool';
 
-/** A goal write the model can work around; a store refusal ends the run. */
-const notStorageRefusal = (error: Error): boolean =>
-  findStorageRefusal(Cause.fail(error)) === undefined;
+/** Answer a failed goal write with `result`, after a warning; a store
+ *  refusal is not answered: it ends the run. */
+const recoverGoalFailure =
+  (warning: string, result: (reason: string) => ToolResult) =>
+  <R>(
+    self: Effect.Effect<ToolResult, Error, R>,
+  ): Effect.Effect<ToolResult, Error, R> =>
+    self.pipe(
+      Effect.catchIf(
+        (error) => findStorageRefusal(Cause.fail(error)) === undefined,
+        (error) =>
+          Effect.logWarning(warning).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as(result(toErrorMessage(error))),
+          ),
+      ),
+    );
 
 function formatGoalView(goal: Goal, nowMs: number): string {
   return [
@@ -54,7 +68,8 @@ function formatGoalView(goal: Goal, nowMs: number): string {
 
 /**
  * Schema for the unified plan tool input. A discriminated union over
- * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason.
+ * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason,
+ * trimmed and checked non-empty once here.
  * Branches stay `looseObject`: provider schema flattening advertises one
  * object across commands, and OpenAI-compatible providers null-fill the other
  * branches' fields.
@@ -75,6 +90,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
     command: z.literal('pause'),
     reason: z
       .string()
+      .trim()
       .min(1)
       .describe('Why you are pausing: describe what you need from the user.'),
   }),
@@ -82,6 +98,7 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
     command: z.literal('complete'),
     reason: z
       .string()
+      .trim()
       .min(1)
       .describe(
         'How you verified completion: cite current filesystem state, ' +
@@ -136,28 +153,21 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
         `Plan approved: goal ${active.goalId} retargeted`,
       );
     }).pipe(
-      Effect.catchIf(notStorageRefusal, (err) => {
-        const reason = toErrorMessage(err);
-        return Effect.logWarning(
-          'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
-        ).pipe(
-          Effect.annotateLogs({ data: err }),
-          withLogChannel(CHANNEL),
-          Effect.as(
-            errorResult(
-              `The user approved this plan and requested autonomous run, ` +
-                `but the in-flight goal could not be retargeted: ${reason}\n\n` +
-                `Work toward the new objective turn-by-turn. The pre-existing ` +
-                `goal is still active and will keep injecting continuations ` +
-                `against its previous objective until the user pauses or abandons it.`,
-              {
-                summary:
-                  'Plan approved: goal could not be retargeted, proceeding without it',
-              },
-            ),
+      recoverGoalFailure(
+        'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
+        (reason) =>
+          errorResult(
+            `The user approved this plan and requested autonomous run, ` +
+              `but the in-flight goal could not be retargeted: ${reason}\n\n` +
+              `Work toward the new objective turn-by-turn. The pre-existing ` +
+              `goal is still active and will keep injecting continuations ` +
+              `against its previous objective until the user pauses or abandons it.`,
+            {
+              summary:
+                'Plan approved: goal could not be retargeted, proceeding without it',
+            },
           ),
-        );
-      }),
+      ),
     );
   }
 
@@ -179,23 +189,16 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
       `Plan approved: goal ${goal.goalId} started`,
     );
   }).pipe(
-    Effect.catchIf(notStorageRefusal, (err) => {
-      const reason = toErrorMessage(err);
-      return Effect.logWarning(
-        'Failed to start goal for approved plan; falling back to plain approval.',
-      ).pipe(
-        Effect.annotateLogs({ data: err }),
-        withLogChannel(CHANNEL),
-        Effect.as(
-          executed(
-            `The user approved this plan and requested autonomous run, but ` +
-              `the goal could not be started: ${reason}\n\n` +
-              `Work toward the objective as a normal turn-by-turn workflow.`,
-            'Plan approved: goal could not be started, proceeding without it',
-          ),
+    recoverGoalFailure(
+      'Failed to start goal for approved plan; falling back to plain approval.',
+      (reason) =>
+        executed(
+          `The user approved this plan and requested autonomous run, but ` +
+            `the goal could not be started: ${reason}\n\n` +
+            `Work toward the objective as a normal turn-by-turn workflow.`,
+          'Plan approved: goal could not be started, proceeding without it',
         ),
-      );
-    }),
+    ),
   );
 });
 
@@ -374,12 +377,9 @@ function planCommand(
     case 'update':
       return executeUpdate(call, { objective: input.objective });
     case 'pause':
-    case 'complete': {
-      const reason = requireNonEmptyString(input.reason, 'reason');
-      return input.command === 'pause'
-        ? executePause(call, call.run.runId, reason)
-        : executeComplete(call, call.run.runId, reason);
-    }
+      return executePause(call, call.run.runId, input.reason);
+    case 'complete':
+      return executeComplete(call, call.run.runId, input.reason);
   }
 }
 

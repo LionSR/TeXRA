@@ -74,18 +74,16 @@ const withHost = <A, E, R>(self: Effect.Effect<A, E, R>) =>
   self.pipe(withEnv({}), withServices);
 
 vi.mock('@model/subscriptionAccess', () => ({
-  isPreferSubscription: (provider: string, stores: unknown) =>
-    provider === 'chatgpt'
-      ? mocks.isPreferCodexSubscription(stores)
-      : mocks.isPreferXaiSubscription(stores),
-  setPreferSubscription: (
-    provider: string,
-    stores: unknown,
-    enabled: boolean,
-  ) =>
-    provider === 'chatgpt'
-      ? mocks.setPreferCodexSubscription(stores, enabled)
-      : mocks.setPreferXaiSubscription(stores, enabled),
+  SubscriptionPreference: {
+    get: (provider: string, stores: unknown) =>
+      provider === 'chatgpt'
+        ? mocks.isPreferCodexSubscription(stores)
+        : mocks.isPreferXaiSubscription(stores),
+    set: (provider: string, stores: unknown, enabled: boolean) =>
+      provider === 'chatgpt'
+        ? mocks.setPreferCodexSubscription(stores, enabled)
+        : mocks.setPreferXaiSubscription(stores, enabled),
+  },
 }));
 
 vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {

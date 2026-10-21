@@ -39,6 +39,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -69,7 +70,6 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { RUN_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { DisposableStore } from '@texra/platform/disposable';

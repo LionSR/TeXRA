@@ -389,7 +389,7 @@ export function sessionContributions(
               // flag itself, and the queued task polls this flag — dropping it
               // would hang `/exit` forever with a follow-up queued and no
               // stream id yet.
-              context.session.stopRequested = true;
+              context.session.askStop('shutdown');
               context.requestInputExit();
             }),
         },

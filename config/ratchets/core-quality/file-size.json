@@ -14,7 +14,7 @@
   "packages/harness/src/agent/runtime/run/compaction.ts": 449,
   "packages/harness/src/agent/runtime/run/validationModel.ts": 547,
   "packages/harness/src/agent/runtime/RunHistory.ts": 428,
-  "packages/harness/src/agent/runtime/runRegistry.ts": 934,
+  "packages/harness/src/agent/runtime/runRegistry.ts": 933,
   "packages/harness/src/agent/runtime/SessionHandle.ts": 408,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 435,
   "packages/harness/src/controllers/session/Database.ts": 1085,

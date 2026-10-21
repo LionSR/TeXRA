@@ -15,7 +15,6 @@ import {
   reportMissingImageTools,
   toolLabel,
 } from '@texra/utils/system/toolChecks';
-import { detectImageTool } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 function missingTool(
@@ -48,7 +47,11 @@ export const checkCoreDependencies = Effect.fn(
   ).map((id) => missingTool(id, false));
 
   // Report both image tools as interchangeable only if neither is installed.
-  if (!(yield* detectImageTool())) {
+  const imageTools = yield* Effect.all(
+    IMAGE_LATEX_TOOLS.map((tool) => checkToolInstalled(tool, false)),
+    { concurrency: 'unbounded' },
+  );
+  if (!imageTools.some(Boolean)) {
     missing.push(...IMAGE_LATEX_TOOLS.map((id) => missingTool(id, true)));
     if (showError) yield* reportMissingImageTools();
   }

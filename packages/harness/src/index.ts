@@ -45,7 +45,7 @@ export type { RunEnd } from '@shared/schemas';
 export type { RunResult } from '@agent/storage/resultMeta';
 export type { RunRefusal } from '@agent/runtime/runClassification';
 export type { AgentRunListingEntry } from '@agent/storage/runListing';
-export type { ExportNode } from '@agent/export/schemas';
+export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
@@ -106,6 +106,7 @@ export {
   type AgentDirectoryServiceOptions,
 } from '@agent/index/AgentDirectoryService';
 export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
+export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // The process's stores: the global root's current values, each family a
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
@@ -257,7 +258,8 @@ export {
   type RunModelDecisionReason,
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
-export type { CopilotModelRoute } from '@model/copilotRouting';
+export { CopilotRoutes, type CopilotModelRoute } from '@model/copilotRouting';
+export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {
   reasoningEffortOverrides,
   supportsReasoningLevel,

@@ -4,10 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  isPreferSubscription,
-  setPreferSubscription,
-} from '@model/subscriptionAccess';
+import { SubscriptionPreference } from '@model/subscriptionAccess';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -24,11 +21,15 @@ describe('Codex subscription preference (packages/harness/src/model/subscription
           }),
         );
 
-        yield* setPreferSubscription('chatgpt', testWorkspaceRoots(), true);
-
-        expect(isPreferSubscription('chatgpt', testWorkspaceRoots())).toBe(
+        yield* SubscriptionPreference.set(
+          'chatgpt',
+          testWorkspaceRoots(),
           true,
         );
+
+        expect(
+          SubscriptionPreference.get('chatgpt', testWorkspaceRoots()),
+        ).toBe(true);
         expect(
           testWorkspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
         ).toMatchObject({

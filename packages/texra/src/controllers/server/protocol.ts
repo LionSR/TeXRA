@@ -40,7 +40,6 @@ import {
   RUN_STATUS_KEYS,
 } from '@texra-ai/harness/schemas';
 import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
-import { ChatExportInputSchema } from '@agent/export/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
@@ -49,6 +48,7 @@ import {
   RunIdSchema,
   RunRecordFieldsSchema,
 } from '@shared/schemas';
+import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
 import {
   EventsFrameSchema,

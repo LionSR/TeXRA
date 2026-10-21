@@ -160,7 +160,15 @@ export class LatexMediaManager {
   ): Effect.Effect<FileLocation | undefined, Error, MediaServices> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      const buildDir = path.join(path.dirname(file.absolutePath), 'build');
+      // One build directory per input (the shape TikZ compiles use): up to
+      // LATEX_CONCURRENCY engines run at once, and two inputs in one folder
+      // that share an `\include` or a `.bib` would otherwise write the same
+      // `.aux`/`.bbl` files into one `build/` and corrupt each other's.
+      const buildDir = path.join(
+        path.dirname(file.absolutePath),
+        'build',
+        path.parse(file.absolutePath).name,
+      );
       yield* fs.makeDirectory(buildDir, { recursive: true });
       const compiled = yield* compileLatex2Pdf(file, this.roots, {
         outputDirectory: buildDir,

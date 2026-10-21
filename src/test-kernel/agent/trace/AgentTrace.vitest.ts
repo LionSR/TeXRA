@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type AgentEvent, emitToolUseCard, TraceEmitter } from '@agent/trace';
+import { type AgentEvent, TraceEmitter } from '@agent/trace';
+import type { ToolUseLog } from '@shared/schemas';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
@@ -8,16 +9,16 @@ function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
   return events;
 }
 
-type ToolUseCard = Parameters<typeof emitToolUseCard>[1];
+type ToolUseCard = ToolUseLog;
 
-/** Emit a card on a fresh trace and return only its tool.start/tool.end events. */
+/** Open a card on a fresh trace and return only its tool.start/tool.end events. */
 function collectToolEvents(card: ToolUseCard): AgentEvent[] {
-  return collectEvents((trace) => emitToolUseCard(trace, card)).filter(
+  return collectEvents((trace) => trace.openToolCard(card)).filter(
     (e) => e.type === 'tool.start' || e.type === 'tool.end',
   );
 }
 
-describe('emitToolUseCard', () => {
+describe('openToolCard', () => {
   it.each<{ name: string; card: ToolUseCard }>([
     {
       name: 'no status is passed (slow-tool path)',

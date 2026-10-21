@@ -18,6 +18,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import {
+  JsonStore,
   projectValueIgnored,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
@@ -25,7 +26,6 @@ import {
   type SettingsCatalog,
 } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { JsonStore } from '@platform/defaults/jsonStore';
 
 import {
   TEXRA_CONFIG_FILE_NAME,

@@ -17,7 +17,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand, makeMachineGitEnv } from '@texra-ai/harness/node';
 import {
   overleafGitClone,
   overleafTokenSpec,
@@ -25,7 +25,6 @@ import {
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** What the clone workflow and its host ports run on: git, and the filesystem

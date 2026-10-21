@@ -12,6 +12,7 @@ import { defineTool } from '@texra-ai/harness';
 import { requireRun, errorResult } from '@texra-ai/harness/plugins';
 import { ChildRuns } from '@texra-ai/harness/plugins';
 import { AgentCatalog } from '@texra-ai/harness';
+import { CALL_FIELDS, fileList } from '@texra-ai/harness/plugins';
 import {
   agentMatchesIdentifier,
   toJsonValue,
@@ -23,7 +24,6 @@ import {
   documentTaskPatch,
 } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({
   prompt: z

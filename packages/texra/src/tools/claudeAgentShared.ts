@@ -5,7 +5,6 @@ import { Effect, Predicate } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import type { AgentTrace } from '@agent/trace';
 import type {
   TokenUsageStats,
   ToolError,
@@ -22,6 +21,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { ModelConfig } from 'llm-zoo';
 

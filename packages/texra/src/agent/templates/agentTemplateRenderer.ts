@@ -1,6 +1,6 @@
 import nunjucks from 'nunjucks';
 
-import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
+import { buildTemplatePassthrough } from '@texra-ai/harness/plugins';
 
 type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 

@@ -112,7 +112,9 @@ export class TranscriptSubscriptions extends Context.Service<
           Effect.suspend(() => {
             if (set.length === 0) ports.delete(port);
             else ports.set(port, set);
-            return SubscriptionRef.set(ref, union());
+            // Computed under the ref's own permit, so two ports changing at
+            // once cannot publish an older union after a newer one.
+            return SubscriptionRef.update(ref, union);
           }),
       };
     }),

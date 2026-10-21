@@ -34,13 +34,10 @@ import {
   ConfigWriteFailed,
   type PlatformSecrets,
   Secrets,
+  SubscriptionPreference,
   withLogChannel,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  isPreferSubscription,
-  setPreferSubscription,
-} from '@model/subscriptionAccess';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -252,9 +249,9 @@ function defineSubscriptionProvider<
   return Object.freeze({
     ...descriptor,
     isPreferSubscription: (stores: SettingsStores) =>
-      isPreferSubscription(descriptor.id, stores),
+      SubscriptionPreference.get(descriptor.id, stores),
     setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
-      setPreferSubscription(descriptor.id, stores, enabled),
+      SubscriptionPreference.set(descriptor.id, stores, enabled),
     signIn,
     signOut: (secrets: PlatformSecrets) => bindCoordinator(secrets).signOut(),
     getStatus: (secrets: PlatformSecrets) =>

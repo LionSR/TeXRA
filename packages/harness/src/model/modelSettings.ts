@@ -31,9 +31,9 @@ import {
 
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
-import { preferredCopilotRouteModels } from './copilotRouting';
+import { CopilotRoutes } from './copilotRouting';
 import { reasoningEffortOverrides } from './reasoningLevel';
-import { isPreferSubscription } from './subscriptionAccess';
+import { SubscriptionPreference } from './subscriptionAccess';
 import type { ModelOptionStores } from './computeModelOptions';
 import type { ReasoningEffort } from 'llm-zoo';
 
@@ -184,7 +184,7 @@ const subscriptionOn = (
   provider: 'chatgpt' | 'grok',
 ): Effect.Effect<boolean, StateReadFailed> =>
   Effect.try({
-    try: () => isPreferSubscription(provider, stores),
+    try: () => SubscriptionPreference.get(provider, stores),
     catch: (cause) =>
       new StateReadFailed({
         key: provider,
@@ -271,7 +271,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         { concurrency: 'unbounded' },
       ),
       Effect.all({
-        copilotModels: preferredCopilotRouteModels(stores.globalState),
+        copilotModels: CopilotRoutes.preferred(stores.globalState),
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
         background: readBackgroundToggles(stores),

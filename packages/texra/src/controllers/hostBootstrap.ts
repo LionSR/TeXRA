@@ -39,8 +39,7 @@ import {
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
-} from '@platform/defaults/nodeHost';
-import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
+} from '@texra-ai/harness/node';
 
 export interface HostBootstrapInit {
   /**
@@ -62,10 +61,6 @@ export interface HostBootstrapInit {
 export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   init: HostBootstrapInit,
 ) {
-  // The environment's proxy policy for the rest of the process's HTTP
-  // traffic. Model traffic carries its own transport; this is the host's
-  // process, so it may set the global dispatcher an embedder's may not.
-  installProcessHttpDispatcher();
   // Project skills follow each session's workspace; only the bundle is fixed
   // here, so this is a registration rather than a scan. Each tool plugin's
   // bundled directory contributes the skills it ships to the bundled tier;

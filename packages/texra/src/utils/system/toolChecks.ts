@@ -13,6 +13,7 @@ import { ToolMissingReporter } from '@texra-ai/harness';
 import {
   executeCommand,
   type ExecuteCommandBaseOptions,
+  probeTool,
   withExtendedPath,
 } from '@texra-ai/harness/node';
 import which from 'which';
@@ -30,7 +31,6 @@ import {
   TEXFMT_INSTALL_GUIDE,
   getInstallGuide,
 } from '@texra/shared/constants/latexToolchain';
-import { IMAGE_TOOL_COMMANDS, probeTool } from '@utils/system/toolUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface ToolConfig {
@@ -112,7 +112,8 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   gm: withDocs(
     'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
-    { command: IMAGE_TOOL_COMMANDS.gm, label: 'GraphicsMagick' },
+    // GraphicsMagick has no `--version` flag.
+    { command: 'gm version', label: 'GraphicsMagick' },
   ),
   perl: withDocs(
     'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,

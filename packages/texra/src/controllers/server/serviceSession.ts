@@ -44,8 +44,8 @@ import {
 import {
   agentErrorPresentation,
   attachErrorPresentationClaimed,
+  describeFollowUpFailure,
 } from '@texra-ai/harness';
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import {
   JsonValueSchema,
   RUN_OUTCOME,

@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
+import { nodeFileServices } from '@texra-ai/harness/node';
 import { buildCliContext } from '@cli/runtime/cliContext';
 import { writeTextStderr } from '@cli/runtime/logSinks';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 
 import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
 
