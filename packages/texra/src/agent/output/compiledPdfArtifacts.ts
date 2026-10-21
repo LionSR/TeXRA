@@ -1,7 +1,7 @@
 // Node imports
 import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
-import { hasExtension } from '@texra-ai/harness';
+import { getPathSegments, hasExtension } from '@texra-ai/harness';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -28,9 +28,9 @@ interface PublishCompiledPdfOptions {
 }
 
 function normalizePdfRelativePath(pdfPath: string): string {
-  const parts = normalizeFilePath(pdfPath)
-    .split('/')
-    .filter((part) => part && part !== '.' && part !== '..');
+  const parts = getPathSegments(normalizeFilePath(pdfPath)).filter(
+    (part) => part !== '.' && part !== '..',
+  );
   const normalized = parts.length > 0 ? parts.join('/') : 'output.pdf';
   return hasExtension(normalized, '.pdf') ? normalized : `${normalized}.pdf`;
 }

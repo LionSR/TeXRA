@@ -55,6 +55,11 @@ split, but it's imported by webview-reachable code (`src/ui/transcript/*`)
 and can't pull in `pathCore.ts` (which imports `node:path`). Its duplication
 is the accepted cost of the `BROWSER_SAFE_UTILS` boundary.
 
+**Update 2026-10-21:** `fileListingRules.ts` and `compiledPdfArtifacts.ts`
+now split through `getPathSegments` (the `..`-filtering in the PDF path is
+unchanged, applied on top of it). `outputFileUtils.ts` stays as is: it needs
+`path.posix.parse` and the drive-letter check.
+
 ## 2. `monacoLanguage.ts` basename reimplementation
 
 `src/shared/monaco/monacoLanguage.ts:20` hand-rolls
