@@ -18,7 +18,7 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexProvider.js';
 
 const mocks = vi.hoisted(() => ({
   isPreferCodexSubscription: vi.fn(),

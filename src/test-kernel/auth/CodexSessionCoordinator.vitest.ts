@@ -7,22 +7,21 @@ import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SubscriptionOAuthError } from '@texra-ai/llm/node';
+import {
+  SubscriptionOAuthError,
+  type SubscriptionTokenResponse,
+} from '@texra-ai/llm/node';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { CODEX_POLICY } from '../../../packages/llm/src/oauth/codex/codexSessionPolicy.js';
+import {
+  CODEX_POLICY,
+  type CodexSession,
+} from '../../../packages/llm/src/oauth/codex/codexProvider.js';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
   type SubscriptionSessionStorage,
 } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
-import type {
-  CodexSession,
-  CodexTokenResponseSchema,
-} from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
 import type { HttpClient } from 'effect/http';
-import type { z } from 'zod';
-
-type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -109,8 +108,8 @@ function expiredSession(): CodexSession {
 }
 
 function tokenResponse(
-  overrides: Partial<CodexTokenResponse> = {},
-): CodexTokenResponse {
+  overrides: Partial<SubscriptionTokenResponse> = {},
+): SubscriptionTokenResponse {
   return {
     access_token: 'access-1',
     refresh_token: 'refresh-1',
@@ -119,7 +118,7 @@ function tokenResponse(
   };
 }
 
-function newLoginTokenResponse(): CodexTokenResponse {
+function newLoginTokenResponse(): SubscriptionTokenResponse {
   return tokenResponse({
     access_token: 'access-new',
     refresh_token: 'refresh-new',
@@ -162,7 +161,7 @@ const forkNow = <A>(
  */
 function parkedRefresh() {
   const pending = Deferred.makeUnsafe<
-    CodexTokenResponse,
+    SubscriptionTokenResponse,
     SubscriptionOAuthError
   >();
   const started = Deferred.makeUnsafe<void>();

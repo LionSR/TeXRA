@@ -24,10 +24,10 @@ import {
 import {
   CODEX_DEVICE_REDIRECT_URI,
   CODEX_DEVICE_VERIFICATION_URL,
-} from './codexConstants.js';
+  type CodexSession,
+} from './codexProvider.js';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient.js';
 import type { HttpClient } from 'effect/http';
-import type { CodexSession } from './codexSessionTypes.js';
 
 /**
  * Fallback lifetime for the user code when the endpoint omits `expires_in`.

@@ -10,8 +10,10 @@ import {
   type SubscriptionOAuthClient,
   type SubscriptionSessionStorage,
 } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
-import { XAI_POLICY } from '../../../packages/llm/src/oauth/xai/xaiSessionPolicy.js';
-import type { XaiSession } from '../../../packages/llm/src/oauth/xai/xaiSessionTypes.js';
+import {
+  XAI_POLICY,
+  type XaiSession,
+} from '../../../packages/llm/src/oauth/xai/xaiProvider.js';
 
 const NOW = 1_900_000_000_000;
 

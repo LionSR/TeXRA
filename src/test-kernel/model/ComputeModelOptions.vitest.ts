@@ -26,7 +26,7 @@ import {
 } from '@test/support/setupPlatform';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { FAST_FIRST_RESPONSE_HINT } from '@texra/shared/model/modelPicker';
-import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexProvider.js';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
 const GPT56 = 'openai/gpt-5.6-sol';

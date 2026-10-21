@@ -57,7 +57,7 @@ export function oauthTokenErrorKind(
 }
 
 /** A fully read response: status and the body text. */
-export interface OAuthResponse {
+interface OAuthResponse {
   readonly status: number;
   readonly ok: boolean;
   readonly text: string;
