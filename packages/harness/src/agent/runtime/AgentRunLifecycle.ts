@@ -265,13 +265,10 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   const finalizeTerminal = ({
     settledBy,
     ...arm
-  }: {
-    outcome: RunOutcome;
-    error?: ResultEvent['error'];
-    output?: RunEndOutput;
-    stopped?: boolean;
-    settledBy?: RunEndResult;
-  }) =>
+  }: Pick<
+    FinalizeRunTerminalParams,
+    'outcome' | 'error' | 'output' | 'stopped'
+  > & { settledBy?: RunEndResult }) =>
     finalizeRunTerminal({
       session,
       handle,
