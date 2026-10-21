@@ -20,8 +20,7 @@ import {
   type StateReadFailed,
   type StateStore,
 } from '@texra-ai/harness';
-import { getModelLabel } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import { getModelLabel, GlobalStateKey } from '@texra-ai/harness/schemas';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 

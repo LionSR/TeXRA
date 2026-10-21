@@ -11,8 +11,8 @@ import {
   type RunId,
   type TokenUsageStats,
   type UsageRoute,
+  isActivePhase,
 } from '@texra-ai/harness/schemas';
-import { isActivePhase } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -39,8 +39,11 @@ import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { RunView, SessionView } from '@texra-ai/harness';
+import type {
+  ApprovalPolicy,
+  RunView,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */

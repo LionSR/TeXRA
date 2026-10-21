@@ -82,14 +82,6 @@ export interface Composition {
   readonly plugins: readonly Plugin[];
 }
 
-// The views a host reads, read-only all the way down.
-export type {
-  PendingRequest,
-  RunView,
-  SessionView,
-  TranscriptView,
-} from '@shared/session/readonlyViews';
-
 /**
  * A host's answer to each request a run of the session waits on: an
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.

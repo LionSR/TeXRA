@@ -15,22 +15,17 @@ import {
   type HostRequestFailure,
   PlatformSecrets,
   AgentDirectoriesFailed,
-} from '@texra-ai/harness';
-import {
   withProcessServices,
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
-} from '@texra-ai/harness';
-import {
   sessionFsLayer,
   type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
+  pathToLocationIn,
 } from '@texra-ai/harness';
-import { type RunId } from '@texra-ai/harness/schemas';
-import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,

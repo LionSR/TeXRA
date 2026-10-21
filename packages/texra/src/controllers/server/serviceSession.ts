@@ -45,9 +45,6 @@ import {
   type Session,
   type StateStore,
   type WorkspaceRoots,
-  type TranscriptSubscription,
-} from '@texra-ai/harness';
-import {
   agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
@@ -64,8 +61,11 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { FoldInput } from '@texra-ai/harness/transcript';
-import type { RunEndResult } from '@texra-ai/harness';
+import type {
+  TranscriptSubscription,
+  FoldInput,
+} from '@texra-ai/harness/transcript';
+import type { RunEndResult } from '@texra-ai/harness/schemas';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
 /** What a call made while the link reconnects is told. */

@@ -3,8 +3,11 @@ import { Cause, Effect, Exit } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness';
-import { isActivePhase, isEmptyUsage } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  isActivePhase,
+  isEmptyUsage,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -34,8 +37,11 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;

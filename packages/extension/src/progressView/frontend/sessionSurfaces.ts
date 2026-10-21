@@ -40,9 +40,11 @@ import {
   type WebviewSession,
   type WebviewTransport,
 } from './sessionTransport';
-import type { SessionView } from '@texra-ai/harness/schemas';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type {
+  SessionView,
+  RuntimeRequest,
+  RunId,
+} from '@texra-ai/harness/schemas';
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {

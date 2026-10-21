@@ -11,8 +11,8 @@ import {
   acceptsFollowUp,
   type RunId,
   type ToolEditPermission,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
@@ -39,7 +39,8 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime, ToolEditContent } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type {
   ApprovalPayload,
   PendingApprovalFact,

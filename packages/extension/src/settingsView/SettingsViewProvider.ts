@@ -15,9 +15,13 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  PlatformSecrets,
+  StateStore,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (

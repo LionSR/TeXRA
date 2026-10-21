@@ -9,8 +9,8 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
-import { Settings } from '@texra-ai/harness';
 import {
+  Settings,
   mcpConfigPathOf,
   readMcpConfig,
   type ConfigProvider,

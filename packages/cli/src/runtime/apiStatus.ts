@@ -22,8 +22,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */

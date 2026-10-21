@@ -8,6 +8,7 @@ import {
   isTaskConfig,
   RUN_SUBSTATE,
   type RunId,
+  serializeFilteredConfig,
 } from '@texra-ai/harness/schemas';
 import {
   listRunGeneratedFiles,
@@ -18,7 +19,6 @@ import {
   type SessionOpenError,
 } from '@texra-ai/harness';
 import { absentReason } from '@texra-ai/harness/node';
-import { serializeFilteredConfig } from '@texra-ai/harness/schemas';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
@@ -41,8 +41,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
-import type { RunView } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */

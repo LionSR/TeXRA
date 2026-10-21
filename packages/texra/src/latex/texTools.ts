@@ -6,13 +6,12 @@ import { Data, Effect, FileSystem, Config, Option } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import { withLogChannel, WorkspaceFs, Settings } from '@texra-ai/harness';
 import {
   toErrorMessage,
   splitContentLines,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';

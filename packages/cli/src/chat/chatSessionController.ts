@@ -25,12 +25,12 @@ import {
   type ProcessServices,
   type RunModelDecisionReason,
   type RunStopReason,
-  type RuntimeRequest,
-  type RunView,
   type Session,
-  type SessionView,
 } from '@texra-ai/harness';
 import {
+  type RuntimeRequest,
+  type RunView,
+  type SessionView,
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
@@ -38,10 +38,12 @@ import {
   generateRunId,
   isTaskConfig,
   type RunId,
+  acceptsFollowUp,
+  isLiveRun,
+  isTerminalOutcomePhase,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {

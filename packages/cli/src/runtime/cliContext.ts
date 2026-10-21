@@ -15,21 +15,21 @@ import {
   DatabaseOpenFailed,
   type ConfigProvider,
   type SkillSourceOptions,
+  Settings,
 } from '@texra-ai/harness';
 import {
   absentReason,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
-import { Settings } from '@texra-ai/harness';
-import { safeParseJson } from '@texra-ai/harness/schemas';
 import {
+  safeParseJson,
   APPROVAL_POLICY_CONFIG_KEY,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
   type ApprovalPolicy,
+  stricterPolicy,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { stricterPolicy } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,

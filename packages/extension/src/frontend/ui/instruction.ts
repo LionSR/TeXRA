@@ -3,9 +3,8 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, Settings } from '@texra-ai/harness';
 import { z } from 'zod';
-import { Settings } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type {

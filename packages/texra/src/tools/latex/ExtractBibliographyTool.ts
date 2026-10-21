@@ -20,8 +20,8 @@ import {
   resolveToolPath,
   type ToolPathCall,
   executed,
+  formatToolOutput,
 } from '@texra-ai/harness/plugins';
-import { formatToolOutput } from '@texra-ai/harness/plugins';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
