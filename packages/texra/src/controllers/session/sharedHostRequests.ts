@@ -14,6 +14,7 @@
  * compiler still names a kind it forgot.
  */
 import * as path from 'node:path';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 
 import { Effect } from 'effect';
 
@@ -39,7 +40,6 @@ import {
   type WorkflowFileOperationResult,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { formatResultCount } from '@utils/text/stringUtils';
 import type {
   ProcessServices,
   StorageFs,

@@ -7,7 +7,6 @@ import ignore from 'ignore';
 
 // Local imports - utils
 import { toPosixPath } from '@utils/core/pathCore';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 type GitignoreSource = {
@@ -37,7 +36,7 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
   return yield* fs.readFileString(absolutePath).pipe(
     Effect.map((content): GitignoreSource | null => ({
       absolutePath,
-      content: normalizeLineEndings(content),
+      content: content.replaceAll('\r\n', '\n'),
     })),
     // An absent policy file is the normal case; any other read failure is the
     // caller's to see.

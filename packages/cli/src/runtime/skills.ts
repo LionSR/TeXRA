@@ -2,39 +2,13 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
-import { Settings } from '@texra-ai/harness';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
-import type { SkillLoadIssue, SourcedSkill } from '@skills/loadSkills';
-import type { SkillSourceOptions } from '@skills/skillSources';
 import {
-  discoverRuntimeSkillSources,
-  filterDiscoveredSkills,
-  readDisabledSkills,
-} from '@skills/runtimeSkills';
-import type { SettingsStores } from '@texra-ai/harness';
-
-/**
- * Fold the contributions the command's platform init installed for `cwd`,
- * with this command's own source flags in place of the process-wide ones.
- * `stores` are the setting slots of the workspace this listing is for — the
- * roots that init installed — so the disabled-skill lists come from that
- * project rather than from ambient state.
- */
-export function readCliSkills(
-  cwd: string,
-  stores: SettingsStores,
-  options: SkillSourceOptions = {},
-) {
-  return Effect.gen(function* () {
-    const result = yield* discoverRuntimeSkillSources(
-      cwd,
-      yield* readInstalledPluginLoad(stores),
-      options,
-    );
-    return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
-  });
-}
+  Settings,
+  type EnabledSkill,
+  type SettingsStores,
+  type SkillLoadIssue,
+} from '@texra-ai/harness';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:
@@ -60,12 +34,12 @@ export function formatCliSkillIssue(issue: SkillLoadIssue): string {
   return `${issue.severity}: ${issue.message}${location}`;
 }
 
-export function formatCliSkillList(skills: readonly SourcedSkill[]): string {
+export function formatCliSkillList(skills: readonly EnabledSkill[]): string {
   if (skills.length === 0) return 'No skills found.';
   return skills
     .map(
-      (entry) =>
-        `${entry.source.scope}\t${entry.skill.name}\t${entry.skill.description}`,
+      ({ display }) =>
+        `${display.scope}\t${display.name}\t${display.description}`,
     )
     .join('\n');
 }

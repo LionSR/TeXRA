@@ -332,7 +332,7 @@ export class CodeSandbox extends Context.Service<
       request: ScriptRequest<E, R>,
     ) => Effect.Effect<ScriptResult, ScriptError | E, R>;
   }
->()('@texra/agent/CodeSandbox') {
+>()('@texra-ai/harness/agent/CodeSandbox') {
   /** Needs the host's worker platform (`NodeWorker.layerPlatform`). */
   static readonly layer: Layer.Layer<
     CodeSandbox,

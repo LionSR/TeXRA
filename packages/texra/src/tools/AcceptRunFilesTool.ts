@@ -10,6 +10,7 @@
  */
 
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { z } from 'zod';
 import { Clock, Effect, FileSystem } from 'effect';
 
@@ -47,7 +48,7 @@ import { approvedWriteConflict } from '@tools/approval/approvedWrite';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { entryExists, absentReason } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { formatResultCount, pluralize } from '@utils/text/stringUtils';
+import { pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePathUnder,
   originalSnapshotPathUnder,

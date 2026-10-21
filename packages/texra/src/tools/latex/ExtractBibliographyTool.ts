@@ -1,5 +1,6 @@
 // Node imports
 import * as nodePath from 'node:path';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
@@ -27,7 +28,6 @@ import {
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { pathExists } from '@utils/files/fsDurability';
-import { formatResultCount } from '@utils/text/stringUtils';
 import {
   emptyExtractionResult,
   resolveLatexFile,

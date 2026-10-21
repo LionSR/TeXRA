@@ -2,6 +2,7 @@
 // row actions (expand, and, where the list is `removable`, delete). An
 // interrupted row says so; its one Resume is on the task's ended line, which
 // the row opens. `run-tabs` lays the rows out.
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { getBasename } from '@texra-ai/harness/schemas';
 import {
   LitElement,
@@ -37,7 +38,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
+import { formatRelativeTime } from '@utils/text/stringUtils';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 

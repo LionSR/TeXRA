@@ -28,7 +28,11 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  ensureError,
+  toErrorMessage,
+  previewLabel,
+} from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
   emitToolUseCard,
@@ -58,7 +62,6 @@ import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -378,7 +381,7 @@ function buildCodexLaunch(params: {
         runId,
         prompt: lastPrompt,
         attributes: [{ name: 'thread-id', value: thread.id || null }],
-        wallTime: formatWallTimeSeconds(wallTimeMs),
+        wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
         response: turn.finalResponse,
         usage: codexTurnUsage(turn),
       }),

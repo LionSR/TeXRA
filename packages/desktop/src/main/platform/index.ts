@@ -23,13 +23,11 @@ import {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
-import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
 import { repairLaunchPath } from './pathFix.js';
@@ -38,6 +36,7 @@ import {
   resolveDesktopMainDir,
   resolveResourcesPath,
 } from './paths.js';
+import type { ConfigStore } from '@texra-ai/harness/node';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,
@@ -83,9 +82,7 @@ export const initializeElectronPlatform = Effect.fn(
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
-  const dataRoot = yield* resolveDesktopDataRoot(userDataPath).pipe(
-    Effect.provide(processEnvConfigLayer),
-  );
+  const dataRoot = yield* resolveDesktopDataRoot(userDataPath);
   // The process roots are the no-workspace roots. Each open project gets its
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
@@ -109,7 +106,7 @@ export const initializeElectronPlatform = Effect.fn(
       );
       return { mainDir, resourcesPath, configStores, secrets };
     },
-  ).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
+  ).pipe(Effect.provide(nodeFileServices));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeEffect`), after run

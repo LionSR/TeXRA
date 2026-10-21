@@ -1,5 +1,3 @@
-import { normalizeLineEndings } from '@utils/text/stringUtils';
-
 // Matches a line that is exactly `---`, tolerant of a trailing `\r` so a
 // CRLF-edited file still fences correctly. `$` in multiline mode also
 // matches end-of-string, so a fence line need not be newline-terminated.
@@ -32,9 +30,9 @@ export function splitFrontmatterFence(content: string): FrontmatterFenceSplit {
 
   return {
     kind: 'ok',
-    frontmatterText: normalizeLineEndings(
-      content.slice(opening[0].length, closing.index),
-    ),
+    frontmatterText: content
+      .slice(opening[0].length, closing.index)
+      .replaceAll('\r\n', '\n'),
     body: content.slice(closing.index + closing[0].length),
   };
 }

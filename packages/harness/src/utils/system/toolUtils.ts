@@ -15,7 +15,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { resolveOptionalCommand } from './binaryResolver';
+import { findCommand } from './binaryResolver';
 import { executeCommand } from './execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -63,9 +63,9 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     // (some tools return non-zero for --version but still output version info)
     if (result.exitCode === 0 || hasVersionOutput(result)) return true;
 
-    const fallback = yield* resolveOptionalCommand(cmd, args);
+    const fallback = yield* findCommand(cmd);
     if (fallback) {
-      result = yield* runProbe(fallback.command, fallback.args);
+      result = yield* runProbe(fallback.command, [...fallback.args, ...args]);
       if (result.exitCode === 0 || hasVersionOutput(result)) return true;
     }
 

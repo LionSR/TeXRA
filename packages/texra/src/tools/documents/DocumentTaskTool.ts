@@ -80,9 +80,9 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     return errorResult(
       `'${input.agentName}' has no document task: call \`agent\` to run it with a prompt.`,
     );
-  if (input.inputFiles.length === 0)
+  if (input.inputFiles.length === 0 && input.mediaFiles.length === 0)
     return errorResult(
-      `'${input.agentName}' revises files: pass the files it revises as \`inputFiles\`.`,
+      `'${input.agentName}' needs files: pass \`inputFiles\` or \`mediaFiles\`.`,
     );
   const launched = yield* (yield* ChildRuns).launch({
     tool: 'document_task',

@@ -15,7 +15,6 @@ import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { IMAGE_TOOL_LABEL } from '@texra/shared/constants/latexToolchain';
 
 // Local file imports
-import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
@@ -36,9 +35,6 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
   const { roots } = (yield* ToolContext).env;
-  // Verification follows an install, so a tool looked up and missed a moment
-  // ago is searched for again rather than answered from the miss cache.
-  yield* Effect.sync(forgetToolMisses);
 
   if (input.tool != null) {
     const name = input.tool.trim();

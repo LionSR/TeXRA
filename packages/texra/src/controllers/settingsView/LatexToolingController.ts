@@ -2,6 +2,7 @@ import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness';
+import { findCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -21,7 +22,6 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@texra/utils/system/toolChecks';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'LatexToolingController';
@@ -69,16 +69,18 @@ export function detectLatexSettingsStatus(
       ),
     ) as Record<ProbedLatexTool, boolean>;
     // Perl backs latexindent but is never shown with a path of its own.
+    const commandPath = (name: string) =>
+      Effect.map(findCommand(name), (found) => found?.resolvedPath ?? null);
     const { gm, magick, ...toolPaths } = yield* Effect.all(
       {
-        pdflatexPath: findToolInCommonPaths('pdflatex'),
-        latexmkPath: findToolInCommonPaths('latexmk'),
-        latexdiffPath: findToolInCommonPaths('latexdiff'),
-        latexindentPath: findToolInCommonPaths('latexindent'),
-        texcountPath: findToolInCommonPaths('texcount'),
-        ghostscriptPath: findToolInCommonPaths('gs'),
-        gm: findToolInCommonPaths('gm'),
-        magick: findToolInCommonPaths('magick'),
+        pdflatexPath: commandPath('pdflatex'),
+        latexmkPath: commandPath('latexmk'),
+        latexdiffPath: commandPath('latexdiff'),
+        latexindentPath: commandPath('latexindent'),
+        texcountPath: commandPath('texcount'),
+        ghostscriptPath: commandPath('gs'),
+        gm: commandPath('gm'),
+        magick: commandPath('magick'),
       },
       { concurrency: 'unbounded' },
     );

@@ -1736,7 +1736,7 @@ registerBuiltinSlashCommands({
     Effect.sync(() => {
       appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
     }),
-  configStores: session().roots,
+  configRoots: session().roots,
   onError: (error) => {
     appendHarnessAssistantTranscript(
       `Slash command failed: ${toErrorMessage(error)}`,

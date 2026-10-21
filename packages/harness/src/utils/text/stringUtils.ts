@@ -63,11 +63,6 @@ export function formatCompactTokenCount(tokens: number): string {
   return `${tokens}`;
 }
 
-/** Normalize CRLF line endings to LF. */
-export function normalizeLineEndings(text: string): string {
-  return text.replaceAll('\r\n', '\n');
-}
-
 /**
  * Regular English plural of a noun phrase whose head noun is its last word:
  * a consonant + `y` becomes `ies`, a sibilant ending takes `es`, everything
@@ -102,11 +97,6 @@ export function formatResultCount(
   return `${count} ${pluralize(count, singular, plural)}`;
 }
 
-/** UTC calendar date (`YYYY-MM-DD`) of a Date; defaults to now. */
-export function isoDateOnly(date: Date = new Date()): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Normalize line endings and split into content lines.
  * A trailing newline does not produce a phantom empty element.
@@ -118,7 +108,7 @@ export function isoDateOnly(date: Date = new Date()): string {
  */
 export function splitContentLines(text: string): string[] {
   if (!text) return [];
-  const lines = normalizeLineEndings(text).split('\n');
+  const lines = text.replaceAll('\r\n', '\n').split('\n');
   if (lines.at(-1) === '') lines.pop();
   return lines;
 }
@@ -166,18 +156,6 @@ export function truncateWithEllipsis(text: string, maxLen: number): string {
   return text;
 }
 
-/**
- * Collapse every whitespace run (including newlines) to a single space
- * and trim. Used by header-preview renderers that need a one-line summary
- * of multi-line content.
- *
- * @example
- * collapseWhitespace('foo\n  bar\t baz ') // 'foo bar baz'
- */
-export function collapseWhitespace(text: string): string {
-  return text.replaceAll(/\s+/g, ' ').trim();
-}
-
 // eslint-disable-next-line no-control-regex -- the C0/C1 control ranges are the match target
 const CONTROL_CHARACTERS = /[\x00-\x1f\x7f-\x9f]/g;
 
@@ -193,7 +171,7 @@ export function stripControlCharacters(text: string, replacement = ''): string {
  * Collapse whitespace first, then truncate to a fixed-width one-line summary.
  */
 export function truncateSummary(text: string, maxLength: number): string {
-  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
+  return truncateWithEllipsis(text.replaceAll(/\s+/g, ' ').trim(), maxLength);
 }
 
 /**
@@ -215,45 +193,11 @@ export function previewLabel(text: string): string {
 }
 
 /**
- * Format an ISO-8601 timestamp for compact display: normalize to UTC,
- * replace the `T` separator with a space, and drop the fractional-seconds
- * suffix. (e.g. `'2026-06-02T14:30:45.123Z'` → `'2026-06-02 14:30:45'`).
- * Parses through `Date` first so offset forms (e.g. `+02:00`) normalize to
- * UTC instead of passing through unstripped.
- */
-export function formatTimestamp(isoTimestamp: string): string {
-  const parsed = new Date(isoTimestamp);
-  const utcIso = Number.isFinite(parsed.getTime())
-    ? parsed.toISOString()
-    : isoTimestamp;
-  return utcIso.replace('T', ' ').replace(/\.\d+Z$/, '');
-}
-
-/**
  * Format a USD cost value as a display string with three decimal places.
  * e.g. `0.012` → `'$0.012'`
  */
 export function formatCostUsd(cost: number): string {
   return `$${cost.toFixed(3)}`;
-}
-
-/**
- * Format a timestamp (number of ms since epoch, or a date-parsable string) for
- * locale-aware display using the system locale and timezone.
- */
-export function formatLocaleTimestamp(ts: number | string): string {
-  return new Date(ts).toLocaleString();
-}
-
-/**
- * Format an elapsed wall-clock duration as seconds with one decimal digit
- * (e.g. `12.3s`), regardless of magnitude. Unlike {@link formatDuration} /
- * {@link formatCompactDuration}, this never switches to compound units
- * (`2m 5s`) — agent-CLI turn timings are always shown as a single seconds
- * figure.
- */
-export function formatWallTimeSeconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {

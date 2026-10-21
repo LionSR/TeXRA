@@ -53,7 +53,7 @@ export interface WorkspaceAgentsControllerDeps<
    * Resolve one stored identifier without collapsing exact source identity.
    * The controller applies no fallback around this, so an implementation owns
    * the whole contract: match a bare name against the deduplicated agents,
-   * and a source-qualified key exactly. `getCatalogAgent` is the production
+   * and a source-qualified key exactly. `AgentCatalog.get` is the production
    * implementation.
    */
   readonly resolveAgent: (identifier: string) => Entry | undefined;

@@ -13,13 +13,13 @@
  */
 
 // Third-party imports - Lit template utilities
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
 import { toolDisplayKind } from '@texra-ai/harness/transcript';
 import { normalizeToolName } from '@texra-ai/harness/transcript';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
 import {

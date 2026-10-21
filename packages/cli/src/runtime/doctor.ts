@@ -1,4 +1,5 @@
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Data, Effect, FileSystem, PlatformError } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
@@ -9,10 +10,9 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
+import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { CliExitCode } from './exitCodes';

@@ -34,13 +34,14 @@ import {
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
+  envFlag,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
-import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
+import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
@@ -59,7 +60,6 @@ import {
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { envFlag } from '@utils/system/envFlags';
 import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';

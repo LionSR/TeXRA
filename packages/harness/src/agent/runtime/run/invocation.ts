@@ -44,7 +44,7 @@ import type { ModelRetryGate } from '../ModelRetryGate';
 export class RouteRetries extends Context.Service<
   RouteRetries,
   ModelRetryGate
->()('@texra/RouteRetries') {}
+>()('@texra-ai/harness/RouteRetries') {}
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;

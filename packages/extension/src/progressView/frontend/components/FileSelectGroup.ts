@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
 import { String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -23,7 +24,6 @@ import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatResultCount } from '@utils/text/stringUtils';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 

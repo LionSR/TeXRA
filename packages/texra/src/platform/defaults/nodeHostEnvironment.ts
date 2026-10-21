@@ -6,9 +6,7 @@
  */
 import * as os from 'node:os';
 
-import { Effect } from 'effect';
-
-import { envVar } from '@utils/system/envFlags';
+import { Effect, Config, Option } from 'effect';
 
 type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
@@ -27,12 +25,17 @@ export const nodeHostEnvironment = Object.freeze({
     shell: string;
   }> {
     return Effect.map(
-      Effect.all([envVar('SHELL'), envVar('ComSpec')]),
+      Effect.all([
+        Config.String('SHELL').pipe(Config.option, Effect.orDie),
+        Config.String('ComSpec').pipe(Config.option, Effect.orDie),
+      ]),
       ([shell, comSpec]) => ({
         platform: process.platform,
         arch: process.arch,
         osRelease: os.release(),
-        shell: shell ?? comSpec ?? 'unknown',
+        shell:
+          Option.getOrUndefined(Option.orElse(shell, () => comSpec)) ??
+          'unknown',
       }),
     );
   },

@@ -17,11 +17,7 @@ import {
 } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
-import {
-  formatBytes,
-  normalizeLineEndings,
-  splitContentLines,
-} from '@utils/text/stringUtils';
+import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import {
   getMimeType,
@@ -163,7 +159,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     }
     const raw = yield* fs
       .readFileString(resolved.absolute)
-      .pipe(Effect.map(normalizeLineEndings));
+      .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
     const { text, images } = yield* parseEml(raw);
     lines = splitContentLines(text);
     emlImages = images;
@@ -171,7 +167,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     lines = splitContentLines(
       yield* fs
         .readFileString(resolved.absolute)
-        .pipe(Effect.map(normalizeLineEndings)),
+        .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n'))),
     );
   }
 

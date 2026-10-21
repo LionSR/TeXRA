@@ -227,7 +227,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           run.config.mediaFiles.length
             ? mediaInputParts(
                 run.config.mediaFiles.map((p) =>
-                  run.fileService.createLocation(p),
+                  run.fileService.locateSource(p),
                 ),
                 bound.config.capabilities,
                 logger,

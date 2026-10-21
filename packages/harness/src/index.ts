@@ -7,22 +7,14 @@
  * calls `Effect.runPromise`, `runSync`, or `runFork`: a Promise-land
  * embedder runs `Effect.runPromise(program)` at its own entry point.
  *
- * This module is the package's public surface and is documented as one
- * (packages/harness/README.md); it is the one barrel the "no convenience
- * barrels" rule does not apply to.
- *
- * The root entry used to render these services as Promises and
- * AsyncIterables, the boundary the Effect migration's rule R1 names
- * (`2026-08-26-effect-4-runtime-migration.md`,
- * §7 R1, boundary kind 3: the published SDK speaks Promises). That ruling is
- * superseded (2026-09-21): `effect` is a mandatory exact-pin peer dependency
- * of the whole package, the package has no external consumers, and TeXRA 1.0
- * keeps no parallel surfaces.
+ * This module is the package's public surface, documented in the package
+ * README. `effect` is a peer dependency: the surface is Effect services, not
+ * Promises.
  */
+// The one barrel the "no convenience barrels" rule does not apply to.
 
-// The services and their layer. `Sessions.layer({ platform, plugins })` is
-// an embedder's way in: the process and its sessions live for that layer's
-// scope, so nothing is held without a scope to end it.
+// The services and their layer. `Sessions.layer({ platform, plugins })` is an
+// embedder's way in; the process and its sessions live for that layer's scope.
 export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export { Sessions, processLayer } from './effect/processLayer.js';
@@ -67,11 +59,9 @@ export type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 
-// The process the hosts compose: one `processLayer` for every TeXRA host
-// and for `Sessions.layer` above.
+// The process the hosts compose: one `processLayer` for every host.
 export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-// A project's `.env` over the process environment, for a host surface that
-// serves one project (the desktop's), as each run reads it.
+// A project's `.env` over the process environment, for a one-project host.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withForkFailureReporting,
@@ -82,10 +72,8 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
-// The process's agent catalog: its reads, launch resolution and custom
-// copies, the workspace's agent selection over it, and the agent
-// directories a host serves it (bundled agents under its packaged
-// resources' `BUNDLED_AGENTS_DIRECTORY`).
+// The agent catalog: reads, launch resolution, custom copies, the workspace's
+// selection, and the agent directories a host serves it.
 export {
   AgentCatalog,
   AgentCatalogLoadError,
@@ -156,10 +144,8 @@ export {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-// A host's presentation surface: what a session presents through, the
-// `SessionHostInteractions` a host with no session of its own presents
-// through, a host's emit handlers (one per presentation event), and a failed
-// run's presentation, which marks it presented.
+// A host's presentation surface: session and sessionless interactions, the
+// emit handlers (one per event), and a failed run's presentation claim.
 export {
   SessionHostInteractions,
   type HostInteractions,
@@ -171,10 +157,8 @@ export { escapeText } from '@shared/utils/xmlEscape';
 // The payloads, as the runtime defines them.
 export type { AgentEvent } from '@agent/trace';
 
-// `RunEndResult` comes from its own module: declaration emit follows the
-// module a public type comes from, and one that pulls the model handlers'
-// `.d.ts` graph in trips the provider-type leak check in
-// `scripts/validate-artifacts.mjs` (`@anthropic-ai/sdk`).
+// `RunEndResult` comes from its own module so declaration emit does not pull
+// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,
@@ -185,8 +169,8 @@ export type {
 } from '@agent/core/tools/ToolTypes';
 export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
-export { defineTool } from '@tools/core/definition';
-export type { DefinedTool } from '@tools/core/definition';
+export { defineTool, type DefinedTool } from '@tools/core/definition';
+export type { ToolResult } from '@shared/schemas';
 export type {
   AggregateId,
   RequestDecision,
@@ -203,10 +187,8 @@ export {
   NotOwner,
   Rejected,
   Unavailable,
-} from '@shared/session/requestErrors';
-export type {
-  RequestError,
-  RequestRefusal,
+  type RequestError,
+  type RequestRefusal,
 } from '@shared/session/requestErrors';
 export type {
   Outcome,
@@ -215,14 +197,7 @@ export type {
   ToolEditContent,
 } from '@shared/session/runtimeRequest';
 
-// The platform's ports: what an `AgentPlatform` implements, the failures its
-// stores answer with, and the services a plugin's code reads them as.
-export type {
-  AgentDirectoriesPort,
-  ConfigProvider,
-  StateStore,
-  ToolMissingHandler,
-} from '@platform/interfaces';
+// The platform's ports, their stores' failures, and the services plugins read.
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -231,18 +206,19 @@ export {
   StateReadFailed,
   StateWriteFailed,
   ToolMissingReporter,
+  type AgentDirectoriesPort,
+  type ConfigProvider,
+  type StateStore,
+  type ToolMissingHandler,
 } from '@platform/interfaces';
-export type { PlatformSecrets } from '@platform/secrets';
-export { Secrets } from '@platform/secrets';
-export type {
-  LanguageModelAccessState,
-  LanguageModelInfo,
-  LanguageModelPort,
-  LanguageModelReference,
-} from '@platform/languageModel';
+export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelAccessState,
+  type LanguageModelInfo,
+  type LanguageModelPort,
+  type LanguageModelReference,
 } from '@platform/languageModel';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
@@ -256,13 +232,10 @@ export type {
 
 // The budget a session close waits for its runs: a plugin's drain fits it.
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
-// Model access a host request makes outside a run: the user's own key and
-// the endpoint they set (audio transcription).
+// Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
-// The models a host offers: one read answers every visible model's option
-// (availability, route, the plan paying, why it cannot run), beside the
-// enabled list and its one writer, the precedence that picks a run's model,
-// the one reasoning-level policy, and the helper model.
+// The models a host offers: each visible model's option, the enabled list and
+// its writer, run-model precedence, the reasoning policy, the helper model.
 export {
   getEnabledModels,
   ModelHostFactUnreadable,
@@ -287,16 +260,13 @@ export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
-export { RouteUnavailable } from '@common/errors/agentErrors';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
 // What a used-up plan falls back to, as the retry copy names it.
 export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 
-// The rooted file systems a plugin's code reads (the workspace, the
-// session's run storage, the global storage root), and the layers that
-// serve them over a session's roots outside a run.
+// The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,
   sessionFsLayer,
@@ -304,32 +274,56 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
-// A `FileLocation` by its root: a workspace file, a file under a run's
-// storage, a file outside both, or a path against the workspace root a
-// caller holds.
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+// A `FileLocation` by its root: workspace, run storage, external, or relative.
 export {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
-// The user's MCP servers the tool catalog loads: the config file beside a
-// global storage directory, read as the catalog reads it, and the server a
-// namespaced MCP tool name belongs to.
+// The user's MCP servers: their config file, and a namespaced tool's server.
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+// The skills a session's roots discover (the settings inventory, the enabled
+// ones a person activates) with their issues, and a host's source options.
+export {
+  Skills,
+  type EnabledSkill,
+  type SkillRoots,
+} from '@skills/runtimeSkills';
+export type { SkillSourceOptions } from '@skills/skillSources';
+export type {
+  SkillIssueCode,
+  SkillIssueSeverity,
+  SkillLoadIssue,
+} from '@skills/skillLoader';
+export type { SkillDisplayItem } from '@shared/schemas';
+// The Claude Code and Codex plugins installed under a storage root: their
+// operations (enable asks for trust), what loads now, and their refusals.
+export {
+  InstalledPlugins,
+  type PluginOrigin,
+  type PluginUpdate,
+} from '@common/plugins/installedPlugins';
+export type { PluginEnv } from '@common/plugins/installRecord';
+export {
+  PluginError,
+  PluginRequestError,
+} from '@common/plugins/pluginManifest';
+export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+export type { ConfiguredHook } from '@common/plugins/hookConfig';
+export type { InstalledPlugin, PluginTrust } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
-// Failures as a host or plugin reads them: the agent error and how it is
-// presented, the filesystem and module predicates, the cause chain, a
-// user's abort, and a provider error's message. Error messages themselves
-// (`toErrorMessage`, `ensureError`) are in `./schemas`.
-export { AgentError } from '@common/errors/agentErrors';
+// Failures as hosts and plugins read them: the agent error, predicates, cause
+// chain, abort, provider message (`toErrorMessage` is in `./schemas`).
+export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export {
   agentErrorPresentation,
   type AgentErrorKind,
@@ -343,9 +337,7 @@ export {
   isUserAbort,
 } from '@common/errors/errorPredicates';
 export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-// Path containment on the platform's own paths, a path's segments and its
-// POSIX form, and an extension check that ignores case. (The browser-safe
-// path basics are in `./schemas`.)
+// Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,
   hasExtension,
@@ -369,9 +361,7 @@ export {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-// The process's tool catalog: the built-in tools the switches leave on, a
-// plugin's process services, and the switches themselves; and the switches'
-// first-install seed.
+// The tool catalog: enabled built-ins, plugin services, switches and their seed.
 export {
   ToolCatalog,
   type ToolCatalogOwner,
@@ -388,8 +378,7 @@ export {
   type LogSink,
 } from '@logger/logSink';
 export { withLogChannel } from '@logger/effectLog';
-// The redaction the write path applies, for a host surface that shows text
-// outside it (a crash dialog, a log file read back, a result message).
+// The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
 // Every read and write of a catalog setting, against the stores a caller
 // holds (a session's roots), and the typed read of a non-catalog state key.

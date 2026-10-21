@@ -39,7 +39,9 @@ export interface OpenWork {
  *  the publisher would never end. `committed` runs once the job has. */
 export const PublisherJob = Context.Reference<{
   readonly committed: Effect.Effect<void>[];
-} | null>('@texra/session/PublisherJob', { defaultValue: () => null });
+} | null>('@texra-ai/harness/session/PublisherJob', {
+  defaultValue: () => null,
+});
 
 /** Run `action` once the publisher job this fiber runs has committed, never
  *  if it rolls back; outside a job, now. What a job changes in memory
@@ -132,7 +134,7 @@ export type Append = (
 export class ProcessIdentity extends Context.Service<
   ProcessIdentity,
   { readonly ownerId: OwnerId }
->()('@texra/session/ProcessIdentity') {
+>()('@texra-ai/harness/session/ProcessIdentity') {
   static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
     return Layer.succeed(ProcessIdentity)({ ownerId });
   }
@@ -226,6 +228,6 @@ export class SessionEvents extends Context.Service<
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   }
->()('@texra/session/SessionEvents') {}
+>()('@texra-ai/harness/session/SessionEvents') {}
 
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;

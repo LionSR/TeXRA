@@ -201,7 +201,8 @@ plan-specific key instead of a full provider key. Read
 
 The ChatGPT section's **Advanced → Input token budget** (`texra.chatgptCodex.contextWindowK`) is the
 input budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, like Codex CLI's
-`model_context_window`. The default 272 (272,000 tokens) matches Codex; GPT-5.6 models accept up to 872.
+`model_context_window`. Left empty, each model takes the window the Codex backend grants it (500K for
+GPT-6.1 Sol, 272K for the others); a value overrides it for every model, up to 872.
 Automatic compaction may run earlier, according to the separate compaction threshold, and the context
 window TeXRA displays adds the model's output budget. OpenAI enforces the real per-account limit: a value
 above what your plan allows fails and triggers compaction recovery.

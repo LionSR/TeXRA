@@ -7,7 +7,6 @@ import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDash
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,
-  isWindows: false,
 }));
 
 vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
@@ -16,17 +15,6 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   return {
     ...actual,
     hasPackageManager: (name: string) => name === mocks.packageManager,
-  };
-});
-
-vi.mock('@utils/system/platformPaths', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@utils/system/platformPaths')>();
-  return {
-    ...actual,
-    get IS_WINDOWS() {
-      return mocks.isWindows;
-    },
   };
 });
 
@@ -113,8 +101,16 @@ const CASES: Array<{
 describe('planToolTerminalAction', () => {
   it.each(CASES)('$name', ({ packageManager, isWindows, input, expected }) => {
     mocks.packageManager = packageManager ?? null;
-    mocks.isWindows = isWindows ?? false;
-
-    expect(planToolTerminalAction(input)).toEqual(expected);
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    // Pin the platform both ways so a Windows runner doesn't leak into the
+    // non-Windows cases.
+    Object.defineProperty(process, 'platform', {
+      value: isWindows ? 'win32' : 'linux',
+    });
+    try {
+      expect(planToolTerminalAction(input)).toEqual(expected);
+    } finally {
+      if (platform) Object.defineProperty(process, 'platform', platform);
+    }
   });
 });

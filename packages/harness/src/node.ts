@@ -32,6 +32,21 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+// Running a program on this machine: find it, run it, and give any other
+// child the PATH the harness resolves tools on.
+export {
+  executeCommand,
+  type ExecuteCommandBaseOptions,
+} from '@utils/system/execUtils';
+export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
+export { withExtendedPath } from '@utils/system/platformPaths';
+// The process environment as the harness reads it: a flag (any value but
+// unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
+// child agent CLI starts from (no provider key but the one it authenticates
+// with).
+export { envFlag, inheritedEnv } from '@utils/system/envFlags';
+// Crash-safe replace of a file.
+export { writeFileAtomic } from '@utils/files/fsDurability';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.
@@ -40,6 +55,14 @@ export {
   type SettingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
+// The config provider over a host's stores (workspace, local, global), and
+// whether it ignores a project file's value for a row.
+export {
+  JsonConfigProvider,
+  projectValueIgnored,
+  type ConfigStore,
+  type JsonConfigProviderOptions,
+} from '@platform/defaults/jsonConfigProvider';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {

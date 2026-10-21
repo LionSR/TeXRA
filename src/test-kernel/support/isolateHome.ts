@@ -45,7 +45,7 @@ if (process.env[SWAPPED_BY] !== String(process.pid)) {
 
 // Loaded only now, so no module of the repository reads the home first.
 const { defaultNodeStorageRoot } =
-  await import('@platform/defaults/nodeStorage');
+  await import('@texra/platform/defaults/nodeStorage');
 const { resolveGlobalStoragePath } =
   await import('@platform/defaults/workspaceStorage');
 

@@ -2,7 +2,10 @@ import { basename } from 'node:path';
 
 import { computed } from '@lit-labs/signals';
 
-import { isWorkingRun } from '@texra-ai/harness/schemas';
+import {
+  isWorkingRun,
+  stripControlCharacters,
+} from '@texra-ai/harness/schemas';
 import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
@@ -11,7 +14,6 @@ import {
   TERMINAL_TAB_TITLE,
 } from '@texra/shared/sessionTitle';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { stripControlCharacters } from '@utils/text/stringUtils';
 
 import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';

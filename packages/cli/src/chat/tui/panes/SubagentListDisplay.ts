@@ -1,5 +1,9 @@
 // Local imports - shared formatting
 import {
+  formatCompactTokenCount,
+  formatResultCount,
+} from '@texra-ai/harness/transcript';
+import {
   COLOR_BORDER,
   COLOR_ERROR,
   COLOR_HINT,
@@ -7,10 +11,6 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
-import {
-  formatCompactTokenCount,
-  formatResultCount,
-} from '@utils/text/stringUtils';
 import type { RunView } from '@texra-ai/harness';
 
 // Local imports - TUI state

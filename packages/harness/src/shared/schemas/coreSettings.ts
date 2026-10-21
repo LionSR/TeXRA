@@ -55,7 +55,8 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
 } as const);
 
 /**
- * Bounds, default, and copy for the ChatGPT-subscription input budget.
+ * Bounds and copy for the ChatGPT-subscription input budget; unset, each
+ * model takes the window the Codex backend grants it.
  *
  * The stored unit is **thousands of tokens**, and the key says so. Every
  * budget in play is a round multiple of 1000 (272K, 400K, 872K), so a raw
@@ -68,12 +69,11 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
   configKey: 'texra.chatgptCodex.contextWindowK',
   /** Tokens per stored unit; the sole reader multiplies by this. */
   tokensPerUnit: 1_000,
-  defaultValue: 272,
   min: 1,
   max: 872,
   unitLabel: 'K tokens',
   description:
-    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. The default 272 (272,000 tokens) matches the Codex default; GPT-5.6 models accept up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
 } as const);
 
 /**

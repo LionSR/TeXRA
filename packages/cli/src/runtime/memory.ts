@@ -2,11 +2,8 @@ import { Effect, PlatformError, Predicate } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
-import {
-  formatBytes,
-  formatLocaleTimestamp,
-  truncateSummary,
-} from '@utils/text/stringUtils';
+import { truncateSummary } from '@texra-ai/harness/schemas';
+import { formatBytes } from '@utils/text/stringUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
@@ -15,7 +12,7 @@ const MEMORY_DESCRIPTION_MAX = 72;
 function formatModifiedDate(value: string): string {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) return 'modified: unknown';
-  return `modified: ${formatLocaleTimestamp(timestamp)}`;
+  return `modified: ${new Date(timestamp).toLocaleString()}`;
 }
 
 export function cliMemoryItemDescription(item: MemoryViewItem): string {

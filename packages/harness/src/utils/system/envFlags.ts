@@ -1,10 +1,10 @@
 /**
  * How TeXRA reads the process environment.
  *
- * Effect programs read env through Effect `Config`, served by one
- * `ConfigProvider` over the live `process.env` (`processEnvConfigLayer`,
- * installed by `processLayer` and the CLI's pre-runtime run). Tests
- * replace it with a provider record instead of mutating `process.env`.
+ * Effect programs read env through Effect `Config`, served by the
+ * `ConfigProvider` `processLayer` installs over the live `process.env`
+ * (`nodePlatform`'s, the project's `.env` over it). Tests replace it with a
+ * provider record instead of mutating `process.env`.
  *
  * - `fromEnvRecord(process.env)`, not a bare `fromEnv()`: the latter copies
  *   `process.env` once, and the reference default is cached per process, so the
@@ -20,7 +20,7 @@
  * `TEXRA_NO_UPDATE_CHECK=0` disabled update checks in one host and not in
  * another. A user who writes `=0` means off in all of them.
  */
-import { Config, ConfigProvider, Effect, Layer, Option } from 'effect';
+import { Config, Effect, Option } from 'effect';
 
 import {
   API_KEY_ENV_NAMES,
@@ -43,11 +43,6 @@ function isEnvFlagValueOn(value: string | undefined): boolean {
   return !ENV_FLAG_OFF_VALUES.has(value.trim().toLowerCase());
 }
 
-/** The process environment as Effect's ConfigProvider, read live. */
-export const processEnvConfigLayer: Layer.Layer<never> = ConfigProvider.layer(
-  Effect.sync(() => ConfigProvider.fromEnvRecord(process.env)),
-);
-
 /** One variable; unset and `''` both read as undefined. */
 export const envVar = (name: string): Effect.Effect<string | undefined> =>
   Config.String(name).pipe(
@@ -56,19 +51,19 @@ export const envVar = (name: string): Effect.Effect<string | undefined> =>
     Effect.orDie,
   );
 
-/** Whether `name` is set to something that means "on" (see `isEnvFlagValueOn`). */
-export const envFlag = (name: string): Effect.Effect<boolean> =>
-  Effect.map(envVar(name), isEnvFlagValueOn);
-
-/** Sync face of `envFlag` for non-Effect callers (telemetry gate, `texra
- *  doctor`, CLI update notice), over `env`: the process's own, or an
- *  `environment` a run read. */
-export function isEnvFlagEnabled(
+/**
+ * Whether `name` is set to something that means "on" (see
+ * `isEnvFlagValueOn`): in the process environment, read through the ambient
+ * `ConfigProvider`, or in `env` when the caller holds one (the environment a
+ * run read).
+ */
+export const envFlag = (
   name: string,
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): boolean {
-  return isEnvFlagValueOn(env[name]);
-}
+  env?: Readonly<Record<string, string | undefined>>,
+): Effect.Effect<boolean> =>
+  env === undefined
+    ? Effect.map(envVar(name), isEnvFlagValueOn)
+    : Effect.succeed(isEnvFlagValueOn(env[name]));
 
 /**
  * The environment a child process TeXRA spawns starts from: this process's

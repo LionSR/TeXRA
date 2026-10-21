@@ -11,7 +11,7 @@
  * {@link ProviderEvidenceSchema}: bytes this store keeps and never interprets.
  * The package parses them when it replays to its own protocol, and refuses
  * another protocol's evidence there. `RunHistory` converts between these
- * shapes and the package's (`packages/harness/src/agent/runtime/storedTurn.ts`).
+ * shapes and the package's.
  */
 import { z } from 'zod';
 
@@ -103,7 +103,7 @@ const TokenCount = z.int().nonnegative().nullable();
 export const StoredTurnSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('http'),
-    providerResponseId: z.string().min(1),
+    providerResponseId: z.string().min(1).nullable(),
     requestedOrigin: StoredOriginSchema,
     returnedModel: z.string().min(1).nullable(),
     modelFingerprint: z.string().nullable(),

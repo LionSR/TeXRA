@@ -8,8 +8,7 @@ import {
 } from '@shared/schemas';
 
 /**
- * The tone (PRD one-fold-three-renderers, G4 and 15): a fact-only word
- * every host paints in its own colour vocabulary.
+ * The tone: a fact-only word every host paints in its own colour vocabulary.
  */
 export const RUN_STATUS_TONE = {
   RUNNING: 'running',
@@ -21,12 +20,12 @@ export const RUN_STATUS_TONE = {
 type RunStatusTone = (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
 
 /**
- * The one status table (G4): each way a run's status reads, and its tone.
+ * The one status table: each way a run's status reads, and its tone.
  * A key is the run's phase, its substate when it has one, `ready` before
  * its first activation, or one of the fold's two readings: `interrupted`
  * (an in-flight run whose owner process nobody holds) and `waitingOnUser`
- * (a run parked on the user's answer). The words are the app's
- * (`@ui/copy/runStatus`); the fold stores the key.
+ * (a run parked on the user's answer). The words are the app's; the fold
+ * stores the key.
  */
 const RUN_STATUS_TONE_OF = {
   [RUN_SUBSTATE.STARTING]: 'running',
@@ -53,7 +52,7 @@ export const RUN_STATUS_KEYS = Object.keys(RUN_STATUS_TONE_OF) as [
 ];
 
 /**
- * The status key and tone a `RunView` carries (G4), read from the one
+ * The status key and tone a `RunView` carries, read from the one
  * table: the status and substate, or the fold's interrupted or waiting
  * reading.
  */
@@ -106,7 +105,7 @@ export const RUN_DAMAGED_MESSAGE =
 export const RUN_EARLIER_BUILD_MESSAGE =
   "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
 
-/** Banner and tooltip copy for a run another TeXRA process holds, named by
+/** Banner and tooltip copy for a run another host process holds, named by
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;

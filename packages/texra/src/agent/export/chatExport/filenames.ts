@@ -1,7 +1,5 @@
 /** Descriptive filename generation for chat exports. */
 
-import { isoDateOnly } from '@utils/text/stringUtils';
-
 /**
  * Minimal fields these generators read. `ChatExportInput` satisfies this
  * structurally, so callers pass either the full input or an ad-hoc object of
@@ -20,7 +18,10 @@ export function generateExportFilename(
   input: ExportFilenameInput,
   extension: 'md' | 'tex' | 'html',
 ): string {
-  const parts = ['texra-chat', isoDateOnly(new Date(input.timestamp))];
+  const parts = [
+    'texra-chat',
+    new Date(input.timestamp).toISOString().slice(0, 10),
+  ];
 
   if (input.config.agent) {
     parts.push(sanitizeFilename(input.config.agent));

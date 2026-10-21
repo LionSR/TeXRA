@@ -1,6 +1,6 @@
 /**
- * The models TeXRA starts with: the run default, the helper default and the
- * curated picker list. They are the app's choices over the llm catalog, not
+ * The models the harness starts with: the run default, the helper default
+ * and the curated picker list. They are the app's choices over the llm catalog, not
  * catalog facts, and the stored agent config (`agentConfig.ts`)
  * prefault to them, so they live with the storage and not in
  * `@texra-ai/llm`.
@@ -26,9 +26,10 @@ export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
 /**
  * Curated models every user starts with enabled; the persisted selection is a
  * delta over this list. `llm-zoo` has no "featured" flag to derive it from, so
- * it is literal data — `ModelOptionsBasic.vitest.ts` fails an llm-zoo bump that
- * retires or deprecates an entry, and the entry is replaced here.
+ * it is literal data, replaced here when an llm-zoo bump retires or
+ * deprecates an entry.
  */
+// `ModelOptionsBasic.vitest.ts` fails such a bump.
 export const DEFAULT_MODELS: readonly string[] = [
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
@@ -38,6 +39,7 @@ export const DEFAULT_MODELS: readonly string[] = [
   'anthropic/claude-sonnet-5-5',
   'anthropic/claude-opus-5-5',
   'anthropic/claude-fable-5-1',
+  'google/gemini-4-argon',
   'google/gemini-3.8-flash',
   'google/gemini-3.1-pro-preview',
 

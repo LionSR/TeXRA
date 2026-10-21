@@ -150,7 +150,7 @@ export interface AgentRunShape {
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
-  '@texra/agent/AgentRun',
+  '@texra-ai/harness/agent/AgentRun',
 ) {}
 
 interface AgentRunLayerInput {

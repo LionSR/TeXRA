@@ -56,7 +56,6 @@ import {
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ToolEditApproval';
@@ -669,7 +668,7 @@ export class ToolEditApprovalController {
           this.send(entry.request, {
             action: 'approve',
             // Normalize: the host read these bytes itself, so they may be CRLF.
-            content: normalizeLineEndings(content),
+            content: content.replaceAll('\r\n', '\n'),
           }),
       }),
     );

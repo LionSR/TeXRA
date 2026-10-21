@@ -152,7 +152,7 @@ class SessionKey implements Equal.Equal {
 
 /** The session of one root: the handle the map built over the root's graph. */
 class Session extends Context.Service<Session, SessionHandle>()(
-  '@texra/session/Session',
+  '@texra-ai/harness/session/Session',
 ) {}
 
 /**
@@ -353,7 +353,7 @@ class SessionMap extends Context.Service<
     Session,
     DatabaseOpenFailed | DatabaseReadFailed
   >
->()('@texra/session/SessionMap') {
+>()('@texra-ai/harness/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
     Effect.suspend(() => {

@@ -261,10 +261,9 @@ const configEditCommand = defineCliCommand({
         () => import('../config/runConfigTui'),
       );
       yield* runConfigTui({
-        stores: services.roots,
+        roots: services.roots,
         secrets: services.secrets,
         runtime: services.runtime,
-        workspaceRoot: services.roots.workspace,
         colorEnabled: context.stdoutColorEnabled,
         onError: writeErrorStderr,
       });

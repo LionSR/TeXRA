@@ -16,10 +16,9 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, truncateSummary } from '@texra-ai/harness/schemas';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { WARNING } from '@cli/tui/ui/glyphs';
-import { truncateSummary } from '@utils/text/stringUtils';
 
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker (e.g. its

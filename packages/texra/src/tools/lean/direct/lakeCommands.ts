@@ -12,7 +12,7 @@ import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness';
 
 import { Effect } from 'effect';
 
-import { executeCommand } from '@utils/system/execUtils';
+import { executeCommand } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;

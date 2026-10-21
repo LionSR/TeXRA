@@ -8,9 +8,9 @@ import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
+import { writeFileAtomic } from '@texra-ai/harness/node';
+import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
-import { writeFileAtomic } from '@utils/files/fsDurability';
 
 export interface InitAnswers {
   readonly agent: string;
