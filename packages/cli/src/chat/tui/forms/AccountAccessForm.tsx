@@ -28,9 +28,11 @@ import {
 } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  PlatformSecrets,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }

@@ -5,8 +5,8 @@ import {
   RUN_PHASE,
   type RunPhase,
   type RunId,
+  isLiveRun,
 } from '@texra-ai/harness/schemas';
-import { isLiveRun } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
 import { registerCliStateResetHook } from './cliState';

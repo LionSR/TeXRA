@@ -16,25 +16,26 @@ import {
   readModelOptions,
   type LanguageModel,
   type PlatformSecrets,
+  type PerKeyLane,
+  Settings,
+  withPerKeyLane,
 } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { type PerKeyLane, Settings, withPerKeyLane } from '@texra-ai/harness';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { FileOptions } from '@texra/shared/session/hostSnapshot';
-import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
+  FileOptions,
   HostSnapshot,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
+import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type { AgentCatalog } from '@texra-ai/harness';
+import type { AgentCatalog, SettingsStores } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness';
 
 type Banners = HostSnapshot['banners'];
 

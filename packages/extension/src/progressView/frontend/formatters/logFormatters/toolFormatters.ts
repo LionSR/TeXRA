@@ -17,8 +17,10 @@ import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { toolDisplayKind } from '@texra-ai/harness/transcript';
-import { normalizeToolName } from '@texra-ai/harness/transcript';
+import {
+  toolDisplayKind,
+  normalizeToolName,
+} from '@texra-ai/harness/transcript';
 import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers

@@ -7,7 +7,6 @@ import {
   processLayer,
   AgentDirectoryService,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  withForkFailureReporting,
   type ProcessServices,
   type PlatformSecrets,
   type AgentDirectoriesPort,
@@ -16,6 +15,7 @@ import {
   Sessions,
   StateStores,
 } from '@texra-ai/harness';
+import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,
   FileSecrets,

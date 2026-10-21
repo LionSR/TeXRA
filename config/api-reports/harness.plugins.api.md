@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 121
+Exports: 120
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: z.ZodType<A>; readonly result?: AgentBlockResult<R>; }`
@@ -58,7 +58,6 @@ Exports: 121
 - `MemoryPinResult` — `type MemoryPinResult = { readonly status: 'changed'; readonly pinnedCount: number; } | { readonly status: 'already'; } | { readonly status: 'cap-reached'; readonly max: number; }; ≡ MemoryPinResult`
 - `MemoryPreview` — `interface MemoryPreview { readonly storagePath: string; readonly displayPath: string; readonly preview: string; readonly lineCount: number | undefined; }`
 - `MemoryStore` — `const MemoryStore: { delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; displayPath: (storagePath: string) => string; folder: "memories"; list: Effect<{ displayPath: string; lineCount?: number | undefined; modifiedBy?: string | undefined; mtime: string; pinned?: boolean | undefined; preview?: string | undefined; previewError?: boolean | undefined; size: number; storagePath: string; }[], PlatformError, StorageFs>; pin: (input: string, pinned: boolean) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; storagePath: (input: string) => Effect<string, Error, never>; }`
-- `MemoryViewItem` — `type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>; ≡ { displayPath: string; lineCount?: number | undefined; modifiedBy?: string | undefined; mtime: string; pinned?: boolean | undefined; preview?: string | undefined; previewError?: boolean | undefined; size: number; storagePath: string; }`
 - `memoryWorkflow` — `const memoryWorkflow: Plugin`
 - `ModelRetryGate` — `class ModelRetryGate { constructor: new (scope: Scope) => ModelRetryGate; static: make: Effect<ModelRetryGate, never, Scope>; instance: withRoutes: (routes: readonly [RoutePolicy, ...RoutePolicy[]], options: RouteOptions) => <A, E, R>(attempt: Effect<A, E, R>) => Effect<A, E, R> }`
 - `multiAgent` — `const multiAgent: Plugin`

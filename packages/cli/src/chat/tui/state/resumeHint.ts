@@ -12,8 +12,7 @@ import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { SessionView } from '@texra-ai/harness';
+import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
 
 export interface ResumeTarget {
   readonly runId: string;

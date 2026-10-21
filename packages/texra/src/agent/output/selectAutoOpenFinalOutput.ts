@@ -6,8 +6,7 @@ import {
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import type { RunEndResult } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /**

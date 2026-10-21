@@ -1,7 +1,6 @@
-import { Redacted } from 'effect';
+import { Redacted, Effect } from 'effect';
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports

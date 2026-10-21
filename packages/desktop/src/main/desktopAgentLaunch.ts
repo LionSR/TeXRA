@@ -1,9 +1,11 @@
 import { Effect } from 'effect';
 
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
-import type { FileLocation } from '@texra-ai/harness/schemas';
-import type { RunEndResult } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type {
+  FileLocation,
+  RunEndResult,
+  AgentConfig,
+} from '@texra-ai/harness/schemas';
 import type { DesktopProject } from './desktopProjects.js';
 
 /** What a run's output reads of the project: its roots, and where it

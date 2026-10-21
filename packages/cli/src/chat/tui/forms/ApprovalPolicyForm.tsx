@@ -5,8 +5,10 @@ import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_COPY } from '@ui/copy/delegationApproval';
 
 import { ListForm } from './_shared/ListForm';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalPolicy,
+  ApprovalBypassKind,
+} from '@texra-ai/harness/schemas';
 
 /** A policy, or a grant of the focused task to revoke. */
 export type ApprovalFormValue = ApprovalPolicy | ApprovalBypassKind;

@@ -42,10 +42,12 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiRunPending, type TuiSession } from './state/sessionRunState';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { SessionView } from '@texra-ai/harness';
+import type {
+  ApprovalPolicy,
+  SessionView,
+  RunId,
+} from '@texra-ai/harness/schemas';
 import type { RunStopReason } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;

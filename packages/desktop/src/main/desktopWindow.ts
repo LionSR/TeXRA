@@ -61,8 +61,9 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
+  ProcessRuntime,
+  ProcessServices,
   PlatformSecrets,
   AgentDirectoriesPort,
   StateStore,

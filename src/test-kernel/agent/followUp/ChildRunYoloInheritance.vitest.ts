@@ -9,8 +9,6 @@ import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
-} from '@shared/approvalBypassKind';
-import {
   inheritedGrants,
   resolveBypass,
   runBypasses,

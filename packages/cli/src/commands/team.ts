@@ -5,8 +5,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { AgentCatalog } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
+import { AgentCatalog, Settings } from '@texra-ai/harness';
 import {
   canLaunchTeam,
   planTeamRun,

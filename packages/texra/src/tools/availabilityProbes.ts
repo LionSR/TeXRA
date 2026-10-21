@@ -12,8 +12,7 @@ import { Duration, Effect, type FileSystem } from 'effect';
 import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
 import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient } from '@texra-ai/harness/plugins';
-import { ToolProbeFailed } from '@texra-ai/harness/plugins';
+import { scopedClient, ToolProbeFailed } from '@texra-ai/harness/plugins';
 import {
   hasPackageManager,
   SYSTEM_PACKAGE_MANAGERS,

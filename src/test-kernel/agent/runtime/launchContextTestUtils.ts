@@ -10,7 +10,7 @@ import { noCoWrite } from '@shared/session/sessionEvents';
 import { PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { fakeStores } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
@@ -38,12 +38,13 @@ export function createTestLaunchContext({
     model: 'test-model',
   });
 
+  const { stores, secrets } = makeFakeSettingsStores();
   return {
     config,
     persona: PersonaSchema.parse({}),
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
-    stores: fakeStores(),
+    stores: { ...stores, secrets },
     runId,
     session,
     logger,

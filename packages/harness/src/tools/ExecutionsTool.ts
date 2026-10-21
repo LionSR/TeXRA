@@ -131,9 +131,9 @@ interface SizedEntry {
  * straight through.
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
-  return entries.map((entry) => {
-    const sizeStr = entry.isDirectory ? '<dir>' : `${entry.size} bytes`;
-    return `${sizeStr.padStart(8)}  ${entry.path}`;
+  return entries.map(({ isDirectory, size, path }) => {
+    const bytes = `${size.toLocaleString('en-US')} bytes`;
+    return `${(isDirectory ? '<dir>' : bytes).padStart(8)}  ${path}`;
   });
 }
 type ExecutionsAction = ExecutionsToolInput['action'];

@@ -19,8 +19,7 @@ import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView, runViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
-import type { TranscriptView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { TranscriptView, RunId } from '@texra-ai/harness/schemas';
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 

@@ -118,7 +118,6 @@ export {
   type MemoryPinResult,
   type MemoryPreview,
 } from '@tools/memory/memoryStore';
-export type { MemoryViewItem } from '@shared/tools/memoryView';
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,

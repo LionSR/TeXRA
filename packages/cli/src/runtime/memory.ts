@@ -1,8 +1,11 @@
 import { Effect, PlatformError, Predicate } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
-import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
-import { truncateSummary } from '@texra-ai/harness/schemas';
+import { MemoryStore } from '@texra-ai/harness/plugins';
+import {
+  type MemoryViewItem,
+  truncateSummary,
+} from '@texra-ai/harness/schemas';
 import { formatBytes } from '@ui/copy/format';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 

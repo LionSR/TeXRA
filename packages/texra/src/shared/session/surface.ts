@@ -19,8 +19,6 @@ import {
   RunIdSchema,
   isModelOptionAvailable,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import {
   acceptsFollowUp,
   type FollowUpHost,
   type SessionView,
@@ -32,7 +30,7 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
-import type { SessionView as ReadSessionView } from '@texra-ai/harness';
+import type { SessionView as ReadSessionView } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 

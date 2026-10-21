@@ -47,8 +47,7 @@ import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { SessionView, RunView, RunId } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('session-composer')

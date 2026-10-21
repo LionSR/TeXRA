@@ -27,7 +27,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
-  FakeScopedConfigProvider,
+  fakeConfig,
   FakeSecrets,
   FakeStateStore,
 } from '@test/support/FakePlatform';
@@ -106,7 +106,7 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     globalState = new FakeStateStore(),
     workspaceState = new FakeStateStore(),
     repoState = new FakeStateStore(),
-    config = new FakeScopedConfigProvider(),
+    config = fakeConfig(),
     postToRenderer = () => undefined,
   } = overrides;
   // The paper's three setting slots reach the body through its session's
@@ -570,8 +570,8 @@ describe('desktop settings IPC', () => {
     const repoState = new FakeStateStore({
       [CodexStateKey.SANDBOX_MODE]: 'danger-full-access',
     });
-    const config = new FakeScopedConfigProvider();
-    config.seedWorkspace('texra.toolUse.requireBashApproval', false);
+    // A `local` row: the scope that answers it, never the project file.
+    const config = fakeConfig({ 'texra.toolUse.requireBashApproval': false });
     const { settings, posted } = await createCapturedSettingsFixture({
       repoState,
       config,
@@ -624,7 +624,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('writes the bash-approval toggle to the local config scope, not global or the project file', async () => {
-    const config = new FakeScopedConfigProvider();
+    const config = fakeConfig();
+    const update = vi.spyOn(config, 'update');
 
     const { settings, posted } = await createCapturedSettingsFixture({
       config,
@@ -643,7 +644,9 @@ describe('desktop settings IPC', () => {
     // Security-adjacent scope pin: a per-workspace approval bypass must never
     // be written to the global config target (see issue #7085), nor to the
     // project file a cloned repository controls.
-    expect(config.lastTargetFor('texra.toolUse.requireBashApproval')).toBe(
+    expect(update).toHaveBeenCalledWith(
+      'texra.toolUse.requireBashApproval',
+      false,
       'local',
     );
     expect(findSnapshot(posted, 'approval')).toMatchObject({
@@ -706,7 +709,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('writes the agent-skills toggle and returns the skills settings', async () => {
-    const config = new FakeScopedConfigProvider();
+    const config = fakeConfig();
+    const update = vi.spyOn(config, 'update');
 
     const { settings, posted } = await createCapturedSettingsFixture({
       config,
@@ -722,7 +726,11 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
-    expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
+    expect(update).toHaveBeenCalledWith(
+      AGENT_SKILLS_CONFIG_KEY,
+      false,
+      'workspace',
+    );
     expect(findSnapshot(posted, 'skills')).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
       snapshot: 'skills',
@@ -756,7 +764,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('keeps a workspace-scoped row unwritten while no folder is open', async () => {
-    const config = new FakeScopedConfigProvider();
+    const config = fakeConfig();
+    const update = vi.spyOn(config, 'update');
     const showInfoMessage = vi.fn(() => Effect.void);
     const { settings, posted } = await createCapturedSettingsFixture({
       config,
@@ -773,7 +782,7 @@ describe('desktop settings IPC', () => {
     });
     await flushAsyncWork();
 
-    expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBeUndefined();
+    expect(update).not.toHaveBeenCalled();
     expect(showInfoMessage).toHaveBeenCalledWith(
       'Open a workspace folder before changing the “Enable skills for agents” setting.',
     );

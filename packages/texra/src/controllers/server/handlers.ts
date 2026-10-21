@@ -30,19 +30,19 @@ import {
   type RequestError,
   type Run,
   type Session,
-  type SessionView,
   type RunEnd,
+  presentRunFailure,
 } from '@texra-ai/harness';
 import {
+  type SessionView,
   isLiveRun,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   type JsonValue,
   type RunId,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { presentRunFailure } from '@texra-ai/harness';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
