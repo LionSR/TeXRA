@@ -13,8 +13,6 @@ import {
   pathToLocationIn,
   withLogChannel,
   WorkspaceFs,
-} from '@texra-ai/harness';
-import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,

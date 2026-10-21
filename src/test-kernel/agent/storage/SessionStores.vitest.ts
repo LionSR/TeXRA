@@ -18,14 +18,13 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { startAwaited } from '@test/support/runHandleFixtures';
+import { startAwaited, testRunHandle } from '@test/support/runHandleFixtures';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { goalOf, startGoal } from '@tools/goal/goalRows';
 
 // One restore after each test covers every vi.spyOn in this file.

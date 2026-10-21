@@ -25,17 +25,17 @@ import {
   type RequestRefusal,
   PlatformSecrets,
   LanguageModel,
-} from '@texra-ai/harness';
-import { workspaceRelativePath } from '@texra-ai/harness/node';
-import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
   type Session,
+  withLogChannel,
+  withSessionFs,
+  WorkspaceFs,
+  type StorageFs,
+  pathToLocationIn,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
-import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,

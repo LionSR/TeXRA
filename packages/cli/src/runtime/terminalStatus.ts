@@ -4,10 +4,10 @@ import {
   InstalledPlugins,
   type DatabaseReadFailed,
   type LocalSession,
-  type RunEndResult,
   type SettingsStores,
 } from '@texra-ai/harness';
 import {
+  type RunEndResult,
   toErrorMessage,
   RUN_OUTCOME,
   type RunOutcome,

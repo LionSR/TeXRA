@@ -14,12 +14,11 @@ import {
   type ProcessRuntime,
   type Run,
   withProcessServices,
-  type RunEndResult,
   type HostPresentation,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
+  type PresentationEventHandlers,
 } from '@texra-ai/harness';
-import { type PresentationEventHandlers } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
@@ -31,8 +30,12 @@ import {
 } from './desktopToolEditApproval.js';
 import { presentDesktopFinalOutput } from './desktopAgentLaunch.js';
 import { desktopSpawner } from './desktopWindows.js';
-import type { RequestOpenFilePayload, RunId } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type {
+  RunEndResult,
+  RequestOpenFilePayload,
+  RunId,
+  AgentConfig,
+} from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
 

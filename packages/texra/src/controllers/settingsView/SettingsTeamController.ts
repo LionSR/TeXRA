@@ -3,8 +3,10 @@ import { Data, Effect, absurd } from 'effect';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
 import type { MessageHost } from '@texra/hosts/uiHosts';
-import type { WorkspaceAgentsController } from '@texra-ai/harness';
-import type { StateReadFailed } from '@texra-ai/harness';
+import type {
+  WorkspaceAgentsController,
+  StateReadFailed,
+} from '@texra-ai/harness';
 
 interface SettingsTeamCatalog {
   getPresetRoot(

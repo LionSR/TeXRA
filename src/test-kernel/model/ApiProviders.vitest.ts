@@ -13,8 +13,7 @@ import {
   lookupApiKeyOrigin,
   SecretsFailed,
 } from '@texra-ai/llm';
-import { emitAppSignal } from '@eventBus/AppSignals';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { FileSecrets } from '@platform/defaults/fileSecrets';
 
 import type { PlatformSecrets } from '@platform/secrets';

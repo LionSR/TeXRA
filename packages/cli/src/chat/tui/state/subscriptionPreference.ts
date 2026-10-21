@@ -6,8 +6,7 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 import { bumpCodexPreferenceVersion } from './cliState';
-import type { ConfigWriteFailed } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { ConfigWriteFailed, SettingsStores } from '@texra-ai/harness';
 
 /**
  * Flip an OAuth subscription preference (ChatGPT, Grok) on `/login` and

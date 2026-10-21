@@ -16,8 +16,6 @@ import {
   GOAL_MAX_COST_SETTING,
   RESUME_ON_OPEN_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-} from '@texra-ai/harness/schemas';
-import {
   parseApprovalPolicy,
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,

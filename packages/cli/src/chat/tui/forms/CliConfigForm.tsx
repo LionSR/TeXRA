@@ -2,8 +2,10 @@ import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  type SurfacedSettingEntry,
+} from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -30,8 +32,11 @@ import {
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  PlatformSecrets,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;

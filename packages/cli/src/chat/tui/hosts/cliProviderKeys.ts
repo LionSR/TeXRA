@@ -19,9 +19,11 @@ import { getProviderDisplayName } from '@texra/model/providerPresentation';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  PlatformSecrets,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */

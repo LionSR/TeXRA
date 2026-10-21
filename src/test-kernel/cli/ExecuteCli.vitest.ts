@@ -11,7 +11,6 @@ import {
   RunFailure,
   type Outcome,
   type Run,
-  type RuntimeRequest,
   type LocalSession,
   type StartInput,
 } from '@texra-ai/harness';
@@ -46,6 +45,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRows, seedRows } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),

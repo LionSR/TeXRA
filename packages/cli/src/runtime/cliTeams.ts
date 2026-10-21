@@ -19,8 +19,7 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from '@common/teams/TeamPresets';
-import type { AgentEntry } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness';
+import type { AgentEntry, StateStore } from '@texra-ai/harness';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 

@@ -19,9 +19,7 @@ import {
 import {
   taskGroupDisplayStatus,
   pluralize,
-} from '@texra-ai/harness/transcript';
-import { compareBySeqNo } from '@texra-ai/harness/transcript';
-import {
+  compareBySeqNo,
   scriptStages,
   type ScriptStageView,
   type TranscriptRow,

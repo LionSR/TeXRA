@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 49
+Exports: 46
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -45,9 +45,6 @@ Exports: 49
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspacePath: string | undefined) => string`
 - `runsInWsl` — `function runsInWsl: () => boolean`
 - `secretsDirectory` — `function secretsDirectory: (storageRoot: string) => string`
-- `settingsCatalog` — `function settingsCatalog: (appRows: readonly StateSettingEntry[]) => SettingsCatalog`
-- `SettingsCatalog` — `interface SettingsCatalog { readonly rows: readonly StateSettingEntry[]; readonly byKey: (key: string) => StateSettingEntry | undefined; readonly settingsViewByKey: (key: string) => SettingsViewStateSettingEntry | undefined; readonly snapshotEntries: (snapshot: SettingsViewSnapshot) => readonly SettingsViewStateSettingEntry[]; readonly cliRows: readonly SurfacedSettingEntry[]; readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined; readonly configSlotKeys: readonly string[]; readonly modelsTab: (provider: string) => readonly { readonly entry: StateSettingEntry; readonly surface: ModelsTabSurface; }[]; readonly configDefault: (key: string) => unknown; }`
-- `StateSettingEntry` — `interface StateSettingEntry { readonly key: string; readonly schema: z.ZodType; readonly title?: string; readonly description?: string; readonly category?: string; readonly slot: SettingStore; readonly configTarget?: 'global' | 'workspace' | 'local'; readonly projectMayOptOut?: true; readonly surfaces?: SettingSurfaces; readonly onWrite?: SettingWriteEffects; readonly enumDescriptions?: readonly string[]; readonly enumLabels?: readonly string[]; readonly openForm?: string; }`
 - `ToolProbe` — `interface ToolProbe { readonly installed: boolean; readonly probeFailed: boolean; }`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T) => T`
 - `WORKSPACE_STORES` — `const WORKSPACE_STORES: ValueFamily<{ readonly root: string; }, false>`

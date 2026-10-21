@@ -2,10 +2,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { createRunStorageLocation } from '@texra-ai/harness';
+import { createRunStorageLocation, Settings } from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
-import { Settings } from '@texra-ai/harness';
 import {
   toErrorMessage,
   fileLocationDisplayPath,

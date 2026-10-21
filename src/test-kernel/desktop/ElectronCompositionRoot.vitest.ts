@@ -13,8 +13,7 @@ import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from '@desktop/main/desktopProjectRecords.js';
-import { GlobalValues } from '@platform/processRuntime';
-import { SessionOwner } from '@platform/processRuntime';
+import { GlobalValues, SessionOwner } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   nodeProcesses,

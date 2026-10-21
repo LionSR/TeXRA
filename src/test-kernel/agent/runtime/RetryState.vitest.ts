@@ -79,13 +79,15 @@ import {
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { Settings } from '@shared/config/settings';
-import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
+import {
+  setTestApprovalPolicy,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {

@@ -1,20 +1,19 @@
-import { type RunId } from '@texra-ai/harness/schemas';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { LocalSession } from '@texra-ai/harness';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type {
+  LocalSession,
   ProcessRuntime,
   ProcessServices,
   Session,
+  PlatformSecrets,
+  SettingsStores,
 } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
 import type { Effect } from 'effect';
-import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * What a slash command does, as a program the dispatcher runs: the chat's
