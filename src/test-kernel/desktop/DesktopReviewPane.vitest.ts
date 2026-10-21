@@ -70,6 +70,22 @@ describe('desktop review pane', () => {
     expect(countsText(controller)).toContain('+8');
   });
 
+  // Two pending edits to one file (parallel subagents): keyed by path, the
+  // second replaced the first, and settling it emptied the pane while the
+  // first was still pending.
+  it('keeps each pending preview of one file until its own close', async () => {
+    const controller = await newReviewPane();
+    controller.open(reviewPayload('src/main.ts', 3, 0, 'request-a'));
+    controller.open(reviewPayload('src/main.ts', 7, 2, 'request-b'));
+    expect(fileButtons(controller)).toHaveLength(1);
+    expect(countsText(controller)).toContain('+7');
+
+    expect(controller.close('request-b')).toBe(false);
+    expect(fileButtons(controller)).toHaveLength(1);
+    expect(countsText(controller)).toContain('+3');
+    expect(controller.close('request-a')).toBe(true);
+  });
+
   it('closes only the reviews the named preview opened', async () => {
     const controller = await newReviewPane();
     controller.open(reviewPayload('src/main.ts', 1, 1, 'request-a'));
