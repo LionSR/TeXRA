@@ -63,6 +63,16 @@ require('node:readline')
         description: 'Echo the text.',
         inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       }] } });
+    else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'exit') {
+      // A grandchild holding stdout answers after this process has exited.
+      const answer = { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'late' }] } };
+      require('node:child_process').spawn(
+        process.execPath,
+        ['-e', 'process.stdout.write(process.argv[1])', JSON.stringify(answer) + '\\n'],
+        { stdio: ['ignore', 'inherit', 'inherit'] },
+      );
+      process.exit(0);
+    }
     else if (method === 'tools/call')
       send({ jsonrpc: '2.0', id, result: { content: [{
         type: 'text',
@@ -221,6 +231,49 @@ describe('MCP server plugins', () => {
         expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
     20_000,
+  );
+
+  // A server's 'exit' can precede the end of its stdout: an answer written
+  // after it is the call's result, not a disposal.
+  it.live('answers a call whose answer arrives after its server exited', () =>
+    Effect.gen(function* () {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+      writeFileSync(
+        path.join(dir, 'mcp.json'),
+        JSON.stringify({
+          mcpServers: {
+            fixture: {
+              command: process.execPath,
+              args: [path.join(dir, 'server.cjs'), path.join(dir, 'pid')],
+              env: { FIXTURE_MODE: 'exit' },
+            },
+          },
+        }),
+      );
+      const resolved = yield* resolveTestStep({
+        tools: [{ name: 'mcp__fixture__*' }],
+        injectTools: false,
+        stores: hostStores(),
+        workspaceRoot: undefined,
+        host: 'cli',
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            mcpToolTableLayer(dir),
+            LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+          ),
+        ),
+      );
+      const tool = resolved.registry.get('mcp__fixture__echo')!;
+      expect(yield* tool.call({ text: 'hi' })).toMatchObject({
+        status: 'executed',
+        output: 'late',
+      });
+    }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
   );
 
   it.live(
