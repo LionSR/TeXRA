@@ -7,7 +7,7 @@
  * sign-in from the session store (`@texra-ai/llm/node`).
  */
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
+import type { SubscriptionAuthProvider } from '@shared/model/subscriptionAuth';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import type { Effect } from 'effect';

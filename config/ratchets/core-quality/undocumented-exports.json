@@ -86,7 +86,7 @@
   "packages/harness/src/shared/schemas/traceEvent.ts": 1,
   "packages/harness/src/shared/schemas/usage.ts": 7,
   "packages/harness/src/shared/schemas/workspaceAgents.ts": 3,
-  "packages/harness/src/shared/session/database.ts": 7,
+  "packages/harness/src/shared/session/database.ts": 6,
   "packages/harness/src/shared/session/historyTurns.ts": 2,
   "packages/harness/src/shared/session/requestErrors.ts": 1,
   "packages/harness/src/shared/session/runRows.ts": 4,

@@ -1,10 +1,12 @@
 /**
  * Chat export, the door the CLI imports (`@texra/agent/export`): loading a
  * conversation into the export input shape (`loadChatExportInput`),
- * rendering it to Markdown (`formatChatAsMarkdown`), and the types named at
- * that seam (`./schemas`).
+ * rendering it to Markdown (`formatChatAsMarkdown`), embedding a run's trace
+ * in the trace viewer's single-file page (`injectStandaloneTrace`), and the
+ * types named at that seam (`./schemas`).
  */
 
 export { loadChatExportInput } from './loadChatExportInput';
 export { formatChatAsMarkdown } from './chatExportFormatter';
+export { injectStandaloneTrace } from './standaloneTraceHtml';
 export type { ChatExportInput } from './schemas';
