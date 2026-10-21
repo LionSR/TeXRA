@@ -71,8 +71,7 @@ export interface NodePlatformOptions {
   /**
    * The directory this platform stores run history, checkpoints and its
    * global state under, and reads its `mcp.json` from. Required: the package
-   * never falls back to the user's own `~/.texra`, which belongs to the
-   * TeXRA hosts.
+   * never falls back to a per-user default directory.
    */
   readonly storageDir: string;
   /** The setting rows the embedder's plugins read, resolved beside the
@@ -106,7 +105,7 @@ const unpersistedSecrets: PlatformSecrets = {
  * platform plus the workspace roots of `workspaceDir`.
  *
  * Agent definitions are read from `agentsDir`; configuration and state are
- * process-local, while run artifacts use TeXRA's ordinary Node storage layout.
+ * process-local, while run artifacts use the ordinary Node storage layout.
  */
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   // Canonical once, here: the storage directory and `roots.workspace` both

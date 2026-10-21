@@ -17,10 +17,9 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
  * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
  * type; also validates the YAML frontmatter parsed back off disk so a
  * hand-edited or malformed block degrades to "no metadata" rather than
- * throwing. `modifiedAt` is required: every TeXRA writer (the retired
- * sidecar and the inline-frontmatter writer) has always emitted it, so a
- * block without it is not TeXRA-produced metadata and stays ordinary
- * content (#9648).
+ * throwing. `modifiedAt` is required: every writer of this metadata (the
+ * retired sidecar and the inline-frontmatter writer) has always emitted it,
+ * so a block without it is not this metadata and stays ordinary content.
  */
 const MemoryFileMetaSchema = z.object({
   /** Agent name that last modified this file. */

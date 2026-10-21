@@ -1,5 +1,5 @@
 /**
- * How TeXRA reads the process environment.
+ * How the harness reads the process environment.
  *
  * Effect programs read env through Effect `Config`, served by the
  * `ConfigProvider` `processLayer` installs over the live `process.env`
@@ -11,7 +11,7 @@
  *   extension's own PATH write, per-call keychain toggles and the per-turn
  *   validation switch would go unseen. `fromEnvRecord` looks each leaf up live.
  * - Not `Config.Boolean`: it accepts only a fixed case-sensitive vocabulary and
- *   fails on anything else. TeXRA flags read "any non-off value is on".
+ *   fails on anything else. Harness flags read "any non-off value is on".
  * - `orDie`: `Config.String` under `Config.option` fails only on a provider
  *   source error, which `fromEnvRecord` never raises, so the unreachable case is
  *   a loud defect rather than a widened error channel.
@@ -66,9 +66,9 @@ export const envFlag = (
     : Effect.succeed(isEnvFlagValueOn(env[name]));
 
 /**
- * The environment a child process TeXRA spawns starts from: this process's
- * with its project's `.env` variables over it (`environment`),
- * minus every provider API-key variable TeXRA reads as its own credential
+ * The environment a child process the harness spawns starts from: this
+ * process's with its project's `.env` variables over it (`environment`),
+ * minus every provider API-key variable the harness reads as its own credential
  * ({@link API_KEY_ENV_NAMES}) and the requested approval policy
  * (`TEXRA_APPROVAL_POLICY`). What a child prints lands in tool results and
  * the transcript, so the key is never there to print. `keep` names the one
@@ -82,7 +82,7 @@ export const inheritedEnv = (
     const env = yield* environment;
     const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
     const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
-    // A project's `.env` never reaches a nested TeXRA as a requested
+    // A project's `.env` never reaches a nested harness process as a requested
     // approval policy: only the user's own invocation asks for one.
     const withheld = new Set(
       [

@@ -13,8 +13,8 @@ import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
 const isSupportedEvent = (event: string): event is HookEvent =>
   (SUPPORTED_HOOK_EVENTS as readonly string[]).includes(event);
 
-/** One handler as the reference declares it; the fields TeXRA does not read
- *  are stripped. */
+/** One handler as the reference declares it; the fields the harness does not
+ *  read are stripped. */
 const HookHandlerSchema = z.object({
   type: z.string(),
   command: z.string().optional(),
@@ -46,7 +46,7 @@ export const HooksConfigSchema = z.object({
 });
 type HooksConfig = z.infer<typeof HooksConfigSchema>;
 
-/** One command hook TeXRA runs: its event, matcher and command as the
+/** One command hook the harness runs: its event, matcher and command as the
  *  plugin wrote them, placeholders unexpanded. */
 export interface ConfiguredHook {
   /** Its position in the plugin's configuration: `<source>/<event>/<group>/<handler>`. */
@@ -68,8 +68,8 @@ const EXACT_MATCHER = /^[\w\s,|-]+$/;
 
 /**
  * The command hooks of one configuration `source` (a file or the manifest)
- * that TeXRA runs, and one line for each entry it does not: an event TeXRA
- * does not run, a handler type other than `command`, an `async` or
+ * that the harness runs, and one line for each entry it does not: an event
+ * the harness does not run, a handler type other than `command`, an `async` or
  * PowerShell hook, a matcher that is not a valid regular expression.
  */
 export function configuredHooks(source: string, config: HooksConfig) {
@@ -138,7 +138,7 @@ const isRegExp = (pattern: string) => {
 
 /**
  * Whether `matcher` selects a value named by any of `names` (a tool's
- * Claude Code name and its TeXRA name): all when absent, empty or `*`; an
+ * Claude Code name and its harness name): all when absent, empty or `*`; an
  * exact list split on `|` or `,` when it holds only simple characters; an
  * unanchored regular expression otherwise (validated when configured).
  */
@@ -171,10 +171,10 @@ const same =
 type Absolute = (path: unknown) => unknown;
 
 /**
- * TeXRA's tools that have a Claude Code counterpart, by TeXRA name: the name
- * a plugin's matcher and `tool_name` see, and the call's input under the
- * field names and meanings the Claude Code hooks reference documents for
- * that tool, file paths absolute. A TeXRA-only field (`literal`,
+ * The harness's tools that have a Claude Code counterpart, by harness name:
+ * the name a plugin's matcher and `tool_name` see, and the call's input under
+ * the field names and meanings the Claude Code hooks reference documents for
+ * that tool, file paths absolute. A harness-only field (`literal`,
  * `max_results`) has no counterpart and is not sent.
  */
 const CLAUDE_TOOLS: Readonly<
@@ -247,12 +247,12 @@ const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
   ['MultiEdit', 'edit_file'],
 ]);
 
-/** The TeXRA tool that does what Claude Code's tool `name` does (a
+/** The harness tool that does what Claude Code's tool `name` does (a
  *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
 export const texraToolOfClaudeTool = (name: string): string | undefined =>
   TEXRA_TOOL_OF_CLAUDE_TOOL.get(name);
 
-/** The TeXRA tools that have a Claude Code counterpart. */
+/** The harness tools that have a Claude Code counterpart. */
 export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
   Object.keys(CLAUDE_TOOLS),
 );
@@ -261,7 +261,7 @@ export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
  * A call as a Claude Code hook sees it: for a tool with a Claude Code
  * counterpart, that tool's name and its input translated (absent fields
  * dropped); any other tool, or an input that is not an object, keeps its
- * TeXRA name and input unchanged.
+ * harness name and input unchanged.
  */
 export function claudeToolCall(
   name: string,

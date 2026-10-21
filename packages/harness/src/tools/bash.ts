@@ -233,7 +233,7 @@ function createBackgroundBashStrategy(params: {
   cwd: string | undefined;
   /**
    * The launching session's setting slots, so a `git commit` the background
-   * shell runs carries that paper's configured TeXRA identity.
+   * shell runs carries the project's configured agent identity.
    */
   settings: SettingsStores;
   logger: AgentTrace;
@@ -455,7 +455,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
       `Executed: ${preview} (exit 0, ${duration})`,
     );
   }
-  // Many CLI tools (including latexmk) write errors to stdout, not stderr
+  // Many CLI tools write errors to stdout, not stderr
   const errorOutput =
     [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
     'No error output available';

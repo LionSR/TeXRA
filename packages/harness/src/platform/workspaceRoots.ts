@@ -27,13 +27,13 @@ export interface WorkspaceRoots {
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
   /**
-   * The storage root this process opened (the hosts' `~/.texra`, an SDK
-   * embedder's `storageDir`): every storage path below derives from it, and
+   * The storage root this process opened (a host's per-user directory, an
+   * SDK embedder's `storageDir`): every storage path below derives from it, and
    * the files a person keeps there (the MCP config) are found beside it.
    */
   readonly storageRoot: string;
-  /** Application-owned storage for this project's TeXRA 1.0 state. Custom
-   * hosts must keep this separate from earlier release storage directories;
+  /** Application-owned storage for this project's state. Custom hosts must
+   * keep this separate from storage directories of earlier releases;
    * session services use this exact root without importing previous state. */
   readonly storage: string;
   /**

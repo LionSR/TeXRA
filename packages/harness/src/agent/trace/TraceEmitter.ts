@@ -1,7 +1,7 @@
 /**
  * Default in-process implementation of {@link AgentTrace}.
  *
- * This is the agent-general core: no TeXRA-specific sugar; `MessageType`
+ * This is the agent-general core: no app-specific sugar; `MessageType`
  * is the only product vocabulary it takes. Product-specific helpers are plain functions in `helpers.ts` /
  * `toolUseHelpers.ts` that operate on the emitted event stream.
  *

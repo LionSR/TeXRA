@@ -50,7 +50,7 @@ const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
  * | pid exists, identity differs (pid reuse)       | dead       |
  * | pid exists, identity unreadable on either side | unprovable |
  *
- * Hostnames compare case-insensitively on every platform TeXRA supports. A
+ * Hostnames compare case-insensitively on every supported platform. A
  * cross-host owner is unprovable by construction: a local pid says nothing
  * about a process on another machine sharing the storage directory.
  *

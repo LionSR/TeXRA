@@ -1,8 +1,7 @@
 /**
  * Ambient module declarations the harness sources need: untyped third-party
  * packages they import and the build-embedded modules (QuickJS WASM bytes,
- * the code sandbox worker). App and host declarations live in
- * `packages/texra/src/types/ambient.d.ts`.
+ * the code sandbox worker). App and host declarations live with the app.
  */
 
 /** Embedded by every Node host through esbuild's binary loader. */

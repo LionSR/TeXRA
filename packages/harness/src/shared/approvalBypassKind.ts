@@ -3,8 +3,8 @@
  *
  * Serialized wire values (`bash` | `toolEdit` | `superYolo`) are pinned —
  * rename the TypeScript aliases freely, but do not change these strings.
- * `superYolo` here is the delegated-work scoped bypass, not a TeXRA policy
- * value.
+ * `superYolo` here is the delegated-work scoped bypass, not an approval
+ * policy value.
  */
 import { z } from 'zod';
 

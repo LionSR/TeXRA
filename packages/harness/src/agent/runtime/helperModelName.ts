@@ -39,11 +39,11 @@ export function getHelperModelName(stores: SettingsStores) {
 }
 
 /**
- * Helper-model preference for launches that opt in with `preferHelperModel`
- * (a host's compile-fix actions): the root launch runs them on the configured
- * helper model rather than the heavyweight model the user has selected.
- * Every other launch (a direct main-view Run, the CLI, an orchestrator
- * delegation) leaves the flag off and keeps the chosen model.
+ * Helper-model preference for launches that opt in with
+ * `preferHelperModel`: small, quick fix-up actions a host runs on the
+ * configured helper model rather than the heavyweight model the user has
+ * selected. Every other launch (a direct run, an orchestrator delegation)
+ * leaves the flag off and keeps the chosen model.
  *
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, the helper model can't call
@@ -61,7 +61,7 @@ export const applyHelperModelPreference = Effect.fn(
 
   const helperModelConfig = modelConfig(helperModel);
 
-  // The agent needs its tools, so do not assign a helper
+  // The agent (e.g. latexFixer) needs its tools, so do not assign a helper
   // model that does not declare function calling — not only one that
   // explicitly sets the capability to false.
   if (!helperModelConfig?.capabilities.supportsFunctionCalling) {

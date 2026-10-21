@@ -98,7 +98,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
         /** The agent-file block (`AgentBlock.key`) whose task it runs. */
         block: z.string().min(1),
         /** The launch's options for that task, as its plugin reads them
-         *  (the documents plugin's figure, TeXCount and critic switches). */
+         *  (the switches that plugin defines). */
         options: z.record(z.string(), JsonValueSchema),
       }),
     ])

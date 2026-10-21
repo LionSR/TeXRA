@@ -1,6 +1,6 @@
 /**
- * The settings TeXRA keeps over the llm provider catalog: the custom-endpoint
- * setting of each provider with an HTTP endpoint of its own, and the
+ * The settings the harness keeps over the llm provider catalog: the
+ * custom-endpoint setting of each provider with an HTTP endpoint of its own, and the
  * China-region toggle of each provider with two platforms, with the toggle's
  * default and its Models tab control copy. The catalog (`@texra-ai/llm`)
  * owns the provider data; these rows are the host's, read into

@@ -9,7 +9,7 @@
 // hooks run outside the plugin. A changed digest asks again.
 //
 // Hooks run out of process (`./pluginHooks`). A plugin with LSP servers is
-// refused: TeXRA does not run them yet.
+// refused: the harness does not run them yet.
 
 // Node imports
 import * as path from 'node:path';
@@ -220,7 +220,7 @@ export interface PluginListing extends InstalledPlugin {
   readonly mcpServers: readonly string[];
   /** Whether the user trusts it as it is now. */
   readonly trusted: boolean;
-  /** Its command hooks, and the configured ones TeXRA does not run. */
+  /** Its command hooks, and the configured ones the harness does not run. */
   readonly hooks: readonly ConfiguredHook[];
   readonly unsupportedHooks: readonly string[];
   /** Code components, which keep it from being enabled (LSP servers). */

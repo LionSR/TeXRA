@@ -100,8 +100,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'request.decided': V1,
   'approval.policy': V1,
   'run.position': V1,
-  // v2: no `latexdiff` or `missingOutputs` message type; the documents
-  // plugin's fact holds both (no upcaster, as `run.config`).
+  // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
+  // holds both (no upcaster, as `run.config`).
   log: { version: 2, upcast: [] },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its

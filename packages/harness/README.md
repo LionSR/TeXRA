@@ -1,7 +1,7 @@
 # `@texra-ai/harness`
 
-The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
-Node program and consume its trace as a stream.
+An embeddable agent runtime in Effect, from [TeXRA](https://texra.ai): run an
+agent from a Node program and consume its trace as a stream.
 
 > **0.x: the API may change in any minor release.** The package is versioned
 > on its own, not with the TeXRA app. The surface below is real and
@@ -56,8 +56,8 @@ what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
 plugin of the embedder's own beside them. `session.start` runs an agent as a
 conversation. A plugin may own one more block of an agent file
 (`Plugin.agentBlock`, an `AgentBlock`): an agent carrying it is a task, which
-that plugin launches on its own recipe script (TeXRA's `documents` plugin owns
-`task:`, which the package does not ship).
+that plugin launches on its own recipe script. The package ships no such
+plugin.
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -75,7 +75,7 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots);
   const run = yield* session.start({
     agent: 'polish',
-    instruction: 'Tighten the abstract in paper.tex.',
+    instruction: 'Tighten the summary in notes.md.',
   });
   yield* Effect.forkScoped(
     Stream.runForEach(run.events, (event) =>
@@ -111,12 +111,12 @@ const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots);
   const run = yield* session.start({
     agent: {
-      name: 'abstract_editor',
-      description: 'Reviews abstracts.',
-      prompt: 'You review LaTeX abstracts for concision. Keep every claim.',
+      name: 'summary_editor',
+      description: 'Reviews summaries.',
+      prompt: 'You review summaries for concision. Keep every claim.',
       tools: ['read_file', 'grep'],
     },
-    instruction: 'Suggest a tighter abstract for paper.tex.',
+    instruction: 'Suggest a tighter summary for notes.md.',
   });
   return yield* run.result;
 });
@@ -129,11 +129,11 @@ entry that runs the program.
 ### A persistent session, and resume
 
 `sessions.open(roots, { persistent: true })` keeps the session's history in
-the root's SQLite store, the same store every TeXRA host keeps, under the
+the root's SQLite store, the same store every host keeps, under the
 platform's storage directory (`nodePlatform`'s `storageDir`). Without it the
 store is in memory and ends with the session. A later process opens the same
 root the same way and continues a run with `session.resume(runId)`, which
-continues it from its committed history through the resume path every TeXRA
+continues it from its committed history through the resume path every
 host takes and hands back the same `Run` that `start` returns. A run that
 nothing can continue fails with `ResumeRefused`, whose `reason` says why:
 `finished`, `owned_elsewhere` (a live process holds it), `blocked` (an agent
@@ -165,7 +165,7 @@ caller's scope (a host's presentation surface rides the same value),
 an Effect function from a `PendingRequest` (which run asks, the request's
 id, and its `payload`, whose `kind` is a command, an edit, a plan, a retry
 or a question) to the `RequestDecision` it records. The handler is called
-once for each request a run waits on here, the requests every TeXRA host
+once for each request a run waits on here, the requests every host
 lists from `SessionView.requests`, and its answer goes through the
 session's one `request.decide`. An embedder may instead answer a listed
 request itself, with `session.request({ kind: 'request.decide', ... })`;
@@ -193,7 +193,7 @@ const program = Effect.gen(function* () {
   });
   const run = yield* session.start({
     agent: 'polish',
-    instruction: 'Tighten the abstract in paper.tex.',
+    instruction: 'Tighten the summary in notes.md.',
   });
   return yield* run.result;
 });
@@ -204,11 +204,11 @@ of the same root gets that session, and must ask for the same store: one
 that asks for the other fails with `SessionOptionsConflict`; close the
 session first to open it differently.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root, through the same owner every TeXRA host opens through. `processLayer`, the one every TeXRA host builds, serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process. |
-| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's fold inputs whose transcript interest lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag.                                                                                   |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                |
+| Service    | What it is                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root, through the same owner every host opens through. `processLayer`, the one every host builds, serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process. |
+| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's fold inputs whose transcript interest lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag.                                                                       |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                    |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -231,7 +231,7 @@ surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering
 fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
 exactly what the launch path threw.
 
-`run.view` is the folded session state every TeXRA host renders, so run
+`run.view` is the folded session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
 re-folded from the trace. It yields the current view first, then subsequent
 changes through the first view containing the run's durable outcome. That
@@ -259,7 +259,7 @@ descendants as they appear, until the run's final view: a reader that needs
 them later watches them (`view.watch`).
 
 Runs share one session per workspace storage root. The runtime's session
-owner holds it, the same owner every TeXRA host opens its sessions through, so
+owner holds it, the same owner every host opens its sessions through, so
 opening a root twice resolves the one session already open there; a second
 root gets its own. A session's requests are answered by the hosts attached
 to it, or, without one that answers, denied by its policy (see
@@ -322,8 +322,8 @@ without promising exactly-once execution of arbitrary external effects.
 ## Storage failures
 
 Every session-store error ends in one of a few outcomes, so a host knows what
-happens without reading the code. The table is in the header of
-`src/shared/session/database.ts`; in short:
+happens without reading the code. The full table is kept with
+the session store's source; in short:
 
 - **S1** The store does not open (`DatabaseOpenFailed`): the session does
   not open, and the error says why. A store written before 1.0, or one SQLite
@@ -389,17 +389,6 @@ The package's surface is Effect, in full: every decision the package makes is
 stated once, in Effect, on the services above, and nothing in the package
 calls `Effect.runPromise`, `runSync`, or `runFork`.
 
-Until 2026-09-21 the root entry rendered these services as Promises and
-AsyncIterables, the boundary kind rule R1 of TeXRA's Effect migration names
-for the published SDK (`2026-08-26-effect-4-runtime-migration.md`
-§7 R1; supersession recorded in the architecture rulings ledger,
-`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`).
-That ruling is superseded: `effect` was already a mandatory exact-pin peer of
-the whole package, so no consumer was spared installing Effect; the package
-is unpublished and the Promise entry had no consumers; and TeXRA 1.0 keeps no
-parallel surfaces. The composition-once-per-process limit went with the
-Promise entry: each `Sessions.layer` scope owns the composition it made.
-
 Failures are `Data.TaggedError`s. Six come from the package itself —
 `PluginsRefused`, `AgentNotFound`, `ToolsRefused`, `ResumeRefused`,
 `TraceUnavailable`, and `RunFailure`, whose `cause` is exactly what the
@@ -407,10 +396,9 @@ launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
 `SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
 from the session store when it cannot open or read, or is open over the
 other store, for nine in the session lifecycle. The entry exports other
-tagged errors too; `config/api-reports/harness.api.md` lists the whole
-surface. A
+tagged errors too; the package's type declarations list the whole surface. A
 `session.request` answers with the runtime's own `Outcome` or its
-`RequestError` union, the same values every TeXRA host reads. Beyond these,
+`RequestError` union, the same values every host reads. Beyond these,
 no fold internals and no host widgets are exported.
 
 A runnable version of this program against a packed tarball is in
@@ -426,8 +414,8 @@ work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
 `mcp.json` at the storage root that global storage lies under.
 `nodePlatform()` supplies all of them: process-local config and state,
-TeXRA's ordinary storage layout under the `storageDir` you name (required; the
-package never writes to the user's `~/.texra`), that directory's `mcp.json`,
+the ordinary storage layout under the `storageDir` you name (required; the
+package never falls back to a per-user directory), that directory's `mcp.json`,
 and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, resolved after the harness's own; a
@@ -445,9 +433,9 @@ The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.
 
 Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
-host that already owns those services. For TeXRA 1.0, supply a fresh,
-application-owned storage directory in custom `WorkspaceRoots`; the SDK uses
-that exact directory. Do not reuse an earlier TeXRA storage directory.
+host that already owns those services. Supply a fresh, application-owned
+storage directory in custom `WorkspaceRoots`; the SDK uses that exact
+directory. Do not reuse a storage directory an earlier release wrote.
 `nodePlatform()` selects the separate `v1` storage layout under `storageDir`
 automatically. Earlier histories and checkpoints
 are not imported or removed.

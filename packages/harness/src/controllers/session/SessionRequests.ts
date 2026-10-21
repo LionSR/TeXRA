@@ -481,7 +481,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     mode: DeletionMode,
     expectedStartCommit: CommitOrdinal,
   ) {
-    // Listing-driven removal (`texra history delete`, the leftover-shell sweep)
+    // Listing-driven removal (a history delete, the leftover-shell sweep)
     // acts through the registry's inactive-run step and the claim, which refuse
     // a run anything still holds; `actions` is not consulted, the claim suffices.
     const admitted = yield* admit(deps, { kind: 'run.delete', runId });

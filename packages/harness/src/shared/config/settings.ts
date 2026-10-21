@@ -213,8 +213,8 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
  * A value the row's schema rejects is a defect of the program, not a member
  * of the `ConfigWriteFailed | Error` channel: it is thrown, so it will not
  * arrive as a catchable failure. Callers pass a value they already know is
- * valid; user input is validated upstream (a settings-UI write resolves
- * through TeXRA's `applyStateSettingUpdate`, which `safeParse`s first). A row
+ * valid; user input is validated upstream (a settings-UI write is
+ * `safeParse`d by the app before it reaches here). A row
  * that excludes a setting the catalog lacks is the same kind of defect.
  *
  * A config-slot row is written to `target` when given (the one caller that

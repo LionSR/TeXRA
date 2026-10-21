@@ -139,7 +139,7 @@ export function recordCustomChoices(
 
 /**
  * Forget the hidden choice of a custom agent the user deleted: the one
- * place that knows its removal is real. A file removed outside TeXRA keeps
+ * place that knows its removal is real. A file removed outside the app keeps
  * its key, which is harmless, until that name is deleted here or recreated
  * and chosen again. Takes the workspace agents' write lane itself.
  */

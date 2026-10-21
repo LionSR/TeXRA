@@ -39,7 +39,7 @@ export function formatDuration(durationMs: number): string {
  *
  * Backed by `pretty-ms` with whole-second flooring like {@link formatDuration},
  * but renders zero / negative / sub-second durations as `0s` (used by elapsed
- * displays that start from zero, e.g. Goal timings and Lean server uptime).
+ * displays that start from zero, e.g. goal timings and server uptime).
  */
 export function formatCompactDuration(durationMs: number): string {
   const wholeSeconds = floorToWholeSeconds(Math.max(0, durationMs));

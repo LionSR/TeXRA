@@ -26,7 +26,7 @@ function turnFate(turn: AttemptKey, run: RunView | undefined): string {
   if (isTerminalOutcomePhase(run.status)) {
     return `${label} was interrupted: it ended with its run (${run.status}) before producing a result`;
   }
-  // Another TeXRA process holds the run, or its state cannot be read here:
+  // Another process holds the run, or its state cannot be read here:
   // either way nothing here may call the turn finished.
   if (run.statusDetail !== null) {
     return `${label} has not finished: ${run.statusDetail}`;
@@ -36,13 +36,13 @@ function turnFate(turn: AttemptKey, run: RunView | undefined): string {
 
 /**
  * One-line attribution note for /report and /result when a newer turn was
- * accepted but never persisted a result (#9531): without it, the single
+ * accepted but never persisted a result: without it, the single
  * latest-value slots would silently present the previous turn as current.
  *
  * Reads the run's row in the session fold, the same reading the process
  * output footer states: "still running" only while its owner is alive and
  * the run is in flight; a terminal run words the turn from its outcome; a run
- * another TeXRA process holds, or one whose state cannot be read, renders that
+ * another process holds, or one whose state cannot be read, renders that
  * fact, because this process cannot see how far such a turn got. A missing
  * outcome is not liveness: a run whose owner crashed leaves exactly that, and
  * it reads as

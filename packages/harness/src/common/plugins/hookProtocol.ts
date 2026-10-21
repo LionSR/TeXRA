@@ -1,10 +1,9 @@
-// The Claude Code hooks protocol, typed at TeXRA's edge
+// The Claude Code hooks protocol, typed at the harness's edge
 // (https://code.claude.com/docs/en/hooks): each event's JSON on stdin, and
 // each event's JSON or plain text on stdout with its exit code. Every event's
 // input and output schema lives here, and a hook's output is parsed here
-// once. TeXRA defines no hook format of its own
-// (`2026-09-28-code-plugins-hooks-v1.md`); the configuration that names the
-// hooks is `./hookConfig`'s.
+// once. The harness defines no hook format of its own; the configuration
+// that names the hooks is `./hookConfig`'s.
 
 // Third-party imports
 import { Result } from 'effect';
@@ -24,8 +23,8 @@ const CommonInput = {
   agent_type: z.string().optional(),
 };
 
-/** Each event's stdin, as the reference names its fields. TeXRA keeps no
- *  transcript file, so `transcript_path` is not sent. */
+/** Each event's stdin, as the reference names its fields. The harness keeps
+ *  no transcript file, so `transcript_path` is not sent. */
 const HookInputSchema = z.discriminatedUnion('hook_event_name', [
   z.object({
     ...CommonInput,

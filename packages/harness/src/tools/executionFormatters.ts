@@ -66,7 +66,7 @@ function getAvailablePaths(
  * What may be said about a run's status, in the fold's own words: the durable
  * phase, plus the clause naming the fact that forbids a terminal reading —
  * interrupted (nobody owns it and nothing recorded how it ended), held by
- * another TeXRA process, or unreadable. "No handle in this process" is never
+ * another process, or unreadable. "No handle in this process" is never
  * on its own a reason to call a run finished, and the fold is what knows the
  * difference.
  */

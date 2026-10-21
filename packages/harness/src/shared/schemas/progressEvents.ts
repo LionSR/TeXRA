@@ -21,7 +21,7 @@ export const INSTRUCTION_ACTION = {
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 
-/** Request the frontend to open a file (and build+display if LaTeX). */
+/** Request the frontend to open a file, and build and show it if it can. */
 export interface RequestOpenFilePayload {
   location: FileLocation;
   preserveFocus: boolean;

@@ -32,7 +32,7 @@ export function toPosixPath(relativePath: string): string {
  *
  * The `'..'` case must be matched as a whole segment: a plain
  * `startsWith('..')` also matches a first segment that merely begins with two
- * dots, so an in-root file honestly named `..notes.tex` reads as an escape and
+ * dots, so an in-root file honestly named `..notes.md` reads as an escape and
  * every containment check refuses it. Separators are the platform's, matching
  * what `path.relative` returns.
  */
@@ -76,9 +76,9 @@ export function getExtensionLowercase(filePath: string): string {
  * Consolidates scattered `.toLowerCase().endsWith('.ext')` patterns.
  *
  * @example
- * hasExtension('paper.tex', '.tex') // true
- * hasExtension('Paper.TEX', '.tex') // true
- * hasExtension('paper.pdf', '.tex') // false
+ * hasExtension('notes.md', '.md') // true
+ * hasExtension('Notes.MD', '.md') // true
+ * hasExtension('notes.pdf', '.md') // false
  */
 export function hasExtension(filePath: string, extension: string): boolean {
   return getExtensionLowercase(filePath) === extension.toLowerCase();

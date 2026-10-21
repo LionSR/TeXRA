@@ -6,7 +6,7 @@ import { SkillNameSchema } from './skillName';
 export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
 export const AGENT_SKILLS_ENABLED_DEFAULT = false;
 
-/** Whether agents receive the available TeXRA and imported skills. */
+/** Whether agents receive the available bundled and imported skills. */
 export const AgentSkillsEnabledSchema = z
   .boolean()
   .describe(
@@ -28,17 +28,17 @@ export type PluginTrust = z.infer<typeof PluginTrustSchema>;
 
 /**
  * One installed plugin, persisted as a row of the `texra.plugins.installed`
- * state: the one install record every host reads and writes (the CLI's
- * `texra plugin`, and the Skills page of the extension's and the desktop's
- * settings). The plugin keeps its own manifest (`.claude-plugin/plugin.json`
- * or `.codex-plugin/plugin.json`); this row is where it lives, whether it is
+ * state: the one install record every host reads and writes (a CLI's
+ * plugin command, a settings page). The plugin keeps its own manifest
+ * (`.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`); this row is
+ * where it lives, whether it is
  * enabled, the trust given to it, and what stands in for a manifest the
  * plugin does not have (the marketplace entry's skill directories, version
  * and description).
  *
  * `name` takes the skill-name grammar, which also makes it a safe single path
  * segment for the managed `plugins/<name>` directory. `commit` is set exactly
- * when TeXRA fetched the plugin with git and owns its directory; a local
+ * when the harness fetched the plugin with git and owns its directory; a local
  * plugin is referenced in place and has none.
  */
 export const InstalledPluginSchema = z.object({

@@ -52,7 +52,7 @@ const expand = (value: string, places: Partial<HookPlaces>) =>
       : text.replaceAll(`\${${name}}`, place).replaceAll(`$${name}`, place);
   }, value);
 
-/** The plugin data directory TeXRA keeps for `name`. */
+/** The plugin data directory the harness keeps for `name`. */
 export const pluginDataDir = (globalStorage: string, name: string) =>
   path.join(globalStorage, 'plugin-data', name);
 

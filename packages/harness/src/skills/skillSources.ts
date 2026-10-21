@@ -210,9 +210,9 @@ export function hostSkillContributions(
  * Fold contributions into the tiers one discovery scans. Contributions are
  * stable-sorted by tier and flattened with the tier's scope stamped on; a
  * path seen twice keeps its first occurrence (and becomes required if any
- * occurrence is), so a `--skills .texra/skills` root still absorbs the
- * project root. Contribution ids are unique; a repeated id is a wiring
- * defect and throws, so the id stays a checked key for the display and
+ * occurrence is), so an explicitly requested project skills root still
+ * absorbs the project root. Contribution ids are unique; a repeated id is a
+ * wiring defect and throws, so the id stays a checked key for the display and
  * toggle consumers that will read it.
  */
 export function foldSkillSources(

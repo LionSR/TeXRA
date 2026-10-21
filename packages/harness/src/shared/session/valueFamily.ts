@@ -41,8 +41,8 @@ export const REPO_STATE: ValueFamily<JsonValue, true> = {
 
 /**
  * The global root's record of a workspace store, keyed by its storage
- * directory id: the root it serves, so `texra doctor --prune-storage` can
- * tell a store whose root is gone.
+ * directory id: the root it serves, so a storage prune can tell a store
+ * whose root is gone.
  */
 export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> = {
   name: 'workspace-store',

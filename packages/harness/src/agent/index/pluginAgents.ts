@@ -2,8 +2,8 @@
  * The agents installed plugins contribute: Claude Code subagent files
  * (`agents/<name>.md`, YAML frontmatter with `name`, `description` and
  * `tools`, the body its system prompt), read as agents of source
- * `plugin` named `<plugin>:<name>`. TeXRA defines no agent format for them;
- * each file is read here, at the boundary, and nowhere else.
+ * `plugin` named `<plugin>:<name>`. The harness defines no agent format for
+ * them; each file is read here, at the boundary, and nowhere else.
  */
 // Node imports
 import * as path from 'node:path';
@@ -49,11 +49,11 @@ export const PLUGIN_AGENT_DEFAULT_TOOLS = CLAUDE_COUNTERPART_TOOLS;
 interface PluginAgent {
   readonly name: string;
   readonly description?: string;
-  /** The tools it names, as TeXRA's; `undefined` when it names none and
+  /** The tools it names, as the harness's; `undefined` when it names none and
    *  inherits them (`AgentRun`). */
   readonly tools: readonly string[] | undefined;
   readonly systemPrompt: string;
-  /** Tools the file names that TeXRA has no counterpart for. */
+  /** Tools the file names that the harness has no counterpart for. */
   readonly dropped: readonly string[];
 }
 
@@ -93,7 +93,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   const mapped = (declared ?? []).map((tool) =>
     tool.startsWith('mcp__') ? tool : texraToolOfClaudeTool(tool),
   );
-  // Naming only tools TeXRA lacks must not read as naming none, which
+  // Naming only tools the harness lacks must not read as naming none, which
   // would widen the agent to everything it inherits.
   if (
     declared !== undefined &&
@@ -161,8 +161,8 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
 /**
  * The catalog entries of the agents of the installed plugins that load now
  * (enabled, and trusted as they are). A file that does not read is no entry,
- * and a tool a file names that TeXRA has no counterpart for is dropped; both
- * are logged.
+ * and a tool a file names that the harness has no counterpart for is
+ * dropped; both are logged.
  */
 export const scanPluginAgents = Effect.gen(function* () {
   const { loadable } = yield* readInstalledPluginLoad({

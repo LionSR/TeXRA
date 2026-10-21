@@ -1,18 +1,15 @@
 # Embedding the TeXRA Agent Runtime
 
-**Status: internal. Not published on texra.ai.** There is no `@texra/core`
-package and no SDK surface; everything below is a deep import through the
-repo-root path aliases declared in `tsconfig.json`. Plain `tsc` output does not
-rewrite those aliases. An external program must therefore build from a TeXRA
-checkout with equivalent alias-aware bundler configuration, or replace the
-aliases with resolvable paths. The repository's Vite builds derive their alias
-map from `tsconfig.json` (`scripts/aliases.mjs:14-20`,
-`packages/extension/vite.config.mts:5`), while the extension's esbuild bundle
-reads its package tsconfig, which extends the root one (`packages/extension/esbuild.config.mjs:34-48`).
-Nothing here is a stable contract — this note documents what an external
-program has to do _today_ to get a root launch (`session.runs.launch`) to
-complete, so that SDK work
-has a measurable baseline.
+**Status: internal. Not published on texra.ai.** A program outside this
+repository embeds the harness through the published package
+`@texra-ai/harness` and its entries (`.`, `/node`, `/plugins`, `/schemas`,
+`/transcript`), documented in `packages/harness/README.md`:
+`Sessions.layer({ platform, plugins })` composes everything §1 walks through,
+and the §1 example uses only those entries. The rest of this note documents
+the internal composition behind that layer, reached through the repo-root path
+aliases declared in `tsconfig.json`, for work on the harness itself. Plain
+`tsc` output does not rewrite those aliases, so none of the internal names
+below is reachable from an installed package, and none is a stable contract.
 
 Every claim below is cited to `file:line`. The original baseline was verified
 at the PR base (`5fc03f9436`); review corrections were rechecked against
@@ -170,95 +167,73 @@ object it passes to `use` (§3), which keeps the approval-gated tools away from 
 
 ### Putting it together
 
-This example assumes an alias-aware build from a TeXRA checkout, as described
-at the start of this document. Copying these imports into an ordinary external
-TypeScript project and running plain `tsc` is insufficient: there are no
-runtime packages named `@controllers/session/sessionLayer`,
-`@agent/runtime/sessionGraph`, and so on.
+An embedder does not run the steps above itself. `Sessions.layer({ platform,
+plugins })` installs the process runtime (Step 1) over the platform's process
+services, seeds the first-install tool switches, and serves the `Sessions`
+that open a session over the platform's roots (Prerequisite A). The catalog
+loads on its first miss (Prerequisite B). `nodePlatform` reads provider keys
+from the environment (Step 2) and names the agent directory the registry
+scans (Step 3). The example imports only the published entries; every name in
+it is in the package's declarations (`config/api-reports/harness.api.md`,
+`harness.node.api.md`, `harness.plugins.api.md`).
 
 ```ts
-import { Effect } from 'effect';
-import { AgentDirectories } from '@platform/interfaces';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import { AgentCatalog, AgentDirectoryService } from '@texra-ai/harness';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { bootstrapHost } from '@controllers/hostBootstrap';
-import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { validateRunRequest } from '@texra/controllers/session/runRequests';
+import { Effect, Stream } from 'effect';
+import { Sessions } from '@texra-ai/harness';
+import { nodePlatform } from '@texra-ai/harness/node';
+import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
-// Step 1 — the process services: agent directories, filesystem, secrets,
-// application state, and the rest.
-const agentDirectories = new AgentDirectoryService({
-  channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, skills/
-  state: { get: () => Effect.succeed(undefined) },
-});
-const runtime = installProcessRuntime({
-  processStart: nodeProcesses.selfIdentity(),
-  globalStorage,
-  secrets,
-  agentDirectories: AgentDirectories.layer(agentDirectories),
-  appState: globalState,
-  /* …the other process services… */
-  lean: directLeanLanguageServices(), // Shipped-feature parity
+// The process services and the workspace roots: the agent directory, the
+// storage directory (required; nothing falls back to a per-user default) and
+// the folder the runs work in. Process-wide: build it once.
+const platform = nodePlatform({
+  agentsDir: './agents',
+  storageDir: './.agent-storage',
+  workspaceDir: process.cwd(),
 });
 
-// The per-workspace services, carried by the session rather than the process.
-const roots = createNodeWorkspaceRoots({
-  workspacePath,
-  storage,
-  globalStorage,
-  config,
-  workspaceState,
-  globalState,
-});
-
-await runtime.runPromise(
-  Effect.gen(function* () {
-    // Everything a TeXRA process installs once beside its process runtime.
-    yield* bootstrapHost({
-      host: 'cli',
-      roots,
-      secrets,
-      skills: { resourcesPath },
-    });
-
-    const session = yield* initializeDefaultSession({ roots });
-    const detachHostInteractions = yield* session.interactions.use({
-      // §3: this host can answer no approval, so no run of the session is
-      // offered a tool that would ask for one, and the session denies the
-      // retry a provider failure opens.
-      approvalPromptsUnavailable: true,
-      emit: (event, payload) => {
-        console.error(`[texra] ${event}`, payload);
-      },
-    });
-    // Optional: the catalog loads on its first miss anyway (`forLaunch`
-    // reloads once when an agent is not found); an explicit refresh only
-    // front-loads the scan.
-    yield* (yield* AgentCatalog).refresh;
-
-    const validated = validateRunRequest({
-      config: {
-        agent: 'assistant',
-        instruction: 'Hello',
-      },
-    });
-    if (!validated.valid) throw new Error(validated.message);
-
-    yield* Effect.ensuring(
-      // The process runtime serves the `SessionOwner` a root launch requires.
-      session.runs.launch({ request: validated.request, options: {} }),
-      Effect.sync(detachHostInteractions),
-    );
-  }),
+const program = Effect.gen(function* () {
+  const session = yield* (yield* Sessions).open(platform.roots);
+  // §3: this host can answer no approval, so no run of the session is
+  // offered a tool that would ask for one, and the session denies the
+  // retry a provider failure opens. Attached for the program's scope.
+  yield* session.attach({
+    approvalPromptsUnavailable: true,
+    emit: (event, payload) => {
+      console.error(`[host] ${event}`, payload);
+    },
+  });
+  const run = yield* session.start({
+    agent: 'assistant',
+    instruction: 'Hello',
+  });
+  yield* Effect.forkScoped(
+    Stream.runForEach(run.events, (event) =>
+      Effect.sync(() => {
+        if (event.type === 'stream.chunk') process.stdout.write(event.text);
+      }),
+    ),
+  );
+  return yield* run.result;
+}).pipe(
+  Effect.scoped,
+  // The process and its sessions live for this layer's scope; releasing it
+  // closes every session, then the process under them.
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
 );
+
+const result = await Effect.runPromise(program);
+console.log(result.outcome);
 ```
 
+`session.start` validates its input itself: a refusal before any model work
+fails it with a tagged error (`AgentNotFound`, `ToolsRefused`), and a failure
+after admission fails `run.result` with `RunFailure`. A host inside this
+repository that already holds a `ValidatedExecutionRequest` launches through
+`session.runs.launch` on its `SessionHandle` instead, which needs the
+composition root's `SessionOwner`.
 `validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
-is the result-style validation helper: it returns either a
+is the result-style helper that builds one: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
 `ValidatedExecutionRequest` structurally, as production extension callers do

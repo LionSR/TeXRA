@@ -1,5 +1,5 @@
 /**
- * The process every TeXRA host and embedder runs on: {@link processLayer}
+ * The process every host and embedder runs on: {@link processLayer}
  * composes the process services and the {@link Sessions} service over the
  * process's internal session owner, so a host and an embedder open a root's
  * session the same way. `Sessions.layer` is an embedder's

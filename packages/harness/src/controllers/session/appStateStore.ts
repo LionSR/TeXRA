@@ -102,8 +102,8 @@ function appStateStoreFromDatabase(
 /**
  * Retain the project's persistent database for the caller's project scope,
  * and record in the global root which workspace root the store serves
- * (`workspace-store`, keyed by the storage directory id; the storage
- * design's §7): `texra doctor --prune-storage` finds a store whose root is
+ * (`workspace-store`, keyed by the storage directory id): a storage prune
+ * finds a store whose root is
  * gone by it. An unchanged record is not rewritten (`values.modify`). One
  * that cannot be read or written is logged at warn and the project still
  * opens: the prune then never lists the store as an orphan.
@@ -221,7 +221,7 @@ export const processStoresLayer = Layer.mergeAll(
 );
 
 /** The process's application state, in the global root's current values at
- *  `globalStorage`: what every TeXRA host keeps. */
+ *  `globalStorage`: what every host keeps. */
 export const globalAppStateLayer = (
   globalStorage: string,
 ): Layer.Layer<AppState, never, GlobalDatabase> =>

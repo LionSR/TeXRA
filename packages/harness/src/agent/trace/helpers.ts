@@ -1,5 +1,5 @@
 /**
- * TeXRA sugar over {@link AgentTrace}, as plain functions.
+ * Logging sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
  * single primitive call (`info` / `warn` / `error` / `emit`).

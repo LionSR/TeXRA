@@ -3,7 +3,7 @@
  *
  * `Sessions` is a projection of the process's `SessionOwner`: it opens,
  * lists and closes through that one owner, so a root
- * opened here is the same session every TeXRA host opens (one session per
+ * opened here is the same session every host opens (one session per
  * workspace storage root, never a second registry). A {@link Session} is a
  * value, not a tag — there are N of them, one per root — and a pure
  * function of the owner's handle: it stores nothing the owner already

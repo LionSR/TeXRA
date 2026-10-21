@@ -162,7 +162,7 @@ export interface StateSettingEntry {
   readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
-   * enum options (TeXRA's settings UIs derive them). The option *values* are
+   * enum options (a host's settings UI derives them). The option *values* are
    * derived from the schema, not restated here.
    */
   readonly enumDescriptions?: readonly string[];

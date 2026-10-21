@@ -1,8 +1,8 @@
 /**
- * Open-time continuation (durable harness, gap 2; ruling Q2), for a session
- * a TUI, desktop or extension window opened. Headless runs and the SDK never
- * start it: their policy is `off`. `texra resume <id>` starts only its
- * retries: an open-time resume beside that one would race it.
+ * Open-time continuation, for a session an interactive host window opened.
+ * Headless runs and the SDK never start it: their policy is `off`. An
+ * explicit resume of one run starts only its retries: an open-time resume
+ * beside that one would race it.
  *
  * At open it finds the interrupted roots: runs no process holds that did not
  * end, launched by a user (an owned child is resumed by its parent's call,

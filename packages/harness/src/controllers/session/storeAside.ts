@@ -1,8 +1,8 @@
 /**
  * The session store's aside copies: the files a store open moved beside it
  * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
- * at a name no earlier copy holds and kept until
- * `texra doctor --prune-storage` deletes them; the outermost transaction's
+ * at a name no earlier copy holds and kept until a storage prune deletes
+ * them; the outermost transaction's
  * two retries (a busy lock, claim owners proven off the lock); and the test
  * of whether a failed open is SQLite reporting the file damaged.
  */

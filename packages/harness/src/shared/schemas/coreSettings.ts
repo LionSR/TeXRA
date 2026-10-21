@@ -95,8 +95,8 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
 } as const);
 
 /**
- * What a TUI, desktop or extension window does at open with the tasks a
- * closed or crashed TeXRA left interrupted:
+ * What an interactive host window does at open with the tasks a closed or
+ * crashed process left interrupted:
  * `ask` lists them, `auto` continues them. Headless runs and the SDK do
  * neither, whatever this says.
  */

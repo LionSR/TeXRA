@@ -33,7 +33,7 @@
  * - Parent-exit cleanup. Every child still registered when the process emits
  *   `exit` gets SIGTERM from a synchronous listener, its process group when it
  *   leads one. Every child, detached or not: the POSIX default is detached,
- *   and nothing TeXRA starts through this spawner is meant to outlive it
+ *   and nothing the harness starts through this spawner is meant to outlive it
  *   (background runs are drained). A child leaves the set when it exits or
  *   its scope closes. On Windows this is TerminateProcess on the child alone
  *   (taskkill is asynchronous and cannot run in `exit`).

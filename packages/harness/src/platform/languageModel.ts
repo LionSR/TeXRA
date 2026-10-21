@@ -17,7 +17,7 @@ export interface LanguageModelInfo {
   readonly access: LanguageModelAccessState;
 }
 
-/** Whether the editor lets TeXRA call a model: allowed, waiting on the
+/** Whether the editor lets the host call a model: allowed, waiting on the
  *  user's consent, or not callable. */
 export type LanguageModelAccessState =
   'allowed' | 'consent-required' | 'unavailable';

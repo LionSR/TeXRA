@@ -4,9 +4,8 @@
  *
  * Used by:
  *  - `ExecutionsTool`'s `/executions/{id}/conversation` endpoint
- *    (`packages/harness/src/tools/executions/conversationFormat.ts`)
- *  - the CLI's `texra history` / resume previews
- *    (`packages/cli/src/runtime/history/conversationFormat.ts`)
+ *    (`tools/executions/conversationFormat.ts`)
+ *  - a host's history and resume previews
  *
  * Callers keep their own output composition (XML-ish `<message>` blocks for
  * the tools endpoint; a structured preview/transcript shape plus whole-message

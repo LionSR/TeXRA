@@ -19,8 +19,8 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 /**
  * The one failure of this module's probes: the native binary lookup a CLI's
  * probe runs could not answer. An SDK that will not import is a dashboard
- * message, not a failure; the localhost request the Zotero probe makes folds
- * its own failures to `false`; and a tool that is simply not installed is
+ * message, not a failure; a localhost request a probe makes folds its own
+ * failures to `false`; and a tool that is simply not installed is
  * `check` answering `false`.
  */
 export class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
@@ -55,10 +55,10 @@ export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {
 
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
- * from an ambient scope: the folder the GitHub plugin asks whether it is a git
- * repository, the configuration the Zotero plugin reads its port from, and the
- * host the Lean plugin asks whether it drives Lean through the editor: three
- * fields of the roots every caller of the availability surface opened.
+ * from an ambient scope: the folder a probe asks whether it is a git
+ * repository, the configuration a probe reads a port from, and the host a
+ * probe asks whether the editor drives a tool for it: three fields of the
+ * roots every caller of the availability surface opened.
  */
 export type ToolProbeInputs = Pick<
   WorkspaceRoots,
@@ -74,9 +74,9 @@ export type ToolProbeInputs = Pick<
 export interface ToolAvailabilityChecks<R = ToolProbeServices> {
   /**
    * Optional shared probe result passed to check/status/detail callbacks.
-   * Takes the asking workspace as data — the GitHub plugin's probe asks whether
-   * that folder is a git repository, the Zotero plugin's reads its port
-   * out of that workspace's configuration.
+   * Takes the asking workspace as data: a probe may ask whether that folder
+   * is a git repository, or read a port out of that workspace's
+   * configuration.
    */
   readonly probe?: (
     inputs: ToolProbeInputs,

@@ -7,7 +7,7 @@
  * stage as its start.
  *
  * These helpers exist so agent code can program against `AgentTrace`
- * without TeXRA-specific sugar; they reduce to the same `tool.start` /
+ * without app-specific sugar; they reduce to the same `tool.start` /
  * `tool.end` emissions.
  */
 import {

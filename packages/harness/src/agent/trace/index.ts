@@ -5,10 +5,8 @@
  * built with. Plain `debug/info/warn/error`, stages, runs, and the domain
  * helpers are sugar over `emit()`.
  *
- * TeXRA-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
+ * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
  * functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
- *
- * See `2026-05-22-agent-trace-sdk-surface.md` for the design.
  */
 export type { AgentEvent, ResultEvent } from './events';
 

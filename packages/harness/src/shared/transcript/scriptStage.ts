@@ -3,7 +3,7 @@
  * read from their cards (the tool rows under the script's `script` stage)
  * and, for an `agent` call, from the child run its card launched
  * (`RunView.parentCard`). One model for the progress view, the terminal
- * popup and headless `texra run`; a host only decides how a row looks.
+ * popup and a headless run; a host only decides how a row looks.
  *
  * Nothing here is a fact of its own: a status is the card's, read with its
  * settlement (`reusedFrom`, a `Skipped` error) and whether a child exists;
@@ -84,7 +84,7 @@ export interface ScriptCallView {
   readonly label: string;
   readonly status: ScriptCallStatus;
   readonly phase: string | null;
-  /** `drafter · gpt-5 · retried · a.tex · 1m 12s · $0.31` */
+  /** `drafter · gpt-5 · retried · a.md · 1m 12s · $0.31` */
   readonly facts: readonly string[];
   readonly detail?: { readonly kind: 'error' | 'note'; readonly text: string };
   /** The child run an `agent` call launched: the row opens it. */
