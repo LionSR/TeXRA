@@ -11,7 +11,7 @@ import { Cause, Effect, Queue, type Scope, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type { ToolEditApprovalRequest } from '@texra-ai/harness';
 import type { HostInteractions, LocalSession } from '@texra-ai/harness';
 
 const CHANNEL = 'SessionHost';

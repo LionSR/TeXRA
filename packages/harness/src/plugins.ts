@@ -57,8 +57,39 @@ export {
   type ToolTable,
 } from '@tools/toolTable';
 export type { DefineToolOptions } from '@tools/core/definition';
-export type { ToolProbeFailed } from '@tools/toolProbes';
+// A plugin's availability: the check of one that needs nothing installed,
+// and the one failure a probe raises.
+export { ALWAYS_AVAILABLE, ToolProbeFailed } from '@tools/toolProbes';
 export { errorResult, executed } from '@tools/core/result';
+// A listing's output text: its header over its lines, or a note for none.
+export { formatToolOutput } from '@tools/formatting';
+// A workspace file as a call's attachment, and the workspace's ignore policy.
+export {
+  buildFileAttachment,
+  type BuildFileAttachmentOptions,
+} from '@tools/attachments';
+export { getGitignoreMatcher, type GitignoreMatcher } from '@tools/gitignore';
+// Asking the person for an edit, the result a refusal returns, and the
+// write of the approved content (a conflict is the value, not a failure).
+export {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+  type ToolEditApprovalResult,
+  type ToolEditProposal,
+} from '@tools/approval/toolEditApproval';
+export {
+  approvedWriteConflict,
+  type ApprovedEditConflictError,
+} from '@tools/approval/approvedWrite';
+// JSON-RPC 2.0 over a child process's stdio (a language server's framing,
+// or one message per line).
+export {
+  makeJsonRpcConnection,
+  type JsonRpcConnection,
+  type JsonRpcConnectionDisposed,
+  type JsonRpcConnectionOptions,
+  type JsonRpcRequestError,
+} from '@tools/jsonRpc';
 export { ToolError } from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
 export {
@@ -87,8 +118,14 @@ export {
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
 // What `ChildRuns` launches: an agent's child, or an external process's
-// with the strategy its loop runs.
-export type { ChildLaunch } from '@tools/delegation/AgentTool';
+// with the strategy its loop runs. A tool that launches children takes the
+// call fields every child launch takes (`CALL_FIELDS`) and its file lists
+// as `fileList` fields.
+export {
+  CALL_FIELDS,
+  fileList,
+  type ChildLaunch,
+} from '@tools/delegation/AgentTool';
 export type { ProcessChildLaunch } from '@tools/delegation/detachedChildRun';
 export type {
   ChildRunPause,
@@ -141,3 +178,14 @@ export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 export { jitteredExponentialBackoffMs } from '@utils/core';
 export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 export { isTransientHttpStatus } from '@utils/core/httpStatus';
+// A tool's requests: one attempt under a deadline, the transient-failure
+// retry, the scoped clients an attempt's scope aborts, and whether a failure
+// got no answer at all.
+export {
+  isTransportReason,
+  retryTransientFetch,
+  scopedClient,
+  type RetryTransientFetchOptions,
+  scopedOkClient,
+  withRequestTimeout,
+} from '@tools/timeouts';

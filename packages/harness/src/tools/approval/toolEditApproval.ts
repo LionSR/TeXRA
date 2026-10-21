@@ -12,7 +12,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type RequestRefusal,
+  type RefusalDecision,
   type RunId,
   type ToolEditPermission,
   type ToolResult,
@@ -80,10 +80,10 @@ export type ToolEditApprovalResult =
       };
       readonly startLine?: number;
     }
-  | RequestRefusal;
+  | RefusalDecision;
 
 /** What a tool proposes; {@link requestToolEditApproval} derives the rest. */
-type ToolEditProposal = Omit<
+export type ToolEditProposal = Omit<
   ToolEditApprovalRequest,
   'permission' | 'roots' | 'hunks' | 'firstChangedLine'
 >;
@@ -333,7 +333,7 @@ export function appendApprovalDiffNote(
 export function buildApprovalRejectedResult(
   path: string,
   sourceTool: string,
-  refusal: RequestRefusal,
+  refusal: RefusalDecision,
 ): ToolResult {
   const copy = refusalCopy('Tool edit', refusal);
   const summary =
