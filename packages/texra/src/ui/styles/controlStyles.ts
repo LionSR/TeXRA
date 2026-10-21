@@ -368,6 +368,14 @@ export const buttonStyles: CSSResult = css`
     color: var(--color-text-link-active);
   }
 
+  /* focusRingStyles cannot reach inside wa-button's shadow root, so the
+     link skin draws the shared ring on the part itself. */
+  .btn-ghost.is-link:focus-visible::part(base),
+  .action-button.is-link:focus-visible::part(base) {
+    outline: var(--focus-ring-width) solid var(--wa-color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+
   /* Destructive actions read as red text. A filled red button is reserved for
      the confirm step inside a dialog, where it is the only action. */
   .is-danger::part(base) {
