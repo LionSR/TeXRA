@@ -60,7 +60,7 @@ that plugin launches on its own recipe script. The package ships no such
 plugin.
 
 ```ts
-import { Effect, Stream } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
@@ -77,14 +77,18 @@ const program = Effect.gen(function* () {
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
   });
-  yield* Effect.forkScoped(
+  const events = yield* Effect.forkScoped(
     Stream.runForEach(run.events, (event) =>
       Effect.sync(() => {
         if (event.type === 'stream.chunk') process.stdout.write(event.text);
       }),
     ),
   );
-  return yield* run.result;
+  const result = yield* run.result;
+  // The run's trace ends with it; join so the consumer drains what the
+  // result may have outrun instead of being interrupted with the scope.
+  yield* Fiber.join(events);
+  return result;
 }).pipe(
   Effect.scoped,
   Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
