@@ -26,7 +26,6 @@ const atIdle = (session: SessionHandle) =>
       session,
       runId: RUN_ID,
       state: freshRunState(0),
-      canContinue: true,
     })
     .pipe(
       Effect.provide(testPluginServicesLayer),

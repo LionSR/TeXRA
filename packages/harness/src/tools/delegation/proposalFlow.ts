@@ -14,7 +14,7 @@ import {
   findAgentByIdentifier,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-import { type RunToolCall } from '@agent/runtime/RunCall';
+import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
@@ -32,6 +32,8 @@ import {
   approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
+import { attemptRequests, callRequestId } from '@shared/session/inFlight';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -70,6 +72,65 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
     ),
   );
 });
+
+/**
+ * The request the `agent` calls of one script share: the first to ask opens
+ * it, and a resumed script finds it, answered or still open, from its rows.
+ * It is the script call's, shared by all its attempts (attempt 0), so it
+ * outlives a restart; one the run's stop cancelled is asked again under the
+ * next ordinal.
+ */
+export const scriptRequest = (
+  call: RunToolCall,
+  script: ScriptScope,
+  proposal: AgentProposal,
+): Effect.Effect<RequestDecision, ProposalRequestError> =>
+  Effect.gen(function* () {
+    const { session, runId } = call.run;
+    const shared = {
+      responseId: call.responseId,
+      callId: script.callId,
+      attempt: 0,
+    };
+    const from = session.log.now();
+    const state = yield* session.runHistory.load(runId);
+    const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
+    if (own?.request.decision === null)
+      // A plane that closes first decides nothing: the call stays in
+      // flight, and the next resume finds the request still open.
+      return yield* session.requests.decision(runId, own.requestId, from).pipe(
+        Effect.map((row) => row.decision),
+        Effect.catch((cause) =>
+          Effect.logWarning(
+            `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
+          ).pipe(
+            Effect.annotateLogs({ data: cause }),
+            Effect.andThen(Effect.interrupt),
+          ),
+        ),
+      );
+    if (own !== null) return own.request.decision;
+    const calls = yield* script.calls;
+    return yield* call.requests.open({
+      kind: 'proposal',
+      data: {
+        requestId: callRequestId(shared, raised + 1),
+        runId,
+        ...proposal,
+        script: {
+          title: script.title,
+          source: script.source,
+          calls: calls.map(({ toolName, input }) => ({
+            toolName,
+            // A tool the preview does not know shows its arguments.
+            preview:
+              deriveToolInputPreview(toolName, input) ||
+              truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
+          })),
+        },
+      },
+    });
+  });
 
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(proposal: AgentProposal): string {

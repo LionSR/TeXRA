@@ -169,6 +169,12 @@ transcript says why. Raise the cap and re-arm the goal to continue; `0`
 removes the cap. The cap is checked between turns, so a single long turn can
 overshoot it. Goal mode has no time or turn limit.
 
+A script can run an agent as a goal too: `agent(objective, { agentName, goal: true })`
+keeps that agent working until it verifies the objective, and the call
+resolves when the goal ends. Such a goal grants no auto-approval of its own;
+the child's commands and edits follow the run's approval policy. Read
+[Multi-agent workflows](./multi-agent-workflows.md#the-script-tool) for the call.
+
 ## File discovery
 
 TeXRA uses built-in file extensions and exclusions when discovering inputs,

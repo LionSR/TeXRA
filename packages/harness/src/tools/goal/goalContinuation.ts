@@ -1,6 +1,8 @@
 /**
- * Goal mode's continuation: while the run's goal is active, a parked
- * conversation opens its next turn itself. A failed turn, or a resume, pauses
+ * Goal mode's continuation: while the run's goal is active, a parked run
+ * opens its next turn itself: a conversation's, and an awaited child's
+ * (a goal an `agent` call armed), which ends once its goal does. A failed
+ * turn, or a root's resume, pauses
  * the goal (its own row) and revokes its auto-approval instead; only a human
  * re-arms it (approving a plan), and a goal armed after the resume stays
  * armed. An active goal also pauses, with a warning on the transcript, once
@@ -61,19 +63,13 @@ const pauseActive = Effect.fn('goal.pause')(function* ({
 });
 
 export const goalContinuation: Continuation = {
-  atIdle: Effect.fn('goal.atIdle')(function* ({
-    session,
-    runId,
-    state,
-    canContinue,
-  }) {
+  atIdle: Effect.fn('goal.atIdle')(function* ({ session, runId, state }) {
     const goal = goalOf(session, runId);
     if (goal?.status !== 'active') return null;
     if (state.lastError !== null) {
       yield* pauseActive({ session, runId });
       return null;
     }
-    if (!canContinue) return null;
     const cap = yield* Settings.get<number>(
       session.roots,
       GOAL_MAX_COST_SETTING.configKey,

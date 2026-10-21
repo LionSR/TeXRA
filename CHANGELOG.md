@@ -618,6 +618,14 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **A script can launch a goal.** `agent(objective, { agentName, goal: true })`
+  runs the agent as an autonomous goal on the objective: it keeps working
+  turn after turn until it verifies the objective is done, pauses for
+  input, or reaches the goal spend cap, and the call resolves when the
+  goal ends, with `goal: 'completed'` or `'paused'` in its result. The
+  same option works on a direct `agent` call in a one-shot run (`texra run`).
+  A goal launched this way approves nothing on its own; the child's
+  commands and edits follow the run's approval policy, as every child's do.
 - **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
   Each subscription model now takes the input window the Codex backend
   grants it (500K for GPT-6.1 Sol, 272K for the others) instead of one

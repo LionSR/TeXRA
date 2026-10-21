@@ -905,6 +905,36 @@ describe('an active goal at the wait', () => {
     }),
   );
 
+  it.effect(
+    "continues a one-shot child, an awaited agent call's, past its cycle",
+    () =>
+      Effect.gen(function* () {
+        const session = yield* goalSession();
+        const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
+        // A goal an `agent` call armed: its child ends with the goal, not
+        // with its first cycle.
+        yield* startGoal(session, runId, 'Prove the lemma.');
+
+        try {
+          const { requests, state } = yield* runUntilSpent({
+            runId,
+            session,
+            parentRunId,
+            stopAfterCycle: true,
+            script: [textTurn('first'), textTurn('second')],
+          });
+
+          expect(requests.length).toBeGreaterThan(1);
+          expect(
+            userTexts(state).some((text) => text.includes('Prove the lemma.')),
+          ).toBe(true);
+        } finally {
+          yield* clearGoal(session, runId);
+        }
+      }),
+  );
+
   it.effect('lets queued user input win over the continuation', () =>
     Effect.gen(function* () {
       const session = yield* goalSession();

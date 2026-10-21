@@ -111,8 +111,10 @@ export type InstalledToolReader = Effect.Effect<{
 /**
  * What decides that a parked run continues, pinned by
  * each step beside its tools; with none, the run
- * parks. `atIdle` answers the synthetic turn's text or null; `canContinue`
- * is false when the run ends here or a follow-up is queued. `onResume` runs
+ * parks. `atIdle` answers the synthetic turn's text or null, asked at a
+ * park with no input queued (queued input outranks it). A child and a
+ * one-shot run park there too: the text keeps either running, and a
+ * one-shot run with none ends. `onResume` runs
  * at a resumed activation's first step that pins it, before the activation
  * decides anything: continuation does not survive a resume on its own.
  */
@@ -121,7 +123,6 @@ export interface Continuation<R = never> {
     readonly session: SessionHandle;
     readonly runId: RunId;
     readonly state: RunState;
-    readonly canContinue: boolean;
   }) => Effect.Effect<string | null, Error, R>;
   readonly onResume: (run: {
     readonly session: SessionHandle;

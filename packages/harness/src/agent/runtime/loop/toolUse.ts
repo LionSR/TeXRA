@@ -460,22 +460,22 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
           restoring &&= queued;
-          // A child's idle is its parent's; the policy sees failed turns too.
-          const canContinue = !run.toolPolicy.stopAfterCycle && !queued;
-          // A park opens a step, which pins (and records) its continuation.
-          let next: string | null = null;
-          if (!isChild()) {
-            const step = yield* openStep(state, 'park');
-            if (step.rows.length > 0) state = yield* cell.append(step.rows);
-            if (step.continuation !== null) {
-              next = yield* step.continuation
-                .atIdle({ session, runId, state, canContinue })
-                .pipe(Effect.provide(step.tools.services));
-            }
-          }
+          // A park opens a step, which pins (and records) its continuation:
+          // a child's or a one-shot run's too, whose goal continues it as
+          // a conversation's does. Queued input outranks the continuation.
+          const step = yield* openStep(state, 'park');
+          if (step.rows.length > 0) state = yield* cell.append(step.rows);
+          const next =
+            queued || step.continuation === null
+              ? null
+              : yield* step.continuation
+                  .atIdle({ session, runId, state })
+                  .pipe(Effect.provide(step.tools.services));
           // Every park is idle, a failed turn's too: a resume acks the first.
           run.callbacks.onIdle?.();
-          if (run.toolPolicy.stopAfterCycle) {
+          // A one-shot run ends at its park unless its continuation opens
+          // the next turn.
+          if (run.toolPolicy.stopAfterCycle && next === null) {
             return finish(
               state,
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
@@ -559,10 +559,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (block !== null) continue;
-        // A one-shot run ends with its completed turn; a handed-down call's
-        // run ends at its park, however its turn ended.
-        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
-          return finish(state, turn.outcome);
+        // Every turn ends at the park, a one-shot run's too: its
+        // continuation may open the next turn there, and with none the
+        // one-shot run ends there, as a handed-down call's run does.
         if (settlement !== null)
           yield* Effect.uninterruptible(settlement.settled);
       }
