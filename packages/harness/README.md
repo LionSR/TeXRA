@@ -485,6 +485,11 @@ than failing quietly:
   end the run after its cycle rather than waiting for a follow-up message.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a
   host that needs host-provided models must supply its own.
+- **A persistent store is not carried across 0.x releases.** No row schema
+  is frozen before 1.0, so a row kind can change with no upcaster. A run whose
+  rows an earlier release wrote is listed as unreadable and is not resumed
+  (S3), and a store whose schema stamp differs from this release's is refused
+  whole (S1, S2). Keep nothing in a persistent store you need past an upgrade.
 
 ## License
 
