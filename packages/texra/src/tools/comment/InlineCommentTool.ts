@@ -2,12 +2,20 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  withLogChannel,
+  type ToolResult,
+} from '@texra-ai/harness';
 
 // Internal imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { resolveToolPath, executed } from '@texra-ai/harness/plugins';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import {
+  resolveToolPath,
+  executed,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 
 // Local file imports
 

@@ -142,7 +142,7 @@ describe('formatSubagentError', () => {
     expect(xml).toBe(
       [
         '<subagent-error id="abc123" agent="reviewer" retryable="true">',
-        '<wall-time>1m 5s</wall-time>',
+        '<wall-time>65.0s</wall-time>',
         '<working-directory>/ws/project</working-directory>',
         '<memory-misses>',
         '<memory-miss path="/memories/missing.md" reason="Path is missing" />',

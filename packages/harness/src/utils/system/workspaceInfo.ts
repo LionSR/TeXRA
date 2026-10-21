@@ -12,7 +12,7 @@ import { listExternalRoots } from '@utils/files/externalRoots';
 import { executeCommand } from '@utils/system/execUtils';
 import { envVar } from './envFlags';
 import { IS_WINDOWS } from './platformPaths';
-import { isWSL } from './wslDetect';
+import { runsInWsl } from './wslDetect';
 
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
@@ -46,7 +46,7 @@ function getPlatformLabel(): string {
       base = 'Windows';
       break;
     case 'linux':
-      base = isWSL ? 'Linux/WSL' : 'Linux';
+      base = runsInWsl() ? 'Linux/WSL' : 'Linux';
       break;
     default:
       base = process.platform;

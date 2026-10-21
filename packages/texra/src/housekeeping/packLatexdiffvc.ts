@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
-import { copyFileExclusive } from '@utils/files/fsDurability';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import {
@@ -105,19 +104,22 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
     yield* outputSide.fs.makeDirectory(outputSide.absolutePath, {
       recursive: true,
     });
-    // Move each file without replacing an existing one: an exclusive copy
-    // (`AlreadyExists` when the name is taken — a second pack of the same
-    // commit within the timestamp's second) followed by removing the source.
+    // Move each file without replacing an existing one: an exclusive create
+    // (`wx`: `AlreadyExists` when the name is taken — a second pack of the
+    // same commit within the timestamp's second) followed by removing the
+    // source.
     // `FileSystem.rename` would silently replace the earlier archive, and a
     // crash between the two steps leaves the source in place, never a loss.
     for (const file of mainFiles) {
       const source = yield* filesystemFor(workspaceFs, file);
-      yield* copyFileExclusive(
-        source.absolutePath,
-        (yield* filesystemFor(
-          workspaceFs,
-          path.join(outputFolder, path.basename(file)),
-        )).absolutePath,
+      const destination = yield* filesystemFor(
+        workspaceFs,
+        path.join(outputFolder, path.basename(file)),
+      );
+      yield* destination.fs.writeFile(
+        destination.absolutePath,
+        yield* source.fs.readFile(source.absolutePath),
+        { flag: 'wx' },
       );
       yield* source.fs.remove(source.absolutePath);
     }

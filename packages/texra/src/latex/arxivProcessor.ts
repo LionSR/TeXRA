@@ -4,6 +4,10 @@ import {
   randomizedExponentialBackoff,
   isTransientHttpStatus,
 } from '@texra-ai/harness/plugins';
+import {
+  readDirectoryTypedTolerant,
+  entryTypeIn,
+} from '@texra-ai/harness/node';
 
 import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
@@ -26,8 +30,6 @@ import * as tar from 'tar';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
-import { entryExists } from '@utils/files/fsEntryExists';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';
@@ -496,7 +498,7 @@ class ArxivSourceProcessor {
         return false;
       }
       const fs = yield* FileSystem.FileSystem;
-      if (!(yield* permanentFs(entryExists(fs, paperDirFull)))) {
+      if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
         return false;
       }
       // The tolerant listing is the facade's `readDir`: the provider typed
@@ -542,9 +544,28 @@ class ArxivSourceProcessor {
       // straight into it and a partial tree holding one `.tex` would pass
       // `hasExistingSource` on the next Download. A directory that was already
       // there, and the workspace root, belong to the user and stay.
-      const ownsPaperDir =
-        !isRoot && !(yield* permanentFs(entryExists(fs, paperDirFull)));
-      yield* permanentFs(fs.makeDirectory(paperDirFull, { recursive: true }));
+      //
+      // The claim is the create itself: a non-recursive `makeDirectory` either
+      // makes the directory, and this download owns it, or fails
+      // `AlreadyExists`, and it is the user's or a concurrent download's. An
+      // existence probe before the create let two downloads of one id (two
+      // runs, or a run and the host command) both pass it, both believe they
+      // owned the directory, and the loser's cleanup remove the winner's
+      // placed source.
+      const ownsPaperDir = isRoot
+        ? false
+        : yield* permanentFs(
+            fs
+              .makeDirectory(path.dirname(paperDirFull), { recursive: true })
+              .pipe(
+                Effect.andThen(fs.makeDirectory(paperDirFull)),
+                Effect.as(true),
+                Effect.catchIf(
+                  (error) => error.reason._tag === 'AlreadyExists',
+                  () => Effect.succeed(false),
+                ),
+              ),
+          );
       yield* Effect.addFinalizer((exit) =>
         ownsPaperDir && !Exit.isSuccess(exit)
           ? this.cleanUpBestEffort(paperDirFull, 'paper dir', {
@@ -553,11 +574,15 @@ class ArxivSourceProcessor {
           : Effect.void,
       );
 
-      // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
-      const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
-      const downloadDirFull = path.join(paperDirFull, stagingDirName);
-      yield* permanentFs(
-        fs.makeDirectory(downloadDirFull, { recursive: true }),
+      // A staging directory of this download's own: a fixed name derived from
+      // the id would be shared by two downloads of the same paper, which
+      // would then stream into one archive file and remove each other's
+      // staging. The prefix keeps it clear of a user's `download/` folder.
+      const downloadDirFull = yield* permanentFs(
+        fs.makeTempDirectory({
+          directory: paperDirFull,
+          prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
+        }),
       );
       // The staging directory belongs to this scope, so removing it is a scope
       // finalizer rather than a step on the happy path. Every non-success exit
@@ -631,7 +656,12 @@ class ArxivSourceProcessor {
         yield* this.extractTarFile(downloadedPath, extractedDir);
         const entries = yield* permanentFs(fs.readDirectory(extractedDir));
         const collisions = yield* Effect.filter(entries, (entry) =>
-          permanentFs(entryExists(fs, placed(entry))),
+          permanentFs(
+            Effect.map(
+              entryTypeIn(fs, placed(entry)),
+              (type) => type !== undefined,
+            ),
+          ),
         );
         if (collisions.length > 0) {
           const message = `Target already exists: ${collisions.map(placed).join(', ')}`;
@@ -677,7 +707,7 @@ class ArxivSourceProcessor {
       // rather than be replaced by a regular file.
       const targetPath = path.join(paperDirFull, 'main.tex');
       if (sourceFilePath !== targetPath) {
-        if (yield* permanentFs(entryExists(fs, targetPath))) {
+        if ((yield* permanentFs(entryTypeIn(fs, targetPath))) !== undefined) {
           return yield* Effect.fail(
             new ArxivSourcePermanentError({
               message: `Target already exists: ${targetPath}`,

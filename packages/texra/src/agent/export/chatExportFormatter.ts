@@ -18,12 +18,12 @@
  * point so callers import a single stable surface.
  */
 
-import type { ChatExportInput } from '@agent/export/schemas';
+import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { renderDocument } from './chatExport/formatSpec';
 import { createLatexSpec } from './chatExport/latexSpec';
 import { markdownSpec } from './chatExport/markdownSpec';
 
-export type { ChatExportInput } from '@agent/export/schemas';
+export type { ChatExportInput } from '@texra/agent/export/schemas';
 export { generateExportFilename } from './chatExport/filenames';
 
 export function formatChatAsMarkdown(input: ChatExportInput): string {

@@ -20,9 +20,8 @@ import {
   decodeXmlEntities,
   deliveryTagOf,
   formatScriptDeliverySummary,
+  DELIVERY_TAGS,
 } from '@texra-ai/harness/transcript';
-import type { ScriptDeliverySummary } from '@shared/schemas';
-import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
@@ -42,8 +41,9 @@ import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { formatDisplayTimestamp } from '../formatters/timestampUtils';
+import type { ScriptDeliverySummary } from '@texra-ai/harness/schemas';
 
-// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags) so
+// Derived from the single owned DELIVERY_TAGS list (`@texra-ai/harness/transcript`) so
 // a new child-run kind only needs one entry there. See that module for the
 // escaped-subset rationale.
 const XML_ESCAPED_TAGS = new Set(

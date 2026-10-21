@@ -1,5 +1,5 @@
 import { Predicate } from 'effect';
-import { fileLocationAddressPath } from '@shared/schemas';
+import { fileLocationAddressPath } from '@texra-ai/harness/schemas';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';

@@ -2,21 +2,23 @@
 // render line by line as full-width added/removed bands with dim context rows
 // (see DIFF_LINE_STYLE for the color rationale).
 
+import { Number as Num } from 'effect';
 import { Box, Text } from 'ink';
 
+import {
+  formatHunkLines,
+  type ToolEditContent,
+} from '@texra-ai/harness/schemas';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { formatHunkHeader } from '@utils/text/unifiedDiff';
 
-import { clamp } from '@utils/text/stringUtils';
 import {
   boundedScrollableLines,
   COMPACT_SCROLLABLE_CONTENT_ROWS,
   compactAwareMaxScrollOffset,
   type ScrollableDisplayLine,
 } from './scrollBounds';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
 type Hunk = ToolEditContent['hunks'][number];
 
@@ -33,20 +35,19 @@ const NO_NEWLINE_MARKER = '\\';
 const DEFAULT_DIFF_WIDTH = 74;
 
 export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
-  return hunks.flatMap((hunk) => [
-    { kind: 'header' as const, text: formatHunkHeader(hunk) },
-    ...hunk.lines
-      .filter((line) => !line.startsWith(NO_NEWLINE_MARKER))
-      .map((raw): DiffDisplayLine => {
-        // File text is producer text: strip what a terminal would execute.
-        // A patch line is one row, so a CR (a CRLF file) opens no new one.
-        const line = safeTerminalText(raw).replaceAll('\n', '');
-        const marker = line.at(0);
-        if (marker === '+') return { kind: 'added', text: line };
-        if (marker === '-') return { kind: 'removed', text: line };
-        return { kind: 'context', text: line };
-      }),
-  ]);
+  return formatHunkLines(hunks)
+    .filter((line) => !line.startsWith(NO_NEWLINE_MARKER))
+    .map((raw): DiffDisplayLine => {
+      // A hunk line starts with its marker, so only a header starts `@@`.
+      if (raw.startsWith('@@')) return { kind: 'header', text: raw };
+      // File text is producer text: strip what a terminal would execute.
+      // A patch line is one row, so a CR (a CRLF file) opens no new one.
+      const line = safeTerminalText(raw).replaceAll('\n', '');
+      const marker = line.at(0);
+      if (marker === '+') return { kind: 'added', text: line };
+      if (marker === '-') return { kind: 'removed', text: line };
+      return { kind: 'context', text: line };
+    });
 }
 
 export function wrappedDiffDisplayLines(
@@ -87,7 +88,10 @@ export function initialDiffScrollOffset(
     maxDisplayLines,
     totalLines: lines.length,
   });
-  const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
+  const defaultOffset = Num.clamp(changedIndex - 1, {
+    minimum: 0,
+    maximum: maxOffset,
+  });
   const fallbackOffset = (): number =>
     changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
   if (firstChange?.kind !== 'removed') {
@@ -121,11 +125,14 @@ export function initialDiffScrollOffset(
     }
     const edited = addedIndex + differs;
     if (edited < initiallyVisibleContentRows) return 0;
-    return clamp(edited - 1, 0, maxOffset);
+    return Num.clamp(edited - 1, { minimum: 0, maximum: maxOffset });
   }
 
   if (addedIndex < initiallyVisibleContentRows) return 0;
-  return clamp(addedIndex - windowRows + 1, 0, maxOffset);
+  return Num.clamp(addedIndex - windowRows + 1, {
+    minimum: 0,
+    maximum: maxOffset,
+  });
 }
 
 // Compact windows cannot scroll far enough to find the edit, so they anchor on

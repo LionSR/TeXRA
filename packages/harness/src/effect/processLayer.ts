@@ -12,6 +12,7 @@ import {
   type ProcessLayerOptions,
 } from '@controllers/session/sessionLayer';
 import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
+import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
@@ -88,7 +89,7 @@ export class Sessions extends Context.Service<
           ),
         ),
         Effect.map(() =>
-          processLayer({
+          sessionsLayer({
             storageRoot: platform.roots.storageRoot,
             plugins,
             secrets: platform.secrets,
@@ -112,8 +113,22 @@ export class Sessions extends Context.Service<
  * `ManagedRuntime` the host disposes on shutdown. Disposal closes every open
  * session, plugins drained first; a host whose resources must outlive them
  * runs `Sessions.closeAll` first.
+ *
+ * The host owns its process, so the model transport's dispatcher also
+ * becomes the process's global one, and the rest of its HTTP traffic follows
+ * the same proxy policy. An embedder's process (`Sessions.layer`) keeps its
+ * own global dispatcher: its model traffic carries the transport anyway.
  */
 export function processLayer(
+  options: ProcessLayerOptions,
+): Layer.Layer<ProcessServices | Sessions> {
+  return Layer.merge(
+    sessionsLayer(options),
+    Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
+  );
+}
+
+function sessionsLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions> {
   return Layer.effect(

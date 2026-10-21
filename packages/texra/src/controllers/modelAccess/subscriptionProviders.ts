@@ -33,19 +33,16 @@ import {
   ConfigWriteFailed,
   type PlatformSecrets,
   Secrets,
+  SubscriptionPreference,
   withLogChannel,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  isPreferSubscription,
-  setPreferSubscription,
-} from '@model/subscriptionAccess';
-import {
   codexAccountLabel,
-  type SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
-} from '@shared/model/subscriptionAuth';
+} from '@texra/shared/model/subscriptionAuth';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -54,7 +51,7 @@ const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
- * `@shared/model/subscriptionAuth` is the same set the catalog keys on.
+ * `SUBSCRIPTION_AUTH_PROVIDERS` is the same set the catalog keys on.
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
@@ -245,9 +242,9 @@ function defineSubscriptionProvider<
   return Object.freeze({
     ...descriptor,
     isPreferSubscription: (stores: SettingsStores) =>
-      isPreferSubscription(descriptor.id, stores),
+      SubscriptionPreference.get(descriptor.id, stores),
     setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
-      setPreferSubscription(descriptor.id, stores, enabled),
+      SubscriptionPreference.set(descriptor.id, stores, enabled),
     signIn,
     signOut: (secrets: PlatformSecrets) => bindCoordinator(secrets).signOut(),
     getStatus: (secrets: PlatformSecrets) =>

@@ -17,7 +17,7 @@ export function loadAliases(rootDir) {
       // Prefer the bare '*' variant (ends with just '/*') — it strips
       // cleanly to a directory path for build tools.  Fall back to the
       // first value when there is no bare variant (e.g. non-wildcard
-      // aliases like "@transcript" which map to an index.ts file).
+      // aliases like "@common/webview" which map to an index.ts file).
       const best = values.find((v) => v.endsWith('/*')) ?? values[0];
       const pathValue = best.replace('/*', '');
 

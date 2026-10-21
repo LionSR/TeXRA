@@ -36,12 +36,12 @@ import {
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { readCompletedRunConversation } from '@transcript';
+import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -132,7 +132,7 @@ interface SizedEntry {
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
   return entries.map((entry) => {
-    const sizeStr = entry.isDirectory ? '<dir>' : formatBytes(entry.size);
+    const sizeStr = entry.isDirectory ? '<dir>' : `${entry.size} bytes`;
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
 }

@@ -1,6 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { getFileStem } from '@texra-ai/harness/schemas';
+import { getFileStem, type FileLocation } from '@texra-ai/harness/schemas';
 
 import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
@@ -12,7 +12,6 @@ import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { FileLocation } from '@shared/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,

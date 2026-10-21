@@ -18,14 +18,14 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolContext, type ToolResult } from '@texra-ai/harness';
 import {
   isTransportReason,
   scopedClient,
   scopedOkClient,
   withRequestTimeout,
-} from '@tools/timeouts';
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s

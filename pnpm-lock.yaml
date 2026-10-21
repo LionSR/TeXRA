@@ -571,9 +571,6 @@ importers:
       postal-mime:
         specifier: 'catalog:'
         version: 4.0.11
-      pretty-bytes:
-        specifier: 'catalog:'
-        version: 7.2.0
       pretty-ms:
         specifier: 'catalog:'
         version: 10.0.0
@@ -774,6 +771,12 @@ importers:
       openai:
         specifier: 'catalog:'
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.2)(ws@8.22.0)(zod@4.4.3)
+      pretty-bytes:
+        specifier: 'catalog:'
+        version: 7.2.0
+      pretty-ms:
+        specifier: 'catalog:'
+        version: 10.0.0
       semver:
         specifier: ^7.8.5
         version: 7.8.5

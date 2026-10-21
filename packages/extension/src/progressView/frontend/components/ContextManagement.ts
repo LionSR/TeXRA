@@ -11,7 +11,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -25,14 +25,14 @@ import { contextManagementStyles } from './ContextManagement.styles';
 /** Stat item to display. Local to this renderer (icon-resolved); the
  *  transcript's own `StatItem` is the key-based row shape it derives from. */
 interface StatItem {
-  icon: TeXRAIconName;
+  icon: IconName;
   label: string;
   value: string;
 }
 
 /** Action configuration */
 export interface ActionConfig {
-  icon: TeXRAIconName;
+  icon: IconName;
   label: string;
   color: string;
 }

@@ -10,7 +10,7 @@
  */
 
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
 import { z } from 'zod';
 import { Clock, Effect, FileSystem } from 'effect';
 
@@ -20,40 +20,36 @@ import {
   ToolContext,
   type ToolContextShape,
   WorkspaceFs,
+  type ToolResult,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
   assertNoParentTraversal,
-} from '@texra-ai/harness/plugins';
-import { createWorkspaceLocation } from '@texra-ai/harness';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
-import { stripCriticizeAnnotations } from '@replacement/advanced';
-import {
-  RunIdSchema,
+  RunFileService,
   ToolError,
   type EditRecord,
-  type ToolResult,
-  RequestRefusal,
-  RunId,
-  FileLocation,
-} from '@shared/schemas';
-import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
+  type RefusalDecision,
+} from '@texra-ai/harness/plugins';
+import { pathToLocationIn } from '@texra-ai/harness';
 import {
+  absentReason,
+  entryTypeIn,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
+import {
+  ensureError,
+  RunIdSchema,
+  FileLocation,
+} from '@texra-ai/harness/schemas';
+import {
+  approvedWriteConflict,
   buildApprovalRejectedResult,
   requestToolEditApproval,
-} from '@tools/approval/toolEditApproval';
-import { approvedWriteConflict } from '@tools/approval/approvedWrite';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { entryExists, absentReason } from '@utils/files/fsEntryExists';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { pluralize } from '@utils/text/stringUtils';
-import {
-  findExistingRunStoragePathUnder,
-  originalSnapshotPathUnder,
-  inspectRunStorageEntryUnder,
-} from '@utils/files/runStorageFs';
+} from '@texra-ai/harness/plugins';
+import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
+import { stripCriticizeAnnotations } from '@replacement/advanced';
+import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
@@ -83,7 +79,7 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
 /** One declined file: the refusal a person or a policy gave it. */
 interface RecordedRejection {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 }
 
 /**
@@ -93,14 +89,14 @@ interface RecordedRejection {
  */
 function summarizeRefusals(rejections: readonly RecordedRejection[]): {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 } {
-  const of = <A extends RequestRefusal['action']>(action: A) =>
+  const of = <A extends RefusalDecision['action']>(action: A) =>
     rejections.filter(
       (
         r,
       ): r is RecordedRejection & {
-        refusal: Extract<RequestRefusal, { action: A }>;
+        refusal: Extract<RefusalDecision, { action: A }>;
       } => r.refusal.action === action,
     );
   const cancelled = of('cancel');
@@ -191,12 +187,10 @@ function executeAcceptRunFilesTool(
   return Effect.gen(function* () {
     const call = yield* ToolContext;
     yield* requireRun('accept_run_files');
-    const directory = yield* findExistingRunStoragePathUnder(
-      call.env.roots.storage,
-      input.execution_id,
-    );
+    // The run whose files are accepted, which is not the calling run.
+    const runFiles = new RunFileService(input.execution_id, call.env.roots);
     if (
-      directory === undefined &&
+      !(yield* runFiles.hasDirectory()) &&
       !(yield* (yield* ChildRuns).records(input.execution_id).exists)
     ) {
       return yield* Effect.fail(
@@ -205,13 +199,14 @@ function executeAcceptRunFilesTool(
         ),
       );
     }
-    return yield* acceptFiles(input, call);
+    return yield* acceptFiles(input, call, runFiles);
   });
 }
 
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
   call: ToolContextShape,
+  runFiles: RunFileService,
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
   const { execution_id: runId, files, strip_criticize } = input;
 
@@ -223,7 +218,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         yield* assertNoParentTraversal(mapping.path);
 
         const sourceLocation = yield* resolveSourceFile(
-          runId,
+          runFiles,
           mapping.path,
           call,
         );
@@ -231,8 +226,11 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         const destPath = mapping.original ?? mapping.path;
         // The call's own workspace root, as data: the source may resolve
         // under any root, but the destination is this session's.
-        const dest = locateInWorkspace(call.env.roots.workspace, destPath);
-        if (dest.kind === 'external') {
+        const workspaceRoot = call.env.roots.workspace;
+        const dest = workspaceRoot
+          ? pathToLocationIn(workspaceRoot, destPath)
+          : undefined;
+        if (dest?.kind !== 'workspace') {
           return yield* Effect.fail(
             new ToolError(`original must be inside the workspace: ${destPath}`),
           );
@@ -248,19 +246,18 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
           strip_criticize
             ? stripCriticizeAnnotations(rawContent)
             : { content: rawContent, count: 0 };
-        const destExists = yield* entryExists(
+        const destExists = yield* entryTypeIn(
           workspaceFs,
           dest.relativePath,
-        ).pipe(Effect.mapError(ensureError));
+        ).pipe(
+          Effect.map((type) => type !== undefined),
+          Effect.mapError(ensureError),
+        );
 
         // Determine original content for diff display. In-place document
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
-        const snapshotPath = originalSnapshotPathUnder(
-          call.env.roots.storage,
-          runId,
-          dest.relativePath,
-        );
+        const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
         const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
           Effect.mapError(ensureError),
         );
@@ -429,7 +426,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
  */
 const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
-    runId: RunId,
+    runFiles: RunFileService,
     runPath: string,
     call: ToolContextShape,
   ): Effect.fn.Return<
@@ -437,11 +434,8 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
-    const entry = yield* inspectRunStorageEntryUnder(
-      call.env.roots.storage,
-      runId,
-      runPath,
-    );
+    const { runId } = runFiles;
+    const entry = yield* runFiles.inspectEntry(runPath);
     switch (entry.kind) {
       case 'file':
         return entry.location;
@@ -468,14 +462,15 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 
     // Fall back to workspace
     const workspaceFs = yield* WorkspaceFs;
-    const wsLoc = locateInWorkspace(call.env.roots.workspace, runPath);
+    // `runPath` is non-empty here: run storage refused an empty one above.
+    const wsLoc = pathToLocationIn(call.env.roots.workspace, runPath);
     if (
-      wsLoc.kind !== 'external' &&
-      (yield* entryExists(workspaceFs, wsLoc.relativePath).pipe(
+      wsLoc.kind === 'workspace' &&
+      (yield* entryTypeIn(workspaceFs, wsLoc.relativePath).pipe(
         Effect.mapError(ensureError),
-      ))
+      )) !== undefined
     ) {
-      return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
+      return wsLoc;
     }
 
     return yield* Effect.fail(

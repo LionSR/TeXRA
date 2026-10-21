@@ -1,11 +1,11 @@
 import { Stream } from 'effect';
 
-import type { RunId } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { SessionView } from '@texra-ai/harness';
 
 /**

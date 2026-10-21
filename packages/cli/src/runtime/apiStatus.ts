@@ -5,12 +5,12 @@ import {
   loadApiKeyStatusMap,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
-import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 import {

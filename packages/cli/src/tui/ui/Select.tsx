@@ -9,6 +9,7 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 // Third-party imports
+import { Number as Num } from 'effect';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -21,13 +22,12 @@ import {
 } from '@cli/tui/overflowText';
 
 // Local imports - TUI input and presentation
-import { clamp } from '@utils/text/stringUtils';
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
 /** `index` held to a valid index of a `length`-item list (0 when empty). */
 function clampIndex(index: number, length: number): number {
-  return clamp(index, 0, length - 1);
+  return Num.clamp(index, { minimum: 0, maximum: Math.max(0, length - 1) });
 }
 
 export interface SelectItem<T> {
@@ -198,7 +198,12 @@ function visibleSelectRange({
 }): { readonly start: number; readonly end: number } {
   if (itemCount <= 0) return { start: 0, end: 0 };
   const visibleCount =
-    maxVisibleItems == null ? itemCount : clamp(itemCount, 0, maxVisibleItems);
+    maxVisibleItems == null
+      ? itemCount
+      : Num.clamp(itemCount, {
+          minimum: 0,
+          maximum: Math.max(0, maxVisibleItems),
+        });
   if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);

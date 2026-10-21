@@ -1,7 +1,14 @@
 /** Agent proposal card: "Delegate a task to reviewer" / "Start a team run: …". */
 
 // Third-party imports
-import { getBasename } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  agentKey,
+  agentName,
+  getProposalFileGroups,
+  type AgentProposalPermission,
+  type PermissionPayload,
+} from '@texra-ai/harness/schemas';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -18,13 +25,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { modelRefOf } from '@texra-ai/llm';
 import { getModelLabel } from '@texra-ai/harness/schemas';
-import {
-  agentKey,
-  agentName,
-  getProposalFileGroups,
-  type AgentProposalPermission,
-  type PermissionPayload,
-} from '@shared/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';

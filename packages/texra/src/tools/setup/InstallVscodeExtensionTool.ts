@@ -4,8 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
-import { executed } from '@texra-ai/harness/plugins';
-import { ToolError } from '@shared/schemas';
+import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 

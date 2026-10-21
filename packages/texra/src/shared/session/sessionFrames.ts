@@ -26,18 +26,21 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
-import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
+import {
+  OutcomeSchema,
+  RuntimeRequestSchema,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   ExistenceReconciliationSchema,
   FoldEventSchema,
   LocalRuntimeStateSchema,
-  RunIdSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
   type FoldInput,
   type TranscriptSubscription,
-} from '@shared/schemas';
+} from '@texra-ai/harness/transcript';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';

@@ -3,9 +3,8 @@
  */
 
 // Local imports
-import { getBasename } from '@texra-ai/harness/schemas';
-import type { LogLevel } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+import { getBasename, type LogLevel } from '@texra-ai/harness/schemas';
+import type { IconName } from '@ui/wa/iconNames';
 
 /**
  * Font Awesome icon name per log level, rendered via `waIcon`. Replaces
@@ -13,7 +12,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
  * UI; per-level color is applied through the `log-level-icon--{level}` classes
  * in logEntryStyles.
  */
-export const ICON_BY_LEVEL: Record<LogLevel, TeXRAIconName> = {
+export const ICON_BY_LEVEL: Record<LogLevel, IconName> = {
   error: 'circle-exclamation',
   warn: 'triangle-exclamation',
   info: 'circle-info',
@@ -108,7 +107,7 @@ export const INLINE_DIFF_TIMEOUT_MS = 250;
  * Maps tool names to wa-icon names (codicon-style aliases supported via the
  * shared TeXRA icon library).
  */
-export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
+export const TOOL_ICON_MAP: Record<string, IconName> = {
   // File operations
   read_file: 'file',
   write_file: 'file-circle-plus',

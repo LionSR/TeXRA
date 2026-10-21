@@ -1,4 +1,7 @@
-import type { UserQuestionAnswers, UserQuestionPrompt } from '@shared/schemas';
+import type {
+  UserQuestionAnswers,
+  UserQuestionPrompt,
+} from '@texra-ai/harness/schemas';
 
 export function updateUserQuestionAnswers(
   answers: UserQuestionAnswers,

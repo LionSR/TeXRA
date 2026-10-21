@@ -56,7 +56,7 @@ export const RequestDecisionSchema = z.discriminatedUnion('action', [
 export type RequestDecision = z.infer<typeof RequestDecisionSchema>;
 
 /** The arms that decline a request, whatever the provenance. */
-export type RequestRefusal = Extract<
+export type RefusalDecision = Extract<
   RequestDecision,
   { action: 'reject' | 'deny' | 'cancel' }
 >;

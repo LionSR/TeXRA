@@ -12,14 +12,13 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
-import { attentionOf } from '@texra-ai/harness/schemas';
-import type {
-  PermissionPayload,
-  ProgressPermissionKind,
-  RequestDecision,
-  RunId,
-} from '@shared/schemas';
+import { withLogChannel, type RequestDecision } from '@texra-ai/harness';
+import {
+  attentionOf,
+  type PermissionPayload,
+  type ProgressPermissionKind,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   approvalDecisionArms,
   type SurfaceDecision,

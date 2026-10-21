@@ -10,7 +10,12 @@ import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
-import { Skills, hasExtension, withLogChannel } from '@texra-ai/harness';
+import {
+  CopilotRoutes,
+  Skills,
+  hasExtension,
+  withLogChannel,
+} from '@texra-ai/harness';
 import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -26,12 +31,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import {
-  discoverCopilotRoutes,
-  setCopilotRoutePreference,
-} from '@model/copilotRouting';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
@@ -41,6 +41,7 @@ import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSe
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
@@ -279,7 +280,7 @@ export class SettingsViewMessageHandler {
       // Discover now: authorization acts only on the route the editor
       // reports for this request, and a failed probe fails the program.
       const discovery = yield* Effect.exit(
-        Effect.map(discoverCopilotRoutes(), (routes) => routes.get(modelName)),
+        Effect.map(CopilotRoutes.discover(), (routes) => routes.get(modelName)),
       );
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
@@ -346,7 +347,7 @@ export class SettingsViewMessageHandler {
                 this.channel,
                 'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
               )
-            : setCopilotRoutePreference(modelName, true, this.globalState);
+            : CopilotRoutes.setPreferred(modelName, true, this.globalState);
         result = yield* Effect.exit(settle);
       }
       if (Exit.isFailure(result)) {
@@ -384,7 +385,7 @@ export class SettingsViewMessageHandler {
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private handleClearCopilotRoute(modelName: string) {
-    return setCopilotRoutePreference(modelName, false, this.globalState).pipe(
+    return CopilotRoutes.setPreferred(modelName, false, this.globalState).pipe(
       Effect.andThen(this.refreshCopilotRoutes()),
     );
   }

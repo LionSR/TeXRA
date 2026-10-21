@@ -13,7 +13,7 @@ import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
-import type { ChatExportInput } from '@agent/export/schemas';
+import type { ChatExportInput } from '@texra/agent/export/schemas';
 import type {
   ExternalOpenFailed,
   MessageHost,

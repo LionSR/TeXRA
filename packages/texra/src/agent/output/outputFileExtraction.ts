@@ -9,10 +9,13 @@
  * parsing. Low-level XML text utilities live in @texra/utils/text/xmlExtraction.
  */
 
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  fileLocationDisplayPath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 import { Effect, FileSystem } from 'effect';
 
-import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
 
 import { replaceInputCommands } from './fileMapping';

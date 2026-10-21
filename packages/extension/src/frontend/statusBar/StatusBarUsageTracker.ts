@@ -5,8 +5,9 @@ import {
   isLiveRun,
   isWorkingRun,
   sessionActivity,
+  sumUsageStats,
+  type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
-import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
 import type { SessionTitleState } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
 

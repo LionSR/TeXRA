@@ -10,6 +10,7 @@
 import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
+import { pluralize } from '@texra-ai/harness/transcript';
 import {
   VscodeDiffViewHost,
   type DiffSession,
@@ -28,7 +29,6 @@ import type {
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
-import { pluralize } from '@utils/text/stringUtils';
 import type {
   HostRequestFailure,
   ProcessRuntime,
