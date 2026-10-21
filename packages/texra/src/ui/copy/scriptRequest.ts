@@ -1,5 +1,5 @@
+import { countLines, truncateSummary } from '@texra-ai/harness/schemas';
 import type { AgentProposalPermission } from '@shared/schemas';
-import { countLines, truncateSummary } from '@utils/text/stringUtils';
 
 /** How much of the first agent's instruction the request quotes: the full
  *  text is in the folded code. */

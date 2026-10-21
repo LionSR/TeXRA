@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
@@ -8,7 +9,6 @@ import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { activeStartedAt, childElapsed } from '../state/childControls';
 import { killableRunId, runPhaseOf } from '../state/sessionView';

@@ -1,13 +1,11 @@
 import { z } from 'zod';
 
-import { collapseWhitespace } from '@utils/text/stringUtils';
-
 const SKILL_NAME_MAX_LENGTH = 64;
 
 /** Canonical grammar for discovered and persisted skill names. */
 export const SkillNameSchema = z
   .string()
-  .transform((name) => collapseWhitespace(name))
+  .transform((name) => name.replaceAll(/\s+/g, ' ').trim())
   .refine((name) => name.length > 0, 'Skill name is required')
   .refine(
     (name) => name.length <= SKILL_NAME_MAX_LENGTH,

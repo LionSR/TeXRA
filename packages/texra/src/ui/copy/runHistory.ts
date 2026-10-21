@@ -1,5 +1,5 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Predicate } from 'effect';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 export function formatCliHistoryDeletionSummary(counts: {
   readonly deleted: number;

@@ -7,10 +7,10 @@
  * which stay wire identifiers and never reach the screen.
  */
 
+import { formatCostUsd } from '@texra-ai/harness/transcript';
 import { absurd } from 'effect';
 import { type TokenUsageStats, type UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
-import { formatCostUsd } from '@utils/text/stringUtils';
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {

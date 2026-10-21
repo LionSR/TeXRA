@@ -79,3 +79,12 @@ export {
 } from '@shared/runs/runOrdering';
 export { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 export type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+// How the rows word what they count: a compact duration, a token count, a
+// USD cost, and a count with its noun. A host's own status line uses the
+// same wording.
+export {
+  formatCompactDuration,
+  formatCompactTokenCount,
+  formatCostUsd,
+  formatResultCount,
+} from '@utils/text/stringUtils';

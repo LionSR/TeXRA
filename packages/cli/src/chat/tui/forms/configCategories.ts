@@ -1,6 +1,6 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { String as Str } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import { formatResultCount } from '@utils/text/stringUtils';
 import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {

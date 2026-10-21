@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/transcriptEntry.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 51
+Exports: 55
 
 - `BASH_TOOL_DEFAULT_TIMEOUT_MS` — `const BASH_TOOL_DEFAULT_TIMEOUT_MS: 120000`
 - `buildMcpToolName` — `function buildMcpToolName: (server: string, tool: string) => string`
@@ -21,6 +21,10 @@ Exports: 51
 - `EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS` — `const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS: 300`
 - `executionsWaitTimeoutSeconds` — `function executionsWaitTimeoutSeconds: (timeout: unknown) => number`
 - `FileListRow` — `interface FileListRow extends TranscriptRowBase { readonly kind: 'fileList'; readonly files: readonly FileListEntry[]; readonly summary: string; readonly media: readonly LoadedMediaRef[]; }`
+- `formatCompactDuration` — `function formatCompactDuration: (durationMs: number) => string`
+- `formatCompactTokenCount` — `function formatCompactTokenCount: (tokens: number) => string`
+- `formatCostUsd` — `function formatCostUsd: (cost: number) => string`
+- `formatResultCount` — `function formatResultCount: (count: number, singular: string, plural?: string | undefined) => string`
 - `formatScriptDeliverySummary` — `function formatScriptDeliverySummary: (summary: { costUsd: number; durationMs: number; errorCause: null | string; files: { added: null | number; path: string; removed: null | number; }[]; name: string; outcome: "completed" | "failed" | "stopped"; phaseCount: number; tally: { cancelled: number; failed: number; ok: number; skipped: number; total: number; }; }) => string`
 - `isMcpToolName` — `function isMcpToolName: (toolName: string) => boolean`
 - `LogRow` — `interface LogRow extends TranscriptRowBase { readonly kind: 'log'; readonly text: TranscriptText; }`

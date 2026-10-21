@@ -10,7 +10,6 @@
 
 import { type RunId, type RunIdentity } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
  * The display category of a run: an agent run is a conversation (`agent`)
@@ -80,7 +79,10 @@ export function formatRunStatus(run: RunView): string {
 /** One /executions line. `marks` is what the line says about the run
  *  relative to the caller: its relation and unread input. */
 export function formatListingLine(run: RunView, marks: string): string {
-  const ts = formatTimestamp(new Date(run.launchedAt).toISOString());
+  const ts = new Date(run.launchedAt)
+    .toISOString()
+    .replace('T', ' ')
+    .slice(0, 19);
   const modelTag = run.model === null ? '' : `  ${run.model}`;
   const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
   const markSuffix = marks ? `  ${marks}` : '';
@@ -90,7 +92,10 @@ export function formatListingLine(run: RunView, marks: string): string {
 
 /** Format a single child run as a summary line. */
 export function formatChildLine(child: RunView): string {
-  const ts = formatTimestamp(new Date(child.launchedAt).toISOString());
+  const ts = new Date(child.launchedAt)
+    .toISOString()
+    .replace('T', ' ')
+    .slice(0, 19);
   const desc = child.description ? `: ${child.description}` : '';
   return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
 }

@@ -1,5 +1,6 @@
 /** Single memory entry with metadata and collapsible markdown preview. */
 
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import {
   LitElement,
   html,
@@ -27,7 +28,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
-import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
+import { formatBytes } from '@utils/text/stringUtils';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 const SHORT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {

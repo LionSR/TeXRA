@@ -5,6 +5,7 @@
  */
 
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Option, Config } from 'effect';
 
 // Local imports
@@ -47,7 +48,6 @@ import {
   type SdkBinaryStatus,
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
 

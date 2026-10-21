@@ -54,12 +54,10 @@ const COMPOSITION_ROOT_FILES = new Set([
 
 // The `@utils/*` modules the webview frontends may import at runtime. Each is
 // held to the browser (no Node built-ins) and may import only the others, so
-// the set stays closed under its own imports.
-const BROWSER_SAFE_UTILS = [
-  '@utils/core',
-  '@utils/errors/errorMessage',
-  '@utils/text/stringUtils',
-];
+// the set stays closed under its own imports. The browser path basics and
+// error messages reach the frontends through `@texra-ai/harness/schemas`,
+// whose closure the browser build proves.
+const BROWSER_SAFE_UTILS = ['@utils/text/stringUtils'];
 const BROWSER_SAFE_UTILS_MESSAGE = `Browser-reachable code may import at runtime only the browser-safe utils (${BROWSER_SAFE_UTILS.join(', ')}); adding one means holding it to the browser too.`;
 // A regex rather than a gitignore group: `@utils/**` would exclude the
 // intermediate `@utils/text/` directory, and negation cannot re-include a

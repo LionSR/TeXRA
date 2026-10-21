@@ -11,7 +11,7 @@
  */
 import yaml from 'yaml';
 
-import { collapseWhitespace, splitContentLines } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 /** One text-bearing field of a transcript row. */
 export interface TranscriptText {
@@ -34,7 +34,7 @@ export function transcriptText(raw: string): TranscriptText {
   if (!raw) return EMPTY_TRANSCRIPT_TEXT;
   return {
     full: raw,
-    oneLine: collapseWhitespace(raw),
+    oneLine: raw.replaceAll(/\s+/g, ' ').trim(),
     lineCount: splitContentLines(raw).length,
   };
 }
@@ -132,7 +132,7 @@ export function appendTranscriptText(
   // `prev.lineCount` already counts an unterminated last line, so the
   // newlines inside the chunk move the count, plus the line the chunk opens
   // after a terminating newline, minus the one it leaves unopened. A `\r`
-  // never breaks a line on its own (`normalizeLineEndings` only folds
+  // never breaks a line on its own (the line split only folds
   // `\r\n`), so a pair split across the boundary counts its `\n` once.
   const endedOnNewline = prevEnd === '\n';
   let newlines = 0;

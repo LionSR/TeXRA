@@ -1,4 +1,5 @@
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect } from 'effect';
 
 // Local imports
@@ -18,7 +19,6 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from '@common/teams/TeamPresets';
-import { formatResultCount } from '@utils/text/stringUtils';
 import type { AgentEntry } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';
 

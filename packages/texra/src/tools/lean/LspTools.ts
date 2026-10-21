@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect, Scope } from 'effect';
 import { z } from 'zod';
 
@@ -22,7 +23,6 @@ import {
   formatCounts,
   formatGroupedSections,
 } from '@texra/utils/diagnostics/diagnosticFormatting';
-import { formatResultCount } from '@utils/text/stringUtils';
 import {
   LEAN_FILE_COMMANDS,
   LEAN_PROJECT_COMMANDS,

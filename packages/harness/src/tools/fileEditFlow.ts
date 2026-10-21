@@ -24,7 +24,6 @@ import {
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -119,7 +118,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
       exists || (options.missing ?? 'require') === 'require'
         ? yield* fs
             .readFileString(absolutePath)
-            .pipe(Effect.map(normalizeLineEndings))
+            .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')))
         : '';
 
     return {

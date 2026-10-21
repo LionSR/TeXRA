@@ -16,7 +16,6 @@ import { Effect, FileSystem, Predicate } from 'effect';
 // Local imports
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -84,7 +83,7 @@ export const extractLatexFileDependencies = Effect.fn(
   const bytes = yield* fs
     .readFile(latexFileLocation.absolutePath)
     .pipe(Effect.mapError(ensureError));
-  const content = normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
+  const content = Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
   const uncommented = stripLatexComments(content);
 
   const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>

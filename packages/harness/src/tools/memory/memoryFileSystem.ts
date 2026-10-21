@@ -42,10 +42,7 @@ import {
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
-import {
-  normalizeLineEndings,
-  splitContentLines,
-} from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -167,7 +164,7 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
       chunks.map((chunk) => Buffer.from(chunk)),
     ).toString('utf-8');
     return {
-      text: normalizeLineEndings(text),
+      text: text.replaceAll('\r\n', '\n'),
       truncated: size > maxBytes,
     };
   },

@@ -41,7 +41,6 @@ import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSe
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
@@ -148,7 +147,7 @@ export class SettingsViewMessageHandler {
         showReadOnlyYaml: (_fileName, text) =>
           showDocument(() =>
             vscode.workspace.openTextDocument({
-              content: normalizeLineEndings(text),
+              content: text.replaceAll('\r\n', '\n'),
               language: 'yaml',
             }),
           ),

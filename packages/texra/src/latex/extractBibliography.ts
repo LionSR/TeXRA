@@ -12,7 +12,6 @@ import { parseBibFile } from 'bibtex';
 // Local imports - utils
 import { ensureError } from '@texra-ai/harness/schemas';
 import { pathExists } from '@utils/files/fsDurability';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -58,7 +57,7 @@ const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const bytes = yield* fs.readFile(filePath).pipe(Effect.mapError(ensureError));
-  return normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
+  return Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
 });
 
 export const extractBibliographyContext = Effect.fn(

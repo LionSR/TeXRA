@@ -13,11 +13,10 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { scriptStages } from '@texra-ai/harness/transcript';
+import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
 import type { SessionHandle } from '@agent/runtime';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
-import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
 

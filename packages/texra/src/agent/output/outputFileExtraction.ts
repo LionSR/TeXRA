@@ -14,7 +14,6 @@ import { Effect, FileSystem } from 'effect';
 
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
@@ -89,7 +88,7 @@ const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
   // no outputs beside its kept `reply`, which hosts show as a round that
   // wrote no documents, so it is never a quiet success.
   const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
-    Effect.map(normalizeLineEndings),
+    Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
     Effect.catch((error) =>
       Effect.sync(() => {
         deps.logger.warn(
