@@ -61,7 +61,7 @@ export function maybeSaveDebugObject({
       return;
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(runDir, { recursive: true });
-    yield* fs.writeFile(filePath, Buffer.from(JSON.stringify(object, null, 2)));
+    yield* fs.writeFileString(filePath, JSON.stringify(object, null, 2));
 
     logger.info(`Saved ${objectType} object to ${filePath}`);
   }).pipe(
