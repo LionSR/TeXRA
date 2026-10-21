@@ -165,7 +165,7 @@ names a type the entries do not export
 `src/turn.ts` defines it. Every operation returns an `Effect` or a `Stream`
 and fails only with `ModelError`.
 
-```ts
+```text
 prepareTurn(request) -> ResolvedTurn // freeze the binding and the controls
 streamTurn(turn)     -> Stream<TurnEvent>
 ```

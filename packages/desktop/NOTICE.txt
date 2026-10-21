@@ -1,7 +1,8 @@
 TeXRA
 Copyright 2024-2026 TeXRA Team
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+This product is licensed under the Apache License, Version 2.0 (see LICENSE.txt,
+or LICENSE at the repository root).
 It includes software from the following third-party project:
 
 --------------------------------------------------------------------------------
