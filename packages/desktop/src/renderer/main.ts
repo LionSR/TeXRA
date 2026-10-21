@@ -754,6 +754,7 @@ const routeMessage = createMessageRoutes({
         kind: 'pdf',
         target: message.pdfUrl,
         title: message.title,
+        build: message.build,
       }),
     );
   },

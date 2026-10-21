@@ -12,6 +12,8 @@ import { z } from 'zod';
 //   - `pdfUrl`: the `file:` URL of the PDF, built by the main process with
 //     `pathToFileURL`. The schema accepts nothing else, so a malicious
 //     main-process post can't turn the iframe into a generic browsing surface.
+//   - `build`: the PDF's modification time in ms. A rebuild posts the same
+//     URL, so this is what tells the open tab to reload.
 
 export const DESKTOP_PDF_COMMANDS = {
   SHOW_PDF: 'desktop:showPdf',
@@ -26,6 +28,7 @@ export const DesktopShowPdfMessageSchema = z.object({
     .refine((url) => new URL(url).pathname.toLowerCase().endsWith('.pdf'), {
       message: 'Not a PDF',
     }),
+  build: z.number(),
 });
 
 export type DesktopShowPdfMessage = z.infer<typeof DesktopShowPdfMessageSchema>;

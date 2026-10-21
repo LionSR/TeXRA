@@ -5,6 +5,7 @@ import {
   Data,
   Effect,
   FileSystem,
+  Option,
   type Path,
   type PlatformError,
 } from 'effect';
@@ -108,10 +109,15 @@ export function createDesktopPreviewHost(
     );
   }
 
+  /** The file's stat, or a report that it is not there. */
   function ensurePathExists(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
-    return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
+  ): Effect.Effect<
+    FileSystem.File.Info,
+    PreviewUnavailable,
+    FileSystem.FileSystem
+  > {
+    return FileSystem.FileSystem.use((fs) => fs.stat(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
           error.reason._tag === 'NotFound'
@@ -185,6 +191,7 @@ export function createDesktopPreviewHost(
     roots: WorkspaceRoots,
     pdfPath: string,
     title: string,
+    build: number,
   ): boolean {
     return tryShowInRenderer(
       { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },
@@ -193,6 +200,7 @@ export function createDesktopPreviewHost(
         session: roots.storage,
         title,
         pdfUrl: pathToFileURL(pdfPath).href,
+        build,
       } satisfies DesktopShowPdfMessage,
     );
   }
@@ -253,11 +261,18 @@ export function createDesktopPreviewHost(
       }
 
       // Confirm the PDF is on disk before rendering it (the iframe will
-      // load nothing and present a blank surface otherwise).
+      // load nothing and present a blank surface otherwise). Its mtime names
+      // the build; a platform with none gets a fresh one, so the tab reloads
+      // rather than keep a stale build.
       const { pdfPath } = built;
-      yield* ensurePathExists(pdfPath);
+      const { mtime } = yield* ensurePathExists(pdfPath);
+      const build = Option.match(mtime, {
+        onNone: () => Date.now(),
+        onSome: (date) => date.getTime(),
+      });
 
-      if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath))) return;
+      if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
+        return;
 
       yield* openPathProgram(pdfPath);
     });
