@@ -56,7 +56,7 @@ function setPreferSubscription(
 
 /** Each subscription's "prefer my subscription" switch: its read (`get`) and
  *  its write in the scope that controls it (`set`). */
-export const SubscriptionPreference = {
+export const SubscriptionPreference = Object.freeze({
   get: isPreferSubscription,
   set: setPreferSubscription,
-};
+});

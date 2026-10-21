@@ -225,9 +225,9 @@ function getRuntimeModelDirectFallback(
  * user prefers (`preferred`) and its writer (`setPreferred`), and the
  * own-key route for a model Copilot was serving (`directFallback`).
  */
-export const CopilotRoutes = {
+export const CopilotRoutes = Object.freeze({
   discover: discoverCopilotRoutes,
   preferred: preferredCopilotRouteModels,
   setPreferred: setCopilotRoutePreference,
   directFallback: getRuntimeModelDirectFallback,
-};
+});
