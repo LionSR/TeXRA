@@ -141,8 +141,9 @@ export interface Surface {
   readonly drafts: ReadonlyMap<RunId, Draft>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
-  /** Streams awaiting follow-up admission. Never persisted. */
-  readonly sending: ReadonlySet<RunId>;
+  /** Streams awaiting follow-up admission, and `launch` while the
+   *  launcher's task awaits its own. Never persisted. */
+  readonly sending: ReadonlySet<RunId | 'launch'>;
   /** The error the runtime answered this surface's last request on a stream
    *  with, until the next request on that stream. Never persisted. */
   readonly rejected: ReadonlyMap<RunId, SurfaceRefusal>;

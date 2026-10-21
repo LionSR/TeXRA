@@ -335,6 +335,15 @@ export function createSessionSurfaces(options: {
         polishing: new Set([...surface.polishing, target]),
       });
     }
+    // A second Send before the host admits the launch would start a
+    // second run, so the launch claims its stream like a follow-up does.
+    if (request.kind === 'launch') {
+      if (surface.sending.has('launch')) return;
+      setSurface(entry, {
+        ...surface,
+        sending: new Set([...surface.sending, 'launch']),
+      });
+    }
     const result = await transport.request({
       kind: 'host.request',
       session: entry.key,
@@ -347,6 +356,12 @@ export function createSessionSurfaces(options: {
       const polishing = new Set(current.polishing);
       polishing.delete(target);
       setSurface(entry, { ...current, polishing });
+    }
+    if (request.kind === 'launch') {
+      const current = entry.surface$.get();
+      const sending = new Set(current.sending);
+      sending.delete('launch');
+      setSurface(entry, { ...current, sending });
     }
     settleHostResponse(entry, request, origin, result);
   }

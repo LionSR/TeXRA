@@ -140,6 +140,18 @@ describe('session Surface ownership', () => {
     expect(surfaces.get(KEY)?.surface$.get().launch.approval).toBe('policy');
   });
 
+  it('starts one task when Send is pressed again before the host admits it', async () => {
+    surfaces.act(KEY, { kind: 'select', runId: null });
+    surfaces.act(KEY, { kind: 'launch', patch: { instruction: 'Proofread' } });
+    const admit = response();
+    surfaces.submit(KEY);
+    surfaces.submit(KEY);
+    expect(transport.request).toHaveBeenCalledOnce();
+    admit({ ok: true, outcome: { kind: 'done' } });
+    await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().sending.size).toBe(0);
+  });
+
   it('keeps persisted drafts through host updates before listing replay, then prunes authoritative absence', async () => {
     host.set(
       emptyHostSnapshot({

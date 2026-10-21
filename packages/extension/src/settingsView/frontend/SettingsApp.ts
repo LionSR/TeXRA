@@ -325,10 +325,9 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           </models-tab>
         `;
       case 'agents': {
-        // Touch the acknowledgement generation so a same-value rebroadcast
-        // after a rejected/failed write still re-renders this branch and lets
-        // live() restore the committed number-row value: the Advanced rows
-        // ride the agents snapshot.
+        // The acknowledgement generation lets a same-value rebroadcast after
+        // a rejected/failed write restore the committed number-row value:
+        // the Advanced rows ride the agents snapshot.
         const ackGeneration = agentsSettingsRevision.get();
         return html`
           <agents-tab

@@ -1,5 +1,6 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
+import { guard } from 'lit/directives/guard.js';
 import { live } from 'lit/directives/live.js';
 
 // Web Awesome switch + input (side-effect imports — the rows render them)
@@ -138,6 +139,9 @@ export interface SettingsNumberRowOptions {
   /** Present when a cleared field resets the setting; it wins over `revertOnEmpty`. */
   readonly onClear?: () => void;
   readonly onChange: (value: number) => void;
+  /** The parent's acknowledgement generation: a bump repaints the saved
+   *  value over a rejected edit even when the host rebroadcast it unchanged. */
+  readonly ackGeneration?: number;
 }
 
 /**
@@ -206,7 +210,12 @@ export function renderSettingsNumberRow(
           id=${id}
           class="setting-number-input"
           type="number"
-          .value=${live(shown)}
+          .value=${
+            // Only a new value or an acknowledgement repaints the field: any
+            // other re-render (a ticker, an unrelated row) would erase digits
+            // typed but not yet committed.
+            guard([shown, options.ackGeneration], () => live(shown))
+          }
           placeholder=${options.placeholder ?? nothing}
           min=${options.min ?? nothing}
           max=${options.max ?? nothing}

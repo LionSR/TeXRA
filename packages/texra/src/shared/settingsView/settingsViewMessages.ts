@@ -20,6 +20,7 @@ import {
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
+  WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
@@ -762,6 +763,19 @@ const UpdateStateSettingMessageSchema = z.object({
   value: StateSettingValueSchema.optional(),
 });
 
+/** One skill, or one skill source, switched on or off. The host applies it
+ *  to the list it holds, so a second switch sent before the first one's
+ *  snapshot returned cannot undo it. */
+const SetSkillEnabledMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED),
+  key: z.enum([
+    WorkspaceStateKey.DISABLED_SKILLS,
+    WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+  ]),
+  item: z.string().min(1),
+  enabled: z.boolean(),
+});
+
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
@@ -825,6 +839,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenPRSubscriptionStreamMessageSchema,
     // Generic catalog-driven scalar-setting write
     UpdateStateSettingMessageSchema,
+    SetSkillEnabledMessageSchema,
     // Agent team messages
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,

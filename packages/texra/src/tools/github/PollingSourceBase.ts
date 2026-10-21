@@ -409,12 +409,13 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * Detach a subscription unilaterally (e.g. on PR close, auth failure). No-op
-   * if the key is already gone. Always notifies; safe to call from inside
-   * `pollOne`.
+   * Detach a subscription unilaterally (e.g. on PR close, auth failure), if
+   * `state` is still the key's: a round's poll can outlive its state, whose
+   * key a new register may hold by then. Safe to call from inside `pollOne`.
    */
-  protected detach(key: K): void {
-    if (!this.subscriptions.delete(key)) return;
+  protected detach(key: K, state: S): void {
+    if (this.subscriptions.get(key) !== state) return;
+    this.subscriptions.delete(key);
     this.notifyKeysChanged();
   }
 
@@ -426,7 +427,7 @@ export abstract class PollingSourceBase<
     detail: string,
   ): Effect.Effect<void> {
     return this.emit(state, this.formatErrorEvent(state, detail)).pipe(
-      Effect.andThen(Effect.sync(() => this.detach(key))),
+      Effect.andThen(Effect.sync(() => this.detach(key, state))),
     );
   }
 
@@ -587,7 +588,9 @@ export abstract class PollingSourceBase<
    */
   private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
-      if (state.skipPollUntilMs > now) return;
+      // An entry its listeners left since the round began is not polled.
+      if (state.skipPollUntilMs > now || this.subscriptions.get(key) !== state)
+        return;
       yield* this.pollOne(key, state).pipe(
         Effect.catchCause((cause) =>
           Effect.failCause(
@@ -655,7 +658,7 @@ export abstract class PollingSourceBase<
       );
       yield* this.emit(state, this.formatErrorEvent(state, err.message));
       emitAppSignal('githubTokenInvalid', { message: err.message });
-      this.detach(key);
+      this.detach(key, state);
       return;
     }
     if (err instanceof GitHubPermanentError) {
