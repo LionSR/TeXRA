@@ -11,7 +11,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { runViewOf } from './sessionView';
-import type { RunView, SessionView } from '@texra-ai/harness';
+import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * When a run's active time started, or nothing: a run parked on the user's

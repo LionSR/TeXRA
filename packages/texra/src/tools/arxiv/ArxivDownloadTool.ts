@@ -16,9 +16,9 @@ import {
   nullishWithDefault,
   executed,
   ToolError,
+  getGitignoreMatcher,
+  formatToolOutput,
 } from '@texra-ai/harness/plugins';
-import { getGitignoreMatcher } from '@texra-ai/harness/plugins';
-import { formatToolOutput } from '@texra-ai/harness/plugins';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 

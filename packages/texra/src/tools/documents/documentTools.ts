@@ -10,14 +10,13 @@
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
+import { defineTool, Settings } from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { Settings } from '@texra-ai/harness';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,

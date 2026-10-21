@@ -13,7 +13,7 @@ import {
   type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * One run's recorded output files by round, from a view of the session that

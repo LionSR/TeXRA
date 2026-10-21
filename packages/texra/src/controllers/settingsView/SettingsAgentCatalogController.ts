@@ -15,11 +15,8 @@ import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import type {
-  WorkspaceAgentsController,
-  AgentModePreset,
-} from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness';
+import type { WorkspaceAgentsController, StateStore } from '@texra-ai/harness';
+import type { AgentModePreset } from '@texra-ai/harness/schemas';
 
 interface SettingsAgentCatalogEntry {
   name: string;

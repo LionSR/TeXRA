@@ -11,7 +11,7 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 // Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';

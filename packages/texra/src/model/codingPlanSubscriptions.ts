@@ -1,13 +1,18 @@
 import { Settings } from '@texra-ai/harness';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import {
+  GlobalStateKey,
+  providerRegionSetting,
+} from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@texra/shared/model/codingPlans';
-import type { ConfigWriteFailed, StateReadFailed } from '@texra-ai/harness';
+import type {
+  ConfigWriteFailed,
+  StateReadFailed,
+  SettingsStores,
+} from '@texra-ai/harness';
 import type { Effect } from 'effect';
-import type { SettingsStores } from '@texra-ai/harness';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;

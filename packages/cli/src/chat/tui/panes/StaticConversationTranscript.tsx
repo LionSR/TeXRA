@@ -43,8 +43,7 @@ import {
 } from './staticTranscriptRing';
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
-import type { SessionView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
   let home: string;

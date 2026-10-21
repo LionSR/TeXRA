@@ -6,9 +6,9 @@ import {
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-  type AgentModePreset,
 } from '@texra-ai/harness';
 import {
+  type AgentModePreset,
   AGENT_MODE_PRESETS,
   agentKeyOf,
   STARTER_AGENT_MODE_PRESET,
@@ -27,8 +27,11 @@ import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 type WorkspaceAgentsFormMode =
   'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';

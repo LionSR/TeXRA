@@ -4,8 +4,6 @@ import {
   Cancelled,
   type PlatformSecrets,
   type LanguageModel,
-} from '@texra-ai/harness';
-import {
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';

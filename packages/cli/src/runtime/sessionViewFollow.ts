@@ -4,8 +4,8 @@
  * (`runProgressRenderer.ts`) and the plain-text workflow output
  * (`scriptPlainOutput.ts`), which are otherwise separate renderers.
  */
-import type { LocalSession, SessionView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { LocalSession } from '@texra-ai/harness';
+import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** What a headless renderer reads of a session: its view. */
 export interface RunProgressSession {

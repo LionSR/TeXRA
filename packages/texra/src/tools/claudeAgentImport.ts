@@ -31,8 +31,7 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { StateReadFailed } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
 
 // ---------------------------------------------------------------------------
 // SDK import

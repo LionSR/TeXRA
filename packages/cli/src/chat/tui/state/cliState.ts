@@ -9,8 +9,8 @@ import {
   RunIdSchema,
   type AgentSource,
   type RunId,
+  descendantRuns,
 } from '@texra-ai/harness/schemas';
-import { descendantRuns } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import {
   applySurfaceAction,
@@ -24,9 +24,9 @@ import { RUN_GROUP_LABELS } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
 import type {
   RunModelDecisionReason,
-  RunView,
   AgentDelegationScope,
 } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------

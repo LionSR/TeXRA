@@ -23,9 +23,11 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   type JsonConfigProviderOptions,
-  type SettingsCatalog,
 } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  type SettingsCatalog,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 
 import {
   TEXRA_CONFIG_FILE_NAME,

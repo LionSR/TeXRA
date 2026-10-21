@@ -2,10 +2,14 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext, type ToolResult } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type ToolResult,
+  pathToLocationIn,
+} from '@texra-ai/harness';
 
 // Local imports - tools
-import { pathToLocationIn } from '@texra-ai/harness';
 import {
   formatToolOutput,
   type ToolFileAttachment,

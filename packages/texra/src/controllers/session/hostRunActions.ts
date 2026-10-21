@@ -1,17 +1,8 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import * as path from 'node:path';
 
-import { Settings } from '@texra-ai/harness';
-import { entryTypeIn } from '@texra-ai/harness/node';
-import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
-
 import {
-  type ApiKeyProviderId,
-  hasUsableApiKey,
-  lookupApiKey,
-  type SecretsFailed,
-} from '@texra-ai/llm';
-import {
+  Settings,
   type AgentCatalog,
   AppState,
   DatabaseReadFailed,
@@ -31,20 +22,27 @@ import {
   withLogChannel,
   pathToLocationIn,
   type WorkspaceRoots,
-} from '@texra-ai/harness';
-import {
-  toErrorMessage,
-  isTaskConfig,
-  recipeBlockOf,
-  type RunId,
-} from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import {
   CopilotRoutes,
   presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
+import { entryTypeIn } from '@texra-ai/harness/node';
+import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
+
+import {
+  type ApiKeyProviderId,
+  hasUsableApiKey,
+  lookupApiKey,
+  type SecretsFailed,
+} from '@texra-ai/llm';
+import {
+  toErrorMessage,
+  isTaskConfig,
+  recipeBlockOf,
+  type RunId,
+  GlobalStateKey,
+} from '@texra-ai/harness/schemas';
 import {
   validateRunRequest,
   type RunRequest,

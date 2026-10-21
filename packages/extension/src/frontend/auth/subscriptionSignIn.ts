@@ -20,9 +20,8 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import type { Secrets } from '@texra-ai/harness';
+import type { Secrets, SettingsStores } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
-import type { SettingsStores } from '@texra-ai/harness';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';

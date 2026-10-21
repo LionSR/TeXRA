@@ -10,9 +10,13 @@ import {
 // Local imports - components
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import type { ProcessRuntime, Session } from '@texra-ai/harness';
-import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  Session,
+  PlatformSecrets,
+  StateStore,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 export function registerCommands(
   context: vscode.ExtensionContext,

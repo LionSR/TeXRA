@@ -28,8 +28,10 @@ import {
   transcriptRowHeadline,
 } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
-import type { TranscriptRowKind } from '@texra-ai/harness/transcript';
-import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
+import type {
+  TranscriptRowKind,
+  CompactionActivityStatus,
+} from '@texra-ai/harness/transcript';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;

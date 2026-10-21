@@ -5,13 +5,13 @@ import {
   WorkspaceStateKey,
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
+  type SkillDisplayItem,
 } from '@texra-ai/harness/schemas';
 import {
   Settings,
   Skills,
   type ProcessRuntime,
   type WorkspaceRoots,
-  type SkillDisplayItem,
 } from '@texra-ai/harness';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 

@@ -9,8 +9,9 @@ import { Cause, Effect } from 'effect';
 import {
   INSTRUCTION_ACTION,
   type InstructionAction,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,

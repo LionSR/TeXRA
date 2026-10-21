@@ -1,4 +1,10 @@
-import { Settings } from '@texra-ai/harness';
+import {
+  Settings,
+  readModelOptions,
+  type LanguageModel,
+  type ModelOptionStores,
+  type PlatformSecrets,
+} from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
@@ -6,12 +12,6 @@ import {
   GlobalStateKey,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
-import {
-  readModelOptions,
-  type LanguageModel,
-  type ModelOptionStores,
-  type PlatformSecrets,
-} from '@texra-ai/harness';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import type { SettingsStores } from '@texra-ai/harness';

@@ -17,10 +17,10 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
+  ALWAYS_AVAILABLE,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
-import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';

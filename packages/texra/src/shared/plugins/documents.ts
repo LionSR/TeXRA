@@ -31,8 +31,8 @@ import {
   type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { RunView, AggregateId } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { AggregateId } from '@texra-ai/harness';
+import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 
 const DocumentsOutputSchema = z.strictObject({

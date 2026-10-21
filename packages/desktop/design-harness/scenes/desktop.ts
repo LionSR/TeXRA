@@ -33,7 +33,7 @@ import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 

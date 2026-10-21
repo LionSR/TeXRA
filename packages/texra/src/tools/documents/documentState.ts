@@ -34,8 +34,8 @@ import {
   AgentCatalog,
   pathToLocationIn,
   type AgentEntry,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -45,6 +45,8 @@ import {
 import {
   documentsOutputFact,
   latestDocumentRounds,
+  documentTaskOptions,
+  type DocumentTask,
 } from '@texra/shared/plugins/documents';
 import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
@@ -62,10 +64,6 @@ import {
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import {
-  documentTaskOptions,
-  type DocumentTask,
-} from '@texra/shared/plugins/documents';
 import {
   documentTaskOf,
   taskFileVars,
