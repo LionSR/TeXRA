@@ -15,7 +15,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/sql/SqlClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
@@ -240,7 +239,9 @@ export const databaseLayer = (
             ).pipe(Effect.mapError(openFailed));
       const { sql, movedAside } = yield* openStore(
         SqliteClient.make({
-          filename: create ? filename : `${pathToFileURL(filename)}?mode=rw`,
+          filename: create
+            ? filename
+            : `file:${filename.replace(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
           busyTimeout: '5 seconds',
         }),
@@ -618,8 +619,7 @@ export const databaseLayer = (
           const target = aggregateTarget(draft.aggregateId);
           const columns = aggregateColumns(draft.aggregateId);
           if (edges.borrowsClaim) {
-            // A plugin's own aggregate borrows its claim for this
-            // transaction only.
+            // A plugin's own aggregate borrows its claim for this transaction only.
             yield* exec(claim, [identity.ownerId, ...columns, null]);
           }
           if (edges.reparent != null) {

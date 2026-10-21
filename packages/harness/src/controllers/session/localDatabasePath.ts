@@ -94,8 +94,9 @@ function isLocalDirectory(
 }
 
 /**
- * Create `directory` (with `create`; without, it must exist) and answer the
- * database path inside it.
+ * Create `directory` (with `create`; without, it must exist, and the caller
+ * opens the file with SQLite's URI `mode=rw`, which never makes one) and
+ * answer the database path inside it.
  *
  * C1: reject remote or unclassified storage before SQLite opens. The native
  * Windows realpath uses GetFinalPathNameByHandleW, resolving junctions and
