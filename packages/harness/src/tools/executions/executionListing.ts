@@ -32,51 +32,49 @@ const RELATION_NOUN: Record<Exclude<RunRelation, 'peer'>, string> = {
   sibling: 'sibling',
 };
 
-export const listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
-  function* (
-    session: SessionHandle,
-    caller: RunId | undefined,
-    offset: number,
-    limit: number,
-  ) {
-    // One cold fold of the log's listing tier: every run's identity, model,
-    // description, parentage and status, already decided. Nothing per row.
-    const view = yield* session.view.read([]);
-    const entries = [...view.runs.values()].toSorted(
-      (left, right) =>
-        right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
-    );
+export const listExecutions = Effect.fn('listExecutions')(function* (
+  session: SessionHandle,
+  caller: RunId | undefined,
+  offset: number,
+  limit: number,
+) {
+  // One cold fold of the log's listing tier: every run's identity, model,
+  // description, parentage and status, already decided. Nothing per row.
+  const view = yield* session.view.read([]);
+  const entries = [...view.runs.values()].toSorted(
+    (left, right) =>
+      right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
+  );
 
-    if (entries.length === 0) {
-      return executed('No run history found.');
-    }
+  if (entries.length === 0) {
+    return executed('No run history found.');
+  }
 
-    // Unread input is the live fold's: the listing tier carries no follow-ups.
-    const { queuedFollowUps } = SubscriptionRef.getUnsafe(session.view.ref);
-    const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
-    const relationTo = (run: RunView): string | undefined => {
-      if (caller === undefined) return undefined;
-      if (run.id === caller) return '(you)';
-      const relation = runRelation(run.id, caller, parentOf);
-      return relation === 'peer'
-        ? undefined
-        : `(your ${RELATION_NOUN[relation]})`;
-    };
-    const marks = (run: RunView): string => {
-      const unread = queuedFollowUps.get(run.id)?.length ?? 0;
-      return [relationTo(run), unread > 0 ? `unread=${unread}` : undefined]
-        .filter((mark) => mark !== undefined)
-        .join('  ');
-    };
+  // Unread input is the live fold's: the listing tier carries no follow-ups.
+  const { queuedFollowUps } = SubscriptionRef.getUnsafe(session.view.ref);
+  const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
+  const relationTo = (run: RunView): string | undefined => {
+    if (caller === undefined) return undefined;
+    if (run.id === caller) return '(you)';
+    const relation = runRelation(run.id, caller, parentOf);
+    return relation === 'peer'
+      ? undefined
+      : `(your ${RELATION_NOUN[relation]})`;
+  };
+  const marks = (run: RunView): string => {
+    const unread = queuedFollowUps.get(run.id)?.length ?? 0;
+    return [relationTo(run), unread > 0 ? `unread=${unread}` : undefined]
+      .filter((mark) => mark !== undefined)
+      .join('  ');
+  };
 
-    const { page, start, end, total } = paginateToolListing(
-      entries,
-      offset,
-      limit,
-    );
+  const { page, start, end, total } = paginateToolListing(
+    entries,
+    offset,
+    limit,
+  );
 
-    return executed(
-      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map((run) => formatListingLine(run, marks(run))).join('\n')}${formatPaginationHint(end, total)}`,
-    );
-  },
-);
+  return executed(
+    `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map((run) => formatListingLine(run, marks(run))).join('\n')}${formatPaginationHint(end, total)}`,
+  );
+});
