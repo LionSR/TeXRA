@@ -1,27 +1,15 @@
 import { Context, Effect, type Layer, ManagedRuntime } from 'effect';
 
-import {
-  processLayer,
-  Sessions,
-  type ProcessLayerOptions,
-} from '@texra-ai/harness';
-import { AppState, AgentDirectories } from '@platform/interfaces';
+import { processLayer, Sessions } from '@texra-ai/harness';
 import {
   type ProcessServices,
   type SessionOwner,
   withForkFailureReporting,
 } from '@platform/processRuntime';
-import { UsageLog } from '@shared/usageLog';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
-import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import { createFakeWorkspaceRoots } from './FakePlatform';
-import {
-  fakeHostAgentDirectories,
-  fakeHostAppState,
-  fakeHostLanguageModel,
-  fakeHostSecrets,
-} from './setupPlatform';
+import { testProcessOptions } from './setupPlatform';
 
 /**
  * The test kernel's process runtime and session graph family (PRD
@@ -58,29 +46,6 @@ const { storageRoot } = createFakeWorkspaceRoots();
  *  process service, so it builds once however many sessions open. */
 export const identityReads = { count: 0 };
 
-/** The kernel's composition over the fake host: `processLayer`'s options
- *  with `plugins` under the storage root `root`. The setting rows travel
- *  with the fake host's config (`ConfigProvider.catalog`). */
-const testProcessOptions = (
-  plugins: readonly Plugin[],
-  root: string = storageRoot,
-): ProcessLayerOptions => ({
-  // Under the worker's storage root: its global storage, and its mcp.json
-  // rather than the developer's `~/.texra/mcp.json`.
-  storageRoot: root,
-  plugins,
-  secrets: fakeHostSecrets,
-  appState: AppState.layer(fakeHostAppState),
-  languageModel: fakeHostLanguageModel,
-  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-  toolAvailability: unprobedToolAvailability,
-  // The harness reports no usage; the telemetry suite starts its own.
-  usageLog: UsageLog.disabled,
-  // The suite's captured entries are the assertion surface: emit every
-  // level the programs run and let each test filter what it reads.
-  minimumLogLevel: 'Trace',
-});
-
 /** A second composition in this process, for a suite that needs one: the
  *  kernel's, under the storage root `root`, with a process start of its own.
  *  Fixed, as the install's is: reading the real one spawns PowerShell on
@@ -104,7 +69,7 @@ export async function installTestSessionGraph(
       // cast: `processLayer` serves the internal `SessionOwner` beside
       // `Sessions` (provideMerge); the suites' root launches ask it.
       processLayer({
-        ...testProcessOptions(plugins),
+        ...testProcessOptions(plugins, storageRoot),
         processStart: Effect.sync(() => {
           identityReads.count += 1;
           return 'vitest';

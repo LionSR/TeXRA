@@ -9,11 +9,11 @@
  * file, a `beforeEach` and whichever suite runs next, so its local lives
  * here rather than in a closure none of the three share.
  *
- * Two writers, in the order the harness runs them: `installFakeHost` builds
- * the bare runtime over the fake host's process services, and
- * `sessionGraphTestSetup` replaces it with the session graph family when the
- * suite that imported it needs one — the same order, and the same last
- * install wins, that the production slot gave them. `installFakeHost`
+ * Two writers: `sessionGraphTestSetup` installs the session graph family
+ * while the suite that imported it loads, and `installFakeHost`, which the
+ * setup file runs once the suite is collected, builds the bare runtime over
+ * the fake host's process services only when no runtime is installed yet.
+ * `installFakeHost`
  * imports this module dynamically, for the same reason it imports the
  * platform modules that way: a suite that calls `vi.resetModules()` gets
  * fresh module instances, and the install has to land in the instance the

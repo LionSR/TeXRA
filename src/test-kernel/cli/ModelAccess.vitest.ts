@@ -77,7 +77,10 @@ const fake = makeFakeSettingsStores();
 const stores = {
   ...fake.stores,
   secrets: fake.secrets,
-  runtime: testRuntime(),
+  // Read when a lookup runs: the kernel builds its runtime after collection.
+  get runtime() {
+    return testRuntime();
+  },
 };
 
 /**
