@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { type SettingsViewSnapshot } from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import {
   AgentModePresetSchema,
   AgentScanIssueSchema,
@@ -20,10 +21,7 @@ import {
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
 } from '@shared/schemas';
-import {
-  SUBSCRIPTION_AUTH_PROVIDERS,
-  SubscriptionAuthStatusSchema,
-} from '@shared/model/subscriptionAuth';
+import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
 import {

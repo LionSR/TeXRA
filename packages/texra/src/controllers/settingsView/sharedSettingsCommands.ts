@@ -28,10 +28,12 @@ import {
   withLogChannel,
   withSessionFs,
 } from '@texra-ai/harness';
-import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  providerEndpointKey,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@texra-ai/harness/schemas';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
-import { providerEndpointKey } from '@shared/state/providerSettings';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
