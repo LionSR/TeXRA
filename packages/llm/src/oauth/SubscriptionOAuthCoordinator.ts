@@ -219,16 +219,20 @@ export class SubscriptionOAuthCoordinator<
 
   /** The stored session, refreshed when expiring soon. */
   getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return this.freshSession(false);
+    return this.freshSession(undefined);
   }
 
   /**
-   * Refresh the stored session now, whatever its stored expiry: the provider
-   * rejected its access token early (revoked, or expired server-side). A
-   * fatal refresh clears the session, so the account reads as signed out.
+   * The provider rejected `accessToken` early (revoked, or expired
+   * server-side): refresh now, whatever the stored expiry, while the stored
+   * session still holds that token. A token already replaced is not
+   * rejected again: several calls that sent it each answer 401, and only the
+   * first may rotate. A fatal refresh clears the session.
    */
-  refreshRejected(): Effect.Effect<void, Error, HttpClient.HttpClient> {
-    return Effect.asVoid(this.freshSession(true));
+  refreshRejected(
+    accessToken: string,
+  ): Effect.Effect<void, Error, HttpClient.HttpClient> {
+    return Effect.asVoid(this.freshSession(accessToken));
   }
 
   private store(session: S): Effect.Effect<void, SecretsFailed> {
@@ -356,7 +360,10 @@ export class SubscriptionOAuthCoordinator<
 
   private readonly freshSession = Effect.fn(
     'SubscriptionOAuthCoordinator.getFreshSession',
-  )(function* (this: SubscriptionOAuthCoordinator<S>, force: boolean) {
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+    rejected: string | undefined,
+  ) {
     const { generation, session } = yield* this.stableSession();
     if (!session) {
       return yield* Effect.fail(
@@ -366,7 +373,8 @@ export class SubscriptionOAuthCoordinator<
         }),
       );
     }
-    if (!force && !this.isExpiringSoon(session)) return session;
+    const isRejected = session.accessToken === rejected;
+    if (!isRejected && !this.isExpiringSoon(session)) return session;
     return yield* this.refresh(session, generation);
   });
 

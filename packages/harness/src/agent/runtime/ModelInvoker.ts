@@ -599,7 +599,9 @@ export const modelInvokerLayer = (): Layer.Layer<
                     declinedRoutes,
                     textOnly: failed.textOnly,
                     temperature: run.persona.temperature,
-                    renew: selection === 'renewed',
+                    ...(selection === 'renewed' && {
+                      rejected: failed.subscriptionToken,
+                    }),
                   }),
             ),
           ).pipe(

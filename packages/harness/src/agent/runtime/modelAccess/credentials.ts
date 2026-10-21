@@ -117,14 +117,14 @@ function subscriptionUnavailable(
 /**
  * The OAuth session a subscription route bills. The decision already found
  * the preference on, the model eligible and a session signed in, so this only
- * reads the session, refreshing an expired one. `renew` first refreshes a
- * token the provider rejected although its stored expiry still calls it
- * fresh (revoked, or expired server-side).
+ * reads the session, refreshing an expired one. `rejected` is a token the
+ * provider rejected although its stored expiry still calls it fresh
+ * (revoked, or expired server-side): it is refreshed first, while stored.
  */
 const subscriptionCredential = (
   route: 'chatgpt-subscription' | 'xai-subscription',
   secrets: PlatformSecrets,
-  renew: boolean,
+  rejected: string | undefined,
 ): Effect.Effect<RouteCredential, RouteUnavailable, HttpClient.HttpClient> => {
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
@@ -142,13 +142,15 @@ const subscriptionCredential = (
           bearer: fresh.accessToken,
           endpoint: XAI_SUBSCRIPTION_ENDPOINT,
         }));
-  const refresh =
+  const refresh = (token: string) =>
     route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets).refreshRejected()
-      : xaiCoordinator(secrets).refreshRejected();
-  return (renew ? Effect.andThen(refresh, session) : session).pipe(
-    Effect.mapError((error) => subscriptionUnavailable(route, error)),
-  );
+      ? codexCoordinator(secrets).refreshRejected(token)
+      : xaiCoordinator(secrets).refreshRejected(token);
+  return (
+    rejected === undefined
+      ? session
+      : Effect.andThen(refresh(rejected), session)
+  ).pipe(Effect.mapError((error) => subscriptionUnavailable(route, error)));
 };
 
 /**
@@ -206,12 +208,12 @@ export function routeCredential(
   config: ModelConfig,
   facts: Pick<HostRouteFacts, 'endpoints'>,
   secrets: PlatformSecrets,
-  renew: boolean,
+  rejected: string | undefined,
 ): Effect.Effect<RouteCredential, RouteUnavailable, HttpClient.HttpClient> {
   switch (route.kind) {
     case 'chatgpt-subscription':
     case 'xai-subscription':
-      return subscriptionCredential(route.kind, secrets, renew);
+      return subscriptionCredential(route.kind, secrets, rejected);
     case 'no-api-key':
       return Effect.fail(
         new RouteUnavailable({
