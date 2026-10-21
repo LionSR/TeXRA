@@ -1,7 +1,7 @@
 import { hash } from 'node:crypto';
 import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
-import { runDirUnder } from '@texra-ai/harness/node';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { hasExtension } from '@texra-ai/harness';
 
 import { Cause, Effect, FileSystem } from 'effect';
@@ -26,7 +26,6 @@ import {
   isGenericOutputStem,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { type RunFileService } from '@utils/files/runStorage';
 
 import {
   publishCompiledPdfArtifact,
@@ -94,7 +93,7 @@ export function resolveWorkspaceSourceDir(
   const runRelative =
     location.kind === 'runStorage'
       ? path.relative(
-          runDirUnder(roots.storage, location.runId),
+          new RunFileService(location.runId, roots).runDirectory,
           location.absolutePath,
         )
       : undefined;

@@ -11,7 +11,8 @@ import path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, isPathWithin } from '@texra-ai/harness';
-import { runDirUnder, relativeToRoot } from '@texra-ai/harness/node';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { relativeToRoot } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   countLines,
@@ -262,7 +263,10 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
     );
     const written = computed.filter((diff) => diff !== null);
     if (written.length > 0) {
-      const runDir = runDirUnder(storageRoot, runId);
+      const runDir = new RunFileService(runId, {
+        storage: storageRoot,
+        workspace: undefined,
+      }).runDirectory;
       // One recursive create reaches the run directory and the runs root above
       // it, which is all the run-dir ensure ahead of this ever did.
       yield* fs.makeDirectory(path.join(runDir, 'diffs'), { recursive: true });

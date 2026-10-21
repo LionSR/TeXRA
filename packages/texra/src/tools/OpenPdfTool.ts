@@ -11,7 +11,6 @@ import {
   hasExtension,
   isPathWithin,
 } from '@texra-ai/harness';
-import { runDirUnder } from '@texra-ai/harness/node';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import {
   callerRun,
@@ -19,6 +18,7 @@ import {
   type ToolPathCall,
   nullishWithDefault,
   executed,
+  RunFileService,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
@@ -125,7 +125,8 @@ export const OpenPdfTool = defineTool({
     const runId = run?.runId;
     const trimmedPath = input.path.trim();
     // An absolute path inside this run's own storage directory.
-    const runDirectory = runId && runDirUnder(env.roots.storage, runId);
+    const runDirectory =
+      runId && new RunFileService(runId, env.roots).runDirectory;
     const runRelative =
       runDirectory &&
       path.isAbsolute(trimmedPath) &&

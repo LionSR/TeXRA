@@ -7,7 +7,8 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
-import { entryTypeIn, runDirUnder } from '@texra-ai/harness/node';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -97,7 +98,10 @@ export class ProgressWorkflowFileActionsController {
 
   openRunStorage(runId: RunId): FileAction<void> {
     return Effect.gen({ self: this }, function* () {
-      const runDirectory = runDirUnder(this.deps.storageRoot, runId);
+      const { runDirectory } = new RunFileService(runId, {
+        storage: this.deps.storageRoot,
+        workspace: undefined,
+      });
       const fs = yield* FileSystem.FileSystem;
       if ((yield* entryTypeIn(fs, runDirectory)) === undefined) {
         yield* fs.makeDirectory(runDirectory, { recursive: true });

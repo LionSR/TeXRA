@@ -80,6 +80,9 @@ export {
 } from '@agent/runtime/ToolServices';
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
+// A run's files under its session storage: its directory, the pre-run
+// snapshots and workspace mirrors it prepares, and output locations.
+export { RunFileService } from '@utils/files/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

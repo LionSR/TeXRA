@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -26,7 +27,6 @@ import {
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { RunFileService } from '@utils/files/runStorage';
 
 import {
   publishCompiledPdfArtifact,

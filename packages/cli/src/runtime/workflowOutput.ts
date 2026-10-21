@@ -1,11 +1,11 @@
 import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { toPosixPath } from '@texra-ai/harness';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { isNotADirectoryError } from '@texra-ai/harness';
-import { runDirUnder } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { RunEndOutput } from '@shared/schemas';
 import { isTaskConfig, RUN_OUTCOME } from '@shared/schemas';
@@ -327,7 +327,10 @@ export function resolveWorkflowOutput(
             ),
           )
         : { outputs: [], compileFailures: [], diffs: [] });
-    const runDirectory = runDirUnder(options.storageRoot, result.runId);
+    const { runDirectory } = new RunFileService(result.runId, {
+      storage: options.storageRoot,
+      workspace: undefined,
+    });
     const baseResult = {
       ...result,
       output: { ...output, documents },

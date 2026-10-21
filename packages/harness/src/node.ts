@@ -22,8 +22,7 @@ import type { AgentPlatform } from './index.js';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
 // composes its own platform: workspace roots over Node, the canonical
-// spelling of a workspace path, and the storage layout under a root (a
-// run's directory among it).
+// spelling of a workspace path, and the storage layout under a root.
 export { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 export {
   canonicalizeWorkspacePath,
@@ -33,7 +32,6 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-export { runDirUnder } from '@utils/files/runStorageFs';
 // Running a program on this machine: find it, run it, and give any other
 // child the PATH the harness resolves tools on.
 export {
