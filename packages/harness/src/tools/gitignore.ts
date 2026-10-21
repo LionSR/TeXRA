@@ -14,7 +14,9 @@ type GitignoreSource = {
   content: string;
 };
 
-type GitignoreMatcher = {
+/** A workspace's ignore policy: whether a workspace-relative path is
+ *  ignored, and the policy files it was read from. */
+export type GitignoreMatcher = {
   ignores: (relativePath: string) => boolean;
   ignoreFiles: string[];
 };

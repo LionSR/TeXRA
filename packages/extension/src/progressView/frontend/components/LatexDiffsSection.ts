@@ -15,10 +15,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import type { TeXRAIconName } from '@shared/iconNames';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import type { IconName } from '@ui/wa/iconNames';
 import { buttonStyles } from '@ui/styles/controlStyles';
 import { compactFormControlStyles, designTokens } from '@ui/styles';
 import { readSelectValue } from '@ui/wa/selectTemplates';
@@ -33,7 +33,7 @@ type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];
 /** A labeled diff operation button rendered inside a wa-button-group. */
 interface DiffActionSpec {
   readonly id: string;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly tooltip: string;
   readonly action: LatexDiffsAction;

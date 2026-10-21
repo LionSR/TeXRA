@@ -27,7 +27,6 @@ import {
   type ContextManagementData,
   type ErrorContext,
   type ErrorLogData,
-  type FileListEntry,
   type MediaAttachmentKind,
   type ProviderError,
   type ScriptDeliverySummary,
@@ -190,41 +189,4 @@ export function logContextManagementEvent(
   data?: ContextManagementData,
 ): void {
   trace.info(text, { messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT, data });
-}
-
-export function logWebSearch(trace: AgentTrace, data: unknown): void {
-  trace.info('', { messageType: MESSAGE_TYPES.WEB_SEARCH, data });
-}
-
-/** Files-loaded card with full {@link FileListEntry} entries. */
-export function logFilesLoaded(
-  trace: AgentTrace,
-  entries: readonly FileListEntry[],
-  stageId?: string,
-): void {
-  trace.info('', {
-    messageType: MESSAGE_TYPES.FILE_LIST,
-    data: entries,
-    stageId,
-  });
-}
-
-/**
- * Files-loaded card built from path/ok pairs — the category becomes both
- * the source label and the display label.
- */
-export function logFileCategory(
-  trace: AgentTrace,
-  category: string,
-  files: ReadonlyArray<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
-  stageId?: string,
-): void {
-  if (files.length === 0) return;
-  const entries: FileListEntry[] = files.map((f) => ({
-    path: f.path,
-    ok: f.ok === true,
-    source: category,
-    sourceDisplay: category,
-  }));
-  logFilesLoaded(trace, entries, stageId);
 }

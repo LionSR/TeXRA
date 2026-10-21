@@ -2,20 +2,20 @@
 import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
-import { ensureError } from '@texra-ai/harness/schemas';
-import { GlobalValues } from '@texra-ai/harness';
 import {
+  ensureError,
   InquiryThreadIdSchema,
-  ToolError,
   type InquiryThreadId,
-  type InquiryThreadSummary,
   type OpenInquiryTurn,
   type AnsweredInquiryTurn,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { GlobalValues } from '@texra-ai/harness';
+import { ToolError } from '@texra-ai/harness/plugins';
 import {
   INQUIRY_THREADS,
   InquiryRecords,
   type InquiryThreadRecord,
+  type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 
 const QUESTION_PREVIEW_CHARS = 200;

@@ -3,17 +3,17 @@
  * Fires `page-change` with the new page index on navigation.
  */
 
+import { Number as Num } from 'effect';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
-import type { TeXRAIconName } from '@shared/iconNames';
 import { createEvent } from '@texra/shared/utils/events';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { clamp } from '@utils/text/stringUtils';
 
 /** Detail payload for the `page-change` custom event. */
 export interface PageChangeDetail {
@@ -32,7 +32,10 @@ export function paginate<T>(
   pageSize: number,
 ): T[] {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const safePage = clamp(page, 0, totalPages - 1);
+  const safePage = Num.clamp(page, {
+    minimum: 0,
+    maximum: Math.max(0, totalPages - 1),
+  });
   const start = safePage * pageSize;
   return items.slice(start, start + pageSize);
 }
@@ -98,13 +101,16 @@ export class Pagination extends LitElement {
   }
 
   private goTo(target: number): void {
-    const page = clamp(target, 0, this.totalPages - 1);
+    const page = Num.clamp(target, {
+      minimum: 0,
+      maximum: Math.max(0, this.totalPages - 1),
+    });
     if (page === this.page) return;
     this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
   }
 
   private renderNavButton(
-    icon: TeXRAIconName,
+    icon: IconName,
     label: string,
     page: number,
     disabled: boolean,

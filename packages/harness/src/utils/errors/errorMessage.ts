@@ -1,7 +1,4 @@
-import {
-  isNonEmptyString,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 /** Normalize any thrown value into a user-friendly error message string. */
 export function toErrorMessage(err: unknown): string {
@@ -32,10 +29,10 @@ export function ensureError(err: unknown): Error {
  * {@link toErrorMessage}.
  */
 export function extractErrorMessage(err: unknown): string | undefined {
-  if (err instanceof Error && isNonEmptyString(err.message)) {
+  if (err instanceof Error && err.message.trim() !== '') {
     return err.message.trim();
   }
-  if (isNonEmptyString(err)) {
+  if (typeof err === 'string' && err.trim() !== '') {
     return err.trim();
   }
   return undefined;

@@ -9,11 +9,11 @@ import {
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
+  OnboardingFunnelRefresher,
   setFirstRunDone,
   setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /**

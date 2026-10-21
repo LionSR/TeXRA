@@ -4,9 +4,8 @@
 // Everything here is plain data over the transcript fold — no React, no Ink —
 // so the component file holds only the component.
 
-import { getModelLabel } from '@texra-ai/harness/schemas';
+import { getModelLabel, type RunPhase } from '@texra-ai/harness/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import type { RunPhase } from '@shared/schemas';
 
 import {
   incrementalStaticTranscriptEntries,

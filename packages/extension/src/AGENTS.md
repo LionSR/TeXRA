@@ -16,7 +16,7 @@ extension host and its webviews (`progressView`, `settingsView`).
 ## Webviews and UI
 
 - Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
-- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@texra-ai/harness/schemas` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
+- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@texra-ai/harness/schemas` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`; text primitives) and `@ui/copy/format` (counts, sizes, durations). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
 
 ## Error handling
 

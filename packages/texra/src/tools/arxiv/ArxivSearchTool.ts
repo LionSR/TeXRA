@@ -13,11 +13,13 @@ import { z } from 'zod';
 // Local imports
 import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
+import {
+  nullishWithDefault,
+  executed,
+  ToolError,
+} from '@texra-ai/harness/plugins';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { ToolError } from '@shared/schemas';
-import { requireNonEmptyString } from '@tools/utils';
-import { pluralize } from '@utils/text/stringUtils';
 
 type Category = Parameters<typeof catQuery>[0];
 
@@ -102,7 +104,10 @@ type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   input: ArxivSearchInput,
 ) {
-  const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
+  const trimmedQuery = input.query.trim();
+  if (!trimmedQuery) {
+    return yield* Effect.fail(new ToolError('Search query cannot be empty.'));
+  }
 
   // Select the query function based on the field parameter
   const fieldQueryFns = {

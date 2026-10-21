@@ -14,17 +14,39 @@ import { z } from 'zod';
 import {
   ExternalInquiryTurnRecordSchema,
   InquiryThreadIdSchema,
-  InquiryThreadSummarySchema,
   RunIdSchema,
   type InquiryThreadId,
-  type InquiryThreadStatus,
-  type InquiryThreadSummary,
   type JsonValue,
   type RunId,
   type ToolFact,
-} from '@shared/schemas';
-import type { ValueFamily } from '@shared/session/valueFamily';
+} from '@texra-ai/harness/schemas';
+import type { ValueFamily } from '@texra-ai/harness';
 import type { SessionView } from '@texra-ai/harness/schemas';
+
+const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
+/** Where a thread stands: awaiting an answer, answered, or dropped. */
+export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
+
+/** A thread as a list shows it: its status, last question and turn count. */
+const InquiryThreadSummarySchema = z.object({
+  threadId: InquiryThreadIdSchema,
+  /** The run the last question was asked under; continuations flow back to it. */
+  parentRunId: RunIdSchema.nullable(),
+  status: InquiryThreadStatusSchema,
+  lastQuestionPreview: z.string(),
+  lastActivityIso: z.iso.datetime(),
+  turnCount: z.int().nonnegative(),
+});
+/** A thread as a list shows it. */
+export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
+
+/** An open turn's unsent answer, as its panel keeps it between renders. */
+export const InquiryDraftSchema = z.object({
+  answer: z.string(),
+  sessionLinks: z.string(),
+});
+/** An open turn's unsent answer. */
+export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
 
 /** A thread's full record: its turns, explicit `status` and the asking run. */
 const InquiryThreadRecordSchema = z.object({

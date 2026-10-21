@@ -13,11 +13,10 @@ import { z } from 'zod';
 
 import {
   AgentOptionDataSchema,
-  type AggregateId,
   type FileLocation,
   type SessionEvent,
   type ToolFact,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import {
   DocumentDiffsSchema,
   DocumentsResultSchema,
@@ -32,7 +31,7 @@ import {
   type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView, AggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 

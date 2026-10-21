@@ -3,7 +3,7 @@
 
 import { Box, Text } from 'ink';
 
-import { planSummaryLine, type Plan } from '@shared/schemas';
+import { planSummaryLine, type Plan } from '@texra-ai/harness/schemas';
 
 export function PlanPanel({
   maxRows,

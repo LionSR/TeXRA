@@ -10,7 +10,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   MODEL_AVAILABILITY_STATUS,
   type ModelOptionData,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { AGENT_DECORATORS, getModelProviderDecorator } from '@ui/wa/icons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

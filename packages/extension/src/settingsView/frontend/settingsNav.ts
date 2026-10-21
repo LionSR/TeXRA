@@ -4,13 +4,13 @@
  * Pages and sections retain their IPC addresses (`page` or `page/section`).
  */
 
-import type { TeXRAIconName } from '@shared/iconNames';
 import {
   SETTINGS_PAGE_SECTIONS,
   SETTINGS_TAB_ORDER,
   type SettingsSectionName,
   type SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
+import type { IconName } from '@ui/wa/iconNames';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
 interface SettingsSectionEntry {
@@ -21,7 +21,7 @@ interface SettingsSectionEntry {
 export interface SettingsNavEntry {
   /** Panel name — the addressing key the nav and e2e selectors share. */
   readonly panel: SettingsTabPanelName;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly group: 'Preferences' | 'AI' | 'Tools';
   readonly description: string;

@@ -5,15 +5,14 @@
  * (`roundsToPersisted`).
  */
 
-import type { AgentTrace } from '@agent/trace';
-import type { FileLocation } from '@shared/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   type CompileFailure,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { RunFileService } from '@utils/files/runStorage';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig, FileLocation } from '@texra-ai/harness/schemas';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;

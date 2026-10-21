@@ -13,9 +13,12 @@
 import { Data, Effect, Fiber, LogLevel, Option, Stream } from 'effect';
 import stripAnsi from 'strip-ansi';
 
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import {
+  isTerminalOutcomePhase,
+  qualifyAggregateId,
+  type RunOutcome,
+} from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import { qualifyAggregateId, type RunOutcome } from '@shared/schemas';
 import type {
   EventsFrame,
   RequestErrorWire,

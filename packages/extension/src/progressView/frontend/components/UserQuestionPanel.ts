@@ -12,17 +12,17 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared styles
-import type {
-  UserQuestionAnswers,
-  UserQuestionPermission,
-  UserQuestionPrompt,
-} from '@shared/schemas';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
+import type {
+  UserQuestionAnswers,
+  UserQuestionPermission,
+  UserQuestionPrompt,
+} from '@texra-ai/harness/schemas';
 
 @customElement('user-question-panel')
 export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {

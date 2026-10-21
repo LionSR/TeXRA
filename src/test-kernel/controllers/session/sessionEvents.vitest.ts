@@ -99,7 +99,6 @@ import {
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
-  type InquiryThreadSummary,
 } from '@shared/schemas';
 import { runStateAppend } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
@@ -140,6 +139,7 @@ import {
   globalValuesOver,
 } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,

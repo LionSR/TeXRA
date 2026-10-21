@@ -12,7 +12,6 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { supportsReasoningLevel, type ModelOption } from '@texra-ai/harness';
-import type { ModelOptionData } from '@shared/schemas';
 import {
   EXPENSIVE_MODEL_HINT,
   FAST_FIRST_RESPONSE_HINT,
@@ -20,6 +19,7 @@ import {
   isFastFirstResponseModel,
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
+import type { ModelOptionData } from '@texra-ai/harness/schemas';
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;

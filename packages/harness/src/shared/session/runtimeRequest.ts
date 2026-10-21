@@ -168,6 +168,19 @@ export const ToolEditContentSchema = z.object({
 /** A pending tool edit's staged content (`request.preview`). */
 export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;
 
+/**
+ * Hunks as unified-diff text lines, each preceded by its header. One header
+ * policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
+ */
+export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
+  const range = (start: number, lines: number) =>
+    lines === 1 ? String(start) : `${start},${lines}`;
+  return hunks.flatMap((hunk) => [
+    `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`,
+    ...hunk.lines,
+  ]);
+}
+
 /** What a `run.files` did: `done` (with the copy's folder), no directory
  *  to act on, or the failure that stopped it. */
 const RunFilesResultSchema = z.discriminatedUnion('status', [

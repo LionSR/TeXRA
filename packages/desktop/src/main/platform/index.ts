@@ -18,11 +18,12 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
+  FileSecrets,
+  nodeFileServices,
   resolveWorkspaceStoragePath,
+  secretsDirectory,
 } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';

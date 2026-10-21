@@ -1,19 +1,19 @@
-import { getModelLabel } from '@texra-ai/harness/schemas';
-import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
+  getModelLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
   type BashPermission,
   type RetryPermission,
   type UserQuestionPermission,
-} from '@shared/schemas';
+  formatHunkLines,
+} from '@texra-ai/harness/schemas';
+import { hiddenRowsText } from '@cli/tui/overflowText';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
   scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
-import { formatHunkLines } from '@utils/text/unifiedDiff';
 
 import { type CliApprovalContent } from './approvalPrompts';
 import type { ToolEditApprovalRequest } from '@texra-ai/harness';

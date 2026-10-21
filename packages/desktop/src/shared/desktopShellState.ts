@@ -2,7 +2,7 @@
 import { getBasename } from '@texra-ai/harness/schemas';
 import { z } from 'zod';
 
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import type { SerializedDockview } from 'dockview';
 
 export const WORKBENCH_KIND_META = {
@@ -17,7 +17,7 @@ export const WORKBENCH_KIND_META = {
 } as const satisfies Record<
   string,
   {
-    icon: TeXRAIconName;
+    icon: IconName;
     label: string;
     singleton: boolean;
   }

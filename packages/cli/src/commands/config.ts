@@ -3,7 +3,7 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { AgentCatalog, InvalidAgentTeamError } from '@texra-ai/harness';
-import { agentKeyOf } from '@shared/schemas';
+import { agentKeyOf } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import {

@@ -2,7 +2,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { renderBannerFrame } from './bannerFrame';
 import { waIcon } from './webAwesomeIcons';
 
@@ -10,7 +10,7 @@ export interface SettingsBannerOptions {
   readonly id: string;
   readonly title: string;
   readonly description: string | TemplateResult;
-  readonly icon?: TeXRAIconName;
+  readonly icon?: IconName;
   readonly detail?: TemplateResult | typeof nothing;
   readonly actions?: TemplateResult | typeof nothing;
   readonly className?: string;

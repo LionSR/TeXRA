@@ -4,9 +4,9 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'dialogs';
 

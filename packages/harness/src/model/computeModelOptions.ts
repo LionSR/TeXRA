@@ -29,7 +29,7 @@ import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
   copilotRouteUnavailableReason,
-  discoverCopilotRoutes,
+  CopilotRoutes,
   type CopilotModelRoute,
 } from './copilotRouting';
 
@@ -326,7 +326,7 @@ function buildAvailabilityContext(
 }
 
 /** A failed discovery (the port warns) shows each Copilot row unavailable. */
-const presentedCopilotRoutes = discoverCopilotRoutes().pipe(
+const presentedCopilotRoutes = CopilotRoutes.discover().pipe(
   Effect.orElseSucceed((): ReadonlyMap<string, CopilotModelRoute> => new Map()),
 );
 

@@ -14,14 +14,16 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 
 // Local imports - shared schemas
-import { GlobalStateKey, WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
+  GlobalStateKey,
+  WorkspaceStateKey,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-} from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/schemas';
+  type AgentScanIssue,
+} from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
@@ -38,7 +40,6 @@ import {
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsNumberRow } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize } from '@utils/text/stringUtils';
 import {
   postStateSetting,
   renderStateSettingToggleRow,

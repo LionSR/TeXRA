@@ -8,7 +8,7 @@ import {
   type SettingsStores,
   type SkillLoadIssue,
 } from '@texra-ai/harness';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
+import { AGENT_SKILLS_CONFIG_KEY } from '@texra-ai/harness/schemas';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:

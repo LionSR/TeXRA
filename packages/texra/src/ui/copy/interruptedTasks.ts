@@ -9,9 +9,11 @@
  * the session's follower, and the fix it names has one home, Settings ›
  * Plugins (the TUI's `/plugins`), which the notice links to.
  */
-import { formatResultCount } from '@texra-ai/harness/transcript';
-import type { ResumeBlocker, RunId } from '@shared/schemas';
-import type { RunView, SessionView } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  type ResumeBlocker,
+} from '@texra-ai/harness/transcript';
+import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as the notice lists it. */
 export interface InterruptedTask {

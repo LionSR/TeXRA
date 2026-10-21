@@ -27,7 +27,7 @@ interface WriteApprovedContentResult {
  * the approved change overlaps a change made to that version, or the
  * file was deleted or created meanwhile. Nothing was written.
  */
-class ApprovedEditConflictError extends ToolError {
+export class ApprovedEditConflictError extends ToolError {
   constructor(path: string) {
     super(
       `${path} changed on disk, was deleted or was created while this edit waited for approval, so the approved change no longer applies. Nothing was written. Re-read the file and redo the edit.`,

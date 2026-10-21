@@ -9,7 +9,10 @@
  * the same tokens as one parenthesized phrase appended to the message.
  */
 
-import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@texra-ai/harness/schemas';
 
 const CLI_INSTRUCTION_ACTION_HINTS = {
   [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra setup)',

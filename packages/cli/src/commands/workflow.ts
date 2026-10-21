@@ -2,8 +2,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 import { hasMagic } from 'glob';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  toErrorMessage,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';

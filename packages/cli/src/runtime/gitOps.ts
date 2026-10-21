@@ -4,8 +4,7 @@
 // These commands carry no TeXRA settings, so they use the user's Git identity.
 import { Effect } from 'effect';
 
-import { executeCommand } from '@texra-ai/harness/node';
-import type { ExecResult } from '@shared/schemas';
+import { executeCommand, type ExecResult } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type GitRead<A> = Effect.Effect<A, never, ChildProcessSpawner>;

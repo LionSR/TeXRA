@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 
-import { CredentialSwitchSchema, RunIdSchema } from '@shared/schemas';
+import { CredentialSwitchSchema, RunIdSchema } from '@texra-ai/harness/schemas';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,

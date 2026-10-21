@@ -1,5 +1,8 @@
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
-import { RUN_OUTCOME, type RunLifecycleStatus } from '@shared/schemas';
+import {
+  isTerminalOutcomePhase,
+  RUN_OUTCOME,
+  type RunLifecycleStatus,
+} from '@texra-ai/harness/schemas';
 
 /** Status of a persisted run in the CLI history output. */
 export const HISTORY_RUN_STATUS = {

@@ -8,23 +8,22 @@
  */
 
 // Third-party imports
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename, type FileListEntry } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
-import type { FileListEntry } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import { copyWithFeedback } from '@texra/shared/utils/clipboard';
 import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
+import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - shared utilities
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatBytes } from '@utils/text/stringUtils';
+import { formatBytes } from '@ui/copy/format';
 
 // Local imports - formatter helpers
 import {
@@ -165,7 +164,7 @@ export const SPINNER_ICON_NAME = '__spinner__';
  */
 export function triStateStatusIcon(
   status: string,
-): TeXRAIconName | typeof SPINNER_ICON_NAME {
+): IconName | typeof SPINNER_ICON_NAME {
   if (status === 'failed') return 'circle-exclamation';
   if (status === 'running' || status === 'in_progress') {
     return SPINNER_ICON_NAME;
@@ -178,7 +177,7 @@ export function triStateStatusIcon(
  * {@link SPINNER_ICON_NAME} is passed.
  */
 function renderIconOrSpinner(
-  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME,
+  iconName: IconName | typeof SPINNER_ICON_NAME,
   className?: string,
 ): TemplateResult {
   if (iconName === SPINNER_ICON_NAME) {
@@ -190,7 +189,7 @@ function renderIconOrSpinner(
 
 /** Build a neutral filled badge with a leading icon (or spinner). */
 export function buildStatusBadge(
-  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME,
+  iconName: IconName | typeof SPINNER_ICON_NAME,
   label: string,
 ): TemplateResult {
   return renderStatusBadge({
@@ -203,7 +202,7 @@ export function buildStatusBadge(
 /** Options for building a details summary header. */
 interface DetailsSummaryOptions {
   /** wa-icon name (codicon-style aliases supported), or {@link SPINNER_ICON_NAME}. */
-  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
+  iconName: IconName | typeof SPINNER_ICON_NAME;
   label: string;
   labelClass?: string;
   timestamp?: { display: string; tooltip: string };
@@ -287,10 +286,7 @@ export function buildFileListRender(
 }
 
 /** Get appropriate wa-icon name for a tool. */
-export function getToolIconName(
-  toolName: string,
-  isError = false,
-): TeXRAIconName {
+export function getToolIconName(toolName: string, isError = false): IconName {
   if (isError) return 'circle-exclamation';
   return TOOL_ICON_MAP[toolName] ?? 'wrench';
 }

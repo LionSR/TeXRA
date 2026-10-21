@@ -20,7 +20,6 @@ import { Effect, type FileSystem, type Path } from 'effect';
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { type FileLocation, type RunId } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
@@ -34,6 +33,7 @@ import {
 // Local file imports
 import { LaTeXdiffService } from '../latexdiff';
 import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
+import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   DiffProgressReporter,
