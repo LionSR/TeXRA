@@ -14,8 +14,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import type { RunView } from '@shared/session/sessionView';
+import type { RunView } from '@shared/session/readonlyViews';
 
 /**
  * A goal is a live pursuit: it exists only while the autonomous loop is running
@@ -73,9 +72,7 @@ export function goalStateRow(
 }
 
 /** The run's goal as its latest goal row states it; none before the first. */
-export function goalStateOf(
-  run: Pick<ReadonlyDeep<RunView>, 'facts'>,
-): GoalState {
+export function goalStateOf(run: Pick<RunView, 'facts'>): GoalState {
   const value = run.facts[`${GOAL_STATE_ARM.plugin}/${GOAL_STATE_ARM.kind}`];
   return value === undefined ? { active: false } : GoalStateSchema.parse(value);
 }

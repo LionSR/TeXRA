@@ -88,13 +88,8 @@ export type {
   TranscriptView,
 } from '@shared/session/readonlyViews';
 export type { FollowUpHost } from '@shared/session/sessionView';
-// The fold's own shapes the views are read-only copies of.
+// What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-export type {
-  RunView as FoldRunView,
-  SessionView as FoldSessionView,
-  TranscriptView as FoldTranscriptView,
-} from '@shared/session/sessionView';
 // What a session store's reads and claims answer with: an aggregate's claim
 // and state, a deletion's mode, a CLI input-history row, and the refusals.
 export type {

@@ -218,7 +218,7 @@ export type RunView = z.infer<typeof RunViewSchema>;
  * and sorts under `recent`, yet it is live.
  */
 export function isLiveRun(
-  run: Pick<RunView, 'group' | 'status' | 'substate'>,
+  run: Pick<ReadRunView, 'group' | 'status' | 'substate'>,
 ): boolean {
   if (run.substate === RUN_SUBSTATE.PAUSED) return false;
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
@@ -234,8 +234,8 @@ export function isLiveRun(
  */
 export function rollupOf(
   children: readonly ReadRunView[],
-  below: (child: ReadRunView) => RunView['rollup'] = (child) => child.rollup,
-): RunView['rollup'] {
+  below = (child: ReadRunView) => child.rollup,
+): ReadRunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle =
@@ -250,9 +250,8 @@ export function rollupOf(
   return rollup;
 }
 
-/** What a host can do with a follow-up, the only input the host brings to
- *  `acceptsFollowUp`: whether it delivers one to a terminal-backed run (an
- *  external agent CLI such as codex). */
+/** What a host brings to `acceptsFollowUp`, its only input: whether it
+ *  delivers a follow-up to a terminal-backed run (an agent CLI: codex). */
 export interface FollowUpHost {
   readonly terminalBacked: boolean;
 }
@@ -314,7 +313,8 @@ const QueuedFollowUpViewSchema = z.object({
   text: z.string(),
 });
 
-const SessionViewSchema = z.object({
+/** One level of the session's fold: its runs, requests and grants. */
+export const SessionViewSchema = z.object({
   key: SessionKeySchema,
   runs: z.map(RunIdSchema, RunViewSchema),
   /** Top-level ids, `runOrdering` rule. */
