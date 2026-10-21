@@ -7,7 +7,10 @@
  * `@resources` import and is buildable from any host.
  */
 
-import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
+import type {
+  DocumentMeta,
+  ExportAttachmentType,
+} from '@texra/agent/export/schemas';
 
 import { escapeLatex, latexListing } from './escapeUtils';
 import {

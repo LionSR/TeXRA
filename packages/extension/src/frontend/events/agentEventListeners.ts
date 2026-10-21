@@ -24,19 +24,20 @@ import {
   type PresentationEventHandlers,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
+  ensureError,
+  toErrorMessage,
   INSTRUCTION_ACTION,
   type InstructionAction,
   type RequestEnsureProgressViewPayload,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';

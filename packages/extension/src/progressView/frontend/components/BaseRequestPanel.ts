@@ -28,13 +28,12 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
-import type { PermissionPayload, RunId } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import type { IconName } from '@ui/wa/iconNames';
 import {
   commonViewStyles,
   designTokens,
@@ -48,7 +47,11 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
-import type { RequestAnswerability } from '@texra-ai/harness/schemas';
+import type {
+  RequestAnswerability,
+  PermissionPayload,
+  RunId,
+} from '@texra-ai/harness/schemas';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 /** The three ways a card declines, each with its one word. */
@@ -133,7 +136,7 @@ export abstract class BaseRequestPanel<
     return 'Approve';
   }
 
-  protected get primaryIcon(): TeXRAIconName {
+  protected get primaryIcon(): IconName {
     return 'check';
   }
 

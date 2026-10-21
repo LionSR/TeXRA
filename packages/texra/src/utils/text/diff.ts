@@ -2,7 +2,7 @@
  * diff-match-patch helpers.
  *
  * dmp is a metric library here, not a text pipeline: every
- * diff a user or a model reads comes from `@utils/text/unifiedDiff`. What
+ * diff a user or a model reads comes from the harness's `buildDiffHunks`. What
  * survives here is what dmp does that jsdiff does not — a Levenshtein
  * distance and a cheap line-change count for run bookkeeping.
  */

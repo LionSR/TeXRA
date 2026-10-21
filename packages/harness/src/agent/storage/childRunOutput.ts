@@ -9,10 +9,8 @@ import {
 } from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core';
-import {
-  inspectRunStorageEntryUnder,
-  runStorageLocationUnder,
-} from '@utils/files/runStorageFs';
+import { RunFileService } from '@utils/files/runStorage';
+import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 
 import { getRunRecords } from './runRecords';
 
@@ -102,11 +100,10 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     if (reference.runId !== parentRunId)
       yield* checkDeclaredChildOutput(session, parentRunId, reference);
 
-    const entry = yield* inspectRunStorageEntryUnder(
-      storageRoot,
+    const entry = yield* new RunFileService(
       reference.runId,
-      reference.relativePath,
-    );
+      session.roots,
+    ).inspectEntry(reference.relativePath);
     switch (entry.kind) {
       case 'file':
         return entry.location;

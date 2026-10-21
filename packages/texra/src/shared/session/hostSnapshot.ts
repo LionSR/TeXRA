@@ -6,14 +6,17 @@
  * receives it with the events frame (`sessionFrames.ts`), and the design
  * harness passes literals. Zod because it crosses the bridge.
  */
-import { getBasename } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  ModelOptionDataSchema,
+  TeamOptionDataSchema,
+} from '@texra-ai/harness/schemas';
 import { z } from 'zod';
 
 import {
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
-import { ModelOptionDataSchema, TeamOptionDataSchema } from '@shared/schemas';
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 
 const visible = { visible: z.boolean() };

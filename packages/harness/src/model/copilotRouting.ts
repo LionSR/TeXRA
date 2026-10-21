@@ -9,7 +9,7 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
  *
  * The preference is persisted state. The route is never stored: the editor's
  * language-model port is its authority, so each route decision discovers it
- * once ({@link discoverCopilotRoutes}) and carries the discovered route on the
+ * once (`CopilotRoutes.discover`) and carries the discovered route on the
  * `ModelRoute` it decides.
  */
 
@@ -75,40 +75,40 @@ function matchingBaseModel(info: LanguageModelInfo): string | undefined {
  * travels on unchanged (the port has already logged it at `warn`), so a run
  * that needs a route fails with the error the host raised.
  */
-export const discoverCopilotRoutes = Effect.fn(
-  'copilotRouting.discoverCopilotRoutes',
-)(function* (): Effect.fn.Return<
-  ReadonlyMap<string, CopilotModelRoute>,
-  Error,
-  LanguageModel
-> {
-  const languageModel = yield* LanguageModel;
-  const discovered = yield* languageModel.selectModels({ vendor: 'copilot' });
-  const entries = new Map<string, CopilotModelRoute>();
-  for (const info of discovered.toSorted((left, right) =>
-    right.version.localeCompare(left.version),
-  )) {
-    const baseModel = matchingBaseModel(info);
-    const base = baseModel && lookup(baseModel);
-    if (!baseModel || !base || entries.has(baseModel)) continue;
-    entries.set(baseModel, {
-      access: info.access,
-      reference: {
-        vendor: info.vendor,
-        id: info.id,
-      },
-      version: info.version,
-      effectiveConfig: {
-        ...base,
-        ...zeroCostAccessOverrides(info.maxInputTokens),
-        // VS Code's LM route chooses the model's own reasoning behavior and
-        // exposes no per-request effort control.
-        reasoning: base.reasoning && { efforts: [] },
-      },
-    });
-  }
-  return entries;
-});
+const discoverCopilotRoutes = Effect.fn('copilotRouting.discoverCopilotRoutes')(
+  function* (): Effect.fn.Return<
+    ReadonlyMap<string, CopilotModelRoute>,
+    Error,
+    LanguageModel
+  > {
+    const languageModel = yield* LanguageModel;
+    const discovered = yield* languageModel.selectModels({ vendor: 'copilot' });
+    const entries = new Map<string, CopilotModelRoute>();
+    for (const info of discovered.toSorted((left, right) =>
+      right.version.localeCompare(left.version),
+    )) {
+      const baseModel = matchingBaseModel(info);
+      const base = baseModel && lookup(baseModel);
+      if (!baseModel || !base || entries.has(baseModel)) continue;
+      entries.set(baseModel, {
+        access: info.access,
+        reference: {
+          vendor: info.vendor,
+          id: info.id,
+        },
+        version: info.version,
+        effectiveConfig: {
+          ...base,
+          ...zeroCostAccessOverrides(info.maxInputTokens),
+          // VS Code's LM route chooses the model's own reasoning behavior and
+          // exposes no per-request effort control.
+          reasoning: base.reasoning && { efforts: [] },
+        },
+      });
+    }
+    return entries;
+  },
+);
 
 const RouteModelsSchema = z.array(z.string()).prefault([]);
 
@@ -121,7 +121,7 @@ const RouteModelsSchema = z.array(z.string()).prefault([]);
  * Copilot discovery never matches a retired or deprecated base model, so a
  * preference for one could never resolve to a route; it drops out at read.
  */
-export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
+function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
   return Effect.map(
     Settings.state(
       state,
@@ -143,7 +143,7 @@ const liveRouteModels = (stored: readonly string[]) =>
  * stored list that fails the reader's schema reads as empty, as it does for
  * the reader, and is replaced with a warning.
  */
-export function setCopilotRoutePreference(
+function setCopilotRoutePreference(
   model: string,
   preferred: boolean,
   state: StateStore,
@@ -200,16 +200,11 @@ export function copilotRouteUnavailableReason(
   }
 }
 
-interface CopilotDirectFallback {
-  readonly model: string;
-  readonly provider: ApiKeyProviderId;
-}
-
 /** Direct-key route for a model the editor was serving through Copilot. */
-export function getRuntimeModelDirectFallback(
+function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
-): CopilotDirectFallback | undefined {
+): { readonly model: string; readonly provider: ApiKeyProviderId } | undefined {
   const selected = selectModel(model);
   if (!selected) return undefined;
   // The replacement run declines every subscription route and Copilot.
@@ -223,3 +218,16 @@ export function getRuntimeModelDirectFallback(
     ? { model, provider: route.provider }
     : undefined;
 }
+
+/**
+ * The editor's Copilot routes and the user's preference for them: the routes
+ * the editor offers now (`discover`), the models whose Copilot route the
+ * user prefers (`preferred`) and its writer (`setPreferred`), and the
+ * own-key route for a model Copilot was serving (`directFallback`).
+ */
+export const CopilotRoutes = Object.freeze({
+  discover: discoverCopilotRoutes,
+  preferred: preferredCopilotRouteModels,
+  setPreferred: setCopilotRoutePreference,
+  directFallback: getRuntimeModelDirectFallback,
+});

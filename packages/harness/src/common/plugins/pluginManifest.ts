@@ -15,8 +15,7 @@ import { z } from 'zod';
 
 // Local imports - common
 import { SkillNameSchema } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { absentReason, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
 // Local imports - this module's neighbours

@@ -2,10 +2,9 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
+import { entryTypeIn, workspaceRelativePath } from '@texra-ai/harness/node';
 
 import { COMMIT_HASH_HEX_RANGE } from '@texra/utils/git/commitHashPattern';
-import { entryExists } from '@utils/files/fsEntryExists';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
@@ -139,7 +138,8 @@ export const buildLatexdiffAwareFixInstruction = Effect.fn(
   if (!artifact) return base;
 
   const fs = yield* FileSystem.FileSystem;
-  const sourceExists = yield* entryExists(fs, artifact.sourcePath);
+  const sourceExists =
+    (yield* entryTypeIn(fs, artifact.sourcePath)) !== undefined;
   // A user may legitimately keep a source file named chapter_diff.tex. Treat
   // a plain `_diff` suffix as generated only when the inferred source exists.
   if (artifact.kind === 'workspaceDiff' && !sourceExists) {

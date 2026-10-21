@@ -26,7 +26,7 @@ import { lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { ensureError } from '@texra-ai/harness/schemas';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,

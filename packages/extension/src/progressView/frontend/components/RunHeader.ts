@@ -14,9 +14,9 @@ import { repeat } from 'lit/directives/repeat.js';
 import { goalStateOf, type GoalState } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp } from '@texra-ai/harness/schemas';
 import { resolveBypass } from '@texra-ai/harness/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import type { IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
@@ -52,7 +52,7 @@ import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js
  *  LaTeXDiffs, figures. */
 export interface HeaderMenuItem {
   readonly value: string;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly activate: () => void;
 }

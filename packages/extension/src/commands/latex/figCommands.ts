@@ -9,13 +9,13 @@ import * as vscode from 'vscode';
 import { withLogChannel } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
 import { ensureError, truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { pluralize } from '@utils/text/stringUtils';
 import type { StorageFs, WorkspaceFs } from '@texra-ai/harness';
 import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 

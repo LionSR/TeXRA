@@ -1,14 +1,14 @@
 import { Box, Text, useWindowSize } from 'ink';
 
-import { getModelLabel } from '@texra-ai/harness/schemas';
+import {
+  getModelLabel,
+  getProposalFileGroups,
+  type AgentProposalPermission,
+} from '@texra-ai/harness/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
-import {
-  getProposalFileGroups,
-  type AgentProposalPermission,
-} from '@shared/schemas';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';

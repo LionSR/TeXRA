@@ -64,14 +64,14 @@ export const ownerLiveness = Layer.effectDiscard(
         yield* SubscriptionRef.get(view.ref),
         identity.ownerId,
       );
-      const snapshot = yield* SubscriptionRef.get(local.ref);
-      if (
+      // One atomic update: a `get` then `set` would let `markDamaged` or
+      // `updateLocal` land between them and be overwritten by this stale copy.
+      yield* SubscriptionRef.update(local.ref, (snapshot) =>
         snapshot.dead.length === dead.length &&
         snapshot.dead.every((owner, i) => owner === dead[i])
-      ) {
-        return;
-      }
-      yield* SubscriptionRef.set(local.ref, { ...snapshot, dead });
+          ? snapshot
+          : { ...snapshot, dead },
+      );
     });
     yield* Effect.forkScoped(
       SubscriptionRef.changes(view.ref).pipe(

@@ -31,7 +31,6 @@ import {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Shared Zod field for the `memories` parameter on delegation tools.
@@ -177,7 +176,9 @@ const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
   ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     const entries = groups.flatMap(({ label, files }) =>
-      files.filter(isNonEmptyString).map((path) => ({ label, path })),
+      files
+        .filter((file) => file.trim() !== '')
+        .map((path) => ({ label, path })),
     );
     const inspected = yield* Effect.forEach(
       entries,

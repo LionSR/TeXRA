@@ -19,7 +19,12 @@ import {
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  agentKeyOf,
+  type FileLocation,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
@@ -33,11 +38,11 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
-import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import {
   getFirstRunDone,
+  OnboardingFunnelRefresher,
   setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import {
   EXTENSION_CATEGORIES,
@@ -55,7 +60,6 @@ import type {
   SurfaceActionMessage,
 } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import {

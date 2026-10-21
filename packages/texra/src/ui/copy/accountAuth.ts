@@ -3,22 +3,18 @@
  *
  * Account brand names and the outcome sentences that mention them live here so
  * the CLI account & access surfaces, slash-command descriptions, login
- * handlers, the extension's subscription settings section, and the
- * auth-failure hints that quote a toggle by name cannot paraphrase each
- * other.
- *
- * The switch that routes eligible models through a subscription is named by
- * the subscription itself — `subscriptionLabel`, "ChatGPT subscription" — and
- * never by a verb. It selects a credential rather than expressing a preference
- * among them: a session that cannot be read fails the run and asks the user to
- * sign in again, so a "Prefer …" label would promise a fallback to the API key
- * that routing does not perform. One noun also keeps the switch recognizable
- * in the row that toggles it and in the hint that quotes it back.
+ * handlers and the extension's subscription settings section cannot
+ * paraphrase each other. Each subscription's switch and sign-in names are the
+ * harness's (`SUBSCRIPTION_AUTH_NAMES`), which its auth-failure hints quote,
+ * so this copy repeats them rather than restating them.
  *
  * Wire identifiers (`chatgpt`, `grok`) stay internal.
  */
 
-import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
+import {
+  SUBSCRIPTION_AUTH_NAMES,
+  type SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@texra-ai/harness/schemas';
 
 /** Shared device-code option description for any account picker. */
 export const DEVICE_CODE_DESCRIPTION =
@@ -27,8 +23,7 @@ export const DEVICE_CODE_DESCRIPTION =
 /** ChatGPT subscription account — Codex models via Plus/Pro/Team. */
 export const CHATGPT_AUTH = {
   label: 'ChatGPT',
-  subscriptionLabel: 'ChatGPT subscription',
-  signInLabel: 'Sign in with ChatGPT',
+  ...SUBSCRIPTION_AUTH_NAMES.chatgpt,
   signInDescription: 'Use a ChatGPT subscription',
   signOutLabel: 'Sign out of ChatGPT',
   deviceCodeLabel: 'Sign in to ChatGPT with a code',
@@ -42,8 +37,7 @@ export const CHATGPT_AUTH = {
 /** Grok / xAI subscription account. */
 export const GROK_AUTH = {
   label: 'Grok',
-  subscriptionLabel: 'Grok subscription',
-  signInLabel: 'Sign in with Grok',
+  ...SUBSCRIPTION_AUTH_NAMES.grok,
   signInDescription: 'Use a Grok / SuperGrok subscription',
   signOutLabel: 'Sign out of Grok',
   deviceCodeLabel: 'Sign in to Grok with a code',
@@ -58,7 +52,10 @@ export const GROK_AUTH = {
 export const SUBSCRIPTION_AUTH_COPY = {
   chatgpt: CHATGPT_AUTH,
   grok: GROK_AUTH,
-} as const satisfies Record<SubscriptionAuthStatus['provider'], unknown>;
+} as const satisfies Record<
+  (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number],
+  unknown
+>;
 
 /**
  * Sign-in / sign-out outcome sentences that read the same for any account,

@@ -10,7 +10,6 @@ import type { AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -239,7 +238,9 @@ function getCategoryFiles(
   config: AgentConfig,
   category: FileCategoryPrefix | 'MEDIA',
 ): string[] {
-  const files = FILE_CATEGORIES[category](config).filter(isNonEmptyString);
+  const files = FILE_CATEGORIES[category](config).filter(
+    (file): file is string => typeof file === 'string' && file.trim() !== '',
+  );
   return [...new Set(files)];
 }
 

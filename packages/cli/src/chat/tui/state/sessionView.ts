@@ -15,7 +15,7 @@ import {
   RUN_PHASE,
   type RunPhase,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type { FollowUpHost } from '@texra-ai/harness/schemas';
 import type {

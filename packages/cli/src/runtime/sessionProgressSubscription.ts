@@ -7,9 +7,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { isLiveRun, type RunView } from '@texra-ai/harness/schemas';
+import {
+  isLiveRun,
+  type RunView,
+  runIdentityName,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { runIdentityName, type RunId } from '@shared/schemas';
 import { writeNdjsonStdout } from './logSinks';
 import type { LocalSession } from '@texra-ai/harness';
 

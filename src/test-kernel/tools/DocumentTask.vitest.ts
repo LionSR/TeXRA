@@ -44,9 +44,8 @@ describe('documentTask', () => {
       sizeBytes: 150 * 1024,
       paths: ['paper.tex', 'bibliography/main.bib'],
       rejectedPath: 'bibliography/main.bib',
-      formattedSize: '150 KiB',
     },
-  ])('$name', ({ sizeBytes, paths, rejectedPath, formattedSize }) =>
+  ])('$name', ({ sizeBytes, paths, rejectedPath }) =>
     Effect.gen(function* () {
       yield* Effect.promise(() => bibFile(rejectedPath, sizeBytes));
 
@@ -62,7 +61,7 @@ describe('documentTask', () => {
       );
       assert.strictEqual(
         result?.error,
-        `${rejectedPath} is ${sizeBytes} bytes (${formattedSize}), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`,
+        `${rejectedPath} is ${sizeBytes} bytes, over the 102400 byte limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`,
       );
       assert.deepStrictEqual(result?.diagnostics, {
         type: 'oversized_bib_attachment',

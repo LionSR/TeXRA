@@ -87,7 +87,9 @@ export class TexraDiffView extends LitElement {
 
   @property({ attribute: false })
   hostTheme: Theme = DESKTOP_THEME_KIND.DARK;
-  @state() private loading = false;
+  /** The Monaco load in flight, when one is: the one fact "loading" and
+   *  "which load is current" both read, so neither can outlive the other. */
+  @state() private editorLoad: Promise<void> | undefined;
   @state() private errorMessage = '';
 
   private editor?: DiffEditor;
@@ -95,7 +97,6 @@ export class TexraDiffView extends LitElement {
   private originalModel?: TextModel;
   private proposedModel?: TextModel;
   private resizeObserver?: ResizeObserver;
-  private loadGeneration = 0;
   private readonly editorContainer = document.createElement('div');
   private disposeCommandTooltips: (() => void) | undefined;
 
@@ -105,17 +106,22 @@ export class TexraDiffView extends LitElement {
     // editor. The component's slot retains the diff frame and sizing.
     this.editorContainer.className = 'desktop-diff-editor';
     this.append(this.editorContainer);
+    // A re-opened view (the pane drops the element when its last diff
+    // closes) has no editor and gets no `firstUpdated`: load it again here.
+    if (this.hasUpdated && !this.editor) this.ensureEditor();
   }
 
   override disconnectedCallback(): void {
-    this.loadGeneration += 1;
+    // Disconnecting abandons the load in flight: no longer current, its
+    // completion changes nothing.
+    this.editorLoad = undefined;
     this.resizeObserver?.disconnect();
     this.disposeMonacoObjects();
     super.disconnectedCallback();
   }
 
   protected override firstUpdated(): void {
-    void this.ensureEditor();
+    this.ensureEditor();
   }
 
   protected override updated(changed: Map<string, unknown>): void {
@@ -124,16 +130,11 @@ export class TexraDiffView extends LitElement {
       changed.has('proposedText') ||
       changed.has('language')
     ) {
-      // If a prior editor load failed (or never completed), retry it when new
-      // diff content arrives instead of staying stuck on the error message for
-      // the rest of the session — the element is reused across re-opens. The
-      // `!this.loading` guard avoids a second concurrent load during the initial
-      // firstUpdated()+updated() cycle (firstUpdated sets loading synchronously).
-      if (!this.editor && !this.loading) {
-        void this.ensureEditor();
-      } else {
-        this.syncModels();
-      }
+      // If a prior editor load failed, retry it when new diff content
+      // arrives instead of staying stuck on the error message for the rest
+      // of the session — the element is reused across re-opens.
+      if (this.editor) this.syncModels();
+      else this.ensureEditor();
     }
     if (changed.has('hostTheme')) {
       this.applyTheme();
@@ -144,23 +145,29 @@ export class TexraDiffView extends LitElement {
     if (this.errorMessage) {
       return html`<div class="error">${this.errorMessage}</div>`;
     }
+    const loading = this.editorLoad !== undefined;
     return html`
-      ${this.loading ? renderLoadingState('Loading diff...') : nothing}
-      <div class="diff-view" ?hidden=${this.loading}>
+      ${loading ? renderLoadingState('Loading diff...') : nothing}
+      <div class="diff-view" ?hidden=${loading}>
         <slot></slot>
       </div>
     `;
   }
 
-  private async ensureEditor(): Promise<void> {
-    if (this.editor) return;
-    const generation = ++this.loadGeneration;
-    this.loading = true;
-    this.errorMessage = '';
+  /** Start the editor's load unless one is in flight or it is built. */
+  private ensureEditor(): void {
+    if (this.editor || this.editorLoad) return;
+    const load = this.loadEditor(() => this.editorLoad === load);
+    this.editorLoad = load;
+  }
 
+  /** `current`: whether this load is still the element's; a disconnect in
+   *  the meantime abandoned it, and a reconnect may have started another. */
+  private async loadEditor(current: () => boolean): Promise<void> {
+    this.errorMessage = '';
     try {
       const monaco = await loadMonaco();
-      if (!this.isConnected || generation !== this.loadGeneration) return;
+      if (!current() || !this.isConnected) return;
       const container = this.editorContainer;
       this.disposeCommandTooltips = installMonacoCommandDescriptions(container);
 
@@ -178,10 +185,11 @@ export class TexraDiffView extends LitElement {
       this.syncModels();
       this.observeResize(container);
     } catch (error) {
-      this.errorMessage =
-        extractErrorMessage(error) ?? 'Failed to load diff editor.';
+      if (current())
+        this.errorMessage =
+          extractErrorMessage(error) ?? 'Failed to load diff editor.';
     } finally {
-      if (generation === this.loadGeneration) this.loading = false;
+      if (current()) this.editorLoad = undefined;
     }
   }
 

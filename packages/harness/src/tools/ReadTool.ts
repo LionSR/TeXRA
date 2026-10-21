@@ -17,7 +17,7 @@ import {
 } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
-import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import {
   getMimeType,
@@ -153,7 +153,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     if (Number(stats.size) > ATTACHMENT_MAX_BYTES) {
       return yield* Effect.fail(
         new ToolError(
-          `EML file exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
+          `EML file exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
         ),
       );
     }

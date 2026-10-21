@@ -6,15 +6,12 @@ import { computed, signal, type Signal } from '@lit-labs/signals';
 import {
   APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
+  RunIdSchema,
+  type AgentSource,
+  type RunId,
 } from '@texra-ai/harness/schemas';
 import { descendantRuns } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
-import {
-  RunIdSchema,
-  type AgentDelegationScope,
-  type AgentSource,
-  type RunId,
-} from '@shared/schemas';
 import {
   applySurfaceAction,
   emptySurface,
@@ -25,7 +22,11 @@ import {
 } from '@texra/shared/session/surface';
 import { RUN_GROUP_LABELS } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
-import type { RunModelDecisionReason, RunView } from '@texra-ai/harness';
+import type {
+  RunModelDecisionReason,
+  RunView,
+  AgentDelegationScope,
+} from '@texra-ai/harness';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------

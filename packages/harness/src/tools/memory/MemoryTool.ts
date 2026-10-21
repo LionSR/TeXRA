@@ -41,11 +41,7 @@ import {
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  formatBytes,
-  formatRelativeTime,
-  splitContentLines,
-} from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/definition';
@@ -158,8 +154,8 @@ function formatListingRow(
 ): string {
   const display = toDisplayPath(storagePath);
   return [
-    formatBytes(size),
-    formatRelativeTime(mtime),
+    `${size.toLocaleString('en-US')} bytes`,
+    new Date(mtime).toISOString(),
     meta ? formatAttribution(meta) : '-',
     meta?.pinned ? `${display} [pinned]` : display,
   ].join('\t');

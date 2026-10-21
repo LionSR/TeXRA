@@ -4,13 +4,13 @@
  * `webAwesomeIcons.ts` pairs each of these names with a Font Awesome icon
  * definition (and imports Lit for the `waIcon` template helper), which pulls
  * ~200 FontAwesome modules plus Lit into the type graph of anything that
- * imports from it — even a bare `import type`. Consumers outside the UI layer
- * (schemas, non-UI shared code) that only need the *name* union or the
- * codicon-alias table should import from here instead.
+ * imports from it — even a bare `import type`. Code that only needs the
+ * *name* union (a desktop shell state, a launcher config schema) imports it
+ * from here instead.
  *
  * `webAwesomeIcons.ts` builds its `icons` map `satisfies
- * Record<(typeof TEXRA_ICON_CANONICAL_NAMES)[number], FontAwesomeIconDefinition>`
- * against {@link TEXRA_ICON_CANONICAL_NAMES}, so the two lists cannot drift:
+ * Record<(typeof ICON_NAMES)[number], FontAwesomeIconDefinition>`
+ * against {@link ICON_NAMES}, so the two lists cannot drift:
  * adding, removing, or renaming a canonical icon without updating the other
  * file is a compile error, not a silent mismatch.
  */
@@ -19,7 +19,7 @@
 // `webAwesomeIcons.ts` exactly (and in the same order). Add a new icon there
 // first, then mirror its key here — the `satisfies` constraint on `icons`
 // turns any mismatch into a type error.
-export const TEXRA_ICON_CANONICAL_NAMES = [
+export const ICON_NAMES = [
   'arrow-down',
   'arrow-right',
   'arrow-rotate-left',
@@ -135,4 +135,5 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'xmark',
 ] as const;
 
-export type TeXRAIconName = (typeof TEXRA_ICON_CANONICAL_NAMES)[number];
+/** An icon the UI toolkit can draw. */
+export type IconName = (typeof ICON_NAMES)[number];

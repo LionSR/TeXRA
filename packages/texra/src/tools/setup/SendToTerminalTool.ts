@@ -4,8 +4,11 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
-import { executed, nullishWithDefault } from '@texra-ai/harness/plugins';
-import { ToolError } from '@shared/schemas';
+import {
+  executed,
+  nullishWithDefault,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 
 // Local file imports
