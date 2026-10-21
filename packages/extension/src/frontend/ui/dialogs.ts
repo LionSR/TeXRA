@@ -3,8 +3,8 @@ import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { relativeToRoot } from '@texra-ai/harness/node';
-import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 
@@ -104,10 +104,7 @@ export function selectFiles(
       return null;
     }
     return fileUris.map((uri) =>
-      workspacePath
-        ? (relativeToRoot(workspacePath, uri.fsPath) ??
-          normalizeFilePath(uri.fsPath))
-        : uri.fsPath,
+      workspaceRelativePath(workspacePath, uri.fsPath),
     );
   });
 }

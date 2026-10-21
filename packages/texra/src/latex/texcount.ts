@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { absentReason } from '@texra-ai/harness/node';
+import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { pathToLocationIn } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
@@ -25,13 +25,8 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  return yield* fs.readFile(absolutePath).pipe(
+  return yield* readNormalizedFile(fs, absolutePath).pipe(
     Effect.mapError(ensureError),
-    // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-    // would strip a leading UTF-8 BOM the file carries.
-    Effect.map((bytes) =>
-      Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-    ),
     Effect.map((content) =>
       CHINESE_PACKAGES.some(
         (pkg) =>
@@ -69,8 +64,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const exists = yield* fs.exists(filePath).pipe(
-    Effect.catchIf(absentReason, () => Effect.succeed(false)),
+  const exists = yield* pathExists(fs, filePath).pipe(
     Effect.mapError(ensureError),
   );
   if (!exists) {

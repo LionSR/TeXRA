@@ -3,8 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { relativeToRoot } from '@texra-ai/harness/node';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -99,14 +98,10 @@ export function getCurrentFile(
 ): Effect.Effect<string | null> {
   return Effect.sync(() => {
     const workspaceRoot = roots.workspace;
-    const workspaceRelative = (fsPath: string) =>
-      workspaceRoot
-        ? (relativeToRoot(workspaceRoot, fsPath) ?? normalizeFilePath(fsPath))
-        : fsPath;
     // Try activeTextEditor first (for text files)
     const doc = vscode.window.activeTextEditor?.document;
     if (doc?.uri.scheme === 'file') {
-      return workspaceRelative(doc.uri.fsPath);
+      return workspaceRelativePath(workspaceRoot, doc.uri.fsPath);
     }
 
     // Fallback to active tab (for media files like images, PDFs)
@@ -116,6 +111,8 @@ export function getCurrentFile(
         input instanceof vscode.TabInputCustom) &&
       input.uri.scheme === 'file';
 
-    return isFileInput ? workspaceRelative(input.uri.fsPath) : null;
+    return isFileInput
+      ? workspaceRelativePath(workspaceRoot, input.uri.fsPath)
+      : null;
   });
 }

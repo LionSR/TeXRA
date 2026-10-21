@@ -27,7 +27,7 @@ import {
   type LocalSession,
   type WorkspaceFs,
 } from '@texra-ai/harness';
-import { absentReason } from '@texra-ai/harness/node';
+import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
@@ -265,8 +265,10 @@ export class ChatExportController {
           `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
         );
       }
-      const template = yield* fs.readFileString(standaloneTemplatePath).pipe(
-        Effect.map((text) => text.replaceAll('\r\n', '\n')),
+      const template = yield* readNormalizedFile(
+        fs,
+        standaloneTemplatePath,
+      ).pipe(
         Effect.catchIf(absentReason, () =>
           bundleFailure(
             `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +

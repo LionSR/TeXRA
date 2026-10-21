@@ -12,12 +12,11 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, isPathWithin } from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
-import { relativeToRoot } from '@texra-ai/harness/node';
 import {
-  toErrorMessage,
-  countLines,
-  normalizeFilePath,
-} from '@texra-ai/harness/schemas';
+  readNormalizedFile,
+  workspaceRelativePath,
+} from '@texra-ai/harness/node';
+import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
 import { runStorageFilePath, type RunId } from '@shared/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -136,11 +135,7 @@ function deliveredFilePath(
   if (originalPath === null || isPathWithin(roots.storage, originalPath)) {
     return stripWorkflowRoundDir(output.relativePath);
   }
-  if (!roots.workspace) return originalPath;
-  return (
-    relativeToRoot(roots.workspace, originalPath) ??
-    normalizeFilePath(originalPath)
-  );
+  return workspaceRelativePath(roots.workspace, originalPath);
 }
 
 /** Every revision's outputs, in revision order: a document revised twice
@@ -211,18 +206,11 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
       (o) =>
         Effect.gen(function* () {
           if (!o.originalPath) return null;
-          // Decoded by `Buffer`, which keeps a leading BOM, so a BOM change
-          // shows in the diff (`readFileString` drops it).
-          const read = (target: string) =>
-            fs
-              .readFile(target)
-              .pipe(
-                Effect.map((bytes) =>
-                  Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-                ),
-              );
           const [original, modified] = yield* Effect.all(
-            [read(o.originalPath), read(o.absolutePath)],
+            [
+              readNormalizedFile(fs, o.originalPath),
+              readNormalizedFile(fs, o.absolutePath),
+            ],
             { concurrency: 2 },
           );
 

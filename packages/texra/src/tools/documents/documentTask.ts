@@ -11,6 +11,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
@@ -105,8 +106,7 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
     // Resolved against the agent's own directory; an absolute path as
     // written.
     const fullPath = path.resolve(path.dirname(agentPath), filePath);
-    const content = yield* fs.readFileString(fullPath).pipe(
-      Effect.map((text) => text.replaceAll('\r\n', '\n')),
+    const content = yield* readNormalizedFile(fs, fullPath).pipe(
       Effect.catch((error) =>
         // The variable is simply absent from the prompt after this, so a
         // mistyped path and a permission error must not read like a real

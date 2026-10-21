@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { redactSecrets, withLogChannel } from '@texra-ai/harness';
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand, readNormalizedFile } from '@texra-ai/harness/node';
 import { formatError } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { FileLocation } from '@shared/schemas';
@@ -97,15 +97,7 @@ export class LaTeXdiffService {
   ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      // Decoded by `Buffer`, which keeps a leading BOM (`readFileString`
-      // drops it).
-      return yield* fs
-        .readFile(absolutePath)
-        .pipe(
-          Effect.map((bytes) =>
-            Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-          ),
-        );
+      return yield* readNormalizedFile(fs, absolutePath);
     });
   }
 

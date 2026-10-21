@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { FileLocation } from '@shared/schemas';
 
 import {
@@ -72,13 +73,11 @@ export const extractFigurePathsFromLatex = Effect.fn(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-  // would strip a leading UTF-8 BOM the file carries.
   const fs = yield* FileSystem.FileSystem;
-  const bytes = yield* fs
-    .readFile(latexFileLocation.absolutePath)
-    .pipe(Effect.mapError(ensureError));
-  const content = Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
+  const content = yield* readNormalizedFile(
+    fs,
+    latexFileLocation.absolutePath,
+  ).pipe(Effect.mapError(ensureError));
 
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).

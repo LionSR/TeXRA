@@ -27,7 +27,11 @@ import {
   assertNoParentTraversal,
 } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness';
-import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  entryTypeIn,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -73,20 +77,6 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
       () => Effect.succeed(false),
     ),
   );
-
-/**
- * The file's text with line endings normalized, decoded by `Buffer`, which
- * keeps a leading BOM the accepted file must keep (`readFileString` drops
- * it).
- */
-const readText = (fs: FileSystem.FileSystem, target: string) =>
-  fs
-    .readFile(target)
-    .pipe(
-      Effect.map((bytes) =>
-        Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-      ),
-    );
 
 // ============================================================================
 // Rejection bookkeeping
@@ -255,7 +245,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
         const processFs = yield* FileSystem.FileSystem;
 
-        const rawContent = yield* readText(
+        const rawContent = yield* readNormalizedFile(
           processFs,
           sourceLocation.absolutePath,
         ).pipe(Effect.mapError(ensureError));
@@ -283,7 +273,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
           Effect.mapError(ensureError),
         );
         const snapshotContent = snapshotExists
-          ? yield* readText(processFs, snapshotPath).pipe(
+          ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
               Effect.mapError(ensureError),
             )
           : undefined;
@@ -296,7 +286,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         } else if (isSameFile) {
           originalContent = rawContent;
         } else if (destExists) {
-          originalContent = yield* readText(
+          originalContent = yield* readNormalizedFile(
             workspaceFs,
             dest.relativePath,
           ).pipe(Effect.mapError(ensureError));

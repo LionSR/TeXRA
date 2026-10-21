@@ -33,7 +33,7 @@ import {
 
 import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@texra-ai/harness';
-import { absentReason } from '@texra-ai/harness/node';
+import { pathExists } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { runLakeCommand } from './lakeCommands';
@@ -585,16 +585,12 @@ function isFileTableExhausted(error: unknown): boolean {
 export const resolveWorkspaceRoot = Effect.fn(
   'LeanServerPool.resolveWorkspaceRoot',
 )(function* (fs: FileSystem.FileSystem, filePath: string) {
-  const exists = (target: string) =>
-    fs
-      .exists(target)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
   let dir = path.dirname(path.resolve(filePath));
   const root = path.parse(dir).root;
   for (;;) {
     if (
-      (yield* exists(path.join(dir, 'lakefile.lean'))) ||
-      (yield* exists(path.join(dir, 'lakefile.toml')))
+      (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
+      (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
     ) {
       return dir;
     }

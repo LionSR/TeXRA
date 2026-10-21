@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
-import { entryTypeIn } from '@texra-ai/harness/node';
+import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 
 // Local imports - agent
 import {
@@ -68,15 +68,14 @@ export const writeTemplateAgentFile = Effect.fn(
       message: `A file named "${fileName}" already exists in the custom agents folder.`,
     } as const;
   }
-  const raw = yield* fs
-    .readFileString(
-      path.join(
-        resourcesRoot,
-        'templates',
-        AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
-      ),
-    )
-    .pipe(Effect.map((text) => text.replaceAll('\r\n', '\n')));
+  const raw = yield* readNormalizedFile(
+    fs,
+    path.join(
+      resourcesRoot,
+      'templates',
+      AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
+    ),
+  );
   yield* fs.writeFileString(
     filePath,
     renderAgentTemplateString(raw, {

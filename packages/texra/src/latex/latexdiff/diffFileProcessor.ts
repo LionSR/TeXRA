@@ -1,5 +1,6 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import replacementEngine, {
   logReplacementDiagnostics,
   type ReplacementConfigRead,
@@ -73,19 +74,12 @@ export class DiffFileProcessor {
   ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      // Decoded by `Buffer`, which keeps a leading BOM the written-back file
-      // must keep (`readFileString` drops it).
-      const read = (target: string) =>
-        fs
-          .readFile(target)
-          .pipe(
-            Effect.map((bytes) =>
-              Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-            ),
-          );
-      const content = yield* read(diffFileLocation.absolutePath);
+      const content = yield* readNormalizedFile(
+        fs,
+        diffFileLocation.absolutePath,
+      );
       const editedContent = editedFileLocation
-        ? yield* read(editedFileLocation.absolutePath)
+        ? yield* readNormalizedFile(fs, editedFileLocation.absolutePath)
         : undefined;
       let processedContent = this.restoreFlattenedBibliography(
         content,

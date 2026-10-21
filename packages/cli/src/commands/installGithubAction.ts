@@ -1,8 +1,8 @@
 import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
+import { pathExists } from '@texra-ai/harness/node';
 
-import { absentReason } from '@texra-ai/harness/node';
 import {
   parseGitHubSlug,
   type GitHubSlug,
@@ -195,9 +195,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
     // An unreadable workflow path is the command's failure, reported by the
     // `catchExitCode` below; only "not there" is an answer.
     const workflowExists = yield* FileSystem.FileSystem.use((fs) =>
-      fs
-        .exists(workflowAbsPath)
-        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false))),
+      pathExists(fs, workflowAbsPath),
     );
     if (workflowExists && !opts.force) {
       writeTextStderr(

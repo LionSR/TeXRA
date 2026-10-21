@@ -26,6 +26,7 @@ import {
   PlatformSecrets,
   LanguageModel,
 } from '@texra-ai/harness';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -35,8 +36,7 @@ import {
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
-import { relativeToRoot } from '@texra-ai/harness/node';
-import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -429,11 +429,7 @@ export function createExtensionHostRequests(
       .filter((uri) => uri.scheme === 'file');
     return Effect.succeed([
       ...new Set(
-        fileUris.map(
-          (uri) =>
-            relativeToRoot(workspaceRoot, uri.fsPath) ??
-            normalizeFilePath(uri.fsPath),
-        ),
+        fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
       ),
     ]);
   }
