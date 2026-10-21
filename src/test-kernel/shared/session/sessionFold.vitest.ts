@@ -454,7 +454,7 @@ describe('sessionFold', () => {
     expect(runView(withOwner, CHILD).readOnly).toBe(false);
     expect(runView(withOwner, CHILD).statusKey).toBe('waitingOnUser');
     expect(runView(withOwner, CHILD).tone).toBe('warning');
-    expect(runView(withOwner, CHILD).statusDetail).toBeNull();
+    expect(runView(withOwner, CHILD).statusNotice).toBeNull();
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
     expect(runView(withOwner, ROOT).group).toBe('running');
     // The path to the decision is forced open.
@@ -472,7 +472,7 @@ describe('sessionFold', () => {
     expect(child.status).toBe(RUN_PHASE.RUNNING);
     expect(child.statusKey).toBe('interrupted');
     expect(child.tone).toBe('warning');
-    expect(child.statusDetail).toMatch(/resume/i);
+    expect(child.statusNotice).toStrictEqual({ kind: 'interrupted' });
     expect(child.readOnly).toBe(false);
     expect(child.forceExpanded).toBe(true);
     expect(runView(interrupted, ROOT).group).toBe('interrupted');
@@ -545,7 +545,7 @@ describe('sessionFold', () => {
     // Somebody holds the run: waiting, not interrupted; but not ours to act on.
     expect(child.group).toBe('waiting');
     expect(child.readOnly).toBe(true);
-    expect(child.statusDetail).toContain('pid 4242');
+    expect(child.statusNotice).toStrictEqual({ kind: 'held', pid: 4242 });
     expect(runView(held, ROOT).readOnly).toBe(true);
     expect(runView(held, ROOT).group).toBe('running');
     // The holder becomes us: the same owner, still held, now ours to act on.
@@ -557,20 +557,20 @@ describe('sessionFold', () => {
       ...scenario.pending,
       local({
         self: [OWNER],
-        unreadable: [{ runId: PROCESS, detail: 'meta.json is unreadable' }],
+        unreadable: [{ runId: PROCESS, reason: 'damaged' }],
       }),
     ]);
     expect(runView(unreadable, PROCESS).readOnly).toBe(true);
-    expect(runView(unreadable, PROCESS).statusDetail).toBe(
-      'meta.json is unreadable',
-    );
+    expect(runView(unreadable, PROCESS).statusNotice).toStrictEqual({
+      kind: 'damaged',
+    });
     expect(runView(unreadable, CHILD).readOnly).toBe(false);
 
     // The overlay lifts with the next snapshot; the owner change touches
     // exactly the runs that owner holds.
     const lifted = fold(unreadable, local({ self: [OWNER] }));
     expect(runView(lifted, PROCESS).readOnly).toBe(false);
-    expect(runView(lifted, PROCESS).statusDetail).toBeNull();
+    expect(runView(lifted, PROCESS).statusNotice).toBeNull();
     const foreign = fold(lifted, local({ self: [OTHER_OWNER] }));
     expect(runView(foreign, CHILD).group).toBe('waiting');
     expect(runView(foreign, CHILD).readOnly).toBe(true);

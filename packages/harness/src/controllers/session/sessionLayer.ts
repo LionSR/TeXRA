@@ -15,6 +15,7 @@ import {
   Hash,
   Layer,
   LayerMap,
+  type LogLevel,
   Option,
   RcMap,
   Stream,
@@ -50,10 +51,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  effectDiagnosticsLayer,
-  type MinimumLogLevel,
-} from '@logger/effectDiagnostics';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
   holdProcessRoot,
   SessionOwner,
@@ -260,8 +258,8 @@ const sessionHandleLayer = (key: SessionKey) =>
         .deliver((runId) => session.followUps.forget(runId))
         .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail: its
-      // waiters read `RunView.status` synchronously, so a row reaches them
-      // once the view holds its state. Host notices go to the author.
+      // waiters read `RunView.status` once the view holds a row's state.
+      // Host notices go to the author. `log.settled` waits for this reader.
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
@@ -626,7 +624,7 @@ export interface ProcessLayerOptions {
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
    *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
    *  user setting arrives by another road (the fold's `debug` flag). */
-  readonly minimumLogLevel: MinimumLogLevel;
+  readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }

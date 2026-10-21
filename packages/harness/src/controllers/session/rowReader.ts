@@ -12,10 +12,6 @@ import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  RUN_DAMAGED_MESSAGE,
-  RUN_EARLIER_BUILD_MESSAGE,
-} from '@shared/runs/runStatusDisplay';
-import {
   pluginFactFloor,
   RunIdSchema,
   type AggregateId,
@@ -108,16 +104,16 @@ export function rowReader<E>(
   exec: Exec<E>,
 ): RowReader<E> {
   const warned = new Set<string>();
-  const unopenable = new Map<RunId, string>();
+  const unopenable = new Map<
+    RunId,
+    LocalRuntimeState['unreadable'][number]['reason']
+  >();
   // The runs an earlier build wrote, each with the first such row.
   const earlier = new Map<RunId, DatabaseRowEarlier>();
   let scanned = false;
   const mark = (runId: RunId, earlier: boolean) => {
     if (!unopenable.has(runId))
-      unopenable.set(
-        runId,
-        earlier ? RUN_EARLIER_BUILD_MESSAGE : RUN_DAMAGED_MESSAGE,
-      );
+      unopenable.set(runId, earlier ? 'earlierBuild' : 'damaged');
   };
   const warnOnce = (key: string, message: string) =>
     warned.has(key)
@@ -202,7 +198,7 @@ export function rowReader<E>(
   return {
     read,
     damaged: Effect.map(scan, () =>
-      [...unopenable].map(([runId, detail]) => ({ runId, detail })),
+      [...unopenable].map(([runId, reason]) => ({ runId, reason })),
     ),
   };
 }

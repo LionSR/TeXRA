@@ -102,7 +102,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   )
     return yield* Effect.fail(
       new Error(
-        `${file} names only tools TeXRA does not have (${declared.join(', ')}).`,
+        `${file} names only tools this build does not have (${declared.join(', ')}).`,
       ),
     );
   return {
@@ -182,7 +182,7 @@ export const scanPluginAgents = Effect.gen(function* () {
       const agent = read.success;
       if (agent.dropped.length > 0)
         yield* Effect.logWarning(
-          `Agent ${agent.name} names tools TeXRA does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
+          `Agent ${agent.name} names tools this build does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
         ).pipe(withLogChannel('agentRegistry'));
       entries.push(pluginAgentEntry(agent, file));
     }

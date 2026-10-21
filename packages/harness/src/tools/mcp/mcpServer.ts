@@ -329,7 +329,7 @@ const connect = (config: McpServerConfig) =>
           ).pipe(withLogChannel(CHANNEL));
         }
         yield* rpc.close(
-          `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the TeXRA log (${CHANNEL})` : ''}`,
+          `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`,
         );
       }),
     );

@@ -59,7 +59,7 @@ import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
-import type { Continuation } from '@tools/toolTable';
+import { continuationOf, type Continuation } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -267,8 +267,7 @@ const openStep = Effect.fn('Step.open')(function* (
     );
     // The plugin continuing a parked run (one at most), and the sections.
     const continuing =
-      pinned.plugins.find(({ continuation }) => continuation !== undefined) ??
-      null;
+      pinned.plugins.find((plugin) => continuationOf(plugin) !== null) ?? null;
     const contributing = pinned.plugins.filter(
       ({ prompt }) => prompt !== undefined,
     );
@@ -366,7 +365,7 @@ const openStep = Effect.fn('Step.open')(function* (
     tools,
     scope,
     withheld: step.withheld,
-    continuation: step.continuing?.continuation ?? null,
+    continuation: continuationOf(step.continuing),
     skills: step.skills,
     holding,
   });
@@ -424,7 +423,7 @@ const openStep = Effect.fn('Step.open')(function* (
   }
   return {
     tools,
-    continuation: step.continuing?.continuation ?? null,
+    continuation: continuationOf(step.continuing),
     system,
     // The content the set names is stored before the row that names it.
     rows: changed

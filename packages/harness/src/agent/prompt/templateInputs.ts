@@ -69,7 +69,8 @@ const TemplateInputsSchema = z.object({
   OUTPUT_FILES: z.array(z.string()).optional(),
 });
 
-type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
+/** The fixed variables every prompt template may read. */
+export type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
 
 /**
  * The template-variable map accepted at the render boundary (PromptBuilder):
@@ -77,7 +78,7 @@ type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
  * off, so templates must tolerate absence), and a plugin's own variables add
  * custom keys beside the fixed ones.
  */
-type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 /** The fixed vocabulary as a runtime list; its reader builds a map from it,
  *  so its order is irrelevant. */

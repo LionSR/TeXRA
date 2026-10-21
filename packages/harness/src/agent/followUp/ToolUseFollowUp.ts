@@ -7,7 +7,6 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
@@ -57,11 +56,8 @@ export type SubmitFollowUpResult =
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
-type FollowUpPresentation =
-  { severity: 'none' } | { severity: 'info' | 'warning'; message: string };
-
-interface SubmitFollowUpOptions {
-  readonly session: SessionHandle;
+/** How one input is delivered to a run. */
+export interface RunInboxSendOptions {
   /**
    * Notifications never revive a persisted cursor. A child delivery is an
    * ordinary continuation: its parent counts the child as active until the
@@ -72,15 +68,19 @@ interface SubmitFollowUpOptions {
   readonly fromParent?: boolean;
 }
 
+interface SubmitFollowUpOptions extends RunInboxSendOptions {
+  readonly session: SessionHandle;
+}
+
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
   unusable_checkpoint:
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
-  earlier_build: RUN_EARLIER_BUILD_MESSAGE,
-  read_failed:
-    "TeXRA couldn't read this task right now. Try again in a moment.",
+  earlier_build:
+    'This run was written by an earlier build, and this build cannot continue it.',
+  read_failed: "This run couldn't be read right now. Try again in a moment.",
   owned_elsewhere:
-    'This run is live in another TeXRA window. Send the message there.',
+    'This run is live in another process. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   not_parent:
@@ -99,7 +99,7 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
-): FollowUpPresentation {
+): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
   if (result.status === 'failed') {
     return {
       severity: 'warning',
@@ -359,7 +359,7 @@ export interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: Pick<SubmitFollowUpOptions, 'mode' | 'fromParent'>,
+    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */

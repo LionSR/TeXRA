@@ -22,10 +22,6 @@ export interface LanguageModelInfo {
 export type LanguageModelAccessState =
   'allowed' | 'consent-required' | 'unavailable';
 
-interface LanguageModelSelector {
-  readonly vendor?: string;
-}
-
 /** Stable identity for a model whose id is scoped to its provider. */
 export interface LanguageModelReference {
   readonly vendor: string;
@@ -37,9 +33,9 @@ export interface LanguageModelReference {
  * Hosts without such an API use {@link UNAVAILABLE_LANGUAGE_MODEL_PORT}.
  */
 export interface LanguageModelPort {
-  selectModels(
-    selector?: LanguageModelSelector,
-  ): Effect.Effect<readonly LanguageModelInfo[], Error>;
+  selectModels(selector?: {
+    readonly vendor?: string;
+  }): Effect.Effect<readonly LanguageModelInfo[], Error>;
   /**
    * The editor's model for one discovered route, live in the caller's scope
    * (its request handle and uploads close with it). The run layer binds

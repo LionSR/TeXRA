@@ -603,8 +603,9 @@ export function executeCliRequest(
             ),
           );
         }
-        // A failed run's end reaches the presenter through the fold: the
-        // presentation host stays attached until it has.
+        // A failed run's end reaches the host through the session's
+        // presenter, which `settled` waits for: the presentation host stays
+        // attached until it has.
         yield* session.settled;
         if (!runResult.ok) return undefined;
         const state = yield* readCliRunOutcomeState(

@@ -32,11 +32,9 @@ interface Waiter {
   granted: RetryPermit | undefined;
 }
 
-/**
- * One scheduled probe. The slot is taken before the fiber exists, so a
- * probe that completes during its own fork still clears it, and a stale
- * fiber recognizes it was superseded.
- */
+/** One scheduled probe. The slot is taken before the fiber exists, so a
+ *  probe that completes during its own fork still clears it, and a stale
+ *  fiber recognizes it was superseded. */
 interface ScheduledProbe {
   fiber: Fiber.Fiber<void> | undefined;
 }
@@ -50,7 +48,8 @@ interface RouteState {
   readonly waiters: Waiter[];
 }
 
-interface RouteFailure {
+/** A failure a route classifies as its own, with the wait it asks for. */
+export interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
@@ -60,7 +59,8 @@ export interface RoutePolicy {
   readonly isReachableFailure?: (error: Error) => boolean;
 }
 
-interface RouteOptions {
+/** How a call waits on its routes: the base backoff, and who hears a wait. */
+export interface RouteOptions {
   readonly baseBackoffMs: number;
   readonly onWait?: (delayMs: number) => void;
 }

@@ -208,12 +208,12 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   )
     return yield* refused(
       path,
-      `is not a TeXRA store (application id ${application}, schema ${stored}); move it away to let TeXRA create its store there`,
+      `is not a session store (application id ${application}, schema ${stored}); move it away to create a fresh store there`,
     );
   if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
     return yield* refused(
       path,
-      `has schema ${stored} and this build writes ${SCHEMA_VERSION}: ${stored > SCHEMA_VERSION ? 'update TeXRA to open it' : 'no step from it exists'}`,
+      `has schema ${stored} and this build writes ${SCHEMA_VERSION}: ${stored > SCHEMA_VERSION ? 'a newer build opens it' : 'no step from it exists'}`,
     );
   return pre1;
 });
@@ -285,7 +285,7 @@ const prepareStore = Effect.fnUntraced(function* (
     if (aside === null) continue;
     yield* incrementalVacuum(sql);
     yield* Effect.logWarning(
-      `Session store ${path} was written before TeXRA 1.0 (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
+      `Session store ${path} was written before the 1.0 format (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
     ).pipe(withLogChannel(CHANNEL));
     movedAside = { path, aside, reason: 'pre-1.0' };
   }

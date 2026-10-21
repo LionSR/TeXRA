@@ -29,7 +29,7 @@ import type { SessionHandle } from './SessionHandle';
  *  (`ToolContext`, the run included). A tool takes `WorkspaceFs` from
  *  context instead of resolving a static against whichever roots its fiber
  *  happens to carry. */
-type CallServices =
+export type CallServices =
   ProcessServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 
 /**

@@ -16,6 +16,7 @@ import {
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
+import { scriptCallLine } from '@ui/copy/scriptStage';
 
 import { claimRootRun } from './sessionViewFollow';
 import type { LocalSession } from '@texra-ai/harness';
@@ -45,7 +46,7 @@ function scriptPlainLines(
     for (const call of stage.calls) {
       if (call.phase !== null)
         lines.set(`${stage.id}:phase:${call.phase}`, `◆ ${call.phase}`);
-      lines.set(call.id, call.line);
+      lines.set(call.id, scriptCallLine(call));
     }
     // The stage's total once it has ended, its discarded attempts included.
     if (stage.status !== RUN_PHASE.RUNNING && stage.costUsd > 0)

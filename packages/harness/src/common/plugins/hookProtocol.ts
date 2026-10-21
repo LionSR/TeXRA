@@ -315,7 +315,7 @@ function effectOf(asked: HookAsked, output: HookOutput) {
 const ignoredWarning = (event: HookEvent, ignored: readonly string[]) =>
   ignored.length === 0
     ? null
-    : `A ${event} hook asked for ${ignored.join(', ')}, which TeXRA does not act on in v1.`;
+    : `A ${event} hook asked for ${ignored.join(', ')}, which this build does not act on yet.`;
 
 /**
  * Read one hook run the way the reference does, for the v1 events, against

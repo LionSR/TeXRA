@@ -54,6 +54,29 @@ export const ResumeBlockerSchema = z.object({
 });
 export type ResumeBlocker = z.infer<typeof ResumeBlockerSchema>;
 
+/** Why this build cannot open a run's rows: one does not decode
+ *  (`damaged`), or an earlier build wrote one it has no upcaster for. */
+const RunUnreadableSchema = z.enum(['damaged', 'earlierBuild']);
+
+/**
+ * Why a run's banner speaks, as a key and the data its words need; the
+ * app's `@ui/copy/runStatus` words it. In priority order: its rows cannot
+ * be read here, a resume found it blocked, its process stopped before it
+ * finished, another process (by pid) holds it, its end lost its result.
+ */
+export const RunNoticeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: RunUnreadableSchema }),
+  z.object({
+    kind: z.literal('resumeBlocked'),
+    reason: ResumeBlockerSchema,
+    /** A resume was asked for: the run continues by itself once unblocked. */
+    retry: z.boolean(),
+  }),
+  z.object({ kind: z.literal('interrupted') }),
+  z.object({ kind: z.literal('held'), pid: z.int() }),
+  z.object({ kind: z.literal('lost'), message: z.string() }),
+]);
+
 /**
  * Process-local liveness evidence: self, explicitly proved-dead owners, and
  * unreadable runs. A current claimant absent from these verdicts is
@@ -64,7 +87,9 @@ export type ResumeBlocker = z.infer<typeof ResumeBlockerSchema>;
 export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   dead: z.array(OwnerIdSchema),
-  unreadable: z.array(z.object({ runId: RunIdSchema, detail: z.string() })),
+  unreadable: z.array(
+    z.object({ runId: RunIdSchema, reason: RunUnreadableSchema }),
+  ),
   resumeBlocked: z.array(
     z.object({
       runId: RunIdSchema,

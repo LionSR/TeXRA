@@ -407,7 +407,7 @@ describe('child run progress events', () => {
       Effect.gen(function* () {
         const setupError = new Error('child loop setup failed');
         const session = testDefaultSession();
-        let childRun: ChildRunPort | undefined;
+        let childLogger: unknown;
         let childRunId: RunId | undefined;
         let visibleBeforeLoop = true;
 
@@ -419,7 +419,7 @@ describe('child run progress events', () => {
             description: 'Fail during synchronous loop setup',
             config,
             buildLaunch: (context) => {
-              childRun = context.childRun;
+              childLogger = context.logger;
               childRunId = context.runId;
               // Before the loop reserves its stop target, no stop can find
               // the handle: a stop never reaches a run it cannot interrupt.
@@ -435,9 +435,9 @@ describe('child run progress events', () => {
         expect(defect).toBe(setupError);
         expect(visibleBeforeLoop).toBe(false);
 
-        expect(childRun).toBeDefined();
+        expect(childLogger).toBeDefined();
         expect(childRunId).toBeDefined();
-        if (!childRun || !childRunId) {
+        if (!childLogger || !childRunId) {
           throw new Error('expected the failed child launch to be captured');
         }
         expect(session.runs.get(childRunId)?.handle).toBeUndefined();
