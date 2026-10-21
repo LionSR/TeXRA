@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -22,15 +22,6 @@ import type {
   StateStore,
   WorkspaceRoots,
 } from '@texra-ai/harness';
-
-function isReadyMessage(message: unknown): boolean {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'command' in message &&
-    message.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
-  );
-}
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
@@ -138,7 +129,12 @@ export class SettingsViewProvider {
       this.runtime.runFork(
         Effect.gen({ self: this }, function* () {
           yield* this.messageHandler.handleMessage(message, panel);
-          if (this._view !== panel || !isReadyMessage(message)) return;
+          if (
+            this._view !== panel ||
+            !Predicate.hasProperty(message, 'command') ||
+            message.command !== SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
+          )
+            return;
           // The ready handler has repainted the view; the tab asked for while
           // it loaded goes after that data, as a reveal of a live panel
           // orders them.
