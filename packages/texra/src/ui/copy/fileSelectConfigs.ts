@@ -6,11 +6,11 @@
  */
 import { z } from 'zod';
 
-import { ICON_NAMES } from '@ui/wa/iconNames';
 import {
   DocumentFileTypeSchema,
   type MultipleDocumentFileType,
-} from './fileTypes';
+} from '@texra/shared/launcher/fileTypes';
+import { ICON_NAMES } from '@ui/wa/iconNames';
 
 const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,

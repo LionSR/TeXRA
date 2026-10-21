@@ -7,7 +7,6 @@ import {
   type ToolCard,
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
-import { formatDuration } from '@ui/copy/format';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -215,7 +214,7 @@ export function buildCodexTurnToolLog({
               {
                 kind: 'text' as const,
                 label: 'Duration:',
-                text: formatDuration(roundedMs),
+                text: `${(roundedMs / 1000).toFixed(1)}s`,
               },
             ]
           : []),

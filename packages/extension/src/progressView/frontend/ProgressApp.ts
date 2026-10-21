@@ -40,11 +40,11 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 import {
   FILE_SELECT_CONFIGS,
   LAUNCH_FILE_LISTS,
-} from '@texra/shared/launcher/fileSelectConfigs';
-import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
+} from '@ui/copy/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
 import {
   renderIconActionButton,

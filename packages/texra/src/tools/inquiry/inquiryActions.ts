@@ -27,7 +27,6 @@ import {
   type InquiryThreadRecord,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
-import { formatRelativeTime } from '@ui/copy/format';
 import type { RunInbox, RequestDecisionHook } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';
@@ -42,7 +41,7 @@ function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
     'Still open on this run:',
     ...threads.map(
       (t) =>
-        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${formatRelativeTime(Date.parse(t.lastActivityIso))})`,
+        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${t.lastActivityIso})`,
     ),
   ];
 }

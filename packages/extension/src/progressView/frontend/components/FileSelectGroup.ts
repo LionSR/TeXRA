@@ -10,7 +10,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { FileSelectConfig } from '@texra/shared/launcher/fileSelectConfigs';
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import {
   DocumentTaskOptionsSchema,
@@ -19,6 +18,7 @@ import {
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@texra/shared/litControllers/SortableController';
+import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
 import type { IconName } from '@ui/wa/iconNames';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
