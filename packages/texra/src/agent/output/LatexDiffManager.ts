@@ -3,11 +3,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunFileService, type AgentTrace } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';

@@ -17,6 +17,7 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
+  type WriteFilter,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
@@ -37,7 +38,6 @@ import {
 } from '@texra/tools/integrationPlugins';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
-import type { WriteFilter } from '@tools/WriteTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 
 // Local file imports

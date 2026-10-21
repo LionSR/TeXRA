@@ -1,13 +1,12 @@
 import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunFileService, type AgentTrace } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem } from 'effect';
 
 import { createExternalLocation } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 
 import replacementEngine, {
   logReplacementDiagnostics,

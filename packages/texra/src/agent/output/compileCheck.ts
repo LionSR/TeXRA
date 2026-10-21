@@ -1,7 +1,7 @@
 import { hash } from 'node:crypto';
 import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunFileService, type AgentTrace } from '@texra-ai/harness/plugins';
 import { hasExtension } from '@texra-ai/harness';
 
 import { Cause, Effect, FileSystem } from 'effect';
@@ -9,7 +9,6 @@ import { Cause, Effect, FileSystem } from 'effect';
 import { createRunStorageLocation, pathToLocationIn } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import {

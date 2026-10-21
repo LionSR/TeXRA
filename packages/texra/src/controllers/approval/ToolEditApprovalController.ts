@@ -43,6 +43,7 @@ import {
   type HostRequestFailure,
   Rejected,
   type Session,
+  type ToolEditApprovalRequest,
   withLogChannel,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -55,7 +56,6 @@ import {
   type BuildDisplayFn,
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ToolEditApproval';

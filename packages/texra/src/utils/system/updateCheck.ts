@@ -3,8 +3,7 @@ import { HttpClient, HttpClientResponse } from 'effect/http';
 import { gt as semverGt, valid as semverValid } from 'semver';
 import { z } from 'zod';
 
-import { withLogChannel } from '@texra-ai/harness';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import { withLogChannel, type ValueFamily } from '@texra-ai/harness';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';

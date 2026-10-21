@@ -5,8 +5,7 @@
  * (`roundsToPersisted`).
  */
 
-import { RunFileService } from '@texra-ai/harness/plugins';
-import type { AgentTrace } from '@agent/trace';
+import { RunFileService, type AgentTrace } from '@texra-ai/harness/plugins';
 import type { FileLocation } from '@shared/schemas';
 import {
   type CompileFailure,
