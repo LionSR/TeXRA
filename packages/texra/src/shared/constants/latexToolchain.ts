@@ -31,7 +31,7 @@ type DoctorRole =
   | { readonly row: 'required' | 'optional'; readonly purpose: string };
 
 /**
- * What the setup assistant (`probe_environment`, `verify_setup`) and the
+ * What the setup assistant (`probe_environment`) and the
  * settings view's LaTeX tab make of one dependency. A `required` tool is
  * reported missing under its own name; the `image` tools are interchangeable,
  * so either one alone satisfies the image capability and both absent report a
@@ -69,7 +69,7 @@ interface LatexToolEntry {
  * subsystems consume it — and `tools` already depends on `latex`, so a
  * `latex`-side or `tools`-side home would create the cross-subsystem cycle the
  * LAY-1 edge ratchet forbids. Keep the tool descriptions in
- * `ProbeEnvironmentTool`/`VerifySetupTool` aligned with the `required` and
+ * `ProbeEnvironmentTool` aligned with the `required` and
  * `image` entries here — they appear verbatim in the LLM prompt.
  */
 const LATEX_TOOLS = [
