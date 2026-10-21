@@ -44,7 +44,7 @@ import {
   type ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { injectStandaloneTrace } from '@transcript';
+import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { WorkspaceRoots } from '@texra-ai/harness';

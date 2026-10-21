@@ -40,7 +40,7 @@ import {
   ToolError,
   type EditRecord,
   type ToolResult,
-  RequestRefusal,
+  RefusalDecision,
   RunId,
   FileLocation,
 } from '@shared/schemas';
@@ -85,7 +85,7 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
 /** One declined file: the refusal a person or a policy gave it. */
 interface RecordedRejection {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 }
 
 /**
@@ -95,14 +95,14 @@ interface RecordedRejection {
  */
 function summarizeRefusals(rejections: readonly RecordedRejection[]): {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 } {
-  const of = <A extends RequestRefusal['action']>(action: A) =>
+  const of = <A extends RefusalDecision['action']>(action: A) =>
     rejections.filter(
       (
         r,
       ): r is RecordedRejection & {
-        refusal: Extract<RequestRefusal, { action: A }>;
+        refusal: Extract<RefusalDecision, { action: A }>;
       } => r.refusal.action === action,
     );
   const cancelled = of('cancel');
