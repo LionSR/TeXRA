@@ -325,9 +325,13 @@ export function pruneSurface(
 
 /**
  * The launcher's selections against the host's catalogs: a model the
- * catalog no longer enables moves to the first enabled one (the current
- * one when none is), and a working directory that is no longer an open
- * root clears to the default. Returns the same record when both hold.
+ * catalog no longer enables moves to the first available one (the first
+ * enabled one when none is), and a working directory that is no longer an
+ * open root clears to the default. A model the catalog still enables stays
+ * chosen while it is unavailable (an unreadable key store, a pending
+ * Copilot consent): the picker shows why, and a launch fails with that
+ * reason rather than running a model the user did not pick. Returns the
+ * same record when both hold.
  */
 export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const { launch } = surface;
@@ -335,15 +339,11 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const current = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
-  if (
-    host.modelOptions.length > 0 &&
-    !(current && isModelOptionAvailable(current))
-  ) {
+  if (host.modelOptions.length > 0 && current === undefined) {
     const next =
       host.modelOptions.find((option) => isModelOptionAvailable(option)) ??
-      current ??
       host.modelOptions[0];
-    if (next.value !== launch.model) patch.model = next.value;
+    patch.model = next.value;
   }
   if (
     launch.workingDirectory !== '' &&
