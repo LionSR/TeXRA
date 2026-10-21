@@ -76,6 +76,9 @@ export class LatexdiffResults extends LitElement {
       .file-link {
         overflow-wrap: anywhere;
       }
+      .file-link::part(base) {
+        white-space: normal;
+      }
 
       .arrow {
         flex-shrink: 0;
@@ -106,9 +109,9 @@ export class LatexdiffResults extends LitElement {
       variant="brand"
       size="s"
       data-file=${filePath}
-      aria-label=${accessibleLabel}
       @click=${() => this.handleFileClick(filePath)}
-      >${label}</wa-button
+      ><span aria-hidden="true">${label}</span
+      ><span class="visually-hidden">${accessibleLabel}</span></wa-button
     >`;
   }
 
