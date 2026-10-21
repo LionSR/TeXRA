@@ -13,20 +13,14 @@ import * as path from 'node:path';
 import { Effect, Scope, Stream } from 'effect';
 
 // Local imports
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import {
-  type AgentDirectoriesPort,
-  type ConfigInspection,
-  type ConfigProvider,
-  type ConfigTarget,
-  ConfigWriteFailed,
-  type AppStateStore,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort, AppStateStore } from '@platform/interfaces';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
@@ -158,173 +152,21 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
   }
 }
 
-export class FakeConfigProvider implements ConfigProvider {
-  /** TeXRA's rows, as every host's config carries them. */
-  readonly catalog = TEXRA_SETTINGS;
-
-  private readonly values = new Map<string, unknown>();
-
-  private readonly targets = new Map<string, ConfigTarget>();
-
-  constructor(values: Record<string, unknown> = {}) {
-    for (const [key, value] of Object.entries(values)) {
-      this.values.set(key, value);
-      this.targets.set(key, 'workspace');
-    }
-  }
-
-  get<T>(key: string, defaultValue?: T): T {
-    const resolvedKey = this.resolveExistingKey(key);
-    if (resolvedKey === undefined) {
-      const catalogDefault = this.catalog.configDefault(key) as T | undefined;
-      return catalogDefault === undefined
-        ? (defaultValue as T)
-        : catalogDefault;
-    }
-    return this.values.get(resolvedKey) as T;
-  }
-
-  set(key: string, value: unknown): void {
-    this.values.set(key, value);
-    this.targets.set(key, 'workspace');
-  }
-
-  update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Effect.Effect<void, ConfigWriteFailed> {
-    return Effect.sync(() => {
-      if (value === undefined) {
-        this.values.delete(key);
-        this.targets.delete(key);
-      } else {
-        this.values.set(key, value);
-        this.targets.set(key, target);
-      }
-    });
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> {
-    const resolvedKey = this.resolveExistingKey(key);
-    if (resolvedKey === undefined) {
-      return { globalValue: undefined, workspaceValue: undefined };
-    }
-    const value = this.values.get(resolvedKey) as T;
-    const target = this.targets.get(resolvedKey) ?? 'workspace';
-    return {
-      globalValue: target === 'global' ? value : undefined,
-      workspaceValue: target === 'workspace' ? value : undefined,
-    };
-  }
-
-  private resolveExistingKey(key: string): string | undefined {
-    return this.configKeys(key).find((candidate) => this.values.has(candidate));
-  }
-
-  private configKeys(key: string): string[] {
-    return key.startsWith('texra.') ? [key] : [key, `texra.${key}`];
-  }
-}
-
 /**
- * `ConfigProvider` fake with real folder -> workspace -> global fallback,
- * mirroring the platform config providers' resolution order.
- * Unlike `FakeConfigProvider` above (which records one target per key and
- * so cannot hold a folder override and a global value for the same key at
- * once), this tracks the three scopes independently.
- *
- * `update()`'s `target` is intentionally never defaulted: a call site that
- * omits it is recorded as `undefined`, not silently coerced to
- * `'workspace'`, so tests can catch scope-mismatch regressions (issue
- * #7085) that a defaulted target would mask.
+ * The config every fake host reads: production's in-memory provider over
+ * TeXRA's catalog, holding each seeded value where a person's setting of it
+ * would sit (the scope its row is written to, else the workspace), so it
+ * resolves exactly as it does on a real host.
  */
-export class FakeScopedConfigProvider implements ConfigProvider {
-  /** TeXRA's rows, as every host's config carries them. */
-  readonly catalog = TEXRA_SETTINGS;
-
-  private readonly globalValues = new Map<string, unknown>();
-
-  private readonly workspaceValues = new Map<string, unknown>();
-
-  private readonly workspaceFolderValues = new Map<string, unknown>();
-
-  private readonly lastTargets = new Map<string, ConfigTarget>();
-
-  readonly updateCalls: Array<{
-    key: string;
-    value: unknown;
-    target: ConfigTarget | undefined;
-  }> = [];
-
-  get<T>(key: string, defaultValue?: T): T {
-    if (this.workspaceFolderValues.has(key))
-      return this.workspaceFolderValues.get(key) as T;
-    if (this.workspaceValues.has(key))
-      return this.workspaceValues.get(key) as T;
-    if (this.globalValues.has(key)) return this.globalValues.get(key) as T;
-    const catalogDefault = this.catalog.configDefault(key) as T | undefined;
-    return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
+export function fakeConfig(
+  values: Record<string, unknown> = {},
+): MemoryConfigProvider {
+  const config = new MemoryConfigProvider(TEXRA_SETTINGS);
+  for (const [key, value] of Object.entries(values)) {
+    const row = TEXRA_SETTINGS.byKey(canonicalConfigKey(key));
+    Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }
-
-  update<T>(
-    key: string,
-    value: T,
-    target?: ConfigTarget,
-  ): Effect.Effect<void, ConfigWriteFailed> {
-    return Effect.sync(() => {
-      this.updateCalls.push({ key, value, target });
-      if (target === undefined) {
-        this.lastTargets.delete(key);
-      } else {
-        this.lastTargets.set(key, target);
-      }
-      const store =
-        target === 'global' ? this.globalValues : this.workspaceValues;
-      if (value === undefined) {
-        store.delete(key);
-      } else {
-        store.set(key, value);
-      }
-    });
-  }
-
-  /** The most recent explicit `target` passed to `update()` for `key`, or `undefined` if none was given. */
-  lastTargetFor(key: string): ConfigTarget | undefined {
-    return this.lastTargets.get(key);
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> {
-    return {
-      globalValue: this.globalValues.has(key)
-        ? (this.globalValues.get(key) as T)
-        : undefined,
-      workspaceValue: this.workspaceValues.has(key)
-        ? (this.workspaceValues.get(key) as T)
-        : undefined,
-    };
-  }
-
-  /** Seeds a legacy global value directly, without going through `update()`. */
-  seedGlobal(key: string, value: unknown): void {
-    this.globalValues.set(key, value);
-  }
-
-  /** Seeds a workspace value directly, without going through `update()`. */
-  seedWorkspace(key: string, value: unknown): void {
-    this.workspaceValues.set(key, value);
-  }
-
-  /**
-   * Seeds a resource-scoped `workspaceFolderValue` directly. Real writes to
-   * the `'workspace'` target (`ConfigTarget` has no folder-scope option)
-   * land in `workspaceValue`, but some settings are declared
-   * `resource`-scoped, so UI writes to them commonly resolve as
-   * `workspaceFolderValue` instead -- this seeds that shape directly.
-   */
-  seedWorkspaceFolder(key: string, value: unknown): void {
-    this.workspaceFolderValues.set(key, value);
-  }
+  return config;
 }
 
 /** The platform's in-memory store, with the change feed an `AppStateStore`
@@ -364,21 +206,6 @@ export class FakeSecrets implements PlatformSecrets {
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
     return Effect.sync(() => [...this.values.keys()]);
   }
-}
-
-/**
- * A detached pair of process stores, for a suite whose readers are all mocked
- * and only pass the bag through.
- */
-export function fakeStores(): ModelOptionStores {
-  return {
-    host: 'vscode',
-    secrets: new FakeSecrets(),
-    config: new FakeConfigProvider(),
-    workspaceState: new FakeStateStore(),
-    repoState: new FakeStateStore(),
-    globalState: new FakeStateStore(),
-  };
 }
 
 export interface FakePlatformOptions {
@@ -423,7 +250,7 @@ export interface FakeProcessPorts {
 
 /**
  * Overrides for one fake host: the process ports above, the two
- * workspace-root ports a suite substitutes (a scoped config provider, a
+ * workspace-root ports a suite substitutes (a config it holds a handle to, a
  * hand-built state store), the process ports a root hands
  * `processLayer`, and the setup platform a setup-tool suite
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
@@ -455,7 +282,7 @@ export function createFakeWorkspaceRoots(
     storageRoot: fakeStorageRoot(),
     storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
     globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
-    config: overrides.config ?? new FakeConfigProvider(options.config),
+    config: overrides.config ?? fakeConfig(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
     repoState: overrides.repoState ?? new FakeStateStore(),
