@@ -124,7 +124,7 @@ export function ConversationRegion({
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
+    ? clamp(requestedQueuedFollowUpPanelRows, 0, rows - footerRows)
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   // The open-time notice shares the queued panel's place above the footer

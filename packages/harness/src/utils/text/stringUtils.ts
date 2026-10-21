@@ -15,7 +15,7 @@ function floorToWholeSeconds(durationMs: number): number {
   return Math.floor(durationMs / 1000) * 1000;
 }
 
-/** Pin `value` into `[min, max]`; `max` wins when the bounds cross. */
+/** Pin `value` into `[min, max]`; `min` wins when the bounds cross. */
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

@@ -198,7 +198,7 @@ function visibleSelectRange({
 }): { readonly start: number; readonly end: number } {
   if (itemCount <= 0) return { start: 0, end: 0 };
   const visibleCount =
-    maxVisibleItems == null ? itemCount : clamp(maxVisibleItems, 0, itemCount);
+    maxVisibleItems == null ? itemCount : clamp(itemCount, 0, maxVisibleItems);
   if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);

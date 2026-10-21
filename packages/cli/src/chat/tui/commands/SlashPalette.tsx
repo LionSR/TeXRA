@@ -55,7 +55,7 @@ function slashPaletteWindow({
     return { start: 0, end: 0, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const visibleAtEdge = clamp(maxVisibleCommands, 1, itemCount);
+  const visibleAtEdge = clamp(itemCount, 1, maxVisibleCommands);
   if (itemCount <= visibleAtEdge) {
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };
   }

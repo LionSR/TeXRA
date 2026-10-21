@@ -72,7 +72,7 @@ export function allocateMiddleRows({
     foregroundRows:
       foregroundMaxRows === undefined
         ? foregroundRows
-        : clamp(foregroundMaxRows, 1, foregroundRows),
+        : clamp(foregroundRows, 1, foregroundMaxRows),
     transcriptRows,
   };
 }
