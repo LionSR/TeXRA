@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
 import { goalStateOf } from '@texra-ai/harness/schemas';
@@ -32,7 +33,6 @@ import {
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { formatSlashCommandHelp } from '../helpText';
 import {

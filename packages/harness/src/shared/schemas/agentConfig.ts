@@ -105,7 +105,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
     .nullish(),
 });
 
-/** Canonical current configuration: at most as many outputs as inputs, and
+/** Canonical configuration: at most as many outputs as text/media inputs, and
  *  a persona exactly when the agent is inline, named as the agent is. */
 export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
   (config, ctx) => {
@@ -120,12 +120,15 @@ export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
           'An inline agent carries its persona, named as the agent, and only it does.',
       });
     }
-    if (config.outputFiles.length > config.inputFiles.length) {
+    if (
+      config.outputFiles.length >
+      config.inputFiles.length + config.mediaFiles.length
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['outputFiles'],
         message:
-          'Number of output files must not be greater than the number of input files.',
+          'Number of output files must not exceed the number of text and media input files.',
       });
     }
   },

@@ -1,3 +1,4 @@
+import { previewLabel, truncateSummary } from '@texra-ai/harness/schemas';
 import { Effect } from 'effect';
 /**
  * The inquiry's side of a `request.decided` (one run model, 3.7): an inquiry
@@ -26,11 +27,7 @@ import {
   inquiryThreadFact,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import {
-  formatRelativeTime,
-  previewLabel,
-  truncateSummary,
-} from '@utils/text/stringUtils';
+import { formatRelativeTime } from '@utils/text/stringUtils';
 import type { RunInbox, RequestDecisionHook } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';

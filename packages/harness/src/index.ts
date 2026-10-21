@@ -163,8 +163,7 @@ export type {
 } from '@agent/core/tools/ToolTypes';
 export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
-export { defineTool } from '@tools/core/definition';
-export type { DefinedTool } from '@tools/core/definition';
+export { defineTool, type DefinedTool } from '@tools/core/definition';
 export type { ToolResult } from '@shared/schemas';
 export type {
   AggregateId,
@@ -182,10 +181,8 @@ export {
   NotOwner,
   Rejected,
   Unavailable,
-} from '@shared/session/requestErrors';
-export type {
-  RequestError,
-  RequestRefusal,
+  type RequestError,
+  type RequestRefusal,
 } from '@shared/session/requestErrors';
 export type {
   Outcome,
@@ -196,12 +193,6 @@ export type {
 
 // The platform's ports: what an `AgentPlatform` implements, the failures its
 // stores answer with, and the services a plugin's code reads them as.
-export type {
-  AgentDirectoriesPort,
-  ConfigProvider,
-  StateStore,
-  ToolMissingHandler,
-} from '@platform/interfaces';
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -210,18 +201,19 @@ export {
   StateReadFailed,
   StateWriteFailed,
   ToolMissingReporter,
+  type AgentDirectoriesPort,
+  type ConfigProvider,
+  type StateStore,
+  type ToolMissingHandler,
 } from '@platform/interfaces';
-export type { PlatformSecrets } from '@platform/secrets';
-export { Secrets } from '@platform/secrets';
-export type {
-  LanguageModelAccessState,
-  LanguageModelInfo,
-  LanguageModelPort,
-  LanguageModelReference,
-} from '@platform/languageModel';
+export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelAccessState,
+  type LanguageModelInfo,
+  type LanguageModelPort,
+  type LanguageModelReference,
 } from '@platform/languageModel';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
@@ -266,7 +258,6 @@ export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
-export { RouteUnavailable } from '@common/errors/agentErrors';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
@@ -283,6 +274,7 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // A `FileLocation` by its root: a workspace file, a file under a run's
 // storage, a file outside both, or a path against the workspace root a
 // caller holds.
@@ -298,6 +290,35 @@ export {
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+// The skills a session's roots discover (the settings inventory, the enabled
+// ones a person activates) with their issues, and a host's source options.
+export {
+  Skills,
+  type EnabledSkill,
+  type SkillRoots,
+} from '@skills/runtimeSkills';
+export type { SkillSourceOptions } from '@skills/skillSources';
+export type {
+  SkillIssueCode,
+  SkillIssueSeverity,
+  SkillLoadIssue,
+} from '@skills/skillLoader';
+export type { SkillDisplayItem } from '@shared/schemas';
+// The Claude Code and Codex plugins installed under a storage root: their
+// operations (enable asks for trust), what loads now, and their refusals.
+export {
+  InstalledPlugins,
+  type PluginOrigin,
+  type PluginUpdate,
+} from '@common/plugins/installedPlugins';
+export type { PluginEnv } from '@common/plugins/installRecord';
+export {
+  PluginError,
+  PluginRequestError,
+} from '@common/plugins/pluginManifest';
+export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+export type { ConfiguredHook } from '@common/plugins/hookConfig';
+export type { InstalledPlugin, PluginTrust } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {
@@ -308,7 +329,7 @@ export {
 // presented, the filesystem and module predicates, the cause chain, a
 // user's abort, and a provider error's message. Error messages themselves
 // (`toErrorMessage`, `ensureError`) are in `./schemas`.
-export { AgentError } from '@common/errors/agentErrors';
+export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export {
   agentErrorPresentation,
   type AgentErrorKind,

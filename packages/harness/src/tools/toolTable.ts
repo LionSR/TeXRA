@@ -81,7 +81,7 @@ export type SessionPluginLayer = Layer.Layer<never, never, PluginHold>;
 export class PluginHold extends Context.Service<
   PluginHold,
   (until: Effect.Effect<void>) => Effect.Effect<void>
->()('@texra/tools/PluginHold') {}
+>()('@texra-ai/harness/tools/PluginHold') {}
 
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
@@ -304,5 +304,5 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
 
 /** The process's plugin table, which every run's offered tools come from. */
 export class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
-  '@texra/tools/ToolRegistry',
+  '@texra-ai/harness/tools/ToolRegistry',
 ) {}

@@ -31,7 +31,6 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness';
 
@@ -88,7 +87,8 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 };
 
 /** Native CLI binary filename for the current platform. */
-const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
+const CLAUDE_BINARY_NAME =
+  process.platform === 'win32' ? 'claude.exe' : 'claude';
 
 /** The platform binary sits directly in the platform-package directory. */
 function claudeBinaryInPlatformPackage(platformPkgDir: string) {

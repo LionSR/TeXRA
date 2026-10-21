@@ -187,7 +187,7 @@ export const activePresetId = trackedSignal<string | null>(() => null);
 export const compactionThresholdPercent = settingSignal<number>(
   MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
 );
-export const chatgptCodexContextWindow = settingSignal<number>(
+export const chatgptCodexContextWindow = settingSignal<number | null>(
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
 );
 export const modelRetryMaxAttempts = settingSignal<number>(

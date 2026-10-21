@@ -47,7 +47,7 @@ describe('codex model eligibility', () => {
       overrides: {
         id: 'gpt-5.6-sol',
         shortName: 'gpt-5.6',
-        codexSubscription: true,
+        codexSubscription: { contextWindow: 272_000 },
         reasoning: {
           efforts: [ReasoningEffort.MEDIUM],
           providerDefault: ReasoningEffort.MEDIUM,
@@ -78,7 +78,7 @@ describe('codex model eligibility', () => {
         provider: ModelProvider.ANTHROPIC,
         id: 'claude-codex-lookalike',
         shortName: 'claude-codex-lookalike',
-        codexSubscription: true,
+        codexSubscription: { contextWindow: 272_000 },
       },
       eligible: false,
     },
@@ -92,7 +92,10 @@ describe('codex model eligibility', () => {
   });
 
   it('sends a pro-mode request to the API key: the Codex backend serves no pro mode', () => {
-    const model = openAIModel({ codexSubscription: true, modes: ['pro'] });
+    const model = openAIModel({
+      codexSubscription: { contextWindow: 272_000 },
+      modes: ['pro'],
+    });
     const facts = { ...OWN_KEY_ROUTE_FACTS, chatgptSubscription: true };
     expect(decideModelRoute(model, facts).kind).toBe('chatgpt-subscription');
     expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).not.toBe(
@@ -106,7 +109,7 @@ describe('codex model eligibility', () => {
       chatgptSubscription: true,
       useOpenRouter: true,
     };
-    const flagged = { codexSubscription: true };
+    const flagged = { codexSubscription: { contextWindow: 272_000 } };
     // No OpenRouter route exists for it, so the toggle cannot move it.
     expect(
       decideModelRoute(

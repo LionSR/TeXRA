@@ -6,7 +6,7 @@
  * and Lean tool diagnostics satisfy this interface.
  */
 
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 
 /**
  * Severity levels, matching `vscode.DiagnosticSeverity` values

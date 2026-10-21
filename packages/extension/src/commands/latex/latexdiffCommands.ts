@@ -40,7 +40,6 @@ import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActi
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { entryExists } from '@utils/files/fsEntryExists';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -140,7 +139,7 @@ const openLatexdiffResult = Effect.fnUntraced(function* (
   const diffLocation = pathToLocationIn(roots.workspace, diffFilePath);
   const fs = yield* FileSystem.FileSystem;
 
-  if (!(yield* entryExists(fs, diffLocation.absolutePath))) {
+  if (!(yield* fs.exists(diffLocation.absolutePath))) {
     yield* showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,

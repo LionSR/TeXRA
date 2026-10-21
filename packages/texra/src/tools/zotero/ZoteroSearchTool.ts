@@ -6,13 +6,13 @@
  */
 
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
 import { executed } from '@texra-ai/harness/plugins';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - zotero
 import {

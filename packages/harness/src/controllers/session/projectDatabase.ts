@@ -32,11 +32,10 @@ export const projectDatabaseLayer = Layer.effect(
 );
 
 /**
- * What storage maintenance found under a storage root (the storage design's
- * §7): the workspace stores whose `workspace-store` record names a root that
+ * What storage maintenance found under a storage root: the workspace stores whose `workspace-store` record names a root that
  * is gone, and the `.pre1`/`.corrupt-` aside copies beside the stores that
  * remain. The store of no workspace has no root and is never an orphan.
- * Nothing goes without the caller's word (owner ruling Q4): an unmounted
+ * Nothing goes without the caller's word: an unmounted
  * drive looks exactly like a deleted root.
  */
 export interface StorageInventory {

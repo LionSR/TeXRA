@@ -89,7 +89,7 @@ export class RunHistoryInconsistent extends Data.TaggedError(
 
 /**
  * What the loop continues from. A plain type with no schema of its own,
- * because giving it one invites persisting it (C10). Every field is derived
+ * because giving it one invites persisting it. Every field is derived
  * from the row that produced it.
  */
 export type RunState = RunPosition &
@@ -130,7 +130,7 @@ export type RunState = RunPosition &
      *  no waiter has read them. A decision from before the activation was
      *  read by the process that asked, whose body went on with it. */
     readonly decidedSinceActivation: ReadonlySet<string>;
-    /** Derived (D12): the priced usage on its `response`/`context.edit` rows. */
+    /** Derived: the priced usage on its `response`/`context.edit` rows. */
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;

@@ -469,6 +469,8 @@ const HttpTurnResultSchema = z
   .strictObject({
     kind: z.literal('http'),
     ...IdentitySchema.shape,
+    /** Null for a stateless Google response with no retrievable ID. */
+    providerResponseId: IdentitySchema.shape.providerResponseId.nullable(),
     modelFingerprint: z.string().nullable(),
     content: ContentSchema,
     finishReason: z.enum([
@@ -486,11 +488,9 @@ const HttpTurnResultSchema = z
         z
           .strictObject({
             kind: z.literal('google-interactions'),
-            // Reported verbatim: the interaction status vocabulary is open, so
-            // an unrecognized status is preserved rather than dropped.
+            // Preserve Google's open status vocabulary verbatim.
             status: z.string().min(1),
-            // Null when the interaction reports no reason for ending, which is
-            // every status Google returns today.
+            // Google currently reports no terminal reason.
             terminalReason: z.string().min(1).nullable(),
           })
           .readonly(),
@@ -550,6 +550,9 @@ const HttpTurnResultSchema = z
     const usageKind = result.usage?.providerUsage?.kind;
     const finishKind = result.finishEvidence?.kind;
     if (
+      (result.providerResponseId === null &&
+        (result.requestedOrigin.protocol !== 'google-interactions' ||
+          result.continuation !== undefined)) ||
       (result.refusalEvidence !== undefined &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
@@ -561,7 +564,7 @@ const HttpTurnResultSchema = z
       ctx.addIssue({
         code: 'custom',
         message:
-          'Provider refusal, finish and usage evidence require their original protocol and outcome.',
+          'Provider identity and evidence require their original protocol and outcome.',
       });
     }
     if (
@@ -762,12 +765,9 @@ export interface Model {
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
     ): Effect.Effect<BackgroundSubmission, ModelError>;
     /**
-     * Observe the remote work `operation` names. The admitted turn is passed
-     * back because a completion's continuation anchors to the exact history
-     * prefix it covers, which the handle deliberately does not copy: an
-     * accepted operation is a handle, and the run history keeps no second
-     * transcript. The caller owns that history and hands back the turn it
-     * recorded when it submitted, so the completion anchors as a live one.
+     * Observe remote work against the exact turn recorded at submission.
+     * Its completion anchors to that turn's history; the operation handle
+     * deliberately carries no duplicate transcript.
      */
     observe(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,

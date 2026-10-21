@@ -10,10 +10,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ResolvedTurn, TurnResult } from '../turn.js';
 
 /** A completed provider turn: the HTTP arm of `TurnResult`. */
-export type HttpTurnResult = Extract<
-  TurnResult,
-  { providerResponseId: string }
->;
+export type HttpTurnResult = Extract<TurnResult, { kind: 'http' }>;
 /** One canonical content part of a completed turn. */
 export type Part = HttpTurnResult['content'][number];
 /** One part of a user turn or a tool result. */

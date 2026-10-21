@@ -287,4 +287,11 @@ function state<S extends z.ZodType>(
 }
 
 /** Every read and write of a setting; see the module comment. */
-export const Settings = { get, inspect, getConfig, set, reset, state };
+export const Settings = Object.freeze({
+  get,
+  inspect,
+  getConfig,
+  set,
+  reset,
+  state,
+} as const);

@@ -31,7 +31,6 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { StateReadFailed } from '@texra-ai/harness';
@@ -92,7 +91,7 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
   const fs = yield* FileSystem.FileSystem;
   // An unreadable output file loses its squiggles, not the whole refresh.
   const text = yield* fs.readFileString(absolutePath).pipe(
-    Effect.map(normalizeLineEndings),
+    Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
     Effect.catch((error) =>
       Effect.logError(`Failed to read ${absolutePath}: ${error.message}`).pipe(
         withLogChannel(CHANNEL),

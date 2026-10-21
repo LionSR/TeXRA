@@ -1,13 +1,9 @@
 /**
  * Structural "kind" of a tool's UI treatment, shared by every host that
- * renders individual tool calls: the CLI chat TUI
- * (`packages/cli/src/chat/tui/panes/toolRenderers.tsx`) and the VS Code
- * progress view
- * (`packages/extension/src/progressView/frontend/formatters/`).
+ * renders individual tool calls.
  *
- * Both hosts used to hardcode their own tool-name lists for this and had
- * quietly drifted apart. This browser-safe module is the single source of
- * truth. The tool registry checks its canonical mapped keys at compile time,
+ * This browser-safe module is the single source of truth for it, so hosts
+ * cannot drift apart. The tool registry checks its canonical mapped keys at compile time,
  * so a renamed or removed registered tool is caught without introducing a
  * shared-to-tools dependency.
  */

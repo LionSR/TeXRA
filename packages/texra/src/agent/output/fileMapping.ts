@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
 function normalizeLatexPath(value: string): string {
@@ -157,9 +156,9 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
       const outputPath = fileLocationDisplayPath(outputLocation);
 
       yield* Effect.gen(function* () {
-        const content = normalizeLineEndings(
-          yield* fs.readFileString(outputLocation.absolutePath),
-        );
+        const content = (yield* fs.readFileString(
+          outputLocation.absolutePath,
+        )).replaceAll('\r\n', '\n');
         const newContent = content.replaceAll(
           /\\input{([^}]+)}/g,
           (match, rawPath) => {

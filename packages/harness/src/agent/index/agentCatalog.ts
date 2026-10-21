@@ -357,12 +357,10 @@ export class AgentCatalog extends Context.Service<
       ) =>
         Effect.gen(function* () {
           const entry =
-            (yield* Effect.andThen(
-              settled,
+            (yield* Effect.andThen(settled, () =>
               resolve(stores, identifier, source),
             )) ??
-            (yield* Effect.andThen(
-              refresh,
+            (yield* Effect.andThen(refresh, () =>
               resolve(stores, identifier, source),
             ));
           if (entry) return entry;

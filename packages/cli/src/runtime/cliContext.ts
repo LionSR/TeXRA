@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result, Config, Option } from 'effect';
 
-import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
+import {
+  DatabaseOpenFailed,
+  type ConfigProvider,
+  type SkillSourceOptions,
+} from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { safeParseJson } from '@texra-ai/harness/schemas';
@@ -17,7 +21,6 @@ import {
 import { stricterPolicy } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import type { SkillSourceOptions } from '@skills/skillSources';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
@@ -26,7 +29,6 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
@@ -327,8 +329,8 @@ export interface BuildCliContextInit {
 
 /** One env-tier value from the ambient ConfigProvider, trimmed; blank reads as unset. */
 const envTier = (key: string): Effect.Effect<string | undefined> =>
-  Effect.map(envVar(key), (raw) => {
-    const value = raw?.trim();
+  Effect.map(Config.String(key).pipe(Config.option, Effect.orDie), (raw) => {
+    const value = Option.getOrUndefined(raw)?.trim();
     return isNonEmptyString(value) ? value : undefined;
   });
 

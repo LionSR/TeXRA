@@ -18,4 +18,4 @@ export class SessionInputs extends Context.Service<
       previousDebug: boolean,
     ) => Stream.Stream<readonly FoldInput[]>;
   }
->()('@texra/session/SessionInputs') {}
+>()('@texra-ai/harness/session/SessionInputs') {}

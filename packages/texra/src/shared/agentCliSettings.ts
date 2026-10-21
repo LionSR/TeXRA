@@ -26,7 +26,7 @@ export const isClaudeCodeModel = (config: ModelConfig): boolean =>
 /** A model the Codex CLI can run: an OpenAI model the Codex backend serves. */
 export const isCodexModel = (config: ModelConfig): boolean =>
   config.provider === ModelProvider.OPENAI &&
-  config.codexSubscription === true &&
+  config.codexSubscription !== undefined &&
   config.retired !== true;
 
 /** The picker's models: the eligible ones that are not deprecated, in registry order. */

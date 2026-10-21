@@ -25,14 +25,14 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { executeCommand } from '@texra-ai/harness/node';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { executeCommand } from '@utils/system/execUtils';
-import { resolveOptionalCommand } from '@utils/system/binaryResolver';
+import { findCommand } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------
 // execUtils
@@ -516,36 +516,18 @@ describe('executeCommand', () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// resolveOptionalCommand
+// findCommand
 // ---------------------------------------------------------------------------
 
-describe('resolveOptionalCommand', () => {
+describe('findCommand', () => {
   it.effect('routes Perl scripts through the Perl launcher', () =>
     Effect.gen(function* () {
       const resolvedPath =
         '/usr/local/texlive/scripts/latexindent/latexindent.pl';
 
       assert.deepEqual(
-        yield* resolveOptionalCommand('latexindent', ['-w'], { resolvedPath }),
-        {
-          command: 'perl',
-          args: [resolvedPath, '-w'],
-          resolvedPath,
-        },
-      );
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.effect('launches extensionless Windows binaries directly', () =>
-    Effect.gen(function* () {
-      const resolvedPath = 'C:\\msys64\\usr\\bin\\sox';
-
-      assert.deepEqual(
-        yield* resolveOptionalCommand('sox', [], {
-          resolvedPath,
-          isWindows: true,
-        }),
-        { command: resolvedPath, args: [], resolvedPath },
+        yield* findCommand('latexindent', { path: resolvedPath }),
+        { command: 'perl', args: [resolvedPath], resolvedPath },
       );
     }).pipe(Effect.provide(nodeSpawnerLayer)),
   );

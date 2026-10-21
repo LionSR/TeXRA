@@ -14,6 +14,7 @@ import {
   mcpConfigPathOf,
   readMcpConfig,
   type ConfigProvider,
+  type SettingsStores,
 } from '@texra-ai/harness';
 import { JsonConfigProvider, type ConfigStore } from '@texra-ai/harness/node';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
@@ -25,7 +26,6 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 // Local imports - tools
 
 // Local imports - utilities
-import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * The model a `texra` command starts on when nothing else names one.

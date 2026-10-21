@@ -60,7 +60,7 @@ import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { SessionApprovals } from './runApprovalQueue';
 import type { RunsShape } from './runs';
 
-/** A write the store refused: nothing was written (D6 b). */
+/** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 
 /** A claim the store would not give this process. */
@@ -189,7 +189,7 @@ export interface SessionViewAccess {
     port: string,
     set: readonly TranscriptSubscription[],
   ): Effect.Effect<void>;
-  /** Record what a resume of a run waits for (durable harness D5), or null
+  /** Record what a resume of a run waits for, or null
    *  when nothing blocks it any more: local truth, never a row. */
   markResumeBlocked(
     runId: RunId,
@@ -235,12 +235,12 @@ export interface SessionHandleInit {
   /** A presentation host the session is born with, attached for its life. */
   readonly interactions?: HostInteractions;
   /**
-   * The opener is a window (the TUI, desktop, the extension), which follows
-   * its interrupted tasks (`followInterruptedTasks`): it resumes a task
-   * whose resume was blocked once what it needs is back, and with `offer`
-   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
-   * tasks a closed or crashed TeXRA left interrupted. Headless runs and the
-   * SDK leave it unset: their policy is off.
+   * The opener is a host window, which follows its interrupted tasks
+   * (`followInterruptedTasks`): it resumes a task whose resume was blocked
+   * once what it needs is back, and with `offer` also lists at open, or
+   * under `texra.resumeOnOpen: auto` continues, the tasks a closed or
+   * crashed host app left interrupted. Headless runs and the SDK leave it
+   * unset: their policy is off.
    */
   readonly interruptedTasks?: 'offer' | 'retry';
   /** Absent, the project's database; ephemeral, a throwaway one. */

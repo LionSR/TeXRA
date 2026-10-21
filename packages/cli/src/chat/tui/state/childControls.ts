@@ -4,8 +4,8 @@
  * how a stream is presented. Surface decisions over fold facts; nothing
  * here derives topology.
  */
+import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
-import { formatCompactDuration } from '@utils/text/stringUtils';
 import { runViewOf } from './sessionView';
 import type { RunView, SessionView } from '@texra-ai/harness';
 

@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { ConfigProvider, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
@@ -57,9 +57,6 @@ async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   // Imported after the reload so the tag is the instance the freshly
   // imported module under test yields.
   const { Secrets } = await import('@platform/secrets');
-  // The live env provider, so the suite's `vi.stubEnv` still governs the
-  // API-key fallback read through `envVar`.
-  const { processEnvConfigLayer } = await import('@utils/system/envFlags');
   const spawner = scriptedSpawnerLayer((command) => ({
     exitCode:
       keychainAccount !== undefined && command.args.includes(keychainAccount)
@@ -70,7 +67,11 @@ async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   return Effect.runPromise(
     buildClaudeAgentEnv(options).pipe(
       Effect.provide(Secrets.layer(fakeSecrets)),
-      Effect.provide(processEnvConfigLayer),
+      // The live env provider, so the suite's `vi.stubEnv` still governs the
+      // API-key fallback read through `envVar`.
+      Effect.provide(
+        ConfigProvider.layer(ConfigProvider.fromEnvRecord(process.env)),
+      ),
       Effect.provide(spawner.layer),
     ),
   );

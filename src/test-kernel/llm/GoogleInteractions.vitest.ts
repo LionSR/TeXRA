@@ -284,6 +284,146 @@ describe('canonical Google Interactions protocol', () => {
     vi.unstubAllEnvs();
   });
 
+  // Failure modes: a stateless response can lack a retrievable ID; accepting it
+  // must not fabricate identity/continuation, weaken stored turns, accept an
+  // invalid ID (including on status updates), lose provider errors, or bypass
+  // lifecycle/identity checks.
+  it.effect.each([
+    { store: false, id: '', outcome: 'ok' },
+    { store: false, id: undefined, outcome: 'ok' },
+    { store: false, id: 'int_fixture', outcome: 'ok' },
+    { store: true, id: 'int_fixture', outcome: 'ok' },
+    { store: false, id: '', status: { id: '' }, outcome: 'ok' },
+    { store: false, id: undefined, status: { id: undefined }, outcome: 'ok' },
+    {
+      store: true,
+      id: 'int_fixture',
+      status: { id: '' },
+      outcome: 'malformed-output',
+    },
+    {
+      store: true,
+      id: 'int_fixture',
+      status: { id: undefined },
+      outcome: 'malformed-output',
+    },
+    { store: false, id: '', status: { id: null }, outcome: 'malformed-output' },
+    { store: false, id: '', status: { id: 42 }, outcome: 'malformed-output' },
+    {
+      store: false,
+      id: 'int_fixture',
+      status: { id: 'int_other' },
+      outcome: 'malformed-output',
+    },
+    { store: true, id: '', outcome: 'malformed-output' },
+    { store: true, id: undefined, outcome: 'malformed-output' },
+    { store: false, id: 42, outcome: 'malformed-output' },
+    { store: false, id: null, outcome: 'malformed-output' },
+    { store: false, id: '', fault: 'no-start', outcome: 'malformed-output' },
+    { store: false, id: '', fault: 'no-end', outcome: 'malformed-output' },
+    { store: false, id: '', fault: 'provider', outcome: 'provider-rejection' },
+    { store: false, id: '', fault: 'incomplete', outcome: 'malformed-output' },
+    {
+      store: false,
+      id: 'int_fixture',
+      fault: 'changed',
+      outcome: 'malformed-output',
+    },
+  ])(
+    'handles response identity with store=$store id=$id status=$status fault=$fault',
+    ({ store, id, status, fault, outcome }) =>
+      Effect.gen(function* () {
+        const events = [
+          {
+            event_type: 'interaction.created',
+            interaction: { id, model: 'gemini-returned' },
+          },
+          ...(status === undefined
+            ? []
+            : [
+                {
+                  event_type: 'interaction.status_update',
+                  interaction_id: status.id,
+                  status: 'in_progress',
+                },
+              ]),
+          {
+            event_type: 'step.start',
+            index: 0,
+            step: { type: 'model_output' },
+          },
+          {
+            event_type: 'step.delta',
+            index: 0,
+            delta: { type: 'text', text: 'Synthetic response.' },
+          },
+          { event_type: 'step.stop', index: 0 },
+          {
+            event_type: 'interaction.completed',
+            interaction: {
+              id: fault === 'changed' ? 'int_other' : id,
+              status: fault === 'incomplete' ? 'incomplete' : 'completed',
+              usage: {
+                total_input_tokens: 3,
+                total_output_tokens: 2,
+                total_tokens: 5,
+              },
+            },
+          },
+        ];
+        if (fault === 'no-start') events.shift();
+        if (fault === 'no-end') events.pop();
+        const providerError = {
+          event_type: 'error',
+          error: { code: 'SYNTHETIC_FAILURE', message: 'Fixture rejected.' },
+        };
+        fetchModel.mockImplementation(async () =>
+          response(
+            fault === 'provider'
+              ? [...events.slice(0, 1), providerError]
+              : events,
+          ),
+        );
+        const configured = model(store);
+        const prepared = yield* configured.prepareTurn({
+          messages: [
+            {
+              role: 'user',
+              content: [{ kind: 'text', text: 'Synthetic request.' }],
+            },
+          ],
+        });
+        assert(prepared.mode === 'foreground');
+        const completion = completedTurn(configured.streamTurn(prepared));
+        if (outcome !== 'ok') {
+          const error = yield* Effect.flip(completion);
+          expect(error.kind).toBe(outcome);
+          if (fault === 'provider') expect(error.cause).toEqual(providerError);
+          return;
+        }
+        const result = yield* completion;
+        expect(result).toMatchObject({
+          kind: 'http',
+          providerResponseId: id || null,
+          returnedModel: 'gemini-returned',
+          content: [
+            {
+              kind: 'message',
+              content: [{ kind: 'text', text: 'Synthetic response.' }],
+            },
+          ],
+          finishReason: 'stop',
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        });
+        if (store)
+          expect(result).toHaveProperty(
+            'continuation.anchor.interactionId',
+            'int_fixture',
+          );
+        else expect(result).not.toHaveProperty('continuation');
+      }),
+  );
+
   it.effect(
     'submits once, polls signed tool calls, and replays their canonical results',
     () =>

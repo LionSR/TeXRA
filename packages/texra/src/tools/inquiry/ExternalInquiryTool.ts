@@ -15,6 +15,7 @@
  *   - `list` → enumerate threads by status / scope
  */
 
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { defineTool, withLogChannel } from '@texra-ai/harness';
@@ -40,7 +41,6 @@ import {
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 

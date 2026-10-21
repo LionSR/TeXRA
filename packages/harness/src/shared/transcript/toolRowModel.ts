@@ -29,7 +29,6 @@ import {
 } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { dispatchSections, inputFilePath } from './toolRowSections';
 import {
@@ -188,7 +187,7 @@ const TRIVIAL_WRITE_OUTPUT = 'written';
  *  tool that folds stdout into its summary does not push the actual summary
  *  off the row. No length cut — that belongs to the painter. */
 function headerSummaryText(summary: string): string {
-  const oneLine = collapseWhitespace(summary);
+  const oneLine = summary.replaceAll(/\s+/g, ' ').trim();
   const marker = oneLine.search(/\s+<(?:stdout|stderr)>/i);
   return marker >= 0 ? oneLine.slice(0, marker).trim() || oneLine : oneLine;
 }
@@ -213,7 +212,8 @@ function toolHeaderPreview(
       ? executionsSubagentSummary(input, ctx.runLabels)
       : undefined;
   const inputPreview =
-    labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));
+    labeled ??
+    deriveToolInputPreview(toolName, input).replaceAll(/\s+/g, ' ').trim();
   const summary = headerSummaryText(headerSummary);
   const kind = toolDisplayKind(toolName);
   // A script is named by its title (the input preview) in every state.
@@ -223,7 +223,7 @@ function toolHeaderPreview(
   // row's code section.
   const description =
     Predicate.isObject(input) && typeof input.description === 'string'
-      ? collapseWhitespace(input.description).trim()
+      ? input.description.replaceAll(/\s+/g, ' ').trim()
       : '';
   return description || inputPreview || summary;
 }
@@ -263,11 +263,11 @@ function outputSuppression(
 ): ToolOutputSuppression | undefined {
   const { outputText, errorText } = normalized;
   if (!outputText) return 'empty';
-  const collapsed = collapseWhitespace(outputText).trim();
-  if (collapsed && collapsed === collapseWhitespace(headerPreview).trim()) {
+  const collapsed = outputText.replaceAll(/\s+/g, ' ').trim();
+  if (collapsed && collapsed === headerPreview.replaceAll(/\s+/g, ' ').trim()) {
     return 'duplicate-of-header';
   }
-  if (collapsed && collapsed === collapseWhitespace(errorText).trim()) {
+  if (collapsed && collapsed === errorText.replaceAll(/\s+/g, ' ').trim()) {
     return 'duplicate-of-error';
   }
   if (carriesOutput) return 'rendered-by-sections';
@@ -314,9 +314,9 @@ export function toolRowModel(
   // descriptions named the row.
   const echoPreview =
     toolDisplayKind(normalized.toolName) === 'bash'
-      ? collapseWhitespace(
-          deriveToolInputPreview(normalized.toolName, normalized.input),
-        ) || headerSummaryText(normalized.headerSummary)
+      ? deriveToolInputPreview(normalized.toolName, normalized.input)
+          .replaceAll(/\s+/g, ' ')
+          .trim() || headerSummaryText(normalized.headerSummary)
       : headerPreview;
   const suppression = outputSuppression(
     normalized,

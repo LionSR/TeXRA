@@ -10,7 +10,8 @@ import {
   deleteStorageInventory,
   readStorageInventory,
 } from '@texra-ai/harness';
-import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatBytes } from '@utils/text/stringUtils';
 
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr, writeTextStdout } from './logSinks';

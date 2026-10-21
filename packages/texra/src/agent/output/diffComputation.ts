@@ -9,7 +9,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { createWorkspaceLocation } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
 import {
   fileLocationDisplayPath,
   type DiffStats,
@@ -18,7 +18,6 @@ import {
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { diffLineChanges } from '@texra/utils/text/diff';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { traceFileLineage } from './lineageMapping';
@@ -38,7 +37,9 @@ function computeDiffStats(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const read = (absolutePath: string) =>
-      fs.readFileString(absolutePath).pipe(Effect.map(normalizeLineEndings));
+      fs
+        .readFileString(absolutePath)
+        .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
     if (!baseLocation) {
       const outContent = yield* read(outputLocation.absolutePath);
       return { added: countLines(outContent) };

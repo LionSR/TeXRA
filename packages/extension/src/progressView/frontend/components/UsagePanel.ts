@@ -1,4 +1,8 @@
 // Third-party imports
+import {
+  formatCompactTokenCount,
+  formatCostUsd,
+} from '@texra-ai/harness/transcript';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { join } from 'lit/directives/join.js';
@@ -26,10 +30,6 @@ import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import {
-  formatCompactTokenCount,
-  formatCostUsd,
-} from '@utils/text/stringUtils';
 
 /** The usage strip's token counters in order: each one's icon and tooltip,
  *  and the words the strip's aria summary reads. Only the `always` ones show

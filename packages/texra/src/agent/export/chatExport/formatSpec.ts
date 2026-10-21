@@ -12,7 +12,6 @@ import type {
   ExportConfig,
   ExportNode,
 } from '@agent/export/schemas';
-import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {
@@ -52,7 +51,7 @@ function collectFiles(
 
 function extractMeta(input: ChatExportInput): DocumentMeta {
   return {
-    date: formatLocaleTimestamp(input.timestamp),
+    date: new Date(input.timestamp).toLocaleString(),
     agent: input.config.agent,
     model: input.config.model,
     description: input.description,

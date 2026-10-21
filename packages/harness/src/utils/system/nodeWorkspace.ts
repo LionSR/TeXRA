@@ -64,7 +64,7 @@ export function relativeToRoot(
  */
 export const ProjectEnvironment = Context.Reference<
   Readonly<Record<string, string>>
->('@texra/ProjectEnvironment', { defaultValue: () => ({}) });
+>('@texra-ai/harness/ProjectEnvironment', { defaultValue: () => ({}) });
 
 /** The environment the work in hand sees: this process's, with its
  *  project's `.env` variables over it. */

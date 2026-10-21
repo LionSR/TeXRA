@@ -9,7 +9,7 @@
  * conclusion is a one-line table edit.
  */
 
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 
 import {
   authorOf,

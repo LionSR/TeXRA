@@ -10,13 +10,13 @@ import {
   type PerKeyLane,
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import { type ToolError } from '@shared/schemas';
 import {
   isCodexModel,
   type AgentCliEffort,
 } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { executeCommand } from '@utils/system/execUtils';
 import {
   agentCliReasoning,
   resolveAgentCliModel,

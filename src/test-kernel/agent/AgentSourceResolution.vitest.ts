@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect, Layer } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -159,6 +159,40 @@ describe('shadowed agent resolution', () => {
         );
         expect(keyed?.source).toBe('builtIn');
       }),
+  );
+
+  // Failure mode: a pinned launch captures the old entry before the pending
+  // source refresh, so an agent edited during the watcher debounce runs stale.
+  it.live('launches the refreshed custom agent after invalidation', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const original = yield* catalog.forLaunch(
+        hostStores(),
+        'review',
+        'custom',
+      );
+      const contents = yield* fs.readFileString(original.path);
+      yield* Effect.addFinalizer(() =>
+        fs
+          .writeFileString(original.path, contents)
+          .pipe(Effect.andThen(catalog.refresh), Effect.orDie),
+      );
+      yield* fs.writeFileString(
+        original.path,
+        'name: review\nprompt: Updated custom review agent.\n',
+      );
+      yield* catalog.invalidate;
+
+      const launched = yield* catalog.forLaunch(
+        hostStores(),
+        'review',
+        'custom',
+      );
+      expect(catalog.get('custom:review')?.persona.prompt).toBe(
+        'Updated custom review agent.',
+      );
+      expect(launched.persona.prompt).toBe('Updated custom review agent.');
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('resolves scoped keys and drops unknown ones', () =>

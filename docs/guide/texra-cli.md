@@ -88,6 +88,18 @@ texra run polish --input paper.tex --instruction "Tighten the proof of Lemma 2"
 texra run polish --input paper.tex --instruction-file notes.md
 ```
 
+Supported media files passed with `--input` are attached to the model instead
+of being read as text. Audio transcription requires a model with native audio
+support:
+
+```bash
+texra run transcribe_audio --input recording.m4a --output transcript.tex --model google/gemini-4-argon --print
+```
+
+Text inputs retain their usual behavior. You can combine text and media with
+repeated `--input` flags; `--context` supplies read-only text context.
+For editing tasks, media attachments do not count as output documents.
+
 Pass read-only context files with repeated `--context` flags. The agent can
 read these files through `{{ ALL_CONTEXTS }}`, but it only emits revised
 documents for the selected inputs:

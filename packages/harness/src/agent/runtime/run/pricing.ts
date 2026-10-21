@@ -1,7 +1,7 @@
 /**
  * The run's priced usage for one completed turn. The package prices the
  * turn's usage evidence; the price is a runtime fact stamped on the
- * `response` row beside the dispatch facts (D12), so a resumed run's cost is
+ * `response` row beside the dispatch facts, so a resumed run's cost is
  * the sum of its rows and nothing else. Each priced call is also reported
  * to the process usage log, which bills per call.
  */
