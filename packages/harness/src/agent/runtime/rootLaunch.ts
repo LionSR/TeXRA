@@ -38,10 +38,10 @@ export interface RootLaunchOptions extends Pick<
    */
   suppressErrorNotification?: boolean;
   /**
-   * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
-   * progress-view compile fixer): run the launched agent on the configured
-   * helper model instead of the selected one. Off for a direct main-view launch,
-   * the CLI, and orchestrator delegations, which all keep the chosen model.
+   * Opt-in for cheap, tool-driven repair launches (a host's compile fixer):
+   * run the launched agent on the configured helper model instead of the
+   * selected one. Off for a direct main-view launch, the CLI, and
+   * orchestrator delegations, which all keep the chosen model.
    */
   preferHelperModel?: boolean;
   /**

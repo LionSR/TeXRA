@@ -152,7 +152,7 @@ export type StartInput = (
   readonly runId?: RunId;
   /** The chat's previous root: the run starts with the grants it held. */
   readonly continues?: RunId;
-  /** Run on the configured helper model (the "fix LaTeX" actions). */
+  /** Run on the configured helper model (a host's compile-fix actions). */
   readonly helperModel?: boolean;
   /** A quota-exhausted retry offers the user's own API key. */
   readonly ownKeyFallback?: boolean;
