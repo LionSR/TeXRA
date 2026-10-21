@@ -7,10 +7,10 @@
 
 // Third-party imports
 import { Duration, Effect, type FileSystem } from 'effect';
-import isWSL from 'is-wsl';
 
 // Local imports
 import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
+import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   hasPackageManager,
@@ -106,7 +106,7 @@ export function probeZoteroBbt(
 
 /** Appended to install hints when running under WSL, where side matters. */
 function wslInstallHint(): string {
-  return isWSL ? ' (run this inside WSL, not on the Windows side)' : '';
+  return runsInWsl() ? ' (run this inside WSL, not on the Windows side)' : '';
 }
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */

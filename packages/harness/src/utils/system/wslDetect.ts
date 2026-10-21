@@ -15,8 +15,10 @@
 import isWsl from 'is-wsl';
 
 /**
- * Whether we are running inside Windows Subsystem for Linux (WSL).
- * A plain constant: `is-wsl` computes its result once at import, so there is
- * no need for a wrapper function.
+ * Whether this process runs inside Windows Subsystem for Linux (WSL), where
+ * a tool installed on the Windows side is not on this side's PATH. `is-wsl`
+ * computes the answer once, at import.
  */
-export const isWSL: boolean = isWsl;
+export function runsInWsl(): boolean {
+  return isWsl;
+}
