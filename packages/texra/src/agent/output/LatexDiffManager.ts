@@ -3,6 +3,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
@@ -25,8 +27,6 @@ import {
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { entryExists } from '@utils/files/fsEntryExists';
-import { RunFileService } from '@utils/files/runStorage';
 
 import {
   publishCompiledPdfArtifact,
@@ -133,8 +133,7 @@ export class LatexDiffManager {
     const dependencyPath = targetLocation.absolutePath;
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      const exists = yield* entryExists(fs, dependencyPath);
-      if (!exists) return;
+      if ((yield* entryTypeIn(fs, dependencyPath)) === undefined) return;
       yield* this.fileService.mirrorWorkspaceFile(targetLocation);
     }).pipe(
       Effect.catch((error) =>
@@ -223,7 +222,11 @@ export class LatexDiffManager {
         const fs = yield* FileSystem.FileSystem;
         const baseExists = yield* Effect.forEach(
           candidatePairs,
-          ([, base]) => entryExists(fs, base.absolutePath),
+          ([, base]) =>
+            Effect.map(
+              entryTypeIn(fs, base.absolutePath),
+              (type) => type !== undefined,
+            ),
           { concurrency: 'unbounded' },
         );
         const basePairs = candidatePairs.filter((_, i) => baseExists[i]);

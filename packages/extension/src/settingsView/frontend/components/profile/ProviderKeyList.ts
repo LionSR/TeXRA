@@ -9,7 +9,7 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { providerEndpointKey } from '@shared/state/providerSettings';
+import { providerEndpointKey } from '@texra-ai/harness/schemas';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';

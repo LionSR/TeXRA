@@ -1,5 +1,8 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
+import * as path from 'node:path';
+
 import { Settings } from '@texra-ai/harness';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 import {
@@ -26,6 +29,7 @@ import {
   StateReadFailed,
   Unavailable,
   withLogChannel,
+  pathToLocationIn,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -55,11 +59,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { entryExists } from '@utils/files/fsEntryExists';
-import {
-  locateInWorkspace,
-  workspaceAbsolutePath,
-} from '@utils/files/workspaceFS';
 
 import {
   ApiKeyPromptFailed,
@@ -461,9 +460,23 @@ export const createHostRunActions = (
       // probes its candidates there rather than through the calling
       // context's ambient roots.
       workspace: {
-        locatePath: (target) => locateInWorkspace(roots.workspace, target),
+        locatePath: (target) => {
+          // With no folder open every path is outside it.
+          const location = roots.workspace
+            ? pathToLocationIn(roots.workspace, target)
+            : undefined;
+          return location?.kind === 'workspace'
+            ? location
+            : { kind: 'external' as const };
+        },
+        // Asked only of a path `locatePath` placed in the folder.
         exists: (relativePath) =>
-          entryExists(fs, workspaceAbsolutePath(roots.workspace, relativePath)),
+          roots.workspace
+            ? Effect.map(
+                entryTypeIn(fs, path.join(roots.workspace, relativePath)),
+                (type) => type !== undefined,
+              )
+            : Effect.succeed(false),
       },
     });
 

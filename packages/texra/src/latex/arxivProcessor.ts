@@ -4,6 +4,10 @@ import {
   randomizedExponentialBackoff,
   isTransientHttpStatus,
 } from '@texra-ai/harness/plugins';
+import {
+  readDirectoryTypedTolerant,
+  entryTypeIn,
+} from '@texra-ai/harness/node';
 
 import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
@@ -26,8 +30,6 @@ import * as tar from 'tar';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
-import { entryExists } from '@utils/files/fsEntryExists';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';
@@ -496,7 +498,7 @@ class ArxivSourceProcessor {
         return false;
       }
       const fs = yield* FileSystem.FileSystem;
-      if (!(yield* permanentFs(entryExists(fs, paperDirFull)))) {
+      if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
         return false;
       }
       // The tolerant listing is the facade's `readDir`: the provider typed
@@ -654,7 +656,12 @@ class ArxivSourceProcessor {
         yield* this.extractTarFile(downloadedPath, extractedDir);
         const entries = yield* permanentFs(fs.readDirectory(extractedDir));
         const collisions = yield* Effect.filter(entries, (entry) =>
-          permanentFs(entryExists(fs, placed(entry))),
+          permanentFs(
+            Effect.map(
+              entryTypeIn(fs, placed(entry)),
+              (type) => type !== undefined,
+            ),
+          ),
         );
         if (collisions.length > 0) {
           const message = `Target already exists: ${collisions.map(placed).join(', ')}`;
@@ -700,7 +707,7 @@ class ArxivSourceProcessor {
       // rather than be replaced by a regular file.
       const targetPath = path.join(paperDirFull, 'main.tex');
       if (sourceFilePath !== targetPath) {
-        if (yield* permanentFs(entryExists(fs, targetPath))) {
+        if ((yield* permanentFs(entryTypeIn(fs, targetPath))) !== undefined) {
           return yield* Effect.fail(
             new ArxivSourcePermanentError({
               message: `Target already exists: ${targetPath}`,

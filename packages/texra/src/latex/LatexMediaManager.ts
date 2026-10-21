@@ -1,6 +1,7 @@
 // Node imports
 import * as path from 'node:path';
 import { hasExtension } from '@texra-ai/harness';
+import { RunFileService } from '@texra-ai/harness/plugins';
 
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
@@ -10,7 +11,6 @@ import { pathToLocationIn } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';

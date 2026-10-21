@@ -1,9 +1,8 @@
 import { resolve } from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 
-import { relativeToRoot } from '@texra-ai/harness/node';
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import {
   getFileListConfig,
@@ -54,16 +53,10 @@ const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolve(workspacePath, filePath);
-  // relativeToRoot shares the canonicalize-then-compare fallback
-  // `workspaceRelativePath` uses, so a native dialog pick that
-  // resolves through a symlink (e.g. a symlinked folder inside the workspace)
-  // lands workspace-relative here too. Unlike that identity fallback, an
-  // outside-workspace pick stays an explicit normalized absolute path: the
-  // renderer must be able to open a file chosen outside the workspace.
-  return (
-    relativeToRoot(workspacePath, absolutePath) ??
-    normalizeFilePath(absolutePath)
-  );
+  // A pick that resolves through a symlink inside the workspace lands
+  // workspace-relative; an outside-workspace pick stays a normalized
+  // absolute path, so the renderer can still open it.
+  return workspaceRelativePath(workspacePath, absolutePath);
 }
 
 export function createDesktopFileSelection(

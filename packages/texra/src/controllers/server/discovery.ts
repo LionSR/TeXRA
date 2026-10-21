@@ -18,7 +18,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { absentReason } from '@texra-ai/harness/node';
 
 /** The longest Unix socket path every platform accepts (macOS: 104 bytes). */
 const MAX_UNIX_SOCKET_PATH = 100;

@@ -41,7 +41,8 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -73,9 +74,8 @@ export interface MemoryWalkEntry {
 /**
  * Does a memory path exist? The one existence probe every caller shares.
  *
- * `pathExists` follows a symlink, where the facade's `lstat`-backed probe
- * reported a dangling link as present. The walk below never yields a
- * symlink, so the only paths reaching here are ones a caller named itself.
+ * `pathExists` follows a symlink; the walk below never yields one, so the
+ * only paths reaching here are ones a caller named itself.
  */
 export const memoryPathExists = Effect.fn('memoryFileSystem.memoryPathExists')(
   function* (storagePath: string) {

@@ -16,7 +16,10 @@ import {
   type ConfigProvider,
   type SkillSourceOptions,
 } from '@texra-ai/harness';
-import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  canonicalizeWorkspacePath,
+} from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { safeParseJson } from '@texra-ai/harness/schemas';
 import {
@@ -34,7 +37,6 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { absentReason } from '@utils/files/fsEntryExists';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
