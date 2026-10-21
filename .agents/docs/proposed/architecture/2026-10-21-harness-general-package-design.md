@@ -162,17 +162,19 @@ compile. `@common/webview` leaves the harness alias family.
 
 ### Ports
 
-| Port      | Contract                                                                                                                                                                       | Default (`./node`)                  | Conformance (`./testing`)                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------ |
-| Storage   | Effect `SqlClient` taken from context by `databaseLayer`; one dialect                                                                                                          | `sqliteStorage(path)`               | golden store and crash suites, parameterised by client layer |
-| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts:9` and `gitAuthorEnv.ts:15` become arguments | the Node pair                       | the crash suite's command and file cases                     |
-| Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); `run.position` gains `wakeAt`, and the next `Sessions.open` scans for due runs                                               | Effect's default                    | park, advance `TestClock`, reopen, assert resume             |
-| Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                       | no-op                               | none; it decides no recorded fact                            |
-| Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                      | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                  |
+| Port      | Contract                                                                                                                                                                                                                                                                   | Default (`./node`)                  | Conformance (internal suites)                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Storage   | Effect `SqlClient` taken from context by `databaseLayer`; one dialect                                                                                                                                                                                                      | `sqliteStorage(path)`               | golden store and crash suites, parameterised by client layer                                          |
+| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts:9` and `gitAuthorEnv.ts:15` become arguments                                                                                             | the Node pair                       | the crash suite's command and file cases                                                              |
+| Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); `run.position` gains `wakeAt`; a live session keeps one scoped `Effect.sleep` to the earliest `wakeAt` and re-arms it on each new park, and the next `Sessions.open` scans for due runs a crashed or closed process left | Effect's default                    | park, advance `TestClock`, assert resume in the open session; then park, close, reopen, assert resume |
+| Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                                                                                                                   | no-op                               | none; it decides no recorded fact                                                                     |
+| Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                                                                                                                  | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                                                           |
 
 The durable doc dropped "a storage contract suite parameterised by backend".
 This design parameterises the suite by client of one dialect, not by backend,
 and adds no new assertions.
+The suites stay in `src/test-kernel/`. A `./testing` export of them waits for a
+named external consumer, as the durable doc rules ("Conformance").
 
 ### Public surface
 
@@ -190,7 +192,7 @@ The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
 
 The subpaths are: `./schemas` (a named manifest with storage and view
 sections, and no `texra.*` constant), `./plugins` (the whole authoring
-closure), `./node`, `./host` (host composition only), `./testing`, and
+closure), `./node`, `./host` (host composition only), and
 `./promise`, which ships last.
 
 ```ts
@@ -272,7 +274,7 @@ in lane 4, which lands before the freeze.
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal                                                             | M      | 9           |
 | 4   | Writers and rows: activate through `decisionRow`, one grants derivation, one `run.config` builder, one `followup.consumed` builder, `satisfies never`, `wakeAt`, `deferred`, `admitSwitch` refusing cross-protocol switches, `toolUseHelpers.ts` deleted | M      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                                                                                          | M      | ~53         |
-| 5   | Ports and conformance in `./testing`                                                                                                                                                                                                                     | M      | 0           |
+| 5   | Ports, and the conformance suites parameterised by layer (internal)                                                                                                                                                                                      | M      | 0           |
 | 6   | Freeze: `storage:freeze`, and remove the early return                                                                                                                                                                                                    | S      | 0           |
 | 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                                                                            | L      | 0           |
 | 8   | `./promise`                                                                                                                                                                                                                                              | S      | 0           |
