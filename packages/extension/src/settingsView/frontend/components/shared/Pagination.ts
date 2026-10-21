@@ -10,7 +10,6 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import type { TeXRAIconName } from '@shared/iconNames';
-import { createEvent } from '@texra/shared/utils/events';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { clamp } from '@utils/text/stringUtils';
@@ -100,7 +99,13 @@ export class Pagination extends LitElement {
   private goTo(target: number): void {
     const page = clamp(target, 0, this.totalPages - 1);
     if (page === this.page) return;
-    this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
+    this.dispatchEvent(
+      new CustomEvent<PageChangeDetail>('page-change', {
+        detail: { page },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private renderNavButton(

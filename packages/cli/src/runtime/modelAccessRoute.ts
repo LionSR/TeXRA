@@ -10,6 +10,7 @@ import {
 } from '@shared/model/accountAuth';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
+  codingPlanForUsageRoute,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@texra/shared/model/codingPlans';
@@ -80,9 +81,8 @@ export function formatCliModelAccessRoute(
     case 'xai-subscription':
       return GROK_AUTH.subscriptionLabel;
     case 'kimi-code-subscription':
-      return 'Kimi Code subscription';
     case 'glm-coding-plan-subscription':
-      return 'GLM Coding Plan';
+      return codingPlanForUsageRoute(route).preferenceLabel;
     case undefined:
     case 'api-key':
       return OWN_API_KEYS.label;
