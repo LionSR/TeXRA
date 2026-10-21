@@ -72,6 +72,10 @@ export class InterruptedTasksNotice extends LitElement {
         flex-shrink: 1;
         min-width: 0;
       }
+      .task,
+      .task::part(base) {
+        font-size: inherit;
+      }
       .task::part(base) {
         white-space: normal;
         text-align: start;
