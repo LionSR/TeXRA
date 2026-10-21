@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import type { SettingsCatalog } from '@shared/state/stateSettings';
-import { canonicalConfigKey } from '@shared/config/configKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -50,6 +49,14 @@ export function projectValueIgnored(
   const row = catalog.byKey(key);
   if ((row?.configTarget ?? 'workspace') === 'workspace') return false;
   return row?.projectMayOptOut !== true || value === true;
+}
+
+const TEXRA_PREFIX = 'texra.';
+
+/** The stored spelling of `key`: callers may pass either `<key>` or
+ *  `texra.<key>`, and storage always uses the prefixed one. */
+function canonicalConfigKey(key: string): string {
+  return key.startsWith(TEXRA_PREFIX) ? key : `${TEXRA_PREFIX}${key}`;
 }
 
 /**

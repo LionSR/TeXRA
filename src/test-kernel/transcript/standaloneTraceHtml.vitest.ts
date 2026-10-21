@@ -7,7 +7,7 @@ import {
   MESSAGE_TYPES,
   type RunId,
 } from '@shared/schemas';
-import { injectStandaloneTrace } from '@transcript';
+import { injectStandaloneTrace } from '@transcript/standaloneTraceHtml';
 import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 const RUN_ID = 'ab0001' as RunId;

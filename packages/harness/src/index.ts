@@ -42,7 +42,7 @@ export type { SessionStoreMovedAside } from '@shared/session/database';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
 export type { RunEnd } from '@shared/schemas';
-export type { RunResult } from '@agent/storage/resultMeta';
+export type { RunResult } from '@agent/storage/runRecords';
 export type { RunRefusal } from '@agent/runtime/runClassification';
 export type { AgentRunListingEntry } from '@agent/storage/runListing';
 export type { ExportNode } from '@agent/export/schemas';

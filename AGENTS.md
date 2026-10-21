@@ -292,7 +292,7 @@ For good separation of concerns and platform independence, core business logic s
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
-   - `isFileNotFoundError(err)` from `@common/errors` — not `instanceof vscode.FileSystemError`
+   - `isFileNotFoundError(err)` from `@common/errors/errorPredicates` — not `instanceof vscode.FileSystemError`
    - Use `number` for file type annotations instead of `vscode.FileType` — the numeric values are compatible
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.

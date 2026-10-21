@@ -2,7 +2,7 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 // Common imports
-import { isNotADirectoryError } from '@common/errors';
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 
 /**
  * The failures an existence probe reads as absent: the path is not there

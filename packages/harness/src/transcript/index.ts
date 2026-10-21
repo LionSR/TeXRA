@@ -1,7 +1,6 @@
 /**
- * Host transcript reads from the canonical session event fold.
- * Channel traces publish through their owning session; transcript history is
- * read from the committed event prefix.
+ * The hosts' door to the standalone trace page (`@transcript`, a baselined
+ * deep specifier for cli and texra) until a public entry exports it. Harness
+ * code imports the defining module.
  */
-export { readCompletedRunConversation } from './completedRunArchive';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

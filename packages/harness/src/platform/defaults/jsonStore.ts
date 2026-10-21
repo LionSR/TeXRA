@@ -15,7 +15,7 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';

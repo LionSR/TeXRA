@@ -30,7 +30,7 @@ import {
   retargetGoal,
   startGoal,
   type GoalAutoApprovalScope,
-} from '@tools/goal';
+} from '@tools/goal/goalRows';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';

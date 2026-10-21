@@ -15,7 +15,7 @@ import {
   resolveBypass,
   runBypasses,
 } from '@shared/approvalBypassKind';
-import { delegatedChildGrants } from '@tools/approval';
+import { delegatedChildGrants } from '@tools/delegation/subagentRun';
 
 /** A session's grants as its rows fold them: parent edges, each run's
  *  standing and its latest grants. Every run is live unless `interrupted`. */
