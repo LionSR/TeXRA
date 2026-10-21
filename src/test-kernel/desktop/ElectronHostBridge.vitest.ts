@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
 import {
+  DESKTOP_PUSHES_API_KEY,
+  type DesktopPushesApi,
   ELECTRON_SESSION_MESSAGE_CHANNEL,
   ELECTRON_SESSION_PUSH_CHANNEL,
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
@@ -125,6 +127,35 @@ describe('desktop Electron host bridge', () => {
       ELECTRON_SESSION_PUSH_CHANNEL,
       expect.any(Function),
     );
+  });
+
+  // Main connects a window before its page has evaluated: a push posted then
+  // (a replayed edit preview) reached no listener while main counted it
+  // delivered. The preload holds pushes until the shell says it listens.
+  it('holds webview pushes until the shell listens, then posts them in order', async () => {
+    const exposed = new Map<string, unknown>();
+    const contextBridge = {
+      exposeInMainWorld: (name: string, api: unknown) => exposed.set(name, api),
+    };
+    const ipcRenderer = { on: vi.fn(), off: vi.fn(), send: vi.fn() };
+    const posted: unknown[] = [];
+    vi.stubGlobal('addEventListener', vi.fn());
+    vi.stubGlobal('postMessage', (message: unknown) => posted.push(message));
+
+    await loadPreloadModule({ contextBridge, ipcRenderer });
+    const push = ipcRenderer.on.mock.calls.find(
+      ([channel]) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL,
+    )?.[1] as (event: unknown, message: unknown) => void;
+
+    push({}, { command: 'desktop:showDiff', n: 1 });
+    push({}, { command: 'desktop:showPrompt', n: 2 });
+    expect(posted).toEqual([]);
+
+    (exposed.get(DESKTOP_PUSHES_API_KEY) as DesktopPushesApi).listening();
+    push({}, { command: 'desktop:closeDiff', n: 3 });
+    expect(posted.map((message) => (message as { n: number }).n)).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   it('routes main-process bridge messages over fixed Electron channels', async () => {

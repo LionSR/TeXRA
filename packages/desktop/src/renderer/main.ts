@@ -65,7 +65,10 @@ import {
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
-import { resolveSessionWire } from '../shared/hostBridgeChannels';
+import {
+  resolveDesktopPushes,
+  resolveSessionWire,
+} from '../shared/hostBridgeChannels';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import {
@@ -838,8 +841,9 @@ const routeMessage = createMessageRoutes({
 // The shell's one message listener, for the desktop commands. The session
 // protocol has its own channel (`sessionWire`, above). The settings view's
 // pushes reach `<settings-app>` through its own listener and match no route
-// here.
+// here. The preload holds every push until this listener exists.
 window.addEventListener('message', (event) => routeMessage(event.data));
+resolveDesktopPushes().listening();
 
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.
