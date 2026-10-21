@@ -11,6 +11,7 @@ import { clampModalWidth } from '@cli/tui/ui/theme';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 
 // Local imports - conversation panes and layout
+import { clamp } from '@utils/text/stringUtils';
 import {
   allocateConversationPanelRows,
   allocateMiddleRows,
@@ -123,7 +124,7 @@ export function ConversationRegion({
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? Math.max(0, Math.min(requestedQueuedFollowUpPanelRows, rows - footerRows))
+    ? clamp(requestedQueuedFollowUpPanelRows, 0, rows - footerRows)
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   // The open-time notice shares the queued panel's place above the footer

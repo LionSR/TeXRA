@@ -152,6 +152,7 @@ export {
   SessionHostInteractions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
+export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 export { escapeText } from '@shared/utils/xmlEscape';

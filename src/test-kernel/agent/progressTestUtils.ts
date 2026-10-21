@@ -302,19 +302,25 @@ export function bashApprovalRequest(request: {
 
 /** A tool-edit request carrying the prompt the tool boundary prepares. */
 export const toolEditApprovalRequest = Effect.fn('toolEditApprovalRequest')(
-  function* (request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>) {
+  function* (
+    request: Parameters<typeof prepareToolEditApprovalPrompt>[1]['request'],
+  ) {
     const session = yield* sessionWithInteractions(undefined);
-    return {
-      ...request,
-      roots: session.roots,
-      permission: prepareToolEditApprovalPrompt(session, {
+    const { permission, hunks, firstChangedLine } =
+      prepareToolEditApprovalPrompt(session, {
         requestId: `approval-${generateShortId()}`,
         request,
         relativePath: workspaceRelativePath(
           session.roots.workspace,
           request.path,
         ),
-      }).permission,
-    };
+      });
+    return {
+      ...request,
+      roots: session.roots,
+      permission,
+      hunks,
+      firstChangedLine,
+    } satisfies ToolEditApprovalRequest;
   },
 );

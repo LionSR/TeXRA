@@ -28,13 +28,13 @@ import type {
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
-import {
-  firstChangedLine,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
-import type { ProcessRuntime, WorkspaceRoots } from '@texra-ai/harness';
-import type { HostRequestFailure } from '@texra-ai/harness';
+import type {
+  HostRequestFailure,
+  ProcessRuntime,
+  ToolEditApprovalRequest,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -159,15 +159,10 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private revealFirstChange(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      const line = firstChangedLine(
-        this.request.originalContent,
-        this.request.proposedContent,
-      );
-      if (line === null) return Effect.void;
-
-      return this.diffViewHost.revealFirstChange(this.diffSession, line);
-    });
+    const line = this.request.firstChangedLine;
+    return line === null
+      ? Effect.void
+      : this.diffViewHost.revealFirstChange(this.diffSession, line);
   }
 
   private title(): string {

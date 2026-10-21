@@ -14,7 +14,10 @@ import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import { approvalPolicyDenialMessage } from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { type HostInteractions } from '@texra-ai/harness';
+import {
+  type HostInteractions,
+  type ToolEditApprovalRequest,
+} from '@texra-ai/harness';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -23,7 +26,6 @@ import type {
   UserQuestionAnswers,
   UserQuestionPermission,
 } from '@shared/schemas';
-import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -40,7 +42,7 @@ import {
 } from './approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
-  USER_QUESTION_SKIPPED_FEEDBACK,
+  userQuestionDecision,
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
@@ -123,13 +125,7 @@ const askHeadlessUserQuestion = Effect.fn(
     } satisfies RequestDecision;
   }
 
-  if (Object.keys(answers).length === 0) {
-    return {
-      action: 'skip',
-      feedback: USER_QUESTION_SKIPPED_FEEDBACK,
-    } satisfies RequestDecision;
-  }
-  return { action: 'submit', answers } satisfies RequestDecision;
+  return userQuestionDecision(answers);
 });
 
 /** `runtime` is the process runtime the headless run holds: the view

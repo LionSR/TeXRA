@@ -11,9 +11,9 @@ import {
   type DiffViewHost,
 } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
-import { countLineChanges } from '@tools/approval/toolEditApproval';
 import {
   buildDiffHunks,
+  countLineChanges,
   reportDiffTimeout,
   unifiedDiffText,
 } from '@utils/text/unifiedDiff';

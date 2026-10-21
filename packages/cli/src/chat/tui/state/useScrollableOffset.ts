@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useInput } from 'ink';
+import { clamp } from '@utils/text/stringUtils';
 
 /**
  * Scroll offset for a bounded modal region (approval diffs, command previews,
@@ -29,20 +30,16 @@ export function useScrollableOffset({
   initialOffsetRef.current = initialOffset;
   maxScrollOffsetRef.current = maxScrollOffset;
   const [scrollOffset, setScrollOffset] = useState(() =>
-    Math.max(0, Math.min(maxScrollOffset, initialOffset)),
+    clamp(initialOffset, 0, maxScrollOffset),
   );
   const scrollable = maxScrollOffset > 0;
 
   function scrollBy(delta: number): void {
-    setScrollOffset((current) =>
-      Math.max(0, Math.min(maxScrollOffset, current + delta)),
-    );
+    setScrollOffset((current) => clamp(current + delta, 0, maxScrollOffset));
   }
 
   useEffect(() => {
-    setScrollOffset((current) =>
-      Math.max(0, Math.min(maxScrollOffset, current)),
-    );
+    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
   }, [maxScrollOffset]);
 
   useEffect(() => {

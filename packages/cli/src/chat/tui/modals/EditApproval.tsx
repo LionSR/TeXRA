@@ -5,7 +5,6 @@ import { Box, Text, useWindowSize } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
 import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
@@ -105,11 +104,8 @@ function EditApprovalDiff({
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
 
-  // Single diff pass shared between the summary line and the inline view.
-  const hunks = useMemo(
-    () => buildDiffHunks(tui.originalContent, tui.proposedContent).hunks,
-    [tui.originalContent, tui.proposedContent],
-  );
+  // The request's own diff, shared by the summary line and the inline view.
+  const { hunks } = tui;
   const diffRows = useMemo(
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],

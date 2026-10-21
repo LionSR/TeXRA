@@ -7,10 +7,12 @@ import {
   hostFailure,
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
-import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
 import type { RequestRefusal } from '@texra-ai/harness';
+
+/** How long a reveal waits for the diff's proposed side to become visible. */
+const REVEAL_TIMEOUT_MS = 1500;
 
 /**
  * The failure of a `vscode.*` call this host lifted through `fromHost`: the

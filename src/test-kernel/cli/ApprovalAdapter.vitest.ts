@@ -47,6 +47,17 @@ import {
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import { buildDiffHunks } from '@utils/text/unifiedDiff';
+
+/** An edit's content with the diff its request carries. */
+function editContent(originalContent: string, proposedContent: string) {
+  return {
+    originalContent,
+    proposedContent,
+    hunks: buildDiffHunks(originalContent, proposedContent).hunks,
+    firstChangedLine: 0,
+  };
+}
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   const ctx = createTestCliContext({
@@ -517,8 +528,7 @@ describe('buildToolEditApprovalContent', () => {
     const longLine = 'x'.repeat(1_000);
     const { summary, details } = buildToolEditApprovalContent({
       path: '/tmp/generated.json',
-      originalContent: '',
-      proposedContent: `${longLine}\n`,
+      ...editContent('', `${longLine}\n`),
       sourceTool: 'write_file',
     });
 
@@ -535,8 +545,7 @@ describe('buildToolEditApprovalContent', () => {
     ).join('\n');
     const { summary, details } = buildToolEditApprovalContent({
       path: '/tmp/generated.tex',
-      originalContent: '',
-      proposedContent,
+      ...editContent('', proposedContent),
       sourceTool: 'write_file',
     });
 
