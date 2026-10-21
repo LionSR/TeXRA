@@ -11,7 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import {
   AGENT_SOURCE,
-  agentKey as agentKeyFromSourceName,
+  agentKeyOf,
   isPackagedAgentSource,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -37,11 +37,6 @@ import '../shared/SettingsCatalog';
 import { renderNewerBuiltInNotice } from './newerBuiltInNotice';
 import type { SettingsCatalogItem } from '../shared/SettingsCatalog';
 import type { AgentSource } from '@texra-ai/harness/schemas';
-
-/** Shorthand: derive the canonical key from an AgentSelectionItem. */
-function agentKey(agent: AgentSelectionItem): string {
-  return agentKeyFromSourceName(agent.source, agent.name);
-}
 
 /**
  * Per-source presentation: section heading name and the badge (icon + label)
@@ -77,13 +72,13 @@ export class AgentSelectionPanel extends LitElement {
 
   private get selectedAgent(): AgentSelectionItem | undefined {
     return (
-      this.agents.find((agent) => agentKey(agent) === this.selectedKey) ??
+      this.agents.find((agent) => agentKeyOf(agent) === this.selectedKey) ??
       this.agents[0]
     );
   }
 
   private catalogItem(agent: AgentSelectionItem): SettingsCatalogItem {
-    const key = agentKey(agent);
+    const key = agentKeyOf(agent);
     return {
       key,
       name: agent.name,
