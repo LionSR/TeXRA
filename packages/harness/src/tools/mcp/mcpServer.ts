@@ -34,7 +34,7 @@ import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -57,11 +57,9 @@ const MAX_TOOL_NAME_LENGTH = 64;
 const INVALID_NAME_CHARS = /[^A-Za-z0-9_-]/g;
 const NAME_HASH_LENGTH = 12;
 
-/**
- * Credential-shaped variables stay out of a server's environment unless its
- * config entry names them in `env`: the host app's provider keys must never
- * reach a third-party process implicitly.
- */
+/** Credential-shaped variables stay out of a server's environment unless its
+ *  config entry names them in `env`: the host app's provider keys must never
+ *  reach a third-party process implicitly. */
 const SENSITIVE_ENV_NAME = /KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i;
 
 /** The server could not be spawned, initialized or listed. */
@@ -106,10 +104,8 @@ const McpArgumentsSchema = z.record(z.string(), z.unknown());
 /** The plugin id of the server named `server`. */
 export const mcpPluginId = (server: string): string => `mcp:${server}`;
 
-/**
- * The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
- * `undefined` for any other tool name.
- */
+/** The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
+ *  `undefined` for any other tool name. */
 export function mcpServerOfToolName(name: string): string | undefined {
   if (!name.startsWith(MCP_TOOL_PREFIX)) return undefined;
   const separator = name.indexOf('__', MCP_TOOL_PREFIX.length);
@@ -136,18 +132,21 @@ function mcpToolName(server: string, tool: string): string {
 /** The process's environment with the project's `.env` over it, minus
  *  credential-shaped names, plus the entry's, on the extended process PATH
  *  its command is pinned on (`externalFiles`), so the pinned binary runs. */
+const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
 const serverEnv = (config: McpServerConfig) =>
   Effect.gen(function* () {
     const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
     for (const [name, value] of Object.entries(yield* environment)) {
       if (value === undefined || SENSITIVE_ENV_NAME.test(name)) continue;
-      if (!/^path$/i.test(name)) env[name] = value;
+      if (!isPathName(name)) env[name] = value;
       else if (Object.hasOwn(yield* ProjectEnvironment, name))
         yield* Effect.logWarning(
           `MCP server "${config.name}" ignores the project's .env ${name}: its command is pinned on the extended process PATH.`,
         ).pipe(withLogChannel(CHANNEL));
     }
-    return withExtendedPath({ ...env, ...config.env });
+    for (const [name, value] of Object.entries(config.env))
+      env[isPathName(name) ? 'PATH' : name] = value;
+    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH ?? '' };
   });
 
 const decode = <T>(
