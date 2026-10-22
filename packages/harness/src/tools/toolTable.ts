@@ -223,9 +223,9 @@ export interface ToolTable {
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id or a tool name, claims one request kind's decisions twice,
  * claims an agent-file
- * block another plugin or the persona owns, or gives a switch to a plugin
- * with no availability probe is a defect of the list, refused when it is
- * built.
+ * block another plugin or the persona owns, gives a switch to a plugin
+ * with no availability probe, or lacks a plugin another `requires` is a
+ * defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
@@ -258,6 +258,12 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     if (plugin.availability === undefined && plugin.toggle !== undefined)
       refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
+  const [missing] = plugins.flatMap(({ id, requires }) =>
+    (requires ?? []).flatMap((needed) =>
+      entries.has(needed) ? [] : [`plugin ${id} runs on plugin ${needed}`],
+    ),
+  );
+  if (missing !== undefined) refuse(`${missing}, which is not listed.`);
   const owned = plugins.flatMap(({ agentBlock }) => agentBlock ?? []);
   const blocks = new Map(owned.map((block) => [block.key, block] as const));
   if (

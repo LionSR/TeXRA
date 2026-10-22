@@ -95,6 +95,8 @@ export const memoryWorkflow: Plugin = builtin({
 export const goal: Plugin = builtin({
   id: 'goal',
   tools: { plan: PlanTool },
+  // A goal is a script whose rounds are `self()`.
+  requires: ['codemode'],
   injectedWhen: { plan: true },
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,

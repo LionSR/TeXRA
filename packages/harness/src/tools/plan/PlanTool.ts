@@ -90,10 +90,15 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   plan: Plan,
   armed: 'commands' | 'allAgentWork',
 ) {
-  if (call.run.toolPolicy.stopAfterCycle === true)
+  // A goal forks a conversation and reports to its later turns: a one-shot
+  // run has no later turn, and a script's run is no conversation to fork.
+  if (
+    call.run.toolPolicy.stopAfterCycle === true ||
+    call.run.config.script != null
+  )
     return errorResult(
-      'A one-shot run has no later turn for a goal to report to: work on the approved plan in this run instead.',
-      { summary: 'Plan approved: no goal in a one-shot run' },
+      'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
+      { summary: 'Plan approved: no goal outside a conversation' },
     );
   // One goal at a time: two would race each other's edits and caps. The
   // goals this conversation launched are its `plan` results' runs; one is
