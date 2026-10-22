@@ -18,7 +18,7 @@ passes configuration in (`RouteFacts`) and credentials through one port,
 ## Install
 
 Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
-package is ESM only. `effect` (^4.0.5) and `zod` (^4.4.3) are peer
+package is ESM only. `effect` (^4.0.6) and `zod` (^4.4.3) are peer
 dependencies, so your install supplies the one copy of each:
 
 ```bash

@@ -8,9 +8,9 @@ packages:
 # the `peers` catalog below.
 catalog:
   '@anthropic-ai/claude-agent-sdk': '^0.3.303'
-  '@effect/platform-node': '4.0.5'
-  '@effect/sql-sqlite-node': '4.0.5'
-  '@effect/vitest': '4.0.5'
+  '@effect/platform-node': '4.0.6'
+  '@effect/sql-sqlite-node': '4.0.6'
+  '@effect/vitest': '4.0.6'
   '@google/genai': '^2.23.0'
   '@jitl/quickjs-wasmfile-release-sync': '0.32.0'
   '@openai/codex-sdk': '^0.163.0'
@@ -21,7 +21,7 @@ catalog:
   content-disposition: '^3.0.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
-  effect: '4.0.5'
+  effect: '4.0.6'
   esbuild: '^0.28.2'
   escape-string-regexp: '^5.0.0'
   glob: '^13.0.6'
@@ -59,9 +59,9 @@ catalog:
 # `catalog` versions above); raise both together.
 catalogs:
   peers:
-    '@effect/platform-node': '^4.0.5'
-    '@effect/sql-sqlite-node': '^4.0.5'
-    effect: '^4.0.5'
+    '@effect/platform-node': '^4.0.6'
+    '@effect/sql-sqlite-node': '^4.0.6'
+    effect: '^4.0.6'
 supportedArchitectures:
   os:
     - current
