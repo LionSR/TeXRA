@@ -68,11 +68,8 @@ import {
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { fold } from '@shared/session/sessionFold';
-import {
-  emptySessionView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -563,8 +560,7 @@ describe('the golden 1.0 store', () => {
       const listing = yield* db.readListing();
       const history = yield* Stream.runCollect(db.readDisplay(0));
       const of = (events: readonly (typeof listing)[number][]) => {
-        const view = fold(
-          emptySessionView('golden'),
+        const view = makeSessionViewUpdater('golden').apply(
           events.filter(isDisplaySessionEvent).map((event) => ({
             _tag: 'event' as const,
             read: 'listing' as const,

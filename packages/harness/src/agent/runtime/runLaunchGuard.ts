@@ -24,7 +24,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { parentAdmission, warn, type TransactionPart } from './childSettlement';
+import { parentAdmission, warn, type TransactionPart } from './childTurnResult';
 import { presentRunFailure } from './terminalResultToast';
 import type { SessionHandle } from './SessionHandle';
 
@@ -34,21 +34,21 @@ import type { SessionHandle } from './SessionHandle';
  * a native child's loop that outlived its lifecycle, a session close). An
  * outcome the run already wrote stands (`keepExistingOutcome`), so a row
  * lands only for a run that failed or stopped outside its driver; a failure
- * carries its classified error, and a child's last-turn `settlement` rides
- * the row.
+ * carries its classified error, and a child's `lastTurn` result commits
+ * with the row.
  */
 export const endRunOutsideLifecycle = (
   session: SessionHandle,
   runId: RunId,
   outcome: RunOutcome,
   error: unknown,
-  settlement?: TransactionPart,
+  lastTurn?: TransactionPart,
 ): Effect.Effect<void, Error> =>
   finalizeRun(session, {
     runId,
     outcome,
     keepExistingOutcome: true,
-    ...(settlement !== undefined && { settlement }),
+    ...(lastTurn !== undefined && { lastTurn }),
     ...(outcome === RUN_OUTCOME.FAILED && error != null
       ? {
           error: {
@@ -181,12 +181,8 @@ export const deliverHeld = (
     const { runs } = yield* session.view.read([]);
     for (const child of runs.values())
       if (child.parentId === parent && !isTerminalOutcomePhase(child.status))
-        yield* Effect.flatten(
-          session.log.transact((tx) =>
-            deliverOne(session, tx.append, child.id, parent).pipe(
-              Effect.scoped,
-            ),
-          ),
+        yield* session.log.transact((tx) =>
+          deliverOne(session, tx.append, child.id, parent).pipe(Effect.scoped),
         );
   });
 
@@ -209,14 +205,13 @@ const heldParks = (rows: readonly SessionEvent[]) => {
 };
 
 /** Every result a child holds for `parent` since its lifecycle began, and
- *  its end when the newest park held its last turn; returns what to say
- *  once they commit. */
+ *  its end when the newest park held its last turn. */
 const deliverOne = (
   session: SessionHandle,
   append: Append,
   child: RunId,
   parent: RunId,
-): Effect.Effect<Effect.Effect<void>, Error, Scope.Scope> =>
+): Effect.Effect<void, Error, Scope.Scope> =>
   Effect.gen(function* () {
     const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
       'child.park',
@@ -226,40 +221,34 @@ const deliverOne = (
     ]);
     const parks = heldParks(rows);
     const held = parks.filter(({ park }) => park.heldFor !== undefined);
-    if (held.length === 0) return Effect.void;
+    if (held.length === 0) return;
     const ends = parks.at(-1)?.park.ends;
     if (ends !== undefined) yield* session.log.hold(child);
     const from = { kind: 'run', runId: child } as const;
-    const admitted = [];
+    const delivered = [];
     for (const { park, text } of held) {
       const one = yield* parentAdmission(
-        session.followUps,
+        session,
         parent,
         { text, from, deliveryId: park.heldFor },
         {},
         undefined,
       );
       if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
-        return Effect.void;
-      admitted.push(one);
+        return;
+      delivered.push(...one.rows);
     }
-    const delivered = admitted.flatMap((one) => one.rows);
-    const said = Effect.all(
-      admitted.map((one) => one.committed),
-      { discard: true },
-    );
     if (ends === undefined) {
       yield* append(delivered);
-      return said;
+      return;
     }
     // The held last turn ends the child, through its cell, in this append:
     // its unread input consumed, its halt, what it left open, its `run.end`.
     yield* endIn(session, append, {
       runId: child,
       outcome: ends,
-      settlement: Effect.succeed({ rows: delivered, committed: Effect.void }),
+      lastTurn: Effect.succeed({ rows: delivered }),
     });
-    return said;
   });
 
 /**

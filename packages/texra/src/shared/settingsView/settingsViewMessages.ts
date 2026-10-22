@@ -294,7 +294,7 @@ const UpdateAgentModePresetsMessageSchema = z.object({
 // Tool dashboard data schemas
 // ============================================================
 
-/** Individual tool within a group — carries an optional description for tooltips. */
+/** One tool a dashboard card groups, by name. */
 const ToolInfoSchema = z.object({
   name: z.string(),
 });

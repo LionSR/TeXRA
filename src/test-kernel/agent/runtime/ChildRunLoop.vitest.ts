@@ -243,7 +243,7 @@ const startLoop = (
 ) =>
   Effect.gen(function* () {
     const childRun = extras.childRun ?? (yield* childRunPort(runId));
-    return yield* startChildRunLoop({
+    const started = yield* startChildRunLoop({
       session,
       runId,
       parentRunId: PARENT_RUN_ID,
@@ -252,6 +252,7 @@ const startLoop = (
       childRun,
       strategy,
     }).pipe(Effect.provideService(Runs, session.runs));
+    return started.fiber;
   });
 
 /** Start a native child's loop: no port, its launch its whole run. */
@@ -267,7 +268,10 @@ const startNativeLoop = (
     agentName: 'fake',
     budgeted,
     strategy,
-  }).pipe(Effect.provideService(Runs, session.runs));
+  }).pipe(
+    Effect.map((started) => started.fiber),
+    Effect.provideService(Runs, session.runs),
+  );
 
 /** The run's `run.end` rows, in order. */
 const runEnds = (runId: RunId) =>
@@ -1121,10 +1125,10 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = 'fa11ed01' as RunId;
         publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
         const { strategy, rejectTurn } = createFakeStrategy();
-        // Fires once the failed turn settled, before the loop's finalize: the
-        // window the stop latch has to win. Kill admission is synchronous, so
-        // the stop latch is already set here and only the settlement is left
-        // for the test to run once the loop is done.
+        // Fires once the failed turn's result is built, before the loop's
+        // finalize: the window the stop latch has to win. Kill admission is
+        // synchronous, so the stop latch is already set here and only the
+        // stop's settlement is left for the test to run once the loop is done.
         const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
           stopSettlements.push(
@@ -1132,10 +1136,11 @@ describe('childRunLoop E2E fixtures', () => {
           );
         });
 
-        const loop = yield* startLoop(runId, strategy, {
-          agentName: 'fake-cli',
-          onTurnSettled: interruptAfterFailure,
-        });
+        const loop = yield* startLoop(
+          runId,
+          { ...strategy, releaseSessionOwnership: interruptAfterFailure },
+          { agentName: 'fake-cli' },
+        );
 
         yield* rejectTurn(1, new Error('turn blew up'));
         yield* Fiber.join(loop);

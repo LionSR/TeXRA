@@ -28,7 +28,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import type { CoWrite } from '@shared/session/sessionEvents';
+import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
   DeclinableUsageRouteSchema,
@@ -57,7 +57,7 @@ import type { SessionHandle } from '../SessionHandle';
 interface LaunchEntry {
   readonly registration: readonly SessionEventDraft[] | null;
   readonly seed?: readonly RunHistoryDraft[] | null;
-  readonly opening: Effect.Effect<CoWrite>;
+  readonly opening: Alongside;
   readonly entered: Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
 }

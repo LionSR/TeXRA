@@ -383,6 +383,7 @@ export class SessionComposer extends LitElement {
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.settleHost`).
     const pending = added.map(({ fileName }) => ({ fileName, path: null }));
+    let text = `${this.text}${insert}`;
     if (target && this.isConnected) {
       // setRangeText fires no input event, so the draft is set explicitly.
       target.setRangeText(
@@ -391,14 +392,9 @@ export class SessionComposer extends LitElement {
         target.selectionEnd,
         'end',
       );
-      this.setText(target.value, {
-        images: [...this.draft.images, ...pending],
-      });
-    } else {
-      this.setText(`${this.text}${insert}`, {
-        images: [...this.draft.images, ...pending],
-      });
+      text = target.value;
     }
+    this.setText(text, { images: [...this.draft.images, ...pending] });
     this.announcement =
       added.length === 1
         ? 'Image attached.'

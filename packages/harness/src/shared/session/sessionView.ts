@@ -1,6 +1,6 @@
 /**
- * The one session state every renderer reads. Fold output, never persisted,
- * never parsed: a field lands here first and every host reads its name.
+ * The one session state every renderer reads (`sessionViewUpdate.ts`), never
+ * persisted, never parsed: a field lands here first and every host reads it.
  *
  * `SessionView` holds `Map`s because it never crosses a bridge; only events,
  * chunks, and `local` do, and those are arrays and records.
@@ -56,22 +56,22 @@ import type {
 const SessionKeySchema = z.string().min(1);
 
 /**
- * A run's transcript slice: what hosts paint, and nothing else. The fold
- * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the live text per streaming row) in a
- * module-private map beside it, so a host can neither depend on nor mutate
- * them. The slice is replaced on every change and never written after the
- * fold that produced it returns. Row and block elements are the shared
+ * A run's transcript slice: what hosts paint, and nothing else. The updater
+ * keeps the run's working state (row and group positions, the compaction
+ * projection's state, the live text per streaming row) beside the view,
+ * never on it (`transcriptState.ts`), so a host can neither depend on nor
+ * mutate it. The slice is replaced on every change and never written after
+ * the update that produced it returns. Row and block elements are the shared
  * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
 const TranscriptViewSchema = z.object({
-  /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
-   *  rows, in first-appearance order. */
+  /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
+   *  in first-appearance order. */
   rows: z.array(z.custom<TranscriptRow>()),
-  /** `taskGroupOnStage` over the stage events. */
+  /** One group per stage: opened by `stage.start`, closed by `stage.end`. */
   taskGroups: z.array(TaskGroupSchema),
-  /** The contiguous leading prefix of rows whose finalizing event has
-   *  folded: what an append-only scrollback may print. */
+  /** The contiguous leading prefix of rows whose finalizing event has been
+   *  applied: what an append-only scrollback may print. */
   settledRows: z.int().nonnegative(),
 });
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
@@ -109,26 +109,26 @@ const RunViewSchema = z.object({
    *  undecoded here, read through its plugin's reader. */
   facts: z.record(z.string(), JsonValueSchema),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase, folded from `run.activate` (running), `run.position`
-   *  (`waiting` parks, any other step runs), `child.park` (an agent-CLI
-   *  child's own park row, which has no loop to step), and `run.end` (the
-   *  outcome); `ready` before the first activation folds (3.3). An
-   *  interrupted run keeps it and reads as interrupted through the copy;
-   *  unavailability is `readOnly`, never a status (5.2). */
+  /** The durable phase, from `run.activate` (running), `run.position`
+   *  (`waiting` waits, any other step runs), `child.park` (an agent-CLI
+   *  child's own wait row, which has no loop to step), and `run.end` (the
+   *  outcome); `ready` before the first activation. An interrupted run
+   *  keeps it and reads as interrupted through the copy; unavailability is
+   *  `readOnly`, never a status. */
   status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
-  /** Derived from the activation's position (ruling A9-1): a first
-   *  activation is starting, a later one resuming, cleared by the first
-   *  step. Only a run whose loop steps carries one. */
+  /** Derived from the activation's position: a first activation is
+   *  starting, a later one resuming, cleared by the first step. Only a run
+   *  whose loop steps carries one. */
   substate: RunSubstateSchema.nullable(),
-  /** The terminal status, null before: only the `run.end` row writes one,
-   *  so nothing can move it. What lets a host paint an open group as
-   *  interrupted and the session release the run's sidecar record. */
+  /** The outcome `run.end` wrote; null until the run ends, and again once a
+   *  follow-up's `run.activate` restarts it. Lets a host paint an open group
+   *  as interrupted and the session release the run's sidecar record. */
   durableOutcome: RunOutcomeSchema.nullable(),
   /** What the run's banner says (`RunNoticeSchema`); null: nothing. */
   statusNotice: RunNoticeSchema.nullable(),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */
   lost: z.string().nullable(),
-  // G4: one table (`runStatusDisplay`) keys both, through the status and
+  // One table (`runStatusDisplay`) keys both, through the status and
   // substate or the interrupted reading; `@ui/copy/runStatus` words the key.
   statusKey: z.enum(RUN_STATUS_KEYS),
   tone: z.enum(RUN_STATUS_TONE),
@@ -141,12 +141,12 @@ const RunViewSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number(),
   conversationProgress: ConversationProgressSchema,
-  /** The run's one-based turn, folded from its latest `run.position`
-   *  (the loop commits `state.turn + 1`; the row's `round` counts model
-   *  calls, so no surface reads it). Null before the first position and
-   *  after every activation, and null for the whole life of a run with no
-   *  loop of its own — an agent-CLI child parks through `child.park`, which
-   *  carries a phase and no position. */
+  /** The run's one-based turn, from its latest `run.position` (the loop
+   *  commits `state.turn + 1`; the row's `round` counts model calls, so no
+   *  surface reads it). Null before the first position and after every
+   *  activation, and null for the whole life of a run with no loop of its
+   *  own — an agent-CLI child waits through `child.park`, which carries a
+   *  phase and no position. */
   turn: z.int().nonnegative().nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
@@ -155,7 +155,7 @@ const RunViewSchema = z.object({
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: z.object({ id: RunIdSchema, at: z.int().positive() }).nullable(),
-  /** The `seq` of the run's newest park (a `run.position` at `waiting` or
+  /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
    *  `halted`): the settled point a whole-task fork cuts at; null before
    *  its first turn ends, when there is nothing to fork. */
   forkPoint: z.int().positive().nullable(),
@@ -166,7 +166,7 @@ const RunViewSchema = z.object({
   /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
   /** Descendants by status: `running` counts the live ones (`isLiveRun`)
-   *  still working a turn, `finished` the ended ones and those parked idle
+   *  still working a turn, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: z.object({
@@ -175,7 +175,7 @@ const RunViewSchema = z.object({
     finished: z.int().nonnegative(),
   }),
   approval: z.enum(['none', 'own', 'descendant']),
-  /** This process cannot act on it: another live owner, or unreadable (5.2). */
+  /** This process cannot act on it: another live owner, or unreadable. */
   readOnly: z.boolean(),
   /** What a resume of this run waits for here; null: nothing blocks it. */
   resumeBlocked: ResumeBlockerSchema.nullable(),
@@ -185,13 +185,13 @@ const RunViewSchema = z.object({
    *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: RunGroupSchema,
-  /** The run's metered total. A `usage` row is one priced turn and the fold
+  /** The run's metered total. A `usage` row is one priced turn and the view
    *  sums them; a cold listing read delivers the store's per-run sum as one
-   *  row instead, which the fold takes as the total, so both reads leave the
+   *  row instead, which the view takes as the total, so both reads leave the
    *  same figure here. */
   usage: TokenUsageStatsSchema,
   /** The spend of this run and every run under it, finished or not: its own
-   *  `usage` plus each child's `treeUsage`, folded once per change on the
+   *  `usage` plus each child's `treeUsage`, summed once per change on the
    *  walk to the root. The one task total every host shows (footer, script
    *  card, status line), so no host sums a tree. */
   treeUsage: TokenUsageStatsSchema,
@@ -226,9 +226,9 @@ export function isLiveRun(
 
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
- * the fold's count over the run tree (each child's own `rollup` below it),
+ * the view's count over the run tree (each child's own `rollup` below it),
  * and the dispatch card's over the tree it lists (`below` recurses through
- * the children it lists instead). A child parked between turns (held) or
+ * the children it lists instead). A child waiting between turns (held) or
  * paused, nothing asked of the user, has delivered its turn: it counts as
  * finished, not running.
  */
@@ -283,7 +283,7 @@ export function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean {
  * Whether this window can answer a pending request: the one rule the host's
  * attention badge and the request card both read, matching what
  * `SessionRequests.decide` accepts. A run this process may not act on
- * (`readOnly`) takes no answer here. A request that parks its caller is
+ * (`readOnly`) takes no answer here. A request that blocks its caller is
  * answered by the fiber waiting on it, so only while its run waits here; an
  * interrupted run has to be resumed first. An inquiry, at any other time.
  */
@@ -299,7 +299,7 @@ export function requestAnswerability(
 }
 
 /** A pending request: which run asks and the payload the UI shows. The list
- *  is a set keyed by `requestId` (5.2): opened without decided. */
+ *  is a set keyed by `requestId`: opened without decided. */
 const PendingRequestSchema = z.object({
   runId: RunIdSchema,
   requestId: z.string(),
@@ -307,13 +307,13 @@ const PendingRequestSchema = z.object({
 });
 
 /** A queued follow-up as a composer lists it (`displayText`, else `text`).
- *  Per run a set keyed by `followUpId` (5.2): queued, unconsumed, in order. */
+ *  Per run a set keyed by `followUpId`: queued, unconsumed, in order. */
 const QueuedFollowUpViewSchema = z.object({
   followUpId: z.string(),
   text: z.string(),
 });
 
-/** One level of the session's fold: its runs, requests and grants. */
+/** One session's view at one moment: its runs, requests and grants. */
 export const SessionViewSchema = z.object({
   key: SessionKeySchema,
   runs: z.map(RunIdSchema, RunViewSchema),
@@ -325,15 +325,15 @@ export const SessionViewSchema = z.object({
   /**
    * Transcript verbosity (`texra.logger.debugMode`), sampled by the process
    * reader and carried with the replay — never stamped onto a row. The whole
-   * fold answers with the replay's value, so a settings flip takes effect on
-   * the next replay, not mid-fold.
+   * view uses the replay's value, so a settings flip takes effect on the
+   * next replay, not mid-batch.
    */
   debug: z.boolean(),
-  /** One entry per subscribed aggregate: the highest seq the fold has
-   *  retained for it (the subscription's `fromSeq` until a row folds).
-   *  Created when the aggregate enters the subscription set, deleted with
-   *  its transcript tier on eviction; never a commit ordinal. */
-  folded: z.map(AggregateIdSchema, z.int().nonnegative()),
+  /** One entry per subscribed aggregate: the highest seq its transcript has
+   *  applied (the subscription's `fromSeq` until a row is applied). Created
+   *  when the aggregate enters the subscription set, deleted with its
+   *  transcript when it leaves; never a commit ordinal. */
+  transcriptSeq: z.map(AggregateIdSchema, z.int().nonnegative()),
   /** Paper-level aggregate; a rail badge reads it and derives nothing. */
   rollup: z.object({
     running: z.int().nonnegative(),
@@ -348,7 +348,7 @@ export const SessionViewSchema = z.object({
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
-/** What wants this window: the requests it can answer, in fold order (the
+/** What wants this window: the requests it can answer, in view order (the
  *  badge), and those `previous` could not (none without it: history). */
 export interface Attention<Request> {
   readonly requests: readonly Request[];
@@ -389,7 +389,7 @@ export function attentionOf<View extends ReadSessionView>(
   };
 }
 
-/** A live run working right now: not a conversation parked on its user. */
+/** A live run working right now: not a conversation waiting on its user. */
 export function isWorkingRun(run: ReadRunView): boolean {
   return isLiveRun(run) && isActivePhase(run.status);
 }
@@ -398,8 +398,8 @@ export function isWorkingRun(run: ReadRunView): boolean {
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
  * The paper-level activity every title and status pill shows, read from the
- * fold and nothing else: a request this window can answer outranks a run
- * working right now; a conversation parked on its user is idle.
+ * view and nothing else: a request this window can answer outranks a run
+ * working right now; a conversation waiting on its user is idle.
  */
 export function sessionActivity(view: ReadSessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
@@ -408,9 +408,9 @@ export function sessionActivity(view: ReadSessionView): SessionTitleState {
 }
 
 /**
- * The empty view a fold starts from: keyed by its session, its cursor at the
- * layer's tail anchor, and its initial verbosity flag. Built once
- * per fold fiber; a replay's first input can replace it when policy changes.
+ * The empty view an updater starts from: keyed by its session, its cursor at
+ * the layer's tail anchor, and its initial verbosity flag. A replay's
+ * `debug` input replaces it when the verbosity changes.
  */
 export function emptySessionView(
   key: string,
@@ -423,7 +423,7 @@ export function emptySessionView(
     order: [],
     cursor,
     debug,
-    folded: new Map(),
+    transcriptSeq: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     requests: [],
     policy: new Map(),
@@ -435,7 +435,7 @@ export function emptySessionView(
 /**
  * Every run under `rootRunId`, parents first: the topology `childIds`
  * (root to leaf) and `ancestors` (leaf to root) already state on every row,
- * so a host walks the fold's own facts instead of re-deriving them.
+ * so a host walks the view's own facts instead of re-deriving them.
  */
 export function descendantRuns(
   view: Pick<ReadSessionView, 'runs'>,

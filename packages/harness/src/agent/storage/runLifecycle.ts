@@ -5,7 +5,7 @@ import { Cause, Effect, Exit, Result } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import type { TransactionPart } from '@agent/runtime/childSettlement';
+import type { TransactionPart } from '@agent/runtime/childTurnResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 import {
@@ -30,10 +30,7 @@ import {
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
-import type {
-  RunHistoryDraft,
-  RunInputDraft,
-} from '@shared/session/runState';
+import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -209,8 +206,10 @@ export interface FinalizeRunInput {
   /** What the run produced; absent (an empty output) for a backstop, and
    *  for a child, whose product is its per-turn delivery. */
   readonly output?: RunEndOutput;
-  /** A child's last-turn settlement, committed with the run's end. */
-  readonly settlement?: TransactionPart;
+  /** A child's last turn result, committed with the run's end (or, once
+   *  that result could not be saved, the notice to its parent that it was
+   *  lost). */
+  readonly lastTurn?: TransactionPart;
 }
 
 /** A run's end as it stands on disk: `recorded` is false for a run never
@@ -219,8 +218,8 @@ export interface FinalizedRun {
   readonly recorded: boolean;
 }
 
-/** A run's end in `append`'s job (halt, unapplied input, closure, `run.end`,
- *  settlement); an unloadable run's, all but the halt, loudly. */
+/** A run's end in `append`'s job (halt, unread input, closure, `run.end`,
+ *  last turn); an unloadable run's, all but the halt, with a warning. */
 export const endIn = Effect.fn('endIn')(function* (
   session: SessionHandle,
   append: Append,
@@ -228,27 +227,28 @@ export const endIn = Effect.fn('endIn')(function* (
 ) {
   const { runId, outcome, keepExistingOutcome, error } = input;
   const target = qualifyAggregateId('run', runId);
-  const co: Effect.Success<TransactionPart> = yield* input.settlement ??
-    Effect.succeed({ rows: [], committed: Effect.void });
   const rows = yield* session.log.records(runId);
-  // A run never born has nothing to end: its launch reports the failure.
-  if (!rows.some((row) => row.type === 'run.start'))
-    return { recorded: false, after: Effect.void };
+  // A run never created has nothing to end: its launch reports the failure.
+  if (!rows.some((row) => row.type === 'run.start')) return { recorded: false };
+  const lastTurn: Effect.Success<TransactionPart> = yield* input.lastTurn ??
+    Effect.succeed({ rows: [] });
   // Ended in its current lifecycle: a resumed run ends again, even the same
   // way, or every `durableOutcome` reader keeps it RUNNING for want of the row.
   const ended = runEndFromEvents(rows, runId)?.outcome;
   const persisted =
     keepExistingOutcome === true && ended !== undefined ? ended : outcome;
-  const settled = ended === persisted || co.held === true;
+  // No end now: the run already ended this way, or its end waits until the
+  // result it holds is delivered.
+  const skipEnd = ended === persisted || lastTurn.held === true;
   if (ended === persisted && error !== undefined)
     yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
   // The loop's halt, never apart from its end, through the run's cell.
-  const halt = settled
+  const halt = skipEnd
     ? []
     : rows.flatMap((row) =>
         row.type === 'run.position' ? [haltedPositionRow(row, persisted)] : [],
       );
-  const closing: readonly RunInputDraft[] = settled
+  const closing: readonly RunInputDraft[] = skipEnd
     ? []
     : [
         ...consumedRows(
@@ -263,20 +263,24 @@ export const endIn = Effect.fn('endIn')(function* (
           ...(error && {
             error: {
               ...error,
-              message: [error.message, co.note].filter(Boolean).join('; '),
+              message: [error.message, lastTurn.note]
+                .filter(Boolean)
+                .join('; '),
             },
           }),
           output: input.output ?? emptyRunEndOutput(),
         },
       ];
-  const result = { recorded: true, after: co.committed };
-  const beside = [...closing, ...co.rows];
+  const result = { recorded: true };
+  const beside = [...closing, ...lastTurn.rows];
   const cell = yield* Effect.result(
     session.runHistory.open(runId, { within: append }),
   );
-  const alongside = Effect.succeed({ rows: beside, committed: Effect.void });
   if (Result.isSuccess(cell))
-    return yield* Effect.as(cell.success.append(halt, alongside), result);
+    return yield* Effect.as(
+      cell.success.append(halt, Effect.succeed(beside)),
+      result,
+    );
   if (!unloadable(cell.failure)) return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
@@ -334,22 +338,24 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   // Rows the run published and the store refused fail it, whoever ends it.
   const lost = yield* session.trace.lost(runId);
   const failed = lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED;
-  const { settlement, ...requested } = {
+  const { lastTurn, ...requested } = {
     ...input,
     outcome: failed ? RUN_OUTCOME.FAILED : outcome,
     error: input.error ?? lost,
   };
-  let status = yield* end({ ...requested, settlement });
-  // A refused settlement: the end keeps its outcome and records the loss,
+  let status = yield* end({ ...requested, lastTurn });
+  // A refused last turn: the end keeps its outcome and records the loss,
   // once a read shows no end committed with it (its publication may have
   // failed after); a failed read leaves the end to the backstop, loudly.
   const read =
-    Exit.isFailure(status) && settlement !== undefined
+    Exit.isFailure(status) && lastTurn !== undefined
       ? yield* Effect.result(session.log.records(runId))
       : undefined;
   if (read?._tag === 'Success' && Exit.isFailure(status)) {
     const cause = ensureError(Cause.squash(status.cause)).message;
-    yield* Effect.logWarning(`Run ${runId}: its settled end: ${cause}`);
+    yield* Effect.logWarning(
+      `Run ${runId}: its end with its last turn: ${cause}`,
+    );
     const landed = runEndFromEvents(read.success, runId);
     if (landed !== null) return { recorded: true };
     // The parent's notice rides this end's append (both commit or neither),
@@ -360,26 +366,22 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     const text = `The result of run ${runId} was lost: ${cause}`;
     const notice = Effect.gen(function* () {
       const to = yield* persistedParentRunId(session, runId);
-      if (to === undefined) return { rows: [], committed: Effect.void };
+      if (to === undefined) return { rows: [] };
       const from = { kind: 'run', runId } as const;
       const { rows, sent } = yield* session.followUps
         .admission(to, { text, from, deliveryId }, {})
         .pipe(Effect.catch((e) => Effect.succeed({ rows: [], sent: e })));
-      if ('kind' in sent && sent.kind !== 'refused')
-        return { rows, committed: Effect.void };
+      if ('kind' in sent && sent.kind !== 'refused') return { rows };
       const note = `parent not told (${'kind' in sent ? (sent.reason ?? 'closed') : sent.message})`;
-      return { rows, committed: Effect.logWarning(`${runId}: ${note}`), note };
+      yield* session.log.afterCommit(Effect.logWarning(`${runId}: ${note}`));
+      return { rows, note };
     });
     const had = [cause, requested.error?.message].filter(Boolean);
     const message = `Result lost: ${had.join('; it ended: ')}`;
     const error = { kind: 'result-lost', message } as const;
-    status = yield* end({ ...requested, error, settlement: notice });
+    status = yield* end({ ...requested, error, lastTurn: notice });
   }
-  if (Exit.isSuccess(status)) {
-    const { recorded, after } = status.value;
-    yield* after;
-    return { recorded };
-  }
+  if (Exit.isSuccess(status)) return { recorded: status.value.recorded };
   // The last backstop, loud: the end alone, FAILED.
   const error = ensureError(Cause.squash(status.cause));
   const message = `The run's end was not saved: ${error.message}`;

@@ -4,11 +4,6 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
 });
 
-/** Floor a millisecond duration down to whole-second granularity. */
-function floorToWholeSeconds(durationMs: number): number {
-  return Math.floor(durationMs / 1000) * 1000;
-}
-
 /**
  * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
  *
@@ -17,7 +12,7 @@ function floorToWholeSeconds(durationMs: number): number {
  * displays that start from zero, e.g. goal timings and server uptime).
  */
 export function formatCompactDuration(durationMs: number): string {
-  const wholeSeconds = floorToWholeSeconds(Math.max(0, durationMs));
+  const wholeSeconds = Math.floor(Math.max(0, durationMs) / 1000) * 1000;
   if (wholeSeconds === 0) return '0s';
   return prettyMilliseconds(wholeSeconds, {
     secondsDecimalDigits: 0,
@@ -56,8 +51,7 @@ export function pluralize(
   singular: string,
   plural?: string,
 ): string {
-  if (plural !== undefined) return count === 1 ? singular : plural;
-  return count === 1 ? singular : regularPlural(singular);
+  return count === 1 ? singular : (plural ?? regularPlural(singular));
 }
 
 /**

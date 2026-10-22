@@ -40,7 +40,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import type { CoWrite } from '@shared/session/sessionEvents';
+import type { Alongside } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -338,11 +338,11 @@ export const ownFactRow = (
 /**
  * The rows the facts of a call of `runId` commit in its `tool.result`
  * batch: a fact about the run on the run's history, and one about its
- * plugin's own aggregate (`aggregate`), hung under the run, as the batch's
- * co-write, so each commits with the result or not at all. The co-write
- * reads the aggregate in the job's transaction: a row its latest one
- * already supersedes (the arm's `supersedes`) is left out, since the call
- * only lagged behind it; any other refusal stays the store's.
+ * plugin's own aggregate (`aggregate`), hung under the run, appended
+ * beside the batch (`alongside`), so each commits with the result or not
+ * at all. `alongside` reads the aggregate in the job's transaction: a row
+ * its latest one already supersedes (the arm's `supersedes`) is left out,
+ * since the call only lagged behind it; any other refusal stays the store's.
  */
 export function factRows(
   facts: readonly ToolFact[],
@@ -351,7 +351,7 @@ export function factRows(
   log: Pick<SessionLog, 'rows'>,
 ): {
   readonly run: readonly RunHistoryDraft[];
-  readonly alongside: Effect.Effect<CoWrite, DatabaseWriteFailed>;
+  readonly alongside: Alongside<DatabaseWriteFailed>;
 } {
   const run: RunHistoryDraft[] = [];
   const own: OwnFactRow[] = [];
@@ -364,7 +364,7 @@ export function factRows(
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  const current = (draft: (typeof own)[number]) =>
+  const current = (draft: OwnFactRow) =>
     Effect.gen(function* () {
       const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
       if (arm?.supersedes === undefined) return true;
@@ -382,10 +382,7 @@ export function factRows(
     });
   return {
     run,
-    alongside: Effect.map(Effect.filter(own, current), (rows) => ({
-      rows,
-      committed: Effect.void,
-    })).pipe(
+    alongside: Effect.filter(own, current).pipe(
       // A read in the writing transaction that fails fails the write.
       Effect.mapError(
         (error) => new DatabaseWriteFailed({ path: error.path, cause: error }),

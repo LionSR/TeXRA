@@ -1136,6 +1136,9 @@ show` print the same notice, and the new `texra agents customize`,
 - **A stopped run stays stopped.** Stopping a run while a message was
   queued for it resumed the run at once and sent the stopped model call
   again. The queued message now waits for your next message or Resume.
+- **The panel's agent menu lists each agent once, and a document agent
+  opens on files.** Picking an agent such as `criticize` starts its
+  document task and shows the file panel; a file icon marks those agents.
 - **`texra`'s `/key` picker shows which providers already have a key.** Each
   provider row reads "Key set", "Env" or "Not set", as the API-keys page of
   `/config` already did. If the key store cannot be read, the rows read

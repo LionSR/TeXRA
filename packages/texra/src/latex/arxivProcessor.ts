@@ -438,10 +438,11 @@ class ArxivSourceProcessor {
 
       // An old-style ID ('math/0501234') carries a slash, which would nest
       // the paper under an extra directory level; flatten it into the name.
-      const paperDirRelative =
-        destination === 'root' ? '.' : `References/${id.replaceAll('/', '_')}`;
-      const isRoot = paperDirRelative === '.';
-      const paperDirFull = path.join(workspaceRoot, paperDirRelative);
+      const isRoot = destination === 'root';
+      const paperDirFull = path.join(
+        workspaceRoot,
+        isRoot ? '.' : `References/${id.replaceAll('/', '_')}`,
+      );
 
       const needsDownload = !(yield* this.hasExistingSource(
         isRoot,

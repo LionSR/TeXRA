@@ -32,7 +32,7 @@ import {
   nextAttempt,
   type Attempt,
   type Invocation,
-  type Move,
+  type NextAttempt,
   type RetryCredentials,
 } from '@shared/session/inFlight';
 import type { RunPosition } from '@shared/session/runRows';
@@ -180,7 +180,7 @@ const credentialRenewal = <R>(
  *  unsent, so nothing goes out on the binding it meant to leave: false. */
 const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   driver: InvocationDriver<A, E, R>,
-  move: Extract<Move, { kind: 'send' | 'observe' }>,
+  move: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
   failedOn: BoundModel | null,
   ref: InvocationRef,
 ): Effect.fn.Return<boolean, E, R> {
@@ -204,7 +204,7 @@ const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
  */
 const tryAttempt = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
-  move: Extract<Move, { kind: 'send' | 'observe' }>,
+  move: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
   ref: InvocationRef,
   bound: BoundModel,
 ): Effect.Effect<{ readonly ok: A } | AttemptFailure, E, R | RouteRetries> =>
@@ -242,7 +242,7 @@ const tryAttempt = <A, E, R>(
  *  does. */
 const consult = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
-  move: Extract<Move, { kind: 'await' | 'reask' }>,
+  move: Extract<NextAttempt, { kind: 'await' | 'reask' }>,
 ): Effect.Effect<boolean, E, R> => {
   const { asker } = driver;
   if (asker === null)
@@ -310,7 +310,7 @@ const CANCELLED: InvocationEnd = { kind: 'cancelled' };
 
 /** How a recorded end of an invocation ends it again. */
 const ended = (
-  move: Extract<Move, { kind: 'fail' | 'cancel' }>,
+  move: Extract<NextAttempt, { kind: 'fail' | 'cancel' }>,
 ): InvocationEnd =>
   move.kind === 'fail'
     ? { kind: 'failed', error: move.error, cause: null }
@@ -325,7 +325,7 @@ const afterFailure = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   renew: ReturnType<typeof credentialRenewal<R>>,
   failed: AttemptFailure,
-  move: Extract<Move, { kind: 'send' | 'observe' }>,
+  move: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
   ref: InvocationRef,
   bound: BoundModel,
 ): Effect.Effect<
@@ -362,11 +362,11 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   const renew = credentialRenewal(driver.rebind);
   // A renewed credential observes the same operation again, unrecorded;
   // `failedOn` is the binding the last attempt went out on.
-  let again: Move | null = null;
+  let again: NextAttempt | null = null;
   let failedOn: BoundModel | null = null;
   for (;;) {
     const { invocation, requests } = yield* driver.read;
-    const move: Move = again ?? nextAttempt(invocation, requests);
+    const move: NextAttempt = again ?? nextAttempt(invocation, requests);
     again = null;
     if (move.kind === 'fail' || move.kind === 'cancel') return ended(move);
     if (move.kind === 'await' || move.kind === 'reask') {

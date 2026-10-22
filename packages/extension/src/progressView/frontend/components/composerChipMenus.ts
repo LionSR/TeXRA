@@ -10,24 +10,16 @@ import { repeat } from 'lit/directives/repeat.js';
 import { agentName, isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import type { SessionType, Surface } from '@texra/shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { IconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   approvalPolicyLabel,
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-
-/** The agent menu's sections, one per launch mode: every agent chats, and
- *  an agent with a document task (`rounds`) also runs one. */
-const AGENT_SECTIONS: ReadonlyArray<
-  readonly [SessionType, string, (option: DocumentAgentOption) => boolean]
-> = [
-  ['chat', 'Chat', () => true],
-  ['task', 'Document task', (option) => option.rounds !== undefined],
-];
 
 export interface ChipMenu {
   readonly id: string;
@@ -41,6 +33,22 @@ export interface ChipMenu {
 
 type Launch = Surface['launch'];
 
+/** The launcher's agent in the catalog. The default and imported selections
+ *  can be bare names; catalog options are source-qualified. A bare name
+ *  matches against the effective catalog, while an explicitly chosen source
+ *  stays exact. */
+export function launchAgentOption(
+  launch: Launch,
+  host: HostSnapshot,
+): DocumentAgentOption | undefined {
+  const name = agentName(launch.agent);
+  return host.agentOptions.find(
+    (option) =>
+      option.value === launch.agent ||
+      (name === launch.agent && agentName(option.value) === name),
+  );
+}
+
 export function launcherChipMenus(
   launch: Launch,
   host: HostSnapshot,
@@ -52,15 +60,7 @@ export function launcherChipMenus(
   const team = host.teamOptions.find(
     (option) => option.value === launch.selectedTeamId,
   );
-  // The default and imported selections can be bare names; catalog options
-  // are source-qualified. Match a bare name against the effective catalog,
-  // while keeping an explicitly chosen source exact.
-  const name = agentName(launch.agent);
-  const agent = host.agentOptions.find(
-    (option) =>
-      option.value === launch.agent ||
-      (name === launch.agent && agentName(option.value) === name),
-  );
+  const agent = launchAgentOption(launch, host);
   const agentLabel =
     launch.launchTarget === 'team' && team
       ? team.label
@@ -75,26 +75,31 @@ export function launcherChipMenus(
       label: agentLabel,
       title: 'Agent',
       items: html`
-        ${AGENT_SECTIONS.map(([sessionType, heading, offers]) => {
-          const agents = host.agentOptions.filter(offers);
-          if (agents.length === 0) return nothing;
-          return html`<div class="menu-heading">${heading}</div>
-            ${repeat(
-              agents,
-              (option) => option.value,
-              (option) =>
-                html`<wa-dropdown-item
-                  value=${`agent:${sessionType}:${option.value}`}
-                  type="checkbox"
-                  .checked=${live(
-                    launch.launchTarget === 'agent' &&
-                      launch.sessionType === sessionType &&
-                      option.value === agent?.value,
-                  )}
-                  >${option.label}</wa-dropdown-item
-                >`,
-            )}`;
-        })}
+        ${repeat(
+          host.agentOptions,
+          (option) => option.value,
+          // An agent with a document task launches one over files; the
+          // agent library marks it the same way.
+          (option) =>
+            html`<wa-dropdown-item
+              value=${`agent:${option.value}`}
+              type="checkbox"
+              .checked=${live(
+                launch.launchTarget === 'agent' &&
+                  option.value === agent?.value,
+              )}
+              >${option.label}${
+                option.rounds === undefined
+                  ? nothing
+                  : html`<span slot="details"
+                      >${waIcon('file-lines', {
+                        label: 'Document task: runs on files',
+                        title: 'Document task: runs on files',
+                      })}</span
+                    >`
+              }</wa-dropdown-item
+            >`,
+        )}
         ${
           host.teamOptions.length > 0
             ? html`<div class="menu-heading">Teams</div>
@@ -122,17 +127,12 @@ export function launcherChipMenus(
         >
       `,
       onSelect: (value) => {
-        const agent = /^agent:(chat|task):(.+)$/.exec(value);
-        if (agent) {
-          actions.setLaunch({
-            sessionType: agent[1] as SessionType,
-            agent: agent[2],
-          });
+        if (value.startsWith('agent:')) {
+          actions.setLaunch({ agent: value.slice(6) });
         } else if (value.startsWith('team:')) {
           // A team runs its lead as a chat.
           actions.setLaunch({
             launchTarget: 'team',
-            sessionType: 'chat',
             selectedTeamId: value.slice(5),
           });
         } else if (value === 'settings:teams') {

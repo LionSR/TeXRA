@@ -71,7 +71,7 @@ import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   buildScenario,
-  foldAll,
+  viewOf,
   local,
   OWNER,
   OTHER_OWNER,
@@ -1814,7 +1814,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       },
     },
   });
-  const view = foldAll([
+  const view = viewOf([
     ...events,
     ...log.events.slice(recordedCount).map(tail),
     // `buildScenario` stamped its existence snapshot before these runs

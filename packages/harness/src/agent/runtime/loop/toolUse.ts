@@ -77,7 +77,7 @@ const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
-  /** A native child's turn permit, and the settlement its boundary commits. */
+  /** A native child's turn permit, and the turn result its boundary commits. */
   readonly turns?: ChildRunBoundary<RunEndResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
@@ -512,30 +512,30 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // barrier lets the open streams `waiting` closes count every one.
         yield* session.log.settled;
         // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
-        // closes open streams), a child's settlement with its parent's
+        // closes open streams), a child's turn result with its parent's
         // delivery, and a Stop hook's block or input already queued.
         const { rows: hooks, block } = yield* stopHooks(run, turn, response);
         const goesOn =
           !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
-        const settlement =
+        const childTurn =
           start.turns && goesOn && block === null
-            ? yield* start.turns.settleBoundary(result(turn.outcome, state))
+            ? yield* start.turns.finishTurn(result(turn.outcome, state))
             : null;
         const ending = [
           positionRow(runId, state, 'turn.end'),
           ...session.trace.closure(runId),
           positionRow(runId, state, 'waiting'),
-          ...(settlement?.rows ?? []),
+          ...(childTurn?.rows ?? []),
         ];
         const next = block ?? (goesOn ? yield* followUps.takeQueued : null);
         const pin =
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =
           next === null
-            ? yield* cell.append([...hooks, ...ending], settlement?.alongside)
+            ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
             : (yield* followUps.consume(cell, next, undefined, {
                 rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
-                alongside: settlement?.alongside,
+                alongside: childTurn?.alongside,
               })).state;
         // A turn's end is idle even when it took its next input with it.
         if (next !== null) run.callbacks.onIdle?.();
@@ -553,8 +553,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // run ends at its park, however its turn ended.
         if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
           return finish(state, turn.outcome);
-        if (settlement !== null)
-          yield* Effect.uninterruptible(settlement.settled);
+        if (childTurn !== null)
+          yield* Effect.uninterruptible(childTurn.wakeParent);
       }
     });
 

@@ -313,7 +313,7 @@ export function executeAgent(
       {
         parentRunId: options.parentRunId,
         onRun: options.onRun,
-        settleEnd: options.turns?.settleEnd,
+        finishLastTurn: options.turns?.finishLastTurn,
       },
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
   }).pipe(
@@ -391,7 +391,7 @@ export function resumeToolUseFromResumeData(
       {
         parentRunId,
         onRun: options.onRun,
-        settleEnd: options.turns?.settleEnd,
+        finishLastTurn: options.turns?.finishLastTurn,
       },
     );
   }).pipe(Effect.scoped);

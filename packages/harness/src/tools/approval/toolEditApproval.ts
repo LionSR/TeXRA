@@ -185,11 +185,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       runId !== undefined &&
       session.approvals.bypass(runId, 'toolEdit') !== null;
     const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
-      finalizeApprovalResult(
-        { action: 'apply', appliedContent: preparedRequest.proposedContent },
-        preparedRequest,
-      );
-    const policy = session.approvals.policy(runId ?? undefined);
+      finalizeApprovalResult(preparedRequest.proposedContent, preparedRequest);
+    const policy = session.approvals.policy(runId);
     const decision = decideApproval({
       policy,
       promptRequired: approvalsEnabled,
@@ -257,20 +254,19 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
               },
             )
             .pipe(
-              Effect.flatMap((decided) => {
-                if (decided.action !== 'approve') {
-                  return Effect.succeed(refusalOf('toolEdit', decided));
-                }
-                return finalizeApprovalResult(
-                  {
-                    action: 'apply',
-                    appliedContent: (
+              Effect.flatMap(
+                (decided): Effect.Effect<ToolEditApprovalResult> => {
+                  if (decided.action !== 'approve') {
+                    return Effect.succeed(refusalOf('toolEdit', decided));
+                  }
+                  return finalizeApprovalResult(
+                    (
                       decided.content ?? preparedRequest.proposedContent
                     ).replaceAll('\r\n', '\n'),
-                  },
-                  preparedRequest,
-                );
-              }),
+                    preparedRequest,
+                  );
+                },
+              ),
             ),
         ),
       ),
@@ -280,14 +276,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
 );
 
 function finalizeApprovalResult(
-  result: ToolEditApprovalResult,
+  appliedContent: string,
   request: ToolEditProposal,
-): Effect.Effect<ToolEditApprovalResult> {
-  if (result.action !== 'apply') {
-    return Effect.succeed(result);
-  }
-
-  const { appliedContent } = result;
+): Effect.Effect<AcceptedToolEditApprovalResult> {
   // One pass answers both the start line and the counts.
   const { hunks, timeout } = diffEdit(request.originalContent, appliedContent);
 
@@ -296,8 +287,9 @@ function finalizeApprovalResult(
 
   return reportDiffTimeout(timeout).pipe(
     Effect.as({
-      ...result,
-      lineChanges: result.lineChanges ?? countLineChanges(hunks),
+      action: 'apply' as const,
+      appliedContent,
+      lineChanges: countLineChanges(hunks),
       startLine,
     }),
   );
@@ -339,12 +331,8 @@ export function buildApprovalRejectedResult(
     refusal.action === 'reject'
       ? `User rejected ${sourceTool} for ${path}.`
       : `${copy.summary}: ${sourceTool} for ${path}.`;
-  const details = [copy.detail].filter(
-    (detail): detail is string =>
-      typeof detail === 'string' && detail.trim() !== '',
-  );
-  const error =
-    details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
+  // `refusalCopy` already trims a detail and drops an empty one.
+  const error = copy.detail ? `${summary}\n\n${copy.detail}` : summary;
   return errorResult(error, {
     summary,
     ...(copy.feedback && { userInstruction: copy.feedback }),
