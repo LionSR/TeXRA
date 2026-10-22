@@ -73,9 +73,10 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
       config: run.config,
       source: run.runId,
       before: Number.POSITIVE_INFINITY,
+      boundAt: undefined,
     };
   if (script.kind !== 'background')
-    return { config: run.config, source: null, before: 0 };
+    return { config: run.config, source: null, before: 0, boundAt: undefined };
   const start = (yield* run.session.log.records(run.runId)).find(
     (row) => row.type === 'run.start',
   );
@@ -118,7 +119,12 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
       : owner;
   if (config === null || issued === undefined)
     return yield* Effect.fail(missing);
-  return { config, source: parent, before: issued.commit };
+  return {
+    config,
+    source: parent,
+    before: issued.commit,
+    boundAt: issued.seq,
+  };
 });
 
 const runSelf = Effect.fn('self.call')(function* (
@@ -127,7 +133,7 @@ const runSelf = Effect.fn('self.call')(function* (
 ) {
   const { run } = call;
   const { session, runId: parentRunId } = run;
-  const { config, source, before } = yield* selfOf(call);
+  const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return errorResult(
       "A task's script has no conversation to fork: call self() with `fork: false`.",
@@ -165,7 +171,14 @@ const runSelf = Effect.fn('self.call')(function* (
     Effect.gen(function* () {
       const forked =
         input.fork && source !== null
-          ? yield* forkSeed(session, source, before, runId, input.prompt)
+          ? yield* forkSeed(
+              session,
+              source,
+              before,
+              runId,
+              input.prompt,
+              boundAt,
+            )
           : null;
       return yield* executeSubagentInBand({
         session,

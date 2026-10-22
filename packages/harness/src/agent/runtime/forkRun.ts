@@ -245,6 +245,8 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
   before: number,
   runId: RunId,
   prompt: string,
+  /** The source's row the child is bound as of (`undefined`: its latest). */
+  boundAt: number | undefined,
 ): Effect.fn.Return<
   { readonly record: AgentConfig; readonly seed: RunHistoryDraft[] },
   Rejected | Error
@@ -261,16 +263,22 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
           { ...last, content: [...last.content, text] },
         ]
       : [...state.messages, { role: 'user' as const, content: [text] }];
-  // Bound as the source was at the cut: its route and the routes it
-  // declined (`AgentRun` binds a seeded launch from this row).
+  // Bound as the source was when it issued the call, not at the cut: a
+  // route its turn declined since stays declined (`AgentRun` binds a seeded
+  // launch from this row).
+  const bound = (yield* session.runHistory.load(from, boundAt)) ?? state;
+  const model = bound.modelId ?? record.model;
   const binding =
-    state.backend === null
+    bound.backend === null
       ? []
       : [
-          configRow(runId, record, record.model, {
-            backend: state.backend,
-            declinedRoutes: state.declinedRoutes,
+          configRow(runId, { ...record, model }, model, {
+            backend: bound.backend,
+            declinedRoutes: bound.declinedRoutes,
           }),
         ];
-  return { record, seed: [...viewRows(runId, state, messages), ...binding] };
+  return {
+    record: { ...record, model },
+    seed: [...viewRows(runId, state, messages), ...binding],
+  };
 });
