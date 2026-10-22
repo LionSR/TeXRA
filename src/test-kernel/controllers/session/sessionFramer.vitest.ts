@@ -48,7 +48,7 @@ import type { SessionView } from '@shared/session/readonlyViews';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
-  FakeConfigProvider,
+  fakeConfig,
 } from '@test/support/FakePlatform';
 import {
   fakeProcessServices,
@@ -132,7 +132,7 @@ function streamingRow(
 /** The runtime graph, as `sessionLayer` composes it without the host bits. */
 const runtimeGraph = (
   history: readonly SessionEventDraft[],
-  config = new FakeConfigProvider(),
+  config = fakeConfig(),
 ) => {
   const roots = createFakeWorkspaceRoots({ storagePath: KEY }, { config });
   const seeded = Layer.effectDiscard(
@@ -762,7 +762,7 @@ describe('session framer', () => {
   );
 
   it.effect('replays transcript history when debug policy changes', () => {
-    const config = new FakeConfigProvider({ [DEBUG_MODE_KEY]: 'false' });
+    const config = fakeConfig({ [DEBUG_MODE_KEY]: 'false' });
     const debugLog: SessionEventDraft = {
       type: 'log',
       aggregateId: qualifyAggregateId('run', RUN),
@@ -803,7 +803,7 @@ describe('session framer', () => {
       expect(current.cursor).toBeGreaterThan(0);
       const nonzeroFromSeq = current.folded.get(aggregateId)!;
 
-      config.set(DEBUG_MODE_KEY, true);
+      yield* config.update(DEBUG_MODE_KEY, true);
       yield* Fiber.interrupt(decoder);
       decoder = yield* startReplay({
         ...subscribe,
@@ -819,7 +819,7 @@ describe('session framer', () => {
       current = webview.view.current();
       expect(current.folded.get(aggregateId)).toBe(nonzeroFromSeq);
 
-      config.set(DEBUG_MODE_KEY, false);
+      yield* config.update(DEBUG_MODE_KEY, false);
       yield* Fiber.interrupt(decoder);
       decoder = yield* startReplay({
         ...subscribe,

@@ -1,26 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
   signOutCliSubscription: vi.fn(),
 }));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', async () => {
-  const { Effect } = await import('effect');
-  return {
-    installCliProcessRuntime: mocks.installCliProcessRuntime,
-    disposeCliProcessRuntime: Effect.void,
-  };
-});
 
 vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
   const actual =
@@ -42,10 +29,10 @@ describe('CLI auth command', () => {
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.initCliPlatform
+    cliInitPlatformMock.initCliPlatform
       .mockReset()
       .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
-    mocks.installCliProcessRuntime
+    cliInitPlatformMock.installCliProcessRuntime
       .mockReset()
       .mockImplementation(() => testRuntime());
     mocks.signOutCliSubscription

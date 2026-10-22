@@ -41,7 +41,6 @@ import {
   RUN_PHASE,
   type RunId,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
 import { closeTestDefaultSession, untrackRun } from '@test/support/sessionEnd';
@@ -58,7 +57,6 @@ import {
   queuedFollowUps,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { createChildRun } from '@tools/delegation/childRun';
 import { generateRunId } from '@utils/core';
 
@@ -1157,75 +1155,70 @@ describe('childRunLoop E2E fixtures', () => {
     'gates budgeted child turns through the budget, and a stop the slot wait',
     () =>
       Effect.gen(function* () {
-        const config = testWorkspaceRoots().config as FakeConfigProvider;
-        config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
-        try {
-          const first = loopRunId();
-          const second = loopRunId();
-          const started: string[] = [];
-          const firstStarted = yield* Deferred.make<void>();
-          const firstRelease = yield* Deferred.make<FakeTurn>();
+        yield* testWorkspaceRoots().config.update(
+          CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+          1,
+        );
+        const first = loopRunId();
+        const second = loopRunId();
+        const started: string[] = [];
+        const firstStarted = yield* Deferred.make<void>();
+        const firstRelease = yield* Deferred.make<FakeTurn>();
 
-          // Native children, each turn under the run's permit.
-          const budgeted = (
-            stageLabel: string,
-            turn: Effect.Effect<FakeTurn>,
-          ): NativeChildStrategy<FakeTurn> => ({
-            stageLabel,
-            launch: (_notify, turns) => turns.turnPermit(turn),
-            formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
-            formatError: () => 'error',
-          });
-          const firstLoop = yield* startNativeLoop(
-            first,
-            budgeted(
-              'Budgeted first child',
-              Effect.gen(function* () {
-                started.push('first');
-                yield* Deferred.succeed(firstStarted, undefined);
-                return yield* Deferred.await(firstRelease);
-              }),
-            ),
-            true,
-          );
-          const secondLoop = yield* startNativeLoop(
-            second,
-            budgeted(
-              'Budgeted second child',
-              Effect.sync((): FakeTurn => {
-                started.push('second');
-                return { kind: 'terminal', value: 'done' };
-              }),
-            ),
-            true,
-          );
+        // Native children, each turn under the run's permit.
+        const budgeted = (
+          stageLabel: string,
+          turn: Effect.Effect<FakeTurn>,
+        ): NativeChildStrategy<FakeTurn> => ({
+          stageLabel,
+          launch: (_notify, turns) => turns.turnPermit(turn),
+          formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
+          formatError: () => 'error',
+        });
+        const firstLoop = yield* startNativeLoop(
+          first,
+          budgeted(
+            'Budgeted first child',
+            Effect.gen(function* () {
+              started.push('first');
+              yield* Deferred.succeed(firstStarted, undefined);
+              return yield* Deferred.await(firstRelease);
+            }),
+          ),
+          true,
+        );
+        const secondLoop = yield* startNativeLoop(
+          second,
+          budgeted(
+            'Budgeted second child',
+            Effect.sync((): FakeTurn => {
+              started.push('second');
+              return { kind: 'terminal', value: 'done' };
+            }),
+          ),
+          true,
+        );
 
-          yield* Deferred.await(firstStarted);
-          // One slot: the second child's turn must not start while the first
-          // holds it, although its generation is live.
-          expect(session.runs.get(second)?.live === true).toBe(true);
-          // The loop offers no in-fiber hook for "parked on the permit", so one
-          // macrotask is the window this negative assertion needs.
-          yield* settle;
-          expect(started).toEqual(['first']);
+        yield* Deferred.await(firstStarted);
+        // One slot: the second child's turn must not start while the first
+        // holds it, although its generation is live.
+        expect(session.runs.get(second)?.live === true).toBe(true);
+        // The loop offers no in-fiber hook for "parked on the permit", so one
+        // macrotask is the window this negative assertion needs.
+        yield* settle;
+        expect(started).toEqual(['first']);
 
-          // A stop while it waits for the slot settles it at once, although
-          // the first child still holds the slot.
-          yield* stopChildRun(second);
-          yield* Fiber.await(secondLoop);
-          expect(started).toEqual(['first']);
+        // A stop while it waits for the slot settles it at once, although
+        // the first child still holds the slot.
+        yield* stopChildRun(second);
+        yield* Fiber.await(secondLoop);
+        expect(started).toEqual(['first']);
 
-          yield* Deferred.succeed<FakeTurn, never>(firstRelease, {
-            kind: 'terminal',
-            value: 'done',
-          });
-          yield* Fiber.join(firstLoop);
-        } finally {
-          config.set(
-            CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-            CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
-          );
-        }
+        yield* Deferred.succeed<FakeTurn, never>(firstRelease, {
+          kind: 'terminal',
+          value: 'done',
+        });
+        yield* Fiber.join(firstLoop);
       }),
   );
 });

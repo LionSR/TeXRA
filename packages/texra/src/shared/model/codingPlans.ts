@@ -71,7 +71,14 @@ export const CODING_PLAN_BY_API_PROVIDER: ReadonlyMap<
   CodingPlanSubscription
 > = new Map(CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]));
 
-/** Resolve a coding plan from the route stamped on completed usage. */
+/** Resolve a coding plan from the route stamped on completed usage. A
+ *  plan's own route always resolves: the lookup is built from the catalog. */
+export function codingPlanForUsageRoute(
+  route: CodingPlanSubscription['usageRoute'],
+): CodingPlanSubscription;
+export function codingPlanForUsageRoute(
+  route: string | undefined,
+): CodingPlanSubscription | undefined;
 export function codingPlanForUsageRoute(
   route: string | undefined,
 ): CodingPlanSubscription | undefined {

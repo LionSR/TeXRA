@@ -48,12 +48,8 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import {
-  DOCUMENTS_ACCEPTED_ARM,
-  DOCUMENTS_OUTPUT_ARM,
-  DOCUMENT_TASK_BLOCK,
-} from '@texra/shared/plugins/documents';
-import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
+import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
   LeanLanguageServices,
@@ -78,10 +74,10 @@ import {
 const ARMED_PLUGINS: readonly Plugin[] = [
   {
     id: 'documents',
-    arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM],
+    arms: APP_PLUGIN_ARMS.documents,
     agentBlock: DOCUMENT_TASK_BLOCK,
   },
-  { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
+  { id: 'external-inquiry', arms: APP_PLUGIN_ARMS['external-inquiry'] },
 ];
 
 /** The process's `GlobalValues` over a global database layer, as
