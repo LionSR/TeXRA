@@ -24,7 +24,7 @@ import {
   buildScenario,
   CHILD,
   fanOutView,
-  foldAll,
+  viewOf,
   local,
   OWNER,
   tail,
@@ -40,7 +40,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
 /** The fan-out with nothing waiting: the same replay minus the request. */
 function runningOnlyView(): SessionView {
   const scenario = buildScenario();
-  return foldAll([
+  return viewOf([
     ...scenario.pending.filter(
       (input) =>
         !(input._tag === 'event' && input.event.type === 'request.opened'),
@@ -102,7 +102,7 @@ function withConversation(): SessionView {
       'since it blocks the resubmission.',
   });
   const chat = log.events.slice(before).map(tail);
-  return foldAll([...scenario.pending, ...chat, local({ self: [OWNER] })]);
+  return viewOf([...scenario.pending, ...chat, local({ self: [OWNER] })]);
 }
 
 const display = (

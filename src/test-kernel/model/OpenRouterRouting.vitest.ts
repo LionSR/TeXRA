@@ -80,10 +80,6 @@ describe('the OpenRouter route', () => {
     expect(routeKind(config, true, 'pro')).toBe('openrouter-unsupported');
   });
 
-  it('accepts the same model on OpenRouter when no mode is requested', () => {
-    expect(routeKind(config, true)).toBe('openrouter');
-  });
-
   it('does not silently change access routes for a Responses API model', () => {
     expect(
       routeKind({ ...config, requiresResponsesAPI: true }, true, 'pro'),

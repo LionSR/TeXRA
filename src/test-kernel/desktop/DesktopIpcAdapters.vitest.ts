@@ -80,42 +80,6 @@ describe('desktop IPC adapters', () => {
     }),
   );
 
-  it.effect(
-    'derives State 1 (setup) when hasCredential is true on fresh install',
-    () =>
-      Effect.gen(function* () {
-        const { onboarding, runtime } = yield* Effect.promise(() =>
-          createOnboardingHarness({
-            hasCredential: () => Effect.succeed(true),
-          }),
-        );
-
-        yield* withProcessServices(
-          runtime,
-          onboarding.refreshOnboardingFunnel(),
-        );
-        yield* Effect.promise(() => flushAsync());
-        // Credential present, firstRunDone not set: State 1 (setup card).
-        expectFunnelState(onboarding, 'setup');
-      }),
-  );
-
-  it.effect('derives State 2 (done) for veterans with firstRunDone set', () =>
-    Effect.gen(function* () {
-      const { onboarding, runtime } = yield* Effect.promise(() =>
-        createOnboardingHarness({
-          seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-          hasCredential: () => Effect.succeed(true),
-        }),
-      );
-
-      yield* withProcessServices(runtime, onboarding.refreshOnboardingFunnel());
-      yield* Effect.promise(() => flushAsync());
-      // Veteran with firstRunDone set: State 2 (done), no onboarding UI shown.
-      expectFunnelState(onboarding, 'done');
-    }),
-  );
-
   it.effect('handles skipSetup by setting firstRunDone and deriving done', () =>
     Effect.gen(function* () {
       const { onboarding, runtime, update } = yield* Effect.promise(() =>

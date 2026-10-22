@@ -51,8 +51,6 @@ import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-// Local imports - shared utilities
-
 // Local imports - catalog-driven settings rows
 import {
   renderStateSettingSelectRow,
@@ -264,7 +262,7 @@ export class LaTeXTab extends LitElement {
           ${actionSlot}
         </div>
         ${
-          !installed && installCmd
+          installCmd
             ? html`
                 <div class="dependency-install-actions">
                   <wa-copy-button

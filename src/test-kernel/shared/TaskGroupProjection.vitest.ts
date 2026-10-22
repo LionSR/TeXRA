@@ -1,35 +1,53 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
+  type RunId,
+  type SessionEvent,
   type TaskGroup,
   type TranscriptEvent,
 } from '@shared/schemas';
+import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
+import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
 import {
-  taskGroupDisplayStatus,
-  taskGroupOnStage,
-} from '@shared/runs/taskGroupProjection';
+  emptyTranscript,
+  emptyTranscriptIndexes,
+} from '@shared/session/transcriptState';
 
 type StageEvent = Extract<
   TranscriptEvent,
   { readonly type: 'stage.start' | 'stage.end' }
 >;
 
-/** Replay stage events at their clocks the way the session fold does: each
- *  writes over the group it names. */
+const AGGREGATE = qualifyAggregateId('run', 'abc123' as RunId);
+
+/** Replay stage events at their clocks through the transcript reducer, as
+ *  the session view does, and read the task groups it builds. */
 function project(
   events: readonly (readonly [StageEvent, number])[],
 ): TaskGroup[] {
-  const groups: TaskGroup[] = [];
-  for (const [event, at] of events) {
-    const index = groups.findIndex((group) => group.id === event.id);
-    const group = taskGroupOnStage(groups[index], event, at);
-    if (!group) continue;
-    if (index === -1) groups.push(group);
-    else groups[index] = group;
+  const work = { ix: emptyTranscriptIndexes(), owned: new WeakSet<object>() };
+  const ctx = { debug: false, lifecycleToTaskGroups: true };
+  let transcript = emptyTranscript();
+  for (const [index, [event, at]] of events.entries()) {
+    const seq = index + 2;
+    transcript = applyTranscriptEvent(
+      transcript,
+      work,
+      {
+        ...event,
+        aggregateId: AGGREGATE,
+        seq,
+        commit: seq,
+        origin: null,
+        at,
+      } as SessionEvent,
+      ctx,
+    );
   }
-  return groups;
+  return transcript.taskGroups;
 }
 
 describe('task-group projection from stage events', () => {

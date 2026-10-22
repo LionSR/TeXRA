@@ -25,7 +25,7 @@ import type { SessionView } from '@texra-ai/harness/schemas';
 
 const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
 /** Where a thread stands: awaiting an answer, answered, or dropped. */
-export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
+type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
 /** A thread as a list shows it: its status, last question and turn count. */
 const InquiryThreadSummarySchema = z.object({

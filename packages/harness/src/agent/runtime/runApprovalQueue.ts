@@ -42,7 +42,10 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { writeRefused, type RequestError } from '@shared/session/requestErrors';
+import {
+  writeRejection,
+  type RequestError,
+} from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -329,7 +332,7 @@ function approvePendingUnderBypass(
     { discard: true },
   ).pipe(
     Effect.mapError(
-      writeRefused({
+      writeRejection({
         runId,
         reason: 'The pending requests could not be approved.',
       }),
@@ -373,7 +376,7 @@ export function setPolicy(
         );
   return session.approvals.change(runId, edit).pipe(
     Effect.mapError(
-      writeRefused({
+      writeRejection({
         runId,
         reason: 'The approval change could not be saved.',
       }),

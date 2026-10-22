@@ -63,12 +63,10 @@ import {
 } from './client';
 import type {
   TranscriptSubscription,
-  FoldInput,
+  SessionViewInput,
 } from '@texra-ai/harness/transcript';
 import type { RunEndResult } from '@texra-ai/harness/schemas';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
-
-/** What a call made while the link reconnects is told. */
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
@@ -103,9 +101,9 @@ function requestError(
   }
 }
 
-/** A service frame as the fold inputs it carries (not its host snapshot). */
-function frameInputs(frame: EventsFrame): FoldInput[] {
-  const inputs: FoldInput[] = [];
+/** A service frame as the view inputs it carries (not its host snapshot). */
+function frameInputs(frame: EventsFrame): SessionViewInput[] {
+  const inputs: SessionViewInput[] = [];
   if (frame.debug !== null)
     inputs.push({ _tag: 'debug', enabled: frame.debug });
   inputs.push(...frame.events, ...frame.chunks);
@@ -333,7 +331,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
-  /** The client, once the link has one. */
   /** The client, once the link has one; or the refusal, once a newer
    *  TeXRA's service refused this window, which no reconnect undoes. */
   const connected = Stream.merge(
@@ -375,7 +372,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       );
       const aggregates = [...named].map((id) => ({
         id,
-        fromSeq: view.folded.get(id) ?? 0,
+        fromSeq: view.transcriptSeq.get(id) ?? 0,
       }));
       yield* graph.frames.begin(generation);
       yield* graph.view.subscribe(WINDOW_PORT, aggregates);
@@ -507,7 +504,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
       ),
     }));
-  const offline = (reason: string) => runFailure(reason);
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */
@@ -595,7 +591,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         return Effect.fail(runFailure('A service task needs its config.'));
       const refused = windowTools(input.tools);
       if (refused) return Effect.fail(refused);
-      return callService(link, offline, (client) =>
+      return callService(link, runFailure, (client) =>
         client['task.start']({
           workspace,
           runId: input.runId ?? generateRunId(),
@@ -621,7 +617,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     resume: (runId, input) => {
       const refused = windowTools(input?.tools);
       if (refused) return Effect.fail(refused);
-      return callService(link, offline, (client) =>
+      return callService(link, runFailure, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
         ),

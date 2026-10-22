@@ -17,7 +17,7 @@ import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
 import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
   buildBashApprovalRejectedResult,

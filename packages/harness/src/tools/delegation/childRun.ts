@@ -6,7 +6,7 @@ import { TraceEmitter } from '@agent/trace';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 
-import { parentAdmission } from '@agent/runtime/childSettlement';
+import { parentAdmission } from '@agent/runtime/childTurnResult';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -50,8 +50,8 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // No barrier here: registration committed the launch and its activation
   // awaited (`registerRun`), and every write below is either awaited or this
   // run's own queued fact, which its own drain answers for. A session-wide
-  // settle would instead report whatever session-scoped publication anyone
-  // else queued and fail an otherwise sound launch over it.
+  // barrier (`log.settled`) would instead report whatever session-scoped
+  // publication anyone else queued and fail an otherwise sound launch over it.
   const runs = registryOf(yield* Runs);
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
@@ -84,9 +84,9 @@ interface FinalizeChildRunArgs {
 
 /**
  * Finalize a child run: presentation logging plus the child's report of
- * its own exit, then the shared terminal finalizer (settle, untrack, terminal
- * run phase). Child runs never traverse
- * the run lifecycle, so this is their only settle point.
+ * its own exit, then the shared terminal finalizer (the `run.end` row with
+ * the last turn's result, then untrack). Child runs never go through the run
+ * lifecycle, so this is the only place their end is written.
  *
  * No `output` is passed, by rule rather than by omission: a child loop's
  * product is the per-turn delivery routed to its parent (and the result
@@ -143,7 +143,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
         }),
     stage: options.stage,
     stopped: options.stopped,
-    settle: () => Effect.succeed(options.settlement),
+    lastTurn: () => Effect.succeed(options.lastTurn),
   });
   logger.close();
 
@@ -185,29 +185,25 @@ const pauseChildRun = (
     });
     options.stage?.end(RUN_OUTCOME.CANCELLED);
     const target = qualifyAggregateId('run', runId);
-    // The last turn's settlement first: the pause notice is the newer
-    // report. The notice is read with the parent's next input and offered
-    // to nobody: a pause starts no model turn, parked or busy, and wakes no
-    // parent.
+    // The last turn's result first: the pause notice is the newer report.
+    // The notice is read with the parent's next input and offered to nobody:
+    // a pause starts no model turn, waiting or busy, and wakes no parent.
     const submitted = yield* session.log.transact((tx) =>
       Effect.gen(function* () {
         const parentRunId = yield* persistedParentRunId(session, runId);
         if (parentRunId === undefined) return undefined;
-        const settlement = yield* options.settlement ??
-          Effect.succeed({ rows: [], committed: Effect.void, held: false });
-        // A last turn held for a parent open elsewhere is the park: no
-        // pause after it (its notice would be refused the same way).
-        if (settlement.held === true) {
-          yield* tx.append(settlement.rows);
-          return {
-            parentRunId,
-            sent: { kind: 'duplicate' },
-            after: settlement.committed,
-          };
+        const lastTurn = yield* options.lastTurn ??
+          Effect.succeed({ rows: [], held: false });
+        // A last turn held for a parent open elsewhere already marks the
+        // child as waiting: no pause after it (its notice would be refused
+        // the same way).
+        if (lastTurn.held === true) {
+          yield* tx.append(lastTurn.rows);
+          return { parentRunId, sent: { kind: 'duplicate' } };
         }
         // A parent that cannot take the notice refuses it: the pause stands.
         const notice = yield* parentAdmission(
-          session.followUps,
+          session,
           parentRunId,
           { text, from: { kind: 'run', runId } },
           { hold: 'instruction' },
@@ -215,7 +211,7 @@ const pauseChildRun = (
         );
         // One append: the pause and its notice commit together.
         yield* tx.append([
-          ...settlement.rows,
+          ...lastTurn.rows,
           { type: 'run.report', aggregateId: target, report: text },
           {
             type: 'child.park',
@@ -225,16 +221,11 @@ const pauseChildRun = (
           },
           ...notice.rows,
         ]);
-        return {
-          parentRunId,
-          sent: notice.sent,
-          after: Effect.andThen(settlement.committed, notice.committed),
-        };
+        return { parentRunId, sent: notice.sent };
       }).pipe(Effect.scoped),
     );
     paused = submitted !== undefined;
     if (submitted === undefined) return false;
-    yield* submitted.after;
     if (submitted.sent.kind === 'refused')
       logger.warn(
         `The pause notice was not queued for parent run ${submitted.parentRunId}; it remains in this run's report.`,
@@ -256,7 +247,7 @@ const pauseChildRun = (
  * The run a process child's launch registers: the paused child of `parentRunId`
  * whose pause kept `resumeId`, reactivated rather than left paused beside a
  * new run, else a fresh id. Read from the rows (each run's latest
- * `child.park`, and the fold's paused reading), not from a live registry, so
+ * `child.park`, and the view's paused state), not from a live registry, so
  * it holds across a restart.
  */
 export const resumedChildRunId = Effect.fn('resumedChildRunId')(function* ({
@@ -270,7 +261,7 @@ export const resumedChildRunId = Effect.fn('resumedChildRunId')(function* ({
 }) {
   if (resumeId === undefined) return generateRunId();
   // Only the pauses that kept `resumeId` are collected, not the session.
-  const [view, parks] = yield* Effect.all([
+  const [view, pauses] = yield* Effect.all([
     session.view.read([]),
     Stream.runCollect(
       session.log
@@ -282,7 +273,7 @@ export const resumedChildRunId = Effect.fn('resumedChildRunId')(function* ({
         ),
     ),
   ]).pipe(Effect.mapError((e) => new ToolError(toErrorMessage(e))));
-  for (const row of parks) {
+  for (const row of pauses) {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run') continue;
     const run = view.runs.get(target.id);

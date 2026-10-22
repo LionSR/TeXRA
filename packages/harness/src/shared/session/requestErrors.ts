@@ -11,11 +11,7 @@ import { Data } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
-import {
-  DatabaseClaimRefused,
-  DatabaseWriteFailed,
-  heldElsewhereBy,
-} from './database';
+import { DatabaseClaimRefused, heldElsewhereBy } from './database';
 
 /** Another live owner holds the run this request would act on. */
 export class NotOwner extends Data.TaggedError('NotOwner')<{
@@ -51,31 +47,27 @@ export type RequestError =
  * How a session write the request made fails it: `NotOwner` when another
  * owner holds the run ({@link heldElsewhereBy}); `Rejected`, in the claim's
  * own words, when an owner could not be proven to have exited (as a
- * deletion refuses it); else the `Unavailable` that `refusal` describes, a
- * closed run's included.
+ * deletion rejects it); else the `Unavailable` that `unavailable`
+ * describes, a closed run's included.
  */
-export function writeRefused(
-  refusal: ConstructorParameters<typeof Unavailable>[0],
+export function writeRejection(
+  unavailable: ConstructorParameters<typeof Unavailable>[0],
 ): (error: unknown) => RequestError {
-  return (error) => {
-    const cause = error instanceof DatabaseWriteFailed ? error.cause : error;
-    if (heldElsewhereBy(cause) === null) return new Unavailable(refusal);
-    return claimRefused(refusal.runId)(cause);
-  };
+  return (error) =>
+    heldElsewhereBy(error) === null
+      ? new Unavailable(unavailable)
+      : claimRejection(unavailable.runId)(error);
 }
 
 /** How a claim the request needed fails it: `Rejected`, in the claim's own
  *  words, when its holder could not be proven to have exited; else
  *  `NotOwner`, another owner holding the run. */
-export const claimRefused =
+export const claimRejection =
   (runId: RunId) =>
-  (error: unknown): RequestError => {
-    const cause = error instanceof DatabaseWriteFailed ? error.cause : error;
-    return cause instanceof DatabaseClaimRefused &&
-      cause.verdict === 'unprovable'
-      ? new Rejected({ reason: cause.message })
+  (error: unknown): RequestError =>
+    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
+      ? new Rejected({ reason: error.message })
       : new NotOwner({ runId });
-  };
 
 /**
  * How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds

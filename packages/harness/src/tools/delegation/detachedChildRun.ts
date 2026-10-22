@@ -23,6 +23,7 @@ import {
   type ChildRunPort,
   type NativeChildStrategy,
   type ProcessChildStrategy,
+  type StartedChildRunLoop,
 } from '@agent/runtime/childRunLoop';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -72,6 +73,9 @@ export type DetachedChildRunInput<
         /** Native strategies let `executeAgent` own one handle for the native lifetime. */
         readonly createChildRun?: undefined;
         readonly budgeted: boolean;
+        /** The caller joins the loop's fiber and owns its failure; for any
+         *  other caller a late failure is logged here. */
+        readonly awaited?: true;
         /**
          * Build the strategy (and any attempt-scoped setup) inside the owned-run
          * launch guard so a throw releases the run's claim.
@@ -87,19 +91,15 @@ export type DetachedChildRunInput<
 /**
  * Run the shared detached-child launch choreography: hold the owned-run
  * launch guard while creating any child stream and handing it to the run
- * loop, then attach the completion error trace. Returns the launched loop's
- * completion so in-band callers can await it.
+ * loop, then attach the completion error trace. Returns the launched loop
+ * so in-band callers can await it.
  */
 export function startDetachedChildRunLoop<
   TTurn,
   R extends AgentRunServices = never,
 >(
   input: DetachedChildRunInput<TTurn, R>,
-): Effect.Effect<
-  { completion: Fiber.Fiber<TTurn | undefined, Error> },
-  Error,
-  R | Runs
-> {
+): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
   return runWithLaunchGuard(
     input.session,
     input.runId,
@@ -108,7 +108,7 @@ export function startDetachedChildRunLoop<
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           if (input.createChildRun === undefined) {
-            const { buildLaunch, ...loopParams } = input;
+            const { buildLaunch, awaited: _awaited, ...loopParams } = input;
             const strategy = yield* buildLaunch();
             return yield* startChildRunLoop({ ...loopParams, strategy });
           }
@@ -142,15 +142,17 @@ export function startDetachedChildRunLoop<
         }
         return yield* Effect.failCause(setup.cause);
       }
-      const completion = setup.value;
-      // A caller that awaits the loop (the only one passing `onTurnSettled`)
-      // owns its failure; nobody reads a detached loop's, so a late failure
-      // is said here: always on the loop's log channel (the child's trace
-      // may already be closed by its finalize), and on that trace too.
-      if (input.onTurnSettled === undefined) {
+      const started = setup.value;
+      // A caller that awaits the loop owns its failure; nobody reads a
+      // detached loop's, so a late failure is logged here: always on the
+      // loop's log channel (the child's trace may already be closed by its
+      // finalize), and on that trace too.
+      const awaited =
+        input.createChildRun === undefined && input.awaited === true;
+      if (!awaited) {
         const message = `Child '${input.agentName}' run loop failed after launch`;
         yield* Effect.forkDetach(
-          Fiber.join(completion).pipe(
+          Fiber.join(started.fiber).pipe(
             Effect.catchCause((cause) => {
               const error = Cause.squash(cause);
               return Effect.sync(() =>
@@ -167,7 +169,7 @@ export function startDetachedChildRunLoop<
           ),
         );
       }
-      return { completion };
+      return started;
     }),
   ).pipe(Effect.uninterruptible);
 }

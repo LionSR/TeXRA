@@ -1,11 +1,11 @@
 /**
  * The run history over one session's log, and every run's cell: reads take
  * the aggregate's every row (`SessionLog.rows`, never the display tail),
- * writes go through the session's one door (`SessionLog.transact`, settled
- * once the view folded them) or the job a cell was opened within, and
- * `foldRunState` runs on both paths.
+ * writes go through the session's one door (`SessionLog.transact`, done
+ * once the view has applied them) or the job a cell was opened within, and
+ * `applyRunRows` rebuilds the state on both paths.
  */
-import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
+import { Effect, Result, SynchronizedRef } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
@@ -26,23 +26,18 @@ import {
   runStateAppend,
 } from '@shared/session/runHistory';
 import {
-  foldRunState,
+  applyRunRows,
   freshRunState,
   RunHistoryInconsistent,
   unboundRequests,
   type RunHistoryDraft,
   type RunState,
-} from '@shared/session/runStateFold';
+} from '@shared/session/runState';
 import type {
   HistoryMessage,
   RunHistoryRow,
 } from '@shared/session/historyTurns';
-import {
-  afterCommit,
-  noCoWrite,
-  type Append,
-  type CoWrite,
-} from '@shared/session/sessionEvents';
+import type { Alongside, Append } from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
 import type { SessionLog } from './SessionHandle';
 
@@ -58,15 +53,15 @@ const isMessageBearing = (row: RunHistoryDraft): boolean =>
 /**
  * The first violated precondition of `RunCell.append` that only the batch
  * shows, or null. Which row may follow which, a delivery's tool group
- * included, is the fold's grammar (`foldRunState`), which `commit` folds
- * the batch through before publishing it.
+ * included, is checked by the row handlers (`applyRunRows`), which
+ * `commit` runs the batch through before publishing it.
  */
 function contractViolation(
   run: RunId,
   rows: readonly RunHistoryDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
-  // A row naming another aggregate would fold into the live state and be
+  // A row naming another aggregate would reach the live state and be
   // invisible to a reload, which reads the run's aggregate.
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
   if (foreign !== undefined) {
@@ -136,9 +131,9 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
 }
 
 /**
- * The batch at provisional commits above the state's: the fold reads a
- * `commit` only to require strict increase, so folding these answers "does
- * this batch fold?" exactly as the published rows will.
+ * The batch at provisional commits above the state's: the row handlers read
+ * a `commit` only to require strict increase, so applying these answers
+ * "does this batch apply?" exactly as the published rows will.
  */
 const candidates = (
   state: RunState,
@@ -175,7 +170,7 @@ const unprepared = (
 
 type Refusal = DatabaseNotOwner | DatabaseClaimRefused;
 /** A lost claim's refusal, worded from the refusing row; any other
- *  rollback stays the write failure it is (F3). */
+ *  rollback stays the write failure it is. */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
@@ -197,7 +192,7 @@ const notOwner =
       return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
     });
 
-/** The refusal of rows that do not fold. */
+/** The refusal of rows that cannot be applied. */
 const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
   new RunHistoryRefused({
     reason: 'inconsistent',
@@ -206,24 +201,24 @@ const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
     cause,
   });
 
-/** Committed rows folded onto `state`, their turns read back first. */
-const foldStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
-  Result.flatMap(runHistoryRows(rows), (live) => foldRunState(state, live));
+/** Committed rows applied to `state`, their turns read back first. */
+const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
+  Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
-/** `load`'s answer for a run's folded rows, which a resume shares. */
+/** `load`'s answer for a run's applied rows, which a resume shares. */
 const loaded = (
   run: RunId,
-  folded: ReturnType<typeof foldRunState>,
+  applied: ReturnType<typeof applyRunRows>,
   prepared = true,
 ): Effect.Effect<RunState | null, RunHistoryRefused> =>
   Effect.gen(function* () {
-    if (Result.isFailure(folded))
-      return yield* inconsistent(run, folded.failure);
-    const state = folded.success;
-    // A run's input folds nothing; a request before its opening folds an
-    // unopened state (`phase` null).
+    if (Result.isFailure(applied))
+      return yield* inconsistent(run, applied.failure);
+    const state = applied.success;
+    // A run's input changes no state; a request before its opening leaves
+    // an unopened state (`phase` null).
     if (state === null) return null;
-    if (state.phase === null && state.runHistoryRows === 0) return state;
+    if (state.phase === null && !state.hasHistoryRows) return state;
     if (state.phase === null) {
       return yield* inconsistent(
         run,
@@ -256,7 +251,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   state: RunState,
   rows: readonly RunHistoryDraft[],
   registration: Effect.Effect<readonly SessionEventDraft[]>,
-  alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
+  alongside: Alongside<E>,
   within: Append | undefined,
 ) {
   const violation = contractViolation(run, rows);
@@ -270,14 +265,14 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
           detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
         });
   // `load`'s answer with the batch in, before publishing it: a committed
-  // batch `load` cannot fold is a run nothing can read again. A delivery
-  // its settlements do not match is the writer's own batch: a defect.
-  const batch = foldRunState(state, candidates(state, rows));
+  // batch `load` cannot apply is a run nothing can read again. A delivery
+  // its results do not match is the writer's own batch: a defect.
+  const batch = applyRunRows(state, candidates(state, rows));
   if (Result.isFailure(batch) && batch.failure.reason === 'mismatched-delivery')
     return yield* broken(batch.failure.detail);
   const after = yield* loaded(run, batch, false);
-  // D11: the history `load` checks with `PreparedHistorySchema`, checked
-  // here from what the batch changes on (an edit's range start, else the
+  // The history `load` checks with `PreparedHistorySchema`, checked here
+  // from where the batch changes it (an edit's range start, else the
   // already-checked history's end); re-checking all is quadratic.
   const assembled = after?.messages ?? [];
   if (rows.some(isMessageBearing) && assembled.length > 0) {
@@ -299,28 +294,27 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
       const stray = born.find((row) => row.aggregateId !== target);
       if (stray !== undefined)
         return yield* broken(`a registration targets ${stray.aggregateId}`);
-      const co = yield* alongside;
+      const beside = yield* alongside;
       const written = yield* runStateAppend(append)([
         ...born,
         ...rows.map(storedDraft),
       ]);
-      yield* append(co.rows);
-      yield* afterCommit(co.committed);
+      yield* append(beside);
       return written;
     }).pipe(Effect.scoped);
-  // A target no longer held open is `not-owner`, nothing written (R7).
+  // A target no longer held open is `not-owner`, nothing written.
   const committed = yield* (
     within === undefined
       ? sessionLog.transact((tx) => job(tx.append))
       : job(within)
   ).pipe(notOwner(run));
-  // The same fold at the commits the publisher assigned: the state the run
-  // continues from. A failure here is this module's defect.
-  const folded = foldStored(state, committed);
-  if (Result.isSuccess(folded) && folded.success !== null)
-    return folded.success;
-  const why = Result.isFailure(folded) ? folded.failure.detail : 'nothing';
-  return yield* broken(`its own fold rejects the published batch: ${why}`);
+  // The same rows again at the commits the publisher assigned: the state
+  // the run continues from. A failure here is this module's defect.
+  const applied = applyStored(state, committed);
+  if (Result.isSuccess(applied) && applied.success !== null)
+    return applied.success;
+  const why = Result.isFailure(applied) ? applied.failure.detail : 'nothing';
+  return yield* broken(`its own rows reject the published batch: ${why}`);
 });
 
 /**
@@ -339,7 +333,7 @@ export function makeRunHistory(
   const read = (run: RunId, through = Infinity, prepared = true) =>
     Effect.flatMap(stored(run), (rows) => {
       const kept = rows.filter((r) => r.seq <= through);
-      return loaded(run, foldStored(null, kept), prepared);
+      return loaded(run, applyStored(null, kept), prepared);
     });
   const load = Effect.fn('RunHistory.load')((run: RunId, through?: number) =>
     read(run, through),
@@ -361,7 +355,7 @@ export function makeRunHistory(
           yield* tx.claim(run);
           const before = yield* loaded(
             run,
-            foldStored(null, yield* stored(run)),
+            applyStored(null, yield* stored(run)),
           );
           const aggregateId = qualifyAggregateId('run', run);
           const cancels = (before === null ? [] : unboundRequests(before)).map(
@@ -378,7 +372,7 @@ export function makeRunHistory(
           const rows = [...(yield* activation(before)), ...cancels];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
-          return yield* loaded(run, foldStored(before, written));
+          return yield* loaded(run, applyStored(before, written));
         }),
       )
       .pipe(notOwner(run));
@@ -399,9 +393,9 @@ export function makeRunHistory(
       current: SynchronizedRef.get(ref),
       opened: seeded,
       // A SynchronizedRef: the loop, the invoker and a barrier call run on
-      // one fiber, but a parallel partition settles its calls on sibling
-      // fibers, and each settlement must fold onto the one before it.
-      append: (rows, alongside = noCoWrite) =>
+      // one fiber, but a parallel partition finishes its calls on sibling
+      // fibers, and each call's result must apply on top of the one before.
+      append: (rows, alongside = Effect.succeed([])) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
           commit(
             sessionLog,

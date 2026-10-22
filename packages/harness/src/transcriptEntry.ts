@@ -1,8 +1,8 @@
 // What a renderer paints a session's transcript from, browser-safe like
-// `./schemas`: the view folded from a transport, the rows a `TranscriptView`
+// `./schemas`: the view built from a transport, the rows a `TranscriptView`
 // (`./schemas`) holds, and the projections every host derives from them.
 
-// A session's view across a process boundary: the fold over the inputs the
+// A session's view across a process boundary: built from the inputs the
 // caller's transport serves.
 export { RemoteSessionView } from '@controllers/session/SessionView';
 export { SessionInputs } from '@shared/session/sessionInputs';
@@ -10,18 +10,18 @@ export {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
   ExistenceReconciliationSchema,
-  FoldEventSchema,
+  EventInputSchema,
   LocalRuntimeStateSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
   type CommitOrdinal,
   type ExistenceReconciliation,
-  type FoldInput,
+  type SessionViewInput,
   type ResumeBlocker,
   type TextChunk,
   type TranscriptSubscription,
 } from '@shared/schemas';
-// The runtime a view folds on: fork failures reported, and the redacting
+// The runtime a view is built on: fork failures reported, and the redacting
 // log sink in place of the console logger.
 export {
   viewDiagnosticsLayer,

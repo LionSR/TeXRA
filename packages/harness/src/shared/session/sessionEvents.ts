@@ -7,6 +7,7 @@ import {
   Context,
   Effect,
   Layer,
+  type Scope,
   type Stream,
   type SubscriptionRef,
 } from 'effect';
@@ -26,7 +27,7 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
-import type { RunStateRowType } from './runStateFold';
+import type { RunStateRowType } from './runState';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -34,18 +35,20 @@ export interface OpenWork {
   readonly id: string;
 }
 
-/** The publisher job this fiber runs, null outside one: inside one, the
- *  store's write lock is held, so a claim is the job's own and a wait on
- *  the publisher would never end. `committed` runs once the job has. */
+/** The publisher job this fiber runs, null outside one. Inside a job the
+ *  store's write lock is held, so a claim is the job's own and waiting on
+ *  the publisher would never end. `committed` holds the actions to run once
+ *  the job's transaction commits. */
 export const PublisherJob = Context.Reference<{
   readonly committed: Effect.Effect<void>[];
 } | null>('@texra-ai/harness/session/PublisherJob', {
   defaultValue: () => null,
 });
 
-/** Run `action` once the publisher job this fiber runs has committed, never
- *  if it rolls back; outside a job, now. What a job changes in memory
- *  (a reader ended, an observer told) waits for its rows. */
+/** Run `action` after the transaction of the publisher job this fiber runs
+ *  commits, and never if it rolls back; outside a job, run it now. Use it
+ *  for what a job changes in memory or says in a log (a reader ended, a
+ *  warning), so nothing acts on rows that were never written. */
 export const afterCommit = (action: Effect.Effect<void>): Effect.Effect<void> =>
   Effect.flatMap(PublisherJob, (job) =>
     job === null
@@ -89,35 +92,24 @@ export interface JobOptions {
   readonly failed?: (error: unknown) => void;
 }
 
-/**
- * Rows another owner decides inside a job, under holds the job's scope
- * keeps: the job appends them with its own, so they commit together.
- * `committed` is what changes in memory once they have: the job hands it to
- * {@link afterCommit} or returns it for its caller to run after the
- * transaction, never runs it on an attempt that may roll back.
- */
-export interface CoWrite {
-  /** Rows no run's state folds: a run's input, its turns' companions, and
-   *  the trace an opening carries. */
-  readonly rows: readonly UnfoldedDraft[];
-  readonly committed: Effect.Effect<void>;
-}
-
-/** The co-write of a job with nothing to add. */
-export const noCoWrite: Effect.Effect<CoWrite> = Effect.sync(() => ({
-  rows: [],
-  committed: Effect.void,
-}));
-
-/** A row no run's state folds: what any job may append as is. */
+/** A row that is not part of any run's state: any job may append it as is. */
 export type UnfoldedDraft = Exclude<
   SessionEventDraft,
   { type: RunStateRowType }
 >;
 
+/** Rows another owner decides inside a job, appended with the job's own
+ *  batch so both commit or neither; what deciding them holds (a claim)
+ *  lasts for the job's scope. */
+export type Alongside<E = never> = Effect.Effect<
+  readonly UnfoldedDraft[],
+  E,
+  Scope.Scope
+>;
+
 /** One ordered append to the log, as the publisher hands it to a job: a
- *  savepoint of the job's one transaction. A row a run's state folds goes
- *  through `runStateAppend` instead, which only the run's cell
+ *  savepoint of the job's one transaction. A row that is part of a run's
+ *  state goes through `runStateAppend` instead, which only the run's cell
  *  (`RunCell.append`) and the session's requests hold. */
 export type Append = (
   events: readonly UnfoldedDraft[],
@@ -145,7 +137,7 @@ export class ProcessIdentity extends Context.Service<
  * The one publisher of a root's facts. Every write to the
  * log is a job on one inbox drained by one fiber, so the commit order of
  * the table is the order the jobs were enqueued: a trace row the tool
- * emitted, the loop's settlement batch that follows it, and a surface's
+ * emitted, the loop's result batch that follows it, and a surface's
  * decision all land in program order, whichever fiber produced them. A job
  * receives the log's `Append` and writes through it; one that waits on the
  * publisher it runs on is a defect.
@@ -185,7 +177,7 @@ export class SessionEvents extends Context.Service<
       options?: JobOptions,
     ) => void;
     /** Remove a run and its dependents: the liveness proofs run on the
-     *  caller's fiber, then the tombstone's transaction runs as the next
+     *  caller's fiber, then the deletion's transaction runs as the next
      *  job, so it commits in enqueue order and what this publisher tracks
      *  forgets every run it names. */
     readonly removeRun: (
@@ -205,12 +197,12 @@ export class SessionEvents extends Context.Service<
     readonly drain: Effect.Effect<void>;
     /** What this publisher committed open on one aggregate and nothing has
      *  closed since, in first-appearance order: a stream until its
-     *  `stream.end` or a phase move that rests or ends its run, a stage
-     *  until its `stage.end`. What a park (streams) or a host exit (both)
-     *  closes. Read on the publisher fiber (inside a job) or after a
-     *  settle, it counts every job committed before. */
+     *  `stream.end` or a phase move that pauses or ends its run, a stage
+     *  until its `stage.end`. What a run's wait (streams) or a host exit
+     *  (both) closes. Read on the publisher fiber (inside a job) or after
+     *  `SessionLog.settled`, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
-    /** The cold listing hydrate: the latest row per aggregate and type
+    /** The listing read from storage: the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
     readonly listing: () => Stream.Stream<

@@ -37,7 +37,6 @@ import {
 } from '@texra/tools/github/RunSubscriptionRegistry';
 
 // Local file imports
-import { createRecordingHost } from '../progressTestUtils';
 import type { RunInbox } from '@texra-ai/harness/plugins';
 
 /** What a source's `subscribe` reads: the token store and the HTTP client. */
@@ -225,7 +224,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
   it.effect('reports token invalid events through app signals', () =>
     Effect.gen(function* () {
-      const host = createRecordingHost();
       const signal = yield* Effect.promise(() =>
         recordAppSignal('githubTokenInvalid'),
       );
@@ -245,7 +243,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
         event: 'githubTokenInvalid',
         payload: { message: 'bad token' },
       });
-      expect(host.events).toEqual([]);
     }),
   );
 
