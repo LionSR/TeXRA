@@ -291,6 +291,11 @@ the run history.
   shared helper: single-caller extractions are banned. Narrowing a module's
   export surface to one entry point (fewer exports, same callers) is not an
   extraction.
+- **Plain names and comments (owner rule).** Name things for what they do in
+  ordinary programming English: no coined metaphors (fold, park, settle,
+  admit, arm, tombstone) and no planning-doc citations ("5.2", "D5") in code.
+  Write comments for a reader who hasn't read the design docs, and keep them
+  true. Word list: AGENTS.md "Plain names and comments".
 - **UI anti-patterns.** Never compensate for data-model problems at render time
   (no `Date.now()`, synthetic IDs, or dedup in renderers — fix the upstream
   data). One home per user action; secondary surfaces show read-only status.

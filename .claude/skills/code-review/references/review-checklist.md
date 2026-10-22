@@ -80,6 +80,9 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **WHAT comments** on well-named code → delete.
 - **Process tags** ("// added for issue #123", "// per Codex review") → belong in PR description; delete from code.
 - **Multi-paragraph docstrings on private helpers** → one short line max.
+- **Coined jargon and doc citations** (fold, park, settle, admit, arm, tombstone; "(5.2)", "D5", "decision 9")
+  in a new name or comment → the plain word from AGENTS.md "Plain names and comments". A comment that is false
+  (calls impure code pure, a mutable field final) is a defect.
 
 ## 10. Concurrency and resources
 
