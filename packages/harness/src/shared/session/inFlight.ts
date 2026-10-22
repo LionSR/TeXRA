@@ -1,9 +1,9 @@
 /**
  * What a run has in flight between asking and delivering. First the model
  * invocation: its attempts as their rows left them, and the one function
- * that reads its next move off them (`nextAttempt`), so the invoker's retry
+ * that reads its next step off them (`nextAttempt`), so the invoker's retry
  * loop holds no state of its own and a resume continues exactly where the
- * rows stand. Then the response it stands on until its calls settle: a
+ * rows stand. Then the response it stands on until its calls finish: a
  * model's `response`, or the `handed-down` call a script's run opens on,
  * which no model made, so its assistant message has a null origin.
  */
@@ -172,13 +172,13 @@ export type RetryCredentials = NonNullable<
 >;
 
 /**
- * An invocation's next move: `send` a new attempt (`retry`: after a
+ * What an invocation does next: `send` a new attempt (`retry`: after a
  * person's answer, which rebinds first), `observe` the accepted background
- * operation, ask again (`reask`) for an attempt a person admitted whose
+ * operation, ask again (`reask`) for an attempt a person allowed whose
  * outcome no row recorded, `await` the answer to the open retry request, or
  * end it (`fail`, `cancel`).
  */
-export type Move =
+export type NextAttempt =
   | { readonly kind: 'send'; readonly retry: RetryCredentials | null }
   | {
       readonly kind: 'observe';
@@ -191,26 +191,26 @@ export type Move =
   | { readonly kind: 'fail'; readonly error: RetryErrorInfo }
   | { readonly kind: 'cancel' };
 
-const SEND: Move = { kind: 'send', retry: null };
+const SEND: NextAttempt = { kind: 'send', retry: null };
 
 /**
- * The next move of `invocation` (null: a new one), from its rows and the
+ * What `invocation` does next (null: a new one), from its rows and the
  * run's `requests` alone. An attempt with no recorded outcome is the one a
  * process never saw end: resent unasked, as any automatic attempt is, except
- * one a person admitted, which is asked again rather than resent, and an
+ * one a person allowed, which is asked again rather than resent, and an
  * accepted background operation, which is observed, never resubmitted.
  */
 export function nextAttempt(
   invocation: Invocation | null,
   requests: RunPosition['requests'],
-): Move {
+): NextAttempt {
   if (invocation === null) return SEND;
   const { current, earlier } = invocation;
   const { failed, accepted } = current;
   if (failed === null) {
     if (accepted !== null)
       return { kind: 'observe', attempt: { ...current, accepted } };
-    // A person admitted an attempt of this invocation: whatever ran since
+    // A person allowed an attempt of this invocation: whatever ran since
     // was billed on their word, so they are asked before it is sent again.
     return earlier.some((failure) => failure?.next.kind === 'ask')
       ? { kind: 'reask', attempt: current }
@@ -237,7 +237,7 @@ export function nextAttempt(
   }
 }
 
-/** What one failure says about the move after it. */
+/** What one failure says about the step after it. */
 export interface FailureFacts {
   /** The vendor no longer holds the response this attempt chained on;
    *  true only for an attempt that sent a continuation. */
@@ -277,18 +277,19 @@ export function failedNext(
     : { kind: 'stop' };
 }
 
-type Settlement = Pick<
+/** A call's result, as its `tool.result` row records it. */
+export type CallResult = Pick<
   ToolResultPayload,
   'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
 
 /** How far one call got, as its rows say: `issued`, no body started;
  *  `started`, the `tool.intent` of `attempt` committed, so the body may
- *  have run; `settled`, its `tool.result` at `at` ({@link attemptRequests}). */
+ *  have run; `settled`, its `tool.result` committed at `at`. */
 export type CallStatus =
   | { readonly kind: 'issued' }
   | { readonly kind: 'started'; readonly attempt: number }
-  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & Settlement);
+  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & CallResult);
 
 /** One call of the pending response, the same record whichever issued it:
  *  the response (`script` null) or one of its `script` calls' guests, whose
@@ -311,8 +312,8 @@ export const callRequestId = (at: CallAttempt, ordinal: number): string =>
   `${at.responseId}/${at.callId}:${at.attempt}:${ordinal}`;
 
 /** What one attempt asked: `raised` requests (ordinals 1..raised); `own`,
- *  the first no cancellation retired (a stop's decides nothing, so it asked
- *  again), since a later one parked a body already past its own answer. */
+ *  the first one not cancelled, which is the one that counts (a stop's
+ *  cancel decides nothing, so the attempt asked again). */
 export interface AttemptRequests {
   readonly raised: number;
   readonly own: {
@@ -343,7 +344,7 @@ export function attemptRequests(
   }
 }
 
-/** The attempt a resume continues an unsettled call at. An unstarted body
+/** The attempt a resume continues an unfinished call at. An unstarted body
  *  re-enters whatever it asked; a started one, its own request while it
  *  stands or while no waiter read its answer (decided since this owner took
  *  the run; a stop's cancel decides nothing). Else the body may have run. */
@@ -369,10 +370,10 @@ export function resumedAttempt(
   return started.raised > 0 && stands ? started : { ...next, mayHaveRun: true };
 }
 
-/** A response whose calls are not yet all settled and delivered. */
+/** A response whose calls are not yet all finished and delivered. */
 export type PendingResponse = {
   readonly responseId: string;
-  /** The message it enters history as once its calls are settled. */
+  /** The message it enters history as once its calls are finished. */
   readonly assistant: Extract<HistoryMessage, { readonly role: 'assistant' }>;
   /** The response's own calls, in order. Only their results enter history:
    *  the delivering append carries one per call. */
@@ -381,7 +382,7 @@ export type PendingResponse = {
   readonly records: Readonly<Record<string, PendingCall>>;
 };
 
-/** The settlement of `callId` the rows committed, or null. */
+/** The result of `callId` the rows committed, or null. */
 export const callSettlementOf = (
   pending: PendingResponse,
   callId: string,

@@ -28,7 +28,6 @@ import {
   defineTool,
   Secrets,
   ToolContext,
-  type ToolContextShape,
   type ToolResult,
 } from '@texra-ai/harness';
 
@@ -140,7 +139,7 @@ const ClaudeAgentInputSchema = z
     path: ['fork_session'],
   });
 
-export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
+type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
 
 // ============================================================================
 // Result formatting
@@ -507,15 +506,8 @@ function buildClaudeAgentLaunch(params: {
 // Tool
 // ============================================================================
 
-function executeClaudeAgentTool(input: ClaudeAgentInput) {
-  return Effect.gen(function* () {
-    return yield* run(input, yield* ToolContext);
-  });
-}
-
 const run = Effect.fn('ClaudeAgentTool.run')(function* (
   input: ClaudeAgentInput,
-  toolCall: ToolContextShape,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
@@ -526,6 +518,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | ChildProcessSpawner
   | FileSystem.FileSystem
 > {
+  const toolCall = yield* ToolContext;
   const { roots } = toolCall.env;
   const permissionMode = yield* claudeAgentPermissionMode(input, roots);
   const claudeRun = yield* readClaudeCodeRun(roots, input);
@@ -570,7 +563,7 @@ export const ClaudeAgentTool = defineTool({
         claudeAgentPermissionMode(input, stores),
       ),
   },
-  execute: executeClaudeAgentTool,
+  execute: run,
 });
 
 const launchClaudeAgentSession = Effect.fn(

@@ -18,7 +18,6 @@ import {
   senderOf,
   type AgentTrace,
   type ProcessChildStrategy,
-  type ToolRun,
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
@@ -223,40 +222,6 @@ export const launchAgentCliSession = Effect.fn(
 });
 
 /**
- * Run the shared agent-CLI execute() prelude: refuse a call that has no run to
- * launch under or cannot collect the result, then dispatch to the
- * resume/launch branch with the active run.
- *
- * The run check is the one place either tool asks it: an agent-CLI child is
- * registered under its parent run and delivers every turn as a follow-up to
- * it, so a standalone host invocation has nowhere to put the child. Failing
- * here hands the whole chain a `NonNullable` run instead of re-asking at each
- * step.
- *
- * Both agent-CLI tools deliver every turn as a follow-up message. A run with
- * `stopAfterCycle` ends after the current cycle, so that follow-up would land
- * in a turn that never happens and the child's result is stranded. Refuse
- * rather than launch work nobody collects.
- */
-const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
-  R,
->(
-  toolName: string,
-  run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
-  const { run: activeRun } = yield* requireRun(toolName);
-  if (activeRun.toolPolicy.stopAfterCycle) {
-    return yield* Effect.fail(
-      new ToolError(
-        `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
-      ),
-    );
-  }
-
-  return yield* run(activeRun);
-});
-
-/**
  * The command an agent-CLI call gets approved, built the one way both
  * providers build it: the child's effective mode — read from the call's own
  * settings, so the prompt names the mode the launch will use — and the prompt
@@ -287,7 +252,8 @@ export interface AgentCliLaunchContext {
 
 /**
  * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
- * boilerplate-identical chain both providers (codex, claudeAgent) run: choose
+ * boilerplate-identical chain both providers (codex, claudeAgent) run: refuse
+ * a call that has no run to launch under or cannot collect the result, choose
  * atomically between queueing onto an owned session and launching a disk-based
  * fallback, and resolve the run context a launch needs (parent
  * stream/run/working-directory). A missing in-memory entry denotes a
@@ -315,31 +281,45 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
 }): Effect.Effect<ToolResult, ToolError, R | S | ToolContext | ChildRuns> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
-  return withAgentCliRun(agentName, (run) =>
-    Effect.gen(function* () {
-      const registry = yield* store;
-      const callerRunId = run.runId;
-      // A fork only reads its source session: a live source another run
-      // owns is refused by its current edge, nothing written.
-      const source = sourceId ? registry.lookup(sourceId) : undefined;
-      const sourceParent =
-        source && (yield* (yield* ChildRuns).parent(source.runId));
-      if (sourceId && sourceParent != null && sourceParent !== callerRunId)
-        return yield* notOwned(sourceId, labels);
-      return yield* resumeOrLaunchAgentCliSession(registry, {
-        id: resumeId,
-        prompt,
-        callerRunId,
-        labels,
-        launch: (releaseFallbackClaim) =>
-          launch({
-            parentWorkingDirectory: params.toolCall.env.workingDirectory,
-            releaseFallbackClaim,
-            registry,
-          }),
-      });
-    }),
-  );
+  return Effect.gen(function* () {
+    // The run check is the one place either tool asks it: an agent-CLI child
+    // is registered under its parent run and delivers every turn as a
+    // follow-up to it, so a standalone host invocation has nowhere to put the
+    // child.
+    const { run } = yield* requireRun(agentName);
+    // Every turn is delivered as a follow-up message. A run with
+    // `stopAfterCycle` ends after the current cycle, so that follow-up would
+    // land in a turn that never happens and the child's result is stranded.
+    // Refuse rather than launch work nobody collects.
+    if (run.toolPolicy.stopAfterCycle) {
+      return yield* Effect.fail(
+        new ToolError(
+          `${agentName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
+        ),
+      );
+    }
+    const registry = yield* store;
+    const callerRunId = run.runId;
+    // A fork only reads its source session: a live source another run
+    // owns is refused by its current edge, nothing written.
+    const source = sourceId ? registry.lookup(sourceId) : undefined;
+    const sourceParent =
+      source && (yield* (yield* ChildRuns).parent(source.runId));
+    if (sourceId && sourceParent != null && sourceParent !== callerRunId)
+      return yield* notOwned(sourceId, labels);
+    return yield* resumeOrLaunchAgentCliSession(registry, {
+      id: resumeId,
+      prompt,
+      callerRunId,
+      labels,
+      launch: (releaseFallbackClaim) =>
+        launch({
+          parentWorkingDirectory: params.toolCall.env.workingDirectory,
+          releaseFallbackClaim,
+          registry,
+        }),
+    });
+  });
 }
 
 // ============================================================================
