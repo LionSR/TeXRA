@@ -29,12 +29,12 @@ import type { SettingsStores } from '@texra-ai/harness';
  * data: the gate answers for that project, not for whichever roots the
  * calling context carries.
  */
-export function selectAutoOpenFinalOutput(
-  stores: SettingsStores,
-  config: AgentConfig,
-  result: RunEndResult,
-) {
-  return Effect.gen(function* () {
+export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
+  function* (
+    stores: SettingsStores,
+    config: AgentConfig,
+    result: RunEndResult,
+  ) {
     const documents = documentsResultOf(result.output.structured);
     if (
       config.script?.kind !== 'recipe' ||
@@ -53,5 +53,5 @@ export function selectAutoOpenFinalOutput(
     }
 
     return finalWorkflowOutput(documents.outputs);
-  });
-}
+  },
+);

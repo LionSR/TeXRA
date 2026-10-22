@@ -267,7 +267,6 @@ function createBackgroundBashStrategy(params: {
     });
   };
 
-  let startedAt = Date.now();
   const delivery = (result: ExecResult, wallTimeMs: number): string =>
     formatBashDelivery(
       runId,
@@ -284,29 +283,26 @@ function createBackgroundBashStrategy(params: {
     deliverAfterInterrupt: true,
 
     launch: (signal) =>
-      Effect.suspend(() => {
-        startedAt = Date.now();
-        return executeCommand(command, {
-          cwd: params.cwd,
-          settings: params.settings,
-          timeout: params.timeoutMs,
-          buffer: false,
-          // The child run's own stop signal, not the fiber's: this strategy
-          // sets `deliverAfterInterrupt`, so a stopped background command must
-          // still come back with a result. The string command form gets shell
-          // teardown — abort/timeout signal the whole process group so
-          // backgrounded jobs and piped children are torn down rather than
-          // left running.
-          signal,
-          onStdout: (chunk) => {
-            stdout.append(chunk);
-            logChunk(chunk, 'info');
-          },
-          onStderr: (chunk) => {
-            stderr.append(chunk);
-            logChunk(chunk, 'warn');
-          },
-        });
+      executeCommand(command, {
+        cwd: params.cwd,
+        settings: params.settings,
+        timeout: params.timeoutMs,
+        buffer: false,
+        // The child run's own stop signal, not the fiber's: this strategy
+        // sets `deliverAfterInterrupt`, so a stopped background command must
+        // still come back with a result. The string command form gets shell
+        // teardown — abort/timeout signal the whole process group so
+        // backgrounded jobs and piped children are torn down rather than
+        // left running.
+        signal,
+        onStdout: (chunk) => {
+          stdout.append(chunk);
+          logChunk(chunk, 'info');
+        },
+        onStderr: (chunk) => {
+          stderr.append(chunk);
+          logChunk(chunk, 'warn');
+        },
       }),
 
     // `executeCommand` never fails on a non-zero exit — it answers with the
@@ -320,10 +316,8 @@ function createBackgroundBashStrategy(params: {
     // A failed exit still produced real output: deliver the full excerpt, not
     // the bare error form. `formatBashError` is only for a throw, where there
     // is no result to report.
-    formatError: (turn, err) =>
-      turn
-        ? delivery(turn, Date.now() - startedAt)
-        : formatBashError(runId, call, err),
+    formatError: (turn, err, wallTimeMs) =>
+      turn ? delivery(turn, wallTimeMs) : formatBashError(runId, call, err),
 
     buildResultMeta: (turn, _isError, wallTimeMs) =>
       Effect.sync(() =>

@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Data, Effect, Exit, Fiber } from 'effect';
+import { Cause, Clock, Data, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -23,10 +23,7 @@ import {
 } from '@agent/runtime/AgentLaunchContext';
 import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {
@@ -36,6 +33,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  AgentConfigSchema,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
@@ -150,7 +148,7 @@ const executeInBand = Effect.fn('executeInBand')(
       launch.kind === 'fresh'
         ? launch.definition.config
         : launch.identity.agentConfig;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = yield* startDetachedChildRunLoop({

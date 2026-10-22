@@ -247,7 +247,7 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `ValidatedExecutionRequest` structurally, as production extension callers do
 (`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
-(`packages/harness/src/agent/core/definition/AgentConfig.ts`). A launch names no agent
+(`packages/harness/src/shared/schemas/agentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution
 (`AgentCatalog.forLaunch` in `packages/harness/src/agent/index/agentCatalog.ts`) finds the
 agent by name across sources. Running an agent's document task instead

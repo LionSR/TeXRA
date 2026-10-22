@@ -91,7 +91,7 @@ Not done: each changes which failures surface, and the hook runner's
 verdicts are pinned by `HookProtocol.vitest.ts`. A behavior-preserving
 sweep is the wrong place for that.
 
-## 4. Two plugin pins resolve a program on different PATHs
+## 4. Two plugin pins resolve a program on different PATHs (server spawn decided and done)
 
 `pluginDigest.ts` (`externalFiles`) resolves an MCP server command with
 `whichOnExtendedPath`. `pluginHooks.ts` (`pinHook`) resolves a hook program
@@ -99,8 +99,28 @@ with `which.sync(program, { path: process.env.PATH })`. If a binary is only
 on the extended PATH, it pins for a server but is refused for a hook, and
 the two can pin different binaries for the same name.
 
-Proposal: one resolver for both. The extended PATH is the one TeXRA's
-spawns use. Not done because it changes which hooks load.
+The sharper mismatch was inside the server path. `mcpServer.ts` (`connect`)
+spawns the bare `server.command` with `extendEnv: false`, and Node looks a
+bare command up on the child env's PATH. That PATH was the process's, or a
+project `.env`'s, never extended. So a command found only in an extra
+directory (`/opt/homebrew/bin` under a Dock-launched VS Code) pinned and then
+failed to spawn, and a `.env` PATH could run a binary other than the pinned
+one. The hooks were already consistent: `pinHook` and `runHook` both use
+`process.env.PATH`.
+
+There were two options: (a) give the server spawn the extended PATH the pin
+resolves over, or (b) pin the server on the env it spawns with. The decision
+is (a). `serverEnv` now sets PATH to the extended process PATH, the string
+`whichOnExtendedPath` searches. A project `.env` PATH gives way to it, with
+a `warn` log, because the pin cannot see `.env`; the `.env`'s other
+variables pass as before. A server entry's own `env.PATH`, which is part of
+its trusted digest, still wins and is extended. Such a server still resolves
+its command on a PATH the pin does not read. Option (b) would have moved
+every server pin, and with it every persisted trust digest. Option (a)
+changes no pin.
+
+Still open: one resolver for hooks and servers. Not done because it changes
+which hooks load, and with that the hook trust digests.
 
 ## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
 

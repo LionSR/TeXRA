@@ -6,14 +6,11 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { qualifyAggregateId } from '@shared/schemas';
+import { AgentConfigSchema, qualifyAggregateId } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';

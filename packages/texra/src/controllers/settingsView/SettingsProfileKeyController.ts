@@ -5,7 +5,12 @@ import { Data, Effect } from 'effect';
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
-import type { StateReadFailed, PlatformSecrets } from '@texra-ai/harness';
+import { getProviderDisplayName } from '@texra/model/providerPresentation';
+import type {
+  StateReadFailed,
+  PlatformSecrets,
+  SettingsStores,
+} from '@texra-ai/harness';
 // Local imports - hosts
 // Local imports - model
 // Local imports - platform
@@ -14,9 +19,8 @@ interface SettingsProfileKeyControllerDeps {
   /** The process secret store the host holds, where the keys are written. */
   secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
-  getProviderDisplayName(
-    provider: string,
-  ): Effect.Effect<string, StateReadFailed>;
+  /** The setting slots a provider's display name is read from. */
+  stores: SettingsStores;
 }
 
 /**
@@ -43,7 +47,7 @@ export class SettingsProfileKeyController {
       'set',
       Effect.gen({ self: this }, function* () {
         const apiKey = yield* this.deps.prompt.input({
-          prompt: `Enter ${yield* this.deps.getProviderDisplayName(provider)} API key`,
+          prompt: `Enter ${yield* getProviderDisplayName(this.deps.stores, provider)} API key`,
           password: true,
           placeHolder: '************************************',
         });
@@ -67,7 +71,10 @@ export class SettingsProfileKeyController {
       provider,
       'remove',
       Effect.gen({ self: this }, function* () {
-        const displayName = yield* this.deps.getProviderDisplayName(provider);
+        const displayName = yield* getProviderDisplayName(
+          this.deps.stores,
+          provider,
+        );
         const confirmed = yield* this.deps.prompt.confirm(
           `Remove the ${displayName} API key? This cannot be undone.`,
           { confirmLabel: 'Remove', modal: false },
@@ -85,7 +92,10 @@ export class SettingsProfileKeyController {
     apiKey: string,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
-      const displayName = yield* this.deps.getProviderDisplayName(provider);
+      const displayName = yield* getProviderDisplayName(
+        this.deps.stores,
+        provider,
+      );
       yield* storeCredential(this.deps.secrets, {
         secretName: yield* secretNameFor(provider),
         value: apiKey,
@@ -103,7 +113,7 @@ export class SettingsProfileKeyController {
     action: Effect.Effect<void, Error | PromptFailed>,
   ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
-      const label = yield* this.deps.getProviderDisplayName(provider);
+      const label = yield* getProviderDisplayName(this.deps.stores, provider);
       yield* action.pipe(
         Effect.mapError(
           (cause) =>
