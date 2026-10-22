@@ -5,7 +5,6 @@ import {
   Data,
   Effect,
   FileSystem,
-  Option,
   type Path,
   type PlatformError,
 } from 'effect';
@@ -92,6 +91,8 @@ export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
+  /** The builds this host has shown: each tab reload names the newest. */
+  let builds = 0;
   /**
    * Show the failure, then carry it out through the error channel. The dialog
    * is host I/O like every other call here, so a rejection from it is a typed
@@ -112,15 +113,10 @@ export function createDesktopPreviewHost(
     );
   }
 
-  /** The file's stat, or a report that it is not there. */
   function ensurePathExists(
     filePath: string,
-  ): Effect.Effect<
-    FileSystem.File.Info,
-    PreviewUnavailable,
-    FileSystem.FileSystem
-  > {
-    return FileSystem.FileSystem.use((fs) => fs.stat(filePath)).pipe(
+  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
+    return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
           error.reason._tag === 'NotFound'
@@ -264,15 +260,12 @@ export function createDesktopPreviewHost(
       }
 
       // Confirm the PDF is on disk before rendering it (the iframe will
-      // load nothing and present a blank surface otherwise). Its mtime names
-      // the build; a platform with none gets a fresh one, so the tab reloads
-      // rather than keep a stale build.
+      // load nothing and present a blank surface otherwise). Every build
+      // gets its own number, so its tab reloads however close in time two
+      // builds land.
       const { pdfPath } = built;
-      const { mtime } = yield* ensurePathExists(pdfPath);
-      const build = Option.match(mtime, {
-        onNone: () => Date.now(),
-        onSome: (date) => date.getTime(),
-      });
+      yield* ensurePathExists(pdfPath);
+      const build = ++builds;
 
       if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
         return;

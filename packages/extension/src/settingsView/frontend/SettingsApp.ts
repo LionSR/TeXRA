@@ -62,7 +62,7 @@ import {
   detachSubagentsOnStop,
   disabledSkills,
   disabledSkillSources,
-  agentsSettingsRevision,
+  settingsSnapshotRevisions,
   editApprovalEnabled,
   gitAuthorEmail,
   gitAuthorName,
@@ -316,7 +316,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           >
             <subscriptions-tab
               slot="subscriptions"
-              .ackGeneration=${agentsSettingsRevision.get()}
+              .ackGeneration=${settingsSnapshotRevisions.get().agents ?? 0}
               .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
               .subscriptionAuth=${subscriptionAuth.get()}
               .usage=${subscriptionUsage.get()}
@@ -328,7 +328,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         // The acknowledgement generation lets a same-value rebroadcast after
         // a rejected/failed write restore the committed number-row value:
         // the Advanced rows ride the agents snapshot.
-        const ackGeneration = agentsSettingsRevision.get();
+        const ackGeneration = settingsSnapshotRevisions.get().agents ?? 0;
         return html`
           <agents-tab
             .section=${section}
@@ -415,6 +415,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               .goalMaxCostUsd=${goalMaxCostUsd.get()}
               .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
               .resumeOnOpen=${resumeOnOpen.get()}
+              .ackGeneration=${settingsSnapshotRevisions.get().approval ?? 0}
             ></approval-tab>
           `;
         return section === 'git'

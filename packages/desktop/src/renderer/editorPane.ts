@@ -121,7 +121,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   const disposeCommandTooltips = installMonacoCommandDescriptions(editorHost);
   const notice = createEditorFileNotice({
     onError: callbacks.onError,
-    retrySave: (path) => void open(path).then(() => save()),
+    retrySave: (path) => void save(path),
   });
   element.append(notice.element, editorHost);
 
@@ -618,14 +618,15 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     return refreshPromise;
   }
 
-  /** Save the open file. `overwrite`: replace whatever the file holds now,
-   *  the user's answer to a save that found it rewritten. Saves of one file
-   *  take its lane in turn, so each sends the base the one before it wrote. */
-  function save(overwrite = false): Promise<void> {
-    const path = openPath;
+  /** Save `path`'s buffer. `overwrite`: replace whatever the file holds now,
+   *  the user's answer to a save that found it rewritten. A notice's action
+   *  names its own file, never whichever one is open by then. Saves of one
+   *  file take its lane in turn, so each sends the base the one before it
+   *  wrote. */
+  function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path))
+    if (!path || !file || !model || file.closed || callbacks.isReadOnly?.(path))
       return Promise.resolve();
     return onModelSyncLane(file, async () => {
       if (disposed || file.model !== model) return;
@@ -642,7 +643,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         if (outcome === 'changedOnDisk') {
           if (!disposed)
             notice.changedOnDisk(path, {
-              overwrite: () => void open(path).then(() => save(true)),
+              overwrite: () => void save(path, true),
               reload: () => void reload(path),
             });
           return;
@@ -691,7 +692,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
     hasUnsavedChanges: () => [...files.values()].some((file) => file.dirty),
     // A plain save never overwrites: only the conflict notice's answer does.
-    save: () => save(),
+    save: () => save(openPath),
 
     close(path) {
       const file = fileState(path);

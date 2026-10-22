@@ -140,8 +140,9 @@ export interface SettingsNumberRowOptions {
   readonly onClear?: () => void;
   readonly onChange: (value: number) => void;
   /** The parent's acknowledgement generation: a bump repaints the saved
-   *  value over a rejected edit even when the host rebroadcast it unchanged. */
-  readonly ackGeneration?: number;
+   *  value over a rejected edit even when the host rebroadcast it unchanged.
+   *  Required: without one, a rejected edit would stay painted. */
+  readonly ackGeneration: number;
 }
 
 /**
