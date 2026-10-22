@@ -21,6 +21,8 @@ import {
 import { Settings } from '@shared/config/settings';
 import {
   GOAL_MAX_COST_SETTING,
+  qualifyAggregateId,
+  RunIdSchema,
   type Plan,
   type RunId,
   type ToolResult,
@@ -37,6 +39,11 @@ const CHANNEL = 'PlanTool';
 
 /** A goal's background script, by its title. */
 const GOAL_TITLE = 'Goal';
+
+const PLAN = 'plan';
+
+/** The run a plan answered with a goal launched, on its result. */
+const LaunchedSchema = z.object({ runId: RunIdSchema });
 
 /** How long a goal's script may run: the longest a script may. */
 const GOAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -88,29 +95,45 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       'A one-shot run has no later turn for a goal to report to: work on the approved plan in this run instead.',
       { summary: 'Plan approved: no goal in a one-shot run' },
     );
-  // One goal at a time: two would race each other's edits and caps. A goal
-  // is the script this conversation started with a goal grant, which no
-  // `script` call gives; "Keep agents running" detached, it is still this
-  // conversation's: its `run.start` keeps the parent its view edge dropped.
+  // One goal at a time: two would race each other's edits and caps. The
+  // goals this conversation launched are its `plan` results' runs; one is
+  // running while its run has not ended, or, unborn while it waits for the
+  // child-run budget, while this process holds it. "Keep agents running"
+  // detached, a goal is still found by the call that launched it.
   const { session, runId } = call.run;
-  const scripts = [
-    ...SubscriptionRef.getUnsafe(session.view.ref).runs.values(),
-  ].filter(
-    (other) =>
-      other.identity.kind === 'script' && other.durableOutcome === null,
+  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
+    'model.message',
+    'tool.result',
+  ]);
+  const plans = new Set(
+    rows.flatMap((row) => {
+      if (row.type !== 'model.message' || row.payload.kind !== 'response')
+        return [];
+      const { responseId, calls } = row.payload;
+      return calls.flatMap(({ callId, toolName }) =>
+        toolName === PLAN ? [`${responseId}/${callId}`] : [],
+      );
+    }),
   );
-  const running = (yield* Effect.forEach(scripts, (script) =>
-    Effect.map(session.log.records(script.id), (rows) =>
-      rows.some(
-        (row) =>
-          row.type === 'run.start' &&
-          row.parent?.id === runId &&
-          (row.approvalPolicy?.goal.length ?? 0) > 0,
-      )
-        ? [script.id]
-        : [],
-    ),
-  )).flat()[0];
+  const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
+  const running = rows
+    .flatMap((row) => {
+      if (row.type !== 'tool.result') return [];
+      const { responseId, callId, result } = row.payload;
+      const goal =
+        result.status === 'executed'
+          ? LaunchedSchema.safeParse(result.value).data?.runId
+          : undefined;
+      return goal !== undefined && plans.has(`${responseId}/${callId}`)
+        ? [goal]
+        : [];
+    })
+    .find((goal) => {
+      const run = runs.get(goal);
+      return run === undefined
+        ? session.runs.get(goal) !== undefined
+        : run.durableOutcome === null;
+    });
   if (running !== undefined)
     return errorResult(
       `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
@@ -254,7 +277,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
 });
 
 export const PlanTool = defineTool({
-  name: 'plan',
+  name: PLAN,
   requiresApproval: 'inBody',
   description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every proposal is presented to the user, who may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it. Propose a new plan only when the objective or approach genuinely changes.`,
   schema: PlanToolInputSchema,

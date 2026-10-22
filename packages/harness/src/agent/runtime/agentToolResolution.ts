@@ -22,9 +22,11 @@
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
- *      Code mode is the exception (`ITool.describe`): the script tool reaches
- *      only the run's other tools and its own agent, so a child declaring it
- *      gets it, and the script-only functions (`self()`) come with it.
+ *      Code mode is the exception (the built-in `codemode` plugin's
+ *      tools): the script tool reaches only the run's other tools and its
+ *      own agent, so a child declaring it gets it, and the script-only
+ *      functions (`self()`) come with it. A field another plugin's tool
+ *      may set (`describe`, `withScript`) earns no exemption.
  *   4. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -177,10 +179,12 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const enabled = new Map(
     [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
+  // The built-in code mode plugin's id (`builtinPlugins.ts`).
+  const codeMode = (name: string) => enabled.get(name)?.plugin === 'codemode';
   const isScript = (name: string) =>
-    enabled.get(name)?.tool.describe !== undefined;
+    codeMode(name) && enabled.get(name)?.tool.describe !== undefined;
   const scriptOnly = (name: string) =>
-    enabled.get(name)?.tool.scriptGlobal?.withScript === true;
+    codeMode(name) && enabled.get(name)?.tool.scriptGlobal?.withScript === true;
   // A child keeps only what its parent's step offered, as the same tool.
   const parent = input.parentOffered
     ? new Map(input.parentOffered.map((tool) => [tool.name, tool]))

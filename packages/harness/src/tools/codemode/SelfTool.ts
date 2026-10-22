@@ -86,19 +86,19 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
       : yield* getRunRecords(run.session, parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
-  // last one before that start to carry the call, since a provider may
-  // reuse a call id across turns.
+  // one whose call opened the card the script's start names (a provider
+  // may reuse a call id, never a card).
+  const card = start?.type === 'run.start' ? start.parentCard : null;
   const issued =
-    parent === undefined
+    parent === undefined || card == null
       ? undefined
       : (yield* run.session.log.rows(qualifyAggregateId('run', parent), [
           'model.message',
-        ])).findLast(
+        ])).find(
           (row) =>
             row.type === 'model.message' &&
             row.payload.kind === 'response' &&
-            row.commit < (start?.commit ?? 0) &&
-            row.payload.calls.some(({ callId }) => callId === edge?.callId),
+            row.payload.calls.some(({ logId }) => logId === card),
         );
   if (parent === undefined || config === null || issued === undefined)
     return yield* Effect.fail(

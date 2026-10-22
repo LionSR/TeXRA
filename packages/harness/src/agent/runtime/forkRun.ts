@@ -20,6 +20,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import {
   qualifyAggregateId,
+  requestParksItsCaller,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -31,12 +32,16 @@ import { configRow, positionRow, rowAggregate } from './loop/rows';
 import type { SessionHandle } from './SessionHandle';
 
 /** Whether nothing is in flight: no invocation, response or undecided
- *  request. A turn's beginning is quiet (its input is in, nothing answered
- *  it yet), so a child can be forked there. */
+ *  request that parks its caller (an external inquiry stands across turns,
+ *  its answer a follow-up). A turn's beginning is quiet (its input is in,
+ *  nothing answered it yet), so a child can be forked there. */
 const isQuiet = (state: RunState): boolean =>
   state.invocation === null &&
   state.pendingResponse === null &&
-  Object.values(state.requests).every((request) => request.decision !== null);
+  Object.values(state.requests).every(
+    (request) =>
+      request.decision !== null || !requestParksItsCaller(request.payload),
+  );
 
 /**
  * Whether the run stands at a settled position (HQ4): at a turn boundary,
