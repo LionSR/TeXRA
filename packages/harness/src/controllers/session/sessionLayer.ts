@@ -272,9 +272,8 @@ const sessionHandleLayer = (key: SessionKey) =>
               presentTerminalResult(session, { ...event, runId: target.id }),
             ).pipe(
               Effect.catchCause((cause) =>
-                Effect.logWarning('Terminal result presentation threw').pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
+                logFailure('Terminal result presentation threw')(
+                  Cause.squash(cause),
                 ),
               ),
             );
@@ -489,12 +488,9 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
     );
   }).pipe(
     Effect.catchCause((cause) =>
-      Effect.logWarning(
+      logFailure(
         `Failed to settle run ${runId} as its session closed; a later launch classifies it from its checkpoint`,
-      ).pipe(
-        Effect.annotateLogs({ data: Cause.squash(cause) }),
-        withLogChannel(CHANNEL),
-      ),
+      )(Cause.squash(cause)),
     ),
   );
 

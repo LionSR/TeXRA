@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 // Local imports
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { noCoWrite } from '@shared/session/sessionEvents';
 import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
@@ -56,7 +55,7 @@ export function createTestLaunchContext({
     },
     entry: {
       registration: null,
-      opening: noCoWrite,
+      opening: Effect.succeed([]),
       entered: Effect.void,
       initialUserMessage: undefined,
     },

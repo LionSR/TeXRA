@@ -396,7 +396,8 @@ export const databaseLayer = (
             const mode = yield* TxMode;
             const connection = yield* restore(sql.reserve);
             // Publish the committed write before the reserved connection is
-            // released, including when interruption is pending after COMMIT.
+            // released, even with interruption pending after COMMIT: finalizers
+            // run in reverse, so this one, added after the release, runs first.
             yield* Effect.addFinalizer((exit) =>
               mode === 'write' && Exit.isSuccess(exit)
                 ? Effect.gen(function* () {

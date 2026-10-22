@@ -26,7 +26,6 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { registryOf } from '@agent/runtime/runRegistry';
-import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import {
   AgentConfigSchema,
@@ -298,7 +297,7 @@ export function testAgentRun(
     },
     entry: {
       registration: null,
-      opening: noCoWrite,
+      opening: Effect.succeed([]),
       entered: Effect.void,
       initialUserMessage: 'Do the thing.',
     },
@@ -372,7 +371,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             ? {
                 entry: {
                   registration: null,
-                  opening: noCoWrite,
+                  opening: Effect.succeed([]),
                   entered: Effect.void,
                   initialUserMessage: init.initialUserMessage,
                 },

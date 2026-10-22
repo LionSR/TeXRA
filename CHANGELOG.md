@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
+  floor `^4.0.6`).** Their Effect peers (`effect`, plus
+  `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
+  start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
+  connection, and the harness's session database follows the new contract,
+  which 4.0.5 lacks.
 - **A document task's latexdiff results and missing outputs moved out of
   its log.** `texra run --output-format ndjson` no longer streams them as separate log
   records; they arrive with the task's documents, in its `plugin.fact`
