@@ -400,10 +400,12 @@ describe(
 
     // A stop asked of a run held here returns once the run is interrupted;
     // its halt commits as the run unwinds, so a message sent at once lands
-    // before the halt and is woken all the same.
+    // before the halt and is woken all the same, as is one sent while a
+    // stop that detaches the run's agents commits that detach first.
     for (const [after, afterStop] of [
-      ['leaves the input typed behind it queued, and wakes nothing', false],
-      ['is woken for a message sent once the stop returns', true],
+      ['leaves the input typed behind it queued, and wakes nothing', null],
+      ['is woken for a message sent once the stop returns', 'stopped'],
+      ['is woken for a message sent while it detaches', 'detaching'],
     ] as const)
       it.live(`a user's stop of the resumed turn ${after}`, () =>
         Effect.gen(function* () {
@@ -426,8 +428,14 @@ describe(
           expect(yield* send(session, runId, 'Typed behind.')).toMatchObject({
             wake: false,
           });
-          yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+          const stop = session.runs.stop(runId, {
+            reason: 'user',
+            detachActiveChildren: afterStop === 'detaching',
+          });
+          const settled = yield* Effect.forkChild(stop.settlement);
+          if (afterStop !== 'detaching') yield* Fiber.join(settled);
           if (afterStop) yield* send(session, runId, 'After the stop.');
+          yield* Fiber.join(settled);
           yield* Fiber.await(resumed);
           // A wake owed as the stopped generation leaves starts at once: give
           // it time to activate the run a third time.

@@ -151,7 +151,7 @@ interface RunEntry {
   launches: number;
   /** The stop that interrupted this run here, recorded before the interrupt
    *  for its cleanup (a `user` reason outlives a later `shutdown`), and the
-   *  commit its owed wake counts from: the claim's, then the first stop's. */
+   *  commit its owed wake counts from: the claim's, then its first `stop`'s. */
   stopReason?: RunStopReason;
   since: CommitOrdinal;
 }
@@ -206,6 +206,7 @@ export class RunRegistry implements RunsShape {
 
   // ---------------------------------------------------------------- entries
 
+  private readonly now = () => this.init.session().log.now();
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
@@ -383,11 +384,10 @@ export class RunRegistry implements RunsShape {
         `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
       );
     }
-    if (this.stopFolded(parentRunId)) {
+    if (this.stopFolded(parentRunId))
       throw new Error(
         `Cannot launch child run ${childRunId} under run ${parentRunId}: that run's stop has already folded.`,
       );
-    }
   }
 
   private stopFolded(runId: RunId): boolean {
@@ -467,7 +467,7 @@ export class RunRegistry implements RunsShape {
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
-        counted.since = this.init.session().log.now();
+        counted.since = this.now();
         return undefined;
       };
       const leave = (): void => {
@@ -517,7 +517,7 @@ export class RunRegistry implements RunsShape {
       return Effect.asVoid(
         Effect.acquireRelease(
           Effect.gen({ self: this }, function* () {
-            const since = this.init.session().log.now();
+            const since = this.now();
             const ready = Deferred.makeUnsafe<void, Error>();
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
@@ -645,8 +645,9 @@ export class RunRegistry implements RunsShape {
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const token = Symbol('run-stop');
     const tokens = this.stopping.get(runId) ?? new Set<symbol>();
-    tokens.add(token);
-    this.stopping.set(runId, tokens);
+    const entry = this.entries.get(runId);
+    if (!tokens.size && entry && !entry.stopReason) entry.since = this.now();
+    this.stopping.set(runId, tokens.add(token));
     const lift = Effect.sync(() => {
       const current = this.stopping.get(runId);
       if (current?.delete(token) !== true) return;
@@ -656,8 +657,7 @@ export class RunRegistry implements RunsShape {
     const detach = options.detachActiveChildren === true;
     // Something here to stop: a handle, a child driver, or a launch's fiber
     // that has not tracked its handle yet.
-    const local =
-      this.isRetained(runId) || this.entries.get(runId)?.fiber !== undefined;
+    const local = this.isRetained(runId) || entry?.fiber !== undefined;
     let reached = false;
     const stopHere = (): boolean => {
       // Shared across the child sweep and the root cascade so each run in
@@ -773,7 +773,7 @@ export class RunRegistry implements RunsShape {
   private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
     const entry = this.entries.get(runId);
     if (entry === undefined || reason === undefined) return;
-    if (!entry.stopReason) entry.since = this.init.session().log.now();
+    if (!this.stopping.has(runId)) entry.since = this.now();
     if (entry.stopReason !== 'user') entry.stopReason = reason;
   }
 
