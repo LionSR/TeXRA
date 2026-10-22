@@ -285,11 +285,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
         Effect.all([
-          // The pill and the card launch `launchSetupAssistant`, which turns
-          // OpenRouter on for its run, so an OpenRouter key counts here.
-          hasUsableSetupCredential(this.roots, this.secrets, {
-            openRouterFallback: true,
-          }).pipe(withLogChannel('Setup Credentials')),
+          hasUsableSetupCredential(this.roots, this.secrets, 'vscode').pipe(
+            withLogChannel('Setup Credentials'),
+          ),
           getFirstRunDone(globalState),
         ]).pipe(
           Effect.tap(([usable]) =>

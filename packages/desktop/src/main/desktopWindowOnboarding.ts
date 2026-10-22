@@ -64,13 +64,13 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
       state: options.globalState,
       // Single source of truth for "does the user have a usable
       // credential", shared by every host (extension, desktop, CLI) so this
-      // credential-gating logic can't drift between them. The desktop's
-      // setup kickoff never turns OpenRouter on, so the funnel asks the
-      // question that launch answers.
+      // credential-gating logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(projects.active().roots, options.secrets, {
-          openRouterFallback: false,
-        }).pipe(withLogChannel('Setup Credentials')),
+        hasUsableSetupCredential(
+          projects.active().roots,
+          options.secrets,
+          'desktop',
+        ).pipe(withLogChannel('Setup Credentials')),
       // Suspended so the project and its launch path are read when the user
       // clicks "Run Setup", not when the port is built. The per-session
       // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps

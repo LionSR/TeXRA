@@ -216,12 +216,14 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<ModelSettings, StateReadFailed> {
   const flag = (key: string) => Settings.get<boolean>(stores, key);
+  // One read decides both the route and how an unreadable key fails.
+  const preferKimiCode = yield* flag(GlobalStateKey.KIMI_CODE_PREFER);
   const [route, rest, wire] = yield* Effect.all(
     [
       Effect.all(
         {
           useOpenRouter: flag(GlobalStateKey.USE_OPENROUTER),
-          preferKimiCode: flag(GlobalStateKey.KIMI_CODE_PREFER),
+          preferKimiCode: Effect.succeed(preferKimiCode),
           glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
           glmEndpoint: Effect.map(
             Settings.get<string>(stores, GlobalStateKey.ENDPOINT_GLM),
@@ -233,26 +235,22 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           // so an unreadable one fails the read rather than routing to the
           // pay-per-token key. Otherwise it reads as absent and warns, the
           // rule the picker applies to every key status.
-          kimiCodeKey: Effect.flatMap(
-            flag(GlobalStateKey.KIMI_CODE_PREFER),
-            (preferred) =>
-              hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
-                Effect.catchTag('SecretsFailed', (failure) =>
-                  preferred
-                    ? Effect.fail(
-                        new StateReadFailed({
-                          key: 'kimiCode',
-                          message:
-                            'Could not read the Kimi Code API key while Kimi Code is preferred.',
-                          cause: failure,
-                        }),
-                      )
-                    : Effect.logWarning(
-                        'Failed to read Kimi Code API key status; treating it as unavailable.',
-                        failure.cause,
-                      ).pipe(Effect.as(false)),
-                ),
-              ),
+          kimiCodeKey: hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
+            Effect.catchTag('SecretsFailed', (failure) =>
+              preferKimiCode
+                ? Effect.fail(
+                    new StateReadFailed({
+                      key: 'kimiCode',
+                      message:
+                        'Could not read the Kimi Code API key while Kimi Code is preferred.',
+                      cause: failure,
+                    }),
+                  )
+                : Effect.logWarning(
+                    'Failed to read Kimi Code API key status; treating it as unavailable.',
+                    failure.cause,
+                  ).pipe(Effect.as(false)),
+            ),
           ),
           // Stored in thousands of tokens; this is its only reader.
           chatgptContextWindow: Effect.map(

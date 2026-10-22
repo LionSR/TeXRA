@@ -227,7 +227,9 @@ const scanInto = (state: CatalogState) =>
     );
     // Only custom-agent scan issues are a product surface.
     state.customScanIssues = Object.freeze(custom.issues);
-    state.skippedFiles = Object.freeze([...custom.issues, ...plugin.issues]);
+    state.skippedFiles = Object.freeze(
+      [custom, builtIn, plugin].flatMap((scan) => scan.issues),
+    );
     yield* Effect.logInfo(
       `Loaded ${state.entries.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
     ).pipe(withLogChannel(CHANNEL));

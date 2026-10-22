@@ -1,8 +1,10 @@
 import {
   Settings,
+  StateReadFailed,
   readModelOptions,
   type ModelOptionStores,
   type PlatformSecrets,
+  type SettingHost,
 } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
@@ -59,33 +61,46 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
       };
     }
     if (
-      !includeAccessListFallback ||
-      (yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER))
+      includeAccessListFallback &&
+      !(yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER)) &&
+      (yield* hasUsableApiKey(secrets, 'openRouter'))
     ) {
-      return null;
+      return {
+        model: SETUP_MODEL_BY_PROVIDER.openRouter,
+        requiresOpenRouter: true,
+      };
     }
-    return (yield* hasUsableApiKey(secrets, 'openRouter'))
-      ? { model: SETUP_MODEL_BY_PROVIDER.openRouter, requiresOpenRouter: true }
-      : null;
+    // A key that could not be read is neither a credential nor its absence:
+    // with nothing runnable, the answer is unknown, not "none".
+    const unreadable = candidates.find(
+      ([, model]) => rows.get(model)?.availability === 'key-unreadable',
+    );
+    if (unreadable !== undefined) {
+      return yield* new StateReadFailed({
+        key: unreadable[0],
+        message: `Could not read the ${unreadable[0]} key, so whether setup has a model is unknown.`,
+        cause: undefined,
+      });
+    }
+    return null;
   },
 );
 
 /**
- * True when the caller's setup launch has a model to launch with. Whether an
- * OpenRouter key counts while the OpenRouter switch is off is the caller's
- * host's answer, not a default: `openRouterFallback` is true only where that
- * launch turns the switch on for itself (the extension), so a host whose
- * launch cannot (desktop, CLI) never reports a credential it then fails to
- * launch with. A check that cannot be answered fails typed: an unreadable
- * store is not the fact "no credential", and each caller decides what an
- * unknown answer means for its surface.
+ * True when `host`'s setup launch has a model to launch with. An OpenRouter
+ * key counts while the OpenRouter switch is off only on the extension, whose
+ * launch turns the switch on for itself; desktop, the CLI and an embedder
+ * cannot, so they never report a credential they then fail to launch with.
+ * A check that cannot be answered fails typed: an unreadable store is not
+ * the fact "no credential", and each caller decides what an unknown answer
+ * means for its surface.
  */
 export const hasUsableSetupCredential = (
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  launch: { readonly openRouterFallback: boolean },
+  host: SettingHost,
 ) =>
-  resolveSetupLaunchModel(stores, secrets, launch.openRouterFallback).pipe(
+  resolveSetupLaunchModel(stores, secrets, host === 'vscode').pipe(
     Effect.map((resolution) => resolution !== null),
   );
 

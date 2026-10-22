@@ -150,11 +150,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
         ),
         { concurrency: 'unbounded' },
       ),
-      // The probe runs on every host and cannot tell whether its host's setup
-      // launch turns OpenRouter on, so it counts a key as the extension does.
-      hasUsableSetupCredential(roots, secrets, {
-        openRouterFallback: true,
-      }).pipe(
+      hasUsableSetupCredential(roots, secrets, roots.host).pipe(
         // A check that cannot be answered is not "no credential"; advice
         // built on it would send a configured user to sign in again.
         Effect.catch((failure) =>

@@ -241,10 +241,10 @@ export class SettingsModelSelectionController<R = never> {
 /**
  * A Models-tab row's reasoning controls, from what a run on the row's route
  * sends (`ModelOption.reasoning`, the bind's own decision): the levels the
- * route can carry, the level a run sends with none saved, and the saved
- * level where the route carries it. A saved level it cannot carry reads as
- * the default, which is what the run sends; the row offers no choice where
- * the route carries one level or none (an editor-managed Copilot route).
+ * route can carry, the level a run sends with none saved, and, with a level
+ * saved, the level a run sends for it: the saved one, or the one the policy
+ * substitutes where the route cannot carry it. The row offers no choice
+ * where the route carries one level or none (an editor-managed Copilot route).
  */
 function addReasoningLevelData(
   item: ModelSelectionItem,
@@ -257,7 +257,12 @@ function addReasoningLevelData(
   if (!('refused' in reasoning.fallback)) {
     item.defaultReasoningLevel = reasoning.fallback.effort;
   }
-  if (savedEffort !== undefined && reasoning.efforts.includes(savedEffort)) {
-    item.reasoningLevel = savedEffort;
+  const sent = 'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
+  if (
+    savedEffort !== undefined &&
+    sent !== undefined &&
+    reasoning.efforts.includes(sent)
+  ) {
+    item.reasoningLevel = sent;
   }
 }
