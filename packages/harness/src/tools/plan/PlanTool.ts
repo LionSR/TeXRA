@@ -7,7 +7,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -88,16 +88,25 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       'A one-shot run has no later turn for a goal to report to: work on the approved plan in this run instead.',
       { summary: 'Plan approved: no goal in a one-shot run' },
     );
-  // One goal at a time: two would race each other's edits and caps.
+  // One goal at a time: two would race each other's edits and caps. A goal
+  // "Keep agents running" detached is still this conversation's: its
+  // `run.start` keeps the parent its view edge dropped.
   const { session, runId } = call.run;
-  const running = (session.view.run(runId)?.childIds ?? []).find((id) => {
-    const child = session.view.run(id);
-    return (
-      child?.identity.kind === 'script' &&
-      child.identity.title === GOAL_TITLE &&
-      child.durableOutcome === null
-    );
-  });
+  const goals = [
+    ...SubscriptionRef.getUnsafe(session.view.ref).runs.values(),
+  ].filter(
+    (other) =>
+      other.identity.kind === 'script' &&
+      other.identity.title === GOAL_TITLE &&
+      other.durableOutcome === null,
+  );
+  const running = (yield* Effect.forEach(goals, (goal) =>
+    Effect.map(session.log.records(goal.id), (rows) =>
+      rows.some((row) => row.type === 'run.start' && row.parent?.id === runId)
+        ? [goal.id]
+        : [],
+    ),
+  )).flat()[0];
   if (running !== undefined)
     return errorResult(
       `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,

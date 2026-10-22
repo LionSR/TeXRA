@@ -20,7 +20,11 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { ToolError, type SubagentProgressUpdate } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  ToolError,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult } from '@tools/core/result';
@@ -74,18 +78,32 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const start = (yield* run.session.log.records(run.runId)).find(
     (row) => row.type === 'run.start',
   );
-  const parent = start?.type === 'run.start' ? start.parent?.id : undefined;
+  const edge = start?.type === 'run.start' ? start.parent : null;
+  const parent = edge?.id;
   const config =
     parent === undefined
       ? null
       : yield* getRunRecords(run.session, parent).readConfig();
-  if (start === undefined || parent === undefined || config === null)
+  // The cut is the response that issued the script, not the script's own
+  // start, which a full child-run budget can delay past later turns.
+  const issued =
+    parent === undefined
+      ? undefined
+      : (yield* run.session.log.rows(qualifyAggregateId('run', parent), [
+          'model.message',
+        ])).find(
+          (row) =>
+            row.type === 'model.message' &&
+            row.payload.kind === 'response' &&
+            row.payload.calls.some(({ callId }) => callId === edge?.callId),
+        );
+  if (parent === undefined || config === null || issued === undefined)
     return yield* Effect.fail(
       new ToolError(
-        `self() needs the conversation the script ${run.runId} launched from.`,
+        `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
       ),
     );
-  return { config, source: parent, before: start.commit };
+  return { config, source: parent, before: issued.commit };
 });
 
 const runSelf = Effect.fn('self.call')(function* (
