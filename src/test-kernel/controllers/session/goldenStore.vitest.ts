@@ -103,10 +103,10 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = RunIdSchema.parse('a00000000001');
 const CHAT = RunIdSchema.parse('a00000000008');
-/** The goal the chat's plan ran as, and its one round, named by the call of
- *  the goal's program that launched it. */
-const GOAL = RunIdSchema.parse('a00000000000000000000009');
-const ROUND = '75eeb06409c87debe96fad7b';
+/** The goal script the chat's plan launched, named by the plan call, and
+ *  its one round, named by the script's `self()` call. */
+const GOAL = RunIdSchema.parse('d3e7a0e161ed4e717c2f7ed0');
+const ROUND = 'bb04016df32e420678302598';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = RunIdSchema.parse('a0000000000b');
 const SCRIPTED = RunIdSchema.parse('a0000000000c');
@@ -417,7 +417,7 @@ describe('the golden 1.0 store', () => {
           outcome: 'cancelled',
           children: [GOAL],
         }),
-        run(GOAL, 'golden_chat', { parent: CHAT, children: [ROUND] }),
+        run(GOAL, 'Goal', { parent: CHAT, children: [ROUND] }),
         run(ROUND, 'golden_chat', { parent: GOAL }),
         run(CODEX, 'codex', { status: 'cancelled', outcome: 'cancelled' }),
         run(SCRIPTED, 'golden_script'),

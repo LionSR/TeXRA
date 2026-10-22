@@ -1040,6 +1040,9 @@ const TIMING_KEYS = new Set([
 ]);
 const BASE_AT = Date.UTC(2026, 0, 1);
 
+/** The script functions whose call names the child run it launches. */
+const CHILD_CALLS = new Set(['agent', 'self']);
+
 function normalize(file, root) {
   const db = new DatabaseSync(file);
   const events = db
@@ -1090,9 +1093,9 @@ function normalize(file, root) {
   };
   for (const row of rows) collect(row.value, '');
 
-  // An `agent` call's child run is named by the call (`agentChildRunId`:
-  // its run, response, call and attempt), so a resume finds it by deriving
-  // that name again. Such a child is renamed by the same derivation over
+  // An `agent` or `self` call's child run is named by the call
+  // (`agentChildRunId`: its run, response, call and attempt), so a resume
+  // finds it by deriving that name again. Such a child is renamed by the same derivation over
   // the normalized names, not by order, or no resume would find it.
   const derive = (fields) =>
     createHash('sha256')
@@ -1102,7 +1105,10 @@ function normalize(file, root) {
   const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
   const children = new Map();
   for (const [index, row] of rows.entries()) {
-    if (row.type !== 'script.call' || row.value.payload.toolName !== 'agent')
+    if (
+      row.type !== 'script.call' ||
+      !CHILD_CALLS.has(row.value.payload.toolName)
+    )
       continue;
     const { scriptCallId, callId } = row.value.payload;
     const intents = rows.filter(
