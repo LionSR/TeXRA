@@ -9,11 +9,11 @@
  * module-level signals in `settingsState.ts` directly.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import {
-  type SettingsSectionName,
-  type SettingsTabPanelName,
-  type SettingsViewOutboundHandlerRegistry,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsViewOutboundHandlerRegistry } from '@texra/shared/settingsView/settingsViewMessages';
+import type {
+  SettingsSectionName,
+  SettingsTabPanelName,
+} from '@texra/shared/settingsView/settingsTarget';
 
 import {
   activePresetId,

@@ -26,15 +26,15 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
-import type {
-  RequestDecision,
-  RunId,
-  SessionEventDraft,
+import {
+  AgentConfigSchema,
+  type RequestDecision,
+  type RunId,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   nativeToolTestLayer,

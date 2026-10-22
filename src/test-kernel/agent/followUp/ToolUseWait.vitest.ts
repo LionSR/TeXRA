@@ -44,7 +44,7 @@ import {
   queuedFollowUps,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal/goalRows';
 import { generateRunId } from '@utils/core';
 
 import {

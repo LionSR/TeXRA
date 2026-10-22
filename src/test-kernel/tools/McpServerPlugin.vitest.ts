@@ -32,6 +32,7 @@ import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import {
   autoDecideRequests,
   createRecordingHost,
@@ -46,6 +47,8 @@ const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], String(process.pid));
+if (process.argv[3])
+  fs.writeFileSync(process.argv[3], JSON.stringify({ PATH: process.env.PATH, mark: process.env.FIXTURE_MARK }));
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
 require('node:readline')
   .createInterface({ input: process.stdin })
@@ -314,6 +317,66 @@ describe('MCP server plugins', () => {
           'Declared tool not found in registry: grep',
         ]);
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
+  );
+
+  // The command is pinned on the extended process PATH, so a project `.env`
+  // PATH must not choose the binary the server runs; its other variables do
+  // reach the server.
+  it.live(
+    "spawns a server on the extended process PATH, not the project's .env PATH",
+    () =>
+      Effect.gen(function* () {
+        const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+        );
+        const envFile = path.join(dir, 'env.json');
+        writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+        writeFileSync(
+          path.join(dir, 'mcp.json'),
+          JSON.stringify({
+            mcpServers: {
+              fixture: {
+                command: process.execPath,
+                args: [
+                  path.join(dir, 'server.cjs'),
+                  path.join(dir, 'pid'),
+                  envFile,
+                ],
+              },
+            },
+          }),
+        );
+        const sentinel = path.join(dir, 'project-bin');
+        const resolved = yield* resolveTestStep({
+          tools: [{ name: 'mcp__fixture__*' }],
+          injectTools: false,
+          stores: hostStores(),
+          workspaceRoot: undefined,
+          host: 'cli',
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              mcpToolTableLayer(dir),
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
+          ),
+          Effect.provideService(ProjectEnvironment, {
+            PATH: sentinel,
+            FIXTURE_MARK: 'from-dotenv',
+          }),
+        );
+        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([]);
+        const seen = JSON.parse(readFileSync(envFile, 'utf8'));
+        expect(seen.mark).toBe('from-dotenv');
+        expect(seen.PATH).not.toContain(sentinel);
+        expect(seen.PATH.split(path.delimiter)).toEqual(
+          expect.arrayContaining(
+            (process.env.PATH ?? '').split(path.delimiter).filter(Boolean),
+          ),
+        );
+      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
+    20_000,
   );
 
   it.live('reports an invalid config without quoting its text', () =>

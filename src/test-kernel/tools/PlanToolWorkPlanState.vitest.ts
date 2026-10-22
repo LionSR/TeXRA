@@ -15,7 +15,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal/goalRows';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
 

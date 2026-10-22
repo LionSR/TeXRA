@@ -6,12 +6,9 @@ import { findCommand } from '@texra-ai/harness/node';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
-  LATEX_WORKSHOP_EXT_ID,
-  PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 
-import type { SetupPlatformShape } from './platform';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Installation status of one probed tool, with its path when discoverable. */
@@ -50,10 +47,10 @@ export const locateTool = Effect.fn('locateTool')(function* (
 
 /**
  * Names of the missing core dependencies, given statuses for the whole of
- * {@link PROBED_LATEX_TOOLS}. Either image tool satisfies the image
+ * `PROBED_LATEX_TOOLS`. Either image tool satisfies the image
  * requirement, so both absent report a single {@link IMAGE_TOOL_LABEL} entry.
  */
-function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
+export function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   const missing = statuses
     .filter((tool) => !tool.installed && !IMAGE_TOOL_NAMES.has(tool.name))
     .map((tool) => tool.name);
@@ -63,23 +60,3 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   if (!hasImageTool) missing.push(IMAGE_TOOL_LABEL);
   return missing;
 }
-
-/**
- * The core-setup status shared by `probe_environment` and `verify_setup`:
- * core-tool probing results and LaTeX Workshop extension presence. One definition so the two tools can't drift on what "core setup"
- * means. Each tool's divergent credential/optional-tool handling stays in the
- * tool.
- */
-export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
-  function* (platform: SetupPlatformShape) {
-    const coreTools = yield* Effect.all(
-      PROBED_LATEX_TOOLS.map((name) => locateTool(name)),
-      { concurrency: 'unbounded' },
-    );
-    const missingCore = missingCoreTools(coreTools);
-    const latexWorkshopInstalled = platform.extensions?.isInstalled(
-      LATEX_WORKSHOP_EXT_ID,
-    );
-    return { coreTools, missingCore, latexWorkshopInstalled };
-  },
-);

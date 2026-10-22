@@ -15,11 +15,11 @@ import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipCont
 // Local imports - shared styles
 
 // Local imports - shared schemas and constants
-import {
-  dispatchSettingsViewOutbound,
-  type SettingsSectionName,
-  type SettingsTabPanelName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
+import type {
+  SettingsSectionName,
+  SettingsTabPanelName,
+} from '@texra/shared/settingsView/settingsTarget';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';

@@ -94,7 +94,7 @@ import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   qualifyAggregateId,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
   RUN_PHASE,
@@ -2406,7 +2406,7 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const config = AgentConfigFieldsSchema.parse({
+        const config = AgentConfigSchema.parse({
           model: 'test-model',
         });
         const configured: SessionEventDraft = {

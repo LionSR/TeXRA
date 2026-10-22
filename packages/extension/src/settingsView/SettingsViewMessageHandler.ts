@@ -41,7 +41,6 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
@@ -103,7 +102,8 @@ export class SettingsViewMessageHandler {
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry<
     ProcessServices | StorageFs
   >;
-  private readonly body: ReturnType<typeof createSettingsViewBody>;
+  /** The shared settings body: its programs, handlers and repaints. */
+  readonly body: ReturnType<typeof createSettingsViewBody>;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -213,18 +213,6 @@ export class SettingsViewMessageHandler {
       ),
     );
   }
-
-  /**
-   * Sign in to a subscription provider from outside the settings webview,
-   * through the same program the Models page's sign-in button runs, so the
-   * command palette gets the status round-trip and credential refresh tail.
-   */
-  public signInSubscription(providerId: SubscriptionProviderId) {
-    return this.body.signInSubscription(providerId);
-  }
-
-  /** Every page's opening data, posted to the active view. */
-  public readonly sendAllData = () => this.body.postAll;
 
   private createHandlerRegistry(
     context: vscode.ExtensionContext,

@@ -30,9 +30,9 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   emptyRunEndOutput,
   MESSAGE_TYPES,

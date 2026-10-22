@@ -10,10 +10,10 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import { registerRun } from '@agent/storage/runLifecycle';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,

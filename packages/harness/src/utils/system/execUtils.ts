@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Data, Duration, Effect, Fiber, Option, Result, Stream } from 'effect';
+import { Data, Duration, Effect, Fiber, Result, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
@@ -356,8 +356,10 @@ const awaitOutcome = Effect.fnUntraced(function* (
   const bounded =
     timeout > 0
       ? settled.pipe(
-          Effect.timeoutOption(Duration.millis(timeout)),
-          Effect.map(Option.getOrElse((): Outcome => ({ _tag: 'TimedOut' }))),
+          Effect.timeoutOrElse({
+            duration: Duration.millis(timeout),
+            orElse: () => Effect.succeed<Outcome>({ _tag: 'TimedOut' }),
+          }),
         )
       : settled;
   const { signal } = options;

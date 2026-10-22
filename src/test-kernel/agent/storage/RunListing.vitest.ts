@@ -5,12 +5,10 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { listRuns } from '@agent/storage/runListing';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   emptyRunEndOutput,
   type RunId,

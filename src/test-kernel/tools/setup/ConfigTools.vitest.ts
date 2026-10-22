@@ -74,6 +74,20 @@ describe('ConfigTools — update_config allowlist', () => {
     }),
   );
 
+  // OpenAI-compatible providers send an omitted optional field as `null`.
+  it.effect('writes the user setting when the model sends target: null', () =>
+    Effect.gen(function* () {
+      const { config, layer } = createPlatform();
+
+      const result = yield* updateTool
+        .call({ key: 'texra.bib.zoteroPort', value: 23200, target: null })
+        .pipe(Effect.provide(layer));
+
+      assert.equal(result.status, 'executed');
+      assert.equal(config.inspect('texra.bib.zoteroPort')?.globalValue, 23200);
+    }),
+  );
+
   it.effect.each([
     {
       case: 'a non-allowlisted key',

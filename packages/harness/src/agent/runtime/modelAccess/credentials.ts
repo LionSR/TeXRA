@@ -15,7 +15,6 @@ import {
   type ModelRoute,
 } from '@texra-ai/llm';
 import {
-  CODEX_BACKEND_BASE_URL,
   codexCoordinator,
   SubscriptionOAuthError,
   xaiCoordinator,
@@ -30,12 +29,6 @@ import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
 
 import type { ModelConfig } from 'llm-zoo';
-
-/**
- * The Grok subscription's OAuth token is accepted by xAI's own API surface
- * only; it is never sent to a dashboard custom endpoint or OpenRouter.
- */
-const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
 
 /** The routes that bill a credential. */
 type CredentialRoute = Extract<
@@ -115,14 +108,37 @@ function subscriptionUnavailable(
 }
 
 /**
- * The OAuth session a subscription route bills. The decision already found
- * the preference on, the model eligible and a session signed in, so this only
- * reads the session, refreshing an expired one. `rejected` is a token the
- * provider rejected although its stored expiry still calls it fresh
- * (revoked, or expired server-side): it is refreshed first, while stored.
+ * The endpoint `route` sends `config`'s requests to. A provider the catalog
+ * states no endpoint for is a defect, not a route the user can fix.
+ */
+const routeEndpoint = (
+  config: ModelConfig,
+  route: Exclude<CredentialRoute, { kind: 'no-api-key' }>,
+  facts: Pick<HostRouteFacts, 'endpoints'>,
+): Effect.Effect<string> => {
+  const endpoint = resolveRouteEndpoint(config, route, facts);
+  return endpoint === undefined
+    ? Effect.die(
+        new Error(
+          `No HTTP endpoint is configured for provider ${config.provider}.`,
+        ),
+      )
+    : Effect.succeed(endpoint);
+};
+
+/**
+ * The OAuth session a subscription route bills, at `endpoint`: the
+ * subscription's own surface, which `resolveRouteEndpoint` names ahead of
+ * any per-model or dashboard endpoint, since the token is accepted nowhere
+ * else. The decision already found the preference on, the model eligible
+ * and a session signed in, so this only reads the session, refreshing an
+ * expired one. `rejected` is a token the provider rejected although its
+ * stored expiry still calls it fresh (revoked, or expired server-side): it
+ * is refreshed first, while stored.
  */
 const subscriptionCredential = (
   route: 'chatgpt-subscription' | 'xai-subscription',
+  endpoint: string,
   secrets: PlatformSecrets,
   rejected: string | undefined,
 ): Effect.Effect<RouteCredential, RouteUnavailable, HttpClient.HttpClient> => {
@@ -134,13 +150,13 @@ const subscriptionCredential = (
           bearer: fresh.accessToken,
           accountId: fresh.accountId ?? null,
           plan: fresh.planType,
-          endpoint: CODEX_BACKEND_BASE_URL,
+          endpoint,
         }))
       : Effect.map(xaiCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
           provider: 'xai',
           bearer: fresh.accessToken,
-          endpoint: XAI_SUBSCRIPTION_ENDPOINT,
+          endpoint,
         }));
   const refresh = (token: string) =>
     route === 'chatgpt-subscription'
@@ -186,14 +202,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
     });
   }
   const bearer = exposeApiKey(key);
-  const endpoint = resolveRouteEndpoint(config, route, facts);
-  if (endpoint === undefined) {
-    return yield* Effect.die(
-      new Error(
-        `No HTTP endpoint is configured for provider ${config.provider}.`,
-      ),
-    );
-  }
+  const endpoint = yield* routeEndpoint(config, route, facts);
   return {
     route: route.kind,
     provider,
@@ -213,7 +222,9 @@ export function routeCredential(
   switch (route.kind) {
     case 'chatgpt-subscription':
     case 'xai-subscription':
-      return subscriptionCredential(route.kind, secrets, rejected);
+      return Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
+        subscriptionCredential(route.kind, endpoint, secrets, rejected),
+      );
     case 'no-api-key':
       return Effect.fail(
         new RouteUnavailable({

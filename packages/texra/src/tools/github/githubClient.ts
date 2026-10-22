@@ -7,7 +7,7 @@
  * a 304 means "no change since that ETag".
  */
 
-import { Data, Duration, Effect } from 'effect';
+import { Clock, Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -60,11 +60,14 @@ function extractApiMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
-/** The failure to report for a non-2xx, non-304 response, tagged when it is an HTTP status a caller acts on. */
+/** The failure to report for a non-2xx, non-304 response, tagged when it is
+ *  an HTTP status a caller acts on. `nowMs` is the `Clock` reading the poller
+ *  compares a rate-limit reset against. */
 function classifyFailure(
   status: number,
   responseHeaders: Headers.Headers,
   responseData: unknown,
+  nowMs: number,
 ): Error {
   const message = extractApiMessage(responseData, `HTTP ${status}`);
   if (status === StatusCodes.UNAUTHORIZED || status === StatusCodes.FORBIDDEN) {
@@ -85,7 +88,7 @@ function classifyFailure(
       const secs = Number(retryAfter);
       if (Number.isFinite(secs) && secs > 0) {
         return new GitHubRateLimitError({
-          resetAt: Math.floor(Date.now() / 1000) + Math.ceil(secs),
+          resetAt: Math.floor(nowMs / 1000) + Math.ceil(secs),
         });
       }
     }
@@ -134,7 +137,12 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
         Effect.orElseSucceed((): unknown => undefined),
       );
       return yield* Effect.fail(
-        classifyFailure(response.status, response.headers, body),
+        classifyFailure(
+          response.status,
+          response.headers,
+          body,
+          yield* Clock.currentTimeMillis,
+        ),
       );
     }
     return {

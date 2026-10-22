@@ -43,9 +43,7 @@ function buildOverleafClonePorts(
   return {
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
-    getStoredToken: (key) => secrets.get(key),
-    deleteStoredToken: (key) => secrets.delete(key),
-    storeToken: (key, token) => secrets.set(key, token),
+    secrets,
     promptToken: (spec) =>
       Effect.gen(function* () {
         const tokenGuidance = remote.isOverleaf

@@ -4,9 +4,9 @@ import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
-  AgentError,
   classifyAgentError,
-} from '@common/errors';
+} from '@common/errors/agentErrorClassification';
+import { AgentError } from '@common/errors/agentErrors';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';

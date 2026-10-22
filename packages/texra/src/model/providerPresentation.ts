@@ -76,18 +76,18 @@ const CHINA_PLATFORM_NAMES = new Map<string, string>([
  * The name a provider goes by on the platform its region toggle picks:
  * Qwen's China platform is Bailian. Every other provider keeps its own name.
  */
-export function getProviderDisplayName(
-  stores: SettingsStores,
-  provider: string,
-): Effect.Effect<string, StateReadFailed> {
-  return Effect.gen(function* () {
+export const getProviderDisplayName = Effect.fn('getProviderDisplayName')(
+  function* (
+    stores: SettingsStores,
+    provider: string,
+  ): Effect.fn.Return<string, StateReadFailed> {
     const chinaName = CHINA_PLATFORM_NAMES.get(provider);
     if (chinaName === undefined) return providerDisplayName(provider);
     return (yield* useChinaRegion(stores, provider))
       ? chinaName
       : providerDisplayName(provider);
-  });
-}
+  },
+);
 
 /**
  * The page where a user obtains an API key for a provider, or `undefined` for

@@ -2,12 +2,11 @@
 
 Generated from `packages/llm/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 27
+Exports: 26
 
 - `Binding` — `interface Binding { readonly model: Model; readonly origin: ModelOrigin; readonly background: boolean; readonly persistentConnection: boolean; readonly serviceTier: 'fast' | null; readonly forcedToolChoice: boolean; }`
 - `bindModel` — `const bindModel: (spec: BindSpec) => Effect<Binding, ModelError, Scope>`
 - `BindSpec` — `interface BindSpec { readonly protocol: Exclude<ModelOrigin['protocol'], 'vscode-lm'>; readonly model: ModelConfig; readonly endpoint: string; readonly credentialScope: string; readonly credential: ModelCredential; readonly billing: BillingRoute; readonly options: { readonly maxOutputTokens: number; readonly temperature: number; readonly reasoning: ReasoningChoice; readonly parallelToolCalls: boolean; readonly reasoningSummary: boolean; readonly serverState: boolean; readonly fastTier: boolean; readonly webSocket: boolean; readonly background: boolean; readonly fetch?: typeof fetch; }; }`
-- `CODEX_BACKEND_BASE_URL` — `const CODEX_BACKEND_BASE_URL: "https://chatgpt.com/backend-api/codex"`
 - `codexCoordinator` — `const codexCoordinator: (secrets: CredentialStore) => SubscriptionCoordinator<{ accessToken: string; accountId?: string | undefined; email?: string | undefined; expiresAtMs: number; idToken?: string | undefined; planType?: string | undefined; refreshToken: string; }>`
 - `codexLoginWithDeviceCode` — `const codexLoginWithDeviceCode: (options: DeviceLoginOptions<{ accessToken: string; accountId?: string | undefined; email?: string | undefined; expiresAtMs: number; idToken?: string | undefined; planType?: string | undefined; refreshToken: string; }>) => Effect<{ accessToken: string; accountId?: string | undefined; email?: string | undefined; expiresAtMs: number; idToken?: string | undefined; planType?: string | undefined; refreshToken: string; }, Error, HttpClient>`
 - `codexLoginWithLoopback` — `const codexLoginWithLoopback: (options: LoopbackLoginOptions<{ accessToken: string; accountId?: string | undefined; email?: string | undefined; expiresAtMs: number; idToken?: string | undefined; planType?: string | undefined; refreshToken: string; }>) => Effect<{ accessToken: string; accountId?: string | undefined; email?: string | undefined; expiresAtMs: number; idToken?: string | undefined; planType?: string | undefined; refreshToken: string; }, Error, HttpClient>`

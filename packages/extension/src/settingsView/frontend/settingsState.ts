@@ -54,10 +54,12 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
-  type SettingsSectionName,
-  type SettingsTabPanelName,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type {
+  SettingsSectionName,
+  SettingsTabPanelName,
+} from '@texra/shared/settingsView/settingsTarget';
 import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type {

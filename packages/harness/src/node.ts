@@ -50,7 +50,10 @@ export {
 export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
-export { withExtendedPath } from '@utils/system/platformPaths';
+export {
+  whichOnExtendedPath,
+  withExtendedPath,
+} from '@utils/system/platformPaths';
 export { runsInWsl } from '@utils/system/wslDetect';
 // The process environment as the harness reads it: a flag (any value but
 // unset, empty, `0`, `false`, `no` or `off` is on), the environment a child

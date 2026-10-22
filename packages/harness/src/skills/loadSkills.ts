@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import { isNotADirectoryError } from '@common/errors';
+import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -17,8 +17,6 @@ import {
   loadSkillDirectory,
 } from './skillLoader';
 import type { Skill } from './SkillSchema';
-
-export { type SkillLoadIssue } from './skillLoader';
 
 interface DiscoveredSkill {
   skill: Skill;

@@ -436,7 +436,7 @@ const FRAMING_EVENTS = new Set([
 ]);
 
 /** One decoded Responses event: its sequence, its parts, whether it settles. */
-export interface ResponseEventParts {
+interface ResponseEventParts {
   readonly sequence: number;
   readonly parts: readonly PartEvent[];
   readonly terminal: boolean;

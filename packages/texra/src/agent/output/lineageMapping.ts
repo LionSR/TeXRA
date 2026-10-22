@@ -1,8 +1,10 @@
 /**
  * File lineage mapping for output tracking.
  *
- * Traces the lineage of output files back to their base files,
- * enabling proper diff computation and file history tracking.
+ * Traces the lineage of a round's output files back to their base files.
+ * Extraction (`computeOutputDiffStats`) is its one caller: the lineage it
+ * records on each output is what every later reader (latexdiff, the critic's
+ * review, the hosts) takes, never a recomputation.
  */
 
 import * as path from 'node:path';
@@ -96,8 +98,6 @@ export function traceFileLineage(
   currRound: number,
 ): RoundFileMapping {
   const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
-  const prevOutputs =
-    currRound > 0 ? (state.rounds.get(currRound - 1)?.outputs ?? []) : [];
 
   const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
     loc,
@@ -105,21 +105,11 @@ export function traceFileLineage(
   }));
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
-  // 'contains' matches base filenames that appear as substrings of output names
-  // (e.g. "paper" matches "paper_revised"), for outputs whose names the model chose.
+  // Base filenames that appear as substrings of output names (e.g. "paper"
+  // matches "paper_revised"), for outputs whose names the model chose.
   const baseToOutput = invertMapping(
-    createFileMapping(baseFiles, currentLocations, 'contains'),
+    createFileMapping(baseFiles, currentLocations),
     baseFiles,
-  );
-
-  const prevLocations = prevOutputs.map((entry) => entry.location);
-  // Each round writes `r{round}/<source basename>`, so a file keeps its exact
-  // basename across rounds and pairs with its previous-round self by equality.
-  // createFileMapping already returns an empty map when there are no
-  // previous-round outputs to pair with.
-  const prevToOutput = invertMapping(
-    createFileMapping(prevLocations, currentLocations, 'basename'),
-    prevLocations,
   );
 
   const mapping = new Map<string, RoundFileEntry>();
@@ -128,7 +118,6 @@ export function traceFileLineage(
     const origin = findMatchingBaseFile(baseEntries, entry.source);
     mapping.set(key, {
       base: origin ?? baseToOutput.get(key),
-      prev: prevToOutput.get(key),
       origin,
     });
   }

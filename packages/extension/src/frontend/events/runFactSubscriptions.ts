@@ -17,12 +17,12 @@ import type { RunId, SessionView } from '@texra-ai/harness/schemas';
 export function outputFilesProduced(source: {
   readonly view: { readonly changes: Stream.Stream<SessionView> };
 }): Stream.Stream<readonly OutputFileInfo[]> {
-  return Stream.suspend(() => {
-    // By value: a view rebuilt from the same rows (a resubscribed window)
-    // names no new output.
-    let seen: ReadonlyMap<RunId, string> | undefined;
-    return source.view.changes.pipe(
-      Stream.flatMap((view) => {
+  // By value: a view rebuilt from the same rows (a resubscribed window)
+  // names no new output.
+  return source.view.changes.pipe(
+    Stream.mapAccum(
+      (): ReadonlyMap<RunId, string> | undefined => undefined,
+      (seen, view) => {
         const now = new Map<RunId, string>();
         const changed: (readonly OutputFileInfo[])[] = [];
         for (const run of view.runs.values()) {
@@ -35,9 +35,8 @@ export function outputFilesProduced(source: {
               documentRoundsOf(fact).flatMap((round) => round.outputs),
             );
         }
-        seen = now;
-        return Stream.fromIterable(changed);
-      }),
-    );
-  });
+        return [now, changed] as const;
+      },
+    ),
+  );
 }

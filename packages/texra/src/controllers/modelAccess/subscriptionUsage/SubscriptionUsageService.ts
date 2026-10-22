@@ -8,7 +8,7 @@ import {
   SharedAttempt,
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
-import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
+import { lookupApiKey } from '@texra-ai/llm';
 import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -159,7 +159,7 @@ export class SubscriptionUsageService {
       },
       kimiCode: {
         fetch: () =>
-          Effect.flatMap(this.loadApiKey('kimiCode'), (apiKey) =>
+          Effect.flatMap(lookupApiKey(this.secrets, 'kimiCode'), (apiKey) =>
             apiKey
               ? fetchKimiCodeUsage(apiKey, this.requestTimeoutMs)
               : Effect.succeed(null),
@@ -169,7 +169,7 @@ export class SubscriptionUsageService {
         resolveVariant: () =>
           Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
         fetch: (useChina) =>
-          Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
+          Effect.flatMap(lookupApiKey(this.secrets, 'glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
@@ -201,15 +201,6 @@ export class SubscriptionUsageService {
       ...(session.accountId ? { accountId: session.accountId } : {}),
     };
   });
-
-  /** A coding-plan provider's API key, from secret storage or the environment. */
-  private loadApiKey(
-    provider: 'kimiCode' | 'glm',
-  ): Effect.Effect<string | undefined, SecretsFailed> {
-    return Effect.map(lookupApiKey(this.secrets, provider), (key) =>
-      key === undefined ? undefined : exposeApiKey(key),
-    );
-  }
 
   /** Drop cached and in-flight work after credentials or accounts change. */
   invalidate(provider?: SubscriptionUsageProvider): void {

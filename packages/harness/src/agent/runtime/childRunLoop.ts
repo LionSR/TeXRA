@@ -139,7 +139,7 @@ export interface ChildStrategyBase<TTurn, R> {
     wallTimeMs: number,
   ): Effect.Effect<string, Error, R>;
   /** The error delivery XML (turn is null when the call threw). */
-  formatError(turn: TTurn | null, err: unknown): string;
+  formatError(turn: TTurn | null, err: unknown, wallTimeMs: number): string;
   /** The result manifest persisted beside each turn's report, success or
    *  failure (`turn` null when the call threw), so a failure overwrites a
    *  stale interim one. */
@@ -488,7 +488,7 @@ const settleTurn = <TTurn, R>(
       turn != null && !isError
         ? yield* strategy.formatDelivery(turn, wallTimeMs)
         : yield* Effect.try({
-            try: () => strategy.formatError(turn, err),
+            try: () => strategy.formatError(turn, err, wallTimeMs),
             catch: ensureError,
           });
     const resultMeta = strategy.buildResultMeta
@@ -661,12 +661,11 @@ const driveNative = <TTurn, R>(
       loop.failure !== undefined &&
       !(yield* session.log.owns(runId))
     ) {
-      if (strategy.deliveryMode !== 'persistOnly')
-        yield* deliverLaunchFailure(
-          session,
-          runId,
-          strategy.formatError(turn, err),
-        );
+      if (strategy.deliveryMode !== 'persistOnly') {
+        const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
+        const message = strategy.formatError(turn, err, wallTimeMs);
+        yield* deliverLaunchFailure(session, runId, message);
+      }
       return yield* Effect.fail(ensureError(loop.failure.cause));
     }
     yield* endTurns(loop, turned);

@@ -302,14 +302,10 @@ const supervisedSpawner = Layer.effect(
             kill: (options?: ChildProcess.KillOptions) => {
               const budgetMs = teardownBudgetMillis(command, () => options);
               return handle.kill(options).pipe(
-                Effect.timeoutOption(budgetMs),
-                Effect.flatMap(
-                  Option.match({
-                    onNone: () =>
-                      stopWaiting(handle, command, budgetMs, 'kill'),
-                    onSome: () => Effect.void,
-                  }),
-                ),
+                Effect.timeoutOrElse({
+                  duration: budgetMs,
+                  orElse: () => stopWaiting(handle, command, budgetMs, 'kill'),
+                }),
               );
             },
           });

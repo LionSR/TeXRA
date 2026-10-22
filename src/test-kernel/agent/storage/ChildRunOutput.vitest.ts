@@ -7,8 +7,8 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   type ResultMeta,
   type RunId,

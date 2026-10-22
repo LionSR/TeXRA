@@ -30,14 +30,17 @@ import { type Cause, Deferred, Effect, RcMap, Ref, type Scope } from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import type {
   SessionHandle,
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
