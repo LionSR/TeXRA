@@ -210,11 +210,16 @@ function MetadataLineRow(props: {
   return line.marginTop ? <Box marginTop={1}>{text}</Box> : text;
 }
 
-/** The prompt a proposal shows: a defined agent's system prompt, then its
- *  task. */
-function definedAgentText(payload: AgentProposalPermission): string {
-  if (!payload.persona) return payload.instruction;
-  return `${DEFINED_AGENT_COPY.promptLabel}:\n${payload.persona.prompt ?? ''}\n\n${DEFINED_AGENT_COPY.instructionLabel}:\n${payload.instruction}`;
+/** The text a proposal scrolls: a script's code or the agent's task, after
+ *  a defined agent's system prompt. */
+function proposalText(payload: AgentProposalPermission): string {
+  const { script, persona } = payload;
+  const body = script ? script.source : payload.instruction;
+  if (!persona) return body;
+  const label = script
+    ? SCRIPT_REQUEST_COPY.code(script)
+    : DEFINED_AGENT_COPY.instructionLabel;
+  return `${DEFINED_AGENT_COPY.promptLabel}:\n${persona.prompt ?? ''}\n\n${label}:\n${body}`;
 }
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
@@ -253,7 +258,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         hiddenNoun={script ? 'code rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
         scrollHint={script ? 'scroll code' : 'scroll prompt'}
-        text={script ? script.source : definedAgentText(props.payload)}
+        text={proposalText(props.payload)}
         width={instructionWidth}
       />
     </ConfirmCard>

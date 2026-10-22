@@ -246,13 +246,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       <div class="proposal-card__lede">
         <span>${SCRIPT_REQUEST_COPY.grant}</span>
       </div>
-      ${
-        data.persona
-          ? html`<div class="workflow-proposal__plan-note">
-              ${DEFINED_AGENT_COPY.heading(data.persona)}
-            </div>`
-          : nothing
-      }
+      ${this.renderDefinedAgent(data)}
       <div class="workflow-proposal__plan-note">
         ${scriptRequestFirstAgentLine(
           data.agent,
