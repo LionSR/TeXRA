@@ -25,7 +25,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runState';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {

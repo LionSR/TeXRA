@@ -38,7 +38,7 @@ export type {
 export { readSessionView } from '@controllers/session/readSessionView';
 export type { RunEnd } from '@shared/schemas';
 export type { RunResult } from '@agent/storage/runRecords';
-export type { RunRefusal } from '@agent/runtime/runClassification';
+export type { RunRejection } from '@agent/runtime/runClassification';
 export type { AgentRunListingEntry } from '@agent/storage/runListing';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {

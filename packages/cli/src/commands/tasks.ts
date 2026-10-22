@@ -21,6 +21,7 @@ import { Settings } from '@texra-ai/harness';
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { resolveCliRunAgent } from '../runtime/agents';
@@ -35,7 +36,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
 import { selectCliRunModel } from '../runtime/runModel';
-import { attachTask, describeWireRefusal } from '../runtime/taskAttach';
+import { attachTask } from '../runtime/taskAttach';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -90,7 +91,7 @@ function requestTask(
     }).pipe(
       Effect.catchIf(
         (error): error is RequestErrorWire => error._tag !== 'RpcClientError',
-        (error) => Effect.fail(new CliUsageError(describeWireRefusal(error))),
+        (error) => Effect.fail(new CliUsageError(requestErrorText(error))),
       ),
     );
     return { task, outcome };

@@ -158,7 +158,7 @@ export {
 // What a call's requests and a decision hook's commits fail with.
 export type { LogWriteError } from '@agent/runtime/SessionHandle';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
-export type { RunHistoryInconsistent } from '@shared/session/runStateFold';
+export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';
 // The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
 // policy, opening, trace and stages, model binding and run files.

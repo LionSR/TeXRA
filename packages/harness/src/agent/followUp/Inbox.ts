@@ -15,13 +15,11 @@ import {
   type DatabaseReadFailed,
 } from '@shared/session/database';
 import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
-import type { RunInputDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runState';
 import {
   FOLLOW_UP_TYPES,
-  foldRunRows,
-  isFollowUpRow,
-  lifecycleOf,
-  RUN_LIFECYCLE_TYPES,
+  isSharedRunRow,
+  runRowsFrom,
   type QueuedFollowUp,
   type RunRows,
 } from '@shared/session/runRows';
@@ -37,8 +35,10 @@ import type { FollowUpSenderInput } from './followUpSender';
 
 const CHANNEL = 'Inbox';
 
-/** The rows a run's input is read from. */
-const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...RUN_LIFECYCLE_TYPES];
+/** The rows a run's input is read from: its follow-ups, and the lifecycle
+ *  rows, the latest of which closes it unless it is a `run.activate`. */
+const LIFECYCLE = ['run.activate', 'followup.closed', 'run.removed'] as const;
+const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...LIFECYCLE];
 /** A run's input: what is queued, every follow-up id named, if closed. */
 type InputRows = RunRows & { readonly closed: boolean };
 
@@ -363,10 +363,11 @@ export class Inbox {
     return Effect.suspend(() =>
       this.port.log.rows(qualifyAggregateId('run', runId), INPUT_TYPES),
     ).pipe(
-      Effect.map((rows) => ({
-        ...foldRunRows(rows.filter(isFollowUpRow)),
-        closed: lifecycleOf(rows).closed,
-      })),
+      Effect.map((rows) => {
+        const last = rows.findLast((row) => !isSharedRunRow(row))?.type;
+        const closed = last !== undefined && last !== 'run.activate';
+        return { ...runRowsFrom(rows), closed };
+      }),
     );
   }
 

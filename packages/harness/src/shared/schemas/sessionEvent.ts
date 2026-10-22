@@ -411,7 +411,7 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
 ]);
 /**
  * The run history's private rows: the byte-exact conversation and the loop's durable state (its hooks'
- * outcomes included), read only by `foldRunState` through `RunHistory`. Never
+ * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */
 const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [

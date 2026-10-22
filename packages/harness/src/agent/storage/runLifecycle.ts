@@ -33,7 +33,7 @@ import { unloadable } from '@shared/session/runHistory';
 import type {
   RunHistoryDraft,
   RunInputDraft,
-} from '@shared/session/runStateFold';
+} from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
