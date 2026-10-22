@@ -12,9 +12,10 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { describeWireRefusal, watchTask } from '@cli/runtime/taskAttach';
+import { watchTask } from '@cli/runtime/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import type { Outcome } from '@texra-ai/harness';
 
 /** One level of the attached task, as the view paints it. */
@@ -62,7 +63,7 @@ export function followAttachedTask(
           Effect.mapError((error) =>
             error._tag === 'RpcClientError'
               ? error
-              : new Error(describeWireRefusal(error)),
+              : new Error(requestErrorText(error)),
           ),
         ),
     });

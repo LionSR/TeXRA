@@ -13,10 +13,10 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { describeRequestError } from '../chat/tui/state/transcript';
 import { heldByService } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -139,7 +139,7 @@ export function runResumeCommand(
         }),
       );
       if (Result.isFailure(forked)) {
-        writeTextStderr(describeRequestError(forked.failure));
+        writeTextStderr(requestErrorText(forked.failure));
         return CliExitCode.Usage;
       }
       if (forked.success.kind !== 'forked')
@@ -156,21 +156,21 @@ export function runResumeCommand(
     }
     // Gate resume on ownership: a run held by any owner that is alive or cannot
     // be proven dead refuses, naming that owner.
-    const refusal = yield* store.readRefusal();
-    if (refusal?.kind === 'finished') {
+    const rejection = yield* store.readRejection();
+    if (rejection?.kind === 'finished') {
       writeTextStderr(describeFollowUpFailure('finished'));
       return CliExitCode.Usage;
     }
     // A conversation the service holds continues there: the chat is its
     // client, so the service stays the run's one writer.
     if (
-      refusal?.kind === 'held_elsewhere' &&
+      rejection?.kind === 'owned_elsewhere' &&
       (documentTask ||
-        !(yield* heldByService(context.storageRoot, refusal.owner)))
+        !(yield* heldByService(context.storageRoot, rejection.owner)))
     ) {
       // The owner named by the pid and machine its claim recorded: the two
       // parts of an identity a user can act on.
-      const { pid, hostname } = ownerIdentity(refusal.owner);
+      const { pid, hostname } = ownerIdentity(rejection.owner);
       writeTextStderr(
         `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
       );
