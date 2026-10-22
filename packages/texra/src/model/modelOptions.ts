@@ -3,15 +3,13 @@
  * harness's), worded for display — label, source, context window, prices,
  * tooltip, reasoning column and route badge. Pure.
  */
-import { hint, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { hint, type ModelConfig } from 'llm-zoo';
 
 import {
-  defaultReasoningLevel,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { supportsReasoningLevel, type ModelOption } from '@texra-ai/harness';
 import {
   EXPENSIVE_MODEL_HINT,
   FAST_FIRST_RESPONSE_HINT,
@@ -19,6 +17,7 @@ import {
   isFastFirstResponseModel,
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
+import type { ModelOption } from '@texra-ai/harness';
 import type { ModelOptionData } from '@texra-ai/harness/schemas';
 
 const MILLION = 1_000_000;
@@ -53,22 +52,26 @@ function modelHint(config: ModelConfig): string {
 }
 
 /**
- * The reasoning column of a model row: the user's saved level, else the
- * default a run uses; `(fixed)` where the model offers no choice; nothing for
- * a model that never thinks.
+ * The reasoning column of a model row: what a run on the row's route sends
+ * (`ModelOption.reasoning`, the bind's own decision). The saved level, else
+ * the default; a saved level the route cannot send names the level it sends
+ * instead; `(fixed)` where the route offers no choice; the refusal a run
+ * would fail with; nothing for a model that does not reason there.
  */
 function reasoningLevelLabel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-  saved: ReasoningEffort | undefined,
+  option: Extract<ModelOption, { config: ModelConfig }>,
 ): string | undefined {
-  if (config.reasoning === undefined) return undefined;
-  const fallback = defaultReasoningLevel(config);
-  if (fallback === undefined) return 'Default';
-  const defaultLevel = REASONING_LEVEL_LABELS[fallback];
-  if (!supportsReasoningLevel(config)) return `${defaultLevel} (fixed)`;
-  return saved === undefined
-    ? `Default (${defaultLevel})`
-    : REASONING_LEVEL_LABELS[saved];
+  const { reasoning, savedEffort } = option;
+  if (reasoning === undefined) return undefined;
+  const { sent } = reasoning;
+  if ('refused' in sent) return sent.refused;
+  if (sent.effort === undefined) return 'Default';
+  const level = REASONING_LEVEL_LABELS[sent.effort];
+  if (reasoning.efforts.length <= 1) return `${level} (fixed)`;
+  if (savedEffort === undefined) return `Default (${level})`;
+  if (savedEffort === sent.effort) return level;
+  // The route substitutes the saved level: show what a run sends.
+  return `${level} (${REASONING_LEVEL_LABELS[savedEffort]} unavailable)`;
 }
 
 /** One verdict as a picker row. */
@@ -81,7 +84,7 @@ function optionRow(verdict: ModelOption): ModelOptionData {
   const viaCopilot = availability === 'copilot-allowed';
   const reasoning = viaCopilot
     ? config.reasoning && 'Default (provider managed)'
-    : reasoningLevelLabel(config, verdict.savedEffort);
+    : reasoningLevelLabel(verdict);
   // The row's identity stays the base model; the badge names the route.
   let routeLabel: string | undefined;
   if (viaCopilot) routeLabel = 'Via Copilot';

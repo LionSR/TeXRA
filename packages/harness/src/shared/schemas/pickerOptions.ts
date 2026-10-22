@@ -28,6 +28,9 @@ const ModelAvailabilityKindSchema = z.enum([
   'provider-key',
   'openrouter-key',
   'missing-key',
+  // The provider's key is stored, or may be, but the secret store could not
+  // be read: not a missing key, so never worded as one.
+  'key-unreadable',
   'retired',
   // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
@@ -73,6 +76,11 @@ export const MODEL_AVAILABILITY_STATUS = {
     label: 'Missing API key',
     available: false,
     requiresKey: true,
+  },
+  'key-unreadable': {
+    label: 'API key unreadable',
+    available: false,
+    requiresKey: false,
   },
   'subscription-access': {
     label: SUBSCRIPTION_AUTH_NAMES.chatgpt.subscriptionLabel,

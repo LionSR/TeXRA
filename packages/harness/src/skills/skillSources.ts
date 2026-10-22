@@ -54,7 +54,9 @@ type SkillTierId = (typeof SKILL_TIERS)[number]['id'];
 
 /** What one discovery asks of the contributions: its folder and flags. */
 interface SkillSourceCall {
-  readonly cwd: string;
+  /** The session's workspace; none for a session without one, which has
+   *  no project skills (its home is not a project). */
+  readonly cwd: string | undefined;
   readonly home: string;
   /** The storage root the host opened; its `skills/` holds the user's own. */
   readonly storageRoot: string;
@@ -99,9 +101,10 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:custom',
     tier: 'custom',
-    roots: ({ cwd, options }) =>
+    // A relative path with no workspace resolves from the home directory.
+    roots: ({ cwd, home, options }) =>
       (options.additionalPaths ?? []).map((candidate) => ({
-        path: path.resolve(cwd, candidate),
+        path: path.resolve(cwd ?? home, candidate),
         label: 'custom',
         required: true,
       })),
@@ -109,15 +112,18 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:project',
     tier: 'project',
-    roots: ({ cwd }) => [
-      { path: path.join(cwd, '.texra', 'skills'), label: 'project' },
-    ],
+    roots: ({ cwd }) =>
+      cwd === undefined
+        ? []
+        : [{ path: path.join(cwd, '.texra', 'skills'), label: 'project' }],
   },
   {
     id: 'core:interop-project',
     tier: 'interop-project',
     roots: ({ cwd, options }) =>
-      options.includeInterop === true ? interopRoots(cwd, 'project') : [],
+      options.includeInterop === true && cwd !== undefined
+        ? interopRoots(cwd, 'project')
+        : [],
   },
   {
     id: 'core:user',

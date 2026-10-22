@@ -3,9 +3,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import { xaiCoordinator } from '@texra-ai/llm/node';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import type { CredentialStore } from '@texra-ai/llm';
 
 /** A secret store holding `stored` under every key; writes are dropped. */
@@ -19,7 +16,6 @@ function storeHolding(stored?: string): CredentialStore {
 
 describe('xAI subscription session coordinator', () => {
   afterEach(() => {
-    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -42,20 +38,18 @@ describe('xAI subscription session coordinator', () => {
   });
 
   it.effect.each([
-    { stored: '{not-json', warning: 'not valid JSON' },
-    {
-      stored: JSON.stringify({ accessToken: 'only' }),
-      warning: 'schema validation',
-    },
+    { stored: '{not-json', what: 'not JSON' },
+    { stored: JSON.stringify({ accessToken: 'only' }), what: 'off-schema' },
   ])(
-    'warns and treats an unreadable stored session ($warning) as signed out',
-    ({ stored, warning }) =>
+    'fails an unreadable stored session ($what) as fatal, not signed out',
+    ({ stored }) =>
       Effect.gen(function* () {
-        const logs = captureLogEntries();
         const coordinator = xaiCoordinator(storeHolding(stored));
-        expect(yield* coordinator.loadSession()).toBeNull();
-        expect(yield* coordinator.getStatus()).toEqual({ signedIn: false });
-        expect(logs.has('WARN', 'SubscriptionOAuth', warning)).toBe(true);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+        const failure = yield* Effect.flip(coordinator.getStatus());
+        expect(failure).toMatchObject({
+          _tag: 'SubscriptionOAuthError',
+          kind: 'fatal',
+        });
+      }),
   );
 });

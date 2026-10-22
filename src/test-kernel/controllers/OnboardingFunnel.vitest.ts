@@ -120,4 +120,28 @@ describe('OnboardingFunnelRefresher', () => {
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       ),
   );
+
+  it.effect(
+    'fails a refresh whose credential check cannot be answered, applying nothing',
+    () =>
+      Effect.gen(function* () {
+        const transitions: OnboardingFunnelTransition[] = [];
+        const refresher = new OnboardingFunnelRefresher({
+          hasCredential: () => Effect.fail(new Error('keychain locked')),
+          flags: new FakeStateStore(),
+          apply: (transition) =>
+            Effect.sync(() => transitions.push(transition)),
+        });
+
+        const failure = yield* Effect.flip(refresher.run());
+        expect(failure).toMatchObject({
+          _tag: 'StateReadFailed',
+          key: 'onboarding.credential',
+        });
+        expect(transitions).toHaveLength(0);
+        expect(refresher.state).toBeUndefined();
+      }).pipe(
+        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      ),
+  );
 });

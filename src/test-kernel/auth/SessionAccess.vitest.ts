@@ -1,58 +1,9 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
-import {
-  createSecretBackedCoordinator,
-  getSubscriptionSessionStatus,
-  type SessionAccessCoordinator,
-} from '../../../packages/llm/src/oauth/sessionAccess.js';
+import { createSecretBackedCoordinator } from '../../../packages/llm/src/oauth/sessionAccess.js';
 import type { CredentialStore as SessionSecretStore } from '@texra-ai/llm';
-
-function coordinator(
-  overrides: Partial<SessionAccessCoordinator> = {},
-): SessionAccessCoordinator {
-  return {
-    getStatus: () => Effect.succeed({ signedIn: false }),
-    ...overrides,
-  };
-}
-
-describe('getSubscriptionSessionStatus', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    setLogSink(null);
-  });
-
-  it.effect(
-    'warns on the caller-supplied channel and reports signed-out when the status read fails (#10635)',
-    () =>
-      Effect.gen(function* () {
-        const logs = captureLogEntries();
-        const failing = coordinator({
-          getStatus: () => Effect.fail(new Error('secret store unavailable')),
-        });
-
-        const status = yield* getSubscriptionSessionStatus(
-          () => failing,
-          'subscriptionStatusProbe',
-          'ChatGPT',
-        ).pipe(Effect.provide(effectDiagnosticsLayer('Trace')));
-
-        expect(status).toEqual({ signedIn: false });
-        expect(
-          logs.has(
-            'WARN',
-            'subscriptionStatusProbe',
-            'Failed to read ChatGPT session status: secret store unavailable',
-          ),
-        ).toBe(true);
-      }),
-  );
-});
 
 describe('createSecretBackedCoordinator', () => {
   function store(values: Record<string, string> = {}) {

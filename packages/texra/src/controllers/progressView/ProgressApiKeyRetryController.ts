@@ -1,6 +1,7 @@
 import { Data, Effect, Equal, Redacted } from 'effect';
 
 // Local imports
+import type { RequestRefusal } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId, SecretsFailed } from '@texra-ai/llm';
 
@@ -40,7 +41,12 @@ interface ProgressApiKeyRetryControllerDeps {
     provider: ApiKeyProviderId,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   isRetryPending(stream: RunId, requestId: string): boolean;
-  triggerRetry(stream: RunId, requestId: string): Effect.Effect<boolean>;
+  /** Settles the retry on the user's own key; a refusal fails it, for the
+   *  host arm that took the request to present. */
+  triggerRetry(
+    stream: RunId,
+    requestId: string,
+  ): Effect.Effect<void, RequestRefusal>;
 }
 
 /**

@@ -67,6 +67,9 @@ export interface CliHistoryEntry {
    *  Ownership and loadability are settled when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
+  /** The listing's cause when the run cannot resume in this build (its rows
+   *  are unreadable, or an earlier build's); resume surfaces show it. */
+  readonly resumeBlocked?: string;
   readonly inputBasename: string;
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
@@ -103,16 +106,35 @@ export interface CliHistoryConversationPreviewMessage {
   readonly truncated: boolean;
 }
 
-/** Rows the resume surfaces offer. Both the launcher's resume browser and the
- *  `/resume` form read this, and the launcher's Resume row counts against it,
- *  so the advertised count can never exceed the list it opens. Filtering and
- *  capping live together so a caller cannot honor one half of the rule. */
+/** Rows the `/resume` form offers: the resumable runs, newest first, and
+ *  beside them, with their cause, the runs this build cannot resume, so none
+ *  vanishes unexplained. The cap is the resumable runs': a burst of blocked
+ *  rows (say, after a format change) is bounded on its own and never pushes
+ *  a selectable run off the list. Filtering and capping live together so a
+ *  caller cannot honor one half of the rule. */
 const RESUME_LIST_LIMIT = 50;
+const BLOCKED_LIST_LIMIT = 10;
 
 export function listResumableCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'resumable'>,
+  T extends Pick<CliHistoryEntry, 'resumable' | 'resumeBlocked'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.resumable).slice(0, RESUME_LIST_LIMIT);
+  const listed: T[] = [];
+  let resumable = 0;
+  let blocked = 0;
+  for (const entry of entries) {
+    if (resumable === RESUME_LIST_LIMIT) break;
+    if (entry.resumable) {
+      listed.push(entry);
+      resumable += 1;
+    } else if (
+      entry.resumeBlocked !== undefined &&
+      blocked < BLOCKED_LIST_LIMIT
+    ) {
+      listed.push(entry);
+      blocked += 1;
+    }
+  }
+  return listed;
 }
 
 export type CliHistoryDeleteResult =
@@ -485,6 +507,9 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     model: entry.model ?? config.model,
     status,
     resumable,
+    ...(entry.resumeBlocked !== undefined && {
+      resumeBlocked: entry.resumeBlocked,
+    }),
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,

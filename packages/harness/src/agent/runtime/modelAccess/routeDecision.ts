@@ -10,13 +10,10 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import {
-  BACKEND_PROTOCOLS,
   decideModelRoute,
   hasUsableApiKey,
   OWN_KEY_ROUTE_FACTS,
-  type BackendProviderId,
   type HostRouteFacts,
-  type ModelOrigin,
   type ModelRoute,
   type SelectedModel,
 } from '@texra-ai/llm';
@@ -29,28 +26,20 @@ import {
   type CopilotModelRoute,
 } from '@model/copilotRouting';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
-import { decideReasoning } from '@model/reasoningLevel';
+import {
+  decideReasoning,
+  reasoningRouteOf,
+  servingBackend,
+} from '@model/reasoningLevel';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   getExhaustionReason,
-  ModelBackendSchema,
   type CredentialSwitch,
   type DeclinableUsageRoute,
   type ModelBackend,
   type ProviderError,
 } from '@shared/schemas';
-
-/** The protocol each backend serves a run on. */
-export const PROTOCOL_BY_BACKEND: Readonly<
-  Record<ModelBackend, ModelOrigin['protocol'] | 'validation'>
-> = Object.freeze({ validation: 'validation', ...BACKEND_PROTOCOLS });
-
-type AssertNever<T extends never> = T;
-/** Every plugin that names a protocol is a stored backend. */
-type _EveryBackendProviderIsStored = AssertNever<
-  Exclude<BackendProviderId, ModelBackend>
->;
 
 /**
  * The routes a binding can take: the unsupported one fails in the decision,
@@ -82,24 +71,6 @@ export interface RouteAsk {
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The provider reasoning mode the request asks for (OpenAI `pro`). */
   readonly mode?: ReasoningMode;
-}
-
-/** The backend `route` serves `config` from: the model's own provider on a
- *  direct route (any credential), else the proxy that serves it. */
-function servingBackend(
-  config: ModelConfig,
-  route: BindableRoute,
-): ModelBackend | undefined {
-  switch (route.kind) {
-    case 'validation':
-      return 'validation';
-    case 'copilot':
-      return 'copilot';
-    case 'openrouter':
-      return 'openRouter';
-    default:
-      return ModelBackendSchema.safeParse(config.provider).data;
-  }
 }
 
 const unavailable = (message: string, cause?: unknown) =>
@@ -222,10 +193,7 @@ export const admitSwitch = Effect.fn('admitSwitch')(function* (
     selected.config,
     selected.request,
     settings.reasoningLevels[selected.config.ref],
-    {
-      protocol: PROTOCOL_BY_BACKEND[backend],
-      codexSubscription: decision.route.kind === 'chatgpt-subscription',
-    },
+    reasoningRouteOf(decision.route, backend),
   ).pipe(
     Effect.as(null),
     Effect.catch((error) =>

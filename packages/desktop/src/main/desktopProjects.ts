@@ -10,10 +10,10 @@ import {
   Effect,
   Exit,
   FileSystem,
+  Result,
   Scope,
   SubscriptionRef,
   type Path,
-  type PlatformError,
 } from 'effect';
 
 import {
@@ -162,29 +162,45 @@ export class DesktopProjects extends Context.Service<
   DesktopProjectRegistry
 >()('@texra/desktop/DesktopProjects') {}
 
-/** The folder paths among `candidates` that are still folders, deduplicated
- *  by canonical root, and the ones that are not. */
+/** The folder paths among `candidates`, deduplicated by canonical root, split
+ *  three ways: still folders, gone (or no longer a folder), and unreadable
+ *  (the stat itself failed: permissions, a dead mount). `kept` is the roots
+ *  and the unreadable ones in their remembered order, which is what storage
+ *  keeps: a folder that could not be read this launch is not known to be gone. */
 const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
   function* (candidates: readonly string[]) {
     const fs = yield* FileSystem.FileSystem;
     const roots: string[] = [];
     const missing: string[] = [];
+    const unreadable: { readonly root: string; readonly reason: string }[] = [];
+    const kept: string[] = [];
+    const seen = new Set<string>();
     for (const candidate of candidates) {
       const root = canonicalizeWorkspacePath(candidate);
-      if (roots.includes(root) || missing.includes(root)) continue;
-      const isProject = yield* fs.stat(root).pipe(
-        Effect.map((info) => info.type === 'Directory'),
-        Effect.catch((error: PlatformError.PlatformError) =>
-          absentReason(error)
-            ? Effect.succeed(false)
-            : Effect.logWarning(
-                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error.reason.cause ?? error)}`,
-              ).pipe(Effect.as(false)),
-        ),
-      );
-      (isProject ? roots : missing).push(root);
+      if (seen.has(root)) continue;
+      seen.add(root);
+      const stat = yield* fs.stat(root).pipe(Effect.result);
+      if (Result.isSuccess(stat)) {
+        if (stat.success.type === 'Directory') {
+          roots.push(root);
+          kept.push(root);
+        } else {
+          missing.push(root);
+        }
+      } else if (absentReason(stat.failure)) {
+        missing.push(root);
+      } else {
+        const reason = toErrorMessage(
+          stat.failure.reason.cause ?? stat.failure,
+        );
+        yield* Effect.logWarning(
+          `Cannot read the remembered project ${root}; keeping it for the next launch: ${reason}`,
+        );
+        unreadable.push({ root, reason });
+        kept.push(root);
+      }
     }
-    return { roots, missing };
+    return { roots, missing, unreadable, kept };
   },
 );
 
@@ -193,15 +209,21 @@ interface RememberedDesktopProjects {
   readonly roots: readonly string[];
   /** Remembered roots whose folder no longer exists; forgotten. */
   readonly missing: readonly string[];
+  /** Remembered roots that could not be read; not opened, still remembered. */
+  readonly unreadable: readonly {
+    readonly root: string;
+    readonly reason: string;
+  }[];
 }
 
 /**
  * The folders to reopen at launch: the remembered list, deduplicated by
  * canonical root, with entries that are no longer a folder dropped (a
  * remembered path that a regular file has since replaced is not a project
- * either, nor is one that cannot be read at all: permissions, a dead mount).
- * The recent list is pruned the same way, silently: nothing asked for those.
- * Both lists are written back whenever that changed them.
+ * either). One that cannot be read at all (permissions, a dead mount) is not
+ * opened but stays remembered, since nothing says it is gone. The recent list
+ * is pruned the same way, silently: nothing asked for those. Both lists are
+ * written back whenever that changed them.
  */
 export const readRememberedDesktopProjects = Effect.fn(
   'desktopProjects.readRemembered',
@@ -209,11 +231,15 @@ export const readRememberedDesktopProjects = Effect.fn(
   const records = yield* DesktopProjectRecords;
   const remembered = yield* partitionFolders(yield* records.read);
   const recent = yield* partitionFolders(yield* records.readRecent);
-  yield* records.replace(remembered.roots);
+  yield* records.replace(remembered.kept);
   yield* records.replaceRecent(
-    recent.roots.filter((root) => !remembered.roots.includes(root)),
+    recent.kept.filter((root) => !remembered.kept.includes(root)),
   );
-  return remembered satisfies RememberedDesktopProjects;
+  return {
+    roots: remembered.roots,
+    missing: remembered.missing,
+    unreadable: remembered.unreadable,
+  } satisfies RememberedDesktopProjects;
 });
 
 /** Show `message` in a warning dialog, unawaited: a dialog that cannot be

@@ -13,7 +13,7 @@
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import {
   hasUsableApiKey,
@@ -155,7 +155,6 @@ export function createTuiHostInteractions(
           { action: 'retry', credentials: 'personal' },
           actAgainOnRefusal(requestId),
         );
-        return true;
       }),
   });
 
@@ -255,27 +254,27 @@ export function createTuiHostInteractions(
         acted.add(request.requestId);
         stagePresentation({ kind: 'retry', data: payload.data });
       } else if (payload.kind === 'toolEdit' && stores.preview) {
-        // The service ran the tool: its preview is fetched, once. One the
-        // service no longer holds shows as an empty diff.
+        // The service ran the tool: its preview is fetched, once. A fetch
+        // that failed, or a preview no host staged, is said on the card
+        // itself, so the user never approves a write they cannot see.
         acted.add(request.requestId);
         stores.runtime.runFork(
           stores.preview(request.runId, request.requestId).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `The preview of edit ${request.requestId} was not fetched`,
-              ).pipe(Effect.annotateLogs({ data: error }), Effect.as(null)),
-            ),
-            Effect.map((preview) =>
-              stagePresentation({
-                kind: 'toolEdit',
-                data: payload.data,
-                tui: preview ?? {
-                  originalContent: '',
-                  proposedContent: '',
-                  hunks: [],
-                  firstChangedLine: null,
-                },
+            Effect.matchCause({
+              onFailure: (cause) => ({
+                kind: 'unavailable' as const,
+                reason: `the service did not send it (${toErrorMessage(Cause.squash(cause))})`,
               }),
+              onSuccess: (content) =>
+                content === null
+                  ? {
+                      kind: 'unavailable' as const,
+                      reason: "no host staged this edit's preview",
+                    }
+                  : { kind: 'preview' as const, content },
+            }),
+            Effect.map((tui) =>
+              stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
             ),
           ),
         );
@@ -303,7 +302,7 @@ export function createTuiHostInteractions(
       stagePresentation({
         kind: 'toolEdit',
         data: request.permission,
-        tui: request,
+        tui: { kind: 'preview', content: request },
       });
     },
     // `forgetSettledRequests` only drops a presentation whose request the

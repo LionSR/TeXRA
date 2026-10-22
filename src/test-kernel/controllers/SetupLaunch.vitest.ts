@@ -137,6 +137,17 @@ describe('resolveSetupLaunchModel', () => {
     await expect(launchModel(true)).resolves.toBeNull();
   });
 
+  it('fails rather than answering "no model" when a key could not be read', async () => {
+    mocks.rows.set(SETUP_MODEL_BY_PROVIDER.anthropic, {
+      availability: 'key-unreadable',
+    });
+
+    await expect(launchModel(false)).rejects.toMatchObject({
+      _tag: 'StateReadFailed',
+      key: 'anthropic',
+    });
+  });
+
   it('offers the OpenRouter last resort only when the caller opts in', async () => {
     secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 

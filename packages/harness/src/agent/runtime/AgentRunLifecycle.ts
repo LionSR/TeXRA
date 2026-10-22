@@ -161,9 +161,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       output,
       lastTurn,
     }).pipe(Effect.result);
-    // Guard the cleanup: a throw from untrack's listeners must not escape
-    // past a saved result. Only this handle's registration goes; a run
-    // that started again is its successor's.
+    // Guard the cleanup: a defect in the registry edit must not escape past
+    // a saved result. Only this handle's registration goes; a run that
+    // started again is its successor's.
     yield* Effect.try({
       try: () => runs.untrackIfCurrent(handle),
       catch: ensureError,

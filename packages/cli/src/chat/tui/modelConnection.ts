@@ -70,15 +70,28 @@ export function holdUntilConnected(message: HeldMessage): boolean {
   return true;
 }
 
-/** Startup's check: record whether the chat opens without a usable model. */
+/**
+ * Startup's check: record whether the chat opens without a usable model. A
+ * check that cannot be answered is not "no credential": the connect panel is
+ * not forced on a user who may have one, the failure is said as a startup
+ * notice, and the chat's model is resolved when a run asks for it.
+ */
 export const checkModelConnection = Effect.fn('checkModelConnection')(
   function* (services: CliPlatformServices) {
-    const ready = yield* hasUsableSetupCredential(
-      services,
-      services.secrets,
-    ).pipe(withLogChannel('Setup Credentials'));
-    modelConnectionNeeded.set(!ready);
-    return ready;
+    const probe = yield* Effect.result(
+      hasUsableSetupCredential(services, services.secrets, 'cli'),
+    );
+    if (probe._tag === 'Failure') {
+      yield* Effect.logWarning(
+        `Setup credential check failed: ${probe.failure.message}`,
+      ).pipe(withLogChannel('Setup Credentials'));
+      return {
+        ready: false,
+        notice: `The model credential check failed, so no model was resolved at startup: ${probe.failure.message}`,
+      };
+    }
+    modelConnectionNeeded.set(!probe.success);
+    return { ready: probe.success, notice: undefined };
   },
 );
 
@@ -91,7 +104,6 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
 export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
   options: {
-    readonly startupModel: string;
     readonly modelSource: RunModelDecisionReason;
     readonly recovery: CliNoAvailableModelsRecoveryOptions;
     readonly firstRunSetupAgent: string | undefined;
@@ -100,19 +112,14 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
 ) {
   if (!modelConnectionNeeded.get()) return;
   const { stores, secrets, runtime } = context;
-  const ready = yield* hasUsableSetupCredential(stores, secrets).pipe(
-    withLogChannel('Setup Credentials'),
-  );
+  // A check that cannot be answered fails to the transcript report below and
+  // leaves the panel state as it was.
+  const ready = yield* hasUsableSetupCredential(stores, secrets, 'cli');
   if (!ready) return;
   modelConnectionNeeded.set(false);
   const selection = yield* Effect.exit(
     selectCliRunnableModel(
-      [
-        {
-          model: sessionMeta.get().model || options.startupModel,
-          reason: options.modelSource,
-        },
-      ],
+      [{ model: sessionMeta.get().model, reason: options.modelSource }],
       {
         stores: { ...stores, secrets, runtime },
         noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(

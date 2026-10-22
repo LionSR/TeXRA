@@ -34,6 +34,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from './rows';
+import { executableDecision } from '../requestPolicy';
 import { registryOf } from '../runRegistry';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -255,18 +256,16 @@ const rootOf = (run: AgentRunShape) => {
   return root;
 };
 
-/**
- * The fields every event's input carries for `run`: its root run's id as the
- * session, and for a child its own id and agent, as the reference gives a
- * subagent's hooks.
- */
+/** The fields every event's input carries for `run`: its root run's id as
+ *  the session, its permission mode as its approvals decide, and for a child
+ *  its own id and agent, as the reference gives a subagent's hooks. */
 const inputBase = (run: AgentRunShape) => {
   const root = rootOf(run);
   return {
     session_id: root,
     cwd: run.session.roots.workspace ?? '',
     permission_mode:
-      run.session.approvals.policy(run.runId) === 'yolo'
+      executableDecision(run.session, run.runId) === 'allow'
         ? ('bypassPermissions' as const)
         : ('default' as const),
     ...(root === run.runId

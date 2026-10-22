@@ -32,7 +32,11 @@ describe('shared setup capabilities', () => {
   it.effect('keeps API-key-only setup usable', () =>
     Effect.gen(function* () {
       expect(
-        yield* hasUsableSetupCredential(hostStores(), hostStores().secrets),
+        yield* hasUsableSetupCredential(
+          hostStores(),
+          hostStores().secrets,
+          'desktop',
+        ),
       ).toBe(true);
     }).pipe(Effect.provide(fakeProcessServices())),
   );

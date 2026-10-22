@@ -23,6 +23,7 @@ import {
   type RunHistory,
   RunHistoryRefused,
   type RunOpening,
+  runRefusal,
   runStateAppend,
 } from '@shared/session/runHistory';
 import {
@@ -169,28 +170,20 @@ const unprepared = (
 };
 
 type Refusal = DatabaseNotOwner | DatabaseClaimRefused;
-/** A lost claim's refusal, worded from the refusing row; any other
- *  rollback stays the write failure it is. */
+/** A lost claim's refusal, worded by `runRefusal`; any other rollback stays
+ *  the write failure it is. */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, Exclude<E, Refusal> | RunHistoryRefused, R> =>
-    Effect.mapError(effect, (failure) => {
-      // A live foreign owner refusing a claim is the same refusal.
-      if (failure instanceof DatabaseClaimRefused) {
-        const { ownerId, verdict } = failure;
-        const detail = `held by ${ownerId} (${verdict})`;
-        return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
-      }
-      if (!(failure instanceof DatabaseNotOwner))
-        // cast: the instanceof tests above ruled both refusals out.
-        return failure as Exclude<E, Refusal>;
-      let detail = `held by ${failure.ownerId}`;
-      if (failure.ownerId === null) detail = 'the claim is unheld';
-      if (failure.closed) detail = 'the run aggregate is closed';
-      return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
-    });
+    Effect.mapError(effect, (failure) =>
+      failure instanceof DatabaseClaimRefused ||
+      failure instanceof DatabaseNotOwner
+        ? runRefusal(runId, failure)
+        : // cast: the instanceof tests above ruled both refusals out.
+          (failure as Exclude<E, Refusal>),
+    );
 
 /** The refusal of rows that cannot be applied. */
 const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>

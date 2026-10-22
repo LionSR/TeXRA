@@ -43,6 +43,10 @@ export interface AgentRunListingEntry {
   /** `deriveResumability` finds a point to continue from. Ownership and
    *  loadability are settled when the run is opened. */
   resumable: boolean;
+  /** Why the run cannot resume in this build although it may have rows to
+   *  continue from: they could not be read, or an earlier build wrote them.
+   *  Absent when it resumes or simply has nothing to continue from. */
+  resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
   record: AgentConfig;
@@ -100,6 +104,12 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',
+          ...(resumeFrom.kind === 'unreadable' && {
+            resumeBlocked: resumeFrom.cause,
+          }),
+          ...(resumeFrom.kind === 'earlierBuild' && {
+            resumeBlocked: resumeFrom.refusal.message,
+          }),
           identity,
           record,
         };
