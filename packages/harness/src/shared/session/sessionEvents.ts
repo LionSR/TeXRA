@@ -117,7 +117,7 @@ export type UnfoldedDraft = Exclude<
 
 /** One ordered append to the log, as the publisher hands it to a job: a
  *  savepoint of the job's one transaction. A row a run's state folds goes
- *  through the run's cell (`RunHistory.appendIn`) instead. */
+ *  through the run's cell (`RunCell.append`) instead. */
 export type Append = (
   events: readonly UnfoldedDraft[],
 ) => Effect.Effect<
