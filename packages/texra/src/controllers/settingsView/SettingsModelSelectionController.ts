@@ -8,20 +8,14 @@ import {
 } from 'llm-zoo';
 
 // Local imports
-import {
-  acceptedEfforts,
-  defaultReasoningLevel,
-  resolveModelSource,
-} from '@texra-ai/llm';
+import { resolveModelSource } from '@texra-ai/llm';
 import {
   CopilotRoutes,
   getEnabledModels,
   getHelperModelName,
-  reasoningEffortOverrides,
   setModelEnabled,
   StateReadFailed,
   StateWriteFailed,
-  supportsReasoningLevel,
   type CopilotModelRoute,
   type ModelOption,
   type ModelOptionStores,
@@ -185,9 +179,6 @@ export class SettingsModelSelectionController<R = never> {
       const enabledSet = new Set(
         yield* getEnabledModels(this.deps.stores.globalState),
       );
-      const reasoningOverrides = yield* reasoningEffortOverrides(
-        this.deps.stores.globalState,
-      );
 
       // Resolve availability (personal-key, subscription) once for the
       // models this host shows, via the same shared computation the CLI picker
@@ -238,34 +229,35 @@ export class SettingsModelSelectionController<R = never> {
           availability: option.availability,
         };
 
-        // The reasoning controls follow the config the decided route runs
-        // with: the editor's when an allowed Copilot route serves the model.
-        this.addReasoningLevelData(
-          item,
-          decided.config,
-          reasoningOverrides[config.ref],
-        );
+        addReasoningLevelData(item, decided);
         items.push(item);
       }
 
       return items.sort((a, b) => a.name.localeCompare(b.name));
     });
   }
+}
 
-  private addReasoningLevelData(
-    item: ModelSelectionItem,
-    config: ModelConfig,
-    override: ReasoningEffort | undefined,
-  ): void {
-    if (!supportsReasoningLevel(config)) return;
-
-    item.supportsReasoningLevel = true;
-    const supportedLevels = acceptedEfforts(config);
-    item.supportedReasoningLevels = supportedLevels;
-    item.defaultReasoningLevel = defaultReasoningLevel(config);
-
-    if (override !== undefined && supportedLevels.includes(override)) {
-      item.reasoningLevel = override;
-    }
+/**
+ * A Models-tab row's reasoning controls, from what a run on the row's route
+ * sends (`ModelOption.reasoning`, the bind's own decision): the levels the
+ * route can carry, the level a run sends with none saved, and the saved
+ * level where the route carries it. A saved level it cannot carry reads as
+ * the default, which is what the run sends; the row offers no choice where
+ * the route carries one level or none (an editor-managed Copilot route).
+ */
+function addReasoningLevelData(
+  item: ModelSelectionItem,
+  decided: Extract<ModelOption, { config: ModelConfig }>,
+): void {
+  const { reasoning, savedEffort } = decided;
+  if (reasoning === undefined || reasoning.efforts.length <= 1) return;
+  item.supportsReasoningLevel = true;
+  item.supportedReasoningLevels = [...reasoning.efforts];
+  if (!('refused' in reasoning.fallback)) {
+    item.defaultReasoningLevel = reasoning.fallback.effort;
+  }
+  if (savedEffort !== undefined && reasoning.efforts.includes(savedEffort)) {
+    item.reasoningLevel = savedEffort;
   }
 }

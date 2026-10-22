@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 import { z } from 'zod';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
@@ -6,12 +6,17 @@ import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   acceptedEfforts,
+  BACKEND_PROTOCOLS,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
+  type BackendProviderId,
+  type ModelOrigin,
+  type ModelRoute,
   type ReasoningChoice,
   type ReasoningRequest,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
+import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -52,15 +57,35 @@ export function reasoningEffortOverrides(state: StateStore) {
   });
 }
 
+/** The protocol each backend serves a run on. */
+export const PROTOCOL_BY_BACKEND: Readonly<
+  Record<ModelBackend, ModelOrigin['protocol'] | 'validation'>
+> = Object.freeze({ validation: 'validation', ...BACKEND_PROTOCOLS });
+
+type AssertNever<T extends never> = T;
+/** Every plugin that names a protocol is a stored backend. */
+type _EveryBackendProviderIsStored = AssertNever<
+  Exclude<BackendProviderId, ModelBackend>
+>;
+
 /**
- * Whether the model exposes a user-selectable reasoning level: more than one
- * of the efforts it accepts ({@link acceptedEfforts}). This is the one
- * definition behind both the model binding and the model choices.
+ * The backend a fresh run on `route` serves `config` from: the model's own
+ * provider on a direct route (any credential), else the proxy that serves it.
  */
-export function supportsReasoningLevel(
-  config: Pick<ModelConfig, 'reasoning'>,
-): boolean {
-  return acceptedEfforts(config).length > 1;
+export function servingBackend(
+  config: Pick<ModelConfig, 'provider'>,
+  route: { readonly kind: ModelRoute['kind'] },
+): ModelBackend | undefined {
+  switch (route.kind) {
+    case 'validation':
+      return 'validation';
+    case 'copilot':
+      return 'copilot';
+    case 'openrouter':
+      return 'openRouter';
+    default:
+      return ModelBackendSchema.safeParse(config.provider).data;
+  }
 }
 
 /** The route a request is bound on, as far as reasoning is concerned. */
@@ -70,28 +95,68 @@ export interface ReasoningRoute {
 }
 
 /**
+ * The reasoning route of a run on `backend` over the decided `route`: the
+ * protocol the backend serves, and whether the Codex subscription carries
+ * it. The bind, a model switch and the model options all read it here.
+ */
+export function reasoningRouteOf(
+  route: { readonly kind: ModelRoute['kind'] },
+  backend: ModelBackend,
+): ReasoningRoute {
+  return {
+    protocol: PROTOCOL_BY_BACKEND[backend],
+    codexSubscription: route.kind === 'chatgpt-subscription',
+  };
+}
+
+/**
  * The model's reasoning as this route can control it. Gemini's Interactions
  * request and Kimi's Responses request have no switch that turns thinking
  * off; DashScope's has none that turns Qwen's thinking on. The policy then
  * refuses a request the route cannot carry and records what really happens.
  */
 function routeReasoning(
-  config: ModelConfig,
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
   route: ReasoningRoute,
-): Pick<ModelConfig, 'label' | 'reasoning' | 'modes'> {
+): ModelConfig['reasoning'] {
   const { reasoning } = config;
-  if (reasoning === undefined) return config;
+  if (reasoning === undefined) return undefined;
   const responses = route.protocol === 'openai-responses';
   if (responses && config.provider === ModelProvider.DASHSCOPE) {
-    return { ...config, reasoning: undefined };
+    return undefined;
   }
   if (
     route.protocol === 'google-interactions' ||
     (responses && config.provider === ModelProvider.MOONSHOT)
   ) {
-    return { ...config, reasoning: { ...reasoning, off: undefined } };
+    return { ...reasoning, off: undefined };
   }
-  return config;
+  return reasoning;
+}
+
+/** The levels the Codex subscription narrows a route to; none elsewhere. */
+const routeCeiling = (route: ReasoningRoute) =>
+  route.codexSubscription ? CODEX_ROUTE_EFFORTS : undefined;
+
+/** {@link decideReasoning} as a value: the choice, or why it is refused. */
+function chooseOnRoute(
+  config: ModelConfig,
+  request: ReasoningRequest,
+  userEffort: ReasoningEffort | undefined,
+  route: ReasoningRoute,
+): Result.Result<ReasoningChoice, Error> {
+  return Result.try({
+    try: () =>
+      chooseReasoning(
+        { ...config, reasoning: routeReasoning(config, route) },
+        request,
+        {
+          userEffort,
+          routeEfforts: routeCeiling(route),
+        },
+      ),
+    catch: ensureError,
+  });
 }
 
 /**
@@ -107,12 +172,70 @@ export function decideReasoning(
   userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
 ): Effect.Effect<ReasoningChoice, Error> {
-  return Effect.try({
-    try: () =>
-      chooseReasoning(routeReasoning(config, route), request, {
-        userEffort,
-        routeEfforts: route.codexSubscription ? CODEX_ROUTE_EFFORTS : undefined,
-      }),
-    catch: ensureError,
-  });
+  return Effect.fromResult(chooseOnRoute(config, request, userEffort, route));
+}
+
+/** What a run sends for reasoning, or why its bind refuses the request. */
+export type SentReasoning =
+  | {
+      /** The effort sent: `none` with thinking off, absent when the model thinks without levels. */
+      readonly effort: ReasoningEffort | undefined;
+      /** Why it is not the level asked for, when the policy substituted one. */
+      readonly note?: string;
+    }
+  | { readonly refused: string };
+
+/**
+ * A model's reasoning on its decided route, as data: what the bind's own
+ * policy ({@link decideReasoning}, over the inputs the bind gives it) sends,
+ * so no surface words a level a run does not send.
+ */
+export interface RouteReasoning {
+  /** The levels a run on the route can carry: those a saved level may take. */
+  readonly efforts: readonly ReasoningEffort[];
+  /** What a run sends under the user's saved level. */
+  readonly sent: SentReasoning;
+  /** What a run sends with no saved level: the route's default. */
+  readonly fallback: SentReasoning;
+}
+
+/** One decision as what it sends. */
+function sentOf(decided: Result.Result<ReasoningChoice, Error>): SentReasoning {
+  if (Result.isFailure(decided)) return { refused: decided.failure.message };
+  const { thinking, effort, note } = decided.success;
+  const sent = thinking ? (effort ?? undefined) : ReasoningEffort.NONE;
+  return note === undefined ? { effort: sent } : { effort: sent, note };
+}
+
+/**
+ * The reasoning a run on `route` gives `config` (the config the bind decides
+ * over) under the saved level, or undefined when the model does not reason
+ * there and nothing is refused. The levels offered are those of `runsWith`,
+ * the config the route runs: an editor-managed Copilot route offers none.
+ */
+export function routeReasoningOf(input: {
+  readonly config: ModelConfig;
+  readonly runsWith: Pick<ModelConfig, 'provider' | 'reasoning'>;
+  readonly request: ReasoningRequest;
+  readonly saved: ReasoningEffort | undefined;
+  readonly route: ReasoningRoute;
+}): RouteReasoning | undefined {
+  const { config, request, saved, route } = input;
+  const sent = sentOf(chooseOnRoute(config, request, saved, route));
+  const fallback =
+    saved === undefined
+      ? sent
+      : sentOf(chooseOnRoute(config, request, undefined, route));
+  const reasoning = routeReasoning(input.runsWith, route);
+  if (reasoning === undefined && !('refused' in sent)) return undefined;
+  const ceiling = routeCeiling(route);
+  // `none` turns thinking off rather than naming a level, so no ceiling
+  // applies to it (the policy's own reading).
+  const efforts = acceptedEfforts({ reasoning }).filter(
+    (effort) =>
+      effort === ReasoningEffort.NONE ||
+      ceiling === undefined ||
+      ceiling.includes(effort),
+  );
+  return { efforts, sent, fallback };
 }

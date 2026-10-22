@@ -18,7 +18,11 @@ import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
 import { validationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { decideReasoning } from '@model/reasoningLevel';
+import {
+  decideReasoning,
+  PROTOCOL_BY_BACKEND,
+  reasoningRouteOf,
+} from '@model/reasoningLevel';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   readBackgroundToggles,
@@ -31,8 +35,8 @@ import { LanguageModel } from '@platform/languageModel';
 import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential, usageRouteOf } from './credentials';
-import { PROTOCOL_BY_BACKEND, type RouteDecision } from './routeDecision';
 import { routePolicies, type CallFailure } from './failureInfo';
+import type { RouteDecision } from './routeDecision';
 import type { BindRequest, BoundModel } from './ModelAccess';
 import type { ModelConfig } from 'llm-zoo';
 import type { HttpClient } from 'effect/http';
@@ -75,17 +79,20 @@ function backgroundOn(
 /** A binding that never runs background work. */
 const FOREGROUND = Effect.succeed('foreground' as const);
 
-/** The reasoning `config` asks for on `plan`'s route, its substitution logged. */
+/**
+ * The reasoning `config` asks for on `plan`'s route, its substitution logged.
+ * The model options decide it with the same inputs (`routeReasoningOf`), so
+ * a picker shows what this sends.
+ */
 const reasoningOf = Effect.fn('binding.reasoning')(function* (
   plan: BindPlan,
   config: ModelConfig,
-  codexSubscription: boolean,
 ) {
   const choice = yield* decideReasoning(
     config,
     plan.ask,
     plan.settings.reasoningLevels[config.ref],
-    { protocol: PROTOCOL_BY_BACKEND[plan.backend], codexSubscription },
+    reasoningRouteOf(plan.decision.route, plan.backend),
   ).pipe(Effect.mapError(RouteUnavailable.of));
   if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
   return choice;
@@ -112,7 +119,7 @@ const bindEditor = Effect.fn('binding.editor')(function* (
   const requestedModel = route.reference.id;
   const deployment = { vendor: route.reference.vendor, version: route.version };
   // A choice the route cannot carry still fails the bind.
-  yield* reasoningOf(plan, plan.requested, false);
+  yield* reasoningOf(plan, plan.requested);
   return {
     ...commonOf(plan),
     // The editor takes images only: no native PDF or audio input.
@@ -166,7 +173,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     return yield* bindEditor(plan, route.route);
   if (protocol === 'validation') {
     const bound = validationModel(requested);
-    yield* reasoningOf(plan, requested, false);
+    yield* reasoningOf(plan, requested);
     return {
       ...commonOf(plan),
       // The canned model reads text only.
@@ -208,7 +215,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     request.renew === true,
   );
   const codex = credential.route === 'chatgpt-subscription';
-  const reasoning = yield* reasoningOf(plan, config, codex);
+  const reasoning = yield* reasoningOf(plan, config);
   const turn = { protocol, modelName: config.id, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
     protocol,

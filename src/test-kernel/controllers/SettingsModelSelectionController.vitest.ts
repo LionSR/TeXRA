@@ -46,6 +46,7 @@ const resolveModelOptions = (
             route: { kind: 'openrouter' },
             source: config.provider,
             savedEffort: undefined,
+            reasoning: undefined,
           }
         : {
             model,

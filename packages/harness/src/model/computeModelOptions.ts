@@ -11,6 +11,7 @@ import {
   type ModelRoute,
   providerDisplayName,
   resolveModelSource,
+  type ReasoningRequest,
   routeConfig,
   selectModel,
 } from '@texra-ai/llm';
@@ -27,6 +28,12 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
+import {
+  reasoningRouteOf,
+  routeReasoningOf,
+  servingBackend,
+  type RouteReasoning,
+} from './reasoningLevel';
 import {
   copilotRouteUnavailableReason,
   CopilotRoutes,
@@ -180,6 +187,8 @@ interface RoutedModel {
   readonly rawConfig: ModelConfig;
   /** The config the model runs with on its route: the row's cost and window. */
   readonly config: ModelConfig;
+  /** The effort, thinking and mode the model string asks for. */
+  readonly request: ReasoningRequest;
   readonly route: ModelRoute<CopilotModelRoute>;
   readonly gate: RouteGate;
 }
@@ -375,6 +384,7 @@ function routeModels(models: readonly string[], ctx: ModelRouteContext) {
       routed.set(model, {
         rawConfig,
         config: routeConfig(rawConfig, route, ctx.facts),
+        request: selected.request,
         route,
         gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route, ctx),
       });
@@ -579,6 +589,12 @@ export type ModelOption =
       readonly source: string;
       /** The user's saved reasoning effort for it. */
       readonly savedEffort: ReasoningEffort | undefined;
+      /**
+       * What a run on the route sends for reasoning; absent when the model
+       * does not reason there, or no backend serves the route (an
+       * `others` model off OpenRouter, whose row is unavailable).
+       */
+      readonly reasoning: RouteReasoning | undefined;
     };
 
 /**
@@ -616,6 +632,8 @@ function optionOf(
     route.kind === 'copilot' && route.route?.access === 'allowed'
       ? route.route.effectiveConfig
       : decision.config;
+  const savedEffort = reasoningLevels[decision.config.ref];
+  const backend = servingBackend(decision.config, route);
   return {
     model,
     availability: kind,
@@ -625,7 +643,20 @@ function optionOf(
     config,
     route,
     source: modelSource(route, config),
-    savedEffort: reasoningLevels[config.ref],
+    savedEffort,
+    // The bind's own decision over the bind's inputs (`binding.ts`
+    // `reasoningOf`): the routed config, the model string's request, the
+    // saved level, and the route a fresh run's backend serves.
+    reasoning:
+      backend === undefined
+        ? undefined
+        : routeReasoningOf({
+            config: decision.config,
+            runsWith: config,
+            request: decision.request,
+            saved: savedEffort,
+            route: reasoningRouteOf(route, backend),
+          }),
   };
 }
 

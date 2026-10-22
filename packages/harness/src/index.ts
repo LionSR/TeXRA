@@ -237,7 +237,8 @@ export { CopilotRoutes, type CopilotModelRoute } from '@model/copilotRouting';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {
   reasoningEffortOverrides,
-  supportsReasoningLevel,
+  type RouteReasoning,
+  type SentReasoning,
 } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.

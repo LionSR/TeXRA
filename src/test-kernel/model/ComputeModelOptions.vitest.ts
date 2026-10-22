@@ -271,9 +271,7 @@ describe('model availability', () => {
         expect(logs.at('WARN').map((entry) => entry.message)).toEqual(
           expect.arrayContaining(
             ['OpenAI', 'OpenRouter', 'Kimi Code'].map((name) =>
-              expect.stringContaining(
-                `Failed to read ${name} API key status`,
-              ),
+              expect.stringContaining(`Failed to read ${name} API key status`),
             ),
           ),
         );
@@ -544,6 +542,36 @@ describe('model availability', () => {
         expect(model.cost).toBe('$0.000/$0.000');
         expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);
         expect(isModelOptionAvailable(model)).toBe(true);
+      }),
+  );
+
+  it.effect(
+    'shows the medium a ChatGPT-subscription run sends for a saved High',
+    () =>
+      Effect.gen(function* () {
+        // The subscription carries low and medium only; the bind substitutes
+        // a saved High, so the row and the levels offered say what runs send.
+        yield* Effect.promise(() =>
+          installPlatform({
+            config: PREFER_CODEX_CONFIG,
+            globalState: {
+              [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT56]),
+              [GlobalStateKey.REASONING_LEVELS]: { [GPT56]: 'high' },
+            },
+            secrets: codexSessionSecrets(),
+          }),
+        );
+
+        const options = yield* availabilityInputs(hostStores(), [GPT56]);
+        const [row] = modelOptionsFrom(options);
+
+        expect(row.reasoning).toBe('Medium (High unavailable)');
+        expect(options[0]).toMatchObject({
+          reasoning: {
+            efforts: ['none', 'low', 'medium'],
+            sent: { effort: 'medium' },
+          },
+        });
       }),
   );
 
