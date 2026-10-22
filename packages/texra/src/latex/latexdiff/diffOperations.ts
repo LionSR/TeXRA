@@ -46,6 +46,8 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 export interface LatexdiffPair {
   /** The round's output the diff marks up. */
   readonly revised: OutputFileInfo;
+  /** Its document: its source as the round wrote it, a relative path. */
+  readonly document: string;
   /** What it is diffed against. */
   readonly base: FileLocation;
   /** The round `base` came from; null for the document the task started
@@ -65,21 +67,27 @@ export function latexdiffPairs(
   outputs: readonly OutputFileInfo[],
   previous: readonly OutputFileInfo[],
 ): LatexdiffPair[] {
-  const fromBase = outputs.flatMap((revised): LatexdiffPair[] => {
-    const base = getEffectiveDiffBase(revised.lineage);
-    return base ? [{ revised, base, baseRound: null }] : [];
-  });
+  const documents = outputs.map((revised) => ({
+    revised,
+    document: getSafeDocumentRelativePath(revised.source),
+  }));
+  const fromBase = documents.flatMap(
+    ({ revised, document }): LatexdiffPair[] => {
+      const base = getEffectiveDiffBase(revised.lineage);
+      return base ? [{ revised, document, base, baseRound: null }] : [];
+    },
+  );
   const previousByDocument = new Map(
     previous.map((info) => [getSafeDocumentRelativePath(info.source), info]),
   );
-  const fromPrevious = outputs.flatMap((revised): LatexdiffPair[] => {
-    const prior = previousByDocument.get(
-      getSafeDocumentRelativePath(revised.source),
-    );
-    return prior
-      ? [{ revised, base: prior.location, baseRound: prior.round }]
-      : [];
-  });
+  const fromPrevious = documents.flatMap(
+    ({ revised, document }): LatexdiffPair[] => {
+      const prior = previousByDocument.get(document);
+      return prior
+        ? [{ revised, document, base: prior.location, baseRound: prior.round }]
+        : [];
+    },
+  );
   return [...fromBase, ...fromPrevious];
 }
 
@@ -135,7 +143,11 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
 
     for (const [round, infos] of roundIndexedEntries(rounds)) {
       for (const info of infos) {
-        if (getEffectiveDiffBase(info.lineage)) continue;
+        // Extraction records every output's lineage; one with no base in it
+        // is a new document (a `rewrite: false` task's), not a failure.
+        // Only an output whose lineage was never recorded lacks a base the
+        // run could have named.
+        if (info.lineage !== null) continue;
         results.push({
           success: false,
           message: 'Missing base file path',
@@ -145,18 +157,17 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       const previous = generateBetweenRoundDiffs
         ? (rounds[round - 1] ?? [])
         : [];
-      for (const { revised, base, baseRound } of latexdiffPairs(
+      for (const { revised, document, base, baseRound } of latexdiffPairs(
         infos,
         previous,
       )) {
-        const source = getSafeDocumentRelativePath(revised.source);
         operations.push({
           base,
           revised: revised.location,
           description:
             baseRound === null
-              ? `${source} (r${round})`
-              : `${source} (r${baseRound}→r${round})`,
+              ? `${document} (r${round})`
+              : `${document} (r${baseRound}→r${round})`,
           cwd: roots.workspace ?? path.dirname(base.absolutePath),
           suffix:
             baseRound === null

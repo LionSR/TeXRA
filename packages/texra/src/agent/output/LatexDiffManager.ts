@@ -183,15 +183,8 @@ export class LatexDiffManager {
         workflowOutputRoundDir(currRound),
         { protectedStem: WORKFLOW_OUTPUT_BASENAME },
       );
-      yield* this.fileService.ensureMirroredInRunSubdir(
-        `diff/${workflowOutputRoundDir(currRound)}`,
-      );
-      const relativePath = path.join('diff', `r${currRound}`);
-      const diffDirectory: DiffOutputDirectory = {
-        absolutePath: path.join(this.fileService.runDirectory, relativePath),
-        relativePath,
-        runId: this.fileService.runId,
-      };
+      const roundDiffDirectory = `diff/${workflowOutputRoundDir(currRound)}`;
+      yield* this.fileService.ensureMirroredInRunSubdir(roundDiffDirectory);
 
       this.logger.debug(`r${currRound} output files`, {
         data: outputFiles.map((f) => f.location.absolutePath),
@@ -255,7 +248,7 @@ export class LatexDiffManager {
                 label: 'between-rounds-diff',
                 pdfStemSuffix: '-round-diff',
               },
-          diffDirectory,
+          roundDiffDirectory,
         );
         entries.push(outcome.entry);
         if (outcome.artifact) artifacts.push(outcome.artifact);
@@ -272,13 +265,25 @@ export class LatexDiffManager {
     );
   }
 
-  /** One pair's latexdiff and its compiled PDF: `suffix` names the diff
-   *  file, `label` the log lines, `pdfStemSuffix` the published PDF. */
+  /**
+   * One pair's latexdiff and its compiled PDF: `suffix` names the diff file,
+   * `label` the log lines, `pdfStemSuffix` the published PDF. The diff is
+   * written under `roundDiffDirectory` at its document's own folder, as the
+   * round's output is under `r{round}/`: the diff file is named by the
+   * document's file name, so `a/main.tex` and `b/main.tex` would otherwise
+   * write the same `main_diff.tex`.
+   */
   private runSingleDiff(
-    { revised, base, baseRound }: LatexdiffPair,
+    { revised, document, base, baseRound }: LatexdiffPair,
     kind: { suffix: string; label: string; pdfStemSuffix: string },
-    diffDirectory: DiffOutputDirectory,
+    roundDiffDirectory: string,
   ): Effect.Effect<SingleDiffOutcome, never, DiffServices> {
+    const relativePath = path.join(roundDiffDirectory, path.dirname(document));
+    const diffDirectory: DiffOutputDirectory = {
+      absolutePath: path.join(this.fileService.runDirectory, relativePath),
+      relativePath,
+      runId: this.fileService.runId,
+    };
     const pair = {
       revised: revised.location,
       original: revised.lineage?.original ?? null,
@@ -362,7 +367,7 @@ export class LatexDiffManager {
       // Reuse the workflow compile-check timeout so a hanging diff build
       // is torn down by its scope instead of orphaning latexmk/pdflatex.
       const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(this.roots);
-      // The diff `.tex` is written to `diff/r{round}/`, away from both the
+      // The diff `.tex` is written under `diff/r{round}/`, away from both the
       // revised round output and the live workspace source. Search the revised
       // round directory first so same-round sibling edits win, then fall back
       // to the original source tree for unchanged inputs and bibliographies.
