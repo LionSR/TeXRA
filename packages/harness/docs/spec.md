@@ -485,8 +485,10 @@ request id (`agent/runtime/ModelInvoker.ts:743-759`):
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts:275-277`).
-- A failed observation of an accepted operation is never automatic
-  (`agent/runtime/run/invocation.ts:292-301`).
+- A failed observation of an accepted operation never resubmits it automatically
+  (`agent/runtime/run/invocation.ts:292-301`). The one automatic repeat is a
+  renewed observation after a rejected subscription token, which observes the
+  same operation again (`agent/runtime/run/invocation.ts:336-346`, `:383-386`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
 (`agent/runtime/run/invocation.ts:42-47`, `:205-221`). The gate cools two keys
