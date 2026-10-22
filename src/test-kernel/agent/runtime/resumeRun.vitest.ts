@@ -15,6 +15,8 @@
  * - a host that cannot answer approval prompts has approval-gated tools
  *   offered to the run it resumed;
  * - a stop asked as the resumed run opens still runs a turn;
+ * - a user's stop of the resumed run's turn is undone: the input typed
+ *   behind that turn wakes the run again;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
  * - a run whose rows do not fold is reported as finished.
@@ -46,6 +48,7 @@ import {
   sessionStoreFaults,
   storedRows,
   REAL_RUN_TIMEOUT,
+  untilStored,
   validationHost,
 } from '@test/support/storeFaults';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
@@ -391,6 +394,47 @@ describe(
 
           expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
           expect(answersOf(storage, runId).at(-1)).toContain('held over');
+        }),
+    );
+
+    it.live(
+      "a user's stop of the resumed turn leaves the input typed behind it queued, and wakes nothing",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          // The validation model holds a call that names GOLDEN-PARK.
+          yield* send(session, runId, 'GOLDEN-PARK Hold this turn.');
+          const resumed = yield* Effect.forkChild(resume(runId, { session }));
+          yield* untilStored(storage, (rows) => {
+            const own = rows.filter((row) => row.run === runId);
+            const consumed = own.findLastIndex(
+              (row) => row.type === 'followup.consumed',
+            );
+            return (
+              consumed >= 0 &&
+              own
+                .slice(consumed + 1)
+                .some((row) => row.data.includes('"kind":"attempt"'))
+            );
+          });
+          expect(yield* send(session, runId, 'Typed behind.')).toMatchObject({
+            wake: false,
+          });
+          yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+          yield* Fiber.await(resumed);
+          // A wake owed as the stopped generation leaves starts at once: give
+          // it time to activate the run a third time.
+          yield* untilStored(
+            storage,
+            (rows) =>
+              rows.filter(
+                (row) => row.run === runId && row.type === 'run.activate',
+              ).length > 2,
+          ).pipe(Effect.timeoutOption('2 seconds'));
+
+          expect(session.runs.get(runId)?.live === true).toBe(false);
+          expect(activations(storage, runId)).toBe(2);
+          expect(yield* queuedTexts(session, runId)).toEqual(['Typed behind.']);
         }),
     );
 
