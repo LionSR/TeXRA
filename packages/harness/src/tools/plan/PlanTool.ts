@@ -89,21 +89,25 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       { summary: 'Plan approved: no goal in a one-shot run' },
     );
   // One goal at a time: two would race each other's edits and caps. A goal
-  // "Keep agents running" detached is still this conversation's: its
-  // `run.start` keeps the parent its view edge dropped.
+  // is the script this conversation started with a goal grant, which no
+  // `script` call gives; "Keep agents running" detached, it is still this
+  // conversation's: its `run.start` keeps the parent its view edge dropped.
   const { session, runId } = call.run;
-  const goals = [
+  const scripts = [
     ...SubscriptionRef.getUnsafe(session.view.ref).runs.values(),
   ].filter(
     (other) =>
-      other.identity.kind === 'script' &&
-      other.identity.title === GOAL_TITLE &&
-      other.durableOutcome === null,
+      other.identity.kind === 'script' && other.durableOutcome === null,
   );
-  const running = (yield* Effect.forEach(goals, (goal) =>
-    Effect.map(session.log.records(goal.id), (rows) =>
-      rows.some((row) => row.type === 'run.start' && row.parent?.id === runId)
-        ? [goal.id]
+  const running = (yield* Effect.forEach(scripts, (script) =>
+    Effect.map(session.log.records(script.id), (rows) =>
+      rows.some(
+        (row) =>
+          row.type === 'run.start' &&
+          row.parent?.id === runId &&
+          (row.approvalPolicy?.goal.length ?? 0) > 0,
+      )
+        ? [script.id]
         : [],
     ),
   )).flat()[0];
