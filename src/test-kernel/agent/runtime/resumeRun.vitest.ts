@@ -15,6 +15,9 @@
  * - a host that cannot answer approval prompts has approval-gated tools
  *   offered to the run it resumed;
  * - a stop asked as the resumed run opens still runs a turn;
+ * - a user's stop of the resumed run's turn is undone: the input typed
+ *   behind that turn wakes the run again; or a message sent once the stop
+ *   returns, before its halt commits, is left unread;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
  * - a run whose rows do not fold is reported as finished.
@@ -46,6 +49,7 @@ import {
   sessionStoreFaults,
   storedRows,
   REAL_RUN_TIMEOUT,
+  untilStored,
   validationHost,
 } from '@test/support/storeFaults';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
@@ -393,6 +397,60 @@ describe(
           expect(answersOf(storage, runId).at(-1)).toContain('held over');
         }),
     );
+
+    // A stop asked of a run held here returns once the run is interrupted;
+    // its halt commits as the run unwinds, so a message sent at once lands
+    // before the halt and is woken all the same, as is one sent while a
+    // stop that detaches the run's agents commits that detach first.
+    for (const [after, afterStop] of [
+      ['leaves the input typed behind it queued, and wakes nothing', null],
+      ['is woken for a message sent once the stop returns', 'stopped'],
+      ['is woken for a message sent while it detaches', 'detaching'],
+    ] as const)
+      it.live(`a user's stop of the resumed turn ${after}`, () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          // The validation model holds a call that names GOLDEN-PARK.
+          yield* send(session, runId, 'GOLDEN-PARK Hold this turn.');
+          const resumed = yield* Effect.forkChild(resume(runId, { session }));
+          yield* untilStored(storage, (rows) => {
+            const own = rows.filter((row) => row.run === runId);
+            const consumed = own.findLastIndex(
+              (row) => row.type === 'followup.consumed',
+            );
+            return (
+              consumed >= 0 &&
+              own
+                .slice(consumed + 1)
+                .some((row) => row.data.includes('"kind":"attempt"'))
+            );
+          });
+          expect(yield* send(session, runId, 'Typed behind.')).toMatchObject({
+            wake: false,
+          });
+          const stop = session.runs.stop(runId, {
+            reason: 'user',
+            detachActiveChildren: afterStop === 'detaching',
+          });
+          const settled = yield* Effect.forkChild(stop.settlement);
+          if (afterStop !== 'detaching') yield* Fiber.join(settled);
+          if (afterStop) yield* send(session, runId, 'After the stop.');
+          yield* Fiber.join(settled);
+          yield* Fiber.await(resumed);
+          // A wake owed as the stopped generation leaves starts at once: give
+          // it time to activate the run a third time.
+          yield* untilStored(
+            storage,
+            () => activations(storage, runId) > 2,
+          ).pipe(Effect.timeoutOption('2 seconds'));
+
+          expect(activations(storage, runId)).toBe(afterStop ? 3 : 2);
+          if (!afterStop)
+            expect(yield* queuedTexts(session, runId)).toEqual([
+              'Typed behind.',
+            ]);
+        }),
+      );
 
     it.live(
       'a run a live process elsewhere holds is refused before the host rearranges',
