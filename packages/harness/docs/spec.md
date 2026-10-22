@@ -26,7 +26,7 @@ its kind is its `type` column.
 | Storage root | One directory holding one store file.                                                                                                                                                 |
 | Session      | The process's handle on one storage root: its store connection, its one publisher, its fold and its live runs.                                                                        |
 | Aggregate    | A keyed sequence of rows. Kinds are `run` (keyed by run id) and `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/sessionEvent.ts:103-112`).                                         |
-| Run          | One `run` aggregate. It exists iff its `run.start` row exists (`controllers/session/Database.ts:674-683`).                                                                            |
+| Run          | One `run` aggregate. It exists while its `run.start` row exists and no `run.removed` has closed it (`controllers/session/Database.ts:674-683`, `:772-784`).                           |
 | Turn         | One input answered by the model: from `turn.begin` to `turn.end` (`agent/runtime/loop/toolUse.ts:288-294`, `:534-537`).                                                               |
 | Invocation   | One model call of a turn or a compaction summary, identified by `invocationId` (`shared/schemas/runHistoryEvent.ts:49-52`).                                                           |
 | Attempt      | One try of an invocation, numbered from 1; `attempt` grows only for a retry of the same invocation (`shared/schemas/runHistoryEvent.ts:44-48`, `shared/session/inFlight.ts:111-118`). |
@@ -172,13 +172,14 @@ then classified by the reader (`controllers/session/rowCodec.ts:267-332`):
 | readable, payload fails parse  | `DatabaseRowCorrupt`, naming its commit (`controllers/session/rowCodec.ts:306-318`)                    |
 | a plugin kind this build lacks | left out of every read, kept in the store (`controllers/session/rowCodec.ts:324-325`)                  |
 
-A read of one run's history or records MUST fail on any row that does not decode
-(`controllers/session/rowReader.ts:159-182`). A listing or a tail leaves an
-earlier build's or a corrupt row out with one warning; when the row is on a
-`run` aggregate it also marks that run unreadable, and a bad row on a `plugin`
-aggregate marks no run (`controllers/session/rowReader.ts:183-192`); a row a
-newer build wrote fails every read, listing and tail included, because it means
-a newer build now writes this store
+A read of one run's whole history MUST fail on any row of the aggregate that
+does not decode; a read of its records fails on any undecodable row among the
+rows it selects (`controllers/session/rowReader.ts:159-182`). A listing or a
+tail leaves an earlier build's or a corrupt row out with one warning; when the
+row is on a `run` aggregate it also marks that run unreadable, and a bad row on
+a `plugin` aggregate marks no run (`controllers/session/rowReader.ts:183-192`);
+a row a newer build wrote fails every read, listing and tail included, because
+it means a newer build now writes this store
 (`controllers/session/rowReader.ts:181-182`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:98-104`,
 `agent/runtime/resumeRun.ts:251-252`).
@@ -449,11 +450,15 @@ The move a `failed` row records is decided once, by `failedNext`
 Every automatic send MUST run under the process's `ModelRetryGate`
 (`agent/runtime/run/invocation.ts:42-47`, `:205-221`). The gate cools two keys
 per binding: a 429 the provider scoped to the model cools that model on its wire
-route, and a failure scoped to the route cools the wire route itself (provider,
-credential route, endpoint and key fingerprint), which every model on that route
-shares (`agent/runtime/modelAccess/failureInfo.ts:125-160`). An observation runs
-outside it (`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000 ms
-before an automatic resend (`agent/runtime/run/invocation.ts:50`, `:257-274`).
+route, and a failure scoped to the route cools the wire route itself, which
+every model on that route shares. The wire key is the binding's own tuple:
+provider, credential route, endpoint and key fingerprint for a credential-backed
+HTTP route; vendor and version for an editor's language-model route; provider
+for the validation model (`agent/runtime/modelAccess/binding.ts:145-148`,
+`:188`) (`agent/runtime/modelAccess/failureInfo.ts:125-160`). An observation
+runs outside it (`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000
+ms before an automatic resend (`agent/runtime/run/invocation.ts:50`,
+`:257-274`).
 
 An attempt of an invocation a person admitted, whose outcome no row recorded,
 MUST be asked about again and MUST NOT be resent unasked
@@ -567,8 +572,9 @@ The request kinds are a closed union
 | `externalInquiry` | an answer from an external model, as input | no               |
 | `userQuestion`    | answers to questions                       | yes              |
 
-Every kind parks the tool that opened it except `externalInquiry`, whose answer
-arrives as a follow-up (`shared/schemas/progressView/data.ts:196-200`).
+Every kind parks its caller (the tool call that opened it, or for `retry` the
+model invocation) except `externalInquiry`, whose answer arrives as a follow-up
+(`shared/schemas/progressView/data.ts:196-200`).
 
 ### 8.2 Decisions
 
@@ -599,7 +605,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:346-370`). An open `externalInquiry` is neither:
   it parks no caller, so no attempt re-enters it and it is not unbound; it stays
-  open until its answer arrives as a follow-up
+  open until its `request.decided` commits. Delivering the answer (or the drop)
+  as a follow-up is a separate, best-effort step
   (`shared/session/runStateFold.ts:249-270`).
 
 ## 9. Crash guarantees
