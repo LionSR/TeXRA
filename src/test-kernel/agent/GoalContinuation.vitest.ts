@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { freshRunState } from '@shared/session/runStateFold';
+import { freshRunState } from '@shared/session/runState';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import {

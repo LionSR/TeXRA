@@ -12,7 +12,6 @@
   "packages/harness/src/controllers/session/Database.ts": 1,
   "packages/harness/src/shared/session/runActions.ts": 1,
   "packages/harness/src/shared/session/runRows.ts": 1,
-  "packages/harness/src/shared/session/runStateFold.ts": 1,
   "packages/harness/src/shared/session/sessionFold.ts": 2,
   "packages/harness/src/shared/session/transcriptFold.ts": 1,
   "packages/harness/src/shared/session/transcriptReads.ts": 1,

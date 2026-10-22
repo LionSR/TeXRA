@@ -1,32 +1,22 @@
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 import {
-  isRequestRefusal,
   type RequestRefusal,
   LanguageModel,
   StateStore,
   StateWriteFailed,
   StateReadFailed,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   OnboardingFunnelRefresher,
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
+import {
+  hostFailure,
+  type HostCallFailed,
+} from '@texra/controllers/session/hostCallFailure';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { ProcessServices } from '@texra-ai/harness';
-
-/**
- * A capability behind a card action that still answers with a promise
- * rejected. `member` names which one; `cause` is the value the promise
- * rejected with, which the request's dialog classifies and presents as it
- * presented the bare rejection.
- */
-class OnboardingCallFailed extends Data.TaggedError('OnboardingCallFailed')<{
-  readonly member: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
 
 /** How a card action fails: the funnel's flag write, plus whatever the
  *  sign-in program failed with. */
@@ -46,7 +36,7 @@ interface DesktopOnboardingIpcOptions {
    */
   hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
   /** Launch the setup conversation when the user clicks "Run Setup". The
-   *  host presents its own failure, so the program settles. */
+   *  host reports its own failure, so the program never fails. */
   kickoffSetup: () => Effect.Effect<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Effect.Effect<void, Error, ProcessServices>;
@@ -54,7 +44,7 @@ interface DesktopOnboardingIpcOptions {
 
 /**
  * The onboarding funnel of one window: the funnel state the `host` snapshot
- * carries (PRD 8.1) and the card actions the host request arms call.
+ * carries and the card actions the host request handlers call.
  */
 export interface DesktopOnboardingIpc {
   /** Recompute the funnel from credentials + flags and publish it. */
@@ -72,7 +62,7 @@ export interface DesktopOnboardingIpc {
   /** The setup card's Run Setup: launches the setup conversation. */
   runSetup(): OnboardingAction;
   signInWithChatGpt(): OnboardingAction<
-    OnboardingCallFailed | RequestRefusal,
+    HostCallFailed | RequestRefusal,
     ProcessServices
   >;
 }
@@ -122,7 +112,7 @@ export function createDesktopOnboardingIpc(
         // leaving the card stuck on 'setup'. Detached, so the run outlives
         // the card action that started it.
         yield* options.kickoffSetup().pipe(
-          // Clear the guard once the run settles (success or failure): while
+          // Clear the guard once the run finishes (success or failure): while
           // it's in flight the guard blocks a concurrent second run, but
           // afterwards another manual "Run Setup" click must launch again.
           Effect.ensuring(
@@ -137,18 +127,12 @@ export function createDesktopOnboardingIpc(
     });
 
   const signInWithChatGpt = (): OnboardingAction<
-    OnboardingCallFailed | RequestRefusal,
+    HostCallFailed | RequestRefusal,
     ProcessServices
   > =>
     options.signInWithChatGpt().pipe(
       Effect.mapError((cause) =>
-        isRequestRefusal(cause)
-          ? cause
-          : new OnboardingCallFailed({
-              member: 'onboarding.signInWithChatGpt',
-              message: toErrorMessage(cause),
-              cause,
-            }),
+        hostFailure('onboarding.signInWithChatGpt', cause),
       ),
       Effect.flatMap(() => funnel.run()),
     );

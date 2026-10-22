@@ -30,7 +30,7 @@ import {
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
-import type { RunInputDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,

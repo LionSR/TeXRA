@@ -46,7 +46,7 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';

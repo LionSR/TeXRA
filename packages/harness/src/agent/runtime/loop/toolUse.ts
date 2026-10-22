@@ -37,7 +37,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 import { toolDefinitionsFor } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 

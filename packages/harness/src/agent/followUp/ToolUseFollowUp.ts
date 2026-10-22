@@ -1,7 +1,7 @@
 import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { runRefusal } from '@agent/runtime/runClassification';
+import { runRejection } from '@agent/runtime/runClassification';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -288,14 +288,6 @@ function admitQueued(
   );
 }
 
-/** How a run's refusal reads to whoever sent the input. */
-const REFUSAL_REASON = {
-  held_elsewhere: 'owned_elsewhere',
-  finished: 'finished',
-  earlier_build: 'earlier_build',
-  unreadable: 'read_failed',
-} as const satisfies Record<string, FollowUpFailureReason>;
-
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   item: InboxItem,
@@ -328,17 +320,16 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // stopped. Anything else refuses with its worded reason. Only the one
     // run addressed is inspected.
     // A state that cannot be read cannot be continued.
-    const refusal = yield* runRefusal(runId, ownerSession).pipe(
+    const rejection = yield* runRejection(runId, ownerSession).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-          Effect.as({ kind: 'unreadable' } as const),
+          Effect.as({ kind: 'read_failed' } as const),
         ),
       ),
     );
-    if (refusal !== null)
-      return { status: 'failed', reason: REFUSAL_REASON[refusal.kind] };
+    if (rejection !== null) return { status: 'failed', reason: rejection.kind };
     if (options.mode !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
     dispatch = yield* admitQueued(runId, item, 'wake', options);

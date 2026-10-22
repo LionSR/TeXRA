@@ -45,7 +45,7 @@ import type {
 import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { RunView, SessionView } from '@shared/session/sessionView';
