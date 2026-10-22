@@ -48,8 +48,8 @@ import {
   executeCliConfig,
   executeCliToolUseConfig,
   type CliExecuteOptions,
-  type CliRunServices,
 } from '../runtime/executeCli';
+import type { ProcessServices } from '@texra-ai/harness';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import {
   runOutcomeExitCode,
@@ -111,7 +111,7 @@ function classifyInputFiles(files: readonly string[]) {
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
-): Effect.fn.Return<number, Error, CliRunServices> {
+): Effect.fn.Return<number, Error, ProcessServices> {
   if (init.output && init.outputDir) {
     return yield* failUsage('Use either --output or --output-dir, not both.');
   }
@@ -251,7 +251,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   agentSource: AgentConfigPayload['agentSource'],
   instruction: string,
   services: CliPlatformServices,
-): Effect.fn.Return<number, Error, CliRunServices> {
+): Effect.fn.Return<number, Error, ProcessServices> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
   const workflowOnlyFlag =
@@ -331,7 +331,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
     },
-  ): Effect.fn.Return<number, Error, CliRunServices> {
+  ): Effect.fn.Return<number, Error, ProcessServices> {
     const session = yield* options.services.session;
     const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;

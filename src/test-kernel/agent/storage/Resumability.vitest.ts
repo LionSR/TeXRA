@@ -2,12 +2,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { deriveResumability } from '@agent/storage/resumability';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,

@@ -1,8 +1,5 @@
-import { AgentConfigFieldsSchema } from '@shared/schemas';
+import type { AgentConfigSchema } from '@shared/schemas';
 import type { z } from 'zod';
-
-/** Agent configuration schema with output file count validation. */
-export const AgentConfigSchema = AgentConfigFieldsSchema;
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
 

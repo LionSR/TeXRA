@@ -3,11 +3,10 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { noCoWrite } from '@shared/session/sessionEvents';
-import { PersonaSchema } from '@shared/schemas';
+import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';

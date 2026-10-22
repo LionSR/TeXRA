@@ -68,9 +68,13 @@ export class SettingsViewProvider {
     );
   }
 
-  /** Sign in to a subscription provider from a command, not the webview. */
+  /**
+   * Sign in to a subscription provider from a command, not the webview,
+   * through the same program the Models page's sign-in button runs, so the
+   * command palette gets the status round-trip and credential refresh tail.
+   */
   public signInSubscription(providerId: SubscriptionProviderId) {
-    return this.messageHandler.signInSubscription(providerId);
+    return this.messageHandler.body.signInSubscription(providerId);
   }
 
   /**
@@ -84,7 +88,7 @@ export class SettingsViewProvider {
       if (this._view) {
         const panel = this._view;
         panel.reveal(vscode.ViewColumn.One);
-        yield* this.messageHandler.sendAllData();
+        yield* this.messageHandler.body.postAll;
       } else {
         const panel = vscode.window.createWebviewPanel(
           SettingsViewProvider.viewType,
@@ -106,7 +110,7 @@ export class SettingsViewProvider {
         );
       }
 
-      // this._view can be undefined here: the sendAllData above yields, and
+      // this._view can be undefined here: the postAll above yields, and
       // disposing the dashboard panel meanwhile runs cleanupView.
       if (tab == null || !this._view) return;
       if (this.viewReady) {

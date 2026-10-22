@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { normalizeFilePath } from '@utils/core';
 
-import { AgentConfigFieldsSchema } from './agentConfig';
+import { AgentConfigSchema } from './agentConfig';
 import { JsonValueSchema } from './jsonValue';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
@@ -19,7 +19,7 @@ export const NonAgentRunRecordSchema = z.strictObject({
 /** Inputs have already passed launch validation; persisted records are canonical. */
 export const RunRecordFieldsSchema = z.union([
   NonAgentRunRecordSchema,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
 ]);
 
 /** Whether the run is a task (an agent carrying a plugin's block, run on

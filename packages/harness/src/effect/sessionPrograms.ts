@@ -31,13 +31,16 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeOwnRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
 import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { InlinePersonaSchema, type RunId } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  InlinePersonaSchema,
+  type RunId,
+} from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { AgentConfigSchema } from '@shared/schemas';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

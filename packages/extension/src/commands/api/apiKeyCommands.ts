@@ -12,10 +12,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
-import {
-  getProviderDisplayName,
-  getProviderKeyUrl,
-} from '@texra/model/providerPresentation';
+import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
@@ -36,8 +33,7 @@ function createProfileKeyController(
   return new SettingsProfileKeyController({
     secrets,
     prompt: vscodeUi,
-    getProviderDisplayName: (provider) =>
-      getProviderDisplayName(stores, provider),
+    stores,
   });
 }
 

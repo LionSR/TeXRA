@@ -35,7 +35,6 @@ import {
   readMemoryFile,
   renameMemoryPath,
   setMemoryPinned,
-  statMemoryEntry,
   walkMemoryDirectory,
   writeMemoryFile,
 } from '@tools/memory/memoryFileSystem';
@@ -283,7 +282,7 @@ function requireViewBeforeModify(
 const requireEditableFile = Effect.fn('MemoryTool.requireEditableFile')(
   function* (resolvedPath: string, inputPath: string) {
     const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
-    const stats = yield* statMemoryEntry(resolvedPath).pipe(
+    const stats = yield* (yield* StorageFs).stat(resolvedPath).pipe(
       // Keep the cause on ToolError and in the log so permission faults stay visible.
       Effect.catch((error) =>
         Effect.logWarning(
@@ -327,7 +326,7 @@ const view = Effect.fn('MemoryTool.view')(function* (
     );
   }
 
-  const stats = yield* statMemoryEntry(resolvedPath);
+  const stats = yield* (yield* StorageFs).stat(resolvedPath);
   if (stats.type === 'Directory') {
     const allEntries = yield* buildDirectoryListing(resolvedPath, stats);
     yield* recordToolFileRead(inputPath);
