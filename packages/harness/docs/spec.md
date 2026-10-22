@@ -233,16 +233,16 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:412-440`).
 
 The `model.message` arms:
 
-| Arm           | Meaning                                                                                            |
-| ------------- | -------------------------------------------------------------------------------------------------- |
-| `attempt`     | A billed request is about to leave; names its recorded request by sha256 and its origin.           |
-| `identified`  | The provider's response id, seen before completion.                                                |
-| `accepted`    | A background operation the provider accepted, with its admitted deadline.                          |
-| `cancelled`   | A user stop the provider confirmed for an accepted operation.                                      |
-| `failed`      | The attempt failed: its error and the move after it (`retry`, `unchain`, `ask`, `stop`, `cancel`). |
-| `response`    | The completed turn, its dispatch facts per call, and its priced usage.                             |
-| `handed-down` | The one call a script's run opens on; no model made it.                                            |
-| `append`      | Messages added to history; with `sourceResponse`, the tool group that delivers a response.         |
+| Arm           | Meaning                                                                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempt`     | A billed request is about to leave; names its recorded request by sha256 and its origin.                                                                                                                                                                                    |
+| `identified`  | The provider's response id, seen before completion.                                                                                                                                                                                                                         |
+| `accepted`    | A background operation the provider accepted, with its admitted deadline.                                                                                                                                                                                                   |
+| `cancelled`   | A user stop the provider confirmed for an accepted operation.                                                                                                                                                                                                               |
+| `failed`      | The attempt failed, or its outcome is unknown: a person-admitted attempt found with no outcome on resume is re-asked under a `failed` row (`agent/runtime/ModelInvoker.ts:743-758`). Carries its error and the move after it (`retry`, `unchain`, `ask`, `stop`, `cancel`). |
+| `response`    | The completed turn, its dispatch facts per call, and its priced usage.                                                                                                                                                                                                      |
+| `handed-down` | The one call a script's run opens on; no model made it.                                                                                                                                                                                                                     |
+| `append`      | Messages added to history; with `sourceResponse`, the tool group that delivers a response.                                                                                                                                                                                  |
 
 ### 3.2 Run records (private to the runtime)
 
@@ -282,8 +282,10 @@ The transcript tier is display rows too (`shared/schemas/traceEvent.ts:22-88`):
 `log`, `stage.start`, `stage.end`, `tool.start` (a call's card opens),
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and
-`response.finalized` (the final text of a turn). `response.finalized` is read by
-the fold, which marks the turn's answer final
+`response.finalized` (the final text of one provider response; a loop turn that
+asks for its final tool may record another,
+`agent/runtime/loop/toolUse.ts:319-331`). `response.finalized` is read by the
+fold, which marks that response's answer final
 (`shared/session/runFacts.ts:88-89`, called from
 `shared/session/runStateFold.ts:549`).
 
@@ -661,8 +663,10 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:346-370`). An open `externalInquiry` is neither:
   it parks no caller, so no attempt re-enters it and it is not unbound; it stays
-  open until its `request.decided` commits. Delivering the answer (or the drop)
-  as a follow-up is a separate, best-effort step
+  open until its `request.decided` commits, or until `run.removed` closes the
+  run, which retires it with no decision row
+  (`controllers/session/SessionRequests.ts:145-156`). Delivering the answer (or
+  the drop) as a follow-up is a separate, best-effort step
   (`shared/session/runStateFold.ts:249-270`).
 
 ## 9. Crash guarantees
@@ -687,7 +691,7 @@ The guarantees, numbered as in the package README:
 | I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork.                                                                                                                                          | `crashConformance.ts:30-32`, `:761` |
 | I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                                                                                                                                                         | `crashConformance.ts:33`, `:761`    |
 | I3  | One model invocation has at most one committed response.                                                                                                                                                                                                                                  | `crashConformance.ts:38`, `:761`    |
-| I4  | A command runs only after its approval; an unfinished call that is not replay-safe and that recovery classifies as outcome-unknown runs again only after a person's retry (a call rejoining a standing or newly decided request runs at once, section 9).                                 | `crashConformance.ts:34-35`, `:761` |
+| I4  | A command subject to approval runs only after its approval; an unfinished call that is not replay-safe and that recovery classifies as outcome-unknown runs again only after a person's retry (a call rejoining a standing or newly decided request runs at once, section 9).             | `crashConformance.ts:34-35`, `:761` |
 | I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row, except one deliberately paused with a `child.park` `paused` row so it can be called again (`tools/delegation/childRun.ts:163-172`).       | `crashConformance.ts:39-40`, `:873` |
 | I6  | A child's result is delivered to its parent at most once and is not lost while the parent was held elsewhere; a result whose child was detached, or whose parent cannot take it, stays in the child's run report with a warning (`agent/runtime/childSettlement.ts:220-228`, `:252-262`). | `crashConformance.ts:865-886`       |
 | I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                                                                                                                                                                  | `crashConformance.ts:41`, `:761`    |
