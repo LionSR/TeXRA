@@ -239,10 +239,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           const entry = catalog.get('setup');
           this.surfaceAction({
             kind: 'launch',
-            patch: {
-              sessionType: 'chat',
-              agent: entry ? agentKeyOf(entry) : 'setup',
-            },
+            patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
           });
         }),
     });
@@ -662,11 +659,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(
         Effect.sync(() => {
           const agent = options.selectedAgent;
-          if (agent)
-            this.surfaceAction({
-              kind: 'launch',
-              patch: { sessionType: 'chat', agent },
-            });
+          if (agent) this.surfaceAction({ kind: 'launch', patch: { agent } });
         }),
       ),
     );

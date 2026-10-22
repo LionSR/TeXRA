@@ -365,5 +365,5 @@ export function transcriptAggregates(
   const run = view.runs.get(runId);
   if (!run) return [];
   const id = qualifyAggregateId('run', run.id);
-  return [{ id, fromSeq: view.folded.get(id) ?? 0 }];
+  return [{ id, fromSeq: view.transcriptSeq.get(id) ?? 0 }];
 }

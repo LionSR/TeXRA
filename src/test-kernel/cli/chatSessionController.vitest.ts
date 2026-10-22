@@ -61,8 +61,6 @@ vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
 }));
 
 vi.mock('@cli/chat/tui/state/transcript', () => ({
-  describeRequestError: (error: { reason?: string; _tag: string }) =>
-    error.reason ?? error._tag,
   appendLocalNotice: mocks.appendLocalNotice,
   appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,

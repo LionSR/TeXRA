@@ -1,14 +1,14 @@
 /**
  * The one transcript reducer: session events straight to a run's
  * `TranscriptView` (rows, task groups, compaction blocks) and the run model's
- * inputs. The session fold runs it for every resident run, and
- * `foldRunTranscript` runs the same reducer over one aggregate's committed
- * rows where no view is resident, so live and cold reads cannot drift.
+ * inputs. The session view's updater runs it for every subscribed run, and
+ * `buildRunTranscript` runs the same reducer over one aggregate's committed
+ * rows where no view holds the run, so live and cold reads cannot drift.
  *
- * Pure: the caller supplies each event's clock and id, and the reducer owns no
- * clock, timer, IO, or durable write. Each arm writes the value the event
- * means: a stage its task group and heading, a tool card its row from one
- * decode, a stream its text row, a `log` row its decoded payload
+ * The caller supplies each event's clock and id, and the reducer owns no
+ * clock, timer, IO, or durable write. Each event type writes the value the
+ * event means: a stage its task group and heading, a tool card its row from
+ * one decode, a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
 import { Predicate } from 'effect';
@@ -26,18 +26,15 @@ import {
 } from '@shared/schemas';
 import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityProjection';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
 import { TOOL_CUT_BY_RUN_END } from '@shared/transcript/scriptStage';
 
 import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
 import {
   emptyTranscript,
-  indexesOf,
+  emptyTranscriptIndexes,
   open,
   paint,
-  replaceTranscript,
-  resetTranscriptOwnership,
   settle,
   upsertCompactionRows,
   writableArray,
@@ -45,22 +42,37 @@ import {
   type Draft,
   type Slot,
   type TranscriptContext,
+  type TranscriptWork,
 } from './transcriptState';
 import { phaseMoveOf } from './runRows';
 import type { TranscriptView } from './sessionView';
 
-function foldTaskGroup(
+/** A stage start opens its task group whole; a stage end closes the group
+ *  its start opened and writes nothing for a group no start opened. */
+function applyTaskGroup(
   d: Draft,
   event: Extract<TranscriptEvent, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.taskGroupIndex.get(event.id);
-  const group: TaskGroup | undefined = taskGroupOnStage(
-    at === undefined ? undefined : d.next.taskGroups[at],
-    event,
-    d.at,
-  );
-  if (!group) return;
-  const groups = writableArray(d.next, 'taskGroups');
+  let group: TaskGroup;
+  if (event.type === 'stage.start') {
+    group = {
+      id: event.id,
+      name: event.label,
+      startTime: d.at,
+      status: RUN_PHASE.RUNNING,
+      ...(event.parentId ? { parentGroupId: event.parentId } : {}),
+      ...(event.kind != null ? { kind: event.kind } : {}),
+    };
+  } else {
+    if (at === undefined) return;
+    group = {
+      ...d.next.taskGroups[at],
+      status: event.status,
+      endTime: d.at,
+    };
+  }
+  const groups = writableArray(d, d.next, 'taskGroups');
   if (at !== undefined) groups[at] = group;
   else d.ix.taskGroupIndex.set(event.id, groups.push(group) - 1);
   d.touched = true;
@@ -99,7 +111,7 @@ function record(d: Draft, event: TranscriptEvent): void {
         label: event.label,
         open: true,
       });
-      foldTaskGroup(d, event);
+      applyTaskGroup(d, event);
       return;
     }
 
@@ -109,7 +121,7 @@ function record(d: Draft, event: TranscriptEvent): void {
         slot.open = false;
         write(d, slot);
       }
-      foldTaskGroup(d, event);
+      applyTaskGroup(d, event);
       return;
     }
 
@@ -160,8 +172,8 @@ function record(d: Draft, event: TranscriptEvent): void {
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
       if (inProgress && !ix.activeTools.has(event.logId)) return;
       // On a run with a run history, the card's output is projected from its
-      // settlement and names no tool, input or card: those are the ones its
-      // `tool.start` opened.
+      // `tool.result` and names no tool, input or card: those are the ones
+      // its `tool.start` opened.
       slot.log = decodeToolUseLog({
         toolName: slot.log.toolName,
         input: slot.log.input,
@@ -177,7 +189,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       return;
     }
 
-    // Run facts, not transcript rows: they fold into `RunView.context` and
+    // Run facts, not transcript rows: they go to `RunView.context` and
     // `RunView.usage`.
     case 'context.state':
     case 'usage':
@@ -213,9 +225,9 @@ function record(d: Draft, event: TranscriptEvent): void {
     case 'response.finalized': {
       if (ix.closed || !event.text) return;
       // Upsert by id, not by text: if this round's own MODEL_RESPONSE stream
-      // already wrote a (possibly raw, pre-replacement) row, reconcile it to
-      // the authoritative text and close the stream, so no later stream.end
-      // or boundary settlement can replace that text; otherwise this round
+      // already wrote a (possibly raw, pre-replacement) row, replace its text
+      // with the final one and close the stream, so no later stream.end or
+      // run boundary can replace that text; otherwise this round
       // never streamed (e.g. a non-streaming provider call), so append it.
       const correlatorId = ix.pendingModelResponseId;
       ix.pendingModelResponseId = undefined;
@@ -245,7 +257,7 @@ function record(d: Draft, event: TranscriptEvent): void {
   }
 }
 
-/** Settle a text row, with its final text when one is given. */
+/** Close a text row, now printable, with its final text when one is given. */
 function closeText(
   d: Draft,
   slot: Extract<Slot, { kind: 'text' }>,
@@ -258,7 +270,7 @@ function closeText(
 }
 
 /** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
- *  parked or ended run closes every open stream and fails every open card. */
+ *  waiting or ended run closes every open stream and fails every open card. */
 function moveBoundary(d: Draft, phase: RunPhase): void {
   const { ix } = d;
   if (phase === RUN_PHASE.RUNNING) {
@@ -288,17 +300,19 @@ function moveBoundary(d: Draft, phase: RunPhase): void {
 }
 
 /**
- * Fold one session event into a run's transcript. Returns the same value
- * when the event changed nothing the transcript holds.
+ * Apply one session event to a run's transcript, advancing the run's working
+ * state in `work`. Returns the same value when the event changed nothing the
+ * transcript holds.
  */
-export function foldTranscriptEvent(
+export function applyTranscriptEvent(
   transcript: TranscriptView,
+  work: TranscriptWork,
   event: SessionEvent,
   ctx: TranscriptContext,
 ): TranscriptView {
   const d: Draft = {
-    ix: indexesOf(transcript),
-    next: replaceTranscript(transcript, {}),
+    ...work,
+    next: { ...transcript },
     ctx,
     at: event.at,
     stampId: JSON.stringify([event.aggregateId, event.seq]),
@@ -309,7 +323,7 @@ export function foldTranscriptEvent(
     event.type === 'run.position' &&
     (event.payload.at === 'waiting' || event.payload.at === 'halted')
   )
-    d.ix.lastPark = event.seq;
+    d.ix.lastWait = event.seq;
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);
   else if (isTranscriptEvent(event)) {
@@ -326,7 +340,7 @@ export function foldTranscriptEvent(
         event.at,
       );
       if (changed.length > 0) {
-        upsertCompactionRows(d.next, changed);
+        upsertCompactionRows(d, d.next, changed);
         d.touched = true;
       }
     }
@@ -336,17 +350,20 @@ export function foldTranscriptEvent(
 }
 
 /**
- * One aggregate's transcript, folded cold from its committed rows by the same
- * reducer the session view runs: where no view is resident (export, a parked
- * run's closure, host exit). Empty when the run has no rows. `settledRows`
- * stays 0: only the live session fold advances that prefix, so a cold read
- * uses `rows` and `openWork`, never `settledRows`.
+ * One aggregate's transcript, built cold from its committed rows by the same
+ * reducer the session view runs: where no view holds the run (export, a
+ * waiting run's closure, host exit). Empty when the run has no rows.
+ * `settledRows` stays 0: only the session view advances that prefix, so a
+ * cold read uses `rows` and `openWork`, never `settledRows`.
  */
-export function foldRunTranscript(
+export function buildRunTranscript(
   events: readonly SessionEvent[],
   debug: boolean,
 ): TranscriptView {
-  resetTranscriptOwnership();
+  const work: TranscriptWork = {
+    ix: emptyTranscriptIndexes(),
+    owned: new WeakSet(),
+  };
   let transcript = emptyTranscript();
   const start = events[0];
   if (start === undefined) return transcript;
@@ -358,7 +375,7 @@ export function foldRunTranscript(
     lifecycleToTaskGroups: isPlainAgentIdentity(start.identity),
   };
   for (const event of events) {
-    transcript = foldTranscriptEvent(transcript, event, ctx);
+    transcript = applyTranscriptEvent(transcript, work, event, ctx);
   }
   return transcript;
 }

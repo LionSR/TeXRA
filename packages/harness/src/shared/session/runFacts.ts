@@ -1,11 +1,11 @@
 /**
- * What a run answers and what it produced, folded from the rows that record
+ * What a run answers and what it produced, read from the rows that record
  * them: its input (system text, instruction, activated skills, memory
  * misses), the files its calls edited and how many ran, its structured
  * output, and where its turn policy stands (the final-tool nudge, the
- * finalized answer). `foldRunState` applies this after each row it folds,
- * so the loop reads these facts off the same state on the live path and on
- * resume.
+ * finalized answer). The row handlers in `runState.ts` and
+ * `turnRowHandlers.ts` set these fields, so the loop reads them off the
+ * same state on the live path and on resume.
  */
 import {
   STRUCTURED_OUTPUT_TOOL_NAME,
@@ -14,7 +14,6 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 
-import type { RunHistoryRow } from './historyTurns';
 import type { PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
@@ -26,12 +25,12 @@ export type RunFacts = {
   };
   /** The workspace files the run's calls edited, first edit first. */
   readonly edited: readonly string[];
-  /** Settlements `executed` or `failed`: tool bodies and script host answers. */
+  /** Results `executed` or `failed`: tool bodies and script host answers. */
   readonly toolCalls: number;
-  /** The settled value of a `submit_output` call, whether the response or
+  /** The result value of a `submit_output` call, whether the response or
    *  one of its scripts issued it, or of a script run's handed-down call. */
   readonly structured: { readonly value: JsonValue } | null;
-  /** The result a script run's handed-down call settled with: no model
+  /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;
   /** The turn whose final-tool nudge was appended, so it is asked once. */
@@ -56,7 +55,7 @@ export const NO_FACTS: RunFacts = {
 
 /** `input` with what a row recorded: each field it names replaces the
  *  last, and a `null` instruction returns to the launch's. */
-function withInput(
+export function withInput(
   input: RunFacts['input'],
   recorded: RunInput | null | undefined,
 ): RunFacts['input'] {
@@ -73,50 +72,14 @@ function withInput(
   };
 }
 
-/**
- * `facts` after `row`, which the run's state has already folded: `pending`
- * is that state's pending response (a settled call's record is still in
- * it) and `turn` its turn.
- */
-export function foldRunFacts<F extends RunFacts>(
-  facts: F,
-  row: RunHistoryRow,
-  pending: PendingResponse | null,
-  turn: number,
-): F {
-  switch (row.type) {
-    case 'response.finalized':
-      return { ...facts, answerFinalized: true };
-    case 'context.edit':
-      return { ...facts, input: withInput(facts.input, row.payload.input) };
-    case 'model.message': {
-      const p = row.payload;
-      if (p.kind === 'response')
-        return { ...facts, forceFinalTool: false, answerFinalized: false };
-      if (p.kind !== 'append' || p.sourceResponse !== null) return facts;
-      return {
-        ...facts,
-        input: withInput(facts.input, p.input),
-        ...(p.reason === 'final-tool' && {
-          finalToolTurn: turn,
-          forceFinalTool: true,
-        }),
-      };
-    }
-    case 'tool.result':
-      return afterResult(facts, row.payload, pending);
-    default:
-      return facts;
-  }
-}
-
-/** `facts` after one settlement: the files it edited, whether it ran, and,
- *  when it is the run's output, its value (and a handed-down call's result). */
-function afterResult<F extends RunFacts>(
-  facts: F,
+/** The facts one `tool.result` changes: the files it edited, whether it
+ *  ran, and, when it is the run's output, its value (and a handed-down
+ *  call's result). `pending` is the response the call belongs to. */
+export function resultFacts(
+  facts: RunFacts,
   p: ToolResultPayload,
-  pending: PendingResponse | null,
-): F {
+  pending: PendingResponse,
+): Partial<RunFacts> {
   const ran = p.disposition === 'executed' || p.disposition === 'failed';
   const edits = p.result.status === 'executed' ? (p.result.edits ?? []) : [];
   const fresh = [
@@ -125,7 +88,6 @@ function afterResult<F extends RunFacts>(
   const output = outputOf(pending, p.callId);
   const value = p.result.status === 'executed' ? p.result.value : undefined;
   return {
-    ...facts,
     edited: fresh.length === 0 ? facts.edited : [...facts.edited, ...fresh],
     toolCalls: facts.toolCalls + (ran ? 1 : 0),
     structured:
@@ -139,10 +101,9 @@ function afterResult<F extends RunFacts>(
  *  the response's or one of its scripts' (a script's call names its tool on
  *  its `script.call`); or neither. */
 function outputOf(
-  pending: PendingResponse | null,
+  pending: PendingResponse,
   callId: string,
 ): 'handed-down' | 'submitted' | null {
-  if (pending === null) return null;
   const own = pending.calls.find((call) => call.callId === callId);
   if (own !== undefined && pending.assistant.origin === null)
     return 'handed-down';

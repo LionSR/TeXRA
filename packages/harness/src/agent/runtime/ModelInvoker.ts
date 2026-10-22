@@ -62,7 +62,7 @@ import {
 } from '@shared/schemas';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import { generateShortId } from '@utils/core';

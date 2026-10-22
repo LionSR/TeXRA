@@ -71,10 +71,7 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
-import {
-  type RunHistoryDraft,
-  type RunState,
-} from '@shared/session/runStateFold';
+import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
   callSettlementOf,

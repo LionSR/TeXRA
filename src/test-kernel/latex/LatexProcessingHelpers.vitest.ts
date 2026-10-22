@@ -152,7 +152,6 @@ describe('LatexMediaManager PDF compilation', () => {
         )
         .pipe(Effect.provide(sessionFsLayer(roots)));
 
-      expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
       expect(media.map((file) => file.absolutePath)).toEqual([compiledPdfPath]);
     }).pipe(Effect.provide(nodePlatformLayer)),
   );

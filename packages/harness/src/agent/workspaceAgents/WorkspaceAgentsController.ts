@@ -332,9 +332,7 @@ export class WorkspaceAgentsController<
   }
 
   /** A custom agent the user deleted: its hidden choice goes with it. */
-  forgetDeletedAgent(
-    name: string,
-  ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
+  forgetDeletedAgent(name: string): Effect.Effect<void, StateWriteFailed> {
     return forgetHiddenAgent(this.deps.repoState, name);
   }
 

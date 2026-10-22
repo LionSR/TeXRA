@@ -30,7 +30,7 @@ import {
   type HookOutcomePayload,
   type ToolResult,
 } from '@shared/schemas';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from './rows';

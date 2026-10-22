@@ -32,13 +32,13 @@ import {
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   EventsFrame,
-  FoldEvent,
+  EventInput,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
 import type {
   CommitOrdinal,
   ExistenceReconciliation,
-  FoldInput,
+  SessionViewInput,
   TextChunk,
 } from '@texra-ai/harness/transcript';
 import type { Session } from '@texra-ai/harness';
@@ -58,7 +58,7 @@ export interface FramerSource {
 }
 
 type FrameItem =
-  | Exclude<FoldInput, { _tag: 'subscriptions' }>
+  | Exclude<SessionViewInput, { _tag: 'subscriptions' }>
   | { readonly _tag: 'host'; readonly host: HostSnapshot };
 
 /** One frame from the items of one window: chunks merged per row where
@@ -71,7 +71,7 @@ function cutFrame(
   drainedBefore: CommitOrdinal,
   items: readonly FrameItem[],
 ): EventsFrame {
-  const events: FoldEvent[] = [];
+  const events: EventInput[] = [];
   const chunks = new Map<string, TextChunk>();
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
@@ -168,8 +168,10 @@ export function frameSubscription(
               Stream.filter(
                 (
                   input,
-                ): input is Exclude<FoldInput, { _tag: 'subscriptions' }> =>
-                  input._tag !== 'subscriptions',
+                ): input is Exclude<
+                  SessionViewInput,
+                  { _tag: 'subscriptions' }
+                > => input._tag !== 'subscriptions',
               ),
             ),
           ),
