@@ -23,6 +23,7 @@ import {
   ToolError,
 } from '@texra-ai/harness/plugins';
 import {
+  AgentConfigSchema,
   ensureError,
   toErrorMessage,
   previewLabel,
@@ -30,7 +31,6 @@ import {
   type RunId,
   type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
-import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 
 import type {
   AgentCliSessionEntry,
@@ -193,7 +193,7 @@ export const launchAgentCliSession = Effect.fn(
       // Synthetic run metadata: the CLI runs outside the normal run loop, so
       // the tool-use category and the model's reference are stated here
       // rather than inherited from the generic AgentConfig defaults.
-      config: buildSyntheticToolUseConfig({
+      config: AgentConfigSchema.parse({
         agent: params.agentName,
         model: params.modelRef,
         instruction: params.prompt,

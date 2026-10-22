@@ -313,9 +313,8 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
       ),
     );
     const exitCode = yield* handle.exitCode.pipe(
-      Effect.map((code): number | null => code),
       // Killed by a signal it was not sent by us: no exit code.
-      Effect.catch(() => Effect.succeed(null)),
+      Effect.orElseSucceed(() => null),
     );
     yield* Fiber.join(readers).pipe(
       Effect.timeoutOption(STDIO_GRACE),
@@ -324,10 +323,10 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
     return { kind: 'exited' as const, exitCode, ...out };
   }).pipe(
     Effect.scoped,
-    Effect.timeoutOption(`${hook.timeoutSeconds} seconds`),
-    Effect.map((ended): HookRun =>
-      Option.getOrElse(ended, () => ({ kind: 'timeout' as const })),
-    ),
+    Effect.timeoutOrElse({
+      duration: `${hook.timeoutSeconds} seconds`,
+      orElse: () => Effect.succeed<HookRun>({ kind: 'timeout' }),
+    }),
     Effect.catch((error) =>
       Effect.succeed({
         kind: 'unstartable' as const,

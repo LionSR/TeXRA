@@ -9,13 +9,13 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type {
   ChildRunPort,
   ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,

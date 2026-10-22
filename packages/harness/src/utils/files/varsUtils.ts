@@ -68,12 +68,10 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
           document: { file, content },
           skipped: null,
         })),
-        Effect.catch((err) =>
-          Effect.succeed({
-            document: null,
-            skipped: { file, reason: String(err) },
-          }),
-        ),
+        Effect.orElseSucceed((err) => ({
+          document: null,
+          skipped: { file, reason: String(err) },
+        })),
       ),
     { concurrency: 'unbounded' },
   );

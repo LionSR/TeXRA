@@ -10,23 +10,26 @@ import type {
   StateReadFailed,
 } from '@platform/interfaces';
 
+import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import type { SettingsStores } from '@shared/config/settings';
 import type { SettingHost } from '@shared/state/stateSettings';
 
-import type { SettingsStores } from '@shared/config/settings';
-import { FakeConfigProvider, FakeStateStore } from './FakePlatform';
+import { fakeConfig, FakeSecrets, FakeStateStore } from './FakePlatform';
 
 export interface FakeSettingsStores {
   readonly stores: SettingsStores;
-  readonly config: FakeConfigProvider;
+  readonly config: MemoryConfigProvider;
   readonly workspaceState: FakeStateStore;
   readonly repoState: FakeStateStore;
   readonly globalState: FakeStateStore;
+  /** The secret store a model-options reader takes beside `stores`. */
+  readonly secrets: FakeSecrets;
 }
 
 export function makeFakeSettingsStores(
   host: SettingHost = 'vscode',
 ): FakeSettingsStores {
-  const config = new FakeConfigProvider();
+  const config = fakeConfig();
   const workspaceState = new FakeStateStore();
   const repoState = new FakeStateStore();
   const globalState = new FakeStateStore();
@@ -36,6 +39,7 @@ export function makeFakeSettingsStores(
     workspaceState,
     repoState,
     globalState,
+    secrets: new FakeSecrets(),
   };
 }
 

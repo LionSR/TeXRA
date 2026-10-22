@@ -1,23 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
+import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
+import { fakePath } from '@test/support/FakePlatform';
 
 /** The harness runtime supplies the standard-library filesystem prompt
  *  assembly reads through. */
 const buildOpening = (...args: Parameters<typeof buildTemplateInputs>) =>
   testRuntime().runPromise(buildTemplateInputs(...args));
 
-// getConfig reads through the platform config provider; drive the setting
-// via this provider instead of patching the ESM export.
-const fakeConfig = new FakeConfigProvider();
-
-setupPlatform({}, { config: fakeConfig });
+setupPlatform();
 
 // The describes below replace the whole global platform in their own
 // beforeEach and never restore it — they MUST stay the last describes in

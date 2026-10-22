@@ -55,7 +55,6 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -73,6 +72,7 @@ import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { presentDesktopFinalOutput } from '@desktop/main/desktopAgentLaunch';
 import { withProcessServices } from '@platform/processRuntime';
 import {
+  AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   RUN_OUTCOME,

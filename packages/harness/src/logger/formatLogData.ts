@@ -6,6 +6,7 @@
  * `Error` flattener for the raw values its other callers hand it.
  */
 // Third-party imports
+import { Predicate } from 'effect';
 import { configure } from 'safe-stable-stringify';
 
 const safeStringify = configure({ circularValue: '[Circular]' });
@@ -46,8 +47,8 @@ export function flattenError(
   });
   if (error.cause !== undefined) flat['cause'] = error.cause;
   if (error instanceof AggregateError) flat['errors'] = error.errors;
-  const code = (error as { code?: unknown }).code;
-  if (code !== undefined) flat['code'] = code;
+  if (Predicate.hasProperty(error, 'code') && error.code !== undefined)
+    flat['code'] = error.code;
   return flat;
 }
 

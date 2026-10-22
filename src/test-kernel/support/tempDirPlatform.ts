@@ -6,10 +6,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 import { afterEach } from 'vitest';
 
-// Platform defaults
-
 // Local imports
-import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
@@ -51,17 +48,11 @@ export async function createTempDirPlatform(
   const tempDir = await makeTempDir(prefix, tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  return createFakeHost(
-    {
-      workspacePath: workspaceDir,
-      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-      globalStoragePath: resolveGlobalStoragePath(storageRoot),
-    },
-    {
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+  return createFakeHost({
+    workspacePath: workspaceDir,
+    storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+    globalStoragePath: resolveGlobalStoragePath(storageRoot),
+  });
 }
 
 /**

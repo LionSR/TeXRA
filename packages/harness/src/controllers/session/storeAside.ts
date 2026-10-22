@@ -14,6 +14,7 @@ import {
   Duration,
   Effect,
   FileSystem,
+  Predicate,
   Schedule,
 } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
@@ -204,12 +205,18 @@ function hasSqliteCode(
   return cause.reasons.some((reason) => {
     if (reason._tag === 'Interrupt') return false;
     let error: unknown = reason._tag === 'Fail' ? reason.error : reason.defect;
-    while (error !== null && typeof error === 'object') {
-      const code = (error as { errcode?: unknown }).errcode;
-      if (typeof code === 'number') return codes.includes(code & 0xff);
+    while (Predicate.isObjectOrArray(error)) {
+      if (
+        Predicate.hasProperty(error, 'errcode') &&
+        Predicate.isNumber(error.errcode)
+      )
+        return codes.includes(error.errcode & 0xff);
+      const wrapped = Predicate.hasProperty(error, 'reason')
+        ? error.reason
+        : undefined;
       error =
-        (error as { reason?: { cause?: unknown } }).reason?.cause ??
-        (error as { cause?: unknown }).cause;
+        (Predicate.hasProperty(wrapped, 'cause') ? wrapped.cause : undefined) ??
+        (Predicate.hasProperty(error, 'cause') ? error.cause : undefined);
     }
     return false;
   });

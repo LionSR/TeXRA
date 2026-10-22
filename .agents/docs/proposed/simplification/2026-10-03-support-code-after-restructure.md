@@ -91,7 +91,7 @@ Not done: each changes which failures surface, and the hook runner's
 verdicts are pinned by `HookProtocol.vitest.ts`. A behavior-preserving
 sweep is the wrong place for that.
 
-## 4. Two plugin pins resolve a program on different PATHs
+## 4. Two plugin pins resolve a program on different PATHs (server spawn decided and done)
 
 `pluginDigest.ts` (`externalFiles`) resolves an MCP server command with
 `whichOnExtendedPath`. `pluginHooks.ts` (`pinHook`) resolves a hook program
@@ -99,28 +99,37 @@ with `which.sync(program, { path: process.env.PATH })`. If a binary is only
 on the extended PATH, it pins for a server but is refused for a hook, and
 the two can pin different binaries for the same name.
 
-Proposal: one resolver for both. Not done because it changes which hooks
-load.
+The sharper mismatch was inside the server path. `mcpServer.ts` (`connect`)
+spawns the bare `server.command` with `extendEnv: false`, and Node looks a
+bare command up on the child env's PATH. That PATH was the process's, or a
+project `.env`'s, never extended. So a command found only in an extra
+directory (`/opt/homebrew/bin` under a Dock-launched VS Code) pinned and then
+failed to spawn, and a `.env` PATH could run a binary other than the pinned
+one. The hooks were already consistent: `pinHook` and `runHook` both use
+`process.env.PATH`.
 
-Checked on 2026-10-21: the premise that TeXRA's spawns use the extended
-PATH does not hold for these two. `runHook` (`pluginHooks.ts`) spawns with
-`extendEnv: false` and `PATH: process.env.PATH ?? '/usr/bin:/bin'`;
-`pinHook` resolves over `process.env.PATH ?? ''`, so with PATH unset the
-hook is left dynamic rather than pinned against that fallback.
-`mcpServer.ts` (`connect`) spawns with `extendEnv: false` over `environment` (the process
-environment with the project's `.env` over it). Neither extends PATH, so the
-hook pin matches what the hook runs, and the server pin is the odd one out.
-The extended PATH only appends directories, so the two differ only for a
-program that is found in one of those directories alone. Such a program pins
-for a server, and the server's spawn then fails. Moving hook pins onto the
-extended PATH would pin a binary the hook cannot start. The fix belongs on
-the spawn side: either both children get the extended PATH, or the server
-pins on the PATH it spawns with, including the project's `.env` `PATH`. Which
-one is a design question that stays open. The extension host makes the two
-PATHs equal anyway: it writes the extended PATH into `process.env.PATH` once
-it activates (`initializeLatexSupport`). The CLI and the desktop app do not.
-`hasPackageManager` (`toolChecks.ts`) now calls `whichOnExtendedPath`
-instead of a second copy of it.
+There were two options: (a) give the server spawn the extended PATH the pin
+resolves over, or (b) pin the server on the env it spawns with. The decision
+is (a). `serverEnv` now sets PATH to the extended process PATH, the string
+`whichOnExtendedPath` searches. A project `.env` PATH gives way to it, with
+a `warn` log, because the pin cannot see `.env`; the `.env`'s other
+variables pass as before. A server entry's own `env.PATH`, which is part of
+its trusted digest, still wins and is extended. Such a server still resolves
+its command on a PATH the pin does not read. Option (b) would have moved
+every server pin, and with it every persisted trust digest. Option (a)
+changes no pin.
+
+Still open: one resolver for hooks and servers. Not done because it changes
+which hooks load, and with that the hook trust digests.
+
+The hook side in detail: `runHook` spawns with `extendEnv: false` and
+`PATH: process.env.PATH ?? '/usr/bin:/bin'`; `pinHook` resolves over
+`process.env.PATH ?? ''`, so with PATH unset the hook is left dynamic rather
+than pinned against that fallback. The extension host writes the extended
+PATH into `process.env.PATH` once it activates (`initializeLatexSupport`), so
+there hooks see it too; the CLI and the desktop app do not.
+`hasPackageManager` (`toolChecks.ts`) calls `whichOnExtendedPath` instead of
+a second copy of it.
 
 ## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
 

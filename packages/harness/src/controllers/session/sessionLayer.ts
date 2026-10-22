@@ -432,14 +432,13 @@ const listSessions = Effect.gen(function* () {
       // A store that will not open must not hold a shutdown: past the
       // close budget the entry is skipped, said once, and released with
       // the map.
-      Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      Effect.flatMap((built) =>
-        Option.isSome(built)
-          ? Effect.succeed(built.value)
-          : Effect.logWarning(
-              `Session ${key.storage} was still opening past the close budget; it is skipped here and released with the process.`,
-            ).pipe(withLogChannel(CHANNEL), Effect.as(Option.none())),
-      ),
+      Effect.timeoutOrElse({
+        duration: SESSION_CLOSE_DEADLINE_MS,
+        orElse: () =>
+          Effect.logWarning(
+            `Session ${key.storage} was still opening past the close budget; it is skipped here and released with the process.`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(Option.none())),
+      }),
     );
     if (Option.isSome(entry)) held.push(Context.get(entry.value, Session));
   }
@@ -537,18 +536,18 @@ const closeSession = (root: string) =>
       // The settlement has a budget of its own: a store too stuck to take
       // the terminal rows must not hold the process's exit. A run left
       // unsettled is classified from its checkpoint by the next launch.
-      const settledLate = yield* Effect.forEach(
-        abandoned,
-        (runId) => settleRun(session, runId),
-        { discard: true },
-      ).pipe(
+      yield* Effect.forEach(abandoned, (runId) => settleRun(session, runId), {
+        discard: true,
+      }).pipe(
         Effect.interruptible,
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+        Effect.timeoutOrElse({
+          duration: SESSION_CLOSE_DEADLINE_MS,
+          orElse: () =>
+            Effect.logWarning(
+              `Session ${root} could not settle its abandoned runs within the close budget; the next launch classifies them from their checkpoints`,
+            ).pipe(withLogChannel(CHANNEL)),
+        }),
       );
-      if (Option.isNone(settledLate))
-        yield* Effect.logWarning(
-          `Session ${root} could not settle its abandoned runs within the close budget; the next launch classifies them from their checkpoints`,
-        ).pipe(withLogChannel(CHANNEL));
     }
     yield* sessions.invalidate(key);
     return { settled, abandoned } satisfies SessionCloseReport;

@@ -6,19 +6,17 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  AgentConfigSchema,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunId,
@@ -85,7 +83,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
       config: AgentConfigSchema.parse(childConfigPayload),
       session: parentSession,

@@ -1,7 +1,6 @@
 /** Explicit call capabilities over the test host's existing process services. */
 import { Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   ToolContext,
@@ -20,7 +19,11 @@ import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
-import { qualifyAggregateId, type PermissionPayload } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  qualifyAggregateId,
+  type PermissionPayload,
+} from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';

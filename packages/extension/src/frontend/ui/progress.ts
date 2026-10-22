@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 /** What VS Code hands a progress task to report through. */
@@ -35,24 +35,18 @@ export const withVSCodeProgress = <A, E, R>(
       taskSettled = resolve;
     });
 
-    let taskStarted!: (handles: {
+    const started = yield* Deferred.make<{
       progress: ProgressReporter;
       token: vscode.CancellationToken;
-    }) => void;
-    const started = new Promise<{
-      progress: ProgressReporter;
-      token: vscode.CancellationToken;
-    }>((resolve) => {
-      taskStarted = resolve;
-    });
+    }>();
 
     const dismissed = vscode.window.withProgress(options, (progress, token) => {
-      taskStarted({ progress, token });
+      Deferred.doneUnsafe(started, Effect.succeed({ progress, token }));
       return bodyDone;
     });
 
     return yield* Effect.gen(function* () {
-      const { progress, token } = yield* Effect.promise(() => started);
+      const { progress, token } = yield* Deferred.await(started);
       const exit = yield* Effect.exit(body(progress, token));
       yield* Effect.sync(() => taskSettled());
       yield* Effect.promise(() => dismissed);
