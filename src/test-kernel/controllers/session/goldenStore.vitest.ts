@@ -358,7 +358,6 @@ describe('the golden 1.0 store', () => {
         {
           status: 'completed',
           rounds: 1,
-          cost: expect.any(Number),
           report: 'The golden chat is answered.',
         },
       ]);
