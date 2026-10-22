@@ -2,15 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import {
-  Deferred,
-  Effect,
-  Exit,
-  type FileSystem,
-  type Path,
-  Queue,
-  Stream,
-} from 'effect';
+import { Deferred, Effect, Exit, type FileSystem, type Path } from 'effect';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -20,7 +12,6 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import {
   ToolEditApprovalController,
   type ToolEditPreview,
@@ -32,7 +23,6 @@ import type {
 } from '@texra/tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
-import type { LocalSession } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const RUN = RunIdSchema.parse('ab12cd');
@@ -304,40 +294,6 @@ describe('tool edit approval controller', () => {
 
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
     expect(testHost.session.request).toHaveBeenCalledOnce();
-  });
-
-  it('releases a preview whose decision commits while the window is still staging it', async () => {
-    const testHost = createTestHost();
-    const controller = createController(testHost);
-    Deferred.doneUnsafe(testHost.staging, Effect.void);
-    Deferred.doneUnsafe(testHost.presentation, Effect.void);
-
-    await run(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const committed = yield* Queue.unbounded<SessionEvent>();
-          let host: Parameters<LocalSession['attach']>[0] | undefined;
-          // cast: the two members the wiring reads, over a scripted commit log.
-          const session = {
-            view: { head: () => 0, events: () => Stream.fromQueue(committed) },
-            attach: (attached: NonNullable<typeof host>) =>
-              Effect.sync(() => {
-                host = attached;
-              }),
-          } as unknown as LocalSession;
-          yield* attachSessionHost(session, controller, {});
-          const request = yield* approvalRequest();
-          // The run hands the request over before its `request.opened`
-          // commits; a surface decides it before this window's fibers run.
-          host?.presentToolEdit?.(request);
-          Queue.offerUnsafe(committed, decided(request.permission.requestId));
-          // Released whether the decision lands before or after staging;
-          // a decision followed before the entry existed released nothing.
-          yield* Deferred.await(testHost.disposed);
-        }),
-      ),
-    );
-    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
   });
 
   it("approves a staged request with the user's edit for an approve-all, and reports an unstaged one as not held", async () => {

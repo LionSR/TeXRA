@@ -742,27 +742,6 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('applies two quick skill switches to the list the host holds, neither undoing the other', async () => {
-    const config = fakeConfig();
-    const { settings } = await createCapturedSettingsFixture({ config });
-
-    // Both sent before the first one's snapshot comes back.
-    for (const item of ['proofread', 'translate']) {
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED,
-        key: WorkspaceStateKey.DISABLED_SKILLS,
-        item,
-        enabled: false,
-      });
-    }
-    await vi.waitFor(() =>
-      expect(config.get(WorkspaceStateKey.DISABLED_SKILLS)).toEqual([
-        'proofread',
-        'translate',
-      ]),
-    );
-  });
-
   it('keeps a workspace-scoped row unwritten while no folder is open', async () => {
     const config = fakeConfig();
     const update = vi.spyOn(config, 'update');

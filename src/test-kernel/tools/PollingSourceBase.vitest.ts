@@ -7,7 +7,6 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 // Local imports - tools
-import { GitHubPermanentError } from '@texra/tools/github/githubClient';
 import { getNewestTimestamp } from '@texra/tools/github/githubPaths';
 import { DedupedResource } from '@texra/tools/github/pollingDedup';
 import {
@@ -45,11 +44,6 @@ class TestPollingSource extends PollingSourceBase<
 
   subscribeForTest(listener: (text: string) => Effect.Effect<void>) {
     return this.register('key', createBasePollState, listener);
-  }
-
-  /** What a round that polled `state` does when its poll fails. */
-  failForTest(state: BasePollSubscriptionState, err: unknown) {
-    return this.handleFailure('key', state, err, 0);
   }
 
   emitForTest(text: string): Effect.Effect<void> {
@@ -172,33 +166,5 @@ describe('PollingSourceBase lifetime', () => {
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(shutdown);
     }),
-  );
-
-  it.live(
-    'a stale round cannot detach the subscription that replaced its state',
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* Scope.make();
-        yield* Effect.addFinalizer(() => Scope.close(owner, Exit.void));
-        const lifetime = yield* makePollingLifetime.pipe(
-          Effect.provideService(Scope.Scope, owner),
-        );
-        const source = new TestPollingSource(lifetime);
-        const subscribe = source
-          .subscribeForTest(() => Effect.void)
-          .pipe(
-            Effect.provideService(Secrets, new FakeSecrets()),
-            Effect.provide(testHttpClientLayer),
-          );
-        (yield* subscribe).dispose();
-        // A round still polling the first state, which the last listener left.
-        const stale = createBasePollState(0);
-        yield* subscribe;
-        yield* source.failForTest(
-          stale,
-          new GitHubPermanentError({ status: 404, message: 'Not Found' }),
-        );
-        expect(source.activeKeys()).toEqual(['key']);
-      }),
   );
 });

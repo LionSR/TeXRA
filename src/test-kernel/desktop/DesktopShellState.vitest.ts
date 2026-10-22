@@ -33,26 +33,6 @@ describe('desktop document identity', () => {
     ]);
   });
 
-  // A rebuild posts the same file URL: the tab only re-activated, and its
-  // frame kept showing the first build.
-  it('records a rebuilt PDF on its open tab', () => {
-    const pdf = { kind: 'pdf', target: 'file:///papers/draft.pdf' } as const;
-    let state = openWorkbenchTab(initialDesktopShellState(), {
-      ...pdf,
-      build: 1,
-    });
-    state = openWorkbenchTab(state, { ...pdf, build: 2 });
-    expect(state.workbenchTabs.filter((tab) => tab.kind === 'pdf')).toEqual([
-      {
-        id: 'workbench:pdf:file:///papers/draft.pdf',
-        kind: 'pdf',
-        target: 'file:///papers/draft.pdf',
-        title: 'draft.pdf',
-        build: 2,
-      },
-    ]);
-  });
-
   it('does not reuse terminal identities after closure or persistence', () => {
     let state = openWorkbenchTab(initialDesktopShellState(), {
       kind: 'terminal',

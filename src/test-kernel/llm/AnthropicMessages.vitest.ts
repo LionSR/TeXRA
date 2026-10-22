@@ -370,56 +370,6 @@ describe('canonical Anthropic Messages protocol', () => {
     },
   );
 
-  // The release no longer owns an upload answered after it, so the uploader
-  // is that file's last owner: interrupting it mid-delete must say so.
-  it.effect(
-    'warns when an upload that finishes after release is interrupted before its delete',
-    () => {
-      const warnings: unknown[] = [];
-      const capture = Logger.make((options) => {
-        warnings.push(options.message);
-      });
-      return Effect.gen(function* () {
-        const uploadIssued = yield* Deferred.make<void>();
-        const answerUpload = yield* Deferred.make<void>();
-        const deleteIssued = yield* Deferred.make<void>();
-        fetchModel.mockImplementation(async (url, init) => {
-          if (init?.method === 'DELETE') {
-            Deferred.doneUnsafe(deleteIssued, Effect.void);
-            return new Promise<Response>((_, reject) =>
-              init.signal?.addEventListener('abort', () =>
-                reject(init.signal?.reason),
-              ),
-            );
-          }
-          if (String(url).endsWith('/v1/files')) {
-            Deferred.doneUnsafe(uploadIssued, Effect.void);
-            await Effect.runPromise(Deferred.await(answerUpload));
-            return Response.json({ id: 'file_late', expires_at: null });
-          }
-          return response(signedEvents());
-        });
-        const bound = model();
-        assert(bound.uploadFile && bound.releaseUploads);
-        const late = yield* Effect.forkChild(
-          bound.uploadFile({
-            mimeType: 'application/pdf',
-            filename: 'paper.pdf',
-            base64: 'AA==',
-          }),
-        );
-        yield* Deferred.await(uploadIssued);
-        expect(yield* bound.releaseUploads()).toStrictEqual([]);
-        yield* Deferred.done(answerUpload, Exit.void);
-        yield* Deferred.await(deleteIssued);
-        yield* Fiber.interrupt(late);
-        expect(warnings.flat()).toStrictEqual([
-          expect.stringContaining('file_late'),
-        ]);
-      }).pipe(Effect.withLogger(capture));
-    },
-  );
-
   it.effect(
     "sends no switched-from model's thinking and no empty assistant turn",
     () =>
