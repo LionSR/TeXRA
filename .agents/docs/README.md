@@ -1,8 +1,7 @@
 # Agent Notes
 
 This tree is the home for the project's design notes: PRDs, proposals, plans,
-and audits. It merges the former `docs/prds/` and `docs/proposals/` directories
-into a single lifecycle-organized hierarchy.
+and audits, organized by lifecycle.
 
 ## Layout
 
@@ -52,7 +51,7 @@ rest on landed work and stay open.
 
 - [`INDEX.md`](./INDEX.md) is the one allowed index, and it indexes owners,
   not files: one row per topic naming the note that owns it. It exists because
-  a tree of 29 dated notes cannot say which of six notes on a topic is the
+  a tree of dated notes cannot say which of several notes on a topic is the
   current one. Do not add a second index, a per-class index, or a file listing
   — for everything without an owner, the directory tree and git history remain
   the index.

@@ -41,7 +41,7 @@ type check first. This is the single most common way a change lands broken.
 ## Layout
 
 A pnpm workspace in three layers (split design
-`.agents/docs/proposed/architecture/2026-10-02-harness-package-split.md`):
+`.agents/docs/implemented/architecture/2026-10-02-harness-package-split.md`):
 `packages/harness/src` (`@texra-ai/harness`) is the Effect-only harness;
 `packages/texra/src` (`@texra-ai/texra`) is the app: TeXRA's plugins, LaTeX,
 the UI kit and the host-side controllers; `packages/llm` is model access.
@@ -54,48 +54,44 @@ point into `packages/harness/src`; app files that left a mixed directory
 take `@texra/*` (`@texra/tools/arxiv/…`), and `@latex/*`, `@replacement/*`,
 `@telemetry/*`, `@housekeeping/*` and `@ui/*` point into the app. The harness
 imports nothing from the app (`HARNESS_NO_APP_IMPORT_PATTERNS` in
-`eslint.config.mjs`, with a shrink-only list of residents). Inside
+`eslint.config.mjs`). Inside
 `packages/harness/src` (an ESM package) a relative import names its `.js`
 file.
 
 Things the tree won't tell you:
 
 - **The SDK surface is `packages/harness` (`@texra-ai/harness`) — built, fenced,
-  releasable at 0.x.** There is no `@texra/core` package (deleted by #7099). Hosts still
-  reach the harness through the path aliases, but that surface is
-  **frozen, not open**: `eslint.config.mjs` forbids `packages/harness/src/**`,
-  `packages/texra/src/**` and `packages/llm/src/**` from importing host layers, and the ratchets in
-  `config/ratchets/` freeze the remaining edges — `harness-deep-import-baseline`
-  (no NEW distinct harness-internal specifier, `@agent/*`, `@shared/*`,
-  `@platform/*` …, from the app or a host, type-only included; a host holds
-  the `LocalSession` that `Sessions.open` returns, whose reads are typed, and
-  reaches the harness through `@texra-ai/harness` instead), `core-quality/core-module-mocks`,
-  `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
-  refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
-  an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the
-  SDK entry files (`packages/harness/src/{index,node,plugins,schemas}.ts`,
-  `packages/harness/src/effect/`)
-  (webview frontends excluded) or a named runtime entry carved out in
-  `eslint.config.mjs` (whole-file; the receiver is checked in review), as does
-  `new AbortController()` outside its two ledger residents, and `no-warning-comments` fails on any `@adapter-until`
-  marker, since the owner ruled there are no temporary adapters. AGENTS.md
-  "Directory organization"
-  has the rules. The invariant to hold is "never widen a
-  baseline"; the open work is the Tier-1 public manifest and shrinking the
-  frozen lists, not
-  another lint rule. Publishing `@texra-ai/harness` and `@texra-ai/llm` is the
+  releasable at 0.x.** There is no `@texra/core` package. The app and the
+  hosts reach the harness through `@texra-ai/harness` and its subpaths
+  (`/node`, `/plugins`, `/schemas`, `/transcript`); a host holds the
+  `LocalSession` that `Sessions.open` returns, whose reads are typed. The
+  boundary is **frozen, not open**: `eslint.config.mjs` forbids
+  `packages/harness/src/**`, `packages/texra/src/**` and `packages/llm/src/**`
+  from importing host layers, and the ratchets in `config/ratchets/` freeze
+  the remaining edges — `harness-deep-import-baseline` (no NEW distinct
+  harness-internal specifier, `@agent/*`, `@shared/*`, `@platform/*` …, from
+  the app or a host, type-only included), `core-quality/core-module-mocks`,
+  `architecture-edges`, plus `refuted-candidates`. ESLint's
+  `no-restricted-syntax` fails an `Effect.run*` call outside
+  `packages/{extension,desktop,cli}/src/`, the SDK entry files
+  (`HARNESS_ENTRY_FILES`) and `packages/harness/src/effect/` (webview
+  frontends excluded) or a named runtime entry (`EFFECT_RUN_ENTRIES`,
+  whole-file; the receiver is checked in review), as does
+  `new AbortController()` outside its two ledger residents, and
+  `no-warning-comments` fails on any `@adapter-until` marker, since the owner
+  ruled there are no temporary adapters. AGENTS.md "Directory organization"
+  has the rules. The invariant to hold is "never widen a baseline"; the open
+  work is the public surface in the harness general-package design
+  (`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`)
+  and shrinking the frozen lists, not another lint rule. Publishing `@texra-ai/harness` and `@texra-ai/llm` is the
   owner's manual step (npm OTP, `releasing` skill, "npm packages"); CI's
   `packed example` job installs both tarballs outside the repo, type-checks
   them strictly and runs them. Kernel architecture tests under
-  `src/test-kernel/architecture/` (including
-  `approvalPolicyAuthorityRatchet.vitest.ts`, and
+  `src/test-kernel/architecture/` (for example
   `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every
-  `@shared/schemas/<leaf>` import outright, and
-  `unknownErrorChannelRatchet.vitest.ts`, which forbids an
-  `Effect.Effect`/`Effect.fn.Return` error channel spelled `unknown` — type it
-  with the tagged error the path raises, `Error` at a host port, and
-  `ensureError` at a foreign boundary) also pin single-authority invariants
-  with hardcoded rules rather than baseline JSON.
+  `@shared/schemas/<leaf>` import, and `unknownErrorChannelRatchet.vitest.ts`,
+  which forbids an `unknown` error channel) also pin single-authority
+  invariants with hardcoded rules rather than baseline JSON.
 - **`packages/harness/src/utils/` is host-agnostic, not browser-safe.** The
   webview frontends import no `@utils/*` module at runtime (ESLint refuses
   it). Path basics, error messages, text primitives and escaping reach them
@@ -108,8 +104,6 @@ Things the tree won't tell you:
   (`packages/harness/src/agent/runtime/`).
 - **`packages/harness/src/common/webview/` does not exist.** Webview base classes are in
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
-- **No convenience barrels.** A barrel exists only for a documented public
-  surface. Import the file that defines the symbol.
 - **`packages/texra/src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
   Lit building blocks (`wa/`), the shared `css` tag blocks (`styles/`), the
   markdown/KaTeX pipeline (`markdown/`) and the user-facing copy tables
@@ -120,14 +114,11 @@ Things the tree won't tell you:
   (`@transcript`), the run-transcript persistence layer.
   **`packages/texra/src/shared/{litControllers,monaco,highlighting}/`
   never moved into the kit** — Lit reactive controllers, a Monaco bootstrap, and a
-  highlight.js wrapper. Consumers are webview/renderer UI code, plus one
-  main-process diff-labeling caller (`packages/desktop/src/main/desktopDiffHost.ts`)
-  and the UI toolkit's own markdown pipeline (`packages/texra/src/ui/markdown/katexHtmlProcessor.ts`);
-  none is a wire-contract reader. The three were shelved along with a broader,
-  separately proposed regroup of six `packages/harness/src/shared/` subtrees under `packages/harness/src/shared/ui/`
-  that was rejected on cost (235 import statements plus 9 hardcoded literal test
-  paths for that six-directory regroup, not for these three alone) — not because
-  the code belongs with wire contracts. Treat them as the UI toolkit's territory:
+  highlight.js wrapper. Consumers are UI code (webviews, the desktop renderer,
+  the kit's own `markdown/` and `wa/`) plus one main-process diff-labeling
+  caller (`packages/desktop/src/main/desktopDiffHost.ts`); none is a
+  wire-contract reader. Moving them was shelved on cost, not because the
+  code belongs with wire contracts. Treat them as the UI toolkit's territory:
   don't duplicate a controller or a highlighter in `@ui` without checking
   here first, and don't read their location as license to add more rendering
   code under a `shared/` directory.
@@ -165,11 +156,10 @@ sync with this list and with each other.
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (builds its runtime over `processLayer()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
-`packages/extension/src/common/`, and `packages/harness/src/platform/` interface definitions.
-Within `packages/harness/src/utils/`, a browser-reachable module additionally
-stays free of Node built-ins — see the browser-safe note above; that is a
-stricter constraint layered on top of the VS Code-free rule, not a
-substitute for it.
+`packages/extension/src/common/`, and the view providers in
+`packages/extension/src/{progressView,settingsView}/` outside their
+`frontend/`. The harness's `platform/` defines the host ports as plain
+interfaces; it is VS Code-free like the rest of the harness.
 
 Reach process services from the Effect context the process runtime serves
 (`AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
@@ -182,21 +172,21 @@ decoupling rules".
 
 Also: `packages/harness/src/shared/` is for wire contracts and UI-shared message types, and
 `@ui` (`packages/texra/src/ui/`) for the rendering toolkit over them — don't add new `@agent/*`
-imports to either; host-neutral orchestration goes in `packages/harness/src/controllers/`.
+imports to either; the app's host-neutral orchestration goes in
+`packages/texra/src/controllers/` (the session bridge is in its `session/`).
 
 **Event channels.** New facts a run's trace emits extend `AgentEvent`
-(trace) and reach the plane through `runEventDraft`; facts the session itself
-authors (lifecycle, status, approvals) extend the `SessionEvent` schema
+(trace) and reach the session log through `runEventDraft` and the log's
+`publish`; facts the session itself authors (lifecycle, status, approvals)
+extend the `SessionEvent` schema
 (`packages/harness/src/shared/schemas/sessionEvent.ts`) and are committed as
 drafts through the session log's `transact` (`SessionLog`,
-`packages/harness/src/agent/runtime/SessionHandle.ts`). Don't add a new
-`bus.emit` from a VS Code-free zone and don't add a new subscribe surface. (Ruled in
-`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The tool
-emit sites this once grandfathered have since migrated to session-owned
-emission through the session log (`transact`, and `publish` for trace
-events), so a new direct `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
-`emitAppSignal(...)` on the separate `AppSignals` bus within its documented
-scope.
+`packages/harness/src/agent/runtime/SessionHandle.ts`). Don't add a
+`bus.emit` from a VS Code-free zone and don't add a new subscribe surface
+(ruled in
+`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`).
+This does not restrict `emitAppSignal(...)` on the separate `AppSignals` bus
+within its documented scope.
 
 **One publisher, loop-owned cards.** Every write to a session's event table
 is a job on the `SessionEvents` inbox (its doors are `transact`, `detach`,
@@ -246,9 +236,10 @@ launches on its own recipe (`script.kind: 'recipe'`), and the harness reads
 nothing inside the block. Provider APIs are reached
 only through the `packages/llm` `Model` that `runtime/modelAccess/ModelAccess.ts`
 binds; the `helperModel` path binds through that same route. New agents come
-from the built-in `creator` agent or the settings view's "Create from
-template". Agents are flat persona YAML (`name`, `description`, `prompt`,
-`tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
+from the built-in `creator` agent or the settings view's Agents tab ("New
+agent", from a template). Agents are flat persona YAML (`name`, `description`,
+`prompt`, `tools`, `temperature`) in `packages/extension/resources/agents/`; a
+`task:` block
 (the documents plugin's, `packages/texra/src/tools/documents/documentTask.ts`)
 makes one also launchable as a document task, which the plugin's recipe
 (`packages/texra/src/agent/output/documentRecipe.ts`) runs.
@@ -284,9 +275,9 @@ the run history.
   version per record kind, projections rebuilt from history, one owner per
   fact. Then write the fewest lines that do the job, and build nothing for
   a problem we don't have: no speculative layers, knobs or frameworks.
-- **Abstraction discipline.** Collapse pass-through layers — nodes create and
-  run flows directly in `exec()`; a wrapper that only creates state, runs a
-  flow, and interprets results gets inlined; deleted wrappers leave no
+- **Abstraction discipline.** Collapse pass-through layers — entry points
+  run the loop program directly; a wrapper that only creates state, runs a
+  program, and interprets results gets inlined; deleted wrappers leave no
   re-export shims. Factories need multiple callers, real logic, class
   construction, or captured context. Grep the caller count before adding a
   shared helper: single-caller extractions are banned. Narrowing a module's
@@ -330,9 +321,9 @@ refactoring" and "Code quality rules".
 ## Docs
 
 `docs/guide/` and a few root docs are published on the texra.ai VitePress site;
-internal directories (`architecture/`, `design/`, `dev/`, `supabase/`, …) are
-excluded by `docs/.vitepress/publicDocs.js`. The former PRD and proposal
-trees now live under `.agents/docs/` (outside the VitePress root) — see
+internal directories (`architecture/`, `dev/`, `supabase/`, …) are
+excluded by `docs/.vitepress/publicDocs.js`. PRDs and proposals live under
+`.agents/docs/` (outside the VitePress root) — see
 `.agents/docs/README.md` for the lifecycle/class layout.
 
 **A doc landing at the `docs/` root can silently freeze the texra.ai deploy** if

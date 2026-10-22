@@ -5,17 +5,17 @@ extension host and its webviews (`progressView`, `settingsView`).
 
 ## Directory organization
 
-- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows; subfolders `system/`, `ui/`, `editor/`, `agents/`, `latex/`, `media/`). Prefer these helpers over duplicating logic in commands or webviews.
+- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, approvals, editor and LaTeX integration, instruction banners, status bar; subfolders such as `system/`, `ui/`, `editor/`, `agents/`, `latex/`). Prefer these helpers over duplicating logic in commands or webviews.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
-  - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
+  - `packages/extension/src/common/webview/` - The webview content provider (`BundledViewContentProvider`), which also builds the webview HTML
 
 ## Coding style
 
-- Keep webview directory structure aligned where views share a concern (`components/`, `styles/`); beyond that `progressView` and `settingsView` intentionally diverge (see "Webview Consistency Patterns").
+- Keep webview directory structure aligned where views share a concern (`components/`); beyond that `progressView` and `settingsView` intentionally diverge (see "Webview Consistency Patterns").
 
 ## Webviews and UI
 
-- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
+- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`). There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@texra-ai/harness/schemas` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`; text primitives) and `@ui/copy/format` (counts, sizes, durations). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
 
 ## Error handling
@@ -42,7 +42,7 @@ one the view you're touching already uses:
   directly, composed with `BundledViewContentProvider`, and routes through
   `SessionBridge` / `HostDraftRequests` as typed `runtime.request` /
   `host.request` calls (see
-  `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`).
+  `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md`).
   Its Lit components (`progressView/frontend/components/`) read the
   `SessionView` fold (`packages/harness/src/shared/session/sessionView.ts`) and `Surface`
   records as properties.
