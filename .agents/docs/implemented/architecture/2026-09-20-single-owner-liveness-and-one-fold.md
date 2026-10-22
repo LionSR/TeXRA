@@ -24,11 +24,11 @@ rather than synchronized.
   append is stamped with the owner in the same SQL statement
   (`event_sequence.owner_id`, `packages/harness/src/controllers/session/Database.ts`),
   so a lost claim writes nothing.
-- **No snapshot restates rows.** A run resumes from `foldRunState` over its
+- **No snapshot restates rows.** A run resumes from `applyRunRows` over its
   rows (`packages/harness/src/shared/session/runState.ts`); the facts a
   snapshot once carried each have their own row.
 - **One reducer for the rows both folds read.** `runState` (what the
-  loop continues from) and `sessionFold` (what people see) apply
+  loop continues from) and `sessionViewUpdate.ts` (what people see) apply
   `run.position`, `request.opened`, `request.decided`, `followup.queued`
   and `followup.consumed` through one module,
   `shared/session/runRows.ts` (`applyRunRow`); a type listed there and not

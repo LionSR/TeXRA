@@ -93,7 +93,7 @@ rows go. No new test file is needed.
 - **Writers: no near-miss survived the re-check.** The audits listed five
   (activate's cancels, tool-card producers, grants derivations, `run.config`
   shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, none is a
-  defect. The one missing guard, `transcriptFold.ts`'s switch with no
+  defect. The one missing guard, `transcriptUpdate.ts`'s switch with no
   `satisfies never`, is lane 4 (done, #14211).
 - **The row-version freeze is unarmed until a release.** Its check returns early
   while `config/storage/frozen/` does not exist
@@ -280,7 +280,7 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 | 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
 | 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
-| 4   | Done (#14211): `satisfies never` after `transcriptFold.ts`'s `record` switch; the writer items closed on re-check (below)                                                                    | —      | 0           |
+| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
 | 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
@@ -311,7 +311,7 @@ items needs code; one guard does:
   loop's; a process run's are `openToolCard`'s; no run has two writers. Moving
   them to `stream.chunk` on the launching card would drop them.
 - **Grants**: `grantsKept`, `inheritedGrants` (`shared/approvalBypassKind.ts`)
-  and `delegatedChildGrants` (`tools/approval/index.ts`) are three rules (kept
+  and `delegatedChildGrants` (`tools/delegation/subagentRun.ts`) are three rules (kept
   after a detach, inherited, a delegated child's birth grants), not one rule
   three times. `grantsKeptFromRows` already delegates to `grantsKept`.
 - **`run.config`**: its three producers (registration, activation, and the
@@ -320,8 +320,8 @@ items needs code; one guard does:
   only a changed configuration.
 - **`followup.consumed`**: the copies are three-line literals over different
   inputs (follow-up records, ids, filtered controls); one builder saves nothing.
-- **`satisfies never`**: `applySessionSlices` in `sessionFold.ts` is partial by
-  design (the run arm takes the rest) and stays so. `transcriptFold.ts`'s
+- **`satisfies never`**: `applySessionFacts` in `sessionViewUpdate.ts` is partial by
+  design (the run arm takes the rest) and stays so. `transcriptUpdate.ts`'s
   `record` switch covers all ten transcript event kinds today but has no
   `satisfies never`, so a new kind would compile and vanish from a durable fold.
   Lane 4 is that guard.
@@ -398,7 +398,7 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   switch across protocols is refused early.
 
 Still open after this design: about 350 lines of duplicated lowering across the
-llm adapters and OpenRouter's hand-rolled transport; `sessionFold.ts` at 1,229
+llm adapters and OpenRouter's hand-rolled transport; `sessionViewUpdate.ts` at 1,166
 lines; the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).

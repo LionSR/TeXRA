@@ -65,7 +65,7 @@ catalog over it, from the list an entry passes to `processLayer`.
 
 How a host shows a plugin is not on the value. TeXRA keeps its dashboard copy
 by id in `TEXRA_PLUGIN_CARDS` (`packages/texra/src/tools/pluginCards.ts`),
-which the settings view's Plugins page and `texra tools` read.
+which the settings view's Plugins page reads.
 
 ## Harness built-ins and the app's plugins
 

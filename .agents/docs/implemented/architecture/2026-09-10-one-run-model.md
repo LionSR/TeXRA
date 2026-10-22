@@ -23,7 +23,7 @@ log, published as a value; a renderer is a function of the value. A fact is
 written as exactly one row type; a derived value has exactly one fold;
 nothing derived is persisted and nothing persisted is derived. Two folds are
 legitimate only when they answer different questions over the same rows
-(display, `sessionFold`, versus resume, `foldRunState`); rows both read go
+(display, `sessionViewUpdate.ts`, versus resume, `applyRunRows`); rows both read go
 through one reducer (`shared/session/runRows.ts`). There is no snapshot: a
 run resumes by folding its rows.
 
@@ -164,7 +164,7 @@ is no second inquiry protocol.
 There is one view fold, `SessionView` with `RunView` entries in
 `SessionView.runs` (`packages/harness/src/shared/session/sessionView.ts`),
 and backend readers take the same view as renderers. The resume fold
-(`foldRunState`) is a different question over the same rows and stays
+(`applyRunRows`) is a different question over the same rows and stays
 separate.
 
 ### 3.9 Model identity

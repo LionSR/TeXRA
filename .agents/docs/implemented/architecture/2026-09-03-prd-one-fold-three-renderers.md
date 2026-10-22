@@ -10,7 +10,7 @@ code on `main`. Code comments cite it by section number ("PRD
 one-fold-three-renderers, 5.2"), so the numbering is kept; sections that
 only recorded the build plan are gone.
 
-**In one sentence:** every process that shows a session runs the same pure
+**In one sentence:** every process that shows a session runs the same
 fold over the same session events into one `SessionView`; the transport
 carries events and requests, never a view; a renderer owns only the
 interaction state of its own view instance; and the TUI, the desktop and the
@@ -20,10 +20,10 @@ extension paint the same `TranscriptRow`s from it.
 session event table ──► SessionEvents (one publisher, ordered reads)
                               │ listing · aggregate history · tail, + live text
                               ▼
-                 fold(view, input) ─► SessionView ─► RunView.transcript.rows
-                 (same pure function in the       (TranscriptRow, @shared/transcript)
-                  runtime, a webview, the TUI)          │
-                                                        ▼
+                 updater.apply(input) ─► SessionView ─► RunView.transcript.rows
+                 (same updater in the runtime,       (TranscriptRow, @shared/transcript)
+                  a webview, the TUI)                      │
+                                                           ▼
                          Ink TUI · Lit progress app (extension, desktop) · headless/SDK
 ```
 
@@ -37,7 +37,7 @@ vocabulary removes the copies.
 
 ## 2. Goals
 
-1. One `SessionView`, produced by one pure fold, identical in every process
+1. One `SessionView`, produced by one fold, identical in every process
    that shows a session: runtime, extension webview, Electron renderer, TUI,
    headless, SDK.
 2. The transport carries the fold's input down and requests up.
@@ -55,12 +55,15 @@ vocabulary removes the copies.
 
 ## 4. Governing rules
 
-**G1. One fold, everywhere.** `fold(view, input): SessionView`
-(`packages/harness/src/shared/session/sessionFold.ts`) is a pure function
-over `FoldInput` (`packages/harness/src/shared/schemas/foldInput.ts`): durable
+**G1. One fold, everywhere.** `makeSessionViewUpdater(key)`
+(`packages/harness/src/shared/session/sessionViewUpdate.ts`) returns one
+session's updater, `{ current, apply }`. `apply` takes `SessionViewInput`
+(`packages/harness/src/shared/schemas/sessionViewInput.ts`) in order: durable
 events tagged by the read that delivered them, live text chunks, this
 process's local runtime state, the transcript subscription set, the debug
-flag, and the replay and drain markers. Every process that shows a session
+flag, and the replay and drain markers. The updater owns the working state
+beside the view, each run's transcript state included, so the same inputs in
+the same order give the same view. Every process that shows a session
 runs it. No process holds a mirror of another process's fold output. A
 process that does not own a run has fewer inputs (no live text) and renders
 the settled prefix, never a different reading of the same input.
@@ -101,7 +104,7 @@ Zod schema in `packages/harness/src/shared/session/sessionView.ts`; types by
   first.
 - `cursor`: the commit ordinal of the durable prefix the last drain
   completed.
-- `folded: Map<AggregateId, seq>`: one entry per subscribed aggregate, the
+- `transcriptSeq: Map<AggregateId, seq>`: one entry per subscribed aggregate, the
   highest seq the fold has retained for it.
 - `rollup`, `requests` (pending requests, each with its `runId` and
   `requestId`), `policy` (latest approval policy per run), `pluginFacts`
@@ -129,13 +132,13 @@ exists.
 construction. A listing fact is ordered by commit within its
 `(aggregate, listing type)` entry and ignored when it is not above the
 latest folded. A transcript row folds only when its seq is above
-`folded` for its aggregate, which it then advances. The reads that can carry
+`transcriptSeq` for its aggregate, which it then advances. The reads that can carry
 a subscribed aggregate's rows are sequenced, not raced (listing, histories,
 the replay marker, then the tail), so the threshold never passes a row the
 fold has not retained.
 
 **Residency.** Transcript rows fold only for aggregates in the subscription
-set; a row for any other aggregate is dropped without touching `folded`.
+set; a row for any other aggregate is dropped without touching `transcriptSeq`.
 Listing facts fold regardless. When an aggregate leaves the set the fold
 drops its transcript tier and keeps every listing fact.
 
@@ -160,7 +163,7 @@ makes a foreign claim reclaimable. The prober is
   whose `to` is not past the text held is ignored; otherwise the held text is
   truncated at `from` and the chunk appended. Redelivery in any order is a
   no-op, a `from: 0` chunk replaces the row, and adjacent chunks merge
-  exactly (`foldLiveText`, `packages/harness/src/shared/session/transcriptReads.ts`).
+  exactly (`applyLiveText`, `packages/harness/src/shared/session/transcriptReads.ts`).
 - **Settled text is in the event.** The finalizing event carries the row's
   complete text; deltas are never durable or checkpointed.
 - **In-flight text.** Live text is held per row beside the rows, in the
@@ -174,13 +177,15 @@ makes a foreign claim reclaimable. The prober is
   a top-level run moved: O(depth) per event, and a text chunk costs the
   chunk.
 - **Publication.** Returned views are immutable and untouched branches keep
-  identity; `fold` refuses any view but the one it last returned.
+  identity: `apply` copies a branch once per call and returns the previous
+  view when nothing changed. A throw leaves the updater partly advanced, so
+  its owner discards it.
 
-The transcript tier is one reducer, `transcriptFold.ts`, over its working
+The transcript tier is one reducer, `transcriptUpdate.ts`, over its working
 state in `transcriptState.ts`, the `log` rows in `transcriptLogRows.ts` and
 the reads in `transcriptReads.ts` (all in
 `packages/harness/src/shared/session/`). The session fold runs it for each
-resident run, and `foldRunTranscript` runs the same reducer over one
+resident run, and `buildRunTranscript` runs the same reducer over one
 aggregate's committed rows where no view is resident (export, host-exit
 settlement: `packages/harness/src/transcript/runTranscript.ts`), so live and
 cold reads cannot drift. A `log` payload is decoded once
