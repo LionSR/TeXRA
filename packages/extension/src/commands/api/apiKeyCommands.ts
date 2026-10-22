@@ -117,7 +117,7 @@ export function setApiKey(
       (yield* pickApiProvider(
         secrets,
         'Select API provider',
-        "Keys are stored in VS Code's encrypted secret store, never on disk.",
+        'Keys stay on this machine, in an owner-only folder (~/.texra/secrets).',
       ));
 
     if (!target) return;

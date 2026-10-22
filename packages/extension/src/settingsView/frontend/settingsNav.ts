@@ -101,13 +101,6 @@ const SETTINGS_TAB_METADATA: {
       git: 'Git',
     },
   },
-  shortcuts: {
-    group: 'Preferences',
-    icon: 'code',
-    label: 'Shortcuts',
-    description: 'Customize desktop commands and resolve key conflicts.',
-    sections: {},
-  },
 };
 
 /** Navigation pages in display order, each with its sub-tabs in order. */

@@ -11,7 +11,6 @@ import {
   formatDesktopAccelerator,
   type DesktopPlatform,
 } from '@texra/shared/commands/accelerators';
-import type { DesktopShortcutEntry } from '@texra/shared/commands/shortcutPreferences';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
@@ -45,7 +44,6 @@ export interface CommandPaletteController {
 interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
-  getShortcuts?: () => readonly DesktopShortcutEntry[];
   platform: DesktopPlatform;
 }
 
@@ -108,17 +106,12 @@ function executeCommandPaletteEntry(
 export function createDesktopCommandPalette({
   document,
   actions,
-  getShortcuts,
   platform,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
-  const getEntries = (): CommandPaletteEntry[] => {
-    const shortcutsById = new Map(
-      (getShortcuts?.() ?? []).map((entry) => [entry.id, entry]),
+  const getEntries = (): CommandPaletteEntry[] =>
+    getDesktopCommandMenuEntries(platform).map((entry) =>
+      toPaletteEntry(entry, platform),
     );
-    return getDesktopCommandMenuEntries(platform).map((entry) =>
-      toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
-    );
-  };
 
   const onExecute = (id: string): boolean | Promise<boolean> =>
     dispatchDesktopCommand(id as DesktopCommandMenuEntry['id'], actions);
@@ -303,17 +296,6 @@ export function createDesktopCommandPalette({
             <span><kbd>↑↓</kbd> Navigate</span>
             <span><kbd>↵</kbd> Open</span>
           </div>
-          <wa-button
-            class="desktop-command-palette-customize"
-            appearance="plain"
-            size="s"
-            @click=${() => {
-              close();
-              actions.showSettings('shortcuts');
-            }}
-          >
-            ${waIcon('code', { slot: 'start' })} Customize shortcuts
-          </wa-button>
         </footer>
       `,
       dialog,
@@ -351,17 +333,13 @@ export function createDesktopCommandPalette({
 
 function toPaletteEntry(
   entry: DesktopCommandMenuEntry,
-  shortcut: DesktopShortcutEntry | undefined,
   platform: DesktopPlatform,
 ): CommandPaletteEntry {
   return {
     id: entry.id,
     label: entry.label,
     icon: entry.icon,
-    meta: formatDesktopAccelerator(
-      shortcut?.accelerator ?? entry.accelerator,
-      platform,
-    ),
+    meta: formatDesktopAccelerator(entry.accelerator, platform),
     category: entry.category,
   };
 }

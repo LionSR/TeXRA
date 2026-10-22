@@ -148,19 +148,4 @@ describe('settings navigation', () => {
     await app.updateComplete;
     expect(activeSection(app)).toBe('skills');
   });
-
-  it('keeps desktop-only shortcuts out of the extension navigation', async () => {
-    const app = document.createElement('settings-app') as LitElementLike;
-    setSelectedPanel('shortcuts');
-    document.body.append(app);
-    await app.updateComplete;
-
-    expect(
-      app.shadowRoot?.querySelector(
-        '.settings-page-button[data-panel="shortcuts"]',
-      ),
-    ).toBeNull();
-    expect(activePanelLabel(app)).toBe('General');
-    expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
-  });
 });

@@ -6,8 +6,8 @@
  * already owns; nothing here is a fact about a run (`SessionView`) or a
  * choice of the user's (`Surface`). The catalogs and the recent commits are
  * host-neutral; the host injects its file lists and the banners only it can
- * answer (a VS Code host knows its API-key status and
- * its missing tools; the desktop keeps both in Settings).
+ * answer (a VS Code host knows its API-key status, its missing tools, and
+ * how to start a project; the desktop keeps the first two in Settings).
  */
 import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
 import {
@@ -94,6 +94,10 @@ interface HostSnapshotSourceOptions {
     HostSnapshotReadFailed,
     ChildProcessSpawner
   >;
+  /** A host that can start a project (a sample, an Overleaf clone, an arXiv
+   *  download) offers it while the folder has no LaTeX files; absent means
+   *  never shown. */
+  gettingStartedBanner?: true;
   /** Write directly to the bridge's host snapshot, which its runs replay. */
   publish(snapshot: HostSnapshot): Effect.Effect<void>;
   onError(error: unknown): void;
@@ -193,7 +197,10 @@ export function createHostSnapshotSource(
           ...dependency,
           visible: dependency.visible && !dismissed.has('dependency'),
         },
-        gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
+        gettingStarted:
+          options.gettingStartedBanner === true &&
+          !hasInputFiles &&
+          !dismissed.has('gettingStarted'),
         serviceOffline,
       },
       onboarding,

@@ -13,8 +13,8 @@ This guide helps you diagnose and resolve common issues with TeXRA, whether an a
 Most steps below describe the VS Code extension, but the underlying causes
 (missing dependencies, API keys, model settings) apply to every surface. From
 the terminal, run `texra doctor` to diagnose your environment, `texra models list`
-to confirm available models, and `texra tools list` to check tool availability
-(`texra tools status <id>` shows one integration).
+to confirm available models, and `/plugins` in `texra chat` to see each
+integration's state.
 :::
 
 ## Installation issues
