@@ -16,9 +16,10 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
-import type { Surface, SurfaceRefusal } from '@texra/shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { SCRIPT_CALL_STATUS_LABEL } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
@@ -64,18 +65,6 @@ function statusIcon(
       return terminalStatusIcon('failed');
     default:
       return absurd(status);
-  }
-}
-
-/** The runtime's refusal of a stop, in the runtime's words. */
-function refusalText(error: SurfaceRefusal): string {
-  switch (error._tag) {
-    case 'NotOwner':
-      return 'This task is controlled by another TeXRA window.';
-    case 'Internal':
-      return `The request failed. See the TeXRA log (reference ${error.ref}).`;
-    default:
-      return error.reason;
   }
 }
 
@@ -330,7 +319,7 @@ export class ScriptStage extends LitElement {
         rejected === undefined
           ? nothing
           : html`<span class="row-rejected" role="status"
-              >${refusalText(rejected)}</span
+              >${requestErrorText(rejected)}</span
             >`
       }
       ${
