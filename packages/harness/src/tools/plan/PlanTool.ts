@@ -126,6 +126,15 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         `${issuer.get(row.payload.scriptCallId)}/${row.payload.callId}`,
       );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
+  // A goal that ended still holds the conversation while work it started
+  // (a round's background agent) runs on.
+  const settling = (id: RunId): boolean => {
+    const run = runs.get(id);
+    return (
+      run !== undefined &&
+      (run.durableOutcome === null || run.childIds.some(settling))
+    );
+  };
   const running = rows
     .flatMap((row) => {
       if (row.type !== 'tool.result') return [];
@@ -138,12 +147,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         ? [goal]
         : [];
     })
-    .find((goal) => {
-      const run = runs.get(goal);
-      return run === undefined
-        ? session.runs.get(goal) !== undefined
-        : run.durableOutcome === null;
-    });
+    .find((goal) =>
+      runs.has(goal) ? settling(goal) : session.runs.get(goal) !== undefined,
+    );
   if (running !== undefined)
     return errorResult(
       `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
