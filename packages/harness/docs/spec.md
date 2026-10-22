@@ -28,12 +28,12 @@ its kind is its `type` column.
 | Aggregate    | A keyed sequence of rows. Kinds are `run` (keyed by run id) and `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/sessionEvent.ts:103-112`).                                                                                                                        |
 | Run          | One `run` aggregate. It exists while its `run.start` row exists and no `run.removed` has closed it (`controllers/session/Database.ts:674-683`, `:772-784`).                                                                                                          |
 | Turn         | One loop cycle, delimited by `turn.begin` and `turn.end`; usually one input answered by the model, but a script's handed-down call or a failed or cancelled invocation ends a turn with no answer (`agent/runtime/loop/toolUse.ts:288-294`, `:355-356`, `:534-537`). |
-| Invocation   | One model call of a turn or a compaction summary, identified by `invocationId` (`shared/schemas/runHistoryEvent.ts:49-52`).                                                                                                                                          |
+| Invocation   | One model call of a turn, a compaction summary or a helper, identified by `invocationId`; a helper's invocation lives in memory only and records no rows (`shared/schemas/runHistoryEvent.ts:49-52`, `agent/runtime/run/modelCall.ts:107-119`).                      |
 | Attempt      | One try of an invocation, numbered from 1; `attempt` grows only for a retry of the same invocation (`shared/schemas/runHistoryEvent.ts:44-48`, `shared/session/inFlight.ts:111-118`).                                                                                |
 | Step         | One model call as the loop prepares it: its offered tools and system text, recorded on `tools.offered` when they change (`agent/runtime/loop/toolUse.ts:371-374`).                                                                                                   |
 | Response     | One completed provider turn, committed as a `model.message` `response` row with a minted `responseId` (`shared/schemas/runHistoryEvent.ts:188-206`).                                                                                                                 |
 | Tool call    | One local call of a response, keyed by its `callId`; a call a `script` call's guest issued; or a script-configured run's handed-down call, which its opening `model.message` `handed-down` carries (`shared/schemas/runHistoryEvent.ts:349-370`).                    |
-| Request      | A wait on a person: a `request.opened` row, closed by one `request.decided` row (`shared/schemas/sessionEvent.ts:373-386`).                                                                                                                                          |
+| Request      | A decision that may wait on a person: a `request.opened` row, closed by one `request.decided` row; an approval policy that answers at once commits both in one batch (`shared/schemas/sessionEvent.ts:373-386`, `agent/runtime/requestPolicy.ts:341-353`).           |
 | Claim        | The write authority over one aggregate: the `owner_id` column of its sequence row (`controllers/session/storeSchema.ts:56-67`).                                                                                                                                      |
 | Fold         | `foldRunState`, the pure function from a run's rows to the `RunState` the loop continues from (`shared/session/runStateFold.ts:535-552`).                                                                                                                            |
 | Publisher    | `SessionEvents`, the one inbox through which a session writes (`agent/runtime/SessionEvents.ts:219-370`).                                                                                                                                                            |
@@ -588,12 +588,12 @@ the request a pending `script` call's guest calls share (attempt 0), or an
 
 ### 7.3 What a second process may and may not do
 
-| A process MAY                                                 | Code                                             |
-| ------------------------------------------------------------- | ------------------------------------------------ |
-| read every committed row its build can read, listing and tail | `controllers/session/Database.ts:798-904`        |
-| create a new run, which it then owns                          | `controllers/session/Database.ts:115-122`        |
-| fork a run another process holds, from its committed rows     | `controllers/session/SessionRequests.ts:160-163` |
-| take over a run whose owner is proven dead                    | `controllers/session/storeAside.ts:69-83`        |
+| A process MAY                                                    | Code                                                                                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| read every committed row its build can read, listing and tail    | `controllers/session/Database.ts:798-904`                                                     |
+| create a new run, which it then owns                             | `controllers/session/Database.ts:115-122`                                                     |
+| fork a conversation another process holds, at a settled turn end | `controllers/session/SessionRequests.ts:160-163`, `agent/runtime/forkRun.ts:64-67`, `:85-110` |
+| take over a run whose owner is proven dead                       | `controllers/session/storeAside.ts:69-83`                                                     |
 
 | A process MUST NOT                                                                | Code                                             |
 | --------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -695,11 +695,12 @@ The guarantees, numbered as in the package README:
 The paths in this table are under `src/test-kernel/support/`. I1 is equality
 with a clean run because the suite's validation model is deterministic. Against
 a live model, a resent attempt (section 6) may answer differently; what recovery
-preserves is every committed row, and it still reaches a terminal outcome. The
-suite also asserts that a crash between a request and its answer leaves the
-request pending and the resume answers that same request; that a crash between
-the answer and the body honours the answer; and that a crash inside one
-publisher job leaves neither half on disk
+preserves is every committed row; it reaches a terminal outcome once the
+provider answers or a person decides each request the run opens, such as a retry
+request past the automatic budget. The suite also asserts that a crash between a
+request and its answer leaves the request pending and the resume answers that
+same request; that a crash between the answer and the body honours the answer;
+and that a crash inside one publisher job leaves neither half on disk
 (`src/test-kernel/support/crashConformance.ts:49-56`, `:1120`).
 
 What survives at each commit point follows from sections 2 to 8:
@@ -720,7 +721,8 @@ These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot
 place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
-command as outcome unknown and never reruns it
+command as outcome unknown and never reruns it automatically; the model may
+still issue a new command, which runs under I4
 (`src/test-kernel/controllers/session/goldenStore.vitest.ts:638`).
 
 ## 10. Conformance
