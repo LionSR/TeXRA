@@ -171,7 +171,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             if (!binding || binding !== documentBinding) return;
             binding.bridge.surfaceAction({
               kind: 'launch',
-              patch: { sessionType: 'chat', agent: selectedAgent },
+              patch: { agent: selectedAgent },
             });
           }),
         refreshCredentialStatus: Effect.suspend(() =>

@@ -5,8 +5,8 @@
  * nothing a query names can reach a run history row, a private run record, or an
  * envelope column: they are never copied in.
  *
- * The views apply the fold's lifecycle rules (`sessionFold.ts`) so a query
- * never has to: a `run.detach` severs the parent edge, and a later
+ * The views apply the session view's lifecycle rules (`sessionViewUpdate.ts`)
+ * so a query never has to: a `run.detach` severs the parent edge, and a later
  * `run.activate` reopens a run whose earlier `run.end` belonged to its
  * previous lifecycle. A vocabulary change that moves a row these views read
  * updates them in the same change.

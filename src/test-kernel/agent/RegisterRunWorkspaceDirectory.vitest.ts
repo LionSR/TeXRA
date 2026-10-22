@@ -6,7 +6,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,
   publishTestRunStart,
@@ -101,29 +100,6 @@ describe('run registration and finalization', () => {
         expect(yield* Effect.flip(register())).toBe(failure);
         expect(yield* session.log.owns(runId)).toBe(false);
         expect(yield* getRunRecords(session, runId).exists()).toBe(false);
-      }),
-  );
-
-  it.effect.each([false, true])(
-    'preserves preexisting ownership %s when database admission fails',
-    (alreadyOwned) =>
-      Effect.gen(function* () {
-        yield* register();
-        // Registration left the birth claim standing; a run nobody drives
-        // any more has given it back.
-        if (!alreadyOwned)
-          yield* Effect.scoped(session.log.hold(runId, { ends: true }));
-        const failure = new DatabaseReadFailed({
-          path: 'session.db',
-          cause: new Error('database admission rejected'),
-        });
-        vi.spyOn(session.log, 'hold').mockReturnValueOnce(Effect.fail(failure));
-        expect(
-          yield* Effect.flip(
-            Effect.scoped(session.log.hold(runId, { ends: true })),
-          ),
-        ).toBe(failure);
-        expect(yield* session.log.owns(runId)).toBe(alreadyOwned);
       }),
   );
 

@@ -19,7 +19,7 @@ import {
   type AggregateId,
   type LocalRuntimeState,
   type ExistenceReconciliation,
-  type FoldInput,
+  type SessionViewInput,
   type TextChunk,
 } from '@shared/schemas';
 import {
@@ -38,17 +38,17 @@ import {
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 /**
- * A read the fold cannot continue without. A failure is logged and retried
+ * A read the view cannot continue without. A failure is logged and retried
  * with backoff, so a transient one (a busy database, an I/O hiccup) costs a
- * delay rather than the session's view; one that persists ends the fold,
- * which fails every reader of the view's changes at that boundary.
+ * delay rather than the session's view; one that persists ends the view's
+ * updates, which fails every reader of the view's changes at that boundary.
  */
-const foldRead = <A>(
+const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
     Effect.tapError((error) =>
-      Effect.logWarning('Session fold read failed; retrying').pipe(
+      Effect.logWarning('Session view read failed; retrying').pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel('sessionInputs'),
       ),
@@ -81,9 +81,9 @@ export const sessionInputsLayer = Layer.effect(
             const effectiveCommit = reset ? 0 : fromCommit;
             const anchor =
               effectiveCommit === 0
-                ? yield* foldRead(log.currentCommit)
+                ? yield* requiredRead(log.currentCommit)
                 : effectiveCommit;
-            const listing = (yield* foldRead(log.readListing())).filter(
+            const listing = (yield* requiredRead(log.readListing())).filter(
               isDisplaySessionEvent,
             );
             let checked = new Set<AggregateId>(
@@ -91,7 +91,7 @@ export const sessionInputsLayer = Layer.effect(
             );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
-            const replay: FoldInput[] = [
+            const replay: SessionViewInput[] = [
               {
                 _tag: 'debug',
                 enabled: debug,
@@ -107,14 +107,14 @@ export const sessionInputsLayer = Layer.effect(
               set: [...effectiveAggregates],
             });
             for (const aggregate of effectiveAggregates) {
-              const rows = yield* foldRead(
+              const rows = yield* requiredRead(
                 log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
               );
               for (const event of rows) {
                 replay.push({ _tag: 'event', read: 'aggregate', event });
               }
             }
-            const replayState = yield* foldRead(
+            const replayState = yield* requiredRead(
               log.readInputBatch(
                 effectiveAggregates.map(({ id }) => id),
                 anchor,
@@ -144,7 +144,7 @@ export const sessionInputsLayer = Layer.effect(
             /** The durable half of a drain: the rows committed past
              *  `from`, and the existence of the aggregates still checked. */
             const readDurable = (from: number) =>
-              foldRead(
+              requiredRead(
                 log.readInputBatch(
                   aggregates.map(({ id }) => id),
                   from,
@@ -202,7 +202,7 @@ export const sessionInputsLayer = Layer.effect(
                             existence: previous.existence,
                           }
                         : yield* readDurable(previous.cursor);
-                    const inputs: FoldInput[] = textChunks(
+                    const inputs: SessionViewInput[] = textChunks(
                       previous.text,
                       nextText,
                     );
@@ -223,10 +223,10 @@ export const sessionInputsLayer = Layer.effect(
                         existence: existence ?? replayExistence,
                       });
                     }
-                    const batch: FoldInput[] = [
+                    const batch: SessionViewInput[] = [
                       ...rows
                         .filter(isDisplaySessionEvent)
-                        .map((event): FoldInput => ({
+                        .map((event): SessionViewInput => ({
                           _tag: 'event',
                           read: 'all',
                           event,
@@ -271,7 +271,8 @@ const markDamaged = (
       : local;
   });
 
-/** Closed sequence rows are no longer live, even while their tombstones remain stored. */
+/** An aggregate a removal closed no longer exists, even while the
+ *  `run.removed` row is still stored. */
 function reconcileExistence(read: {
   readonly checkedAggregateIds: readonly AggregateId[];
   readonly state: readonly AggregateState[];

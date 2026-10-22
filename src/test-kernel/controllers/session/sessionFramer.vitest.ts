@@ -35,7 +35,7 @@ import { runStateAppend } from '@shared/session/runHistory';
 import {
   qualifyAggregateId,
   DEBUG_MODE_KEY,
-  FoldEventSchema,
+  EventInputSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
   type RunId,
@@ -253,9 +253,9 @@ describe('session framer', () => {
         at: 0,
       },
     };
-    expect(FoldEventSchema.safeParse(input).success).toBe(false);
+    expect(EventInputSchema.safeParse(input).success).toBe(false);
     expect(
-      FoldEventSchema.safeParse({
+      EventInputSchema.safeParse({
         ...input,
         event: { ...input.event, aggregateId: runStart.aggregateId },
       }).success,
@@ -795,13 +795,14 @@ describe('session framer', () => {
       let decoder = yield* startReplay(subscribe);
       yield* settle(
         webview.view.changes,
-        (view) => (view.folded.get(aggregateId) ?? 0) > 0 && view.cursor > 0,
+        (view) =>
+          (view.transcriptSeq.get(aggregateId) ?? 0) > 0 && view.cursor > 0,
       );
       let current = webview.view.current();
       expect(current.debug).toBe(false);
       expect(hasDebugRow(current)).toBe(false);
       expect(current.cursor).toBeGreaterThan(0);
-      const nonzeroFromSeq = current.folded.get(aggregateId)!;
+      const nonzeroFromSeq = current.transcriptSeq.get(aggregateId)!;
 
       yield* config.update(DEBUG_MODE_KEY, true);
       yield* Fiber.interrupt(decoder);
@@ -817,7 +818,7 @@ describe('session framer', () => {
         (view) => view.debug && hasDebugRow(view),
       );
       current = webview.view.current();
-      expect(current.folded.get(aggregateId)).toBe(nonzeroFromSeq);
+      expect(current.transcriptSeq.get(aggregateId)).toBe(nonzeroFromSeq);
 
       yield* config.update(DEBUG_MODE_KEY, false);
       yield* Fiber.interrupt(decoder);
@@ -827,7 +828,7 @@ describe('session framer', () => {
         debug: current.debug,
         cursor: current.cursor,
         aggregates: [
-          { id: aggregateId, fromSeq: current.folded.get(aggregateId)! },
+          { id: aggregateId, fromSeq: current.transcriptSeq.get(aggregateId)! },
         ],
       });
       yield* settle(
