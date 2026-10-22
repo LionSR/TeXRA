@@ -377,6 +377,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = run.toolPolicy.stopAfterCycle === true;
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
+  // A task, a structured call and a trusted script's call reach the child
+  // verbatim; any other is handed off with the parent's instruction.
+  const handsOff = task === null && outputSchema === undefined && !trusted;
   // Q2: a completed call with the same prompt, options and file bytes. The
   // requested model, not the one availability resolves to, so a reuse does
   // not depend on which credentials are configured now.
@@ -393,6 +396,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       ? sha256({
           tool: launch.tool,
           prompt: launch.prompt,
+          ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
           ...(persona != null && { persona }),
           model: launch.model ?? null,
@@ -478,16 +482,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     memories: launch.memories,
     ...(workingDirectory !== undefined && { workingDirectory }),
     task: task !== null,
-    // A task's prompt is its instruction, a structured call answers through
-    // its schema, and a trusted script's call reaches the agent verbatim:
-    // none takes a hand-off.
-    instruction:
-      task !== null || outputSchema !== undefined || trusted
-        ? launch.prompt
-        : withToolUseSubagentHandoffInstruction(
-            launch.prompt,
-            call.instruction,
-          ),
+    instruction: handsOff
+      ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
+      : launch.prompt,
     inputFiles: inputs.map(({ file }) => file),
     contextFiles,
     mediaFiles: media.map(({ file }) => file),

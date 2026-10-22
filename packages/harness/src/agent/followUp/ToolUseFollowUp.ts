@@ -215,8 +215,9 @@ export function startFollowUpWake(
  * wake (a resume that failed leaves it to the next explicit Resume), or its
  * sender saw no live arm and woke the run itself; the one resume per run
  * (`Inbox.resumeOnce`) joins the two. An arm that ended in a stop owes
- * nothing: a stopped run stays stopped, its queue left to the user's next
- * message or Resume. A failure to read is logged.
+ * nothing for what was queued before the stop: a stopped run stays stopped,
+ * that queue left to the user's next message or Resume. A failure to read
+ * is logged.
  */
 export const wakeAfterGeneration = (
   runId: RunId,
@@ -237,17 +238,17 @@ export const wakeAfterGeneration = (
       'followup.queued',
       'run.end',
     ]);
+    // A message the user's stop left queued waits for them; one queued
+    // after the stop is owed its wake.
     const end = rows.findLast((row) => row.type === 'run.end');
-    if (
-      end?.type === 'run.end' &&
-      end.commit > since &&
-      end.outcome === 'cancelled'
-    )
-      return;
+    const from =
+      end?.type === 'run.end' && end.outcome === 'cancelled'
+        ? Math.max(since, end.commit)
+        : since;
     const landedSince = rows.some(
       (row) =>
         row.type === 'followup.queued' &&
-        row.commit > since &&
+        row.commit > from &&
         queued.has(row.followUpId),
     );
     if (landedSince) yield* startFollowUpWake(runId, session);
