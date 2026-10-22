@@ -129,10 +129,10 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
+const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
 /** The process's environment with the project's `.env` over it, minus
  *  credential-shaped names, plus the entry's, on the extended process PATH
  *  its command is pinned on (`externalFiles`), so the pinned binary runs. */
-const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
 const serverEnv = (config: McpServerConfig) =>
   Effect.gen(function* () {
     const env: Record<string, string> = { PATH: process.env.PATH ?? '' };

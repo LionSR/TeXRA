@@ -297,7 +297,7 @@ function createRun(
   id: RunId,
 ): RunView {
   const label = runIdentityDisplayName(event.identity);
-  const common = {
+  return {
     id,
     identity: event.identity,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
@@ -349,8 +349,9 @@ function createRun(
     compactingActive: false,
     latestLine: null,
     transcript: emptyTranscript(),
+    recipe: null,
+    plan: null,
   };
-  return { ...common, recipe: null, plan: null };
 }
 
 /**

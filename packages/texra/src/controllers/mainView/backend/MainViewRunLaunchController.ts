@@ -1,11 +1,5 @@
-// Local imports - run requests
 import { Effect, absurd } from 'effect';
 
-// Local imports - team launch
-
-// Local imports - main-view run
-
-// Local imports - shared types and errors
 import {
   Rejected,
   type StateReadFailed,

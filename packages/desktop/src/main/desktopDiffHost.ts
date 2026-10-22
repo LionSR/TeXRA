@@ -173,7 +173,7 @@ export function createDesktopDiffHost(
             proposedText: proposedContent,
             additions: changed.filter((line) => line.startsWith('+')).length,
             deletions: changed.filter((line) => line.startsWith('-')).length,
-            language: monacoLanguageForPath(proposed.filePath ?? ''),
+            language: monacoLanguageForPath(proposed.filePath),
           } satisfies DesktopShowDiffMessage,
         );
         if (shownInRenderer) return;

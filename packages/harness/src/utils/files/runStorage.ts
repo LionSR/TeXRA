@@ -29,7 +29,6 @@ import {
   runStorageAbsolutePathUnder,
   runStorageLocationUnder,
   shouldSkipRelocation,
-  snapshotExists,
 } from './runStorageFs';
 import { locateInWorkspace } from './workspaceFS';
 
@@ -150,9 +149,23 @@ export class RunFileService {
         target.relativePath,
         this.runId,
       );
-      if (yield* snapshotExists(snapshotAbsolute)) return snapshot;
-
       const fs = yield* FileSystem.FileSystem;
+      // Only absence reads as "no snapshot": any other stat failure fails the
+      // capture, so a permissions error never silently forces a re-copy over a
+      // real snapshot.
+      const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
+        Effect.as(true),
+        Effect.catchIf(isAbsent, () => Effect.succeed(false)),
+        Effect.mapError(
+          (error) =>
+            new Error(
+              `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+              { cause: error },
+            ),
+        ),
+      );
+      if (hasSnapshot) return snapshot;
+
       const stats = yield* fs.stat(target.absolutePath);
       if (stats.type !== 'File') return target;
 

@@ -13,7 +13,6 @@ import {
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 
@@ -113,27 +112,6 @@ export const ensureParentDir = Effect.fn('runStorage.ensureParentDir')(
     yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
   },
 );
-
-/** Non-ENOENT stat failures fail the check so a permissions error never silently forces a re-copy over a real snapshot. */
-export const snapshotExists = Effect.fn('runStorage.snapshotExists')(function* (
-  absolutePath: string,
-): Effect.fn.Return<boolean, Error, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  return yield* fs.stat(absolutePath).pipe(
-    Effect.as(true),
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(false),
-    ),
-    Effect.mapError(
-      (error) =>
-        new Error(
-          `Failed to inspect snapshot destination ${absolutePath}: ${toErrorMessage(error)}`,
-          { cause: error },
-        ),
-    ),
-  );
-});
 
 /** Errno codes for which symlink creation is unavailable and a copy is used instead. */
 const SYMLINK_UNSUPPORTED_CODES = new Set([

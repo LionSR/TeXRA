@@ -369,7 +369,7 @@ export function factRows(
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  const current = (draft: (typeof own)[number]) =>
+  const current = (draft: OwnFactRow) =>
     Effect.gen(function* () {
       const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
       if (arm?.supersedes === undefined) return true;

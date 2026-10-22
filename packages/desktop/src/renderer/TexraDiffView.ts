@@ -16,8 +16,6 @@ import { applyMonacoTheme } from '@ui/wa/monacoTheme';
 import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
 import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
 
-// Local imports - errors
-
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
 

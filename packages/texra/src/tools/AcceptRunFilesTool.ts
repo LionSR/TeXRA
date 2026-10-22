@@ -179,33 +179,23 @@ type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 // Tool Implementation
 // ============================================================================
 
-function executeAcceptRunFilesTool(
-  input: AcceptRunFilesInput,
-): Effect.Effect<ToolResult, Error, PluginToolServices> {
-  return Effect.gen(function* () {
-    const call = yield* ToolContext;
-    yield* requireRun('accept_run_files');
-    // The run whose files are accepted, which is not the calling run.
-    const runFiles = new RunFileService(input.execution_id, call.env.roots);
-    if (
-      !(yield* runFiles.hasDirectory()) &&
-      !(yield* (yield* ChildRuns).records(input.execution_id).exists)
-    ) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
-        ),
-      );
-    }
-    return yield* acceptFiles(input, call, runFiles);
-  });
-}
-
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
-  call: ToolContextShape,
-  runFiles: RunFileService,
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
+  const call = yield* ToolContext;
+  yield* requireRun('accept_run_files');
+  // The run whose files are accepted, which is not the calling run.
+  const runFiles = new RunFileService(input.execution_id, call.env.roots);
+  if (
+    !(yield* runFiles.hasDirectory()) &&
+    !(yield* (yield* ChildRuns).records(input.execution_id).exists)
+  ) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
+      ),
+    );
+  }
   const { execution_id: runId, files, strip_criticize } = input;
 
   // Phase 1: Validate all source paths and read content before any approvals
@@ -496,5 +486,5 @@ Parameters map directly to subagent-result delivery attributes:
   path         ← <output-files><file path="...">
   original     ← <output-files><file original="...">`,
   schema: AcceptRunFilesInputSchema,
-  execute: executeAcceptRunFilesTool,
+  execute: acceptFiles,
 });
