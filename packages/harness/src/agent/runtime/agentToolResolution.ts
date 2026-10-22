@@ -26,7 +26,8 @@
  *      tools): the script tool reaches only the run's other tools and its
  *      own agent, so a child declaring it gets it, and the script-only
  *      functions (`self()`) come with it. A field another plugin's tool
- *      may set (`describe`, `withScript`) earns no exemption.
+ *      may set (`describe`, `withScript`), or an app plugin that takes the
+ *      `codemode` id, earns no exemption.
  *   4. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -58,6 +59,7 @@ import {
   type ToolEntry,
 } from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
+import { builtinTools } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -179,8 +181,12 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const enabled = new Map(
     [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
-  // The built-in code mode plugin's id (`builtinPlugins.ts`).
-  const codeMode = (name: string) => enabled.get(name)?.plugin === 'codemode';
+  // The built-in code mode plugin's tools (`builtinPlugins.ts`): an app
+  // plugin that takes the id gets no exemption.
+  const codeMode = (name: string) => {
+    const entry = enabled.get(name);
+    return entry?.plugin === 'codemode' && builtinTools.has(entry.tool);
+  };
   const isScript = (name: string) =>
     codeMode(name) && enabled.get(name)?.tool.describe !== undefined;
   const scriptOnly = (name: string) =>
