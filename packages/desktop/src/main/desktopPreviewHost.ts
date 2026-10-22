@@ -91,6 +91,8 @@ export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
+  /** The builds this host has shown: each tab reload names the newest. */
+  let builds = 0;
   /**
    * Show the failure, then carry it out through the error channel. The dialog
    * is host I/O like every other call here, so a rejection from it is a typed
@@ -188,6 +190,7 @@ export function createDesktopPreviewHost(
     roots: WorkspaceRoots,
     pdfPath: string,
     title: string,
+    build: number,
   ): boolean {
     return tryShowInRenderer(
       { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },
@@ -196,6 +199,7 @@ export function createDesktopPreviewHost(
         session: roots.storage,
         title,
         pdfUrl: pathToFileURL(pdfPath).href,
+        build,
       } satisfies DesktopShowPdfMessage,
     );
   }
@@ -256,11 +260,15 @@ export function createDesktopPreviewHost(
       }
 
       // Confirm the PDF is on disk before rendering it (the iframe will
-      // load nothing and present a blank surface otherwise).
+      // load nothing and present a blank surface otherwise). Every build
+      // gets its own number, so its tab reloads however close in time two
+      // builds land.
       const { pdfPath } = built;
       yield* ensurePathExists(pdfPath);
+      const build = ++builds;
 
-      if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath))) return;
+      if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
+        return;
 
       yield* openPathProgram(pdfPath);
     });

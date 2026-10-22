@@ -21,6 +21,8 @@ type SubscriptionSectionElement = HTMLElement & {
   provider: SubscriptionSectionProvider;
   auth: SubscriptionAuthStatus | null;
   contextWindow: number;
+  now: number;
+  ackGeneration: number;
   updateComplete: Promise<boolean>;
 };
 
@@ -89,5 +91,27 @@ describe('subscription-section provider descriptors', () => {
     expect(mocks.postMessage.mock.calls).toEqual([
       [SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION, { provider: 'grok' }],
     ]);
+  });
+
+  it('keeps digits typed into the budget through a re-render until the host acknowledges', async () => {
+    const element = await mountComponent<SubscriptionSectionElement>(
+      'subscription-section',
+      { provider: chatgptSection, auth: null, contextWindow: 128 },
+    );
+    const input = element.shadowRoot!.querySelector<
+      HTMLElement & { value: string }
+    >('.setting-number-input')!;
+    expect(input.value).toBe('128');
+
+    // Typed but not yet committed: the usage ticker's re-render keeps it.
+    input.value = '25';
+    element.now = 60_000;
+    await element.updateComplete;
+    expect(input.value).toBe('25');
+
+    // The host's acknowledgement (a same-value rebroadcast) restores it.
+    element.ackGeneration = 1;
+    await element.updateComplete;
+    expect(input.value).toBe('128');
   });
 });

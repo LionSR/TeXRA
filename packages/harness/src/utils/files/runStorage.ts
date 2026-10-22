@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { getPathSegments } from '@utils/core/pathCore';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -38,6 +39,10 @@ const isAbsent = (error: Error): boolean =>
   error instanceof PlatformError.PlatformError &&
   error.reason._tag === 'NotFound';
 
+/** `createSymlink`'s refusal to replace an entry that is not a link. */
+const isStanding = (error: PlatformError.PlatformError): boolean =>
+  error.reason._tag === 'AlreadyExists';
+
 /** One run-relative entry of a run's storage, read without following a link. */
 export type RunStorageEntry =
   | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
@@ -53,6 +58,9 @@ export class RunFileService {
   /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
   private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
+  /** One lane per workspace-relative path: its snapshot and its mirror are
+   *  each checked and created by one fiber at a time. */
+  private readonly pathLanes = new Map<string, PerKeyLane>();
   /** The files the run read, which an edit of one needs; read-only here. */
   public readonly readFiles: ReadonlySet<string> = new Set<string>();
 
@@ -149,29 +157,31 @@ export class RunFileService {
         target.relativePath,
         this.runId,
       );
-      const fs = yield* FileSystem.FileSystem;
-      // Only absence reads as "no snapshot": any other stat failure fails the
-      // capture, so a permissions error never silently forces a re-copy over a
-      // real snapshot.
-      const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
-        Effect.as(true),
-        Effect.catchIf(isAbsent, () => Effect.succeed(false)),
-        Effect.mapError(
-          (error) =>
-            new Error(
-              `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
-              { cause: error },
-            ),
-        ),
-      );
-      if (hasSnapshot) return snapshot;
+      return yield* Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        // Only absence reads as "no snapshot": any other stat failure fails the
+        // capture, so a permissions error never silently forces a re-copy over a
+        // real snapshot.
+        const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
+          Effect.as(true),
+          Effect.catchIf(isAbsent, () => Effect.succeed(false)),
+          Effect.mapError(
+            (error) =>
+              new Error(
+                `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+          ),
+        );
+        if (hasSnapshot) return snapshot;
 
-      const stats = yield* fs.stat(target.absolutePath);
-      if (stats.type !== 'File') return target;
+        const stats = yield* fs.stat(target.absolutePath);
+        if (stats.type !== 'File') return target;
 
-      yield* ensureParentDir(snapshotAbsolute);
-      yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
-      return snapshot;
+        yield* ensureParentDir(snapshotAbsolute);
+        yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
+        return snapshot;
+      }).pipe(withPerKeyLane(this.pathLanes, target.relativePath));
     }).pipe(
       Effect.catch((error) =>
         isAbsent(error)
@@ -342,10 +352,21 @@ export class RunFileService {
         location.relativePath,
       );
 
-      if (!this.mirroredDependencies.has(location.relativePath)) {
-        yield* createSymlink(location.absolutePath, runAbsolute);
-        this.mirroredDependencies.add(location.relativePath);
-      }
+      const mirrored = this.mirroredDependencies;
+      // Checked and linked on the path's lane: two mirrors of one dependency
+      // never both create it. A file standing at the path is the run's own.
+      yield* Effect.suspend(() =>
+        mirrored.has(location.relativePath)
+          ? Effect.void
+          : createSymlink(location.absolutePath, runAbsolute).pipe(
+              Effect.catchIf(isStanding, () => Effect.void),
+              Effect.andThen(
+                Effect.sync(() => {
+                  mirrored.add(location.relativePath);
+                }),
+              ),
+            ),
+      ).pipe(withPerKeyLane(this.pathLanes, location.relativePath));
 
       if (options.snapshot) {
         yield* this.captureOriginalSnapshot(location);
@@ -384,10 +405,9 @@ export class RunFileService {
         [...this.mirroredDependencies],
         (relativePath) =>
           Effect.gen({ self: this }, function* () {
-            // A root dep named as the directory's own artifact would symlink
-            // over it: `createSymlink` replaces any existing entry on EEXIST,
-            // so an unguarded mirror would silently destroy it. Skip these;
-            // the dependency is still reachable at
+            // A root dep named as the directory's own artifact would take its
+            // path before the artifact is written there. Skip these; the
+            // dependency is still reachable at
             // `<relativeDirectory>/../<relativePath>`.
             const { dir: depDir, name: depName } = path.parse(relativePath);
             if (depDir === '' && depName === options.protectedStem) {
@@ -432,48 +452,21 @@ export class RunFileService {
               path.join(relativeDirectory, relativePath),
             );
 
-            // Guard against clobbering a real file already written to the
-            // round dir — e.g. a multi-document extracted output at
-            // `r{round}/chapters/ch1.md` when `chapters/ch1.md` is also an
-            // include dependency. A stale symlink from a previous call is
-            // safe to replace (idempotent); anything else must be preserved.
-            // Absence is the common case — no collision, proceed with the
-            // link. Any other failure leaves the collision unknown, and
-            // linking then replaces an EEXIST destination outright, so the
-            // guard fails closed rather than disarming itself.
-            const destination = yield* entryTypeIn(
-              fs,
-              destinationAbsolute,
-            ).pipe(
-              Effect.map((type) => {
-                if (type === undefined) return 'absent' as const;
-                return type === 'SymbolicLink'
-                  ? ('staleLink' as const)
-                  : ('realFile' as const);
-              }),
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
-                ).pipe(
-                  withLogChannel(CHANNEL),
-                  Effect.as('unreadable' as const),
-                ),
-              ),
-            );
-            if (destination === 'realFile') {
-              yield* Effect.logDebug(
-                `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
-              ).pipe(withLogChannel(CHANNEL));
-              return;
-            }
-            if (destination === 'unreadable') return;
-
+            // A stale link from a previous call is replaced (idempotent); a
+            // real file already written to the round dir (a multi-document
+            // output at `r{round}/chapters/ch1.md` when `chapters/ch1.md` is
+            // also an include dependency) stands: `createSymlink` refuses it.
             yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
               Effect.catch((error) =>
-                Effect.logWarning(
-                  `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-                ).pipe(withLogChannel(CHANNEL)),
+                isStanding(error)
+                  ? Effect.logDebug(
+                      `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
+                    )
+                  : Effect.logWarning(
+                      `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                    ),
               ),
+              withLogChannel(CHANNEL),
             );
           }),
         { concurrency: 'unbounded', discard: true },

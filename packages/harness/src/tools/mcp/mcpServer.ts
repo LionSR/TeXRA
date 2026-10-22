@@ -19,7 +19,7 @@
  * no tools, with a warning in the process log; the run that names it shows
  * the failure in its transcript.
  */
-import { Data, Duration, Effect, Exit, Ref, Scope, Stream } from 'effect';
+import { Data, Duration, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 import { z } from 'zod';
 
@@ -45,8 +45,7 @@ const CHANNEL = 'mcp';
 
 /** Every MCP tool's name starts with this, then `<server>__<tool>`. */
 const MCP_TOOL_PREFIX = 'mcp__';
-/** The protocol revision the harness speaks; a server answers the one it
- *  speaks. */
+/** The protocol revision the harness speaks; a server answers its own. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
@@ -291,14 +290,14 @@ const connect = (config: McpServerConfig) =>
     );
     yield* Effect.addFinalizer(() => stopProcess(handle));
 
-    const stderrTail = yield* Ref.make('');
-    yield* Effect.forkScoped(
+    let stderrTail = '';
+    const stderrDrained = yield* Effect.forkScoped(
       handle.stderr.pipe(
         Stream.decodeText(),
         Stream.runForEach((chunk) =>
-          Ref.update(stderrTail, (tail) =>
-            (tail + chunk).slice(-STDERR_TAIL_LIMIT),
-          ),
+          Effect.sync(() => {
+            stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+          }),
         ),
         Effect.ignore,
       ),
@@ -315,19 +314,21 @@ const connect = (config: McpServerConfig) =>
       onRequest: (method) =>
         method === 'ping' ? Effect.succeed({}) : undefined,
     });
-    // The process ended: fail what waits on it with its exit code. Its stderr
-    // goes to the process log only: a server prints what it likes there, its
-    // credentials included, and the failure message reaches tool results.
+    // Once its output is read ('exit' can precede it), fail what waits on
+    // the process with its exit code. Its stderr (which may hold credentials)
+    // goes to the process log only, never into tool results.
     yield* Effect.forkScoped(
       Effect.gen(function* () {
         const exit = yield* Effect.result(handle.exitCode);
-        const tail = (yield* Ref.get(stderrTail)).trim();
+        yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
+          concurrency: 'unbounded',
+        }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
+        const tail = stderrTail.trim();
         const code = exit._tag === 'Success' ? exit.success : 'unknown';
-        if (tail) {
+        if (tail)
           yield* Effect.logWarning(
             `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
           ).pipe(withLogChannel(CHANNEL));
-        }
         yield* rpc.close(
           `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`,
         );

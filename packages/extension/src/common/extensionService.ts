@@ -13,13 +13,14 @@ import {
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
+import type { GlobalValues } from '@texra-ai/harness';
 import type { Effect, Scope } from 'effect';
 
 /** Hold the service, starting it when none answers, for the caller's
  *  scope; the link reaches it again when it goes away. */
 export function reachExtensionService(
   extensionPath: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return linkService(
     defaultNodeStorageRoot(),
     spawnService(
