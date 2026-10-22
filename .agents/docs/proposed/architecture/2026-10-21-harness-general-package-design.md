@@ -358,8 +358,27 @@ files it edits: #14199 (fallback chains; `agent/runtime`, the llm OAuth files,
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
 first: finishing the move of tool-edit approval into the loop, and putting the
-remaining built-ins on `ToolContext`. Both are prerequisites of lane 4b and
-run as its first steps.
+remaining built-ins on `ToolContext`. Its author corrected the first on
+2026-10-22, after reading `main` at `1c68e67`. Tool-edit approval cannot move
+into the loop as bash's did. The bash guard spells its command from the input
+alone, but an edit's proposal is computed by the body, the person may change it
+in the diff view, and the body writes what was approved. So the approval is
+mid-body by necessity. `applyApprovedFileEdit` (`tools/fileEditFlow.ts`)
+composes it for EditTool and WriteTool; the app's AcceptRunFilesTool composes
+the same two primitives (`requestToolEditApproval`, `approvedWriteConflict`)
+directly. The `presentToolEdit` port stays: it carries the original and proposed
+content that the durable `request.opened` deliberately omits.
+
+Lane 4b therefore starts with the fence itself. The three `tools/approval/`
+modules stay in `tools/`, which the layout above makes the engine, and none
+moves to `builtins/`: `bashApproval.ts` and `toolEditApproval.ts` read
+`session.approvals` and the interactions, and `approvedWrite.ts` imports
+`@agent/runtime/RunCall` and `@platform/rootedFs`, which the fence's
+public-imports rule forbids a built-in. `requestToolEditApproval` stays the one
+request path for edits, which `applyApprovedFileEdit` and AcceptRunFilesTool
+both call. The two request modules share one policy preamble (settings key,
+bypass, policy, `decideApproval`, the denial and its message), which lane 4b can
+fold. Putting the other built-ins on `ToolContext` stays part of the fence.
 
 ## Risks and non-goals
 

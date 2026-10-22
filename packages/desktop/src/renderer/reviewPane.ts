@@ -26,8 +26,8 @@ interface ReviewPaneController {
   /** Drop every retained review, whatever opened it (the window closing). */
   clear(): void;
   /**
-   * Drop the retained reviews `previewId` opened and no others, re-selecting
-   * one the pane still holds if the closed diff was the one on screen.
+   * Drop the review `previewId` opened and no other, re-selecting one the
+   * pane still holds (the same file's first) if it was the one on screen.
    * Reports whether the pane is now empty, which is when the Review tab has
    * nothing left to show.
    */
@@ -43,15 +43,25 @@ export function createReviewPane(): ReviewPaneController {
   diffView.className = 'desktop-review-diff';
   diffView.fill = true;
 
-  // Keyed by displayPath, one retained review per path; each entry carries
-  // the `previewId` of the diff that opened it, which is what a close names.
+  // Keyed by `previewId`, the diff a close names, in the order they opened:
+  // two pending edits of one file (parallel subagents) are two reviews, and
+  // settling one never drops the other. The tree shows each path's newest.
   const entries = new Map<string, DesktopShowDiffMessage>();
-  let selectedPath: string | undefined;
+  let selectedId: string | undefined;
   let filter = '';
 
-  function visibleEntries(): readonly DesktopShowDiffMessage[] {
+  /** Each path's newest review, which is the one its tree entry shows. */
+  function newestByPath(): Map<string, DesktopShowDiffMessage> {
+    return new Map(
+      [...entries.values()].map((entry) => [entry.displayPath, entry]),
+    );
+  }
+
+  function visibleEntries(
+    shown: Map<string, DesktopShowDiffMessage>,
+  ): readonly DesktopShowDiffMessage[] {
     const query = filter.trim().toLocaleLowerCase();
-    const values = [...entries.values()];
+    const values = [...shown.values()];
     if (!query) return values;
     return values.filter((entry) =>
       `${entry.displayPath} ${entry.title}`.toLocaleLowerCase().includes(query),
@@ -59,7 +69,7 @@ export function createReviewPane(): ReviewPaneController {
   }
 
   function select(entry: DesktopShowDiffMessage): void {
-    selectedPath = entry.displayPath;
+    selectedId = entry.previewId;
     diffView.originalText = entry.originalText;
     diffView.proposedText = entry.proposedText;
     diffView.language = entry.language;
@@ -67,6 +77,7 @@ export function createReviewPane(): ReviewPaneController {
   }
 
   function renderTree(
+    shown: Map<string, DesktopShowDiffMessage>,
     nodes: readonly EditorTreeNode[],
     depth = 0,
   ): readonly TemplateResult[] {
@@ -83,13 +94,13 @@ export function createReviewPane(): ReviewPaneController {
               ${waIcon('folder')}
               <span>${node.name}</span>
             </span>
-            ${renderTree(node.children, depth + 1)}
+            ${renderTree(shown, node.children, depth + 1)}
           </wa-details>
         `;
       }
-      const entry = entries.get(node.path);
+      const entry = shown.get(node.path);
       if (!entry) return html``;
-      const active = entry.displayPath === selectedPath;
+      const active = entry.previewId === selectedId;
       return html`
         <wa-button
           type="button"
@@ -110,7 +121,7 @@ export function createReviewPane(): ReviewPaneController {
 
   function clearEntries(): void {
     entries.clear();
-    selectedPath = undefined;
+    selectedId = undefined;
     rerender();
   }
 
@@ -130,11 +141,12 @@ export function createReviewPane(): ReviewPaneController {
       );
       return;
     }
-    const visible = visibleEntries();
-    const selected = selectedPath ? entries.get(selectedPath) : undefined;
+    const shown = newestByPath();
+    const visible = visibleEntries(shown);
+    const selected = selectedId ? entries.get(selectedId) : undefined;
     let additions = 0;
     let deletions = 0;
-    for (const entry of entries.values()) {
+    for (const entry of shown.values()) {
       additions += entry.additions;
       deletions += entry.deletions;
     }
@@ -149,7 +161,7 @@ export function createReviewPane(): ReviewPaneController {
             </span>
           </div>
           <span class="desktop-review-file-count">
-            ${entries.size} ${entries.size === 1 ? 'file' : 'files'}
+            ${shown.size} ${shown.size === 1 ? 'file' : 'files'}
           </span>
         </header>
         <div class="desktop-review-layout">
@@ -197,6 +209,7 @@ export function createReviewPane(): ReviewPaneController {
               ${
                 visible.length > 0
                   ? renderTree(
+                      shown,
                       buildEditorTree(
                         visible.map((entry) => ({
                           path: entry.displayPath,
@@ -225,21 +238,24 @@ export function createReviewPane(): ReviewPaneController {
     element,
     clear: clearEntries,
     close(previewId) {
-      for (const [path, entry] of entries) {
-        if (entry.previewId === previewId) entries.delete(path);
-      }
-      const remaining = [...entries.values()];
-      if (selectedPath !== undefined && !entries.has(selectedPath)) {
-        // The diff on screen went with the close. Show one the pane still
-        // holds rather than blanking a review nobody dismissed.
-        selectedPath = undefined;
-        if (remaining[0]) select(remaining[0]);
+      const closed = entries.get(previewId);
+      entries.delete(previewId);
+      if (closed && selectedId === previewId) {
+        // The diff on screen went with the close. Show the same file's other
+        // pending review if there is one, else any the pane still holds,
+        // rather than blanking a review nobody dismissed.
+        selectedId = undefined;
+        const shown = newestByPath();
+        const next = shown.get(closed.displayPath) ?? [...shown.values()][0];
+        if (next) select(next);
       }
       rerender();
-      return remaining.length === 0;
+      return entries.size === 0;
     },
     open(payload) {
-      entries.set(payload.displayPath, payload);
+      // Re-inserted, so a preview opened again is its path's newest.
+      entries.delete(payload.previewId);
+      entries.set(payload.previewId, payload);
       select(payload);
     },
     setTheme(nextTheme) {

@@ -1175,30 +1175,28 @@ for (const [signal, code] of [
 
 function removeScratch(dir) {
   liveScratch.delete(dir);
-  // Every service home under `dir`; one still starting has its run
-  // directory before its record, so its record is waited for briefly.
+  // Every service home under `dir`: each service, the current one and a
+  // retired one still draining, is named by its own `serve-<pid>.sock`. One
+  // still starting has its run directory before its socket, so a socket is
+  // waited for briefly.
   const runDirs = spawnSync(
     'find',
     [dir, '-type', 'd', '-path', '*/.texra/run'],
     { encoding: 'utf8' },
   );
   for (const runDir of runDirs.stdout.split('\n').filter(Boolean)) {
-    const record = path.join(runDir, 'serve.json');
-    for (let waited = 0; !existsSync(record) && waited < 3_000; waited += 100)
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    // The record names the current service; a retired one still draining
-    // is named only by its own `serve-<pid>.sock`.
-    const pids = new Set(
+    const servicePids = () =>
       readdirSync(runDir).flatMap((name) => {
         const match = /^serve-(\d+)\.sock$/.exec(name);
         return match ? [Number(match[1])] : [];
-      }),
-    );
-    try {
-      pids.add(JSON.parse(readFileSync(record, 'utf8')).pid);
-    } catch {
-      // No record: the service never started, or its sockets name it.
-    }
+      });
+    for (
+      let waited = 0;
+      servicePids().length === 0 && waited < 3_000;
+      waited += 100
+    )
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    const pids = new Set(servicePids());
     for (const pid of pids) {
       try {
         process.kill(pid, 'SIGTERM');

@@ -83,6 +83,8 @@ export interface BoundModel {
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */
   readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
+  /** The subscription access token the binding sends: what a renew names. */
+  readonly subscriptionToken?: string;
 }
 
 /** What a run asks to bind. */
@@ -99,14 +101,15 @@ export interface BindRequest {
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   readonly textOnly: boolean;
   readonly temperature: number;
-  /** Refresh a subscription token its provider rejected before binding. */
-  readonly renew?: boolean;
+  /** The subscription token its provider rejected: refreshed before binding
+   *  while it is still the stored one (`BoundModel.subscriptionToken`). */
+  readonly rejected?: string;
 }
 
-/** The configured helper model, for one call; `renew` as for a run's. */
+/** The configured helper model, for one call; `rejected` as for a run's. */
 interface HelperRequest {
   readonly purpose: 'helper';
-  readonly renew?: boolean;
+  readonly rejected?: string;
 }
 
 /** Model access for one project's runs. */
@@ -226,7 +229,7 @@ export const modelAccessLayer = (
           inProject(
             'purpose' in request
               ? Effect.flatMap(helperRequest(stores), (helper) =>
-                  bindOver(stores, { ...helper, renew: request.renew }),
+                  bindOver(stores, { ...helper, rejected: request.rejected }),
                 )
               : bindOver(stores, request),
           ),

@@ -66,10 +66,7 @@ export interface SubscriptionOAuthClient {
   >;
 }
 
-/**
- * Provider-specific policy. Keeps every magic URL/claim out of the shared
- * state machine.
- */
+/** Provider-specific policy: every magic URL/claim out of the machine. */
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** Zod schema for the persisted session bundle. */
   readonly sessionSchema: z.ZodType<S>;
@@ -113,10 +110,8 @@ type MachineFailure = SubscriptionOAuthError | SecretsFailed;
 /** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-/**
- * A token-grant request failure as the machine's error: the same message,
- * kind, and status the grant's Promise API always threw.
- */
+/** A token-grant failure as the machine's error: the same message, kind
+ *  and status the grant's Promise API always threw. */
 function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
   switch (error._tag) {
     case 'OAuthHttpError':
@@ -217,16 +212,18 @@ export class SubscriptionOAuthCoordinator<
 
   /** The stored session, refreshed when expiring soon. */
   getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return this.freshSession(false);
+    return this.freshSession();
   }
 
   /**
-   * Refresh the stored session now, whatever its stored expiry: the provider
-   * rejected its access token early (revoked, or expired server-side). A
-   * fatal refresh clears the session, so the account reads as signed out.
+   * The provider rejected `token` early (revoked, or expired server-side):
+   * refresh while the stored session still holds it, so calls that sent one
+   * token rotate it once. A fatal refresh clears the session.
    */
-  refreshRejected(): Effect.Effect<void, Error, HttpClient.HttpClient> {
-    return Effect.asVoid(this.freshSession(true));
+  refreshRejected(
+    token: string,
+  ): Effect.Effect<void, Error, HttpClient.HttpClient> {
+    return Effect.asVoid(this.freshSession(token));
   }
 
   private store(session: S): Effect.Effect<void, SecretsFailed> {
@@ -255,8 +252,7 @@ export class SubscriptionOAuthCoordinator<
   )(function* (this: SubscriptionOAuthCoordinator<S>) {
     for (;;) {
       const generation = this.sessionGeneration;
-      // A mutation that starts after the barrier bumps the generation and
-      // re-loops.
+      // A mutation after the barrier bumps the generation: re-loop.
       yield* this.sessionMutations.awaitIdle();
       const session = yield* this.loadSession();
       if (generation === this.sessionGeneration) {
@@ -354,7 +350,7 @@ export class SubscriptionOAuthCoordinator<
 
   private readonly freshSession = Effect.fn(
     'SubscriptionOAuthCoordinator.getFreshSession',
-  )(function* (this: SubscriptionOAuthCoordinator<S>, force: boolean) {
+  )(function* (this: SubscriptionOAuthCoordinator<S>, rejected?: string) {
     const { generation, session } = yield* this.stableSession();
     if (!session) {
       return yield* Effect.fail(
@@ -364,7 +360,8 @@ export class SubscriptionOAuthCoordinator<
         }),
       );
     }
-    if (!force && !this.isExpiringSoon(session)) return session;
+    if (session.accessToken !== rejected && !this.isExpiringSoon(session))
+      return session;
     return yield* this.refresh(session, generation);
   });
 
