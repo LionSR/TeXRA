@@ -256,5 +256,16 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
           { ...last, content: [...last.content, text] },
         ]
       : [...state.messages, { role: 'user' as const, content: [text] }];
-  return { record, seed: viewRows(runId, state, messages) };
+  // Bound as the source was at the cut: its route and the routes it
+  // declined (`AgentRun` binds a seeded launch from this row).
+  const binding =
+    state.backend === null
+      ? []
+      : [
+          configRow(runId, record, record.model, {
+            backend: state.backend,
+            declinedRoutes: state.declinedRoutes,
+          }),
+        ];
+  return { record, seed: [...viewRows(runId, state, messages), ...binding] };
 });

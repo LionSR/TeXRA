@@ -265,8 +265,13 @@ export const agentRunLayer = (
       // newest config's); a fresh run binds the launch model under today's
       // default route.
       const folded = yield* runHistory.load(runId);
-      const backend = folded?.backend ?? undefined;
-      const persisted = backend === undefined ? null : folded;
+      // A fork binds as its source was bound at the cut (its seed's row).
+      const seeded = ctx.entry.seed?.findLast(
+        (row) => row.type === 'run.config',
+      );
+      const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
+      const persisted = folded?.backend != null ? folded : fromSeed;
+      const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
       const modelConfig = ctx.modelConfig;
       // The routes this run declines: a resumed run replays the set its rows

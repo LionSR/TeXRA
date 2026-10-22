@@ -63,6 +63,8 @@ for (let round = 1; ; round += 1) {
     return { status: 'paused', rounds: round, cost, report: 'Round ' + round + ' ended without a verdict (' + error.name + '): ' + error.message };
   }
   cost += reply.cost;
+  if (reply.structured == null)
+    return { status: 'paused', rounds: round, cost, report: 'Round ' + round + ' ended without a verdict: it did not submit one.\n\n' + reply.response };
   report = reply.structured.report;
   if (reply.structured.status === 'done') return { status: 'completed', rounds: round, cost, report };
   if (reply.structured.status === 'needs_user') return { status: 'paused', rounds: round, cost, report };

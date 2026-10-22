@@ -35,6 +35,9 @@ import { goalScript } from './goalScript';
 
 const CHANNEL = 'PlanTool';
 
+/** A goal's background script, by its title. */
+const GOAL_TITLE = 'Goal';
+
 /** How long a goal's script may run: the longest a script may. */
 const GOAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
@@ -85,6 +88,21 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       'A one-shot run has no later turn for a goal to report to: work on the approved plan in this run instead.',
       { summary: 'Plan approved: no goal in a one-shot run' },
     );
+  // One goal at a time: two would race each other's edits and caps.
+  const { session, runId } = call.run;
+  const running = (session.view.run(runId)?.childIds ?? []).find((id) => {
+    const child = session.view.run(id);
+    return (
+      child?.identity.kind === 'script' &&
+      child.identity.title === GOAL_TITLE &&
+      child.durableOutcome === null
+    );
+  });
+  if (running !== undefined)
+    return errorResult(
+      `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
+      { summary: 'Plan approved: a goal is already running' },
+    );
   const maxCostUsd = yield* Settings.get<number>(
     call.env.roots,
     GOAL_MAX_COST_SETTING.configKey,
@@ -95,7 +113,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       code: goalScript(plan.objective, maxCostUsd),
       timeoutMs: GOAL_TIMEOUT_MS,
     },
-    'Goal',
+    GOAL_TITLE,
     goalGrant(GOAL_AUTO_APPROVALS[armed])(NO_APPROVAL_GRANTS),
   );
   return {
