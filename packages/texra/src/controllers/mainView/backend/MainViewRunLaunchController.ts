@@ -55,16 +55,21 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
 ): Effect.fn.Return<LaunchPreparation, StateReadFailed, AgentCatalog> {
   // The agent decides the mode: one with a document task runs it over the
   // files; any other agent, and a team's lead, chats. An agent the catalog
-  // cannot resolve launches as a chat, whose own resolution reports the miss
-  // (the agent-config banner) or the failed load.
-  const entry = team
-    ? null
+  // does not know launches as a chat, whose own resolution shows the
+  // agent-config banner. A failed load refuses the launch: the catalog may
+  // still serve the agent, which would then run as a chat without its task.
+  const resolved = team
+    ? { entry: null }
     : yield* (yield* AgentCatalog).forLaunch(roots, agent).pipe(
+        Effect.map((entry) => ({ entry })),
         Effect.catchTags({
-          AgentNotFound: () => Effect.succeed(null),
-          AgentCatalogLoadError: () => Effect.succeed(null),
+          AgentNotFound: () => Effect.succeed({ entry: null }),
+          AgentCatalogLoadError: (failed) =>
+            Effect.succeed({ failed: failed.message }),
         }),
       );
+  if ('failed' in resolved) return { valid: false, message: resolved.failed };
+  const { entry } = resolved;
   const task = entry !== null && documentTaskOf(entry) !== null ? entry : null;
   if (task && launch.inputFiles.length === 0) {
     return {

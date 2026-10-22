@@ -44,7 +44,7 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
   ]"
 />
 
-<p class="hero-caption">The agent picker lists each agent once: the chat agents (a few shown on the left) and the agents with a document task (right), which the picker marks with a file icon. Picking one, like the selected <code>polish</code>, starts its document task on your files.</p>
+<p class="hero-caption">The agent picker lists each agent once: the chat agents (a few shown on the left) and the agents with a document task (right). In the picker itself, each document agent carries a file icon. Picking one, like the selected <code>polish</code>, starts its document task on your files.</p>
 
 The same catalog is available from any terminal:
 
