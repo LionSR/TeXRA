@@ -18,15 +18,14 @@
  * `OnboardingFunnelRefresher`, which the webview hosts own one of each.
  */
 
-import { Effect, Result, Semaphore } from 'effect';
+import { Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
-import { Settings } from '@texra-ai/harness';
+import { Settings, StateReadFailed } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type {
   StateStore,
-  StateReadFailed,
   StateWriteFailed,
   LanguageModel,
 } from '@texra-ai/harness';
@@ -169,15 +168,20 @@ export class OnboardingFunnelRefresher {
 
   private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
     function* (this: OnboardingFunnelRefresher) {
-      const probe = yield* Effect.result(this.host.hasCredential());
-      if (Result.isFailure(probe)) {
-        // An unanswered check moves nothing: the funnel keeps the state it
-        // last derived, and the next refresh asks again.
-        return yield* Effect.logWarning(
-          `Onboarding credential check failed; keeping the funnel at ${this.current ?? 'its unset state'}: ${probe.failure.message}`,
-        );
-      }
-      const hasCredential = probe.success;
+      // An unanswered check fails the refresh before anything is applied:
+      // the funnel keeps the state it last derived, the caller's boundary
+      // reports why (on the first refresh there is no state to keep), and
+      // the next refresh asks again.
+      const hasCredential = yield* this.host.hasCredential().pipe(
+        Effect.mapError(
+          (failure) =>
+            new StateReadFailed({
+              key: 'onboarding.credential',
+              message: `The onboarding credential check failed: ${failure.message}`,
+              cause: failure,
+            }),
+        ),
+      );
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
         declined: yield* Settings.state(
@@ -205,9 +209,9 @@ export class OnboardingFunnelRefresher {
     },
   );
 
-  /** Ask for a refresh. The only failures are the flag reads and the write
-   *  that clears a stale skip; a failed credential probe is warned and keeps
-   *  the last state, and the host publication cannot fail. */
+  /** Ask for a refresh. It fails when the credential probe or a flag read
+   *  cannot be answered, or the write that clears a stale skip fails; the
+   *  host publication cannot fail. */
   run(): Effect.Effect<
     void,
     StateReadFailed | StateWriteFailed,
