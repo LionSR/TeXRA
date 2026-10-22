@@ -108,18 +108,23 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const { session, runId } = call.run;
   const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
     'model.message',
+    'script.call',
     'tool.result',
   ]);
-  const plans = new Set(
-    rows.flatMap((row) => {
-      if (row.type !== 'model.message' || row.payload.kind !== 'response')
-        return [];
-      const { responseId, calls } = row.payload;
-      return calls.flatMap(({ callId, toolName }) =>
-        toolName === PLAN ? [`${responseId}/${callId}`] : [],
+  // A plan call, by the response its result names: a script's call, that of
+  // the latest response to issue its `script` call before it.
+  const plans = new Set<string>();
+  const issuer = new Map<string, string>();
+  for (const row of rows)
+    if (row.type === 'model.message' && row.payload.kind === 'response')
+      for (const { callId, toolName } of row.payload.calls) {
+        issuer.set(callId, row.payload.responseId);
+        if (toolName === PLAN) plans.add(`${row.payload.responseId}/${callId}`);
+      }
+    else if (row.type === 'script.call' && row.payload.toolName === PLAN)
+      plans.add(
+        `${issuer.get(row.payload.scriptCallId)}/${row.payload.callId}`,
       );
-    }),
-  );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   const running = rows
     .flatMap((row) => {

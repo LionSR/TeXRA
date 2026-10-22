@@ -21,6 +21,7 @@ import {
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   AgentConfigSchema,
+  type DispatchFacts,
   qualifyAggregateId,
   ToolError,
   type SubagentProgressUpdate,
@@ -78,34 +79,45 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const start = (yield* run.session.log.records(run.runId)).find(
     (row) => row.type === 'run.start',
   );
-  const edge = start?.type === 'run.start' ? start.parent : null;
-  const parent = edge?.id;
-  const config =
-    parent === undefined
-      ? null
-      : yield* getRunRecords(run.session, parent).readConfig();
+  const missing = new ToolError(
+    `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
+  );
+  const parent = start?.type === 'run.start' ? start.parent?.id : undefined;
+  const card = start?.type === 'run.start' ? start.parentCard : null;
+  if (parent === undefined || card == null) return yield* Effect.fail(missing);
+  const config = yield* getRunRecords(run.session, parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
   // one whose call opened the card the script's start names (a provider
-  // may reuse a call id, never a card).
-  const card = start?.type === 'run.start' ? start.parentCard : null;
+  // may reuse a call id, never a card), or, for a call a script of the
+  // conversation made, the response that issued that script.
+  const rows = yield* run.session.log.rows(qualifyAggregateId('run', parent), [
+    'model.message',
+    'script.call',
+  ]);
+  const issues = (
+    row: (typeof rows)[number],
+    ids: (call: DispatchFacts) => boolean,
+  ) =>
+    row.type === 'model.message' &&
+    row.payload.kind === 'response' &&
+    row.payload.calls.some(ids);
+  const at = rows.findIndex(
+    (row) =>
+      issues(row, ({ logId }) => logId === card) ||
+      (row.type === 'script.call' && row.payload.logId === card),
+  );
+  const owner = rows[at];
   const issued =
-    parent === undefined || card == null
-      ? undefined
-      : (yield* run.session.log.rows(qualifyAggregateId('run', parent), [
-          'model.message',
-        ])).find(
-          (row) =>
-            row.type === 'model.message' &&
-            row.payload.kind === 'response' &&
-            row.payload.calls.some(({ logId }) => logId === card),
-        );
-  if (parent === undefined || config === null || issued === undefined)
-    return yield* Effect.fail(
-      new ToolError(
-        `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
-      ),
-    );
+    owner?.type === 'script.call'
+      ? rows
+          .slice(0, at)
+          .findLast((row) =>
+            issues(row, ({ callId }) => callId === owner.payload.scriptCallId),
+          )
+      : owner;
+  if (config === null || issued === undefined)
+    return yield* Effect.fail(missing);
   return { config, source: parent, before: issued.commit };
 });
 
