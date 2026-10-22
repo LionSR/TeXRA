@@ -73,7 +73,6 @@ vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
 
 function createDiffCompiler(runId: RunId, logger: AgentTrace) {
   const manager = new LatexDiffManager(
-    false,
     logger,
     runId,
     new RunFileService(runId, testWorkspaceRoots()),

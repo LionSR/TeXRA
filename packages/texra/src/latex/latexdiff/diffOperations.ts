@@ -1,14 +1,15 @@
 /**
- * Host-neutral orchestration for a full latexdiff run.
+ * Host-neutral orchestration for a full latexdiff run, and the one pairing
+ * every latexdiff of a document task's outputs follows ({@link latexdiffPairs}),
+ * which the run's own `document_diff` shares.
  *
  * Takes the run's recorded round outputs (its documents, as the host's view
- * of the session folds them), builds one diff operation per round output
- * (and, when the workspace's between-rounds setting is on, one per
- * consecutive pair of rounds), and runs them. That fold is the only source: run storage is never rescanned and no
- * workspace filename is parsed, so a run with no recorded outputs has no diff
- * operations. This is the single source of truth shared by every host (VS Code
- * command, desktop); each host keeps only its own UX (progress chrome,
- * prompts, result rendering) and calls this with a {@link DiffProgressReporter}.
+ * of the session folds them), builds one diff operation per pair each round's
+ * outputs call for, and runs them. That fold is the only source: run storage
+ * is never rescanned and no workspace filename is parsed, so a run with no
+ * recorded outputs has no diff operations. Every host (VS Code command,
+ * desktop) keeps only its own UX (progress chrome, prompts, result rendering)
+ * and calls this with a {@link DiffProgressReporter}.
  */
 
 // Node imports
@@ -40,6 +41,47 @@ import type {
   DiffRunResult,
 } from './types';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+/** One latexdiff a round's recorded outputs call for. */
+export interface LatexdiffPair {
+  /** The round's output the diff marks up. */
+  readonly revised: OutputFileInfo;
+  /** What it is diffed against. */
+  readonly base: FileLocation;
+  /** The round `base` came from; null for the document the task started
+   *  from. */
+  readonly baseRound: number | null;
+}
+
+/**
+ * The latexdiffs a round's recorded `outputs` call for: each output against
+ * the document it started from (its recorded lineage's diff base), then each
+ * against its own output in the `previous` round (empty when between-round
+ * diffs are off). An output's document is its source as the round wrote it
+ * (`getSafeDocumentRelativePath`), never its basename: `a/main.tex` and
+ * `b/main.tex` are two documents.
+ */
+export function latexdiffPairs(
+  outputs: readonly OutputFileInfo[],
+  previous: readonly OutputFileInfo[],
+): LatexdiffPair[] {
+  const fromBase = outputs.flatMap((revised): LatexdiffPair[] => {
+    const base = getEffectiveDiffBase(revised.lineage);
+    return base ? [{ revised, base, baseRound: null }] : [];
+  });
+  const previousByDocument = new Map(
+    previous.map((info) => [getSafeDocumentRelativePath(info.source), info]),
+  );
+  const fromPrevious = outputs.flatMap((revised): LatexdiffPair[] => {
+    const prior = previousByDocument.get(
+      getSafeDocumentRelativePath(revised.source),
+    );
+    return prior
+      ? [{ revised, base: prior.location, baseRound: prior.round }]
+      : [];
+  });
+  return [...fromBase, ...fromPrevious];
+}
 
 /** One latexdiff call: `suffix` names the diff file it writes. */
 interface DiffOperation {
@@ -90,55 +132,37 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
 
     const results: DiffRunResult[] = [];
     const operations: DiffOperation[] = [];
-    const groupedBySource = new Map<
-      string,
-      Array<{ round: number; info: OutputFileInfo }>
-    >();
 
     for (const [round, infos] of roundIndexedEntries(rounds)) {
       for (const info of infos) {
-        const base = getEffectiveDiffBase(info.lineage);
-        const source = getSafeDocumentRelativePath(info.source);
-        const description = `${source} (r${round})`;
-
-        if (!base) {
-          results.push({
-            success: false,
-            message: 'Missing base file path',
-            description,
-          });
-          continue;
-        }
-
+        if (getEffectiveDiffBase(info.lineage)) continue;
+        results.push({
+          success: false,
+          message: 'Missing base file path',
+          description: `${getSafeDocumentRelativePath(info.source)} (r${round})`,
+        });
+      }
+      const previous = generateBetweenRoundDiffs
+        ? (rounds[round - 1] ?? [])
+        : [];
+      for (const { revised, base, baseRound } of latexdiffPairs(
+        infos,
+        previous,
+      )) {
+        const source = getSafeDocumentRelativePath(revised.source);
         operations.push({
           base,
-          revised: info.location,
-          description,
+          revised: revised.location,
+          description:
+            baseRound === null
+              ? `${source} (r${round})`
+              : `${source} (r${baseRound}→r${round})`,
           cwd: roots.workspace ?? path.dirname(base.absolutePath),
-          suffix: '_diff',
+          suffix:
+            baseRound === null
+              ? '_diff'
+              : buildBetweenRoundDiffSuffix(round, baseRound),
         });
-
-        const group = groupedBySource.get(source) ?? [];
-        group.push({ round, info });
-        groupedBySource.set(source, group);
-      }
-    }
-
-    if (generateBetweenRoundDiffs) {
-      for (const group of groupedBySource.values()) {
-        group.sort((a, b) => a.round - b.round);
-        for (const [index, current] of group.slice(1).entries()) {
-          const previous = group[index];
-          const base = previous.info.location;
-
-          operations.push({
-            base,
-            revised: current.info.location,
-            description: `${getSafeDocumentRelativePath(current.info.source)} (r${previous.round}→r${current.round})`,
-            cwd: roots.workspace ?? path.dirname(base.absolutePath),
-            suffix: buildBetweenRoundDiffSuffix(current.round, previous.round),
-          });
-        }
       }
     }
 
