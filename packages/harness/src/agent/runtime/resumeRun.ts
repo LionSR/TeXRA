@@ -21,7 +21,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
-import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
+import { FOLLOW_UP_TYPES, runRowsFrom } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
@@ -231,7 +231,7 @@ const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
     session.log.rows(qualifyAggregateId('run', runId), FOLLOW_UP_TYPES),
     (rows) =>
       Effect.try({
-        try: () => foldRunRows(rows).followUps,
+        try: () => runRowsFrom(rows).followUps,
         catch: ensureError,
       }),
   );

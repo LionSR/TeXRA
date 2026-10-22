@@ -12,7 +12,7 @@ import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,

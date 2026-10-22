@@ -51,7 +51,7 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append } from '@shared/session/sessionEvents';
 import type { ToolStep } from '@tools/sessionTools';
 

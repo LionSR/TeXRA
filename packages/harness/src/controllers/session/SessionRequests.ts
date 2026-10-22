@@ -37,11 +37,11 @@ import {
   type DeletionMode,
 } from '@shared/session/database';
 import {
-  claimRefused,
+  claimRejection,
   NotOwner,
   Rejected,
   Unavailable,
-  writeRefused,
+  writeRejection,
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -110,7 +110,7 @@ const withRunClaim = <A, R>(
         deps
           .session()
           .log.hold(runId)
-          .pipe(Effect.mapError(claimRefused(runId)), Effect.andThen(write)),
+          .pipe(Effect.mapError(claimRejection(runId)), Effect.andThen(write)),
       );
 
 /** Refuse a gated request the run's `actions` no longer hold; a run not
@@ -199,7 +199,7 @@ const rename = (
       ])
       .pipe(
         Effect.mapError(
-          writeRefused({
+          writeRejection({
             runId: req.runId,
             reason: 'The title could not be saved.',
           }),
@@ -256,7 +256,7 @@ const decideRequest = (
       .decide(req.runId, req.requestId, req.decision)
       .pipe(
         Effect.mapError(
-          writeRefused({
+          writeRejection({
             runId: req.runId,
             reason: 'The decision could not be recorded.',
           }),

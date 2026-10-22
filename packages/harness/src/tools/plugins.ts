@@ -40,7 +40,7 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';

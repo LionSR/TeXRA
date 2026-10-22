@@ -1,21 +1,22 @@
 /**
- * The one reducer for the rows both folds read.
+ * The one function for the rows that both the run state and the session
+ * view read.
  *
- * `runStateFold` produces what the loop continues from and `sessionFold`
- * produces what people see, but five row types carry the same facts to both:
- * the loop's position (`run.position`), the requests a run has open
- * (`request.opened`, `request.decided`) and the input it has not taken
- * (`followup.queued`, `followup.consumed`). Folding them twice is how a row
- * type lands in one fold and not the other; this module holds the single
- * application, and each fold projects the slice it returns onto its own
- * shape.
+ * The run state (`runState.ts`) is what the loop continues from and the
+ * session view (`sessionViewUpdate.ts`, the session view updater) is what
+ * people see. Five row types carry the same facts to both: the loop's
+ * position (`run.position`), the requests a run has open (`request.opened`,
+ * `request.decided`) and the input it has not taken (`followup.queued`,
+ * `followup.consumed`). `applyRunRow` handles each of them once, so a row
+ * type cannot reach one reader and miss the other; each reader copies the
+ * fields it returns into its own shape.
  *
- * Pure in the same sense both folds are: no IO, no clock, no platform, no
- * synthetic id. It reports a verdict rather than throwing, because the two
- * readers answer one of them differently: `runStateFold` reads a run's whole
- * aggregate, so a decision naming no request is a malformed aggregate, while
- * `sessionFold` reads whatever the listing, the aggregate or the tail
- * delivered, where the same row means the opening simply never arrived.
+ * Pure: no IO, no clock, no platform, no synthetic id. It returns a result
+ * instead of throwing because the two readers treat a decision for an
+ * unknown request differently. The run state reads all of a run's rows, so
+ * there it means the history is corrupt. The session view may hold only
+ * part of a run's rows (a listing or a tail), so there it means the row that
+ * opened the request was not read.
  */
 import {
   type PositionAt,
@@ -43,7 +44,7 @@ export type SharedRunRow = Extract<
   { type: keyof typeof SHARED_RUN_ROW_TYPES }
 >;
 
-/** Whether `applyRunRow` owns this row: the one test both folds branch on. */
+/** Whether `applyRunRow` handles this row: the one test both readers use. */
 export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
   row: E,
 ): row is Extract<E, SharedRunRow> =>
@@ -64,8 +65,8 @@ export type QueuedFollowUp = Pick<
 
 /**
  * What these rows say about one run's position: everything but its pending
- * input. `RunState` is a superset of it, so the loop's fold applies the
- * patch to itself.
+ * input. `RunState` has every field of it, so the run state copies the
+ * fields `applyRunRow` returns onto itself.
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
@@ -77,21 +78,21 @@ export type RunPosition = {
 };
 
 /**
- * Where the loop stands, as its own branches read it: a settled boundary
- * (`waiting`, `halted`) or somewhere inside a turn. Fold-only,
- * never written: derived from the run's `run.position` rows.
+ * Where the loop stands, as its own branches read it: between turns
+ * (`waiting`, `halted`) or somewhere inside a turn. Never written: derived
+ * from the run's `run.position` rows.
  */
 export type RunLoopPhase =
   'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
 
 /**
- * The phase a position leaves an opened loop in. A `halted` position moves
+ * The phase a position leaves an opened loop in. A `halted` position changes
  * none: a stop keeps the phase the loop stopped in, so a resume continues
- * from there. `turn.ready` is input consumed at a park, still a boundary;
- * a `turn.end` that no `waiting` or `turn.begin` follows in its batch is the
- * round loop's last round closed, the run concluded before its terminal
- * row. A run's first position opens it: its opening batch's `turn.ready`,
- * or a fork's `waiting`. A halt opens nothing.
+ * from there. `turn.ready` is input consumed while waiting, still between
+ * turns; a `turn.end` that no `waiting` or `turn.begin` follows in its batch
+ * is the round loop's last round closed, the run concluded before its
+ * terminal row. A run's first position opens it: its opening batch's
+ * `turn.ready`, or a fork's `waiting`. A halt opens nothing.
  */
 const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
   {
@@ -110,10 +111,9 @@ export const phaseAfter = (
 
 /**
  * What these rows say about one run: its position and the input it has not
- * taken. `sessionFold` keeps one per run beside its view and projects the
- * view's containers from it; the admission's replay check reads it whole.
- * The loop reads its pending input from the rows (`Inbox.read`), so
- * `RunState` carries only the position.
+ * taken. The session view keeps one per run and builds its request and
+ * follow-up lists from it. The loop reads its pending input from the rows
+ * (`Inbox.read`), so `RunState` carries only the position.
  */
 export type RunRows = RunPosition & {
   /** Queued without consumed, in commit order. */
@@ -131,8 +131,8 @@ export type RunRows = RunPosition & {
  * outside, so the key `__proto__` is reachable. On a plain object it would
  * hit the inherited setter instead of creating an own entry, and an entry
  * absent from `Object.keys` is a barrier no reader ever sees. Null-prototype,
- * therefore, for every id-keyed record in either fold: one rule, no per-key
- * reasoning about which ids a provider can choose.
+ * therefore, for every id-keyed record in either reader: one rule, no
+ * per-key reasoning about which ids a provider can choose.
  */
 export function byId<T>(
   entries: Iterable<readonly [string, T]>,
@@ -143,33 +143,35 @@ export function byId<T>(
 }
 
 /** A fresh null-prototype copy of an id-keyed record. */
-export const copyById = <T>(record: Readonly<Record<string, T>>) =>
-  byId(Object.entries(record));
+export const copyById = <T>(
+  record: Readonly<Record<string, T>>,
+): Record<string, T> => byId(Object.entries(record));
 
 /**
- * The containers one fold pass created. A pass (one fold over a batch of
- * rows) copies a container the first time a row writes it and writes that
- * copy in place after, so a batch costs one copy per container instead of one
- * per row, and nothing reachable from the state the pass started from is ever
- * written. Only the pass's result escapes it; the next pass copies again.
+ * The containers copied while applying one batch of rows. A batch copies a
+ * container the first time a row changes it and changes that copy in place
+ * afterwards, so a batch costs one copy per container instead of one per
+ * row, and nothing reachable from the state the batch started from is ever
+ * written. Rebuilding a long run from nothing is one batch; without this,
+ * copying its history, contents and call records once per row is quadratic.
  */
-export type FoldPass = WeakSet<object>;
+export type BatchCopies = WeakSet<object>;
 
-/** `value` itself when this pass created it, else a copy the pass now owns.
- *  Without a pass every write copies, one row at a time. */
-export function writable<T extends object, W extends T>(
-  pass: FoldPass | undefined,
+/** `value` itself when this batch already copied it, else a copy the batch
+ *  now owns. Without `copies` every change copies, one row at a time. */
+export function ownCopy<T extends object, W extends T>(
+  copies: BatchCopies | undefined,
   value: T,
   copy: (value: T) => W,
 ): W {
-  // Only `copy` put a value in the pass, so an owned value is a `W`.
-  if (pass?.has(value) === true) return value as W;
+  // Only `copy` put a value in the set, so an owned value is a `W`.
+  if (copies?.has(value) === true) return value as W;
   const fresh = copy(value);
-  pass?.add(fresh);
+  copies?.add(fresh);
   return fresh;
 }
 
-/** The position before any of these rows folded. */
+/** The position before any of these rows. */
 export const freshRunPosition = (): RunPosition => ({
   family: null,
   at: null,
@@ -178,7 +180,7 @@ export const freshRunPosition = (): RunPosition => ({
   requests: byId([]),
 });
 
-/** The slice before any of these rows folded. */
+/** The `RunRows` before any of these rows. */
 export const freshRunRows = (): RunRows => ({
   ...freshRunPosition(),
   followUps: [],
@@ -187,10 +189,10 @@ export const freshRunRows = (): RunRows => ({
 
 export type RunRowVerdict =
   | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
-  /** The row moves nothing: an id the slice already carries, or a row that
-   *  presupposes a run this reader holds no rows for. */
+  /** The row changes nothing: an id already recorded, or a row that needs
+   *  a run this reader holds no rows for. */
   | { readonly kind: 'unchanged' }
-  /** A decision naming a request the slice does not hold. */
+  /** A decision naming a request this reader does not hold. */
   | { readonly kind: 'unresolved'; readonly requestId: string }
   /** The rows contradict each other under any reader. */
   | { readonly kind: 'contradiction'; readonly detail: string };
@@ -200,29 +202,7 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
-/** The rows that decide, latest first wins, whether a run's input is
- *  closed; a `run.activate` starts the next lifecycle. */
-export const RUN_LIFECYCLE_TYPES = [
-  'run.removed',
-  'run.activate',
-  'followup.closed',
-] as const;
-/** A run's input standing from its rows in commit order, after `from`:
- *  closed when a `followup.closed` or `run.removed` follows its latest
- *  `run.activate`. */
-export function lifecycleOf(
-  rows: readonly Pick<SessionEvent, 'type'>[],
-  from = { closed: false },
-): { readonly closed: boolean } {
-  let { closed } = from;
-  for (const { type } of rows) {
-    if (type === 'run.activate') closed = false;
-    if (type === 'followup.closed' || type === 'run.removed') closed = true;
-  }
-  return { closed };
-}
-
-/** The shared rows that move a run's pending input, not its position. */
+/** The shared rows that change a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
   'followup.queued',
   'followup.consumed',
@@ -232,33 +212,31 @@ type FollowUpRow = Extract<
   { type: (typeof FOLLOW_UP_TYPES)[number] }
 >;
 
-export const isFollowUpRow = <E extends Pick<SessionEvent, 'type'>>(
-  row: E,
-): row is Extract<E, FollowUpRow> =>
-  row.type === 'followup.queued' || row.type === 'followup.consumed';
+const copySet = (ids: ReadonlySet<string>) => new Set(ids);
 
 /**
- * Apply one shared row. `current` is `null` for a reader that holds no slice
- * for the run yet: queued input and the loop's own position open one, a
- * request, a consumption or an output presupposes it and moves nothing. A
- * reader that folds only the position (`RunState`) applies only the rows
- * that move it. A fold over a batch passes its `pass`, and the containers a
- * verdict carries are then the pass's own, written in place by later rows.
+ * Apply one shared row. `current` is `null` for a reader that holds nothing
+ * for the run yet: queued input and the loop's own position start it, while
+ * a request or a consumption needs it and changes nothing without it. A
+ * reader that keeps only the position (`RunState`) passes only the rows
+ * that change it. A reader applying a batch passes its `copies`, and the
+ * containers the result carries are then the batch's own, changed in place
+ * by later rows of the batch.
  */
 export function applyRunRow(
   current: RunPosition | null,
   row: Exclude<SharedRunRow, FollowUpRow>,
-  pass?: FoldPass,
+  copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
-  pass?: FoldPass,
+  copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunPosition | null,
   row: SharedRunRow,
-  pass?: FoldPass,
+  copies?: BatchCopies,
 ): RunRowVerdict {
   // A follow-up row enters only through the `RunRows` overload.
   const slice = current as RunRows | null;
@@ -287,11 +265,8 @@ export function applyRunRow(
           detail: `request ${row.requestId} opened twice`,
         };
       }
-      const requests = writable(pass, current.requests, copyById);
-      requests[row.requestId] = {
-        payload: row.payload,
-        decision: null,
-      };
+      const requests = ownCopy(copies, current.requests, copyById);
+      requests[row.requestId] = { payload: row.payload, decision: null };
       return applied({ requests });
     }
     case 'request.decided': {
@@ -300,33 +275,29 @@ export function applyRunRow(
       if (request === undefined) {
         return { kind: 'unresolved', requestId: row.requestId };
       }
-      const requests = writable(pass, current.requests, copyById);
+      const requests = ownCopy(copies, current.requests, copyById);
       requests[row.requestId] = { ...request, decision: row.decision };
       return applied({ requests });
     }
     case 'followup.queued': {
-      // Queued input may precede everything else a run writes, so it opens
-      // the slice; a replayed delivery id is already queued once.
+      // Queued input may come before everything else a run writes, so it
+      // starts the reader's state; a replayed delivery id is queued once.
       const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
-      const followUps = writable(pass, rows.followUps, (f) => [...f]);
+      const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
       followUps.push({
         followUpId: row.followUpId,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
         ...(row.control ? { control: row.control } : {}),
       });
-      const followUpIds = writable(
-        pass,
-        rows.followUpIds,
-        (ids) => new Set(ids),
-      );
+      const followUpIds = ownCopy(copies, rows.followUpIds, copySet);
       followUpIds.add(row.followUpId);
       return applied({ followUps, followUpIds });
     }
     case 'followup.consumed': {
       // The consumer commits this with the message the follow-up became. An
-      // id this slice never queued (another writer queued it while the loop
+      // id this reader never queued (another writer queued it while the loop
       // ran, or the read that delivered this row did not carry the queuing)
       // consumes nothing, and is recorded so the queuing cannot land twice.
       if (slice === null) return { kind: 'unchanged' };
@@ -337,12 +308,8 @@ export function applyRunRow(
       if (!removed && slice.followUpIds.has(row.followUpId)) {
         return { kind: 'unchanged' };
       }
-      if (removed) pass?.add(followUps);
-      const followUpIds = writable(
-        pass,
-        slice.followUpIds,
-        (ids) => new Set(ids),
-      );
+      if (removed) copies?.add(followUps);
+      const followUpIds = ownCopy(copies, slice.followUpIds, copySet);
       followUpIds.add(row.followUpId);
       return applied({ ...(removed ? { followUps } : {}), followUpIds });
     }
@@ -350,19 +317,19 @@ export function applyRunRow(
 }
 
 /**
- * The slice one run's whole committed aggregate folds to: for a reader that
+ * The `RunRows` of one run's whole committed aggregate, for a reader that
  * holds every row of the run and needs only what these rows say (is this
- * request open, is this follow-up queued), with no `RunState` to build. A
- * whole aggregate answers every decision it holds, so a contradiction or an
- * unresolved decision is a malformed aggregate and throws, as it refuses
- * in `runStateFold`.
+ * request open, is this follow-up queued) without building a `RunState`.
+ * A whole aggregate answers every decision it holds, so a contradiction or
+ * an unknown request means corrupt history and throws, as `applyRunRows`
+ * rejects it.
  */
-export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
+export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   let slice = freshRunRows();
-  const pass: FoldPass = new WeakSet();
+  const copies: BatchCopies = new WeakSet();
   for (const row of rows) {
     if (!isSharedRunRow(row)) continue;
-    const verdict = applyRunRow(slice, row, pass);
+    const verdict = applyRunRow(slice, row, copies);
     if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
       throw new Error(
         `${row.type} on ${row.aggregateId}: ${
@@ -378,13 +345,13 @@ export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
 }
 
 /**
- * The phase a lifecycle row moves its run to (one run model, 3.3), or null
- * for a row that moves none: an activation and every loop step but
- * `waiting` and `halted` open the run window, `waiting` and a child's park
- * rest it, `run.end` ends it on its outcome. `halted` is the loop's own word
- * and leaves the phase to `run.end`. The one statement of the rule: the
- * session fold's run window, the transcript boundary, the held chunk text
- * and the publisher's open streams all move on it.
+ * The phase a lifecycle row puts its run in, or null for a row that changes
+ * none: an activation and every loop step but `waiting` and `halted` open
+ * the run window, `waiting` and a child's wait rest it, `run.end` ends it on
+ * its outcome. `halted` is the loop's own word and leaves the phase to
+ * `run.end`. The one statement of the rule: the session view's run window,
+ * the transcript boundary, the held chunk text and the publisher's open
+ * streams all follow it.
  */
 export function phaseMoveOf(row: SessionEvent): RunPhase | null {
   switch (row.type) {
@@ -404,7 +371,7 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
   }
 }
 
-/** Whether the row's phase move rests or ends the run: the move that closes
+/** Whether the row's phase rests or ends the run: the change that closes
  *  its run window, every open stream and every held chunk with it. */
 export function closesRunWindow(row: SessionEvent): boolean {
   const phase = phaseMoveOf(row);
