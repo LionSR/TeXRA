@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 // Local imports - formatter implementations
 import { Settings } from '@texra-ai/harness';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
@@ -36,7 +37,10 @@ export interface LatexFormatter extends LatexFormatterDefinition {
   readonly settings: SettingsStores;
 }
 
-const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
+const LATEX_FORMATTERS: Record<
+  Exclude<LatexFormatterValue, 'none'>,
+  LatexFormatterDefinition
+> = {
   'tex-fmt': {
     id: 'tex-fmt',
     configKey: TEXFMT_CONFIG_KEY,
@@ -51,8 +55,7 @@ const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
 
 /**
  * Resolve the configured LaTeX formatter, or null when formatting is
- * disabled. Unrecognized settings fall back to latexindent. Sole owner of the
- * formatter → runner + config-key mapping.
+ * disabled. Sole owner of the formatter → runner + config-key mapping.
  *
  * `stores` are the settings slots of the workspace the caller is formatting
  * (a session's roots), held as data, so both the formatter choice and its
@@ -61,15 +64,14 @@ const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
  */
 export function resolveLatexFormatter(stores: SettingsStores) {
   return Effect.gen(function* () {
-    const formatter = yield* Settings.get<string>(
+    const formatter = yield* Settings.get<LatexFormatterValue>(
       stores,
       TexraStateKey.LATEX_FORMATTER,
     );
     if (formatter === 'none') {
       return null;
     }
-    const selected =
-      LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
+    const selected = LATEX_FORMATTERS[formatter];
     return {
       ...selected,
       configPath: stores.config.get(selected.configKey, ''),

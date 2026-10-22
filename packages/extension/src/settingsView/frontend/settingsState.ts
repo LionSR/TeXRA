@@ -40,6 +40,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
+import { API_KEY_PROVIDER_IDS, providerDisplayName } from '@texra-ai/llm';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -151,7 +152,18 @@ export const memoryEnabled = settingSignal<boolean>(
 // ---------------------------------------------------------------------------
 // Profile state
 // ---------------------------------------------------------------------------
-export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
+// Until the first profile message arrives, every provider shows as unset so
+// the key controls are usable before host state lands.
+export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() =>
+  API_KEY_PROVIDER_IDS.map((provider) => ({
+    provider,
+    displayName: providerDisplayName(provider),
+    status: 'not-set',
+    customEndpoint: '',
+    supportsCustomEndpoint: false,
+    providerSettings: [],
+  })),
+);
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------

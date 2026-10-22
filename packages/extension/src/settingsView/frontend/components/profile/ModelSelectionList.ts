@@ -38,7 +38,6 @@ import { readSelectValue } from '@ui/wa/selectTemplates';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
-import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 interface ProviderGroup {
@@ -252,7 +251,7 @@ export class ModelSelectionList extends LitElement {
     const isExpanded = this.expandedProvider === group.provider;
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
-    const keyStatus = resolveProviderKeyRows(this.providerKeyStatuses).find(
+    const keyStatus = this.providerKeyStatuses.find(
       (entry) => entry.provider === group.provider,
     );
     // Key status is read-only here. Setting, fetching, and removing keys all

@@ -34,7 +34,6 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 // Local imports - profile view styles and events
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
-import { resolveProviderKeyRows } from './providerKeyRows';
 import './SubscriptionUsageRow';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -231,7 +230,7 @@ export class ProviderKeyList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const rows = resolveProviderKeyRows(this.providerKeyStatuses);
+    const rows = this.providerKeyStatuses;
 
     const description =
       "Add a key from each provider's developer console. Kimi Code and GLM Coding Plan keys go on their rows; a ChatGPT or Grok plan signs in below instead.";

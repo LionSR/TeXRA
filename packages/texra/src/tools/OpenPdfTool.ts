@@ -16,12 +16,10 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type FileLocation,
-  type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
 import {
   callerRun,
   resolveToolPath,
-  type ToolPathCall,
   nullishWithDefault,
   executed,
   RunFileService,
@@ -31,7 +29,7 @@ import {
 // Local imports
 
 // Local file imports
-import { EditorHost, type EditorCapabilities } from './editorHost';
+import { EditorHost } from './editorHost';
 
 const OpenPdfInputSchema = z.strictObject({
   path: z.string().describe('Path to the PDF file to open.'),
@@ -42,78 +40,6 @@ const OpenPdfInputSchema = z.strictObject({
 
 export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
 
-/**
- * The host viewer and the run coordinates path resolution needs, read from
- * the session in the caller's run context before the program runs.
- */
-interface OpenPdfPorts {
-  readonly call: ToolPathCall;
-  readonly openPdf: EditorCapabilities['openPdf'];
-  /**
-   * The requested path's run-storage identity, resolved in the caller's turn
-   * against the run's own storage root (`session.roots.storage`), which the
-   * caller holds as data. Undefined when this run has no storage of its own
-   * or the path lies outside it.
-   */
-  readonly runStorageLocation: RunStorageFileLocation | undefined;
-}
-
-const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
-  ports: OpenPdfPorts,
-  input: OpenPdfInput,
-) {
-  const openPdf = ports.openPdf;
-  if (!openPdf) {
-    return yield* Effect.fail(
-      new ToolError(
-        'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
-      ),
-    );
-  }
-
-  const location = yield* resolvePdfLocation(input.path, ports);
-  const displayPath = fileLocationDisplayPath(location);
-
-  if (!hasExtension(location.absolutePath, '.pdf')) {
-    return yield* Effect.fail(
-      new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
-    );
-  }
-  // The path is already absolute — the resolution above produced it — so the
-  // read goes through the process filesystem. A missing path, or a path whose
-  // parent is not a directory, is "not found"; anything else (a permission
-  // denial) is the caller's to see, as the facade's own stat was.
-  const fs = yield* FileSystem.FileSystem;
-  const info = yield* fs.stat(location.absolutePath).pipe(
-    Effect.catchIf(
-      (error) =>
-        error.reason._tag === 'NotFound' || error.reason._tag === 'BadResource',
-      () => Effect.succeed(undefined),
-    ),
-  );
-  if (info?.type !== 'File') {
-    return yield* Effect.fail(
-      new ToolError(`PDF file not found: ${displayPath}`),
-    );
-  }
-
-  // The host viewer's own failure, matched by tag: the agent is told the
-  // viewer refused rather than seeing an unknown rejection escape the tool.
-  yield* openPdf({
-    location,
-    preserveFocus: input.preserve_focus,
-  }).pipe(
-    Effect.catchTag('PdfOpenFailed', (error) =>
-      Effect.fail(
-        new ToolError(`Failed to open PDF ${displayPath}: ${error.message}`),
-      ),
-    ),
-  );
-
-  const message = `Opened PDF: ${displayPath}`;
-  return executed(message, message);
-});
-
 export const OpenPdfTool = defineTool({
   name: 'open_pdf',
   description:
@@ -123,8 +49,21 @@ export const OpenPdfTool = defineTool({
     const { env } = yield* ToolContext;
     const run = yield* callerRun;
     const runId = run?.runId;
+    const openPdf = (yield* EditorHost).at(env.roots.storage).openPdf;
+    if (!openPdf) {
+      return yield* Effect.fail(
+        new ToolError(
+          'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
+        ),
+      );
+    }
+
     const trimmedPath = input.path.trim();
-    // An absolute path inside this run's own storage directory.
+    if (!trimmedPath) {
+      return yield* Effect.fail(new ToolError('path is required.'));
+    }
+    // An absolute path inside this run's own storage directory names a
+    // run-storage file; anything else resolves as a tool path.
     const runDirectory =
       runId && new RunFileService(runId, env.roots).runDirectory;
     const runRelative =
@@ -133,33 +72,53 @@ export const OpenPdfTool = defineTool({
       isPathWithin(runDirectory, trimmedPath)
         ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
         : '';
-    const ports: OpenPdfPorts = {
-      call: env,
-      openPdf: (yield* EditorHost).at(env.roots.storage).openPdf,
-      runStorageLocation:
-        runId && runRelative
-          ? createRunStorageLocation(trimmedPath, runRelative, runId)
-          : undefined,
-    };
-    return yield* openPdfProgram(ports, input);
+    const location: FileLocation =
+      runId && runRelative
+        ? createRunStorageLocation(trimmedPath, runRelative, runId)
+        : pathToLocationIn(
+            env.roots.workspace,
+            (yield* resolveToolPath(env, trimmedPath)).absolute,
+          );
+    const displayPath = fileLocationDisplayPath(location);
+
+    if (!hasExtension(location.absolutePath, '.pdf')) {
+      return yield* Effect.fail(
+        new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
+      );
+    }
+    // The path is already absolute — the resolution above produced it — so the
+    // read goes through the process filesystem. A missing path, or a path whose
+    // parent is not a directory, is "not found"; anything else (a permission
+    // denial) is the caller's to see, as the facade's own stat was.
+    const fs = yield* FileSystem.FileSystem;
+    const info = yield* fs.stat(location.absolutePath).pipe(
+      Effect.catchIf(
+        (error) =>
+          error.reason._tag === 'NotFound' ||
+          error.reason._tag === 'BadResource',
+        () => Effect.succeed(undefined),
+      ),
+    );
+    if (info?.type !== 'File') {
+      return yield* Effect.fail(
+        new ToolError(`PDF file not found: ${displayPath}`),
+      );
+    }
+
+    // The host viewer's own failure, matched by tag: the agent is told the
+    // viewer refused rather than seeing an unknown rejection escape the tool.
+    yield* openPdf({
+      location,
+      preserveFocus: input.preserve_focus,
+    }).pipe(
+      Effect.catchTag('PdfOpenFailed', (error) =>
+        Effect.fail(
+          new ToolError(`Failed to open PDF ${displayPath}: ${error.message}`),
+        ),
+      ),
+    );
+
+    const message = `Opened PDF: ${displayPath}`;
+    return executed(message, message);
   }),
 });
-
-const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
-  function* (
-    rawPath: string,
-    ports: OpenPdfPorts,
-  ): Effect.fn.Return<FileLocation, ToolError> {
-    const trimmed = rawPath.trim();
-    if (!trimmed) {
-      return yield* Effect.fail(new ToolError('path is required.'));
-    }
-
-    if (ports.runStorageLocation) {
-      return ports.runStorageLocation;
-    }
-
-    const resolved = yield* resolveToolPath(ports.call, trimmed);
-    return pathToLocationIn(ports.call.roots.workspace, resolved.absolute);
-  },
-);

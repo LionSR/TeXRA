@@ -126,7 +126,6 @@ export interface CliAmbientState {
  * Resolve whether ANSI color may be emitted on a given stream, reusing the
  * conventional override precedence picocolors' own `isColorSupported` honors:
  *
- * - `forceDisable` ⇒ never color.
  * - `NO_COLOR` (any value) or `TERM=dumb` ⇒ never color.
  * - `FORCE_COLOR` nonzero/truthy values ⇒ always color, ignoring TTY
  *   detection; `0`/`false`/`no` disable color; empty is ignored.
@@ -144,12 +143,10 @@ export interface CliAmbientState {
 export function resolveStreamColor(
   streamIsTty: boolean,
   options: {
-    forceDisable?: boolean;
     env?: Record<string, string | undefined>;
   } = {},
 ): boolean {
   const env = options.env ?? process.env;
-  if (options.forceDisable === true) return false;
   if (env.NO_COLOR != null || env.TERM === 'dumb') return false;
   const forceColor = parseForceColor(env.FORCE_COLOR);
   if (forceColor != null) return forceColor;
