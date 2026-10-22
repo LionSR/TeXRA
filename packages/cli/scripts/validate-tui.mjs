@@ -1274,7 +1274,7 @@ const SCENARIOS = [
       '… 5 previous rows',
       '› /status    Show task details and cost',
       '/memory',
-      '… 9 more rows',
+      '… 7 more rows',
       'Esc close',
     ],
   },
