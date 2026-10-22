@@ -314,9 +314,13 @@ attempt the same way, with `purpose: 'summary'`
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
-**W2.** A completed turn MUST commit once, as one `response` row with a fresh
-`responseId` and one dispatch fact per local call, in the batch that moves the
-position to `response.ready` (`agent/runtime/ModelInvoker.ts:378-401`,
+**W2.** A completed provider turn (one invocation's answer; a loop turn may hold
+none, or several as the loop calls the model again after tool results) MUST
+commit once, as one `response` row with a fresh `responseId`, in the batch that
+moves the position to `response.ready`. It carries one dispatch fact per local
+call the harness dispatches; an editor's language-model turn carries none,
+because its host runs its calls (`agent/runtime/run/tools.ts:59-60`)
+(`agent/runtime/ModelInvoker.ts:378-401`,
 `shared/schemas/runHistoryEvent.ts:236-296`). The loop MUST dispatch only the
 pending response its fold holds (`agent/runtime/loop/toolUse.ts:342-349`).
 
@@ -494,8 +498,9 @@ HTTP route; vendor and version for an editor's language-model route; provider
 for the validation model (`agent/runtime/modelAccess/binding.ts:145-148`,
 `:188`) (`agent/runtime/modelAccess/failureInfo.ts:125-160`). An observation
 runs outside it (`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000
-ms before an automatic resend (`agent/runtime/run/invocation.ts:50`,
-`:257-274`).
+ms before a `retry` or `unchain` that follows a recorded failure
+(`agent/runtime/run/invocation.ts:50`, `:257-274`, `:388-393`); a resend after a
+crash, of an attempt no row recorded an outcome for, goes out without it.
 
 An attempt of an invocation a person admitted, whose outcome no row recorded and
 which holds no accepted operation, MUST be asked about again and MUST NOT be
