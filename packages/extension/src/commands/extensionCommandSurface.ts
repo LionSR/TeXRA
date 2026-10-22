@@ -21,10 +21,7 @@ import {
   handleFixCompilation as latexFixCompilation,
   handleGetTeXCount as latexGetTeXCount,
 } from '@commands/latex/latexCommands';
-import {
-  handleExtractTikzFigures as latexExtractTikzFigures,
-  handleCompileTikzFigures as latexCompileTikzFigures,
-} from '@commands/latex/figCommands';
+import { handleCompileTikzFigures as latexCompileTikzFigures } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -95,7 +92,6 @@ export function createExtensionCommandActions(
     indentCurrentTeX: () => latexIndentCurrentTeX(roots),
     fixCompilation: () => latexFixCompilation(roots),
     getTeXCount: () => latexGetTeXCount(roots),
-    extractTikzFigures: () => latexExtractTikzFigures(roots),
     compileTikzFigures: () => latexCompileTikzFigures(roots),
     cloneOverleafProject: () => gitCloneOverleafProject(secrets),
     removeApiKey: () => apiRemoveApiKey(roots, secrets),

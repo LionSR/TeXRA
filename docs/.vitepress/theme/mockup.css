@@ -594,7 +594,7 @@
 /* ============================================
    TERMINAL TITLEBAR (faux macOS window chrome)
    Traffic-light dots + a mono window title, shared by the standalone terminal
-   cards (CliChatHero, CliToolsListHero) so the chrome is defined once. Consumers
+   cards (CliChatHero) so the chrome is defined once. Consumers
    keep only their own card shell (border / radius / body padding).
    ============================================ */
 .mockup .mk-term-bar {
@@ -629,9 +629,8 @@
 
 /* Standalone terminal card — shell, recessed mono body, optional bottom hint
    strip, and the prompt line every terminal figure opens with. Extracted from
-   CliChatHero / CliToolsListHero (which previously each re-rolled this CSS) and
-   served to consumers through the <TermWindow> primitive, so heroes keep only
-   their own row vocabulary. */
+   CliChatHero and served to consumers through the <TermWindow> primitive, so
+   heroes keep only their own row vocabulary. */
 .mockup.mk-term-card,
 .mockup .mk-term-card {
   background: var(--mk-bg);

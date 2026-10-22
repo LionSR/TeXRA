@@ -120,14 +120,14 @@ export class ProgressApp extends LitElement {
   }
 
   /** The window's own items: pop the view out or back, the LaTeXDiffs
-   *  sheet, figure extraction. The New-task header shows them in its menu;
-   *  a run's header appends them to the run's. The desktop has neither an
-   *  editor to pop out into nor a figure extractor, and a LaTeX diff is
-   *  asked for in the conversation there, so it is given none. */
+   *  sheet. The New-task header shows them in its menu; a run's header
+   *  appends them to the run's. The desktop has no editor to pop out into,
+   *  and a LaTeX diff is asked for in the conversation there, so it is given
+   *  none. */
   private windowItems(): HeaderMenuItem[] {
     if (this.placement === 'desktop') return [];
     const inEditor = this.placement === 'editor';
-    const host = (kind: 'popOut' | 'popBack' | 'extractFigures') => () =>
+    const host = (kind: 'popOut' | 'popBack') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind }));
     return [
       inEditor
@@ -151,12 +151,6 @@ export class ProgressApp extends LitElement {
           this.dispatchEvent(
             SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
           ),
-      },
-      {
-        value: 'figures',
-        icon: 'image',
-        label: 'Figures…',
-        activate: host('extractFigures'),
       },
     ];
   }

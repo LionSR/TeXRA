@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
   start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
   connection, and the harness's session database follows the new contract,
   which 4.0.5 lacks.
+- **Four little-used controls are gone.**
+  - The desktop app no longer shows the "No LaTeX files yet" card, whose
+    buttons only said they needed the VS Code extension; open a folder with
+    **File › Open Folder** instead. VS Code keeps the card.
+  - The task menu's **Figures…** item and the **Extract TikZ Figures from
+    Current File** command, which only copied a figure label, are removed.
+    **Compile TikZ Figures from Current File** stays, and agents read and
+    compile TikZ figures with their TikZ tool.
+  - The desktop **Settings › Shortcuts** page and the command palette's
+    **Customize shortcuts** link are removed; the desktop keeps its fixed
+    shortcuts, shown in the command palette.
+  - `texra tools list|status|enable|disable|install|auth` is removed. Switch
+    TeXRA's plugins and integrations in `/plugins` inside `texra chat`, and
+    manage the plugins you install with `texra plugin`.
 - **A document task's latexdiff results and missing outputs moved out of
   its log.** `texra run --output-format ndjson` no longer streams them as separate log
   records; they arrive with the task's documents, in its `plugin.fact`
@@ -1103,6 +1117,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **VS Code's API-key prompt says where keys are kept.** It claimed keys
+  live in VS Code's encrypted secret store and never on disk; it now says
+  they stay on this machine in an owner-only folder (`~/.texra/secrets`),
+  which every TeXRA app shares.
 - **The panel's agent menu lists each agent once, and a document agent
   opens on files.** Picking an agent such as `criticize` starts its
   document task and shows the file panel; a file icon marks those agents.

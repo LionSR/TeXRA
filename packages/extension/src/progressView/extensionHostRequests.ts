@@ -117,11 +117,9 @@ const CHANNEL = 'ExtensionHostRequests';
 
 /** The VS Code command behind each getting-started action. */
 const GETTING_STARTED_COMMANDS = {
-  runSetup: EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
   createSampleProject: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
   cloneOverleaf: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
   downloadArxiv: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
-  openWalkthrough: EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
 } satisfies Record<GettingStartedAction, string>;
 
 interface ExtensionHostRequestsOptions {
@@ -593,13 +591,6 @@ export function createExtensionHostRequests(
         }
         yield* commandVerb('texra.openDoc', page);
       }),
-    gettingStarted: (action) =>
-      Effect.gen(function* () {
-        yield* commandVerb(GETTING_STARTED_COMMANDS[action]);
-        if (action === 'runSetup') {
-          yield* refreshOnboardingFunnel;
-        }
-      }),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
@@ -610,12 +601,12 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
       runSetup: Effect.gen(function* () {
-        yield* commandVerb(GETTING_STARTED_COMMANDS.runSetup);
+        yield* commandVerb(EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT);
         yield* refreshOnboardingFunnel;
       }),
       // The provider's `firstRunDone` follower refreshes the funnel.
       skipSetup: setFirstRunDone(globalState, true),
-      openGettingStarted: commandVerb(GETTING_STARTED_COMMANDS.openWalkthrough),
+      openGettingStarted: commandVerb(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
     },
   };
 
@@ -680,8 +671,8 @@ export function createExtensionHostRequests(
           };
           return outcome;
         }
-        case 'extractFigures':
-          yield* commandVerb('texra.extractTikzFigures');
+        case 'gettingStarted':
+          yield* commandVerb(GETTING_STARTED_COMMANDS[request.action]);
           return done;
         case 'workspaceFile':
           return yield* Effect.fail(

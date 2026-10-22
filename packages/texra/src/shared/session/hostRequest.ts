@@ -20,11 +20,9 @@ import { SettingsTargetSchema } from '@texra/shared/settingsView/settingsTarget'
 import { LaunchSurfaceSchema } from './surface';
 
 const GettingStartedActionSchema = z.enum([
-  'runSetup',
   'createSampleProject',
   'cloneOverleaf',
   'downloadArxiv',
-  'openWalkthrough',
 ]);
 export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
 
@@ -145,7 +143,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     base64: z.string().min(1),
     mediaType: z.string().min(1),
   }),
-  z.object({ kind: z.literal('extractFigures') }),
   /** The desktop editor pane's file I/O on the session's workspace: a
    *  directory's entries, a file's contents, or a write. */
   z.object({

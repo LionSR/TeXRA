@@ -70,7 +70,6 @@ import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
-  vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -438,14 +437,6 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
-    // The desktop has no walkthrough of its own: its getting-started page
-    // is the desktop docs.
-    gettingStarted: (action) =>
-      action === 'openWalkthrough'
-        ? options.openExternalUrl(DESKTOP_DOCS_URL)
-        : Effect.asVoid(
-            host.showInfoMessage(vsCodeOnlyGettingStartedMessage(action)),
-          ),
     onboarding: {
       signInChatGpt: Effect.suspend(() =>
         options.onboarding.signInWithChatGpt(),
@@ -453,8 +444,8 @@ export function createDesktopHostRequests(
       skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
       runSetup: Effect.suspend(() => options.onboarding.runSetup()),
       skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
-      // The card's "Open walkthrough" opens the same page
-      // `gettingStarted('openWalkthrough')` above opens.
+      // The desktop has no walkthrough of its own: the card's "Open
+      // walkthrough" opens the desktop docs.
       openGettingStarted: Effect.suspend(() =>
         options.openExternalUrl(DESKTOP_DOCS_URL),
       ),
@@ -517,8 +508,8 @@ export function createDesktopHostRequests(
         case 'useCurrentFile':
         case 'addOpenedFiles':
           return yield* Effect.fail(notOnDesktop("The editor's current file"));
-        case 'extractFigures':
-          return yield* Effect.fail(notOnDesktop('Figure extraction'));
+        case 'gettingStarted':
+          return yield* Effect.fail(notOnDesktop('Starting a project'));
         case 'workspaceFile':
           return yield* options.workspaceFile(request.action);
       }

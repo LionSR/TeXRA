@@ -115,7 +115,7 @@ describe('desktop preview host', () => {
   it.effect.each([
     { kind: 'openFile', path: '/missing/output.pdf' },
     { kind: 'apiKeyBanner', action: 'guide' },
-    { kind: 'extractFigures' },
+    { kind: 'gettingStarted', action: 'createSampleProject' },
     { kind: 'latexdiffs', action: 'compare' },
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
