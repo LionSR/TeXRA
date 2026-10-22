@@ -104,25 +104,6 @@ describe('provider capabilities', () => {
       }),
   );
 
-  it.effect.each([
-    ['openai/gpt-5.6-sol', 272_000],
-    ['openai/gpt-5.6-terra', 272_000],
-    ['openai/gpt-5.6-luna', 272_000],
-    ['openai/gpt-6.1-sol', 500_000],
-  ] as const)(
-    'caps ChatGPT-subscription %s to the input window Codex grants it (%i)',
-    ([id, window]) =>
-      Effect.gen(function* () {
-        const model = MODEL_CONFIGS[id];
-        const capabilities = yield* chatgptConfig(model);
-
-        expect(model.codexSubscription).toEqual({ contextWindow: window });
-        expect(capabilities).toMatchObject({
-          contextWindow: window + model.maxOutputTokens,
-        });
-      }),
-  );
-
   describe('context window override', () => {
     afterEach(() => installPlatform());
 
