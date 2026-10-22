@@ -13,11 +13,11 @@
  * The connection has one terminal state: `close(reason)` fails every pending
  * request with {@link JsonRpcConnectionDisposed} carrying that reason, drops
  * later notifications, and refuses later requests. The scope's finalizer
- * closes with a generic reason; a writer failure (the peer's stdin is gone)
- * closes with the failure; the owner closes with the peer's end when it
- * knows it. Ending of the input stream alone does not close; it completes
- * `inputEnded`, so an owner that sees the process exit (which can precede the
- * end of its output) closes only once every answer the peer wrote was read.
+ * closes with a generic reason; the owner with the peer's end when it knows
+ * it; a writer failure (the peer's stdin is gone) with the failure. Ending of
+ * the input stream alone does not close; it completes `inputEnded`, so the
+ * owner, seeing the process exit (which can precede the end of its output),
+ * and a writer failure close only once every answer the peer wrote was read.
  */
 
 import { Buffer } from 'node:buffer';
@@ -318,6 +318,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
               `stdin write failed: ${toErrorMessage(error)}`,
             ).pipe(withLogChannel(CHANNEL));
           }
+          yield* Deferred.await(inputDone);
           yield* close(`JSON-RPC output failed: ${toErrorMessage(error)}`);
         }),
       ),

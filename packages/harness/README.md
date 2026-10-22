@@ -29,7 +29,7 @@ one process do not work at all: Streams, Fibers and Context built by one copy
 do not interoperate with another's, and a peer dependency is how a consumer
 gets one copy rather than a second nested one. Effect's packages also release
 in patch lockstep: each `@effect/*` release peers `effect` at its own patch
-(`@effect/platform-node-shared@4.0.5` needs `effect ^4.0.5`), so the Effect
+(`@effect/platform-node-shared@4.0.6` needs `effect ^4.0.6`), so the Effect
 set has to come from your one install, on caret ranges that let it resolve
 to one patch. Pinning `effect` exactly while an `@effect/*` package floats
 past it fails at startup.
@@ -37,11 +37,11 @@ past it fails at startup.
 ```jsonc
 {
   "dependencies": {
-    "@effect/platform-node": "^4.0.5",
-    "@effect/sql-sqlite-node": "^4.0.5",
+    "@effect/platform-node": "^4.0.6",
+    "@effect/sql-sqlite-node": "^4.0.6",
     "@texra-ai/harness": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
-    "effect": "^4.0.5",
+    "effect": "^4.0.6",
     "zod": "^4.4.3",
   },
 }

@@ -176,9 +176,10 @@ export const parseInboundToolArguments = (
 
 /**
  * Waits out `pending` at scope close. A rejection is dropped only when it
- * repeats the cause the primary failure in `exit` already carries, or when
- * `isExpected` recognizes it; anything else is an independent defect, raised
- * through `cleanupFailure`.
+ * repeats the cause the primary failure in `exit` already carries (typed, or
+ * already a defect when an earlier cleanup died), or when `isExpected`
+ * recognizes it; anything else is an independent defect, raised through
+ * `cleanupFailure`, which makes the primary failure a defect too.
  */
 export const rejoin = (
   pending: PromiseLike<unknown>,
@@ -190,12 +191,12 @@ export const rejoin = (
     Effect.catch((cause) =>
       isExpected(cause) ||
       (Exit.isFailure(exit) &&
-        exit.cause.reasons.some(
-          (reason) =>
-            Cause.isFailReason(reason) &&
-            reason.error instanceof ModelError &&
-            reason.error.cause === cause,
-        ))
+        exit.cause.reasons.some((reason) => {
+          const primary = Cause.isFailReason(reason)
+            ? reason.error
+            : Cause.isDieReason(reason) && reason.defect;
+          return primary instanceof ModelError && primary.cause === cause;
+        }))
         ? Effect.void
         : Effect.die(cleanupFailure(cause)),
     ),
@@ -209,7 +210,8 @@ export const rejoin = (
  * pending read. Cancel repeats an errored reader's original failure; only that
  * repeat (the abort reason, or the cause the primary failure already carries,
  * such as a transport error or a parser's rejection of a streamed event) is
- * dropped, and distinct cleanup defects stay in the scope's combined failure.
+ * dropped, and distinct cleanup defects stay in the scope's combined failure,
+ * where Effect makes its typed failure a defect as well.
  */
 export const readerAbortSignal = (
   reader: () => ReadableStreamDefaultReader<unknown> | undefined,

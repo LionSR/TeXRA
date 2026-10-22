@@ -289,6 +289,7 @@ export function rootedFileSystem(
         return matches;
       }),
     link: (from, to) => onPair('link', fs.link)(from, to),
+    lstat: on('lstat', fs.lstat),
     makeDirectory: (target, options) =>
       on('makeDirectory', (resolved) => fs.makeDirectory(resolved, options))(
         target,
