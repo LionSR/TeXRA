@@ -198,7 +198,14 @@ export class SettingsViewMessageHandler {
         requiresOpenWorkspace: () => !roots.workspace,
       },
     });
-    this.handlerRegistry = this.createHandlerRegistry(context);
+    this.handlerRegistry = {
+      ...this.body.handlers,
+      requestModelAccess: (message) =>
+        this.handleRequestModelAccess(message.modelName, context),
+      clearCopilotRoute: (message) =>
+        this.handleClearCopilotRoute(message.modelName),
+      ...vscodeLatexSettingsHandlers(this.body),
+    };
 
     const { repaintOn, settle } = this.body;
     const following = runtime.runFork(this.body.followToolAvailability);
@@ -212,19 +219,6 @@ export class SettingsViewMessageHandler {
           }),
       ),
     );
-  }
-
-  private createHandlerRegistry(
-    context: vscode.ExtensionContext,
-  ): SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs> {
-    return {
-      ...this.body.handlers,
-      requestModelAccess: (message) =>
-        this.handleRequestModelAccess(message.modelName, context),
-      clearCopilotRoute: (message) =>
-        this.handleClearCopilotRoute(message.modelName),
-      ...vscodeLatexSettingsHandlers(this.body),
-    };
   }
 
   /** Clear the tracked active view. */

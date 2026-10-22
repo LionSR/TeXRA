@@ -118,7 +118,7 @@ const CodexInputSchema = z.strictObject({
     ),
 });
 
-export type CodexInput = z.infer<typeof CodexInputSchema>;
+type CodexInput = z.infer<typeof CodexInputSchema>;
 
 /**
  * Log a completed codex thread item that has no tool card, straight to the
@@ -178,19 +178,6 @@ function buildCodexLiveToolLog(
   }
 }
 
-function updateCodexLiveToolLog(
-  logger: AgentTrace,
-  cards: Map<string, ToolCardHandle>,
-  item: ThreadItem,
-  toolLog: ToolUseLog,
-): void {
-  // The card stays after it closes (re-ending is idempotent); it knows
-  // whether it is still open when the turn's finalizer asks.
-  const existing = cards.get(item.id);
-  if (existing) existing.update(toolLog);
-  else cards.set(item.id, logger.openToolCard(toolLog));
-}
-
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
@@ -202,7 +189,11 @@ function publishCodexItemProgress(params: {
   const toolLog = buildCodexLiveToolLog(item, status);
   if (!toolLog) return false;
 
-  updateCodexLiveToolLog(logger, refs, item, toolLog);
+  // The card stays after it closes (re-ending is idempotent); it knows
+  // whether it is still open when the turn's finalizer asks.
+  const existing = refs.get(item.id);
+  if (existing) existing.update(toolLog);
+  else refs.set(item.id, logger.openToolCard(toolLog));
   return true;
 }
 

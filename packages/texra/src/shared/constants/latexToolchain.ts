@@ -108,7 +108,8 @@ interface LatexToolEntry {
  * and none restates a name: the doctor probe (`@latex/latexToolchain`), the
  * setup assistant's (`@tools/setup/toolProbing`), the settings view's LaTeX
  * status (`@controllers/settingsView/LatexToolingController`), and the
- * dependency banner (`checkCoreDependencies` in `@utils/system/toolUtils`).
+ * dependency banner (`checkCoreDependencies` in
+ * `@texra/utils/system/checkCoreDependencies`).
  *
  * The order is the doctor's row order, which is user-visible CLI output.
  *
@@ -345,7 +346,7 @@ function combineGuides(
 // Per-tool install guides (single source of truth)
 //
 // Consumed by:
-//   - `toolUtils.ts` TOOL_CONFIGS (runtime error messages)
+//   - `toolChecks.ts` tool configs (runtime error messages)
 //   - `LaTeXTab.ts` dependency cards (settings UI)
 // ============================================================
 
