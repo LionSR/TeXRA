@@ -156,10 +156,10 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
         const newContent = content.replaceAll(
           /\\input{([^}]+)}/g,
           (match, rawPath) => {
-            const normalizedPath = normalizeLatexPath(rawPath);
-            const replacement = normalizedPath
-              ? replacementLookup.get(normalizedPath)
-              : undefined;
+            // `register` never stores an empty key, so an empty path misses.
+            const replacement = replacementLookup.get(
+              normalizeLatexPath(rawPath),
+            );
             return replacement ? `\\input{${replacement}}` : match;
           },
         );

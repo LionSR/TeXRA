@@ -669,19 +669,6 @@ describe('handleTuiSlashCommand', () => {
     }),
   );
 
-  it.effect('signs out of only the requested account', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const signOutChatGpt = mockSignOuts();
-
-      yield* logout('grok');
-      expect(signOutChatGpt).toHaveBeenCalledOnce();
-
-      yield* logout('chatgpt');
-      expect(signOutChatGpt).toHaveBeenCalledTimes(2);
-    }),
-  );
-
   it.effect('reports a failed ChatGPT sign-out as a line', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });

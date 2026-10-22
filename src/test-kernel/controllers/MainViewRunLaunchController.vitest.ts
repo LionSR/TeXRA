@@ -12,6 +12,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   fakeHostAgentDirectories,
   storePluginsLayer,
@@ -20,9 +21,10 @@ import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 /**
- * A program over the process's global storage view. Nothing under test here
- * reads it: the fake agent directories answer `custom()` themselves, so this
- * only satisfies the requirement the catalog readers name.
+ * A program over the process's global storage view and the bundled agents:
+ * a launch's agent decides its mode, so the catalog is the one a real host
+ * scans. The global storage view only satisfies the requirement the catalog
+ * readers name; the fake agent directories answer `custom()` themselves.
  */
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, AgentCatalog>,
@@ -36,7 +38,10 @@ function onGlobalStorage<A, E>(
           storePluginsLayer,
           nodePlatformLayer,
           testHttpClientLayer,
-          AgentDirectories.layer(fakeHostAgentDirectories),
+          AgentDirectories.layer({
+            ...fakeHostAgentDirectories,
+            builtIn: () => Effect.succeed(BUNDLED_AGENTS),
+          }),
           AppState.layer(new FakeStateStore()),
         ),
       ),
@@ -118,14 +123,11 @@ describe('main-view run launch controller', () => {
       }),
   );
 
-  it.effect('requires an input file for document task runs', () =>
+  it.effect('requires an input file for a document agent', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
         onGlobalStorage(
-          prepareSurfaceLaunch(
-            launchRequest({ sessionType: 'task', agent: 'correct' }),
-            ROOTS,
-          ),
+          prepareSurfaceLaunch(launchRequest({ agent: 'correct' }), ROOTS),
         ),
       );
 

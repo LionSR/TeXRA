@@ -36,7 +36,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import type { CoWrite } from '@shared/session/sessionEvents';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
@@ -287,15 +287,14 @@ const enterRun = Effect.fn('enterRun')(function* (
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   let carried = 0;
-  const opening = Effect.sync((): CoWrite => {
+  const opening = Effect.sync((): readonly UnfoldedDraft[] => {
     const events = held ?? [];
     carried = events.findIndex((e) => e.type.startsWith('stream.'));
     if (carried < 0) carried = events.length;
-    const rows = events.slice(0, carried).flatMap((e) => {
+    return events.slice(0, carried).flatMap((e) => {
       const row = runEventDraft(runId, e);
       return row === null ? [] : [row];
     });
-    return { rows, committed: Effect.void };
   });
   const entered = Effect.sync(() => {
     for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);

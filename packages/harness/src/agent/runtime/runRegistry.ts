@@ -167,10 +167,10 @@ export class RunRegistry implements RunsShape {
    *  stops the first to settle cannot admit a child the second's snapshot
    *  already left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
-  /** Children a detach cut before their birth, which has no row to carry
-   *  it: added in that detach's afterCommit, read through {@link parentOf}
-   *  (the birth job's, and the unborn edge's), removed with the entry. A
-   *  marked child is born detached, so once born its rows agree. */
+  /** Children a detach cut before their run was created, so no row carries
+   *  it: added once that detach commits, read through {@link parentOf},
+   *  removed with the entry. A marked child is created detached, so once
+   *  created its rows agree. */
   private readonly unbornDetached = new Set<RunId>();
   /** Steps admitted but not yet started; disposal fails them all at once. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
@@ -866,7 +866,7 @@ export class RunRegistry implements RunsShape {
             }),
           );
         // Only a child still here: one gone since has no birth left to cut.
-        yield* tx.afterCommit(
+        yield* session.log.afterCommit(
           Effect.sync(() => {
             for (const id of children)
               if (!kept.has(id) && this.entries.has(id))

@@ -150,9 +150,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(roots, secrets).pipe(
-        withLogChannel('Setup Credentials'),
-      ),
+      hasUsableSetupCredential(roots, secrets).pipe(withLogChannel(CHANNEL)),
       resolveGitHubTokenSource(secrets).pipe(
         // A store the host cannot read is neither a token nor its absence:
         // report it unknown (as a provider key's origin is) and log why, so

@@ -59,16 +59,6 @@ function firstZodMessage(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid skill metadata';
 }
 
-/**
- * `extractFrontmatter` throws a typed {@link SkillFrontmatterError} for every
- * malformed-frontmatter case; anything else (a failed read included) is a
- * read error.
- */
-function skillReadErrorCode(err: unknown): SkillIssueCode {
-  if (err instanceof SkillFrontmatterError) return 'invalid_frontmatter';
-  return 'read_error';
-}
-
 function normalizeSkillName(
   rawName: unknown,
   directoryName: string,
@@ -291,11 +281,19 @@ export function loadSkillDirectory(
         catch: ensureError,
       }),
     ),
+    // `extractFrontmatter` throws a typed `SkillFrontmatterError` for every
+    // malformed-frontmatter case; anything else (a failed read included) is
+    // a read error.
     Effect.orElseSucceed((err): LoadedSkill => ({
       errors: [
-        issue('error', skillReadErrorCode(err), toErrorMessage(err), {
-          path: skillPath,
-        }),
+        issue(
+          'error',
+          err instanceof SkillFrontmatterError
+            ? 'invalid_frontmatter'
+            : 'read_error',
+          toErrorMessage(err),
+          { path: skillPath },
+        ),
       ],
     })),
   );

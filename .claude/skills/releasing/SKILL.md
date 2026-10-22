@@ -77,9 +77,10 @@ asks for the OTP): llm first, then harness, by the steps below.
 - **Versions are their own.** `bump-workspace-version.mjs` leaves both
   manifests alone. Bump `version` in `packages/llm/package.json` and/or
   `packages/harness/package.json` by hand when what they ship changed since
-  the last publish. The harness pack pins `@texra-ai/llm` at the exact
-  workspace version, so that llm version must be on npm before the harness
-  that names it.
+  the last publish. The harness names `@texra-ai/llm` as a peer with
+  `workspace:^`, which the pack writes as a caret range on the workspace
+  version (`^0.1.0` admits `0.1.x` only). That version is the range's floor,
+  so it must be on npm before the harness that names it.
 - **Effect peers.** `effect`, `@effect/platform-node` and
   `@effect/sql-sqlite-node` are peers whose ranges come from the `peers`
   catalog in `pnpm-workspace.yaml`; its floor must equal the `catalog`

@@ -10,8 +10,7 @@ import {
   type RunIdentity,
   type RunOutcome,
 } from '@shared/schemas';
-import { fold } from '@shared/session/sessionFold';
-import { emptySessionView } from '@shared/session/sessionView';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 import type { TraceDocument } from '@texra-ai/harness/schemas';
 // Relative import: `packages/trace-viewer` is a separate workspace package
@@ -22,8 +21,8 @@ import type { TraceDocument } from '@texra-ai/harness/schemas';
 const RUN_ID = 'abc123' as RunId;
 const AGGREGATE = qualifyAggregateId('run', RUN_ID);
 
-/** The view the fold reaches over the trace's rows, with the transcript tier
- *  subscribed for the run's stream. */
+/** The view the trace's rows build, with the run's transcript
+ *  subscribed. */
 function foldTrace(trace: TraceDocument) {
   const frame = traceFrame(trace, 'trace', {
     kind: 'subscribe',
@@ -33,7 +32,7 @@ function foldTrace(trace: TraceDocument) {
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
   });
-  const view = fold(emptySessionView('trace', 0), [
+  const view = makeSessionViewUpdater('trace').apply([
     { _tag: 'subscriptions', set: [{ id: AGGREGATE, fromSeq: 0 }] },
     ...frame.events,
     {

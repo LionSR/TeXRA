@@ -129,6 +129,39 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
   - Use **camelCase** for simple command/function namespaces (e.g., `latexCommands`)
 - **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `SESSION_CLOSE_DEADLINE_MS`)
 
+### Plain names and comments
+
+Name things for what they do, in ordinary programming English. Write comments for a reader who has read
+the code but none of the planning docs. Coined metaphors read as insight to the author and as noise to
+everyone else, and one metaphor tends to end up meaning several things.
+
+- **Use the plain word.** Prefer these over the metaphor on the left in new identifiers and comments:
+
+  | Avoid                       | Write instead                                     |
+  | --------------------------- | ------------------------------------------------- |
+  | fold (as a noun), folded    | update, apply, rebuild; applied                   |
+  | park, parked                | wait, waiting, blocked                            |
+  | settle, settled, settlement | finish, finished, result (name which result)      |
+  | admit, admission            | accept, start, requires                           |
+  | arm (of a union or a fold)  | case, branch, handler                             |
+  | move, grammar, transition   | outcome, handlers, next step                      |
+  | tombstone, hydration        | deletion marker, initial load                     |
+  | seam, plane, ledger, spine  | boundary, layer, record, the specific module name |
+  | refusal (our own rejection) | rejection, error (a model refusing stays refusal) |
+
+  Existing names that are documented APIs (`withPerKeyLane`, `SessionEvents`) keep their names.
+
+- **One word, one meaning.** Before reusing a word for a new concept, grep it. If it already names
+  something else in that package, pick another word.
+- **No document citations in code.** No section numbers, PRD or decision ids (`5.2`, `D5`, `G1`,
+  `decision 9`), and no "ruled" or "owner rule" provenance. Say the reason directly; the PR and the design doc
+  carry the history.
+- **Comments must be true.** A comment that calls a function pure, or a field final, is checked like code.
+  When you change behaviour, fix the comment in the same commit.
+- **Persisted and wire strings keep their spelling.** Row and event `type` literals, `_tag` strings,
+  settings keys and command ids are data. Renaming the TypeScript around them is fine; renaming the string
+  is a format change.
+
 ### Directory organization
 
 This is a pnpm workspace; CLAUDE.md "Layout" describes the packages and the frozen `@agent/*` surface. Never widen a baseline under `config/ratchets/`; a decrease is always welcome. Kernel architecture tests under `src/test-kernel/architecture/` (for example `approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with hardcoded rules rather than baseline JSON.

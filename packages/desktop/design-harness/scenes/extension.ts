@@ -18,7 +18,7 @@ import {
   buildScenario,
   CHILD,
   fanOutView,
-  foldAll,
+  viewOf,
   GRANDCHILD,
   local,
   Log,
@@ -273,7 +273,7 @@ function interruptedTasksView(): SessionView {
     },
     OTHER_OWNER,
   );
-  return foldAll([
+  return viewOf([
     ...log.events.map(tail),
     log.drained(),
     local({
@@ -362,7 +362,7 @@ function forkView(): SessionView {
     by: 'user',
   });
   park(FORK, T.childDone + 1, 1);
-  return foldAll([
+  return viewOf([
     subscribe(FORK_SOURCE, FORK),
     ...log.events.map(tail),
     log.drained(),
@@ -460,12 +460,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Coming back to a finished session: the child has completed, so where
   // its composer stood the dock says so and offers the way forward.
   'ext-finished': () => {
-    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    const view = viewOf([...buildScenario().events, local({ self: [OWNER] })]);
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The same, on the finished workflow root: the board, then the dock.
   'ext-finished-workflow': () => {
-    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    const view = viewOf([...buildScenario().events, local({ self: [OWNER] })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // An interrupted child with the drawer shut: the dock's Resume.
@@ -563,7 +563,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         },
       },
     });
-    const view = foldAll([
+    const view = viewOf([
       ...buildScenario().pending.filter(
         (input) =>
           !(input._tag === 'event' && input.event.type === 'request.opened'),
@@ -602,7 +602,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         }),
       ),
     );
-    const view = foldAll([...events, ...priced, local({ self: [OWNER] })]);
+    const view = viewOf([...events, ...priced, local({ self: [OWNER] })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // A document task past its second pass: the header's "Pass 2 of 3" chip.
@@ -652,7 +652,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       type: 'run.position',
       payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
     });
-    const view = foldAll([
+    const view = viewOf([
       subscribe(ROOT),
       ...log.events.map(tail),
       log.drained(),

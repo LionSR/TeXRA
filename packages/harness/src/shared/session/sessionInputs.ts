@@ -1,8 +1,8 @@
-/** Ordered fold inputs shared by the runtime, transport framer, and webview. */
+/** Ordered session view inputs shared by the runtime, transport framer, and webview. */
 import { Context } from 'effect';
 import type {
   CommitOrdinal,
-  FoldInput,
+  SessionViewInput,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { Stream } from 'effect';
@@ -16,6 +16,6 @@ export class SessionInputs extends Context.Service<
       aggregates: readonly TranscriptSubscription[],
       fromCommit: CommitOrdinal,
       previousDebug: boolean,
-    ) => Stream.Stream<readonly FoldInput[]>;
+    ) => Stream.Stream<readonly SessionViewInput[]>;
   }
 >()('@texra-ai/harness/session/SessionInputs') {}
