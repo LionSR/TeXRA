@@ -279,12 +279,15 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     `;
   }
 
-  /** An agent the call defines: its name and tools, and, open, its prompt. */
+  /** An agent the call defines, while it stays the pick: its name and
+   *  tools, and, open, its prompt. */
   private renderDefinedAgent(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const { persona } = data;
-    if (!persona) return nothing;
+    // A catalog agent picked instead runs without it.
+    const picked = this.selectedAgent ?? this.proposedAgent;
+    if (!persona || picked !== this.proposedAgent) return nothing;
     return html`<div class="workflow-proposal__plan-note">
         ${DEFINED_AGENT_COPY.heading(persona)}
       </div>
