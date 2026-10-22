@@ -1,4 +1,4 @@
-import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
+import { Cause, Effect, Exit, Latch, Queue, type Scope } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -15,7 +15,9 @@ const CHANNEL = 'cli.chat';
  *   drain is the lane: there is no permit apart from the running delivery,
  *   so nothing can hand the lane on while a delivery is still running.
  * - **`clear` drops only what has not started.** It takes whatever is still
- *   buffered; a delivery the drain has already taken keeps running.
+ *   buffered and settles each through its own `dropped`, the delivery's
+ *   owner of "this message was not delivered"; a delivery the drain has
+ *   already taken keeps running.
  * - **`idle` waits for the running delivery and everything behind it.** A
  *   count of unsettled deliveries, raised on `enqueue` and lowered when a
  *   delivery settles or `clear` drops it, keeps a `Latch` open exactly while
@@ -38,9 +40,14 @@ const CHANNEL = 'cli.chat';
  * that decides to.
  */
 export interface FollowUpDeliveryQueue {
-  /** Queue a delivery behind every earlier one that has not settled. */
-  readonly enqueue: (delivery: Effect.Effect<void>) => void;
-  /** Drop the deliveries that have not started; the running one finishes. */
+  /** Queue a delivery behind every earlier one that has not settled;
+   *  `dropped` settles it instead if `clear` drops it unstarted. */
+  readonly enqueue: (
+    delivery: Effect.Effect<void>,
+    dropped: () => void,
+  ) => void;
+  /** Drop the deliveries that have not started, each settled by its
+   *  `dropped`; the running one finishes. */
   readonly clear: () => void;
   /** Succeeds once no delivery is running or queued. */
   readonly idle: Effect.Effect<void>;
@@ -51,7 +58,10 @@ export const makeFollowUpDeliveryQueue = (
   scope: Scope.Scope,
 ): Effect.Effect<FollowUpDeliveryQueue> =>
   Effect.gen(function* () {
-    const deliveries = yield* Queue.unbounded<Effect.Effect<void>>();
+    const deliveries = yield* Queue.unbounded<{
+      readonly delivery: Effect.Effect<void>;
+      readonly dropped: () => void;
+    }>();
     const idle = yield* Latch.make(true);
     let unsettled = 0;
     const settle = (count: number): void => {
@@ -63,7 +73,7 @@ export const makeFollowUpDeliveryQueue = (
     // lose a taken delivery's count.
     yield* Effect.uninterruptibleMask((restore) =>
       restore(Queue.take(deliveries)).pipe(
-        Effect.flatMap((delivery) =>
+        Effect.flatMap(({ delivery }) =>
           Effect.ensuring(
             restore(delivery).pipe(
               Effect.catchCause((cause) =>
@@ -80,15 +90,20 @@ export const makeFollowUpDeliveryQueue = (
       ),
     ).pipe(Effect.forever, Effect.forkIn(scope));
     return {
-      enqueue: (delivery) => {
+      enqueue: (delivery, dropped) => {
         unsettled += 1;
         idle.closeUnsafe();
-        Queue.offerUnsafe(deliveries, delivery);
+        Queue.offerUnsafe(deliveries, { delivery, dropped });
       },
       clear: () => {
-        let dropped = 0;
-        while (Queue.takeUnsafe(deliveries) !== undefined) dropped += 1;
-        if (dropped > 0) settle(dropped);
+        for (
+          let taken = Queue.takeUnsafe(deliveries);
+          taken !== undefined && Exit.isSuccess(taken);
+          taken = Queue.takeUnsafe(deliveries)
+        ) {
+          settle(1);
+          taken.value.dropped();
+        }
       },
       idle: idle.await,
     };

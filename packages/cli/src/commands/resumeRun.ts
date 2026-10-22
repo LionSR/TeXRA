@@ -166,9 +166,7 @@ export function runResumeCommand(
     if (refusal?.kind === 'held_elsewhere') {
       const inService = documentTask
         ? Result.succeed(false)
-        : yield* Effect.result(
-            heldByService(context.storageRoot, refusal.owner),
-          );
+        : yield* Effect.result(heldByService(refusal.owner));
       // A service that cannot be asked may be the holder: its own reason
       // (how to stop a wedged one) is what the user can act on.
       if (Result.isFailure(inService)) {

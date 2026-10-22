@@ -576,10 +576,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         },
       );
 
-      /**
-       * Rebind on `selection`, retiring the failed binding, on the routes
-       * the run declines as its rows now stand; a failure keeps it, loudly.
-       */
+      /** Rebind on `selection`, retiring the failed binding, on the routes
+       *  the run declines as its rows now stand; a failure keeps it, loudly.
+       *  A renew names the token the provider rejected. */
       const rebind =
         (cell: RunCell) =>
         (selection: RetryCredentials | 'renewed', failed: BoundModel) =>
@@ -590,16 +589,17 @@ export const modelInvokerLayer = (): Layer.Layer<
                 ? Effect.succeed(current)
                 : access.bind({
                     modelId: failed.modelId,
-                    // A personal-key retry leaves the failed route's overlay
-                    // behind (subscription window, prices, PDF admission, a
-                    // Kimi coding endpoint) and binds the catalog model.
+                    // A personal-key retry drops the route's overlay (window,
+                    // prices, PDF admission, Kimi endpoint) for the catalog's.
                     config:
                       selection === 'personal' ? undefined : failed.config,
                     backend: failed.backend,
                     declinedRoutes,
                     textOnly: failed.textOnly,
                     temperature: run.persona.temperature,
-                    renew: selection === 'renewed',
+                    ...(selection === 'renewed' && {
+                      rejected: failed.subscriptionToken,
+                    }),
                   }),
             ),
           ).pipe(

@@ -15,7 +15,8 @@ interface Notice {
   /** The file it is about; none for the editor itself failing to load. */
   readonly path: string | undefined;
   readonly message: string;
-  retry?(): void;
+  /** The answers it offers, each a button. */
+  readonly actions: readonly { readonly label: string; run(): void }[];
 }
 
 export function createEditorFileNotice(options: {
@@ -36,16 +37,15 @@ export function createEditorFileNotice(options: {
         : html`<wa-callout variant="danger" size="s" role="alert">
             ${waIcon('triangle-exclamation', { slot: 'icon' })}
             <span class="desktop-editor-notice-text">${notice.message}</span>
-            ${
-              notice.retry
-                ? html`<wa-button
-                    size="s"
-                    appearance="outlined"
-                    @click=${notice.retry}
-                    >Try again</wa-button
-                  >`
-                : nothing
-            }
+            ${notice.actions.map(
+              (action) =>
+                html`<wa-button
+                  size="s"
+                  appearance="outlined"
+                  @click=${action.run}
+                  >${action.label}</wa-button
+                >`,
+            )}
             <wa-button
               size="s"
               appearance="plain"
@@ -77,9 +77,26 @@ export function createEditorFileNotice(options: {
       show({
         path,
         message: detail ? `${headline} ${detail}` : headline,
-        ...(action === 'save' && path !== undefined
-          ? { retry: () => options.retrySave(path) }
-          : {}),
+        actions:
+          action === 'save' && path !== undefined
+            ? [{ label: 'Try again', run: () => options.retrySave(path) }]
+            : [],
+      });
+    },
+
+    /** A save found the file rewritten since the editor read it (a run, or
+     *  another editor): nothing was written, and the user picks a side. */
+    changedOnDisk(
+      path: string,
+      answers: { overwrite(): void; reload(): void },
+    ): void {
+      show({
+        path,
+        message: `${getBasename(path)} changed on disk since it was opened. Your changes are still in the editor.`,
+        actions: [
+          { label: 'Overwrite', run: answers.overwrite },
+          { label: 'Reload from disk', run: answers.reload },
+        ],
       });
     },
 

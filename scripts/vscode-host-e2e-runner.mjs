@@ -86,7 +86,7 @@ const watchdog = setTimeout(() => {
     );
   // Whether the live service is what holds VS Code open: stop it, and
   // say whether VS Code then quits.
-  stopService(path.join(home, '.texra', 'run', 'serve.json'));
+  stopService();
   setTimeout(() => {
     const left = spawnSync('pgrep', ['-f', `user-data-dir ${root}/u`], {
       encoding: 'utf8',
@@ -128,9 +128,10 @@ try {
     ],
   });
   // The service the window started outlives it: its tasks keep running.
-  const record = path.join(home, '.texra', 'run', 'serve.json');
   if (process.platform !== 'win32') {
-    const { pid } = JSON.parse(readFileSync(record, 'utf8'));
+    const pid = servicePid();
+    if (pid === undefined)
+      throw new Error('the window started no service (its log names none)');
     try {
       process.kill(pid, 0);
     } catch {
@@ -143,16 +144,34 @@ try {
   throw error;
 } finally {
   clearTimeout(watchdog);
-  stopService(path.join(home, '.texra', 'run', 'serve.json'));
+  stopService();
   rmSync(root, { recursive: true, force: true });
 }
 
-/** Stop the service a run started, when one wrote its record. */
-function stopService(record) {
+/** The pid of the service a run started, as its log names it once it
+ *  holds the record (the newest such line), or undefined. */
+function servicePid() {
   try {
-    process.kill(JSON.parse(readFileSync(record, 'utf8')).pid, 'SIGTERM');
+    const log = readFileSync(
+      path.join(home, '.texra', 'run', 'serve.log'),
+      'utf8',
+    );
+    const last = [...log.matchAll(/listening on \S*serve-(\d+)\.sock/g)].at(-1);
+    return last && Number(last[1]);
   } catch {
-    // No service was started, or it is gone already.
+    // No service was started: it wrote no log.
+    return undefined;
+  }
+}
+
+/** Stop the service a run started, when one started. */
+function stopService() {
+  const pid = servicePid();
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // It is gone already.
   }
 }
 

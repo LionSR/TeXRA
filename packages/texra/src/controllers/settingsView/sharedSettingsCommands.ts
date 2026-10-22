@@ -18,9 +18,12 @@ import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
   CopilotRoutes,
+  type PerKeyLane,
   readModelOptions,
+  Settings,
   type StorageFs,
   withLogChannel,
+  withPerKeyLane,
   withSessionFs,
 } from '@texra-ai/harness';
 import {
@@ -292,6 +295,19 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       yield* bindings.stateSettingApplied(key);
     });
 
+  // One read-modify-write at a time per list: two switches handled at once
+  // would each read the list without the other's item.
+  const skillListLanes = new Map<string, PerKeyLane>();
+  const setSkillEnabled = (key: string, item: string, enabled: boolean) =>
+    Effect.flatMap(Settings.get<readonly string[]>(roots, key), (disabled) =>
+      updateStateSetting(
+        key,
+        enabled
+          ? disabled.filter((candidate) => candidate !== item)
+          : [...new Set([...disabled, item])],
+      ),
+    ).pipe(withPerKeyLane(skillListLanes, key));
+
   const profileKeys = new SettingsProfileKeyController({
     secrets,
     prompt: bindings.prompt,
@@ -379,6 +395,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
         .pipe(Effect.andThen(postModelSelection)),
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),
+    setSkillEnabled: (message) =>
+      setSkillEnabled(message.key, message.item, message.enabled),
 
     // ── Subscriptions ──
     signInSubscription: (message) => signInSubscription(message.provider),

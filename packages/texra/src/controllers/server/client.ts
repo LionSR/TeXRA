@@ -39,6 +39,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
+import type { GlobalValues } from '@texra-ai/harness';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */
@@ -117,6 +118,14 @@ function connectService(
   });
 }
 
+/** Nothing accepts a connection on the socket: no service, or a dead one. */
+const nobodyListens = (error: {
+  readonly _tag: string;
+  readonly reason?: { readonly _tag: string };
+}) =>
+  (error._tag === 'RpcClientError' || error._tag === 'SocketError') &&
+  error.reason?._tag === 'SocketOpenError';
+
 /**
  * The hello of the service on `socket`, or null when nothing accepts the
  * connection (no socket, or a dead service's). A socket that accepts but
@@ -124,7 +133,7 @@ function connectService(
  * hello: that fails, so no caller mistakes it for a dead one and takes its
  * socket over.
  */
-function probeService(
+export function probeService(
   socket: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
@@ -135,8 +144,7 @@ function probeService(
     Effect.timeout(HELLO_TIMEOUT),
     Effect.map((info): ServiceInfo | null => info),
     Effect.catch((error) =>
-      (error._tag === 'RpcClientError' || error._tag === 'SocketError') &&
-      error.reason._tag === 'SocketOpenError'
+      nobodyListens(error)
         ? Effect.succeed(null)
         : Effect.fail(
             new ServiceUnavailable({
@@ -148,28 +156,25 @@ function probeService(
 }
 
 /**
- * The hello of the service `storageRoot`'s record names, or null when there
- * is none: no record, or a socket nobody accepts on (a service that died).
- * A record that cannot be read is unavailable, not none: starting another
- * service beside the one it may name is the wrong answer.
+ * The hello of the service the storage root's record names, or null when
+ * there is none: no record, or a socket nobody accepts on (a service that
+ * died).
  */
-export function probeRecordedService(
-  storageRoot: string,
-): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
-  const paths = servicePaths(storageRoot);
-  return readServiceRecord(paths).pipe(
-    Effect.provide(nodeFileServices),
-    Effect.mapError(
-      (error) =>
-        new ServiceUnavailable({
-          reason: `The TeXRA service record ${paths.record} cannot be read: ${error.message}`,
-        }),
-    ),
-    Effect.flatMap((record) =>
-      record === null ? Effect.succeed(null) : probeService(record.socket),
-    ),
-  );
-}
+export const probeRecordedService: Effect.Effect<
+  ServiceInfo | null,
+  ServiceUnavailable,
+  GlobalValues
+> = readServiceRecord.pipe(
+  Effect.mapError(
+    (error) =>
+      new ServiceUnavailable({
+        reason: `The service record could not be read: ${error.message}`,
+      }),
+  ),
+  Effect.flatMap((record) =>
+    record === null ? Effect.succeed(null) : probeService(record.socket),
+  ),
+);
 
 /**
  * Start the service detached, with its output appended to its log, and
@@ -235,6 +240,16 @@ export function askServiceToStop(
   );
 }
 
+/** Ask the service on `socket` to drain: it exits once its running tasks
+ *  end. One that exited already is retired. */
+function retireService(
+  socket: string,
+): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
+  return askServiceToStop(socket, true).pipe(
+    Effect.catchIf(nobodyListens, () => Effect.void),
+  );
+}
+
 /** The refusal of a running service that speaks a newer protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
@@ -255,12 +270,16 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     /** Runs whenever the connection ends (see {@link connectService}). */
     readonly onDisconnect?: Effect.Effect<void>;
   } = {},
-): Effect.fn.Return<ServiceConnection, ServiceUnavailable, Scope.Scope> {
+): Effect.fn.Return<
+  ServiceConnection,
+  ServiceUnavailable,
+  Scope.Scope | GlobalValues
+> {
   if (process.platform === 'win32')
     return yield* Effect.fail(
       new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
     );
-  let info = yield* probeRecordedService(storageRoot);
+  let info = yield* probeRecordedService;
   if (info !== null && info.protocol > PROTOCOL_VERSION)
     return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
@@ -270,7 +289,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
-    yield* askServiceToStop(retiring.socket, true).pipe(
+    yield* retireService(retiring.socket).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
@@ -301,7 +320,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     const lastRefusal = yield* Ref.make(
       new ServiceUnavailable({ reason: NOT_YET_UP }),
     );
-    info = yield* probeRecordedService(storageRoot).pipe(
+    info = yield* probeRecordedService.pipe(
       Effect.flatMap((answer) => {
         if (answer !== null && answer.protocol > PROTOCOL_VERSION)
           return Effect.fail(newerService(answer));
@@ -398,7 +417,11 @@ const RECONNECT = Schedule.min([
 export const linkService = Effect.fn('server.linkService')(function* (
   storageRoot: string,
   start: Effect.Effect<void, Error>,
-): Effect.fn.Return<ServiceLink, ServiceUnavailable, Scope.Scope> {
+): Effect.fn.Return<
+  ServiceLink,
+  ServiceUnavailable,
+  Scope.Scope | GlobalValues
+> {
   const connect = (begin: Effect.Effect<void, Error>) =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();

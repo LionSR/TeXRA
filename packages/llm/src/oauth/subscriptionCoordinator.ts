@@ -65,8 +65,11 @@ export interface SubscriptionCoordinator<S extends SubscriptionSession> {
   >;
   /** The stored session, refreshed when it expires soon. */
   getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient>;
-  /** Refresh now: the provider rejected the access token before its expiry. */
-  refreshRejected(): Effect.Effect<void, Error, HttpClient.HttpClient>;
+  /** Refresh now, while the stored session still holds `accessToken`: the
+   *  provider rejected it before its expiry. */
+  refreshRejected(
+    accessToken: string,
+  ): Effect.Effect<void, Error, HttpClient.HttpClient>;
   /** Forget the stored session. */
   signOut(): Effect.Effect<void, SecretsFailed>;
   /** The PKCE authorize URL for a loopback callback on `port`. */

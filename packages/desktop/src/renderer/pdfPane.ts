@@ -7,10 +7,18 @@ import type { WorkbenchTab } from '../shared/desktopShellState';
 export function createPdfPane() {
   const frames = new Map<string, HTMLIFrameElement>();
 
-  /** The frame for a `pdf` tab, created on first render of that tab. */
+  /** The frame for a `pdf` tab, created on first render of that tab and
+   *  reloaded when the tab names another build: a rebuild keeps the URL. */
   function frameFor(tab: WorkbenchTab): HTMLIFrameElement {
+    const build = String(tab.build);
     const existing = frames.get(tab.id);
-    if (existing) return existing;
+    if (existing) {
+      if (existing.dataset.build !== build) {
+        existing.dataset.build = build;
+        existing.src = tab.target ?? '';
+      }
+      return existing;
+    }
     // An `<iframe>`, not `<webview>`: `<webview>` needs `webviewTag: true`
     // in webPreferences, which the window does not enable. Electron's main
     // BrowserWindow renders PDFs in iframes through the bundled Chromium
@@ -21,6 +29,7 @@ export function createPdfPane() {
     // Same-origin so the viewer's controls work; no scripts, so a malformed
     // PDF cannot run JS into the renderer.
     frame.setAttribute('sandbox', 'allow-same-origin');
+    frame.dataset.build = build;
     frame.src = tab.target ?? '';
     frames.set(tab.id, frame);
     return frame;

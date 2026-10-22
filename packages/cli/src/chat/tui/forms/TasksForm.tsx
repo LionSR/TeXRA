@@ -39,7 +39,7 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness';
 import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type {
   ApprovalPayload,
@@ -50,7 +50,7 @@ import type {
 type ConnectService = () => Effect.Effect<
   ServiceConnection,
   Error,
-  Scope.Scope
+  Scope.Scope | GlobalValues
 >;
 
 interface TasksFormProps {
