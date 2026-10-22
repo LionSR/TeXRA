@@ -33,7 +33,8 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
-import { environment } from '@utils/system/nodeWorkspace';
+import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
+import { withExtendedPath } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -132,20 +133,22 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
-/** The environment the server starts from (the process's, with the
- *  project's `.env` over it) minus credential-shaped names, plus the
- *  entry's. */
-function serverEnv(
-  config: McpServerConfig,
-  inherited: Readonly<Record<string, string | undefined>>,
-): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(inherited)) {
-    if (value !== undefined && !SENSITIVE_ENV_NAME.test(name))
-      env[name] = value;
-  }
-  return { ...env, ...config.env };
-}
+/** The process's environment with the project's `.env` over it, minus
+ *  credential-shaped names, plus the entry's, on the extended process PATH
+ *  its command is pinned on (`externalFiles`), so the pinned binary runs. */
+const serverEnv = (config: McpServerConfig) =>
+  Effect.gen(function* () {
+    const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
+    for (const [name, value] of Object.entries(yield* environment)) {
+      if (value === undefined || SENSITIVE_ENV_NAME.test(name)) continue;
+      if (!/^path$/i.test(name)) env[name] = value;
+      else if (Object.hasOwn(yield* ProjectEnvironment, name))
+        yield* Effect.logWarning(
+          `MCP server "${config.name}" ignores the project's .env ${name}: its command is pinned on the extended process PATH.`,
+        ).pipe(withLogChannel(CHANNEL));
+    }
+    return withExtendedPath({ ...env, ...config.env });
+  });
 
 const decode = <T>(
   schema: z.ZodType<T>,
@@ -162,11 +165,9 @@ const decode = <T>(
       );
 };
 
-/**
- * The text a call result carries, cut head and tail past the cap a shell
- * command's output takes, since a long result's summary or error sits at its
- * end.
- */
+/** The text a call result carries, cut head and tail past the cap a shell
+ *  command's output takes, since a long result's summary or error sits at
+ *  its end. */
 function resultText(result: z.infer<typeof CallToolResultSchema>): string {
   const parts = result.content.map((item) =>
     item.type === 'text' && item.text != null
@@ -278,7 +279,7 @@ const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
 const connect = (config: McpServerConfig) =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(config.command, [...config.args], {
-      env: serverEnv(config, yield* environment),
+      env: yield* serverEnv(config),
       extendEnv: false,
       ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     }).pipe(
