@@ -165,8 +165,7 @@ export function runResumeCommand(
     // client, so the service stays the run's one writer.
     if (
       rejection?.kind === 'owned_elsewhere' &&
-      (documentTask ||
-        !(yield* heldByService(context.storageRoot, rejection.owner)))
+      (documentTask || !(yield* heldByService(rejection.owner)))
     ) {
       // The owner named by the pid and machine its claim recorded: the two
       // parts of an identity a user can act on.

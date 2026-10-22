@@ -16,7 +16,7 @@ import { watchTask } from '@cli/runtime/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import type { Outcome } from '@texra-ai/harness';
+import type { GlobalValues, Outcome } from '@texra-ai/harness';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {
@@ -50,11 +50,15 @@ function treeOf(view: SessionView, root: RunView['id']): Set<string> {
  * a connection or watch that fails ends it with a final level saying why.
  */
 export function followAttachedTask(
-  connect: () => Effect.Effect<ServiceConnection, Error, Scope.Scope>,
+  connect: () => Effect.Effect<
+    ServiceConnection,
+    Error,
+    Scope.Scope | GlobalValues
+  >,
   task: TaskSummary,
   onReady: (actions: AttachedTaskActions) => void,
   onLevel: (level: AttachedTaskLevel) => void,
-): Effect.Effect<void> {
+): Effect.Effect<void, never, GlobalValues> {
   return Effect.gen(function* () {
     const { client } = yield* connect();
     onReady({

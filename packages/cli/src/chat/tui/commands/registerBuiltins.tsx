@@ -79,6 +79,7 @@ import {
   modelAccessContribution,
 } from './modelAccessContribution';
 import type {
+  GlobalValues,
   LocalSession,
   ProcessRuntime,
   ProcessServices,
@@ -135,7 +136,11 @@ export function registerBuiltinSlashCommands(options: {
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
   /** Reach the TeXRA service (`/tasks`), starting it when none runs. */
-  connectService?: () => Effect.Effect<ServiceConnection, Error, Scope.Scope>;
+  connectService?: () => Effect.Effect<
+    ServiceConnection,
+    Error,
+    Scope.Scope | GlobalValues
+  >;
   configRoots?: WorkspaceRoots;
   onError?: ErrorHandler;
 }): void {

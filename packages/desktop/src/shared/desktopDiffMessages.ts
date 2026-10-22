@@ -47,9 +47,10 @@ export const DesktopCloseDiffMessageSchema = z.object({
   session: z.string().min(1),
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
   /**
-   * The `previewId` of the diff the sender opened. The Review pane retains
-   * one review per path, so the renderer drops the reviews this id opened
-   * and no others, and the Review tab goes only once that empties the pane.
+   * The `previewId` of the diff the sender opened. The Review pane keys its
+   * reviews by this id, so the renderer drops this review and no other (a
+   * second pending edit of the same file stays), and the Review tab goes
+   * only once that empties the pane.
    */
   previewId: z.string().min(1),
 });

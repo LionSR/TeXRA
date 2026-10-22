@@ -24,6 +24,7 @@ import {
   REPO_STATE,
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
+import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
@@ -66,6 +67,7 @@ const VALUE_FAMILIES = [
   DESKTOP_PROJECTS,
   INQUIRY_THREADS,
   UPDATE_CHECKS,
+  TEXRA_SERVICE,
 ];
 
 const VERSIONED: readonly Versioned[] = [

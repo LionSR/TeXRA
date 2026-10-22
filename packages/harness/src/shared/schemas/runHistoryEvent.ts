@@ -11,7 +11,7 @@
  *
  * No payload references a `commit`. Response identity is a runtime-minted
  * uuid, so no persisted row ever names an ordinal the publisher has not
- * assigned, `appendBatch` needs no intra-batch reference resolution, and this
+ * assigned, `RunCell.append` needs no intra-batch reference resolution, and this
  * module needs no import from `sessionEvent.ts` (which imports it).
  */
 import { z } from 'zod';

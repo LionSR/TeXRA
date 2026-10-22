@@ -264,6 +264,24 @@ describe('CodexSessionCoordinator', () => {
     }),
   );
 
+  it.effect('rotates a rejected token once, however many calls sent it', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(
+        session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
+      );
+      const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+
+      // Two calls sent access-0 and both got a 401, one after the other:
+      // the second finds the token already replaced and leaves it.
+      yield* withHttp(coordinator.refreshRejected('access-0'));
+      yield* withHttp(coordinator.refreshRejected('access-0'));
+
+      expect(refreshTokens).toHaveBeenCalledOnce();
+      expect(storage.peek()?.accessToken).toBe('access-1');
+    }),
+  );
+
   it.effect('does not restore a session when sign-out races with refresh', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());

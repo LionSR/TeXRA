@@ -411,12 +411,11 @@ const awaitInBand = (
         Effect.suspend(() =>
           runs.interruptActive(runId)
             ? Fiber.await(child)
-            : Fiber.interrupt(child).pipe(
-                Effect.andThen(
-                  Effect.sync(() => {
-                    runs.interruptActive(runId);
-                  }),
-                ),
+            : // No run to stop yet: a loop the launch's hand-off started
+              // meanwhile is stopped once it returns, and awaited to the end.
+              Fiber.interrupt(child).pipe(
+                Effect.andThen(Effect.sync(() => runs.interruptActive(runId))),
+                Effect.andThen(runs.awaitDrained(runId)),
               ),
         ),
       ),

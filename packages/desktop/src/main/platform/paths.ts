@@ -24,7 +24,7 @@ interface ResourcesPathOptions {
  * defaultNodeStorageRoot}) so a workspace worked on from both hosts shows
  * one memory/history view (#7987). The e2e/dev harness isolates Electron's
  * own `userData` profile via `TEXRA_DESKTOP_E2E_USER_DATA_PATH` (see
- * `packages/desktop/src/main/index.ts`) so relaunches share one throwaway
+ * `packages/desktop/src/main/bootstrap.ts`) so relaunches share one throwaway
  * profile without ever touching a developer's real `~/.texra`; when that var
  * is set, the data root stays colocated with that same isolated profile
  * (`userDataPath` is already the isolated path by the time this runs). The
