@@ -281,30 +281,41 @@ export const serviceProjectState = (
     update: (key, value) => Effect.asVoid(set(key, value, null)),
     modify: (key, change) =>
       Effect.gen(function* () {
-        for (let attempt = 0; attempt < STATE_CHANGE_ATTEMPTS; attempt += 1) {
-          const current = yield* get(key).pipe(
-            Effect.mapError(
-              (error) =>
+        const current = yield* get(key).pipe(
+          Effect.mapError(
+            (error) =>
+              new StateWriteFailed({
+                key,
+                message: error.message,
+                cause: error,
+              }),
+          ),
+        );
+        const next = change(current);
+        if (Result.isFailure(next)) return yield* Effect.fail(next.failure);
+        // None: another writer moved the key between the read and the write.
+        return (yield* set(key, next.success, { value: current }))
+          ? Option.some(next.success)
+          : Option.none();
+      }).pipe(
+        Effect.repeat({
+          times: STATE_CHANGE_ATTEMPTS - 1,
+          until: Option.isSome,
+        }),
+        Effect.flatMap(
+          Option.match({
+            onSome: Effect.succeed,
+            onNone: () =>
+              Effect.fail(
                 new StateWriteFailed({
                   key,
-                  message: error.message,
-                  cause: error,
+                  message: `"${key}" kept changing in the TeXRA service while this window wrote it; try again.`,
+                  cause: undefined,
                 }),
-            ),
-          );
-          const next = change(current);
-          if (Result.isFailure(next)) return yield* Effect.fail(next.failure);
-          if (yield* set(key, next.success, { value: current }))
-            return next.success;
-        }
-        return yield* Effect.fail(
-          new StateWriteFailed({
-            key,
-            message: `"${key}" kept changing in the TeXRA service while this window wrote it; try again.`,
-            cause: undefined,
+              ),
           }),
-        );
-      }),
+        ),
+      ),
   };
 };
 

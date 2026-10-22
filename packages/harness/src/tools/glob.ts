@@ -2,14 +2,14 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Option, Predicate } from 'effect';
+import { Effect, FileSystem, Option, Predicate, type Scope } from 'effect';
 import { Glob } from 'glob';
 import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
 import { ToolError, ToolResult } from '@shared/schemas';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';
@@ -39,25 +39,21 @@ interface GlobMatchInfo {
   mtime: number;
 }
 
-/**
- * The per-call context this tool reads from the caller's turn: the batch's
- * abort signal and the working directory.
- */
-interface GlobPorts {
-  readonly call: ToolPathCall;
-  readonly signal: AbortSignal | undefined;
-}
-
 const runGlob = Effect.fn('GlobTool.execute')(function* (
-  ports: GlobPorts,
   input: GlobInput,
-): Effect.fn.Return<ToolResult, Error, FileSystem.FileSystem> {
-  const { call } = ports;
+): Effect.fn.Return<
+  ToolResult,
+  Error,
+  ToolContext | Scope.Scope | FileSystem.FileSystem
+> {
+  const call = (yield* ToolContext).env;
+  // Aborted when the call's scope closes: an interrupted call stops the walk
+  // it abandons.
+  const signal = yield* Effect.abortSignal;
   const path = yield* resolveToolPath(call, input.path ?? undefined);
   const { display } = path;
   const gitignore = yield* getGitignoreMatcher(call.roots.workspace);
 
-  const cancelSignal = ports.signal;
   const patternError = (err: unknown) =>
     new ToolError(
       `Glob pattern error: ${toErrorMessage(err)}. ` +
@@ -70,8 +66,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
         dot: true,
         nodir: false,
         absolute: false,
-        // Large-tree walks stop promptly when the batch is aborted.
-        signal: cancelSignal,
+        signal,
         follow: false,
       }),
     catch: patternError,
@@ -91,15 +86,6 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     try: () => walker.walk(),
     catch: patternError,
   });
-
-  // The walk is done, but stat-ing every match on a large tree is itself
-  // slow — bail before it so a cancelled batch doesn't wait out the
-  // post-walk stat/sort phase across several concurrent glob calls.
-  if (cancelSignal?.aborted) {
-    return yield* Effect.fail(
-      new ToolError('Cancelled before stat-ing glob matches.'),
-    );
-  }
 
   const fs = yield* FileSystem.FileSystem;
   const statMatch = Effect.fn('GlobTool.statMatch')(function* (
@@ -179,11 +165,5 @@ export const GlobTool = defineTool({
   description:
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
-  execute: Effect.fn('GlobTool.call')(function* (input: GlobInput) {
-    const ports: GlobPorts = {
-      call: (yield* ToolContext).env,
-      signal: yield* Effect.abortSignal,
-    };
-    return yield* runGlob(ports, input);
-  }),
+  execute: runGlob,
 });

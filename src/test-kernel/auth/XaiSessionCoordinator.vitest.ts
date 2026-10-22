@@ -2,44 +2,16 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import {
-  SubscriptionOAuthCoordinator,
-  type SubscriptionOAuthClient,
-  type SubscriptionSessionStorage,
-} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
-import { SubscriptionOAuthError } from '../../../packages/llm/src/oauth/subscriptionOAuthError.js';
-import { XAI_POLICY } from '../../../packages/llm/src/oauth/xai/xaiSessionPolicy.js';
-import type { XaiSession } from '../../../packages/llm/src/oauth/xai/xaiSessionTypes.js';
+import { xaiCoordinator } from '@texra-ai/llm/node';
+import type { CredentialStore } from '@texra-ai/llm';
 
-const NOW = 1_900_000_000_000;
-
-function memoryStorage(initial?: XaiSession): SubscriptionSessionStorage & {
-  peek: () => XaiSession | undefined;
-} {
-  let value = initial ? JSON.stringify(initial) : undefined;
+/** A secret store holding `stored` under every key; writes are dropped. */
+function storeHolding(stored?: string): CredentialStore {
   return {
-    get: () => Effect.sync(() => value),
-    store: (v) =>
-      Effect.sync(() => {
-        value = v;
-      }),
-    delete: () =>
-      Effect.sync(() => {
-        value = undefined;
-      }),
-    peek: () => (value ? (JSON.parse(value) as XaiSession) : undefined),
+    get: () => Effect.succeed(stored),
+    set: () => Effect.void,
+    delete: () => Effect.void,
   };
-}
-
-function makeCoordinator(options: {
-  storage: SubscriptionSessionStorage;
-  client?: SubscriptionOAuthClient;
-}): SubscriptionOAuthCoordinator<XaiSession> {
-  return new SubscriptionOAuthCoordinator({
-    ...options,
-    policy: XAI_POLICY,
-    now: () => NOW,
-  });
 }
 
 describe('xAI subscription session coordinator', () => {
@@ -48,7 +20,7 @@ describe('xAI subscription session coordinator', () => {
   });
 
   it('buildAuthorizeRequest includes pinned redirect, plan, and referrer', () => {
-    const coordinator = makeCoordinator({ storage: memoryStorage() });
+    const coordinator = xaiCoordinator(storeHolding());
     const auth = coordinator.buildAuthorizeRequest(0);
     const url = new URL(auth.url);
     expect(auth.redirectUri).toBe('http://127.0.0.1:56121/callback');
@@ -72,15 +44,12 @@ describe('xAI subscription session coordinator', () => {
     'fails an unreadable stored session ($what) as fatal, not signed out',
     ({ stored }) =>
       Effect.gen(function* () {
-        const storage: SubscriptionSessionStorage = {
-          get: () => Effect.succeed(stored),
-          store: () => Effect.void,
-          delete: () => Effect.void,
-        };
-        const coordinator = makeCoordinator({ storage });
-        const status = yield* Effect.flip(coordinator.getStatus());
-        expect(status).toBeInstanceOf(SubscriptionOAuthError);
-        expect(status).toMatchObject({ kind: 'fatal' });
+        const coordinator = xaiCoordinator(storeHolding(stored));
+        const failure = yield* Effect.flip(coordinator.getStatus());
+        expect(failure).toMatchObject({
+          _tag: 'SubscriptionOAuthError',
+          kind: 'fatal',
+        });
       }),
   );
 });

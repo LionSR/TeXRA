@@ -6,10 +6,12 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { codexLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
-import { CODEX_CALLBACK_PATH } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
-import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
+import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexProvider.js';
 import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/subscriptionCoordinator.js';
+
+/** The callback path ChatGPT's OAuth registration pins. */
+const CALLBACK_PATH = '/auth/callback';
 
 function testSession(): CodexSession {
   return {
@@ -24,7 +26,7 @@ function loopbackRequest(port: number): SubscriptionAuthorizeRequest {
     url: 'https://auth.example.test/oauth/authorize',
     verifier: 'verifier',
     state: 'state',
-    redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+    redirectUri: `http://127.0.0.1:${port}${CALLBACK_PATH}`,
   };
 }
 
@@ -147,7 +149,7 @@ describe('Codex loopback login', () => {
           buildAuthorizeRequest: (
             port: number,
           ): SubscriptionAuthorizeRequest => {
-            const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
+            const redirectUri = `http://localhost:${port}${CALLBACK_PATH}`;
             const url = new URL('https://auth.example.test/oauth/authorize');
             url.searchParams.set('redirect_uri', redirectUri);
             url.searchParams.set('state', state);

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -8,7 +8,7 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { DisposableStore } from '@texra/platform/disposable';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
 // Local file imports
 import {
@@ -22,15 +22,6 @@ import type {
   StateStore,
   WorkspaceRoots,
 } from '@texra-ai/harness';
-
-function isReadyMessage(message: unknown): boolean {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'command' in message &&
-    message.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
-  );
-}
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
@@ -68,9 +59,13 @@ export class SettingsViewProvider {
     );
   }
 
-  /** Sign in to a subscription provider from a command, not the webview. */
+  /**
+   * Sign in to a subscription provider from a command, not the webview,
+   * through the same program the Models page's sign-in button runs, so the
+   * command palette gets the status round-trip and credential refresh tail.
+   */
   public signInSubscription(providerId: SubscriptionProviderId) {
-    return this.messageHandler.signInSubscription(providerId);
+    return this.messageHandler.body.signInSubscription(providerId);
   }
 
   /**
@@ -84,7 +79,7 @@ export class SettingsViewProvider {
       if (this._view) {
         const panel = this._view;
         panel.reveal(vscode.ViewColumn.One);
-        yield* this.messageHandler.sendAllData();
+        yield* this.messageHandler.body.postAll;
       } else {
         const panel = vscode.window.createWebviewPanel(
           SettingsViewProvider.viewType,
@@ -106,7 +101,7 @@ export class SettingsViewProvider {
         );
       }
 
-      // this._view can be undefined here: the sendAllData above yields, and
+      // this._view can be undefined here: the postAll above yields, and
       // disposing the dashboard panel meanwhile runs cleanupView.
       if (tab == null || !this._view) return;
       if (this.viewReady) {
@@ -138,7 +133,12 @@ export class SettingsViewProvider {
       this.runtime.runFork(
         Effect.gen({ self: this }, function* () {
           yield* this.messageHandler.handleMessage(message, panel);
-          if (this._view !== panel || !isReadyMessage(message)) return;
+          if (
+            this._view !== panel ||
+            !Predicate.hasProperty(message, 'command') ||
+            message.command !== SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
+          )
+            return;
           // The ready handler has repainted the view; the tab asked for while
           // it loaded goes after that data, as a reveal of a live panel
           // orders them.

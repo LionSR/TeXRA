@@ -477,9 +477,10 @@ function noPositionData(
 
 /** Resolve a Lean file once in the invoking project before the host program runs. */
 function leanFilePath(file: string, call: ToolContextShape) {
-  return Effect.gen(function* () {
-    return (yield* resolveToolPath(call.env, file)).absolute;
-  });
+  return Effect.map(
+    resolveToolPath(call.env, file),
+    ({ absolute }) => absolute,
+  );
 }
 
 /** The runs whose end already stops the Lean servers they started, by

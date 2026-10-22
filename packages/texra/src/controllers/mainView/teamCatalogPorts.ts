@@ -9,11 +9,11 @@ import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
  * against the same catalog, so both build their ports here: the workspace
  * presets are re-read on each call and the agent ports stay live functions.
  */
-export function createTeamCatalogPorts(repoState: StateStore) {
-  return Effect.gen(function* () {
+export const createTeamCatalogPorts = Effect.fn('createTeamCatalogPorts')(
+  function* (repoState: StateStore) {
     return {
       customPresetsRaw: yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       resolveAgent: (yield* AgentCatalog).get,
     };
-  });
-}
+  },
+);

@@ -6,7 +6,8 @@ status: proposed
 # The harness as a general package: surface first, two structural moves
 
 Baseline: `main` at `08455c8` for the audits, re-checked against `1a553be`.
-Line references point into that tree. The durable doc is
+Line references point into that tree, except the lane 4 re-check, which reads
+`6e5b262`. The durable doc is
 [`2026-10-02-durable-harness.md`](./2026-10-02-durable-harness.md) (accepted);
 the split doc is
 [`2026-10-02-harness-package-split.md`](./2026-10-02-harness-package-split.md).
@@ -22,8 +23,8 @@ TeXRA vocabulary it still carries, and a layout that splits one concept across
 several directories.
 
 The design keeps the package set and most of the tree. It closes the gaps by
-changing the entries, injecting TeXRA's vocabulary as data, naming two ports,
-and fixing four writer near-misses. It adds exactly two structural moves, each
+changing the entries, injecting TeXRA's vocabulary as data, and naming two
+ports. It adds exactly two structural moves, each
 buying something a surface change cannot: one `session/` directory, and a
 `builtins/` directory that may import only public entries. In total about 136
 files move, about 1,500 import lines change, one row field is added, and about
@@ -88,16 +89,16 @@ files move, about 1,500 import lines change, one row field is added, and about
   same-basename pairs. Plugins live in four homes and storage in four. The
   lowest layer imports upward (`platform/processRuntime.ts:27-42`), and the
   foundation directories cycle (`shared↔utils`, `common↔utils`).
-- **Writer near-misses.** `RunHistory.activate` (`agent/runtime/RunHistory.ts:365-377`)
-  appends `request.decided` cancels inline, although `SessionHandle.ts:316`
-  calls `decide` "the one writer of a decision". `tool.start` and `tool.end`
-  have two producers: the loop and `agent/trace/toolUseHelpers.ts`. There are
-  three grants derivations, two `run.config` shapes, and six copies of the
-  `followup.consumed` draft.
-- **Dormant checks.** The row-version freeze returns early because
-  `config/storage/frozen/` does not exist (`src/test-kernel/schemas/rowVersions.vitest.ts:104`).
-  `shared/session/sessionFold.ts:903` and the switch in `transcriptFold.ts`
-  skip known arms without `satisfies never`.
+- **Writers: no near-miss survived the re-check.** The audits listed five
+  (activate's cancels, tool-card producers, grants derivations, `run.config`
+  shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, none is a
+  defect. One guard is missing: `transcriptFold.ts`'s switch has no
+  `satisfies never`; see lane 4.
+- **The row-version freeze is unarmed until a release.** Its check returns
+  early while `config/storage/frozen/` does not exist
+  (`src/test-kernel/schemas/rowVersions.vitest.ts:104`). That is by design:
+  `npm run storage:freeze` is a `releasing` step, so the first release that
+  promises its rows writes the watermark.
 - **Hosts.** `desktopHostRequests.ts` and `extensionHostRequests.ts` share
   about 400 lines of the same composition: 125 lines are byte-identical, and
   the rest make the same calls with host-specific ports. Three hosts repeat the agent-directories layer and
@@ -125,7 +126,8 @@ The two restructures beat the control by one point, at ten times its churn.
 All four agreed on the substance: a root of about 30 names, a public authoring
 closure, methods on `Run`, a neutral host port, vocabulary as data, Storage as
 an Effect `SqlClient`, the execution pair as a port, conformance from the
-existing suites, the writer fixes and the freeze. This design is the control
+existing suites, the writer fixes (re-checked below: none remains) and the
+freeze. This design is the control
 plus the two moves that buy what the control cannot.
 
 ## The design
@@ -254,37 +256,86 @@ ruling holds, the file is deleted and nothing else changes.
 
 ## Deletion ledger
 
-| What goes                                                           | Count                  |
-| ------------------------------------------------------------------- | ---------------------- |
-| Root exports                                                        | 246 → ~30              |
-| `export *` in `shared/schemas/index.ts`                             | 47 → 0                 |
-| `harness-deep-import-baseline.json` and its suite                   | deleted                |
-| `architecture-edges` rows                                           | 67 → ~45, harness only |
-| `forgotten-exports` rows                                            | 277 → ~180             |
-| Same-basename pairs                                                 | 6 → 0                  |
-| TeXRA code leaving the harness                                      | ~1,650 lines           |
-| Duplicated host code                                                | ~1,400 lines           |
-| Writers (grants, `run.config`, `followup.consumed`, card producers) | 3→1, 2→1, 6→1, 2→1     |
-| OAuth `.catch` in llm                                               | 12 → 0                 |
+| What goes                                         | Count                  |
+| ------------------------------------------------- | ---------------------- |
+| Root exports                                      | 246 → ~30              |
+| `export *` in `shared/schemas/index.ts`           | 47 → 0                 |
+| `harness-deep-import-baseline.json` and its suite | deleted                |
+| `architecture-edges` rows                         | 67 → ~45, harness only |
+| `forgotten-exports` rows                          | 277 → ~180             |
+| Same-basename pairs                               | 6 → 0                  |
+| TeXRA code leaving the harness                    | ~1,650 lines           |
+| Duplicated host code                              | ~1,400 lines           |
+| OAuth `.catch` in llm                             | 12 → 0                 |
 
 ## Lanes
 
 Each lane leaves `npm run gate` and `test:pure` green. The only row change is
-in lane 4, which lands before the freeze.
+`wakeAt`, in lane 5, which lands before the freeze.
 
-| #   | Lane                                                                                                                                                                                                                                                     | Effort | Files moved |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| 1   | Doors: the root to ~30 names, `./host`, the `./schemas` manifest, the `./plugins` closure, `effect/` → `sdk/`, alias scoping, the `Run` methods                                                                                                          | L      | 8           |
-| 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                                                                                     | M      | 11          |
-| 2b  | Session merge, with the history lint zone                                                                                                                                                                                                                | M      | ~55         |
-| 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal                                                             | M      | 9           |
-| 4   | Writers and rows: activate through `decisionRow`, one grants derivation, one `run.config` builder, one `followup.consumed` builder, `satisfies never`, `wakeAt`, `deferred`, `admitSwitch` refusing cross-protocol switches, `toolUseHelpers.ts` deleted | M      | 0           |
-| 4b  | Built-ins fence                                                                                                                                                                                                                                          | M      | ~53         |
-| 5   | Ports, and the conformance suites parameterised by layer (internal)                                                                                                                                                                                      | M      | 0           |
-| 6   | Freeze: `storage:freeze`, and remove the early return                                                                                                                                                                                                    | S      | 0           |
-| 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                                                                            | L      | 0           |
-| 8   | `./promise`                                                                                                                                                                                                                                              | S      | 0           |
-| 9   | Publish, `docs/spec.md`, a numbered examples ladder                                                                                                                                                                                                      | M      | 0           |
+| #   | Lane                                                                                                                                                                                         | Effort | Files moved |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
+| 1   | Doors: the root to ~30 names, `./host`, the `./schemas` manifest, the `./plugins` closure, `effect/` → `sdk/`, alias scoping, the `Run` methods                                              | L      | 8           |
+| 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
+| 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
+| 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
+| 4   | `satisfies never` after `transcriptFold.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                   | —      | 0           |
+| 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
+| 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
+| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
+| 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                | L      | 0           |
+| 8   | `./promise`                                                                                                                                                                                  | S      | 0           |
+| 9   | Publish, `docs/spec.md`, a numbered examples ladder                                                                                                                                          | M      | 0           |
+
+### Lane 4 re-check (2026-10-21, at `6e5b262`)
+
+Before lane 4 started, each item was read against the tree. None of the
+writer items needs code; one guard does:
+
+- **activate's cancels** (`agent/runtime/RunHistory.ts`, `activate`) are
+  written in the claim's transaction, for exactly the requests the fold shows
+  open and undecided (`unboundRequests`). `decisionRow`
+  (`agent/runtime/requestPolicy.ts`) exists to settle a race between two
+  answering surfaces; routing activation through it would add one read per
+  request and close no race. `decide` is the one writer of a surface's
+  answer; activation answers for a process that exited.
+- **Card producers: one per run.** Deleting `agent/trace/toolUseHelpers.ts`
+  moved its emission into `TraceEmitter.openToolCard`
+  (`agent/trace/TraceEmitter.ts:139`). Its callers are the agent-CLI tools
+  (`packages/texra/src/tools/claudeAgent.ts`, `codex.ts`,
+  `claudeAgentBackgroundTasks.ts`), and they write on the trace of the child
+  run that `launchAgentCliSession` registers through `ChildRuns.launchProcess`
+  (`packages/texra/src/tools/agentCliShared.ts`), a run "outside the normal
+  run loop", after the launching call's card has closed. A loop run's cards
+  are the loop's; a process run's are `openToolCard`'s; no run has two
+  writers. Moving them to `stream.chunk` on the launching card would drop
+  them.
+- **Grants**: `grantsKept`, `inheritedGrants` (`shared/approvalBypassKind.ts`)
+  and `delegatedChildGrants` (`tools/approval/index.ts`) are three rules
+  (kept after a detach, inherited, a delegated child's birth grants), not one
+  rule three times. `grantsKeptFromRows` already delegates to `grantsKept`.
+- **`run.config`**: its three producers (registration, activation, and the
+  loop's `configRow`, called from the loop, model switch and fork) differ on
+  purpose: the binding exists only once the loop binds, and activation writes
+  only a changed configuration.
+- **`followup.consumed`**: the copies are three-line literals over different
+  inputs (follow-up records, ids, filtered controls); one builder saves
+  nothing.
+- **`satisfies never`**: `applySessionSlices` in `sessionFold.ts` is partial
+  by design (the run arm takes the rest) and stays so. `transcriptFold.ts`'s
+  `record` switch covers all ten transcript event kinds today but has no
+  `satisfies never`, so a new kind would compile and vanish from a durable
+  fold. Lane 4 is that guard.
+- **Cross-protocol switches**: `admitSwitch`
+  (`agent/runtime/modelAccess/routeDecision.ts`) already refuses them
+  (`DIFFERENT_FORMAT`). It compares backends, not protocols, which is
+  stricter on purpose: a run keeps its backend (`shared/schemas/runFacts.ts`,
+  `ModelBackendSchema`), and a stored Responses history replays its
+  reasoning's `encrypted_content` (`packages/llm/src/api/openaiResponsesLower.ts`),
+  which only the vendor that issued it accepts. Its refusal text says
+  "conversation format" for both cases.
+
+`wakeAt` and `deferred` are features, not fixes, and move to lane 5.
 
 ### Sequencing with work in flight
 
@@ -296,8 +347,14 @@ On 2026-10-21 the owner set this order:
 3. The debt-cleanup branches (`claude/debt-*`). Their item 2 folds the llm
    OAuth files, so the `.catch` removal in lane 3 waits for it. Item 7 changes
    `openSettings` in both GUI host request files, so lane 7 waits for it.
-   Items 5 and 8 shrink the deep-import baseline before lane 1 deletes it.
+   Item 5 (#14197) shrinks the deep-import baseline before lane 1 deletes
+   it. Item 8 (#14198) was closed unmerged, so lane 1 moves its two imports
+   (`AgentTrace`, `describeFollowUpFailure`) itself.
 4. This design's lanes.
+
+One later PR is not in the owner's order but also precedes the lanes whose
+files it edits: #14199 (fallback chains; `agent/runtime`, the llm OAuth files,
+`claudeAgent.ts`) before lanes 2b, 3 and 4.
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
 first: finishing the move of tool-edit approval into the loop, and putting the

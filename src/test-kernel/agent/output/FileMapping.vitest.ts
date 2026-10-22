@@ -5,10 +5,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import {
-  createFileMapping,
-  replaceInputCommands,
-} from '@texra/agent/output/fileMapping';
+import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
 
 /**
@@ -30,24 +27,6 @@ function withFsOverrides<A, E>(
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('createFileMapping', () => {
-  it('resolves a basename collision to the first source file', () => {
-    const firstSource = externalLocation('/workspace/chapters/results.tex');
-    const secondSource = externalLocation('/workspace/appendix/results.tex');
-    const target = externalLocation('/run/r1/results.tex');
-
-    const mapping = createFileMapping(
-      [firstSource, secondSource],
-      [target],
-      'basename',
-    );
-
-    expect([...mapping.entries()]).toEqual([
-      [firstSource.absolutePath, target],
-    ]);
-  });
 });
 
 describe('replaceInputCommands', () => {

@@ -37,7 +37,7 @@ import {
 import {
   qualifyAggregateId,
   AgentProposalPermissionSchema,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -81,7 +81,7 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { clearGoal, startGoal } from '@tools/goal';
+import { clearGoal, startGoal } from '@tools/goal/goalRows';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
@@ -546,7 +546,7 @@ function seedRun(
     publish({
       type: 'run.config',
       aggregateId: qualifyAggregateId('run', runId),
-      config: AgentConfigFieldsSchema.parse({
+      config: AgentConfigSchema.parse({
         agent: identity.agent,
         model: HARNESS_MODEL,
       }),

@@ -25,7 +25,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { goalOf, startGoal } from '@tools/goal';
+import { goalOf, startGoal } from '@tools/goal/goalRows';
 
 // One restore after each test covers every vi.spyOn in this file.
 afterEach(() => {

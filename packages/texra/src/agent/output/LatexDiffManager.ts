@@ -14,6 +14,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
+import {
+  latexdiffPairs,
+  type LatexdiffPair,
+} from '@latex/latexdiff/diffOperations';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type {
   LatexdiffEntry,
@@ -38,7 +42,6 @@ import { recoverOutputFailure } from './outputOperations';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { RoundFileEntry, RoundFileMapping } from './types';
 
 /** The services a diff pass checks, runs and records on. */
 type DiffServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
@@ -76,7 +79,6 @@ export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
   constructor(
-    private readonly isRewrite: boolean,
     private readonly logger: AgentTrace,
     private readonly runId: RunId,
     private readonly fileService: RunFileService,
@@ -155,10 +157,15 @@ export class LatexDiffManager {
     );
   }
 
+  /**
+   * The round's latexdiffs: the pairs its recorded `outputFiles` call for
+   * (`latexdiffPairs`), against the documents they started from and, when
+   * the setting asks, against their own `previousOutputs`.
+   */
   handleLatexdiffOfOutput(
     currRound: number,
     outputFiles: readonly OutputFileInfo[],
-    mapping: RoundFileMapping,
+    previousOutputs: readonly OutputFileInfo[],
   ): Effect.Effect<RoundLatexdiffs, never, DiffServices> {
     const execute = Effect.gen({ self: this }, function* () {
       if (!(yield* checkToolInstalled('latexdiff'))) {
@@ -183,131 +190,76 @@ export class LatexDiffManager {
         workflowOutputRoundDir(currRound),
         { protectedStem: WORKFLOW_OUTPUT_BASENAME },
       );
-      yield* this.fileService.ensureMirroredInRunSubdir(
-        `diff/${workflowOutputRoundDir(currRound)}`,
-      );
-      const relativePath = path.join('diff', `r${currRound}`);
-      const diffDirectory: DiffOutputDirectory = {
-        absolutePath: path.join(this.fileService.runDirectory, relativePath),
-        relativePath,
-        runId: this.fileService.runId,
-      };
-
-      const outputByPath = new Map(
-        outputFiles.map((f) => [fileLocationDisplayPath(f.location), f]),
-      );
+      const roundDiffDirectory = `diff/${workflowOutputRoundDir(currRound)}`;
+      yield* this.fileService.ensureMirroredInRunSubdir(roundDiffDirectory);
 
       this.logger.debug(`r${currRound} output files`, {
         data: outputFiles.map((f) => f.location.absolutePath),
       });
 
-      const entries: LatexdiffEntry[] = [];
-      const artifacts: RunStorageFileLocation[] = [];
-      const collect = (outcome: SingleDiffOutcome | null): void => {
-        if (!outcome) return;
-        entries.push(outcome.entry);
-        if (outcome.artifact) artifacts.push(outcome.artifact);
-      };
-      const collectPairs = (
-        pick: (entry: RoundFileEntry) => FileLocation | undefined,
-      ): [string, FileLocation][] => {
-        const pairs: [string, FileLocation][] = [];
-        for (const [outputPath, entry] of mapping) {
-          const location = pick(entry);
-          if (location) pairs.push([outputPath, location]);
-        }
-        return pairs;
-      };
-
-      if (this.isRewrite) {
-        // A base file the mapping named but the workspace never held (an
-        // agent whose declared output files are created by the run) has
-        // nothing to diff against. Skip those pairs rather than gating the
-        // whole call, so the between-round branch below still runs.
-        const candidatePairs = collectPairs((entry) => entry.base);
-        const fs = yield* FileSystem.FileSystem;
-        const baseExists = yield* Effect.forEach(
-          candidatePairs,
-          ([, base]) =>
-            Effect.map(
-              entryTypeIn(fs, base.absolutePath),
-              (type) => type !== undefined,
-            ),
-          { concurrency: 'unbounded' },
-        );
-        const basePairs = candidatePairs.filter((_, i) => baseExists[i]);
-        if (basePairs.length < candidatePairs.length) {
-          this.logger.debug(
-            `Skipping ${candidatePairs.length - basePairs.length} latexdiff base pair(s): base file not present`,
-          );
-        }
-        this.logPairMatches(basePairs, 'base files to output files');
-
-        for (const [outputPath, baseLocation] of basePairs) {
-          collect(
-            yield* this.runSingleDiff({
-              outputPath,
-              baseLocation,
-              outputByPath,
-              originalLocation: baseLocation,
-              baseRound: null,
-              runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiff(
-                  base,
-                  revised,
-                  '_diff',
-                  undefined,
-                  { cwd, outputDirectory: diffDirectory.absolutePath },
-                ),
-              label: 'round-diff',
-              pdfStemSuffix: '-diff',
-              diffDirectory,
-            }),
-          );
-        }
-      }
-
       const generateBetweenRoundDiffs = yield* Settings.get<boolean>(
         this.roots,
         DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       );
-
-      if (generateBetweenRoundDiffs && currRound > 0) {
-        const prevPairs = collectPairs((entry) => entry.prev);
-        this.logPairMatches(
-          prevPairs,
-          'previous round files to current round files',
-        );
-
-        for (const [outputPath, prevLocation] of prevPairs) {
-          const originalLocation = mapping.get(outputPath)?.origin ?? null;
-          collect(
-            yield* this.runSingleDiff({
-              outputPath,
-              baseLocation: prevLocation,
-              outputByPath,
-              originalLocation,
-              baseRound: currRound - 1,
-              runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiff(
-                  base,
-                  revised,
-                  buildBetweenRoundDiffSuffix(currRound, currRound - 1),
-                  undefined,
-                  { cwd, outputDirectory: diffDirectory.absolutePath },
-                ),
-              label: 'between-rounds-diff',
-              pdfStemSuffix: '-round-diff',
-              diffDirectory,
-            }),
-          );
-        }
-      } else if (!generateBetweenRoundDiffs) {
+      if (!generateBetweenRoundDiffs) {
         this.logger.debug(
           'Skipping between-round latexdiff operations: disabled in settings',
         );
       }
+      const candidatePairs = latexdiffPairs(
+        outputFiles,
+        generateBetweenRoundDiffs ? previousOutputs : [],
+      );
+      // A base file the lineage named but the workspace never held (an
+      // agent whose declared output files are created by the run) has
+      // nothing to diff against: that pair is skipped, the rest still run.
+      const fs = yield* FileSystem.FileSystem;
+      const baseExists = yield* Effect.forEach(
+        candidatePairs,
+        (pair) =>
+          pair.baseRound !== null
+            ? Effect.succeed(true)
+            : Effect.map(
+                entryTypeIn(fs, pair.base.absolutePath),
+                (type) => type !== undefined,
+              ),
+        { concurrency: 'unbounded' },
+      );
+      const pairs = candidatePairs.filter((_, i) => baseExists[i]);
+      if (pairs.length < candidatePairs.length) {
+        this.logger.debug(
+          `Skipping ${candidatePairs.length - pairs.length} latexdiff base pair(s): base file not present`,
+        );
+      }
+      this.logger.debug(
+        pairs.length === 0
+          ? 'No latexdiff pairs found'
+          : 'Matched latexdiff pairs',
+        {
+          data: pairs.map(
+            ({ revised, base }) =>
+              `${path.basename(fileLocationDisplayPath(base))} -> ${path.basename(fileLocationDisplayPath(revised.location))}`,
+          ),
+        },
+      );
 
+      const entries: LatexdiffEntry[] = [];
+      const artifacts: RunStorageFileLocation[] = [];
+      for (const pair of pairs) {
+        const outcome = yield* this.runSingleDiff(
+          pair,
+          pair.baseRound === null
+            ? { suffix: '_diff', label: 'round-diff', pdfStemSuffix: '-diff' }
+            : {
+                suffix: buildBetweenRoundDiffSuffix(currRound, pair.baseRound),
+                label: 'between-rounds-diff',
+                pdfStemSuffix: '-round-diff',
+              },
+          roundDiffDirectory,
+        );
+        entries.push(outcome.entry);
+        if (outcome.artifact) artifacts.push(outcome.artifact);
+      }
       return { artifacts, entries, notRun: null };
     });
     return execute.pipe(
@@ -323,106 +275,76 @@ export class LatexDiffManager {
     );
   }
 
-  private logPairMatches(
-    pairs: [string, FileLocation][],
-    description: string,
-  ): void {
-    if (pairs.length === 0) {
-      this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
-      return;
-    }
-
-    this.logger.debug(`Matched ${description}`, {
-      data: pairs.map(
-        ([outputPath, loc]) =>
-          `${path.basename(fileLocationDisplayPath(loc))} -> ${path.basename(outputPath)}`,
-      ),
+  /**
+   * One pair's latexdiff and its compiled PDF: `suffix` names the diff file,
+   * `label` the log lines, `pdfStemSuffix` the published PDF. The diff is
+   * written under `roundDiffDirectory` at its document's own folder, as the
+   * round's output is under `r{round}/`: the diff file is named by the
+   * document's file name, so `a/main.tex` and `b/main.tex` would otherwise
+   * write the same `main_diff.tex`.
+   */
+  private runSingleDiff(
+    { revised, document, base, baseRound }: LatexdiffPair,
+    kind: { suffix: string; label: string; pdfStemSuffix: string },
+    roundDiffDirectory: string,
+  ): Effect.Effect<SingleDiffOutcome, never, DiffServices> {
+    const relativePath = path.join(roundDiffDirectory, path.dirname(document));
+    const diffDirectory: DiffOutputDirectory = {
+      absolutePath: path.join(this.fileService.runDirectory, relativePath),
+      relativePath,
+      runId: this.fileService.runId,
+    };
+    const pair = {
+      revised: revised.location,
+      original: revised.lineage?.original ?? null,
+      base,
+      baseRound,
+    };
+    const failed = (error: string): SingleDiffOutcome => ({
+      entry: { ...pair, status: 'failed', error },
+      artifact: null,
     });
-  }
-
-  private runSingleDiff({
-    outputPath,
-    baseLocation,
-    outputByPath,
-    originalLocation,
-    baseRound,
-    runDiff,
-    label,
-    pdfStemSuffix,
-    diffDirectory,
-  }: {
-    outputPath: string;
-    baseLocation: FileLocation;
-    outputByPath: Map<string, OutputFileInfo>;
-    originalLocation: FileLocation | null;
-    baseRound: number | null;
-    runDiff: (
-      base: FileLocation,
-      revised: FileLocation,
-      cwd: string,
-    ) => Effect.Effect<
-      LaTeXdiffResult,
-      never,
-      FileSystem.FileSystem | ChildProcessSpawner
-    >;
-    label: string;
-    pdfStemSuffix: string;
-    diffDirectory: DiffOutputDirectory;
-  }): Effect.Effect<SingleDiffOutcome | null, never, DiffServices> {
+    // One pair's failure is that pair's entry, never the round's: the
+    // other pairs keep their diffs.
     return Effect.gen({ self: this }, function* () {
-      const revisedFile = outputByPath.get(outputPath);
-      if (!revisedFile) {
-        this.logger.debug(
-          `Skipping diff: output file not found for path ${outputPath}`,
-        );
-        return null;
-      }
+      yield* this.ensureWorkspaceDependency(base);
+      yield* this.ensureWorkspaceDependency(revised.location);
 
-      const pair = {
-        revised: revisedFile.location,
-        original: originalLocation,
-        base: baseLocation,
-        baseRound,
-      };
-      const failed = (error: string): SingleDiffOutcome => ({
-        entry: { ...pair, status: 'failed', error },
-        artifact: null,
-      });
-      // One pair's failure is that pair's entry, never the round's: the
-      // other pairs keep their diffs.
-      return yield* Effect.gen({ self: this }, function* () {
-        yield* this.ensureWorkspaceDependency(baseLocation);
-        yield* this.ensureWorkspaceDependency(revisedFile.location);
-
-        const cwd = yield* this.getWorkingDirectory(revisedFile.location);
-        const result = yield* runDiff(baseLocation, revisedFile.location, cwd);
-        this.logLatexdiffResult(result, label);
-        if (!result.success) return failed(result.message);
-
-        const compiled = yield* this.compileDiff(
-          result.diffPath,
-          baseLocation,
-          diffDirectory,
-          revisedFile.round,
-          revisedFile.location,
-          pdfStemSuffix,
-        );
-        return {
-          entry: { ...pair, status: 'ok', diff: compiled.diffLocation },
-          artifact: compiled.artifact,
-        } satisfies SingleDiffOutcome;
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            const message = toErrorMessage(error);
-            this.logger.warn(`${label} failed for ${outputPath}: ${message}`, {
-              data: error,
-            });
-            return failed(message);
-          }),
-        ),
+      const cwd = yield* this.getWorkingDirectory(revised.location);
+      const result = yield* this.latexdiffService.runDiff(
+        base,
+        revised.location,
+        kind.suffix,
+        undefined,
+        { cwd, outputDirectory: diffDirectory.absolutePath },
       );
-    });
+      this.logLatexdiffResult(result, kind.label);
+      if (!result.success) return failed(result.message);
+
+      const compiled = yield* this.compileDiff(
+        result.diffPath,
+        base,
+        diffDirectory,
+        revised.round,
+        revised.location,
+        kind.pdfStemSuffix,
+      );
+      return {
+        entry: { ...pair, status: 'ok', diff: compiled.diffLocation },
+        artifact: compiled.artifact,
+      } satisfies SingleDiffOutcome;
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          const message = toErrorMessage(error);
+          this.logger.warn(
+            `${kind.label} failed for ${fileLocationDisplayPath(revised.location)}: ${message}`,
+            { data: error },
+          );
+          return failed(message);
+        }),
+      ),
+    );
   }
 
   private compileDiff(
@@ -455,7 +377,7 @@ export class LatexDiffManager {
       // Reuse the workflow compile-check timeout so a hanging diff build
       // is torn down by its scope instead of orphaning latexmk/pdflatex.
       const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(this.roots);
-      // The diff `.tex` is written to `diff/r{round}/`, away from both the
+      // The diff `.tex` is written under `diff/r{round}/`, away from both the
       // revised round output and the live workspace source. Search the revised
       // round directory first so same-round sibling edits win, then fall back
       // to the original source tree for unchanged inputs and bibliographies.

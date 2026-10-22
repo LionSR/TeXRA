@@ -20,7 +20,6 @@ const MemoryPreviewSchema = z.object({
   preview: z.string().optional(),
   error: z.boolean().optional(),
 });
-export type MemoryPreview = z.infer<typeof MemoryPreviewSchema>;
 
 // ============================================================
 // Outbound message schemas (backend → frontend)

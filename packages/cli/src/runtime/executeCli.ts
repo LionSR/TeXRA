@@ -68,10 +68,6 @@ import {
 import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
-/** The process services a headless run requires: its session's runs are
- *  the session's, so it asks for the process services alone. */
-export type CliRunServices = ProcessServices;
-
 /** What a headless run starts: a host's whole configuration (the
  *  `StartInput` arm a host launches with), under the id the CLI minted. */
 type CliRunRequest = Required<
@@ -131,7 +127,7 @@ export function executeCliConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-): Effect.Effect<CliConfigExecuteResult, Error, CliRunServices> {
+): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     const runId = options.runId ?? generateRunId();
     const parsed = AgentConfigSchema.safeParse(config);
@@ -270,7 +266,7 @@ export function executeCliRequest(
     }
   | { ok: false; exitCode: CliExitCode },
   Error,
-  CliRunServices
+  ProcessServices
 > {
   return Effect.gen(function* () {
     const session = yield* options.services.session;

@@ -38,7 +38,7 @@ upstream or disappear.
 ## What we give up
 
 A wire-schema change (`mainView/state.ts`) and a touch of the
-`VerifySetupTool` alias path, which reads the same token.
+`probe_environment` `tool` alias path (`ProbeEnvironmentTool`), which reads the same token.
 
 ## Acceptance criteria
 
@@ -51,7 +51,7 @@ A wire-schema change (`mainView/state.ts`) and a touch of the
 ## Risks
 
 Medium: touches a wire schema consumed by both hosts' progress surfaces and
-the `VerifySetupTool` alias path. Contained: the missing-tools list has
+the `probe_environment` `tool` alias path. Contained: the missing-tools list has
 exactly one consumer path.
 
 ## Estimated delta

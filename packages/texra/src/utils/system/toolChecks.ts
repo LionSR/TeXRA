@@ -14,10 +14,9 @@ import {
   executeCommand,
   type ExecuteCommandBaseOptions,
   probeTool,
-  withExtendedPath,
+  whichOnExtendedPath,
   type ExecResult,
 } from '@texra-ai/harness/node';
-import which from 'which';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -293,12 +292,7 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  const available =
-    which.sync(name, {
-      nothrow: true,
-      path: withExtendedPath({ PATH: process.env.PATH }).PATH,
-      pathExt: process.env.PATHEXT,
-    }) !== null;
+  const available = whichOnExtendedPath(name) !== null;
   packageManagerAvailability.set(name, available);
   return available;
 }

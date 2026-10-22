@@ -8,6 +8,7 @@ import { homedir, hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
+  Clock,
   Duration,
   Effect,
   Exit,
@@ -201,9 +202,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
     return Effect.acquireRelease(lease(root), (project) =>
-      Effect.sync(() => {
+      Effect.map(Clock.currentTimeMillis, (now) => {
         project.leases -= 1;
-        if (project.leases === 0) project.idleSince = Date.now();
+        if (project.leases === 0) project.idleSince = now;
       }),
     ).pipe(
       Effect.map(({ session }): ServiceProject => ({ session })),
@@ -217,7 +218,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     Effect.gen(function* () {
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
-      const now = Date.now();
+      const now = yield* Clock.currentTimeMillis;
       const { session } = project;
       // What this process runs now (its registry), not the claims the view
       // shows: a run held here keeps the project open.

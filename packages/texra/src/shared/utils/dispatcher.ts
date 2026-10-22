@@ -1,3 +1,4 @@
+import { Predicate } from 'effect';
 import type { z } from 'zod';
 
 type CommandMessage = { command: string };
@@ -26,9 +27,8 @@ export function unsupported(reason: string): Unsupported {
 
 export function isUnsupported(value: unknown): value is Unsupported {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { unsupported?: unknown }).unsupported === 'string'
+    Predicate.isObjectOrArray(value) &&
+    Predicate.isString((value as { unsupported?: unknown }).unsupported)
   );
 }
 
@@ -133,8 +133,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
 
 function isZodError(error: unknown): error is z.ZodError {
   return (
-    typeof error === 'object' &&
-    error !== null &&
+    Predicate.isObjectOrArray(error) &&
     'issues' in error &&
     Array.isArray(error.issues)
   );

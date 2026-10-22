@@ -38,7 +38,6 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
   RuntimeTool as ITool,
@@ -55,6 +54,7 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { PluginContext } from '@platform/processRuntime';
 import {
+  AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,

@@ -19,6 +19,7 @@ import { isPathWithin } from '@texra-ai/harness';
 import { ModelError, type ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
   type Cause,
+  Clock,
   Data,
   Deferred,
   type Duration,
@@ -541,7 +542,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             key: session.roots.storage,
             project: projectOf(session),
             capabilities: new Set(capabilities),
-            focusedAt: Date.now(),
+            focusedAt: yield* Clock.currentTimeMillis,
             frames: yield* Queue.unbounded<HostFrame>(),
             pending: new Map(),
           };
@@ -572,9 +573,9 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         { discard: true },
       ),
     focus: (attachment) =>
-      Effect.sync(() => {
+      Effect.map(Clock.currentTimeMillis, (now) => {
         for (const window of windows)
-          if (window.id === attachment) window.focusedAt = Date.now();
+          if (window.id === attachment) window.focusedAt = now;
       }),
     answer: (id, answer) =>
       Effect.suspend(

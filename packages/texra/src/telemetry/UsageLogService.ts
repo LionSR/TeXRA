@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import {
   Clock,
   Data,
+  DateTime,
   Duration,
   Effect,
   Fiber,
@@ -116,26 +117,24 @@ const telemetryOptOutEnvVar = Effect.fnUntraced(function* (
  * `config` is the workspace's configuration the consent is read from: the
  * recording run's session roots, or the one captured with a queued entry.
  */
-function isTelemetryEnabledBySetting(
+const isTelemetryEnabledBySetting = Effect.fnUntraced(function* (
   config: ConfigProvider,
   env?: Readonly<Record<string, string | undefined>>,
-): Effect.Effect<boolean> {
-  return Effect.gen(function* () {
-    // Checked before the config read so the kill switch also holds on a host
-    // that has not initialized its platform yet. `env` is the recording
-    // run's, so a project's `.env` opt-out holds for its runs.
-    if (yield* telemetryOptOutEnvVar(env)) return false;
+): Effect.fn.Return<boolean> {
+  // Checked before the config read so the kill switch also holds on a host
+  // that has not initialized its platform yet. `env` is the recording
+  // run's, so a project's `.env` opt-out holds for its runs.
+  if (yield* telemetryOptOutEnvVar(env)) return false;
 
-    // Which scope answers is the config store's rule (`projectValueIgnored`):
-    // a project file may opt out but never opt in. The config files are
-    // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
-    const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
-    if (typeof value === 'boolean') return value;
-    return yield* Effect.logWarning(
-      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
-    ).pipe(withLogChannel(CHANNEL), Effect.as(false));
-  });
-}
+  // Which scope answers is the config store's rule (`projectValueIgnored`):
+  // a project file may opt out but never opt in. The config files are
+  // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
+  const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
+  if (typeof value === 'boolean') return value;
+  return yield* Effect.logWarning(
+    `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
+  ).pipe(withLogChannel(CHANNEL), Effect.as(false));
+});
 
 /** Why usage logging is off, or `null` when it is on. */
 export type UsageLoggingOptOut =
@@ -148,16 +147,14 @@ export type UsageLoggingOptOut =
  * doing (`texra doctor`). Derived from the same gate the send path uses, so a
  * report of "off" cannot drift from the behaviour.
  */
-export function usageLoggingOptOut(
+export const usageLoggingOptOut = Effect.fnUntraced(function* (
   config: ConfigProvider,
-): Effect.Effect<UsageLoggingOptOut> {
-  return Effect.gen(function* () {
-    const envVar = yield* telemetryOptOutEnvVar();
-    if (envVar) return { source: 'environment', envVar };
-    const enabled = yield* isTelemetryEnabledBySetting(config);
-    return enabled ? null : { source: 'setting' };
-  });
-}
+): Effect.fn.Return<UsageLoggingOptOut> {
+  const envVar = yield* telemetryOptOutEnvVar();
+  if (envVar) return { source: 'environment', envVar };
+  const enabled = yield* isTelemetryEnabledBySetting(config);
+  return enabled ? null : { source: 'setting' };
+});
 
 /**
  * A queued entry with the configuration of the workspace it was recorded in.
@@ -284,7 +281,7 @@ class UsageLogServiceImpl {
     this.queue.push({
       entry: {
         ...entry,
-        timestamp: new Date().toISOString(),
+        timestamp: DateTime.formatIso(yield* DateTime.now),
         extensionVersion: this.extensionVersion,
         editorType: this.editorType,
       },

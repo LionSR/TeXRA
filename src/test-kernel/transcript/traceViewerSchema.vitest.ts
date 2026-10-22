@@ -2,11 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import {
   qualifyAggregateId,
   emptyRunEndOutput,
   LOG_LEVELS,

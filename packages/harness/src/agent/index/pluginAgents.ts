@@ -18,10 +18,7 @@ import {
   type InstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
-import {
-  CLAUDE_COUNTERPART_TOOLS,
-  texraToolOfClaudeTool,
-} from '@common/plugins/hookConfig';
+import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
@@ -42,11 +39,6 @@ const SubagentFrontmatterSchema = z.object({
   description: z.string().optional(),
   tools: z.union([z.string(), z.array(z.string())]).optional(),
 });
-
-/** What a top-level run of a plugin agent that names no tools inherits,
- *  beside the installed plugins' tools (a child inherits its parent's
- *  offered tools instead): the file, shell and web tools. */
-export const PLUGIN_AGENT_DEFAULT_TOOLS = CLAUDE_COUNTERPART_TOOLS;
 
 /** One plugin agent as its file defines it. */
 interface PluginAgent {

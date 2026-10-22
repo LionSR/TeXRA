@@ -227,7 +227,7 @@ export function runStreamedTurn(
   logger: AgentTrace,
   signal?: AbortSignal,
 ): Effect.Effect<RunResult, Error> {
-  return Effect.suspend(() => {
+  return Effect.clockWith((clock) => {
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
@@ -239,7 +239,7 @@ export function runStreamedTurn(
     // exit (stream error, abort, early end), so no dead turn keeps a Running
     // card. finalizeTurnCard is a no-op once the card is closed.
     let turnCard: ToolCardHandle | null = null;
-    let turnStartedMs = Date.now();
+    let turnStartedMs = clock.currentTimeMillisUnsafe();
     const finalizeTurnCard = (
       state: 'completed' | 'failed',
       error?: string,
@@ -248,7 +248,7 @@ export function runStreamedTurn(
       turnCard.update(
         buildCodexTurnToolLog({
           state,
-          wallTimeMs: Date.now() - turnStartedMs,
+          wallTimeMs: clock.currentTimeMillisUnsafe() - turnStartedMs,
           ...(error != null && { error }),
         }),
       );
@@ -261,7 +261,7 @@ export function runStreamedTurn(
           logger.openToolCard(buildCodexThreadToolLog(event));
           break;
         case 'turn.started':
-          turnStartedMs = Date.now();
+          turnStartedMs = clock.currentTimeMillisUnsafe();
           turnCard = logger.openToolCard(
             buildCodexTurnToolLog({ state: 'running' }),
           );

@@ -1,7 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import {
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors/errorPredicates';
 import { isPathWithin } from '@utils/core/pathCore';
 
 /**

@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Redacted } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -82,7 +82,7 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
 }
 
 export function fetchKimiCodeUsage(
-  apiKey: string,
+  apiKey: Redacted.Redacted<string>,
   timeoutMs: number,
 ): Effect.Effect<
   ParsedSubscriptionUsage,
@@ -94,7 +94,7 @@ export function fetchKimiCodeUsage(
       url: KIMI_CODE_USAGE_URL,
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${Redacted.value(apiKey)}`,
       },
       timeoutMs,
     }),

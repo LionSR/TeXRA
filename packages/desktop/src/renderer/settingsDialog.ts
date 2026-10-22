@@ -3,7 +3,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@settingsView/frontend';
 import { html, render } from 'lit';
 import { z } from 'zod';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 

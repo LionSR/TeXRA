@@ -37,6 +37,7 @@ import {
   type HandlerRegistry,
 } from '@texra/shared/utils/dispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { SettingsTargetSchema } from './settingsTarget';
 import { UpdateProfileMessageSchema } from './profileViewMessages';
 import {
   DeleteMemoryMessageSchema,
@@ -58,75 +59,11 @@ import type { ModelProvider } from 'llm-zoo';
 
 // Re-export what settings consumers need from the view-message modules, so
 // they keep one import site; the schemas themselves stay unexported here.
-export { type MemoryPreview } from './memoryViewMessages';
-
 export {
   type ProviderKeyStatus,
   type ProviderSetting,
   type UpdateProfileMessage,
 } from './profileViewMessages';
-
-/**
- * The settings pages in nav order — single source of truth for tab names,
- * spelled the one way they travel: the panel name on the wire (`SET_TAB.tab`)
- * and in every `data-panel` selector. `shortcuts` is desktop-only.
- * Retired internal panels are removed together with their producers and
- * command surfaces so no stale IPC target remains.
- */
-export const SETTINGS_TAB_ORDER = [
-  'general',
-  'shortcuts',
-  'models',
-  'agents',
-  'memory',
-  'plugins',
-  'latex',
-] as const;
-
-/**
- * Webview panel-addressing key for a tab, e.g. `'agents'`. A literal union
- * over {@link SETTINGS_TAB_ORDER}, so an appended tab widens it and
- * exhaustiveness-checked switches (SettingsApp's `renderActivePanel`) become
- * compile errors until they add a case — the same effect the
- * `Record<SettingsTabPanelName, …>` metadata maps have.
- */
-export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
-
-/**
- * Each page's sections in sub-tab order; a page with fewer than two shows no
- * second nav row. `vscode` (LaTeX) exists on the extension only.
- */
-export const SETTINGS_PAGE_SECTIONS = {
-  models: ['keys', 'subscriptions', 'models'],
-  agents: ['library', 'teams', 'skills', 'advanced'],
-  plugins: [],
-  latex: ['dependencies', 'compile', 'formatting', 'vscode'],
-  memory: [],
-  general: ['appearance', 'approval', 'privacy', 'git'],
-  shortcuts: [],
-} as const satisfies Record<SettingsTabPanelName, readonly string[]>;
-
-/** A section of page `P`, e.g. `'teams'` for `'agents'`. */
-export type SettingsSectionName<
-  P extends SettingsTabPanelName = SettingsTabPanelName,
-> = (typeof SETTINGS_PAGE_SECTIONS)[P][number];
-
-/**
- * Where a settings link lands: a page (on its remembered section), or one
- * section of it spelled `page/section`, e.g. `'agents/teams'`.
- */
-export type SettingsTarget =
-  | SettingsTabPanelName
-  | {
-      [P in SettingsTabPanelName]: `${P}/${SettingsSectionName<P>}`;
-    }[SettingsTabPanelName];
-
-export const SettingsTargetSchema = z.enum(
-  SETTINGS_TAB_ORDER.flatMap((page) => [
-    page,
-    ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),
-  ]) as [SettingsTarget, ...SettingsTarget[]],
-);
 
 /** Outbound schema to switch tabs, addressed by page or `page/section`. */
 const SetTabMessageSchema = z.object({
@@ -835,8 +772,3 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
 export type SettingsViewInboundMessage = z.infer<
   typeof SettingsViewInboundMessageSchema
 >;
-
-/** Type helper for extracting a specific inbound message by command. */
-export type SettingsMessageFor<
-  C extends SettingsViewInboundMessage['command'],
-> = Extract<SettingsViewInboundMessage, { command: C }>;

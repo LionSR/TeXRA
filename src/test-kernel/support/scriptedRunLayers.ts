@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
@@ -30,6 +29,7 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import {
+  AgentConfigSchema,
   PersonaSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type RetryErrorInfo,
