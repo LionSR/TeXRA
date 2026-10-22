@@ -105,8 +105,6 @@ export class SubscriptionSection extends LitElement {
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
     const account = provider.accountLabel(this.auth);
-    // A same-value settings rebroadcast must repaint a rejected number edit.
-    void this.ackGeneration;
     return html`
       <section id=${provider.sectionId} aria-labelledby=${headingId}>
         ${renderSettingsSectionHeading({
@@ -201,6 +199,7 @@ export class SubscriptionSection extends LitElement {
                     min: contextWindowSetting.min,
                     max: contextWindowSetting.max,
                     unit: contextWindowSetting.unitLabel,
+                    ackGeneration: this.ackGeneration,
                     onClear: () =>
                       postStateSetting(contextWindowSetting.configKey, null),
                     onChange: (value) =>

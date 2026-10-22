@@ -1094,7 +1094,9 @@ describe('createChatSessionController', () => {
     // Typed while the stop settles: the first waits for the stopped
     // generation, then goes to the session's own admission for that run; the
     // admission resumed it, so the second goes to the resumed run directly,
-    // never waiting on its drain. The chat keeps no copy of either.
+    // never waiting on its drain. The chat keeps no copy of either. A served
+    // chat observes no resumes: the slot passes to the resumed run, so a
+    // later message cannot start a second root beside it.
     holdRun('a11111' as RunId);
     // The stopped generation is no longer live here: the view says so.
     installSession({ view: installableViewRef() });
@@ -1108,6 +1110,7 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(
       makeInit({
         session,
+        served: true,
         getSlashCommandContext: () => ({}) as SlashCommandContext,
       }),
     );
@@ -1132,6 +1135,48 @@ describe('createChatSessionController', () => {
       ]),
     );
     expect(mocks.executeAgent).not.toHaveBeenCalled();
+    expect(session.interruptedRunId).toBeUndefined();
+    expect(session.runId).toBe('a11111');
+    expect(chatTuiCanStartRootRun(session)).toBe(false);
+  });
+
+  it('frees the slot of a continuation that ended before the chat looked', async () => {
+    // The resumed turn ran and ended before the chat's adoption read the
+    // fold: no level it reads shows the run live, yet the run did continue.
+    holdRun('a11111' as RunId);
+    const view = installableViewRef();
+    installSession({ view });
+    const session = makeSession({
+      runId: 'a11111' as RunId,
+      interruptedRunId: 'a11111' as RunId,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        served: true,
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
+      }),
+    );
+    mocks.request.mockImplementation((req: RuntimeRequest) =>
+      Effect.gen(function* (): Effect.fn.Return<Outcome> {
+        if (req.kind === 'followUp.send')
+          yield* SubscriptionRef.set(
+            view,
+            viewWith([
+              makeRunView({
+                id: 'a11111' as RunId,
+                status: RUN_OUTCOME.COMPLETED,
+                durableOutcome: RUN_OUTCOME.COMPLETED,
+              }),
+            ]),
+          );
+        return { kind: 'followUp', status: 'sent' };
+      }),
+    );
+
+    await runSubmit(ctrl, 'Carry on.');
+
+    await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(true));
     expect(session.interruptedRunId).toBeUndefined();
   });
 });

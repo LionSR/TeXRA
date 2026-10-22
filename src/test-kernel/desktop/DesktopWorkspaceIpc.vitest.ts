@@ -165,11 +165,13 @@ describe('desktop workspace IPC', () => {
           ipc.file({
             kind: 'write',
             path: 'linked.tex',
+            base: null,
             contents: 'overwritten',
           }),
           ipc.file({
             kind: 'write',
             path: 'dangling-linked.tex',
+            base: null,
             contents: 'created outside',
           }),
         ];
@@ -265,6 +267,7 @@ describe('desktop workspace IPC', () => {
           .file({
             kind: 'write',
             path: target,
+            base: null,
             contents: `${original}\n# edited\n`,
           })
           .pipe(Effect.provide(context));
@@ -277,13 +280,43 @@ describe('desktop workspace IPC', () => {
         ]) {
           const exit = yield* Effect.exit(
             ipc
-              .file({ kind: 'write', path, contents: 'rejected' })
+              .file({ kind: 'write', path, contents: 'rejected', base: null })
               .pipe(Effect.provide(context)),
           );
           expect(Exit.isFailure(exit)).toBe(true);
         }
         expect(readFileSync(packagedPath, 'utf8')).toBe(original);
         expect(readFileSync(externalPath, 'utf8')).toBe('outside');
+      }),
+  );
+
+  it.effect(
+    'refuses a save over a file that changed on disk since the editor read it',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
+        const save = (contents: string, base: string | null) =>
+          ipc
+            .file({ kind: 'write', path: 'paper.tex', contents, base })
+            .pipe(Effect.provide(context));
+        // A run rewrote the file while the editor held "inside".
+        writeFileSync(join(workspacePath, 'paper.tex'), 'from the run');
+
+        expect(yield* save('inside, edited', 'inside')).toEqual({
+          kind: 'changedOnDisk',
+        });
+        expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          'from the run',
+        );
+        // Saved against what is on disk now, or overwritten on purpose.
+        expect(yield* save('run, edited', 'from the run')).toEqual({
+          kind: 'done',
+        });
+        expect(yield* save('mine', null)).toEqual({ kind: 'done' });
+        expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          'mine',
+        );
       }),
   );
 
@@ -300,6 +333,7 @@ describe('desktop workspace IPC', () => {
             .file({
               kind: 'write',
               path: 'paper.tex',
+              base: null,
               contents: 'recovered buffer',
             })
             .pipe(Effect.provide(context)),

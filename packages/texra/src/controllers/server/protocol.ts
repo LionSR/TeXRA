@@ -61,6 +61,7 @@ import {
   HostCapabilitySchema,
   HostFrameSchema,
 } from './hostCalls';
+import type { ValueFamily } from '@texra-ai/harness';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -136,6 +137,24 @@ const ServiceInfoSchema = z.object({
   draining: z.boolean(),
 });
 export type ServiceInfo = z.infer<typeof ServiceInfoSchema>;
+
+/** The running service's record, claimed once it listens: where a client
+ *  finds it. */
+const ServiceRecordSchema = ServiceInfoSchema.pick({
+  pid: true,
+  protocol: true,
+  version: true,
+  startedAt: true,
+}).extend({ socket: z.string().min(1) });
+export type ServiceRecord = z.infer<typeof ServiceRecordSchema>;
+
+/** The storage root's running service: one row of the global root's
+ *  current values, read and changed under its write lock. */
+export const TEXRA_SERVICE: ValueFamily<ServiceRecord, true> = {
+  name: 'texra-service',
+  schema: ServiceRecordSchema,
+  deletable: true,
+};
 
 /** One top-level task in `tasks.list`. */
 const TaskSummarySchema = z.object({
