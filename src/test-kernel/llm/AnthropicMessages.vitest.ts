@@ -1042,16 +1042,17 @@ describe('canonical Anthropic Messages protocol', () => {
         } else if (phase === 'malformed') {
           const exit = yield* Effect.exit(Stream.runDrain(progress));
           assert(exit._tag === 'Failure');
+          // A cleanup defect elects the primary failure to a defect too.
           expect(
-            exit.cause.reasons.find(Cause.isFailReason)?.error,
-          ).toMatchObject({
-            kind: 'malformed-output',
-            responseId: 'msg_1',
-            model: 'returned-claude',
-          });
-          expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
+            exit.cause.reasons.filter(Cause.isDieReason).map((r) => r.defect),
+          ).toEqual([
+            expect.objectContaining({
+              kind: 'malformed-output',
+              responseId: 'msg_1',
+              model: 'returned-claude',
+            }),
             cleanupFailure,
-          );
+          ]);
         } else if (phase === 'successful-take') {
           const exit = yield* Effect.exit(
             progress.pipe(Stream.take(1), Stream.runDrain),
