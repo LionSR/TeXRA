@@ -13,13 +13,12 @@ import {
   type SkillDisplayItem,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
+import { postMessage } from '@texra/shared/hostBridge';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
-import {
-  postStateSetting,
-  renderStateSettingToggleRow,
-} from '../components/shared/stateSettingRows';
+import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 import '../components/shared/SettingsCatalog';
@@ -81,21 +80,20 @@ export class SkillsTab extends LitElement {
   @property({ attribute: false }) issues: SkillDisplayIssue[] = [];
   @state() private selectedKey: string | null = null;
 
-  private toggleValue<T>(
-    values: readonly T[],
-    value: T,
+  /** A delta, not the list: the host applies it to the list it holds, so a
+   *  second switch before this one's snapshot returns cannot undo it. */
+  private setEnabled(
+    key:
+      | WorkspaceStateKey.DISABLED_SKILLS
+      | WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    item: string,
     enabled: boolean,
-  ): T[] {
-    return enabled
-      ? values.filter((candidate) => candidate !== value)
-      : [...new Set([...values, value])];
-  }
-
-  private setEnabled(item: SkillDisplayItem, enabled: boolean): void {
-    postStateSetting(
-      WorkspaceStateKey.DISABLED_SKILLS,
-      this.toggleValue(this.disabledSkills, item.name, enabled),
-    );
+  ): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED, {
+      key,
+      item,
+      enabled,
+    });
   }
 
   private renderSourceToggle(scope: ActiveSkillSourceScope): TemplateResult {
@@ -103,7 +101,7 @@ export class SkillsTab extends LitElement {
       id=${`skill-source-${scope}`}
       .checked=${live(!this.disabledSources.includes(scope))}
       ?disabled=${!this.masterEnabled}
-      @change=${(event: Event) => postStateSetting(WorkspaceStateKey.DISABLED_SKILL_SOURCES, this.toggleValue(this.disabledSources, scope, (event.target as WaSwitch).checked))}
+      @change=${(event: Event) => this.setEnabled(WorkspaceStateKey.DISABLED_SKILL_SOURCES, scope, (event.target as WaSwitch).checked)}
       >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
     >`;
   }
@@ -126,7 +124,11 @@ export class SkillsTab extends LitElement {
           !this.masterEnabled || this.disabledSources.includes(item.scope),
         onClick: (event) => {
           event.stopPropagation();
-          this.setEnabled(item, !item.enabled);
+          this.setEnabled(
+            WorkspaceStateKey.DISABLED_SKILLS,
+            item.name,
+            !item.enabled,
+          );
         },
       }),
     };
@@ -145,7 +147,11 @@ export class SkillsTab extends LitElement {
         disabled:
           !this.masterEnabled || this.disabledSources.includes(item.scope),
         onChange: (event: Event) =>
-          this.setEnabled(item, (event.target as WaSwitch).checked),
+          this.setEnabled(
+            WorkspaceStateKey.DISABLED_SKILLS,
+            item.name,
+            (event.target as WaSwitch).checked,
+          ),
       })}
       <dl class="catalog-detail-meta">
         <dt class="catalog-detail-meta-label">Instructions</dt>

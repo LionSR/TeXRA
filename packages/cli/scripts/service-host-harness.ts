@@ -18,11 +18,18 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import { ModelError, TurnResultSchema, type Model } from '@texra-ai/llm';
 
+import { GlobalValues } from '@texra-ai/harness';
+import { nodePlatformServices } from '@texra-ai/harness/node';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { globalDatabaseLayer } from '@controllers/session/Database';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { GlobalDatabase } from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { linkService } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { generateRunId } from '@utils/core';
@@ -32,6 +39,17 @@ if (storageRoot === undefined || workspace === undefined)
   throw new Error(
     'usage: service-host-harness <storageRoot> <workspace> <answer|hang|lm>',
   );
+
+/** The storage root's global values, where the service's record is. */
+const globalValues = Layer.effect(
+  GlobalValues,
+  Effect.map(GlobalDatabase, (database) => database.values),
+).pipe(
+  Layer.provide(globalDatabaseLayer(resolveGlobalStoragePath(storageRoot))),
+  Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+  Layer.provide(nodePlatformServices),
+  Layer.orDie,
+);
 
 /** The editor model's reply, streamed in these pieces. */
 const STREAMED = ['HARNESS-COPILOT streamed ', 'this reply.'];
@@ -208,5 +226,5 @@ await Effect.runPromise(
       }
       return yield* Effect.never;
     }),
-  ),
+  ).pipe(Effect.provide(globalValues)),
 );

@@ -53,6 +53,9 @@ interface FileState {
   syncTail?: Promise<void>;
   writeEpoch: number;
   activeWrites: number;
+  /** What this pane last read from or wrote to the file: a save lands only
+   *  while the file still holds it. */
+  disk?: string;
   dirty: boolean;
   syncing: boolean;
   closed: boolean;
@@ -62,7 +65,13 @@ interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
   listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
   readFile(path: string): Promise<string>;
-  writeFile(path: string, contents: string): Promise<void>;
+  /** Writes `contents` while the file still holds `base` (null: whatever
+   *  it holds); `changedOnDisk` when something else rewrote it. */
+  writeFile(
+    path: string,
+    contents: string,
+    base: string | null,
+  ): Promise<'saved' | 'changedOnDisk'>;
   isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
@@ -112,7 +121,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   const disposeCommandTooltips = installMonacoCommandDescriptions(editorHost);
   const notice = createEditorFileNotice({
     onError: callbacks.onError,
-    retrySave: (path) => void open(path).then(save),
+    retrySave: (path) => void save(path),
   });
   element.append(notice.element, editorHost);
 
@@ -396,6 +405,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
     const load = readCurrentContents(path).then((contents) => {
       if (disposed || file.closed) return undefined;
+      file.disk = contents;
       const model = loadedMonaco.editor.createModel(
         contents,
         monacoLanguageForPath(path),
@@ -466,17 +476,45 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         file.activeWrites > 0 ||
         model.getVersionId() !== version ||
         refreshGeneration !== generation ||
-        file.writeEpoch !== writeEpoch ||
-        model.getValue() === contents
+        file.writeEpoch !== writeEpoch
       ) {
         return;
       }
+      file.disk = contents;
+      if (model.getValue() === contents) return;
       file.syncing = true;
       try {
         model.setValue(contents);
       } finally {
         file.syncing = false;
       }
+    });
+  }
+
+  /** Discard this file's edits for what is on disk now (a save found it
+   *  rewritten and the user chose the disk's version). */
+  function reload(path: string): Promise<void> {
+    const file = files.get(path);
+    const model = file?.model;
+    if (!file || !model) return Promise.resolve();
+    const version = model.getVersionId();
+    return onModelSyncLane(file, async () => {
+      const contents = await callbacks.readFile(path);
+      // Typing since the choice is newer than it: keep it, and the file's
+      // base, so its save asks again.
+      if (disposed || file.model !== model || model.getVersionId() !== version)
+        return;
+      file.disk = contents;
+      file.syncing = true;
+      try {
+        model.setValue(contents);
+      } finally {
+        file.syncing = false;
+      }
+      file.dirty = false;
+      callbacks.onDirtyChange(path, false);
+      notice.clear(path);
+      renderTree();
     });
   }
 
@@ -580,32 +618,54 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     return refreshPromise;
   }
 
-  async function save(): Promise<void> {
-    const path = openPath;
+  /** Save `path`'s buffer. `overwrite`: replace whatever the file holds now,
+   *  the user's answer to a save that found it rewritten. A notice's action
+   *  names its own file, never whichever one is open by then. Saves of one
+   *  file take its lane in turn, so each sends the base the one before it
+   *  wrote. */
+  function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path)) return;
-    const savedVersion = model.getVersionId();
-    file.activeWrites += 1;
-    file.writeEpoch += 1;
-    try {
-      await callbacks.writeFile(path, model.getValue());
-      if (
-        disposed ||
-        file.model !== model ||
-        model.getVersionId() !== savedVersion
-      )
-        return;
-      file.dirty = false;
-      callbacks.onDirtyChange(path, false);
-      notice.clear(path);
-      renderTree();
-    } catch (error) {
-      if (!disposed) notice.report(path, 'save', error);
-    } finally {
-      file.activeWrites -= 1;
+    if (!path || !file || !model || file.closed || callbacks.isReadOnly?.(path))
+      return Promise.resolve();
+    return onModelSyncLane(file, async () => {
+      if (disposed || file.model !== model) return;
+      const savedVersion = model.getVersionId();
+      const contents = model.getValue();
+      file.activeWrites += 1;
       file.writeEpoch += 1;
-    }
+      try {
+        const outcome = await callbacks.writeFile(
+          path,
+          contents,
+          overwrite ? null : (file.disk ?? null),
+        );
+        if (outcome === 'changedOnDisk') {
+          if (!disposed)
+            notice.changedOnDisk(path, {
+              overwrite: () => void save(path, true),
+              reload: () => void reload(path),
+            });
+          return;
+        }
+        file.disk = contents;
+        if (
+          disposed ||
+          file.model !== model ||
+          model.getVersionId() !== savedVersion
+        )
+          return;
+        file.dirty = false;
+        callbacks.onDirtyChange(path, false);
+        notice.clear(path);
+        renderTree();
+      } catch (error) {
+        if (!disposed) notice.report(path, 'save', error);
+      } finally {
+        file.activeWrites -= 1;
+        file.writeEpoch += 1;
+      }
+    });
   }
 
   renderTree();
@@ -631,7 +691,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     },
 
     hasUnsavedChanges: () => [...files.values()].some((file) => file.dirty),
-    save,
+    // A plain save never overwrites: only the conflict notice's answer does.
+    save: () => save(openPath),
 
     close(path) {
       const file = fileState(path);

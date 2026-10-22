@@ -6,9 +6,8 @@ import { Effect } from 'effect';
 
 import { StorageFs } from '@texra-ai/harness';
 import { MemoryStore } from '@texra-ai/harness/plugins';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
-import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProcessServices } from '@texra-ai/harness';
 
 import type {
@@ -18,21 +17,35 @@ import type {
 
 /** The Memory page: its arms and its opening data. */
 export function settingsMemoryCommands(ports: {
-  readonly bindings: SettingsHostBindings;
-  readonly present: SettingsPresentation;
+  readonly bindings: Pick<
+    SettingsHostBindings,
+    'post' | 'prompt' | 'openPath' | 'revealPath'
+  >;
+  readonly present: Pick<SettingsPresentation, 'report' | 'reported'>;
 }) {
   const { bindings } = ports;
   const { report, reported } = ports.present;
-  const memory = new SettingsMemoryController({ prompt: bindings.prompt });
-  const postMemoryData = bindings.post(memory.getMemoryDataMessage());
-  // The controller answers a mutation the user declined (a cancelled
-  // delete, a pin over the cap) with `null` after prompting.
-  const postMemoryMutation = <E>(
-    mutation: Effect.Effect<SettingsViewOutboundMessage | null, E, StorageFs>,
-  ) =>
-    Effect.flatMap(mutation, (message) =>
-      message == null ? Effect.void : bindings.post(Effect.succeed(message)),
-    );
+  const memoryData = Effect.map(MemoryStore.list, (items) => ({
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
+    items,
+  }));
+  const postMemoryData = bindings.post(memoryData);
+  // A mutation reads the refreshed list whether or not a view is open, so a
+  // failed read after a delete or pin is reported either way.
+  const postMutatedMemoryData = Effect.flatMap(memoryData, (message) =>
+    bindings.post(Effect.succeed(message)),
+  );
+  const setMemoryPinned = (storagePath: string, pinned: boolean) =>
+    Effect.gen(function* () {
+      const result = yield* MemoryStore.pin(storagePath, pinned);
+      if (result.status === 'cap-reached') {
+        yield* bindings.prompt.warning(
+          `Cannot pin: maximum of ${result.max} pinned memories reached. Unpin an existing memory first.`,
+        );
+        return;
+      }
+      yield* postMutatedMemoryData;
+    });
 
   const handlers = {
     getMemoryData: () => postMemoryData,
@@ -41,15 +54,21 @@ export function settingsMemoryCommands(ports: {
     // on a preview that will not arrive.
     getMemoryPreview: ({ storagePath }) =>
       bindings
-        .post(memory.getMemoryPreviewMessage(storagePath))
+        .post(
+          Effect.map(MemoryStore.preview(storagePath), (preview) => ({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+            preview,
+          })),
+        )
         .pipe(
           Effect.catch((error) =>
             Effect.andThen(
               report('Failed to load memory preview', error),
               bindings.post(
-                Effect.sync(() =>
-                  memory.getMemoryPreviewErrorMessage(storagePath),
-                ),
+                Effect.succeed({
+                  command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+                  preview: { storagePath, error: true },
+                }),
               ),
             ),
           ),
@@ -79,8 +98,21 @@ export function settingsMemoryCommands(ports: {
         ),
       );
     },
-    deleteMemory: (message) =>
-      postMemoryMutation(memory.deleteMemory(message)).pipe(
+    deleteMemory: ({ storagePath, displayPath }) =>
+      Effect.gen(function* () {
+        // A declined delete posts nothing. A prompt that cannot show and a
+        // failed remove stay typed, so the failure is reported and the list
+        // the view is waiting on is reposted.
+        const confirmed = yield* bindings.prompt.confirm(
+          `Delete "${displayPath}"?`,
+          { modal: true, confirmLabel: 'Delete' },
+        );
+        if (!confirmed) return;
+        // On the memory tree's lane, as every memory tool command is: a delete
+        // from here never races an agent's edit beneath it.
+        yield* MemoryStore.delete(storagePath);
+        yield* postMutatedMemoryData;
+      }).pipe(
         Effect.catch((error) =>
           Effect.andThen(
             report('Failed to delete memory', error),
@@ -89,15 +121,9 @@ export function settingsMemoryCommands(ports: {
         ),
       ),
     pinMemory: ({ storagePath }) =>
-      reported(
-        'Failed to pin memory',
-        postMemoryMutation(memory.setMemoryPinned(storagePath, true)),
-      ),
+      reported('Failed to pin memory', setMemoryPinned(storagePath, true)),
     unpinMemory: ({ storagePath }) =>
-      reported(
-        'Failed to unpin memory',
-        postMemoryMutation(memory.setMemoryPinned(storagePath, false)),
-      ),
+      reported('Failed to unpin memory', setMemoryPinned(storagePath, false)),
   } satisfies Partial<
     SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs>
   >;

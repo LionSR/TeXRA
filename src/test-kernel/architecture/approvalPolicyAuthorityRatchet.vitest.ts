@@ -58,7 +58,8 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/rootLaunch.ts',
   // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
-  'packages/harness/src/tools/approval/index.ts',
+  // A delegated child's grants, from how its proposal was approved.
+  'packages/harness/src/tools/delegation/subagentRun.ts',
   'packages/harness/src/tools/delegation/AgentTool.ts',
   // A goal's grant, committed with its goal row.
   'packages/harness/src/tools/goal/goalRows.ts',

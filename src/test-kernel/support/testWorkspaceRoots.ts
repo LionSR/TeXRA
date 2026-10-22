@@ -16,7 +16,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 let installed: WorkspaceRoots | null = null;
 
-/** Install the harness's roots; called by `installFakeHost`. */
+/** Install the harness's roots; called by `bindFakeHost`. */
 export function initTestWorkspaceRoots(roots: WorkspaceRoots): void {
   installed = Object.freeze({ ...roots });
 }

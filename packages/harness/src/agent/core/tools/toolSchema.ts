@@ -6,10 +6,9 @@
  * definitions from it; the structured-output tool builder shares it.
  */
 import { Predicate } from 'effect';
-import { toJSONSchema } from 'zod';
+import { toJSONSchema, type core } from 'zod';
 
 import type { ToolDefinition } from '@shared/schemas';
-import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 
 /** A JSON Schema node as a provider's function-calling API reads it. */
 export interface JSONSchemaObject {
@@ -189,6 +188,13 @@ function withArrayItems(node: unknown): unknown {
       : { maxItems: tuple.length }),
   };
 }
+
+/** Zod's conversion of a tool's input schema. */
+const TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({
+  target: 'draft-2020-12',
+  unrepresentable: 'any',
+  io: 'input',
+} as const satisfies core.ToJSONSchemaParams);
 
 /** A tool's input as JSON Schema, unflattened: its Zod schema converted,
  *  else its pre-converted parameters. */

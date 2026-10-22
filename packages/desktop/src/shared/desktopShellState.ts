@@ -30,6 +30,8 @@ const WorkbenchTabSchema = z.object({
   title: z.string(),
   target: z.string().optional(),
   dirty: z.boolean().optional(),
+  /** A `pdf` tab's build: its frame reloads when a rebuild changes it. */
+  build: z.number().optional(),
 });
 export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
 
@@ -67,15 +69,31 @@ export function initialDesktopShellState(): DesktopShellState {
 
 export function openWorkbenchTab(
   state: DesktopShellState,
-  request: { kind: WorkbenchKind; target?: string; title?: string },
+  request: {
+    kind: WorkbenchKind;
+    target?: string;
+    title?: string;
+    build?: number;
+  },
 ): DesktopShellState {
-  const { kind, target } = request;
+  const { kind, target, build } = request;
   const meta = WORKBENCH_KIND_META[kind];
   let id = `workbench:${kind}`;
   if (kind === 'terminal') id += `:${state.nextTerminalSerial}`;
   else if (!meta.singleton && target) id += `:${target}`;
   const existing = state.workbenchTabs.find((tab) => tab.id === id);
-  if (existing) return { ...state, activeTabId: id };
+  if (existing) {
+    return {
+      ...state,
+      activeTabId: id,
+      workbenchTabs:
+        build === undefined || existing.build === build
+          ? state.workbenchTabs
+          : state.workbenchTabs.map((tab) =>
+              tab === existing ? { ...tab, build } : tab,
+            ),
+    };
+  }
   let title: string = meta.label;
   if (kind === 'terminal') title = `Terminal ${state.nextTerminalSerial}`;
   else if (target && (kind === 'editor' || kind === 'pdf'))
@@ -90,6 +108,7 @@ export function openWorkbenchTab(
         kind,
         title: request.title ?? title,
         ...(target ? { target } : {}),
+        ...(build === undefined ? {} : { build }),
       },
     ],
     nextTerminalSerial:

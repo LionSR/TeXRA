@@ -15,11 +15,11 @@ import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipCont
 // Local imports - shared styles
 
 // Local imports - shared schemas and constants
-import {
-  dispatchSettingsViewOutbound,
-  type SettingsSectionName,
-  type SettingsTabPanelName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
+import type {
+  SettingsSectionName,
+  SettingsTabPanelName,
+} from '@texra/shared/settingsView/settingsTarget';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
@@ -62,7 +62,7 @@ import {
   detachSubagentsOnStop,
   disabledSkills,
   disabledSkillSources,
-  agentsSettingsRevision,
+  settingsSnapshotRevisions,
   editApprovalEnabled,
   gitAuthorEmail,
   gitAuthorName,
@@ -316,7 +316,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           >
             <subscriptions-tab
               slot="subscriptions"
-              .ackGeneration=${agentsSettingsRevision.get()}
+              .ackGeneration=${settingsSnapshotRevisions.get().agents ?? 0}
               .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
               .subscriptionAuth=${subscriptionAuth.get()}
               .usage=${subscriptionUsage.get()}
@@ -325,11 +325,10 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           </models-tab>
         `;
       case 'agents': {
-        // Touch the acknowledgement generation so a same-value rebroadcast
-        // after a rejected/failed write still re-renders this branch and lets
-        // live() restore the committed number-row value: the Advanced rows
-        // ride the agents snapshot.
-        const ackGeneration = agentsSettingsRevision.get();
+        // The acknowledgement generation lets a same-value rebroadcast after
+        // a rejected/failed write restore the committed number-row value:
+        // the Advanced rows ride the agents snapshot.
+        const ackGeneration = settingsSnapshotRevisions.get().agents ?? 0;
         return html`
           <agents-tab
             .section=${section}
@@ -416,6 +415,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               .goalMaxCostUsd=${goalMaxCostUsd.get()}
               .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
               .resumeOnOpen=${resumeOnOpen.get()}
+              .ackGeneration=${settingsSnapshotRevisions.get().approval ?? 0}
             ></approval-tab>
           `;
         return section === 'git'

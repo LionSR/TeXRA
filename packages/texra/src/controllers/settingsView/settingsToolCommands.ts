@@ -4,7 +4,7 @@
  * the LaTeX toolchain status with its install commands. Installing a VS Code
  * extension and writing VS Code's own settings stay with the host that can.
  */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Semaphore, Stream, SubscriptionRef } from 'effect';
 
 import {
   mcpConfigPathOf,
@@ -45,9 +45,13 @@ export function settingsToolCommands(ports: {
     availability.refresh(roots),
   );
 
+  // Every post of the rows reads its results and builds inside this one
+  // lane: the first paint, a repaint the results follow, a switch's. A slow
+  // build that read older results otherwise lands over a newer page.
+  const rowsLane = Semaphore.makeUnsafe(1);
   // Results no probe has produced yet stay `undefined` so the build runs the
   // probes; coercing them to `[]` would render "zero external tools".
-  const postPlugins = bindings.post(
+  const buildAndPostPlugins = bindings.post(
     Effect.flatMap(ToolAvailability, (availability) =>
       Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
         Effect.map(
@@ -60,6 +64,7 @@ export function settingsToolCommands(ports: {
       ),
     ),
   );
+  const postPlugins = rowsLane.withPermits(1)(buildAndPostPlugins);
   const postLatexStatus = bindings.post(
     Effect.map(
       Effect.suspend(() =>
@@ -77,11 +82,11 @@ export function settingsToolCommands(ports: {
    * probe's network checks (Zotero and others) never hold the first render,
    * then re-probe; `followToolAvailability` repaints them with what the
    * re-probe finds. The view shows a spinner until data arrives, so a failed
-   * build still posts an empty page to end it.
+   * build still posts an empty page to end it, in the same lane.
    */
   const postStartup = Effect.andThen(
     Effect.forkDetach(
-      postPlugins.pipe(
+      buildAndPostPlugins.pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             'The plugin rows could not be built; showing the page empty.',
@@ -106,6 +111,7 @@ export function settingsToolCommands(ports: {
           log: 'Warn',
           message: 'The empty plugin page could not be posted either.',
         }),
+        rowsLane.withPermits(1),
         Effect.andThen(refresh),
       ),
       { startImmediately: true },

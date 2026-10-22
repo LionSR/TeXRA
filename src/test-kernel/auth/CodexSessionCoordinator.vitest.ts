@@ -4,36 +4,34 @@ import { setTimeout as delay } from 'node:timers/promises';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SubscriptionOAuthError } from '@texra-ai/llm/node';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { CODEX_POLICY } from '../../../packages/llm/src/oauth/codex/codexSessionPolicy.js';
 import {
-  SubscriptionOAuthCoordinator,
-  type SubscriptionOAuthClient,
-  type SubscriptionSessionStorage,
-} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
-import type {
-  CodexSession,
-  CodexTokenResponseSchema,
-} from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
+  codexCoordinator,
+  type CodexSession,
+  type SubscriptionCoordinator,
+  type SubscriptionTokenResponse,
+} from '@texra-ai/llm/node';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import { jsonResponse } from '@test/support/fetchTestUtils';
+import type { CredentialStore } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import type { z } from 'zod';
 
-type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
-
-const NOW = 1_900_000_000_000;
+// The coordinator reads the wall clock for the expiry decision; every session
+// below is placed relative to it, far from the 5-minute refresh buffer's edge.
+const NOW = Date.now();
 const FIVE_MIN = 5 * 60 * 1000;
 
-function memoryStorage(initial?: CodexSession): SubscriptionSessionStorage & {
+/** The secret store the ChatGPT coordinator binds; it reads one key. */
+function memoryStorage(initial?: CodexSession): CredentialStore & {
   peek: () => CodexSession | undefined;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
   return {
     get: () => Effect.sync(() => value),
-    store: (v) =>
+    set: (_name, v) =>
       Effect.sync(() => {
         value = v;
       }),
@@ -46,14 +44,15 @@ function memoryStorage(initial?: CodexSession): SubscriptionSessionStorage & {
 }
 
 /**
- * In-memory storage whose first `store` or `delete` call blocks until the
- * test calls `release()`, for deterministic race interleavings. `gateReached`
- * resolves once the gated write has started (and is therefore blocked).
+ * An in-memory store whose first `get`, `set` or `delete` call blocks until
+ * the test calls `release()`, for deterministic race interleavings.
+ * `gateReached` resolves once the gated call has started (and is therefore
+ * blocked).
  */
 function gatedStorage(
-  gateOn: 'get' | 'store' | 'delete',
+  gateOn: 'get' | 'set' | 'delete',
   initial?: CodexSession,
-): SubscriptionSessionStorage & {
+): CredentialStore & {
   peek: () => CodexSession | undefined;
   gateReached: Effect.Effect<void>;
   release: () => void;
@@ -75,9 +74,9 @@ function gatedStorage(
         if (gateOn === 'get') yield* gate;
         return snapshot;
       }),
-    store: (v) =>
+    set: (_name, v) =>
       Effect.gen(function* () {
-        if (gateOn === 'store') yield* gate;
+        if (gateOn === 'set') yield* gate;
         value = v;
       }),
     delete: () =>
@@ -109,8 +108,8 @@ function expiredSession(): CodexSession {
 }
 
 function tokenResponse(
-  overrides: Partial<CodexTokenResponse> = {},
-): CodexTokenResponse {
+  overrides: Partial<SubscriptionTokenResponse> = {},
+): SubscriptionTokenResponse {
   return {
     access_token: 'access-1',
     refresh_token: 'refresh-1',
@@ -119,21 +118,51 @@ function tokenResponse(
   };
 }
 
-function newLoginTokenResponse(): CodexTokenResponse {
+function newLoginTokenResponse(): SubscriptionTokenResponse {
   return tokenResponse({
     access_token: 'access-new',
     refresh_token: 'refresh-new',
   });
 }
 
-// The coordinator's refresh can require the HTTP client; these suites stub
-// the OAuth client instead, so the shared stub layer satisfies the type.
+/** The token endpoint's answer to a revoked refresh token. */
+const revoked = () => jsonResponse({ error: 'invalid_grant' }, 401);
+
+/** One token-endpoint grant, as the test answers it. */
+type Grant = () => Promise<Response>;
+
+/** The grants the current test's token endpoint answers. */
+let grants: {
+  exchangeAuthorizationCode?: Grant;
+  refreshTokens?: Grant;
+} = {};
+
+/**
+ * The OAuth token endpoint, behind the `FetchHttpClient.Fetch` reference: the
+ * coordinator posts its form grants here, and each goes to the current test's
+ * handler for its `grant_type`.
+ */
+const tokenEndpoint: typeof fetch = async (_input, init) => {
+  const grantType = new URLSearchParams(String(init?.body)).get('grant_type');
+  if (grantType === 'refresh_token' && grants.refreshTokens) {
+    return grants.refreshTokens();
+  }
+  if (grantType === 'authorization_code' && grants.exchangeAuthorizationCode) {
+    return grants.exchangeAuthorizationCode();
+  }
+  throw new Error(`Unexpected grant: ${grantType}`);
+};
+
 const withHttp = <A>(
   program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
-): Effect.Effect<A, unknown> => Effect.provide(program, testHttpClientLayer);
+): Effect.Effect<A, unknown> =>
+  program.pipe(
+    Effect.provide(FetchHttpClient.layer),
+    Effect.provideService(FetchHttpClient.Fetch, tokenEndpoint),
+  );
 
 function loginWithCode(
-  coordinator: SubscriptionOAuthCoordinator<CodexSession>,
+  coordinator: SubscriptionCoordinator<CodexSession>,
 ): Effect.Effect<CodexSession, unknown> {
   return withHttp(
     coordinator.loginWithCode({
@@ -155,23 +184,19 @@ const forkNow = <A>(
 ) => Effect.forkChild(withHttp(program), { startImmediately: true });
 
 /**
- * A refresh grant that parks until the test settles `pending`.
- * `refreshStarted` completes once the grant has been called. The coordinator
- * runs the refresh on a detached fiber, which the scheduler starts on a later
- * `setImmediate`, so no fixed wait on the test's side is ordered before it.
+ * A refresh grant that parks until the test resolves `pending` with the
+ * endpoint's response. `refreshStarted` completes once the grant has been
+ * posted. The coordinator runs the refresh on a detached fiber, which the
+ * scheduler starts on a later `setImmediate`, so no fixed wait on the test's
+ * side is ordered before it.
  */
 function parkedRefresh() {
-  const pending = Deferred.makeUnsafe<
-    CodexTokenResponse,
-    SubscriptionOAuthError
-  >();
+  const pending = createDeferred<Response>();
   const started = Deferred.makeUnsafe<void>();
-  const refreshTokens = vi.fn(() =>
-    Effect.andThen(
-      Deferred.succeed(started, undefined),
-      Deferred.await(pending),
-    ),
-  );
+  const refreshTokens = vi.fn(() => {
+    Deferred.doneUnsafe(started, Effect.void);
+    return pending.promise;
+  });
   return { pending, refreshTokens, refreshStarted: Deferred.await(started) };
 }
 
@@ -179,23 +204,19 @@ function parkedRefresh() {
 const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
   Effect.flip(Fiber.join(fiber));
 
+/**
+ * The ChatGPT coordinator over `storage`, with the token endpoint answering
+ * the given grants (an unlisted grant fails the request).
+ */
 function makeCoordinator(
-  storage: SubscriptionSessionStorage,
-  client: Partial<SubscriptionOAuthClient> = {},
-): SubscriptionOAuthCoordinator<CodexSession> {
-  return new SubscriptionOAuthCoordinator({
-    storage,
-    policy: CODEX_POLICY,
-    client: {
-      exchangeAuthorizationCode: vi.fn(),
-      refreshTokens: vi.fn(),
-      ...client,
-    },
-    now: () => NOW,
-  });
+  storage: CredentialStore,
+  endpointGrants: typeof grants = {},
+): SubscriptionCoordinator<CodexSession> {
+  grants = endpointGrants;
+  return codexCoordinator(storage);
 }
 
-const freshToken = (coordinator: SubscriptionOAuthCoordinator<CodexSession>) =>
+const freshToken = (coordinator: SubscriptionCoordinator<CodexSession>) =>
   Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
 
 describe('CodexSessionCoordinator', () => {
@@ -214,7 +235,7 @@ describe('CodexSessionCoordinator', () => {
   it.effect('refreshes proactively within the 5-minute buffer', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
-      const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+      const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
       const coordinator = makeCoordinator(storage, { refreshTokens });
       expect(yield* withHttp(freshToken(coordinator))).toBe('access-1');
       expect(refreshTokens).toHaveBeenCalledOnce();
@@ -234,12 +255,30 @@ describe('CodexSessionCoordinator', () => {
       yield* refreshStarted;
       expect(refreshTokens).toHaveBeenCalledOnce();
 
-      Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+      pending.resolve(jsonResponse(tokenResponse()));
       const [ra, rb] = yield* Effect.all([Fiber.join(a), Fiber.join(b)]);
 
       expect(ra).toBe('access-1');
       expect(rb).toBe('access-1');
       expect(refreshTokens).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect('rotates a rejected token once, however many calls sent it', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(
+        session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
+      );
+      const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+
+      // Two calls sent access-0 and both got a 401, one after the other:
+      // the second finds the token already replaced and leaves it.
+      yield* withHttp(coordinator.refreshRejected('access-0'));
+      yield* withHttp(coordinator.refreshRejected('access-0'));
+
+      expect(refreshTokens).toHaveBeenCalledOnce();
+      expect(storage.peek()?.accessToken).toBe('access-1');
     }),
   );
 
@@ -254,7 +293,7 @@ describe('CodexSessionCoordinator', () => {
       expect(refreshTokens).toHaveBeenCalledOnce();
 
       yield* coordinator.signOut();
-      Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+      pending.resolve(jsonResponse(tokenResponse()));
 
       const error = yield* joinFailure(token);
       expect(error).toMatchObject({
@@ -269,8 +308,8 @@ describe('CodexSessionCoordinator', () => {
     'does not restore a session when sign-out races with refresh storage',
     () =>
       Effect.gen(function* () {
-        const storage = gatedStorage('store', expiredSession());
-        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+        const storage = gatedStorage('set', expiredSession());
+        const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
         const token = yield* forkNow(freshToken(coordinator));
@@ -293,17 +332,9 @@ describe('CodexSessionCoordinator', () => {
     () =>
       Effect.gen(function* () {
         const storage = gatedStorage('delete', expiredSession());
-        const refreshTokens = vi.fn(() =>
-          Effect.fail(
-            new SubscriptionOAuthError({
-              message: 'revoked',
-              kind: 'fatal',
-              status: 401,
-            }),
-          ),
-        );
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(newLoginTokenResponse()),
+        const refreshTokens = vi.fn(async () => revoked());
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(newLoginTokenResponse()),
         );
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
@@ -316,6 +347,11 @@ describe('CodexSessionCoordinator', () => {
         const login = yield* forkNow(loginWithCode(coordinator));
         // Let the login run as far as it can before the delete unblocks, so an
         // unserialized store would land first and be erased by the stale delete.
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(exchangeAuthorizationCode).toHaveBeenCalled(),
+          ),
+        );
         yield* Effect.promise(() => delay(0));
         storage.release();
 
@@ -332,7 +368,7 @@ describe('CodexSessionCoordinator', () => {
     () =>
       Effect.gen(function* () {
         const storage = gatedStorage('delete', expiredSession());
-        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+        const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
         const signOut = yield* forkNow(coordinator.signOut());
@@ -356,10 +392,10 @@ describe('CodexSessionCoordinator', () => {
     'does not overwrite a newer login for a caller entering during login',
     () =>
       Effect.gen(function* () {
-        const storage = gatedStorage('store', expiredSession());
-        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(newLoginTokenResponse()),
+        const storage = gatedStorage('set', expiredSession());
+        const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(newLoginTokenResponse()),
         );
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
@@ -383,23 +419,23 @@ describe('CodexSessionCoordinator', () => {
     'finishes an interrupted login store before a later sign-out runs',
     () =>
       Effect.gen(function* () {
-        const gated = gatedStorage('store');
+        const gated = gatedStorage('set');
         const ops: string[] = [];
-        const storage: SubscriptionSessionStorage = {
+        const storage: CredentialStore = {
           get: gated.get,
-          store: (value) =>
+          set: (name, value) =>
             Effect.gen(function* () {
               ops.push('store');
-              yield* gated.store(value);
+              yield* gated.set(name, value);
             }),
-          delete: () =>
+          delete: (name) =>
             Effect.gen(function* () {
               ops.push('delete');
-              yield* gated.delete();
+              yield* gated.delete(name);
             }),
         };
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(newLoginTokenResponse()),
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(newLoginTokenResponse()),
         );
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
@@ -438,8 +474,8 @@ describe('CodexSessionCoordinator', () => {
   it.effect('retries a session read superseded while storage is blocked', () =>
     Effect.gen(function* () {
       const storage = gatedStorage('get', session());
-      const exchangeAuthorizationCode = vi.fn(() =>
-        Effect.succeed(newLoginTokenResponse()),
+      const exchangeAuthorizationCode = vi.fn(async () =>
+        jsonResponse(newLoginTokenResponse()),
       );
       const coordinator = makeCoordinator(storage, {
         exchangeAuthorizationCode,
@@ -461,8 +497,8 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(newLoginTokenResponse()),
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(newLoginTokenResponse()),
         );
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
@@ -474,16 +510,7 @@ describe('CodexSessionCoordinator', () => {
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);
-        Deferred.doneUnsafe(
-          pending,
-          Effect.fail(
-            new SubscriptionOAuthError({
-              message: 'revoked',
-              kind: 'fatal',
-              status: 401,
-            }),
-          ),
-        );
+        pending.resolve(revoked());
 
         const error = yield* joinFailure(token);
         expect(error).toMatchObject({
@@ -501,8 +528,8 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(newLoginTokenResponse()),
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(newLoginTokenResponse()),
         );
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
@@ -514,7 +541,7 @@ describe('CodexSessionCoordinator', () => {
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);
-        Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+        pending.resolve(jsonResponse(tokenResponse()));
 
         // Concurrent sign-in is not a re-auth failure — hand back the new session.
         expect(yield* Fiber.join(token)).toBe('access-new');
@@ -532,8 +559,8 @@ describe('CodexSessionCoordinator', () => {
         // blob) must not hand back the stale token as if refresh completed.
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const exchangeAuthorizationCode = vi.fn(() =>
-          Effect.succeed(
+        const exchangeAuthorizationCode = vi.fn(async () =>
+          jsonResponse(
             tokenResponse({
               access_token: 'access-0',
               refresh_token: 'refresh-0',
@@ -552,11 +579,8 @@ describe('CodexSessionCoordinator', () => {
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);
-        Deferred.doneUnsafe(
-          pending,
-          Effect.succeed(
-            tokenResponse({ access_token: 'access-stale-refresh' }),
-          ),
+        pending.resolve(
+          jsonResponse(tokenResponse({ access_token: 'access-stale-refresh' })),
         );
 
         const error = yield* joinFailure(token);
@@ -573,8 +597,8 @@ describe('CodexSessionCoordinator', () => {
     () =>
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
-        const refreshTokens = vi.fn(() =>
-          Effect.succeed(tokenResponse({ refresh_token: undefined })),
+        const refreshTokens = vi.fn(async () =>
+          jsonResponse(tokenResponse({ refresh_token: undefined })),
         );
         const coordinator = makeCoordinator(storage, { refreshTokens });
         yield* withHttp(freshToken(coordinator));
@@ -585,15 +609,7 @@ describe('CodexSessionCoordinator', () => {
   it.effect('clears the session and surfaces re-auth on a fatal refresh', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
-      const refreshTokens = vi.fn(() =>
-        Effect.fail(
-          new SubscriptionOAuthError({
-            message: 'revoked',
-            kind: 'fatal',
-            status: 401,
-          }),
-        ),
-      );
+      const refreshTokens = vi.fn(async () => revoked());
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
       const error = yield* Effect.flip(withHttp(freshToken(coordinator)));
@@ -608,14 +624,8 @@ describe('CodexSessionCoordinator', () => {
   it.effect('keeps the session on a transient refresh failure', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
-      const refreshTokens = vi.fn(() =>
-        Effect.fail(
-          new SubscriptionOAuthError({
-            message: 'upstream 502',
-            kind: 'transient',
-            status: 502,
-          }),
-        ),
+      const refreshTokens = vi.fn(async () =>
+        jsonResponse({ error: 'upstream' }, 502),
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 

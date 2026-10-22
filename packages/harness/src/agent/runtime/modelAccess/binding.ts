@@ -205,7 +205,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     config,
     facts,
     stores.secrets,
-    request.renew === true,
+    request.rejected,
   );
   const codex = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, config, codex);
@@ -249,6 +249,10 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     route,
     forcedToolChoice: bound.forcedToolChoice,
     persistentConnection: bound.persistentConnection,
+    ...(credential.route === 'chatgpt-subscription' ||
+    credential.route === 'xai-subscription'
+      ? { subscriptionToken: credential.bearer }
+      : {}),
     billing: {
       ...(bound.serviceTier === 'fast' && { serviceTier: 'fast' as const }),
       ...(codex && credential.plan ? { plan: credential.plan } : {}),

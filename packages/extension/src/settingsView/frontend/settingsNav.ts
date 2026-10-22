@@ -9,7 +9,7 @@ import {
   SETTINGS_TAB_ORDER,
   type SettingsSectionName,
   type SettingsTabPanelName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsTarget';
 import type { IconName } from '@ui/wa/iconNames';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 

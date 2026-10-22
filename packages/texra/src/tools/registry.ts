@@ -66,13 +66,12 @@ import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
- * Setup-assistant tools: a narrow UNIX-style set for the onboarding agent.
- *
- * Each tool has one responsibility:
- *   - probe_environment — read-only environment snapshot
- *   - verify_setup — re-check dependencies
+ * Setup-assistant tools: a narrow set for the onboarding agent, one per
+ * concern. Every read-only fact about the environment is one report, so the
+ * agent never sequences overlapping reads:
+ *   - probe_environment — the read-only environment and credential report
+ *     (or, given a `tool`, a recheck of that one tool after an install)
  *   - unset_api_key — remove a persisted provider credential
- *   - list_api_keys — enumerate stored secret key names for auditing
  *   - invoke_command — bridge to allowlisted VS Code commands
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
  *   - read_config / update_config — read a TeXRA setting, or write an
@@ -92,9 +91,7 @@ import { OpenPdfTool } from './OpenPdfTool';
  * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
-import { VerifySetupTool } from './setup/VerifySetupTool';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
-import { ListApiKeysTool } from './setup/ListApiKeysTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
@@ -183,17 +180,15 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
     },
   });
 
-/** The onboarding agent's narrow set, one responsibility per tool, over the
- *  host's setup capabilities. */
+/** The onboarding agent's narrow set, one concern per tool, over the host's
+ *  setup capabilities. */
 const setup = (platform: SetupPlatformShape) =>
   definePlugin<SetupPlatform>({
     id: 'setup',
     processLayer: { layer: SetupPlatform.layer(platform) },
     tools: {
       probe_environment: ProbeEnvironmentTool,
-      verify_setup: VerifySetupTool,
       unset_api_key: UnsetApiKeyTool,
-      list_api_keys: ListApiKeysTool,
       invoke_command: InvokeCommandTool,
       install_vscode_extension: InstallVscodeExtensionTool,
       read_config: ReadConfigTool,

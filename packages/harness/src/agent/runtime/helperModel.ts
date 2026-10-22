@@ -58,14 +58,17 @@ export const helperCall = Effect.fn('helperCall')(
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
     // ScopedRef masks its acquisition; a caller's deadline must still
     // cancel a bind in progress.
-    const acquire = (renew: boolean) =>
-      access.bind({ purpose: 'helper', renew }).pipe(Effect.interruptible);
-    const held = yield* ScopedRef.fromAcquire(acquire(false));
+    const acquire = (rejected?: string) =>
+      access.bind({ purpose: 'helper', rejected }).pipe(Effect.interruptible);
+    const held = yield* ScopedRef.fromAcquire(acquire());
     const { turn } = yield* callModel({
       purpose: 'helper',
       binding: ScopedRef.get(held),
-      reacquire: (_failed, renew) =>
-        ScopedRef.set(held, acquire(renew)).pipe(
+      reacquire: (failed, renew) =>
+        ScopedRef.set(
+          held,
+          acquire(renew ? failed.subscriptionToken : undefined),
+        ).pipe(
           Effect.tapError((error) =>
             Effect.logWarning('Could not rebind the helper model').pipe(
               Effect.annotateLogs({ error }),

@@ -7,7 +7,7 @@
  * custom shell, user
  * disabled the auto-inject, remote SSH edge cases — falls back to
  * `sendText` and returns an empty captured result; the caller sees the
- * same shape as a Ctrl+C interruption and re-probes with `verify_setup`.
+ * same shape as a Ctrl+C interruption and re-probes with `probe_environment`.
  *
  * The runner is an `Effect`: VS Code refusing a terminal or faulting the
  * shell execution reaches the setup tool as `TerminalRunFailed`, and the

@@ -432,19 +432,16 @@ export class SessionComposer extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
   }
 
-  private openSettings(
-    section: 'agents' | 'teams' | 'models' | 'general',
-  ): void {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', section }));
-  }
-
   private chipMenus(): ChipMenu[] {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return [];
     return launcherChipMenus(launch, host, {
       setLaunch: (patch) => this.setLaunch(patch),
-      openSettings: (section) => this.openSettings(section),
+      openSettings: (target) =>
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'openSettings', target }),
+        ),
     });
   }
 
@@ -520,6 +517,7 @@ export class SessionComposer extends LitElement {
       ? canSendFollowUp(run, this.draft, { terminalBacked: true })
       : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Start task';
+    const sending = this.surface?.sending.has(run?.id ?? 'launch') ?? false;
 
     return html`
       ${run ? this.renderRouting(run) : nothing}
@@ -600,11 +598,8 @@ export class SessionComposer extends LitElement {
               appearance: 'filled',
               variant: 'brand',
               size: 'l',
-              busy: this.run !== null && this.surface?.sending.has(this.run.id),
-              disabled:
-                !canSend ||
-                (this.run !== null &&
-                  (this.surface?.sending.has(this.run.id) ?? false)),
+              busy: sending,
+              disabled: !canSend || sending,
               onClick: this.send,
             })}</span
           >

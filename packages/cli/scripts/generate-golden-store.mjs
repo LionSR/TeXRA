@@ -367,10 +367,18 @@ process.stdin.on('end', function answer() {
     let log = '';
     service.stderr.on('data', (data) => (log += data));
     const exited = new Promise((resolve) => service.on('exit', resolve));
-    const record = path.join(home, '.texra/run/serve.json');
     const handle = { done: () => service.exitCode !== null, output: () => log };
-    await until('the service', () => existsSync(record), handle);
-    const { socket } = JSON.parse(readFileSync(record, 'utf8'));
+    // Up once its record names it: what every client finds it by.
+    const { socket } = await until(
+      'the service',
+      () => {
+        const status = JSON.parse(
+          run(['service', 'status', '--output-format', 'json']),
+        );
+        return status.online ? status : null;
+      },
+      handle,
+    );
     const call = (tag, payload) =>
       new Promise((resolve, reject) => {
         const client = connect(socket);

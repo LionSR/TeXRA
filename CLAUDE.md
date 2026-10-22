@@ -187,20 +187,21 @@ imports to either; host-neutral orchestration goes in `packages/harness/src/cont
 **Event channels.** New facts a run's trace emits extend `AgentEvent`
 (trace) and reach the plane through `runEventDraft`; facts the session itself
 authors (lifecycle, status, approvals) extend the `SessionEvent` schema
-(`packages/harness/src/shared/schemas/sessionEvent.ts`) and are published as drafts through
-`SessionHandle.publish`. Don't add a new `bus.emit` from a
-VS Code-free zone and don't add a new subscribe surface. (Ruled in
+(`packages/harness/src/shared/schemas/sessionEvent.ts`) and are committed as
+drafts through the session log's `transact` (`SessionLog`,
+`packages/harness/src/agent/runtime/SessionHandle.ts`). Don't add a new
+`bus.emit` from a VS Code-free zone and don't add a new subscribe surface. (Ruled in
 `.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The tool
 emit sites this once grandfathered have since migrated to session-owned
-emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
-`bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
+emission through the session log (`transact`, and `publish` for trace
+events), so a new direct `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
 `emitAppSignal(...)` on the separate `AppSignals` bus within its documented
 scope.
 
 **One publisher, loop-owned cards.** Every write to a session's event table
-is a job on the `SessionEvents` inbox (`publish`, `exclusive`, `detach`,
-`settle`); commit order is enqueue order, and nothing appends around it. A
-tool call's card belongs to the run loop. A slow tool's `tool.start` commits
+is a job on the `SessionEvents` inbox (its doors are `transact`, `detach`,
+`removeRun` and `drain`); commit order is enqueue order, and nothing appends
+around it. A tool call's card belongs to the run loop. A slow tool's `tool.start` commits
 with the row that admits the attempt; a fast tool's card opens and closes in
 its settlement batch. On a run with a run history, the card stores no output: its
 output is projected at read time from the `tool.result` it commits with.
@@ -264,7 +265,7 @@ write points: `packages/harness/AGENTS.md` "Run loop architecture".
 
 **There is no flow engine.** A run is one Effect program that appends rows to
 the run history (`packages/harness/src/shared/session/runHistory.ts`) and continues from the
-folded `RunState` each `appendBatch` returns; resume is the same function
+folded `RunState` each `RunCell.append` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Every model call retries in one loop (`run/invocation.ts`) whose

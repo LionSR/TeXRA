@@ -35,7 +35,7 @@ import {
   retargetGoal,
   startGoal,
   type GoalAutoApprovalScope,
-} from '@tools/goal';
+} from '@tools/goal/goalRows';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';

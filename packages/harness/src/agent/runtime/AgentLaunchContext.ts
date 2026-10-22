@@ -21,7 +21,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { AgentError } from '@common/errors';
+import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import {
   attachErrorPresentationClaimed,

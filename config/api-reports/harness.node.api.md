@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 46
+Exports: 47
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -46,6 +46,7 @@ Exports: 46
 - `runsInWsl` — `function runsInWsl: () => boolean`
 - `secretsDirectory` — `function secretsDirectory: (storageRoot: string) => string`
 - `ToolProbe` — `interface ToolProbe { readonly installed: boolean; readonly probeFailed: boolean; }`
+- `whichOnExtendedPath` — `function whichOnExtendedPath: (name: string) => null | string`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T) => T`
 - `WORKSPACE_STORES` — `const WORKSPACE_STORES: ValueFamily<{ readonly root: string; }, false>`
 - `workspaceRelativePath` — `function workspaceRelativePath: (root: string | undefined, filePath: string) => string`

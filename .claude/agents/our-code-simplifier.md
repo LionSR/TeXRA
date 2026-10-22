@@ -241,7 +241,7 @@ the same POLICY implemented per host, the simplification is to hoist it:
   sites); `.prefault()`/`.default()`/`.catch()` are not interchangeable.
   Schemas are SSOT — derive types, never hand-write parallel ones.
 - Run-scoped facts extend `AgentEvent`; session-authored facts extend the
-  `SessionEvent` schema and publish via `SessionHandle.publish`.
+  `SessionEvent` schema and commit via the session log's `transact`.
   No new `bus.emit` from a VS Code-free zone.
 - No new `@agent/*` deep-import specifiers from hosts (ratchet-frozen); use
   repo-root path aliases.
