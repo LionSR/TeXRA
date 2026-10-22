@@ -1,7 +1,6 @@
 /**
- * Conformance over the golden 1.0 store
- * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`
- * §11): `src/test-kernel/fixtures/storage/golden-1.0.sql`, which the real
+ * Conformance over the golden 1.0 store:
+ * `src/test-kernel/fixtures/storage/golden-1.0.sql`, which the real
  * CLI wrote (`pnpm --filter @texra-ai/cli run golden:store`). Every later
  * build must read it as this one does.
  *

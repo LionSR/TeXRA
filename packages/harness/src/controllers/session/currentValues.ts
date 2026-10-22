@@ -1,6 +1,5 @@
 /**
- * A root's current values and input history
- * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md` §9):
+ * A root's current values and input history:
  * application state, not history, and the one writer of `current_value` and
  * `input_history`. Each family's row is replaced in place in one
  * `BEGIN IMMEDIATE` with no aggregate claim, and decodes with its family's

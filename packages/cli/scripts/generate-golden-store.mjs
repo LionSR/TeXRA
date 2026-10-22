@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * Regenerate the golden 1.0 session store,
- * `src/test-kernel/fixtures/storage/golden-1.0.sql`
- * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md` §11):
+ * `src/test-kernel/fixtures/storage/golden-1.0.sql`:
  *
  *   pnpm --filter @texra-ai/cli run golden:store            # build, then write
  *   pnpm --filter @texra-ai/cli run golden:store -- --no-build

@@ -36,17 +36,17 @@ surprise bills.
 
 Her journeys, in the order she meets them:
 
-| #   | Journey                | What she needs to know or do                                                                          |
-| --- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| J1  | First install          | Connect a model once; know which agents she has; start                                                |
-| J2  | First request          | Type "tighten section 3"; see what it is doing; approve the edit                                      |
-| J3  | A long multi-agent run | "Have three referees review the paper, then fix what they agree on": see progress, find who needs her |
-| J4  | Approving a script     | Decide whether to let it start agents, without reading code                                           |
-| J5  | A crash and resume     | Laptop sleeps or VS Code reloads mid-run; come back and continue without losing work or paying twice  |
-| J6  | Returning days later   | Find "the referee run on chapter 2" and see what it concluded                                         |
-| J7  | Forking                | Try a second approach from an earlier point                                                           |
-| J8  | Adding a plugin        | Add Zotero, an MCP server, or a Claude Code plugin from GitHub; see that a run can use it             |
-| J9  | Checking cost          | Know what a task cost, children included, while it runs and after                                     |
+| #   | Journey                | What she needs to know or do                                                                                                                          |
+| --- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| J1  | First install          | Connect a model once; know which agents she has; start                                                                                                |
+| J2  | First request          | Type "tighten section 3"; see what it is doing; approve the edit                                                                                      |
+| J3  | A long multi-agent run | "Have three referees review the paper, then fix what they agree on": see progress, find who needs her                                                 |
+| J4  | Approving a script     | Decide whether to let it start agents, without reading code                                                                                           |
+| J5  | A crash and resume     | Laptop sleeps or VS Code reloads mid-run; come back and continue without losing committed work; a request in flight at the crash may be charged twice |
+| J6  | Returning days later   | Find "the referee run on chapter 2" and see what it concluded                                                                                         |
+| J7  | Forking                | Try a second approach from an earlier point                                                                                                           |
+| J8  | Adding a plugin        | Add Zotero, an MCP server, or a Claude Code plugin from GitHub; see that a run can use it                                                             |
+| J9  | Checking cost          | Know what a task cost, children included, while it runs and after                                                                                     |
 
 ## 2. The surface per journey
 
@@ -121,6 +121,10 @@ plugin, which is off. [Turn on]". Once dismissed, an interrupted task keeps
 one Resume button, on its ended line. A pending approval inside an
 interrupted task no longer says "Resume the session to answer" with no
 button beside it: the card carries the Resume button.
+
+Resume keeps at most one committed response per model call: no settled turn
+is redone. A request that had left the process when it crashed and recorded
+no outcome can be sent again, so that one call may be charged twice.
 
 **J6, returning days later.** Tasks are listed by title, newest first,
 grouped by status, searchable, and renameable. A finished task opens at its

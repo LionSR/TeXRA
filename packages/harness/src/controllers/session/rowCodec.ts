@@ -1,7 +1,5 @@
 /**
- * The row codec
- * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md` §1,
- * §3): the one module that knows a stored shape. It turns a validated draft
+ * The row codec: the one module that knows a stored shape. It turns a validated draft
  * into the column tuple `Database` inserts, and a selected column tuple back
  * into a typed event or a typed refusal, so nothing above it sees a `version`, a
  * `data` text, an integer aggregate id or the `blob` table, and nothing

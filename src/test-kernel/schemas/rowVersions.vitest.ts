@@ -36,8 +36,7 @@ import {
 } from '../support/repoScan';
 
 /**
- * The release watermark of the session store
- * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md` §3):
+ * The release watermark of the session store:
  * `config/storage/frozen/<name>.v<N>.json` is the JSON Schema of version N of
  * a row kind, plugin arm or current-value family as a release shipped it, and
  * the highest N frozen is that name's released version. A later build reads
