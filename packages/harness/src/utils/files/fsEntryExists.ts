@@ -23,7 +23,7 @@ export const absentReason = (error: PlatformError.PlatformError): boolean =>
 const isLink = (fs: FileSystem.FileSystem, target: string) =>
   fs.readLink(target).pipe(
     Effect.as(true),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.orElseSucceed(() => false),
   );
 
 /**

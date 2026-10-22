@@ -364,7 +364,7 @@ function issue(
     reopenRequest(requestId);
     onRefused?.();
   };
-  void runtime.runPromise(
+  runtime.runFork(
     Effect.forEach(arms, (request) => requests.request(request), {
       discard: true,
     }).pipe(

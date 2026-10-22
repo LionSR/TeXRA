@@ -3,10 +3,9 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage/runRecords';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,

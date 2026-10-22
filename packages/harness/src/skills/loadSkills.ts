@@ -18,8 +18,6 @@ import {
 } from './skillLoader';
 import type { Skill } from './SkillSchema';
 
-export { type SkillLoadIssue } from './skillLoader';
-
 interface DiscoveredSkill {
   skill: Skill;
   /** Canonical `SKILL.md` path, resolved while the skill was discovered. */

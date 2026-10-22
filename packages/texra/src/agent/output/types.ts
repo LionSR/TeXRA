@@ -4,8 +4,6 @@ import type { FileLocation } from '@texra-ai/harness/schemas';
 export interface RoundFileEntry {
   /** Base FileLocation for round-based diffs (rewrite agents). */
   base?: FileLocation;
-  /** Previous-round FileLocation for between-round diffs. */
-  prev?: FileLocation;
   /**
    * Original base FileLocation for lineage tracking. `traceFileLineage`
    * coalesces `base: origin ?? …`, so `origin` set implies `base` set — do
@@ -14,5 +12,5 @@ export interface RoundFileEntry {
   origin?: FileLocation;
 }
 
-/** Maps output paths to their file relationship facts. Used by LatexDiffManager and diffComputation. */
+/** Maps output paths to their file relationship facts, which diffComputation records as each output's lineage. */
 export type RoundFileMapping = Map<string, RoundFileEntry>;

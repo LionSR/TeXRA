@@ -39,8 +39,11 @@ exception, and it is still host-agnostic.
 Inside `packages/harness/src/agent`, use the `@agent/core/<module>/<File>` alias, e.g.
 
 ```ts
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 ```
+
+The schema those types derive from, `AgentConfigSchema`, is a wire contract:
+harness code imports it from `@shared/schemas`.
 
 There is intentionally no top-level `@agent/core` barrel — internal `packages/harness/src/agent`
 code imports from the specific module so dependency edges stay explicit (and

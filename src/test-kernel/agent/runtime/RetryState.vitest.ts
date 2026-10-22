@@ -40,7 +40,6 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
@@ -63,6 +62,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import {
+  AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,

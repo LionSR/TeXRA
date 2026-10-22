@@ -205,7 +205,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     deps,
     state,
     xml: new XmlOutputManager(config, logger, fileService, state, roots.config),
-    diff: new LatexDiffManager(task.rewrite, logger, runId, fileService, roots),
+    diff: new LatexDiffManager(logger, runId, fileService, roots),
     baseFiles,
     fact: (diffs?: DocumentDiffs) =>
       documentsOutputFact(roundsToPersisted(state), diffs),

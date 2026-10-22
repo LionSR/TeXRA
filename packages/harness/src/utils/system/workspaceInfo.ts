@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { DateTime, Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
@@ -114,7 +114,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
-  const date = new Date().toISOString().slice(0, 10);
+  const date = DateTime.formatIsoDateUtc(yield* DateTime.now);
   const git = wsPath ? yield* getGitInfo(wsPath, settings) : null;
 
   const lines: string[] = [];

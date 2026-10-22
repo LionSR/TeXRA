@@ -71,4 +71,7 @@ packages/extension/serve/
 # Leftover @texra-ai/agent packaging smoke test: the agent package was
 # consolidated into packages/harness/src/agent. This directory holds only
 # generated output (dist/, node_modules/, example/agent.tgz). Runtime-only.
-packages/agent/
+# Spelled `/**` rather than `packages/agent/`: ripgrep matches the directory
+# form against every `agent/` directory when `packages` is the search path, so
+# `rg <pattern> packages` silently skipped packages/*/src/agent/.
+packages/agent/**

@@ -106,7 +106,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
 
 /** Canonical configuration: at most as many outputs as text/media inputs, and
  *  a persona exactly when the agent is inline, named as the agent is. */
-export const AgentConfigFieldsSchema = AgentConfigObjectSchema.superRefine(
+export const AgentConfigSchema = AgentConfigObjectSchema.superRefine(
   (config, ctx) => {
     if (
       (config.agentSource === 'inline') !== (config.persona != null) ||
