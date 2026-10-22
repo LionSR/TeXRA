@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -103,24 +103,10 @@ const ATTACHMENT_COPY: Record<
   },
 };
 
-function executeReadFileTool(input: ReadInput) {
-  return Effect.scoped(read(input));
-}
-
 const read = Effect.fn('ReadFileTool.execute')(function* (
   input: ReadInput,
-): Effect.fn.Return<
-  ToolResult,
-  Error,
-  ToolContext | Scope.Scope | FileSystem.FileSystem
-> {
+): Effect.fn.Return<ToolResult, Error, ToolContext | FileSystem.FileSystem> {
   const call = yield* ToolContext;
-  // Local reads finish in milliseconds, so no mid-read cancellation is
-  // needed — but a queued call must not start after the batch aborted.
-  const signal = yield* Effect.abortSignal;
-  if (signal.aborted) {
-    return yield* Effect.fail(new ToolError('Cancelled before execution.'));
-  }
   const resolved = yield* resolveToolPath(call.env, input.path);
   const displayPath = resolved.display;
   const filePath = resolved.fsPath;
@@ -266,5 +252,5 @@ export const ReadFileTool = defineTool({
   description:
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
-  execute: executeReadFileTool,
+  execute: read,
 });

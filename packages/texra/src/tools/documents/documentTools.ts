@@ -30,7 +30,6 @@ import {
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
-import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import {
@@ -394,7 +393,7 @@ export const DocumentDiffTool = defineTool({
       .handleLatexdiffOfOutput(
         revision,
         outputs,
-        traceFileLineage(docs.state, docs.baseFiles, revision),
+        docs.state.rounds.get(revision - 1)?.outputs ?? [],
       )
       .pipe(
         Effect.catchCause((cause) =>

@@ -83,13 +83,6 @@ export const memoryPathExists = Effect.fn('memoryFileSystem.memoryPathExists')(
   },
 );
 
-/** Stat one memory path. The one `stat` the tree shares. */
-export const statMemoryEntry = Effect.fn('memoryFileSystem.statMemoryEntry')(
-  function* (storagePath: string) {
-    return yield* (yield* StorageFs).stat(storagePath);
-  },
-);
-
 /** Read one memory file whole and split its frontmatter from its content. */
 export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
   function* (storagePath: string) {
@@ -240,7 +233,7 @@ const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
   relativePath: string,
   type: FileSystem.File.Type,
 ) {
-  const stats = yield* statMemoryEntry(storagePath);
+  const stats = yield* (yield* StorageFs).stat(storagePath);
   const size = Number(stats.size);
   const entry = {
     relativePath,

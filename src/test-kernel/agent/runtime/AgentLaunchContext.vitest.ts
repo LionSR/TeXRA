@@ -4,7 +4,6 @@ import { assert, describe, expect } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
@@ -16,7 +15,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { runBypasses } from '@shared/approvalBypassKind';
-import { type RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {

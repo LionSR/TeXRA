@@ -25,6 +25,7 @@ import {
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
+import type { CredentialStore } from '@texra-ai/llm';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** What the clone workflow and its host ports run on: git, and the filesystem
@@ -35,9 +36,8 @@ type CloneServices = ChildProcessSpawner | FileSystem.FileSystem;
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
 export interface OverleafCloneWorkflowPorts {
-  getStoredToken(key: string): Effect.Effect<string | undefined, Error>;
-  deleteStoredToken(key: string): Effect.Effect<void, Error>;
-  storeToken(key: string, token: string): Effect.Effect<void, Error>;
+  /** Where the clone token is cached, under its spec's `tokenKey`. */
+  readonly secrets: CredentialStore;
   /**
    * Prompt for a new token; null when the user cancels. Fails when the host
    * cannot prompt at all (a non-interactive CLI run, say) — that is a usage
@@ -98,11 +98,11 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
   const spec = overleafTokenSpec(remote);
   const isValid = (t: string): boolean => spec.tokenValidator?.(t) ?? true;
 
-  const stored = (yield* ports.getStoredToken(spec.tokenKey))?.trim() ?? '';
+  const stored = (yield* ports.secrets.get(spec.tokenKey))?.trim() ?? '';
   if (stored && isValid(stored)) {
     return { status: 'ready', token: stored };
   }
-  if (stored) yield* ports.deleteStoredToken(spec.tokenKey);
+  if (stored) yield* ports.secrets.delete(spec.tokenKey);
 
   const input = yield* ports.promptToken(spec);
   if (!input) return { status: 'cancelled' };
@@ -115,7 +115,7 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
     return { status: 'invalidToken' };
   }
 
-  yield* ports.storeToken(spec.tokenKey, input);
+  yield* ports.secrets.set(spec.tokenKey, input);
   return { status: 'ready', token: input };
 });
 
@@ -301,9 +301,7 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
           Effect.gen(function* () {
             const authError = isCloneAuthError(error);
             if (authError) {
-              yield* ports.deleteStoredToken(
-                overleafTokenSpec(remote).tokenKey,
-              );
+              yield* ports.secrets.delete(overleafTokenSpec(remote).tokenKey);
               yield* ports.showAuthFailure(remote);
             } else {
               yield* ports.showCloneFailed(

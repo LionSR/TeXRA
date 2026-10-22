@@ -240,6 +240,8 @@ function record(d: Draft, event: TranscriptEvent): void {
       });
       return;
     }
+    default:
+      event satisfies never;
   }
 }
 

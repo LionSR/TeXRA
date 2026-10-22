@@ -14,7 +14,7 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
-import { apiProviderOfSecretName, loadApiKeyStatusMap } from '@texra-ai/llm';
+import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
   CopilotRoutes,
@@ -48,7 +48,7 @@ import {
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
-import { SettingsProfileController } from '@texra/controllers/settingsView/SettingsProfileController';
+import { buildProfileMessage } from '@texra/controllers/settingsView/profileMessage';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import {
@@ -119,10 +119,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Controllers ──
 
-  const profile = new SettingsProfileController({
-    stores: roots,
-    loadProviderKeyStatuses: loadApiKeyStatusMap(secrets),
-  });
   const modelSelection = new SettingsModelSelectionController({
     stores: roots,
     secrets,
@@ -153,7 +149,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Posts ──
 
-  const postProfile = bindings.post(profile.buildProfileMessage());
+  const postProfile = bindings.post(buildProfileMessage(roots, secrets));
   const postModelSelection = bindings.post(
     modelSelection.buildModelSelectionMessage(),
   );
@@ -301,8 +297,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const profileKeys = new SettingsProfileKeyController({
     secrets,
     prompt: bindings.prompt,
-    getProviderDisplayName: (provider) =>
-      profile.getProviderDisplayName(provider),
+    stores: roots,
   });
   // A failed key write leaves the profile and the Models page showing the
   // key as it was before the attempt. The report is the notice: a repaint

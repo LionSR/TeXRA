@@ -1,4 +1,4 @@
-export { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+export { AgentConfigSchema } from '@shared/schemas';
 export type {
   AgentConfig,
   AgentConfigPayload,

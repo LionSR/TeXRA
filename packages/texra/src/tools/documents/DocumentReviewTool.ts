@@ -11,7 +11,6 @@ import { defineTool } from '@texra-ai/harness';
 import { executed, renderPrompt } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
-import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import {
   taskInputs,
   type Documents,
@@ -20,7 +19,10 @@ import {
   documentsOfCall,
   RevisionSchema,
 } from '@texra/tools/documents/documentTools';
-import { type RoundOutput } from '@texra/shared/plugins/documentOutputs';
+import {
+  getEffectiveDiffBase,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
 import { unifiedDiffOf } from '@texra/tools/documents/documentResult';
 
 /** The most diff a critic reads, across all outputs: a whole rewrite of a
@@ -99,14 +101,14 @@ export const DocumentReviewTool = defineTool({
       );
     const missing = missingEvidence(round, revision);
     if (missing) parts.push(missing);
-    const mapping = traceFileLineage(docs.state, docs.baseFiles, revision);
     let left = MAX_DIFF_CHARS;
     for (const output of round?.outputs ?? []) {
       const path = fileLocationDisplayPath(output.location);
-      const base = mapping.get(path)?.base;
-      // An output with no base document is new: all of it is the change.
+      // The base its extraction recorded; an output with none is new: all
+      // of it is the change.
+      const base = getEffectiveDiffBase(output.lineage);
       const before =
-        base !== undefined && (yield* fs.exists(base.absolutePath))
+        base !== null && (yield* fs.exists(base.absolutePath))
           ? yield* fs.readFileString(base.absolutePath)
           : '';
       const after = yield* fs.readFileString(output.location.absolutePath);

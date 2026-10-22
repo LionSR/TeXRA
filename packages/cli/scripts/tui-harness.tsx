@@ -37,7 +37,7 @@ import {
 import {
   qualifyAggregateId,
   AgentProposalPermissionSchema,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -544,7 +544,7 @@ function seedRun(
     publish({
       type: 'run.config',
       aggregateId: qualifyAggregateId('run', runId),
-      config: AgentConfigFieldsSchema.parse({
+      config: AgentConfigSchema.parse({
         agent: identity.agent,
         model: HARNESS_MODEL,
       }),

@@ -6,7 +6,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   type RunId,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -39,7 +39,7 @@ beforeEach(async () => {
 describe('canonical run records', () => {
   it('preserves private values while display readers drain past their commits', async () => {
     const records = getRunRecords(session, runId);
-    const config = AgentConfigFieldsSchema.parse({
+    const config = AgentConfigSchema.parse({
       agent: 'worker',
       instruction: 'private instruction',
     });
@@ -67,7 +67,7 @@ describe('canonical run records', () => {
         yield* seedRunRecord(
           session,
           runId,
-          AgentConfigFieldsSchema.parse({
+          AgentConfigSchema.parse({
             agent: 'worker',
           }),
         );

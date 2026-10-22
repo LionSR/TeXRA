@@ -11,7 +11,6 @@ import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   declaredToolNames,
@@ -23,6 +22,7 @@ import {
   modelAccessLayer,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
@@ -217,7 +217,8 @@ export const agentRunLayer = (
         script === null && !inherits && persona.tools.length === 0;
       const parentOffered = ctx.toolPolicy.parentOffered;
       // A script run offers its script; an inheriting plugin agent what its
-      // parent was offered (or the defaults); anyone else its persona's.
+      // parent was offered, or at top level, beside the installed plugins'
+      // tools, the file, shell and web tools; anyone else its persona's.
       let tools = persona.tools;
       if (script !== null)
         tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
@@ -225,7 +226,7 @@ export const agentRunLayer = (
         tools = (
           parentOffered
             ?.filter(({ plugin }) => plugin !== 'run')
-            .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
+            .map(({ name }) => name) ?? CLAUDE_COUNTERPART_TOOLS
         ).map((name) => ({ name }));
       // The loaded plugins (MCP servers) the declared tools name, held in
       // the project's catalog for the run's life and started with its

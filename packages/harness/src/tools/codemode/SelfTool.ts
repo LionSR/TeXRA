@@ -10,7 +10,6 @@
 import { Effect, Result, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { forkSeed } from '@agent/runtime/forkRun';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -21,6 +20,7 @@ import {
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   ToolError,
   type SubagentProgressUpdate,

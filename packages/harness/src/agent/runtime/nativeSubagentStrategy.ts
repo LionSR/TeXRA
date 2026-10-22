@@ -193,8 +193,7 @@ export function createNativeSubagentStrategy(
       });
     }),
 
-    formatError: (turn, err) => {
-      const wallTimeMs = Date.now() - params.startedAt;
+    formatError: (turn, err, wallTimeMs) => {
       const result = turn ?? lastResult;
       return formatSubagentError(
         params.runId,

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -195,7 +195,7 @@ const restorePreparedViewerTarget = (
  * Each file-open/build phase stays settled and serialized, so setup failures
  * reach `withLatexdiffTool`. The viewer is restored to the last viewer-ready
  * diff whenever a later processed diff is not viewer-ready, including on
- * normal completion (#10553) — the handoff is an `ensuring` finalizer, so it
+ * normal completion (#10553) — the handoff is an `onExit` finalizer, so it
  * runs on the failing path exactly as the `finally` it replaces did.
  */
 const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
@@ -204,7 +204,6 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
 ) {
   let lastViewerLocation: FileLocation | undefined;
   let lastProcessedLocation: FileLocation | undefined;
-  let completedSetup = false;
 
   yield* Effect.gen(function* () {
     for (const result of results) {
@@ -225,14 +224,13 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
         yield* Effect.logWarning(`Diff failed${suffix}: ${result.message}`);
       }
     }
-    completedSetup = true;
   }).pipe(
-    Effect.ensuring(
+    Effect.onExit((exit) =>
       Effect.gen(function* () {
         if (!lastViewerLocation) return;
         let viewerTargetReady = true;
         if (
-          !completedSetup ||
+          Exit.isFailure(exit) ||
           lastProcessedLocation?.absolutePath !==
             lastViewerLocation.absolutePath
         ) {
