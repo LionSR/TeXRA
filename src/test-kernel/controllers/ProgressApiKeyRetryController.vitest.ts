@@ -31,7 +31,6 @@ type ProgressApiKeyRetryControllerDeps = ConstructorParameters<
 interface HarnessOptions {
   keys?: Partial<Record<ApiKeyProviderId, string | undefined>>;
   prompt?(keys: Map<ApiKeyProviderId, string | undefined>): void;
-  retryAvailable?: boolean;
   retryPending?: boolean;
   isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
 }
@@ -75,7 +74,6 @@ function createHarness(options: HarnessOptions = {}): {
       triggerRetry: (stream) =>
         Effect.sync(() => {
           retries.push(stream);
-          return options.retryAvailable ?? true;
         }),
     }),
   };

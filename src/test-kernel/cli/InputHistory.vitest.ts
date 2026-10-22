@@ -39,14 +39,14 @@ describe('CLI TUI input history', () => {
     onGlobalDatabase(
       storage,
       Effect.gen(function* () {
-        const history = yield* loadInputHistory;
+        const { history } = yield* loadInputHistory;
         yield* Effect.all(
           [history.push('alpha'), history.push('alpha'), history.push('beta')],
           { concurrency: 'unbounded' },
         );
         yield* history.push('   ');
 
-        const reloaded = yield* loadInputHistory;
+        const { history: reloaded } = yield* loadInputHistory;
 
         expect(reloaded.length()).toBe(2);
         expect(reloaded.at(0)).toBe('alpha');
@@ -58,7 +58,7 @@ describe('CLI TUI input history', () => {
         // Another CLI writes between two submissions identical in this cache.
         yield* reloaded.push('gamma');
         yield* history.push('beta');
-        const combined = yield* loadInputHistory;
+        const { history: combined } = yield* loadInputHistory;
         expect(
           Array.from({ length: combined.length() }, (_, index) =>
             combined.at(index),
@@ -72,7 +72,7 @@ describe('CLI TUI input history', () => {
     onGlobalDatabase(
       storage,
       Effect.gen(function* () {
-        const history = yield* loadInputHistory;
+        const { history } = yield* loadInputHistory;
         yield* history.push('build the project');
         yield* history.push('run the tests');
         yield* history.push('build the docs');

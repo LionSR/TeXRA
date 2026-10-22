@@ -43,6 +43,6 @@ export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 
 export const UpdateProfileMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
-  providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
+  providerKeyStatuses: z.array(ProviderKeyStatusSchema),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;

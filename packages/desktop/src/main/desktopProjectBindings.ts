@@ -5,6 +5,8 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
+import { homedir } from 'node:os';
+
 import {
   Cause,
   Effect,
@@ -121,6 +123,23 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const bindingsScope = yield* Scope.fork(yield* Scope.Scope);
     const bindings = new Map<string, ProjectBinding>();
 
+    /** Where a project's terminal opens, decided once: the project's folder;
+     *  for the no-workspace session the home directory, not the app's own
+     *  process cwd (`/` when launched from the dock). `os.homedir()` throws
+     *  where no home can be determined (some containers and remote hosts);
+     *  only then does the process cwd stand, and the warning says why. */
+    const terminalCwd = (root: string | undefined): string => {
+      if (root !== undefined) return root;
+      try {
+        return homedir();
+      } catch (error) {
+        console.warn(
+          '[desktop] No home directory could be determined; the terminal opens in the app directory.',
+          error,
+        );
+        return process.cwd();
+      }
+    };
     /** Each document/project owns one auxiliary transport and its resources.
      *  Callbacks capture the project before any asynchronous file or PTY work,
      *  and a released binding's late callbacks are dropped. */
@@ -129,7 +148,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const post = (message: DesktopWorkspaceReply) =>
         !released && host.post({ ...message, session: project.key });
       const ptyHost = createDesktopPtyHost({
-        cwd: () => project.root,
+        cwd: terminalCwd(project.root),
         onData: (sessionId, data) =>
           post({
             command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,

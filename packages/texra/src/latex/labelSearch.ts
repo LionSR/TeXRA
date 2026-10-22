@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option, Result } from 'effect';
 
 // Local imports - utilities
 import escapeRegExp from 'escape-string-regexp';
@@ -9,12 +9,13 @@ import escapeRegExp from 'escape-string-regexp';
  * `onMatch(file, index)`, where `index` is the character offset of the match
  * (so editors can reveal the label position).
  *
- * Reading a candidate and handling its match are both part of the scan: a
- * `read` or `onMatch` that fails is logged, skips that candidate, and scanning continues,
- * so a transient read/open failure on one match falls through to another file
- * that contains the same label. Answers `true` once a match has been handled,
- * `false` if no candidate matched (or every matching candidate failed to
- * handle) — the caller owns the "no file defines this label" report.
+ * A candidate that cannot be read is logged and skipped, and so is a match
+ * `onMatch` fails to handle, so a transient failure on one file falls through
+ * to another that defines the same label. Answers `true` once a match has
+ * been handled and `false` when no candidate defines the label; the caller
+ * owns that "no file defines this label" report. When the label was found but
+ * no match could be handled, the last handling failure is the answer: a label
+ * that exists is never reported missing.
  *
  * Host-neutral: callers supply their own file lister, reader, and open
  * handler, so the VS Code command and the desktop bridge share one scan.
@@ -24,25 +25,31 @@ export function openFirstLabelMatch<ReadError, MatchError>(
   files: Iterable<string>,
   read: (file: string) => Effect.Effect<string, ReadError>,
   onMatch: (file: string, index: number) => Effect.Effect<unknown, MatchError>,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, MatchError> {
   // A regex matching `\label{<label>}` for a literal label string.
   const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
   return Effect.gen(function* () {
+    let unhandled: Option.Option<MatchError> = Option.none();
     for (const file of files) {
-      const handled = yield* read(file).pipe(
-        Effect.flatMap((content) => {
-          const match = content.match(pattern);
-          if (!match || match.index === undefined) return Effect.succeed(false);
-          return Effect.as(onMatch(file, match.index), true);
-        }),
-        Effect.catch((error) =>
-          Effect.logWarning(`Skipping ${file} in the label search`, error).pipe(
-            Effect.as(false),
-          ),
-        ),
+      const content = yield* Effect.result(read(file));
+      if (Result.isFailure(content)) {
+        yield* Effect.logWarning(
+          `Skipping ${file} in the label search`,
+          content.failure,
+        );
+        continue;
+      }
+      const match = content.success.match(pattern);
+      if (!match || match.index === undefined) continue;
+      const opened = yield* Effect.result(onMatch(file, match.index));
+      if (Result.isSuccess(opened)) return true;
+      yield* Effect.logWarning(
+        `The match for ${label} in ${file} could not be opened`,
+        opened.failure,
       );
-      if (handled) return true;
+      unhandled = Option.some(opened.failure);
     }
+    if (Option.isSome(unhandled)) return yield* Effect.fail(unhandled.value);
     return false;
   });
 }

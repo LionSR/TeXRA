@@ -117,6 +117,13 @@ export class RunFileService {
         { concurrency: 'unbounded' },
       );
 
+      // Best-effort, per dependency: the snapshots above are the run's diff
+      // base and have already landed, while a missing mirror costs only that
+      // one file's reachability from run storage (a build there reports the
+      // unresolved include itself). Failing the whole preparation would
+      // instead discard every snapshot. A missing source is not a failure
+      // here (a symlink needs no target), so whatever lands in this catch is
+      // a real I/O error, warned with its path and cause.
       yield* Effect.forEach(
         [...linkTargets.values()],
         (candidate) =>
@@ -430,22 +437,27 @@ export class RunFileService {
               relativePath,
             );
             // No snapshot is the ordinary case for a read-only build asset.
-            // Any other failure means the round dir links the live workspace
-            // mirror in place of the pristine snapshot, which a later diff or
-            // revert would read as the base.
-            const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
-              Effect.as(true),
+            // Any other failure leaves unknown whether one exists, and
+            // linking the workspace mirror then could hand an agent write at
+            // `r<N>/<rel>` the user's working copy, so this dependency is
+            // left unlinked, as the destination guard below does.
+            const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
+              Effect.as('present' as const),
+              Effect.catchIf(isAbsent, () => Effect.succeed('absent' as const)),
               Effect.catch((error) =>
-                isAbsent(error)
-                  ? Effect.succeed(false)
-                  : Effect.logWarning(
-                      `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
-                    ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+                Effect.logWarning(
+                  `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
+                ).pipe(
+                  withLogChannel(CHANNEL),
+                  Effect.as('unreadable' as const),
+                ),
               ),
             );
-            const sourceAbsolute = hasSnapshot
-              ? snapshotAbsolute
-              : workspaceMirrorAbsolute;
+            if (snapshot === 'unreadable') return;
+            const sourceAbsolute =
+              snapshot === 'present'
+                ? snapshotAbsolute
+                : workspaceMirrorAbsolute;
             const destinationAbsolute = runStorageAbsolutePathUnder(
               this.roots.storage,
               this.runId,

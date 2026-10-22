@@ -7,12 +7,16 @@ import arxivClient, {
   abstract as abstractQuery,
   category as catQuery,
 } from 'arxiv-client';
+import {
+  categories as arxivCategories,
+  type Category,
+} from 'arxiv-client/dist/defines/categories.js';
 import { Clock, Duration, Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { defineTool, withLogChannel } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { defineTool } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,
   executed,
@@ -21,9 +25,37 @@ import {
 import { pluralize } from '@texra-ai/harness/transcript';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 
-type Category = Parameters<typeof catQuery>[0];
+/**
+ * The categories a search filters by, from the client's own table (the
+ * package entry does not re-export it): `archive.SUBJECT`, or the archive
+ * alone where it has no subjects (`quant-ph`, `hep-th`). A name outside it
+ * matches no paper, so the search would come back empty rather than fail.
+ * The client's type also admits a subdivided archive alone (`math`); that is
+ * left out, since papers are filed under its subjects.
+ */
+const ARXIV_CATEGORIES: ReadonlySet<string> = new Set(
+  Object.entries(arxivCategories).flatMap(([archive, subjects]) =>
+    subjects.length === 1 && subjects[0] === archive
+      ? [archive]
+      : subjects.map((subject) => `${archive}.${subject}`),
+  ),
+);
 
-const CHANNEL = 'arxiv.search';
+const isArxivCategory = (value: string): value is Category =>
+  ARXIV_CATEGORIES.has(value);
+
+const ArxivCategorySchema = z
+  .string()
+  .trim()
+  .transform((value, ctx): Category => {
+    if (isArxivCategory(value)) return value;
+    ctx.issues.push({
+      code: 'custom',
+      input: value,
+      message: `"${value}" is not an arXiv category: use one from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph".`,
+    });
+    return z.NEVER;
+  });
 
 const MAX_RESULTS = 50;
 const DEFAULT_RESULTS = 10;
@@ -85,9 +117,11 @@ const ArxivSearchInputSchema = z.strictObject({
     'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
   ),
   categories: z
-    .array(z.string())
+    .array(ArxivCategorySchema)
     .nullish()
-    .describe('Optional arXiv category filters such as "math.NT" or "cs.AI".'),
+    .describe(
+      'Optional arXiv category filters, exactly as arXiv spells them, such as "math.NT", "cs.AI" or "quant-ph". A paper matches when it is in all of them.',
+    ),
   maxResults: nullishWithDefault(
     z.int().positive().max(MAX_RESULTS),
     DEFAULT_RESULTS,
@@ -127,32 +161,8 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   const termQueries = terms.map((term) => fieldQueryFn(term));
   let query = termQueries.length === 1 ? termQueries[0] : and(...termQueries);
 
-  // Add category filters if provided
-  const categoryFilters: ReturnType<typeof catQuery>[] = [];
-  for (const cat of input.categories ?? []) {
-    const trimmed = cat.trim();
-    if (!trimmed) continue;
-    // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
-    // User input is unconstrained string — cast to the expected type
-    // and rely on the library's runtime validation (recovered below).
-    const filter = yield* Effect.try({
-      try: () => catQuery(trimmed as Category),
-      catch: ensureError,
-    }).pipe(
-      // Skip invalid categories — log so a silently-dropped filter is
-      // traceable rather than mysteriously absent from the query.
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Ignoring invalid arxiv category filter "${trimmed}"`,
-        ).pipe(
-          withLogChannel(CHANNEL),
-          Effect.annotateLogs({ data: error }),
-          Effect.as(null),
-        ),
-      ),
-    );
-    if (filter != null) categoryFilters.push(filter);
-  }
+  // The schema admitted only categories in the client's table.
+  const categoryFilters = (input.categories ?? []).map((cat) => catQuery(cat));
 
   if (categoryFilters.length > 0) {
     query = and(query, ...categoryFilters);

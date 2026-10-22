@@ -74,6 +74,8 @@ export const WINDOWS_UNSUPPORTED =
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
+/** A started service's probe before it answers this protocol. */
+const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
 
@@ -310,33 +312,40 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     // retiring service: all wait for this protocol's own service.
     // A newer protocol's service that came up meanwhile (a newer build
     // replaced the one this window spoke to) refuses this one at once: no
-    // wait for a service of this protocol that will not come.
+    // wait for a service of this protocol that will not come. Past the
+    // deadline, which interrupts a probe still in flight (a record read on
+    // a stalled mount has no timeout of its own), the last completed
+    // probe's reason stands; only "not yet up" reads as the service not
+    // answering.
+    const lastRefusal = yield* Ref.make(
+      new ServiceUnavailable({ reason: NOT_YET_UP }),
+    );
     info = yield* probeRecordedService.pipe(
       Effect.flatMap((answer) => {
         if (answer !== null && answer.protocol > PROTOCOL_VERSION)
           return Effect.fail(newerService(answer));
         return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
-          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' }));
+          : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
+      Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
       Effect.retry({
         schedule: Schedule.spaced('200 millis'),
         while: (error) => error.newer !== true,
       }),
-      Effect.timeout(START_TIMEOUT),
-      Effect.catch((error) =>
-        error instanceof ServiceUnavailable && error.newer === true
-          ? Effect.fail(error)
-          : Effect.succeed(null),
+      Effect.timeoutOrElse({
+        duration: START_TIMEOUT,
+        orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
+      }),
+      Effect.mapError((error) =>
+        error.reason === NOT_YET_UP
+          ? new ServiceUnavailable({
+              reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
+            })
+          : error,
       ),
     );
   }
-  if (info === null)
-    return yield* Effect.fail(
-      new ServiceUnavailable({
-        reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
-      }),
-    );
   const { socket } = info;
   const client = yield* connectService(socket, options.onDisconnect).pipe(
     Effect.mapError(

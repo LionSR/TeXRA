@@ -34,6 +34,7 @@ export function stringifyConversationValue(value: unknown): string {
   try {
     return JSON.stringify(value) ?? '';
   } catch {
+    // A value JSON cannot hold (a cycle, a BigInt) shows in its string form.
     return String(value);
   }
 }

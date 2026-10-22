@@ -37,6 +37,8 @@ function formatRenderError(error: unknown): string {
   try {
     message = toErrorMessage(error);
   } catch {
+    // An error whose own message throws (a hostile getter) leaves the marker
+    // without text: the boundary still has to render.
     return '';
   }
   // The marker is a single line: collapse whitespace and cap length so a long

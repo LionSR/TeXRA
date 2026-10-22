@@ -61,7 +61,7 @@ import {
   type RetryErrorInfo,
 } from '@shared/schemas';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
-import { findStorageRefusal } from '@shared/session/runHistory';
+import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import type { CellError, RunCell } from '@shared/session/runHistory';
@@ -348,7 +348,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (Cause.hasInterrupts(streamed.cause))
             return yield* Effect.interrupt;
           const refused = findStorageRefusal(streamed.cause);
-          if (refused) return yield* Effect.fail(refused);
+          if (refused) return yield* Effect.fail(runRefusal(runId, refused));
           const found = Cause.findError(streamed.cause);
           if (Result.isFailure(found))
             return yield* Effect.die(Cause.squash(streamed.cause));

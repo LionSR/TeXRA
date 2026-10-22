@@ -293,8 +293,9 @@ export function notifyCliUpdate(
     };
     if (yield* envFlag(UPDATE_CHECK_SKIP_ENV, skip)) return;
     let confirmed = false;
-    // Best-effort by policy: any failure — typed, defect, or interruption —
-    // leaves `latest` unset and the check exits silently.
+    // Best-effort by policy: any failure leaves `latest` unset and the check
+    // exits. A typed failure (offline, registry down) or an interruption does
+    // so silently; a defect is a bug in the check, so it is logged.
     const latest = yield* runDailyUpdateCheck<
       ChildProcessSpawner | HttpClient.HttpClient
     >({
@@ -324,7 +325,14 @@ export function notifyCliUpdate(
       stampFailure: 'ignore',
     }).pipe(
       Effect.provide(updateCheckRecordsLayer),
-      Effect.catchCause(() => Effect.undefined),
+      Effect.catchCause((cause) =>
+        Cause.hasDies(cause)
+          ? Effect.logWarning('The update check failed unexpectedly').pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.as(undefined),
+            )
+          : Effect.undefined,
+      ),
     );
     if (!latest) return;
     if (!confirmed) {

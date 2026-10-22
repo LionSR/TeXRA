@@ -19,6 +19,7 @@ import {
   FiberHandle,
   Layer,
   Option,
+  Predicate,
   Result,
   Semaphore,
   Ref,
@@ -428,14 +429,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       client['task.ended']({ workspace, runId }),
     ).pipe(
       Effect.retry({ times: 2 }),
+      // One classification: a service that answered the end could not be
+      // read fails with its reason; anything else is the link, offline.
       Effect.catch((error) =>
-        Effect.logWarning(
-          `The TeXRA service stopped before task ${runId} ended`,
-        ).pipe(
-          Effect.annotateLogs({ data: error }),
-          Effect.andThen(SubscriptionRef.get(link.away)),
-          Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
-        ),
+        Predicate.isTagged(error, 'TaskFailed')
+          ? Effect.fail(runFailure(error.message))
+          : Effect.logWarning(
+              `The TeXRA service stopped before task ${runId} ended`,
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              Effect.andThen(SubscriptionRef.get(link.away)),
+              Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
+            ),
       ),
       Effect.flatMap(({ at, error, ...end }) => {
         if (end.outcome === RUN_OUTCOME.FAILED) {

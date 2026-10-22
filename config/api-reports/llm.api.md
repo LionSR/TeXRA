@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 90
+Exports: 91
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "reasoning">) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -93,4 +93,5 @@ Exports: 90
 - `UnreleasedUpload` — `interface UnreleasedUpload { readonly fileId: string; readonly reason: string; }`
 - `VscodeLanguageModelConfiguration` — `type VscodeLanguageModelConfiguration = z.infer<typeof VscodeLanguageModelConfigurationSchema>; ≡ Readonly<{ defaults: Readonly<{ justification: string; }>; deployment: Readonly<{ vendor: string; version: string; }>; protocol: "vscode-lm"; requestedModel: string; supportsImageInput: boolean; supportsToolCalling: boolean; }>`
 - `VscodeLanguageModelConfigurationSchema` — `const VscodeLanguageModelConfigurationSchema: ZodReadonly<ZodObject<{ defaults: ZodReadonly<ZodObject<{ justification: ZodString; }, $strict>>; deployment: ZodReadonly<ZodObject<{ vendor: ZodString; version: ZodString; }, $strict>>; protocol: ZodLiteral<"vscode-lm">; requestedModel: ZodString; supportsImageInput: ZodBoolean; supportsToolCalling: ZodBoolean; }, $strict>>`
+- `wireEffort` — `function wireEffort: (config: ModelConfig, reasoning: ReasoningChoice) => ReasoningEffort | null`
 - `zeroCostAccessOverrides` — `function zeroCostAccessOverrides: (contextWindow: number) => { readonly contextWindow: number; readonly inputPrice: 0; readonly longContextPricing: undefined; readonly outputPrice: 0; readonly tiers: undefined; }`

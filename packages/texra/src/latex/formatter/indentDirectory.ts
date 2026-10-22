@@ -19,6 +19,8 @@ export type IndentLatexResult =
       status: 'formatted';
       directory: string;
       count: number;
+      /** The `.tex` files the formatter ran on and failed. */
+      failed: readonly string[];
     }
   | {
       status: 'disabled';
@@ -97,6 +99,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
   }
 
   let indentedCount = 0;
+  const failed: string[] = [];
 
   // The tolerant listing is the facade's `readDir`: its provider typed each
   // entry from the `readdir` dirent, so one entry whose type could not be read
@@ -148,6 +151,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
         yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
           withLogChannel(CHANNEL),
         );
+        failed.push(fullPath);
       }
     }
   });
@@ -166,6 +170,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
           status: 'formatted',
           directory,
           count: indentedCount,
+          failed,
         }),
       ),
     ),
