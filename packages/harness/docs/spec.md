@@ -32,7 +32,7 @@ its kind is its `type` column.
 | Attempt      | One try of an invocation, numbered from 1; `attempt` grows only for a retry of the same invocation (`shared/schemas/runHistoryEvent.ts:44-48`, `shared/session/inFlight.ts:111-118`).                                                                                |
 | Step         | One model call as the loop prepares it: its offered tools and system text, recorded on `tools.offered` when they change (`agent/runtime/loop/toolUse.ts:371-374`).                                                                                                   |
 | Response     | One completed provider turn, committed as a `model.message` `response` row with a minted `responseId` (`shared/schemas/runHistoryEvent.ts:188-206`).                                                                                                                 |
-| Tool call    | One local call of a response, keyed by its `callId`, or a call a `script` call's guest issued (`shared/schemas/runHistoryEvent.ts:349-370`).                                                                                                                         |
+| Tool call    | One local call of a response, keyed by its `callId`; a call a `script` call's guest issued; or a script-configured run's handed-down call, which its opening `model.message` `handed-down` carries (`shared/schemas/runHistoryEvent.ts:349-370`).                    |
 | Request      | A wait on a person: a `request.opened` row, closed by one `request.decided` row (`shared/schemas/sessionEvent.ts:373-386`).                                                                                                                                          |
 | Claim        | The write authority over one aggregate: the `owner_id` column of its sequence row (`controllers/session/storeSchema.ts:56-67`).                                                                                                                                      |
 | Fold         | `foldRunState`, the pure function from a run's rows to the `RunState` the loop continues from (`shared/session/runStateFold.ts:535-552`).                                                                                                                            |
@@ -190,9 +190,10 @@ it, listing and tail included, because it means a newer build now writes this
 store; a read whose query does not select that row (a display tail of display
 kinds, a listing of listing rows) can still succeed, while writes and projection
 catch-up stay gated (`controllers/session/rowReader.ts:181-182`). Reads do not
-run the gate: a row of a kind this build lacks, written by a newer build after
-this one opened the store, reads as corrupt until the next write's gate refuses
-the store (`controllers/session/rowCodec.ts:285`,
+run the gate: a row of a core kind this build lacks, written by a newer build
+after this one opened the store, reads as corrupt until the next write's gate
+refuses the store; a plugin kind whose plugin this build lacks is left out of
+reads and passes the gate (`controllers/session/rowCodec.ts:285`,
 `controllers/session/Database.ts:455-466`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:98-104`,
 `agent/runtime/resumeRun.ts:251-252`).
@@ -570,10 +571,12 @@ who owns the run, and holds it until the launched run holds its own
 (`agent/runtime/resumeRun.ts:188-200`). Its earlier reads only refuse a run
 whose records are gone, and one deleted or whose input closed while they ran
 (`agent/runtime/resumeRun.ts:175-187`). A run another live process holds answers
-`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A run live in this process
-is refused (`agent/runtime/resumeRun.ts:174`). A child an open call of its
-parent owns resumes through that parent (`agent/runtime/resumeRun.ts:199-200`,
-`:104-114`).
+`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A second resume of a run
+another resume in this process is already handling joins that resume and gets
+its result (`agent/runtime/resumeRun.ts:6`, `:130`); otherwise a run live in
+this process is refused (`agent/runtime/resumeRun.ts:174`). A child an open call
+of its parent owns resumes through that parent
+(`agent/runtime/resumeRun.ts:199-200`, `:104-114`).
 
 The resume's activation is one transaction: it takes the claim, folds the stored
 rows, and commits the activation rows with a `request.decided` `cancel` for
@@ -682,7 +685,7 @@ The guarantees, numbered as in the package README:
 | I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork.                                                                                                                                          | `crashConformance.ts:30-32`, `:761` |
 | I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                                                                                                                                                         | `crashConformance.ts:33`, `:761`    |
 | I3  | One model invocation has at most one committed response.                                                                                                                                                                                                                                  | `crashConformance.ts:38`, `:761`    |
-| I4  | A command runs only after its approval; an unfinished call that is not replay-safe, whose outcome is unknown, runs again only after a person's retry.                                                                                                                                     | `crashConformance.ts:34-35`, `:761` |
+| I4  | A command runs only after its approval; an unfinished call that is not replay-safe and that recovery classifies as outcome-unknown runs again only after a person's retry (a call rejoining a standing or newly decided request runs at once, section 9).                                 | `crashConformance.ts:34-35`, `:761` |
 | I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row, except one deliberately paused with a `child.park` `paused` row so it can be called again (`tools/delegation/childRun.ts:163-172`).       | `crashConformance.ts:39-40`, `:873` |
 | I6  | A child's result is delivered to its parent at most once and is not lost while the parent was held elsewhere; a result whose child was detached, or whose parent cannot take it, stays in the child's run report with a warning (`agent/runtime/childSettlement.ts:220-228`, `:252-262`). | `crashConformance.ts:865-886`       |
 | I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                                                                                                                                                                  | `crashConformance.ts:41`, `:761`    |
