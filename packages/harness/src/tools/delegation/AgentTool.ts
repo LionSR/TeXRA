@@ -26,7 +26,6 @@ import {
   Exit,
   FileSystem,
   Result,
-  Semaphore,
   SynchronizedRef,
 } from 'effect';
 import { z } from 'zod';
@@ -34,7 +33,7 @@ import { z } from 'zod';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
-import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
+import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
@@ -52,13 +51,15 @@ import {
   type SubagentProgressUpdate,
   type ToolResult,
 } from '@shared/schemas';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
+import { attemptRequests, callRequestId } from '@shared/session/inFlight';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { delegatedChildGrants } from '@tools/approval';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -75,9 +76,8 @@ import {
   withToolUseSubagentHandoffInstruction,
   workingDirectoryField,
 } from './inputFields';
-import { decideDelegation, requireAgent, scriptRequest } from './proposalFlow';
+import { decideDelegation, requireAgent } from './proposalFlow';
 import {
-  type ApprovalMeta,
   describeSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';
@@ -187,16 +187,66 @@ export interface ChildLaunch {
     ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
     readonly options: NonNullable<AgentProposal['options']>;
   } | null;
-  /** The program the child opens on instead of its prompt, built for the
-   *  agent the approval chose (a goal's rounds): it runs no task, so the
-   *  proposal is a plain agent's, and the prompt reaches it verbatim. */
-  readonly recipe?: (
-    chosen: AgentProposal,
-  ) => NonNullable<AgentConfig['script']>;
-  /** The grants of a launch its caller's own request already approved (a
-   *  plan the user ran as a goal): no proposal is asked. */
-  readonly approved?: ApprovalGrants;
 }
+
+/**
+ * The request the `agent` calls of one script share: the first to ask opens
+ * it, and a resumed script finds it, answered or still open, from its rows.
+ * It is the script call's, shared by all its attempts (attempt 0), so it
+ * outlives a restart; one the run's stop cancelled is asked again under the
+ * next ordinal.
+ */
+const scriptRequest = (
+  call: RunToolCall,
+  script: ScriptScope,
+  proposal: AgentProposal,
+) =>
+  Effect.gen(function* () {
+    const { session, runId } = call.run;
+    const shared = {
+      responseId: call.responseId,
+      callId: script.callId,
+      attempt: 0,
+    };
+    const from = session.log.now();
+    const state = yield* session.runHistory.load(runId);
+    const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
+    if (own?.request.decision === null)
+      // A plane that closes first decides nothing: the call stays in
+      // flight, and the next resume finds the request still open.
+      return yield* session.requests.decision(runId, own.requestId, from).pipe(
+        Effect.map((row) => row.decision),
+        Effect.catch((cause) =>
+          Effect.logWarning(
+            `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
+          ).pipe(
+            Effect.annotateLogs({ data: cause }),
+            Effect.andThen(Effect.interrupt),
+          ),
+        ),
+      );
+    if (own !== null) return own.request.decision;
+    const calls = yield* script.calls;
+    return yield* call.requests.open({
+      kind: 'proposal',
+      data: {
+        requestId: callRequestId(shared, raised + 1),
+        runId,
+        ...proposal,
+        script: {
+          title: script.title,
+          source: script.source,
+          calls: calls.map(({ toolName, input }) => ({
+            toolName,
+            // A tool the preview does not know shows its arguments.
+            preview:
+              deriveToolInputPreview(toolName, input) ||
+              truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
+          })),
+        },
+      },
+    });
+  });
 
 /** The bytes behind a workflow call's files, hashed for its reuse key. */
 const fingerprint = Effect.fn('agent.fingerprint')(function* (
@@ -300,7 +350,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
 
 /** What an ended child becomes for its call: its envelope (a recipe's read
  *  through its block), or the error a script's `await` throws for it. */
-const childResult = Effect.fn('AgentTool.childResult')(function* (
+export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
@@ -343,11 +393,7 @@ const childResult = Effect.fn('AgentTool.childResult')(function* (
   };
 });
 
-/**
- * One call. A script's awaited calls hold one of the session's child-run
- * budget for the whole call, taken first thing, so they start in the order
- * the script issued them and at most the budget run at once.
- */
+/** One call: a script's awaited calls within {@link scriptChildBudget}. */
 export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
@@ -355,18 +401,12 @@ export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   const script = yield* IssuingScript;
   if (script === null || launch.background === true)
     return yield* agentCall(call, launch);
-  const budget = yield* script.shared(
-    'agent:budget',
-    Effect.flatMap(
-      resolveChildRunConcurrencyBudget(call.env.roots),
-      (permits) => Semaphore.make(permits),
-    ),
-  );
+  const budget = yield* scriptChildBudget(call.env.roots, script);
   return yield* budget.withPermits(1)(agentCall(call, launch));
 });
 
 /** A child's run failed the call: timed out, or ended without an answer. */
-function failedResult(agentName: string, error: Error): ToolResult {
+export function failedResult(agentName: string, error: Error): ToolResult {
   if (error instanceof AgentTimedOut)
     return errorResult(
       `'${agentName}' did not finish within ${error.timeoutMs} ms; its run was stopped.`,
@@ -532,14 +572,11 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     memories: launch.memories,
     ...(workingDirectory !== undefined && { workingDirectory }),
     task: task !== null,
-    // A task's or a program's prompt is its instruction, a structured call
-    // answers through its schema, and a trusted script's call reaches the
-    // agent verbatim: none takes a hand-off.
+    // A task's prompt is its instruction, a structured call answers through
+    // its schema, and a trusted script's call reaches the agent verbatim:
+    // none takes a hand-off.
     instruction:
-      task !== null ||
-      launch.recipe !== undefined ||
-      outputSchema !== undefined ||
-      trusted
+      task !== null || outputSchema !== undefined || trusted
         ? launch.prompt
         : withToolUseSubagentHandoffInstruction(
             launch.prompt,
@@ -554,21 +591,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     ...(task === null && { rootUserInstruction: call.instruction }),
   });
 
-  // A launch its caller's request approved asks nothing more.
-  const preApproved: ApprovalMeta = { autoApproved: false };
-  const decided =
-    launch.approved !== undefined
-      ? { proposal, approvalMeta: preApproved }
-      : yield* decideDelegation(
-          call,
-          proposal,
-          script === undefined
-            ? undefined
-            : script.shared(
-                'agent:request',
-                scriptRequest(call, script, proposal),
-              ),
-        );
+  const decided = yield* decideDelegation(
+    call,
+    proposal,
+    script === undefined
+      ? undefined
+      : script.shared('agent:request', scriptRequest(call, script, proposal)),
+  );
   if ('status' in decided) {
     // An approval opened for editing stops the script's calls: the script
     // cannot continue on a task the user took over.
@@ -601,15 +630,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (taskConfig === null)
     return errorResult(`'${approved.agent}' has no task block.`);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
-  const grants = launch.approved ?? delegatedChildGrants(childApproval);
+  const grants = delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.delegationAgentScope,
     ...taskConfig,
-    ...(launch.recipe !== undefined && {
-      script: launch.recipe(decided.proposal),
-    }),
   };
   const parentOffered = yield* offeredBy(run);
 

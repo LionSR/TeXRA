@@ -182,8 +182,8 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
-    // The goal's round: the chat's agent, run by the goal's program, ends
-    // with its verdict.
+    // The goal's round: the chat forked by the goal's script (`self()`),
+    // ends with its verdict.
     if (turn.tools.some(({ name }) => name === 'submit_output'))
       return Effect.succeed([
         call('submit_output', {

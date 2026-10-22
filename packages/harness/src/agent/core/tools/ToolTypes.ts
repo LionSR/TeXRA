@@ -97,8 +97,13 @@ export interface ITool<E = Error, R = never> {
    * The tool is also a global function of a script, taking its `positional`
    * field as the first argument and the rest as the second:
    * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
+   * `withScript`: a function of scripts alone (`self()`), offered whenever
+   * the script tool is.
    */
-  readonly scriptGlobal?: { readonly positional: string };
+  readonly scriptGlobal?: {
+    readonly positional: string;
+    readonly withScript?: true;
+  };
   /**
    * Whether a call recorded as started, with no result, may run again on
    * resume without asking: `'safe'` only for a read-only or idempotent tool,
@@ -130,7 +135,10 @@ export interface ITool<E = Error, R = never> {
    * of `definition.description`: rendered at the step that freezes the
    * run's system text and kept as that step recorded it until a compaction
    * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
-   * its text, and the cached prefix through it, as it was.
+   * its text, and the cached prefix through it, as it was. The tool that has
+   * one is the script tool, which reaches nothing but the run's other tools
+   * and its own agent: a child is offered it, and its script-only functions,
+   * whatever its parent was.
    */
   readonly describe?: (
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],

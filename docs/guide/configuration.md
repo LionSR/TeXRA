@@ -156,21 +156,21 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-A goal is a script that runs an agent in rounds. Each round starts from a
-fresh context, works toward the objective with the agent's own tools, and
-ends by submitting a verdict: done, keep going, or needs you. The next round
-reads the files and the last round's report. The goal ends when a round
-verifies the objective, when a round needs you, or at the spend cap, and
-its result says which, with the last report.
+A goal is a script that runs the agent again, in rounds. Each round
+continues the conversation as it stood when the goal started, is given the
+objective and the last round's report, works toward the objective with the
+agent's own tools, and ends by submitting a verdict: done, keep going, or
+needs you. The goal ends when a round verifies the objective, when a round
+needs you, or at the spend cap, and its result says which, with the last
+report.
 
 Approving a plan with **Run as goal** (press `r` in the terminal) runs the
-plan as a goal on the same agent, as a run of its own beside the
-conversation. It auto-approves shell commands in the goal (or all agent
-work, if you chose that); the conversation's own approvals stay as they
-were. The goal's result arrives in the conversation when it ends. Agents
-can also launch a goal with the `goal` tool, or `goal(objective, { agentName })`
-in a script; such a goal approves nothing on its own, so its commands and
-edits follow the run's approval policy.
+plan as a goal: a background script of the conversation, which you can
+watch like any other. It auto-approves shell commands in the goal (or all
+agent work, if you chose that); the conversation's own approvals stay as
+they were. The goal's result arrives in the conversation when it ends. A
+script can run the same loop itself with
+[`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
 
 On your own API key a goal has no natural end, so it carries a spend cap:
 `texra.goal.maxCostUsd`, on the **Tools** page and in `/config`, defaults to

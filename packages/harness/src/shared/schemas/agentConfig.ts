@@ -90,14 +90,12 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
       /** The parent's model wrote it and sent it to the background; the run
        *  is that script, and its `agent` calls propose themselves. */
       ScriptFieldsSchema.extend({ kind: z.literal('background') }),
-      /** A plugin wrote it: a task's recipe, or a plugin's own program (a
-       *  goal's rounds). The run is its agent's, and its `agent` calls were
-       *  approved with its launch. */
+      /** A plugin wrote it: a task's recipe. The run is its agent's, and its
+       *  `agent` calls were approved with its launch. */
       ScriptFieldsSchema.extend({
         kind: z.literal('recipe'),
-        /** The agent-file block (`AgentBlock.key`) whose task it runs; null
-         *  for a program that runs no task. */
-        block: z.string().min(1).nullable(),
+        /** The agent-file block (`AgentBlock.key`) whose task it runs. */
+        block: z.string().min(1),
         /** The launch's options for that task, as its plugin reads them
          *  (the switches that plugin defines). */
         options: z.record(z.string(), JsonValueSchema),

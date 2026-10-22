@@ -60,7 +60,7 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/tools/approval/index.ts',
   'packages/harness/src/tools/delegation/AgentTool.ts',
   // A plan run as a goal: the grants the person chose, on the goal's run.
-  'packages/harness/src/tools/goal/GoalTool.ts',
+  'packages/harness/src/tools/plan/PlanTool.ts',
 ]);
 
 const EVALUATOR_CALL =

@@ -25,7 +25,7 @@ export interface RecipeResult {
 
 /**
  * The result of a run launched with `config` that ended with `output`, or
- * undefined for a run that is no task's recipe (or has no recorded config). A block no listed plugin reads, or
+ * undefined for a run that is no recipe (or has no recorded config). A block no listed plugin reads, or
  * a value its schema refuses, is logged and read as no files; the refusal is
  * also the delivery, so the launching model sees it.
  */
@@ -36,7 +36,7 @@ export const readRecipeResult = Effect.fn('readRecipeResult')(function* (
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
 ): Effect.fn.Return<RecipeResult | undefined, never, ToolRegistry> {
   const script = config?.script;
-  if (script?.kind !== 'recipe' || script.block === null) return undefined;
+  if (script?.kind !== 'recipe') return undefined;
   const key = script.block;
   const result = (yield* ToolRegistry).blocks.get(key)?.result;
   if (result === undefined) {

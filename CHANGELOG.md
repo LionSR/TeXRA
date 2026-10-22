@@ -6,24 +6,27 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Goal mode is a script.** **Run as goal** on a plan now launches a goal
-  run beside the conversation, on the same agent: it runs the agent in
-  rounds, each on a fresh context, until a round verifies the objective,
-  a round needs you, or the rounds reach the spend cap, and its result
-  arrives in the conversation. The conversation no longer keeps itself
-  going, so the run header's goal chip and `/status`'s goal lines are gone.
-  The commands or agent work a goal auto-approves are approved in the goal
-  run, and the conversation's own approvals stay as they were. The spend cap
-  (`texra.goal.maxCostUsd`) counts what the goal's rounds spend, and a goal
-  stops after 24 hours. The `plan` tool takes only `objective`: its `pause`
-  and `complete` commands are gone. Runs written by an earlier build are
-  listed as such and are not resumed.
+- **Goal mode is a script.** **Run as goal** on a plan now runs the goal
+  template, a background script of the conversation whose rounds are the
+  same agent again: each round continues the conversation as it stood when
+  the goal started, with the objective and the last round's report, and
+  ends by submitting a verdict. The goal ends when a round verifies the
+  objective, a round needs you, or the rounds reach the spend cap, and its
+  result arrives in the conversation. The conversation no longer keeps
+  itself going, so the run header's goal chip and `/status`'s goal lines are
+  gone. The commands or agent work a goal auto-approves are approved in the
+  goal's script and its rounds, and the conversation's own approvals stay as
+  they were. The spend cap (`texra.goal.maxCostUsd`) counts what the goal's
+  rounds spend, and a goal stops after 24 hours. The `plan` tool takes only
+  `objective`: its `pause` and `complete` commands are gone. Runs written by
+  an earlier build are listed as such and are not resumed.
 - **SDK: a parked run never continues itself.** `Plugin.continuation`,
   `PluginContinuation`, and `goalStateOf` and `GoalState` in
   `@texra-ai/harness/schemas` are gone, and the built-in plugins own no row
-  kinds. A recipe's `script.block` is null for a program that runs no task.
-  A recipe run offers the tools its plugin listed instead of narrowing them
-  to its parent's, and its own `agent` calls narrow to that list.
+  kinds. `ITool.scriptGlobal.withScript` marks a function of scripts alone
+  (`self()`), offered whenever the script tool is. A child that declares the
+  script tool gets it, and those functions, whatever its parent was
+  offered.
 
 - **A document task's latexdiff results and missing outputs moved out of
   its log.** `texra run --output-format ndjson` no longer streams them as separate log
@@ -637,12 +640,13 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
-- **Agents and scripts can launch a goal.** The `goal` tool, and
-  `goal(objective, { agentName })` in a script, run an agent as a goal and
-  resolve to `{ status, rounds, report, cost }` when it ends, with `status`
-  `'completed'` or `'paused'`. Such a goal approves nothing on its own: its
-  commands and edits follow the run's approval policy. A child's structured
-  value now reaches its parent in the result it delivers.
+- **Scripts can run their agent again: `self(prompt, options)`.** It runs
+  the same agent with the same tools as a child of the call, forked from
+  the conversation as it stood when the script started (or from the prompt
+  alone with `fork: false`), and resolves to
+  `{ response, files, structured?, runId, outcome, cost }`. Nothing is
+  proposed again: the user approved the script. A loop of `self()` calls
+  that checks each reply is how a goal runs.
 - **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
   Each subscription model now takes the input window the Codex backend
   grants it (500K for GPT-6.1 Sol, 272K for the others) instead of one

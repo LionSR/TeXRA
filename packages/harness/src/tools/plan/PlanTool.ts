@@ -2,8 +2,8 @@
  * The plan tool: propose or replace the plan, a plain objective document
  * stating what to achieve, the approach, and a verifiable stopping
  * condition. Every proposal gates on the user's approval: approve, reject,
- * or run the plan as a goal, which launches the goal program
- * (`launchGoal`) on this run's own agent with the plan as its objective.
+ * or run the plan as a goal, which runs the goal template (`goalScript`) as
+ * a background script of this conversation with the plan as its objective.
  */
 
 // Third-party imports
@@ -12,14 +12,41 @@ import { z } from 'zod';
 
 // Local imports
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
+import { goalGrant } from '@agent/runtime/runApprovalQueue';
 import { withLogChannel } from '@logger/effectLog';
-import type { Plan, RunId, ToolResult } from '@shared/schemas';
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalBypassKind,
+} from '@shared/approvalBypassKind';
+import { Settings } from '@shared/config/settings';
+import {
+  GOAL_MAX_COST_SETTING,
+  type Plan,
+  type RunId,
+  type ToolResult,
+} from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
-import { launchGoal } from '@tools/goal/GoalTool';
+import { launchBackgroundScript } from '@tools/codemode/backgroundScript';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 
+// Local file imports
+import { goalScript } from './goalScript';
+
 const CHANNEL = 'PlanTool';
+
+/** How long a goal's script may run: the longest a script may. */
+const GOAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+/** What a goal the user armed auto-approves: commands alone, or all agent
+ *  work. */
+const GOAL_AUTO_APPROVALS: Record<
+  'commands' | 'allAgentWork',
+  readonly ApprovalBypassKind[]
+> = {
+  commands: ['bash'],
+  allAgentWork: ['superYolo', 'toolEdit', 'bash'],
+};
 
 const PlanToolInputSchema = z.strictObject({
   objective: z
@@ -42,38 +69,44 @@ function buildApprovedResult(): ToolResult {
 }
 
 /**
- * Run the just-approved plan as a goal: the goal program on this run's own
- * agent, the plan document verbatim as its objective, approved by the user's
- * answer with the auto-approvals it chose. In a conversation the goal runs
- * in the background and its result arrives as a follow-up; in a one-shot run
- * the call waits for it.
+ * Run the just-approved plan as a goal: the goal template, a background
+ * script of this conversation whose rounds are this agent again (`self()`),
+ * with the plan document verbatim as its objective and the auto-approvals
+ * the user's answer chose on the script's run, which its rounds inherit.
+ * The conversation's own approvals stay as they were.
  */
 const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   call: RunToolCall,
   plan: Plan,
   armed: 'commands' | 'allAgentWork',
 ) {
-  const launched = yield* launchGoal({
-    tool: 'plan',
-    objective: plan.objective,
-    agentName: call.run.config.agent,
-    model: null,
-    memories: [],
-    workingDirectory: null,
-    id: null,
-    timeoutMs: null,
-    background: null,
-    armed,
-  });
-  if (launched.status !== 'executed') return launched;
+  if (call.run.toolPolicy.stopAfterCycle === true)
+    return errorResult(
+      'A one-shot run has no later turn for a goal to report to: work on the approved plan in this run instead.',
+      { summary: 'Plan approved: no goal in a one-shot run' },
+    );
+  const maxCostUsd = yield* Settings.get<number>(
+    call.env.roots,
+    GOAL_MAX_COST_SETTING.configKey,
+  );
+  const launched = yield* launchBackgroundScript(
+    call,
+    {
+      code: goalScript(plan.objective, maxCostUsd),
+      timeoutMs: GOAL_TIMEOUT_MS,
+    },
+    'Goal',
+    goalGrant(GOAL_AUTO_APPROVALS[armed])(NO_APPROVAL_GRANTS),
+  );
   return {
     ...launched,
     output:
-      `The user approved this plan and runs it as a goal: a goal run works ` +
-      `on it in rounds until a round verifies the stopping condition.\n\n` +
+      `The user approved this plan and runs it as a goal: a background ` +
+      `script runs you again in rounds, each continuing this conversation, ` +
+      `until a round verifies the stopping condition.\n\n` +
       `${launched.output ?? ''}\n\n` +
-      `Do not work on the objective yourself while the goal runs; report ` +
-      `its result to the user when it arrives.`,
+      `Leave the objective to the goal's rounds: end this turn, and report ` +
+      `the goal's result to the user when it arrives.`,
     summary: 'Plan approved: running as a goal',
   } satisfies ToolResult;
 });

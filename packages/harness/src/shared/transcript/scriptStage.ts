@@ -48,7 +48,8 @@ const nameOf = (value: unknown): string | undefined => {
   return key === undefined ? undefined : agentName(key);
 };
 
-const AGENT_TOOL = 'agent';
+/** The calls that run a child: `agent()`, and `self()`, this agent again. */
+const CHILD_TOOLS: ReadonlySet<string> = new Set(['agent', 'self']);
 
 export type ScriptCallStatus =
   | 'queued'
@@ -193,7 +194,7 @@ function callView(
   view: Pick<SessionView, 'runs' | 'requests'>,
   host: FollowUpHost,
 ): ScriptCallView {
-  const agent = row.toolUse.toolName === AGENT_TOOL;
+  const agent = CHILD_TOOLS.has(row.toolUse.toolName);
   const input = Predicate.isObject(row.toolUse.input) ? row.toolUse.input : {};
   // The newest child this card launched: a re-run attempt launches its own.
   const child = run.childIds
@@ -230,7 +231,7 @@ function callView(
       : undefined,
   ].filter((part): part is string => part !== undefined);
   const label = agent
-    ? (stringOf(input.label) ?? nameOf(input.agentName) ?? AGENT_TOOL)
+    ? (stringOf(input.label) ?? nameOf(input.agentName) ?? row.toolUse.toolName)
     : [row.model.headerLabel, row.model.headerPreview]
         .filter((part) => part.length > 0)
         .join(' ');
@@ -295,7 +296,7 @@ function stageSummary(
   calls: readonly ScriptCallView[],
   costUsd: number,
 ): string {
-  const agents = calls.filter((call) => call.toolName === AGENT_TOOL).length;
+  const agents = calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length;
   const needsYou = calls.filter((call) => call.needsYou).length;
   return [
     agents > 0 ? formatResultCount(agents, 'agent') : undefined,

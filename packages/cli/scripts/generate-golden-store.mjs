@@ -29,9 +29,10 @@
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config` and a plugin's
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
- *   (`r` on the approval), which launches the goal's program as a child
- *   run whose one round submits its verdict, and the chat's turn on the
- *   goal's result; then `/model` and a message, so the switch is recorded at the run's
+ *   (`r` on the approval), which runs the goal template as a background
+ *   script of the chat whose one round, a fork of the chat (`self()`),
+ *   submits its verdict, and the chat's turn on the goal's result; then
+ *   `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
  *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
@@ -550,8 +551,8 @@ async function generate(root) {
   const chatRun = () =>
     query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
   // The turn the chat parked after, once a park is its latest position, and
-  // the wait for a park after `turn`: the goal's progress and result each
-  // wake the chat, so which turn a step lands on is not fixed.
+  // the wait for a park after `turn`: the goal's result wakes the chat, so
+  // which turn a step lands on is not fixed.
   const parkedTurn = () => {
     const [last] = query(
       cli.store(),
@@ -664,13 +665,13 @@ async function generate(root) {
   tty.write('Queued behind the held turn.');
   await shows('the typed follow-up', '› Queued behind the held turn.');
   tty.write('\r');
-  // The goal's two progress notices and its result, two messages typed to
-  // the open chat, the Codex turn's result, and this.
+  // The goal's result, two messages typed to the open chat, the Codex
+  // turn's result, and this.
   await until(
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 7,
+        AND json_extract(e.data, '$.control') IS NULL`) === 5,
     tty,
   );
   tty.write('\x03');

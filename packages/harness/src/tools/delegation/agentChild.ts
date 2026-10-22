@@ -14,6 +14,7 @@
 // Third-party imports
 import { Effect } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { offeredBy } from '@agent/runtime/loop/step';
 
 // Local imports
 import {
@@ -163,6 +164,8 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
           session,
           runId: earlier,
           parentRunId,
+          // Narrowed as it launched: to what this call's step offers.
+          parentOffered: yield* offeredBy(call.run),
           notify: recovery.notify,
         }),
       );

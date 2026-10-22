@@ -13,6 +13,7 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
@@ -43,6 +44,9 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   call: RunToolCall,
   input: { readonly code: string; readonly timeoutMs?: number },
   title: string,
+  /** The grants its run starts with, beyond what it inherits: a goal's
+   *  auto-approvals, which the user's plan answer chose. */
+  grants?: ApprovalGrants,
 ) {
   const { run } = call;
   const { session, runId: parentRunId } = run;
@@ -106,6 +110,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
                   parentCard: call.logId,
                   parentCallId: call.callId,
                   description: childRunDescription(title),
+                  ...(grants !== undefined && { grants }),
                 },
                 runId,
                 parentRunId,

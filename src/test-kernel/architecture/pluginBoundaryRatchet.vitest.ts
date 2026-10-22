@@ -183,7 +183,7 @@ describe('plugin rosters', () => {
       ['arxiv', ['arxiv_search', 'download_arxiv_source']],
       ['web', ['web_search', 'web_fetch']],
       ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan', 'goal']],
+      ['goal', ['plan']],
       ['wolfram', []],
       [
         'zotero',
@@ -202,7 +202,7 @@ describe('plugin rosters', () => {
         'core',
         ['inline_comment', 'open_pdf', 'ask_user_question', 'lean_loogle'],
       ],
-      ['codemode', ['script']],
+      ['codemode', ['script', 'self']],
       [
         'setup',
         [
@@ -265,9 +265,9 @@ describe('plugin rosters', () => {
       ],
       ['web', ['web_search', 'web_fetch']],
       ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan', 'goal']],
+      ['goal', ['plan']],
       ['multi-agent', ['agent']],
-      ['codemode', ['script']],
+      ['codemode', ['script', 'self']],
     ]);
   });
 
