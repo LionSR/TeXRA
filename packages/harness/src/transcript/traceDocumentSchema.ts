@@ -40,7 +40,8 @@ const RETIRED_FACTS: ReadonlySet<string> = new Set(['goal/state']);
  * A parsed trace with each plugin fact checked as the store checks it,
  * against the app's plugin arms (`appArms`): a fact
  * outside its arm's versions (`pluginFactFloor`), or whose value the arm's
- * schema rejects, throws, naming it, as does a retired built-in fact;
+ * schema rejects, throws, naming it, as does a retired built-in fact no
+ * current plugin owns;
  * one whose plugin this build lacks is left out. A trace is display data and runs no upcaster, so a version an
  * upcaster would bring forward is rejected by the schema, never misread.
  */
@@ -57,11 +58,11 @@ export function readTraceFacts(
   const events = document.events.filter((event) => {
     if (event.type !== 'plugin.fact') return true;
     const name = `${event.plugin}/${event.kind}`;
-    if (RETIRED_FACTS.has(name))
+    const arm = arms.get(name);
+    if (arm === undefined && RETIRED_FACTS.has(name))
       throw new Error(
         `the plugin fact ${name} was written by an earlier build; this build no longer reads it.`,
       );
-    const arm = arms.get(name);
     if (arm === undefined) return false;
     if (event.version < pluginFactFloor(arm) || event.version > arm.version)
       throw new Error(

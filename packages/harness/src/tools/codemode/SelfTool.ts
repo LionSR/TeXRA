@@ -200,6 +200,7 @@ const runSelf = Effect.fn('self.call')(function* (
           }),
           script: null,
           outputSchema: outputSchema ?? null,
+          asCaller: true,
         }),
         ...(forked !== null && { seed: forked.seed }),
         parentOffered: yield* offeredBy(run),
