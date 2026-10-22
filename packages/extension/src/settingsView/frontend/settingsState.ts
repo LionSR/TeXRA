@@ -154,9 +154,11 @@ export const memoryEnabled = settingSignal<boolean>(
 // ---------------------------------------------------------------------------
 // Profile state
 // ---------------------------------------------------------------------------
-// Empty until the host's first profile message, which always lists every
-// provider: the view shows the keys as loading rather than guessing them unset.
-export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
+/** Null until the host's first profile message: an unknown key state, never
+ *  rendered as "not set". */
+export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[] | null>(
+  () => null,
+);
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------

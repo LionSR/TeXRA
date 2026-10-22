@@ -58,25 +58,39 @@ export const observeBackground = <E>(
 ) => {
   const { operation, deadlineAtMs } = accepted;
   const id = operation.providerResponseId;
-  const cancel = background.cancel(operation).pipe(
-    Effect.timeout(BACKGROUND_CANCEL_TIMEOUT_MS),
-    Effect.andThen(
-      cell.append([
-        {
-          type: 'model.message',
-          aggregateId: rowAggregate(run.runId),
-          payload: { kind: 'cancelled', invocation },
-        },
-      ]),
-    ),
-    Effect.catchCause((cause) =>
-      Effect.sync(() =>
-        run.logger.warn(
-          `Could not cancel the stopped background response ${id}; it may keep running and billing until it finishes.`,
-          { data: Cause.squash(cause) },
+  // Each step's failure is its own fact: a cancel that failed may still be
+  // billing, while a confirmed cancel whose row did not commit only leaves
+  // the operation for a resume to observe again.
+  const retire = cell
+    .append([
+      {
+        type: 'model.message',
+        aggregateId: rowAggregate(run.runId),
+        payload: { kind: 'cancelled', invocation },
+      },
+    ])
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() =>
+          run.logger.warn(
+            `The background response ${id} was cancelled, but its cancelled row was not written; a resume observes it again.`,
+            { data: Cause.squash(cause) },
+          ),
         ),
       ),
-    ),
+    );
+  const cancel = background.cancel(operation).pipe(
+    Effect.timeout(BACKGROUND_CANCEL_TIMEOUT_MS),
+    Effect.matchCauseEffect({
+      onSuccess: () => retire,
+      onFailure: (cause) =>
+        Effect.sync(() =>
+          run.logger.warn(
+            `Could not cancel the stopped background response ${id}; it may keep running and billing until it finishes.`,
+            { data: Cause.squash(cause) },
+          ),
+        ),
+    }),
   );
   return Stream.runForEach(
     background.observe(resolved, operation, { deadlineAtMs }),

@@ -2,6 +2,8 @@
 // progress-view follow-up). Browser-only — relies on FileReader/DataTransfer
 // and has no Node imports, so it is safe in both webview bundles.
 
+import { ensureError } from '@texra-ai/harness/schemas';
+
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',
@@ -48,24 +50,38 @@ export function clipboardImageFiles(
   });
 }
 
-/** Read a File to base64 (no data-URL prefix), or null on failure. */
-export function readFileAsBase64(file: File): Promise<string | null> {
+/** A pasted file's base64 (no data-URL prefix), or why it could not be read. */
+type ClipboardImageRead =
+  | { readonly ok: true; readonly base64: string }
+  | { readonly ok: false; readonly error: Error };
+
+/** Read a File to base64. A failure carries its cause for the caller to show. */
+export function readFileAsBase64(file: File): Promise<ClipboardImageRead> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
+      const base64 =
+        typeof result === 'string' ? result.split(',')[1] : undefined;
       resolve(
-        typeof result === 'string' ? (result.split(',')[1] ?? null) : null,
+        base64
+          ? { ok: true, base64 }
+          : { ok: false, error: new Error('The image held no readable data.') },
       );
     };
-    reader.onerror = () => resolve(null);
+    reader.onerror = () =>
+      resolve({
+        ok: false,
+        error: reader.error ?? new Error('The image could not be read.'),
+      });
     try {
       reader.readAsDataURL(file);
-    } catch {
+    } catch (error) {
       // Browsers may synchronously reject a clipboard-owned File that became
-      // unreadable before FileReader started. This matches reader.onerror: only
-      // that attachment is omitted, while the paste event and other files continue.
-      resolve(null);
+      // unreadable before FileReader started. This matches reader.onerror:
+      // that attachment fails with its cause, while the paste event and other
+      // files continue.
+      resolve({ ok: false, error: ensureError(error) });
     }
   });
 }

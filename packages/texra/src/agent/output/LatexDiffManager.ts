@@ -57,16 +57,23 @@ type SingleDiffOutcome = {
   artifact: RunStorageFileLocation | null;
 };
 
-/** What a round's latexdiff pass wrote: the PDFs it published, and one entry
- *  per diffed pair for the round's documents fact. */
+/** What a round's latexdiff pass wrote: the PDFs it published, one entry
+ *  per diffed pair for the round's documents fact, and why it diffed no pair
+ *  at all when it could not run (`null` when it ran, however many pairs it
+ *  found). */
 export interface RoundLatexdiffs {
   readonly artifacts: RunStorageFileLocation[];
   readonly entries: LatexdiffEntry[];
+  readonly notRun: string | null;
 }
 
-/** A pass that diffed nothing: a fresh value, since a caller owns the
- *  arrays it is handed. */
-const noLatexdiffs = (): RoundLatexdiffs => ({ artifacts: [], entries: [] });
+/** A pass that could not run, and why: fresh arrays, since a caller owns
+ *  the arrays it is handed. */
+const notRun = (reason: string): RoundLatexdiffs => ({
+  artifacts: [],
+  entries: [],
+  notRun: reason,
+});
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -165,14 +172,14 @@ export class LatexDiffManager {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
         );
-        return noLatexdiffs();
+        return notRun('latexdiff is not installed');
       }
 
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
         );
-        return noLatexdiffs();
+        return notRun(`round ${currRound} has no output files`);
       }
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
@@ -253,14 +260,17 @@ export class LatexDiffManager {
         entries.push(outcome.entry);
         if (outcome.artifact) artifacts.push(outcome.artifact);
       }
-      return { artifacts, entries };
+      return { artifacts, entries, notRun: null };
     });
     return execute.pipe(
       recoverOutputFailure({
         logger: this.logger,
         level: 'error',
         label: 'Error during latexdiff processing',
-        recover: () => Effect.sync(noLatexdiffs),
+        recover: (error) =>
+          Effect.succeed(
+            notRun(`the latexdiff pass failed: ${toErrorMessage(error)}`),
+          ),
       }),
     );
   }

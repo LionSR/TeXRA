@@ -37,6 +37,8 @@ export interface LatexFormatter extends LatexFormatterDefinition {
   readonly settings: SettingsStores;
 }
 
+// Keyed by every selectable formatter, so the setting's validated value
+// always names one.
 const LATEX_FORMATTERS: Record<
   Exclude<LatexFormatterValue, 'none'>,
   LatexFormatterDefinition
@@ -55,7 +57,8 @@ const LATEX_FORMATTERS: Record<
 
 /**
  * Resolve the configured LaTeX formatter, or null when formatting is
- * disabled. Sole owner of the formatter → runner + config-key mapping.
+ * disabled. Unrecognized settings fall back to latexindent. Sole owner of the
+ * formatter → runner + config-key mapping.
  *
  * `stores` are the settings slots of the workspace the caller is formatting
  * (a session's roots), held as data, so both the formatter choice and its

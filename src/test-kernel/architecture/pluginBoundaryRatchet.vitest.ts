@@ -50,7 +50,7 @@ import {
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-/** The harness's own plugin arms (`goal`) and the app's. */
+/** The app's plugin arms (the harness's built-ins own none). */
 const PLUGIN_ARM_MODULES =
   /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
@@ -202,7 +202,7 @@ describe('plugin rosters', () => {
         'core',
         ['inline_comment', 'open_pdf', 'ask_user_question', 'lean_loogle'],
       ],
-      ['codemode', ['script']],
+      ['codemode', ['script', 'self']],
       [
         'setup',
         [
@@ -252,7 +252,6 @@ describe('plugin rosters', () => {
       'documents/accepted',
       'documents/output',
       'external-inquiry/thread',
-      'goal/state',
     ]);
   });
 
@@ -266,7 +265,7 @@ describe('plugin rosters', () => {
       ['memory-workflow', ['memory', 'executions']],
       ['goal', ['plan']],
       ['multi-agent', ['agent']],
-      ['codemode', ['script']],
+      ['codemode', ['script', 'self']],
     ]);
   });
 

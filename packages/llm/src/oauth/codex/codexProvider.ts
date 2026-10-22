@@ -18,21 +18,22 @@
  */
 import { z } from 'zod';
 
+import { Effect } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import {
-  createSecretBackedCoordinator,
-  getSubscriptionSessionStatus,
-} from '../sessionAccess.js';
+import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { SubscriptionSessionBaseSchema } from '../subscriptionSessionSchema.js';
-import type { CredentialStore } from '../../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../../providers/credentials.js';
+import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type {
   SubscriptionCoordinator,
   SubscriptionSessionStatus,
 } from '../subscriptionCoordinator.js';
 import type { SubscriptionOAuthPolicy } from '../SubscriptionOAuthCoordinator.js';
-import type { Effect } from 'effect';
 
 /** Borrowed OAuth client id (the Codex CLI's own registration). */
 export const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
@@ -259,8 +260,6 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   },
 };
 
-const CHANNEL = 'codexAuth';
-
 /**
  * The coordinator for the caller's secret store: one coordinator per store
  * instance, so distinct stores never share session state.
@@ -273,15 +272,15 @@ export const codexCoordinator: (
     new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
 });
 
-/** Signed-in status, read from the caller's secret store. */
+/** Signed-in status, read from the caller's secret store. A store that
+ *  cannot be read, or a stored session that does not parse, fails. */
 export function getCodexStatus(
   secrets: CredentialStore,
-): Effect.Effect<SubscriptionSessionStatus> {
-  return getSubscriptionSessionStatus(
-    () => codexCoordinator(secrets),
-    CHANNEL,
-    'ChatGPT',
-  );
+): Effect.Effect<
+  SubscriptionSessionStatus,
+  SecretsFailed | SubscriptionOAuthError
+> {
+  return Effect.suspend(() => codexCoordinator(secrets).getStatus());
 }
 
 /** The browser sign-in, bound to the registered ChatGPT callback. */

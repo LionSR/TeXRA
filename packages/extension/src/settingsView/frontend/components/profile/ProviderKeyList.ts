@@ -23,7 +23,6 @@ import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 
@@ -48,7 +47,9 @@ export class ProviderKeyList extends LitElement {
     providerKeyListStyles,
   ];
 
-  @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
+  /** Null until the profile state arrives. */
+  @property({ attribute: false }) providerKeyStatuses:
+    ProviderKeyStatus[] | null = null;
 
   /** Plan usage for the coding-plan providers (Kimi Code, GLM Coding Plan). */
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
@@ -241,17 +242,17 @@ export class ProviderKeyList extends LitElement {
           description,
           icon: 'key',
         })}
-        <div
-          class="settings-disclosure-list"
-          role="list"
-          aria-label="Provider API keys"
-        >
-          ${
-            this.providerKeyStatuses.length === 0
-              ? renderLoadingState('Loading API keys…')
-              : this.providerKeyStatuses.map((entry) => this.renderRow(entry))
-          }
-        </div>
+        ${
+          this.providerKeyStatuses === null
+            ? html`<em class="text-secondary">Loading key status…</em>`
+            : html`<div
+                class="settings-disclosure-list"
+                role="list"
+                aria-label="Provider API keys"
+              >
+                ${this.providerKeyStatuses.map((entry) => this.renderRow(entry))}
+              </div>`
+        }
       </div>
     `;
   }

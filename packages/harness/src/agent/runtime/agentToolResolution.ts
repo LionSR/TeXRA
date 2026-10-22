@@ -22,6 +22,12 @@
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
+ *      Code mode is the exception (the built-in `codemode` plugin's
+ *      tools): the script tool reaches only the run's other tools and its
+ *      own agent, so a child declaring it gets it, and the script-only
+ *      functions (`self()`) come with it. A field another plugin's tool
+ *      may set (`describe`, `withScript`), or an app plugin that takes the
+ *      `codemode` id, earns no exemption.
  *   4. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -53,6 +59,7 @@ import {
   type ToolEntry,
 } from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
+import { builtinTools } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -174,6 +181,16 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const enabled = new Map(
     [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
+  // The built-in code mode plugin's tools (`builtinPlugins.ts`): an app
+  // plugin that takes the id gets no exemption.
+  const codeMode = (name: string) => {
+    const entry = enabled.get(name);
+    return entry?.plugin === 'codemode' && builtinTools.has(entry.tool);
+  };
+  const isScript = (name: string) =>
+    codeMode(name) && enabled.get(name)?.tool.describe !== undefined;
+  const scriptOnly = (name: string) =>
+    codeMode(name) && enabled.get(name)?.tool.scriptGlobal?.withScript === true;
   // A child keeps only what its parent's step offered, as the same tool.
   const parent = input.parentOffered
     ? new Map(input.parentOffered.map((tool) => [tool.name, tool]))
@@ -182,6 +199,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     if (!parent) return true;
     const offered = parent.get(name);
     const entry = enabled.get(name);
+    if (isScript(name) || scriptOnly(name)) return true;
     return (
       offered !== undefined &&
       entry !== undefined &&
@@ -287,6 +305,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   ))
     offer(name, 'declared');
   for (const name of injected) offer(name, 'injected');
+  // A script's functions come with the script tool.
+  if ([...resolvedNames].some(isScript))
+    for (const name of enabled.keys())
+      if (scriptOnly(name)) offer(name, 'injected');
 
   const overlay = new Map<string, ITool>();
   for (const tool of input.runTools) {

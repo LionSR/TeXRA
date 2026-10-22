@@ -5,39 +5,40 @@ status: proposed
 
 # The harness as a general package: surface first, two structural moves
 
-Baseline: `main` at `08455c8` for the audits, re-checked against `1a553be`.
-Line references point into that tree, except the lane 4 re-check, which reads
+Baseline: `main` at `08455c8` for the audits, re-checked against `1a553be`. Line
+references point into that tree, except the lane 4 re-check, which reads
 `6e5b262`. The durable doc is
-[`2026-10-02-durable-harness.md`](./2026-10-02-durable-harness.md) (accepted);
+[`2026-10-02-durable-harness.md`](../../implemented/architecture/2026-10-02-durable-harness.md);
 the split doc is
-[`2026-10-02-harness-package-split.md`](./2026-10-02-harness-package-split.md).
+[`2026-10-02-harness-package-split.md`](../../implemented/architecture/2026-10-02-harness-package-split.md).
 
 ## Summary
 
 The owner wants `@texra-ai/harness` to be a general package, as usable as
 pi-durable, with TeXRA as one app on it. Seven read-only audits of the tree and
 a four-design comparison came to one diagnosis: the rooms are right and the
-doors are wrong. The ten invariants of the core-concepts note hold in the
-kernel. What lags is the package around it: what its entries export, how much
-TeXRA vocabulary it still carries, and a layout that splits one concept across
-several directories.
+doors are wrong. The ten invariants of the
+[core-concepts note](../../implemented/architecture/2026-09-26-core-concepts.md)
+hold in the kernel. What lags is the package around it: what its entries export,
+how much TeXRA vocabulary it still carries, and a layout that splits one concept
+across several directories.
 
 The design keeps the package set and most of the tree. It closes the gaps by
 changing the entries, injecting TeXRA's vocabulary as data, and naming two
-ports. It adds exactly two structural moves, each
-buying something a surface change cannot: one `session/` directory, and a
-`builtins/` directory that may import only public entries. In total about 136
-files move, about 1,500 import lines change, one row field is added, and about
-3,300 lines and 210 baseline rows go. No new test file is needed.
+ports. It adds exactly two structural moves, each buying something a surface
+change cannot: one `session/` directory, and a `builtins/` directory that may
+import only public entries. In total about 136 files move, about 1,500 import
+lines change, one row field is added, and about 3,300 lines and 210 baseline
+rows go. No new test file is needed.
 
 ## What the audits found
 
 ### What holds
 
-- **Every forbidden import edge is zero.** harness→app, harness→host,
-  llm→repo and texra→host all measure zero over about 1,400 source files at
-  `08455c8`. ESLint, the
-  deep-import baseline and the architecture tests agree with one another.
+- **Every forbidden import edge is zero.** harness→app, harness→host, llm→repo
+  and texra→host all measure zero over about 1,400 source files at `08455c8`.
+  ESLint, the deep-import baseline and the architecture tests agree with one
+  another.
 - **The writer core is clean.** There are three commit doors, all on the one
   publisher (`agent/runtime/SessionEvents.ts:224-341`). No app or host file
   writes rows. The loop holds no shadow of the fold. Requests have one answer
@@ -60,29 +61,29 @@ files move, about 1,500 import lines change, one row field is added, and about
 ### Behind our own design
 
 - **Semantic leaks.** The audit counted eleven groups; the largest follow.
-  Discipline teams are hardcoded in
-  `shared/schemas/agentPresets.ts:62-145`. The settings catalog forces the
-  `texra.` prefix (`shared/state/stateSettings.ts:858`), and `texra.` appears on
-  about 100 lines across 29 harness files, comments included. TeX tool lookup
-  sits in `utils/system/binaryResolver.ts` and the TeX Live and MiKTeX
-  directories in `utils/system/platformPaths.ts`; both are exported from
-  `./node`. The base system prompt asks for LaTeX math
-  (`agent/prompt/PromptBuilder.ts:32`). `SettingHost` lists TeXRA's products
-  (`stateSettings.ts:72`) and sits on `WorkspaceRoots` and `ITool`. The
-  547-line canned validation model lives inside the run package. Icon names
-  live in the wire layer.
-- **The root entry is a host door.** It has 246 exports by `config/api-reports/harness.api.md`: 43 serve only TeXRA's
-  hosts (`HostInteractions` with VS Code event names at
+  Discipline teams are hardcoded in `shared/schemas/agentPresets.ts:62-145`. The
+  settings catalog forces the `texra.` prefix
+  (`shared/state/stateSettings.ts:858`), and `texra.` appears on about 100 lines
+  across 29 harness files, comments included. TeX tool lookup sits in
+  `utils/system/binaryResolver.ts` and the TeX Live and MiKTeX directories in
+  `utils/system/platformPaths.ts`; both are exported from `./node`. The base
+  system prompt asks for LaTeX math (`agent/prompt/PromptBuilder.ts:32`).
+  `SettingHost` lists TeXRA's products (`stateSettings.ts:72`) and sits on
+  `WorkspaceRoots` and `ITool`. The 547-line canned validation model lives
+  inside the run package. Icon names live in the wire layer.
+- **The root entry is a host door.** It has 246 exports by
+  `config/api-reports/harness.api.md`: 43 serve only TeXRA's hosts
+  (`HostInteractions` with VS Code event names at
   `agent/runtime/runtimePresentationEvents.ts:20-26`, presets,
   `WorkspaceAgentsController`, `decideRunModel`) and 37 are internal plumbing
   (`setLogSink`, `withForkFailureReporting`, path helpers).
-- **The plugin contract does not cover TeXRA's own plugins.** More than half
-  of the 95 files in `packages/texra/src/tools` (55 to 58, depending on the
-  alias set counted) import harness internals. `ALWAYS_AVAILABLE`,
-  `ToolFact`, `PermissionPayload`, `ToolCard` and `Continuation` are not
-  public. Built-ins get `Runs | RunCall | ScriptCalls | IssuingScript` through
-  an unexported `defineBuiltinPlugin` (`tools/plugins.ts:182`). The
-  continuation takes the internal `SessionHandle` (`tools/toolTable.ts:118-129`).
+- **The plugin contract does not cover TeXRA's own plugins.** More than half of
+  the 95 files in `packages/texra/src/tools` (55 to 58, depending on the alias
+  set counted) import harness internals. `ALWAYS_AVAILABLE`, `ToolFact`,
+  `PermissionPayload`, `ToolCard` and `Continuation` are not public. Built-ins
+  get `Runs | RunCall | ScriptCalls | IssuingScript` through an unexported
+  `defineBuiltinPlugin` (`tools/plugins.ts:182`). The continuation takes the
+  internal `SessionHandle` (`tools/toolTable.ts:118-129`).
 - **The layout hides the lifetimes.** The session plane lives in three
   directories (tags and folds in `shared/session`, SQLite layers in
   `controllers/session`, session-lifetime layers in `agent/runtime`), with six
@@ -92,28 +93,28 @@ files move, about 1,500 import lines change, one row field is added, and about
 - **Writers: no near-miss survived the re-check.** The audits listed five
   (activate's cancels, tool-card producers, grants derivations, `run.config`
   shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, none is a
-  defect. One guard is missing: `transcriptFold.ts`'s switch has no
-  `satisfies never`; see lane 4.
-- **The row-version freeze is unarmed until a release.** Its check returns
-  early while `config/storage/frozen/` does not exist
+  defect. The one missing guard, `transcriptUpdate.ts`'s switch with no
+  `satisfies never`, is lane 4 (done, #14211).
+- **The row-version freeze is unarmed until a release.** Its check returns early
+  while `config/storage/frozen/` does not exist
   (`src/test-kernel/schemas/rowVersions.vitest.ts:104`). That is by design:
   `npm run storage:freeze` is a `releasing` step, so the first release that
   promises its rows writes the watermark.
-- **Hosts.** `desktopHostRequests.ts` and `extensionHostRequests.ts` share
-  about 400 lines of the same composition: 125 lines are byte-identical, and
-  the rest make the same calls with host-specific ports. Three hosts repeat the agent-directories layer and
-  the service reach. In total about 1,400 lines can go. The CLI TUI
-  synthesizes transcript rows with `Date.now()`
+- **Hosts.** `desktopHostRequests.ts` and `extensionHostRequests.ts` share about
+  400 lines of the same composition: 125 lines are byte-identical, and the rest
+  make the same calls with host-specific ports. Three hosts repeat the
+  agent-directories layer and the service reach. In total about 1,400 lines can
+  go. The CLI TUI synthesizes transcript rows with `Date.now()`
   (`packages/cli/src/chat/tui/state/transcript.ts:78`).
 - **llm.** The package is pure as claimed, except for TeXRA branding in five
-  places (`originator: 'texra'`, `X-Title: 'TeXRA.ai'`, OAuth referrers).
-  Twelve Zod `.catch` calls silently default OAuth token lifetimes.
+  places (`originator: 'texra'`, `X-Title: 'TeXRA.ai'`, OAuth referrers). Twelve
+  Zod `.catch` calls silently default OAuth token lifetimes.
 
 ## How the design was chosen
 
 Four designs were written independently from the same evidence, each from a
-different philosophy, and an adversarial judge scored them, spot-checking
-claims against the tree:
+different philosophy, and an adversarial judge scored them, spot-checking claims
+against the tree:
 
 | Design                 | Idea                                                         | Churn                                       | Score /40 |
 | ---------------------- | ------------------------------------------------------------ | ------------------------------------------- | --------- |
@@ -122,21 +123,21 @@ claims against the tree:
 | minimal move (control) | entries, data injection and ports, with no regroup           | 28 files                                    | 30        |
 | lifetime mirror        | the tree mirrors process ⊃ session ⊃ run ⊃ step ⊃ call       | ~410 files                                  | 28        |
 
-The two restructures beat the control by one point, at ten times its churn.
-All four agreed on the substance: a root of about 30 names, a public authoring
+The two restructures beat the control by one point, at ten times its churn. All
+four agreed on the substance: a root of about 30 names, a public authoring
 closure, methods on `Run`, a neutral host port, vocabulary as data, Storage as
 an Effect `SqlClient`, the execution pair as a port, conformance from the
 existing suites, the writer fixes (re-checked below: none remains) and the
-freeze. This design is the control
-plus the two moves that buy what the control cannot.
+freeze. This design is the control plus the two moves that buy what the control
+cannot.
 
 ## The design
 
 ### Concepts
 
 The thirteen nouns of the core-concepts note keep their owners. The process
-owner is `effect/processLayer.ts:116`, which becomes `sdk/processLayer.ts`.
-The foundation order is declared and ratcheted:
+owner is `effect/processLayer.ts:116`, which becomes `sdk/processLayer.ts`. The
+foundation order is declared and ratcheted:
 `utils < common < platform < shared < {agent, tools} < session < sdk`.
 
 ### Layout
@@ -164,9 +165,9 @@ second embedder appears, without a redesign.
 
 Leaving the harness: presets, teams, icons, Copilot routing and quota routes
 move to `packages/texra/src/host/`, and the canned validation model moves to
-`packages/cli`. Harness-internal aliases are declared only for the harness
-build and the test kernel, so a deep import from the app or a host fails to
-compile. `@common/webview` leaves the harness alias family.
+`packages/cli`. Harness-internal aliases are declared only for the harness build
+and the test kernel, so a deep import from the app or a host fails to compile.
+`@common/webview` leaves the harness alias family.
 
 ### Ports
 
@@ -180,28 +181,27 @@ compile. `@common/webview` leaves the harness alias family.
 
 The durable doc dropped "a storage contract suite parameterised by backend".
 This design parameterises the suite by client of one dialect, not by backend,
-and adds no new assertions.
-The suites stay in `src/test-kernel/`. A `./testing` export of them waits for a
-named external consumer, as the durable doc rules ("Conformance").
+and adds no new assertions. The suites stay in `src/test-kernel/`. A `./testing`
+export of them waits for a named external consumer, as the durable doc rules
+("Conformance").
 
 ### Public surface
 
 The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
 `ResumeInput`, `OpenOptions`, `SessionHost`, `ApprovalHandler`,
-`PendingRequest`, `RequestDecision`, `RuntimeRequest`, `Outcome`,
-`SessionView`, `RunView`, `RunEndResult`, `AgentEvent`, `RunId`,
-`WorkspaceRoots`, `AgentPlatform`, `AgentDefinition`, `Plugin` and
-`defineTool`, plus the errors (`RunFailure`, `ResumeRefused`,
-`TraceUnavailable`, `PluginsRefused`, `AgentNotFound`, `ToolsRefused`,
-`LaunchError`, `RequestError`, `SessionOpenError`).
+`PendingRequest`, `RequestDecision`, `RuntimeRequest`, `Outcome`, `SessionView`,
+`RunView`, `RunEndResult`, `AgentEvent`, `RunId`, `WorkspaceRoots`,
+`AgentPlatform`, `AgentDefinition`, `Plugin` and `defineTool`, plus the errors
+(`RunFailure`, `ResumeRefused`, `TraceUnavailable`, `PluginsRefused`,
+`AgentNotFound`, `ToolsRefused`, `LaunchError`, `RequestError`,
+`SessionOpenError`).
 
 `Run` gains `text: Stream<string>`, `followUp`, `stop`, `decide` and
 `transcript`, all thin methods over the existing request unions.
 
-The subpaths are: `./schemas` (a named manifest with storage and view
-sections, and no `texra.*` constant), `./plugins` (the whole authoring
-closure), `./node`, `./host` (host composition only), and
-`./promise`, which ships last.
+The subpaths are: `./schemas` (a named manifest with storage and view sections,
+and no `texra.*` constant), `./plugins` (the whole authoring closure), `./node`,
+`./host` (host composition only), and `./promise`, which ships last.
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -231,10 +231,11 @@ const program = Effect.gen(function* () {
 await Effect.runPromise(program);
 ```
 
-The Promise entry argues against the 2026-09-21 ruling (rulings ledger,
-"The agent SDK's public surface is Effect"). It is one named SDK entry file of
-60 to 120 lines, holding one `ManagedRuntime` and no logic. It is added to the
-`Effect.run*` entry allowlist and recorded in `refuted-candidates`. If the
+The Promise entry argues against the 2026-09-21 ruling (rulings ledger, "The
+agent SDK's public surface is Effect") and the owner's 2026-10-06 decision on
+#13723 ("./promise: no implementation for now"). It is one named SDK entry file
+of 60 to 120 lines, holding one `ManagedRuntime` and no logic. It is added to
+the `Effect.run*` entry allowlist and recorded in `refuted-candidates`. If the
 ruling holds, the file is deleted and nothing else changes.
 
 ### Plugin contract
@@ -251,8 +252,8 @@ ruling holds, the file is deleted and nothing else changes.
 - `toolUseHelpers.ts` is deleted. The agent-CLI tools report progress through
   `progress(text)`, which emits a transient `stream.chunk`.
 - `defineTool({ deferred: true })` builds on codemode's existing discovery.
-- Request kinds stay closed (ledger D11) until a named plugin cannot be MCP
-  plus hooks plus data.
+- Request kinds stay closed (ledger D11) until a named plugin cannot be MCP plus
+  hooks plus data.
 
 ## Deletion ledger
 
@@ -279,7 +280,7 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 | 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
 | 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
-| 4   | `satisfies never` after `transcriptFold.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                   | —      | 0           |
+| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
 | 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
@@ -289,51 +290,49 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 
 ### Lane 4 re-check (2026-10-21, at `6e5b262`)
 
-Before lane 4 started, each item was read against the tree. None of the
-writer items needs code; one guard does:
+Before lane 4 started, each item was read against the tree. None of the writer
+items needs code; one guard does:
 
-- **activate's cancels** (`agent/runtime/RunHistory.ts`, `activate`) are
-  written in the claim's transaction, for exactly the requests the fold shows
-  open and undecided (`unboundRequests`). `decisionRow`
+- **activate's cancels** (`agent/runtime/RunHistory.ts`, `activate`) are written
+  in the claim's transaction, for exactly the requests the fold shows open and
+  undecided (`unboundRequests`). `decisionRow`
   (`agent/runtime/requestPolicy.ts`) exists to settle a race between two
   answering surfaces; routing activation through it would add one read per
-  request and close no race. `decide` is the one writer of a surface's
-  answer; activation answers for a process that exited.
+  request and close no race. `decide` is the one writer of a surface's answer;
+  activation answers for a process that exited.
 - **Card producers: one per run.** Deleting `agent/trace/toolUseHelpers.ts`
   moved its emission into `TraceEmitter.openToolCard`
   (`agent/trace/TraceEmitter.ts:139`). Its callers are the agent-CLI tools
   (`packages/texra/src/tools/claudeAgent.ts`, `codex.ts`,
-  `claudeAgentBackgroundTasks.ts`), and they write on the trace of the child
-  run that `launchAgentCliSession` registers through `ChildRuns.launchProcess`
-  (`packages/texra/src/tools/agentCliShared.ts`), a run "outside the normal
-  run loop", after the launching call's card has closed. A loop run's cards
-  are the loop's; a process run's are `openToolCard`'s; no run has two
-  writers. Moving them to `stream.chunk` on the launching card would drop
-  them.
+  `claudeAgentBackgroundTasks.ts`), and they write on the trace of the child run
+  that `launchAgentCliSession` registers through `ChildRuns.launchProcess`
+  (`packages/texra/src/tools/agentCliShared.ts`), a run "outside the normal run
+  loop", after the launching call's card has closed. A loop run's cards are the
+  loop's; a process run's are `openToolCard`'s; no run has two writers. Moving
+  them to `stream.chunk` on the launching card would drop them.
 - **Grants**: `grantsKept`, `inheritedGrants` (`shared/approvalBypassKind.ts`)
-  and `delegatedChildGrants` (`tools/approval/index.ts`) are three rules
-  (kept after a detach, inherited, a delegated child's birth grants), not one
-  rule three times. `grantsKeptFromRows` already delegates to `grantsKept`.
+  and `delegatedChildGrants` (`tools/delegation/subagentRun.ts`) are three rules (kept
+  after a detach, inherited, a delegated child's birth grants), not one rule
+  three times. `grantsKeptFromRows` already delegates to `grantsKept`.
 - **`run.config`**: its three producers (registration, activation, and the
   loop's `configRow`, called from the loop, model switch and fork) differ on
   purpose: the binding exists only once the loop binds, and activation writes
   only a changed configuration.
 - **`followup.consumed`**: the copies are three-line literals over different
-  inputs (follow-up records, ids, filtered controls); one builder saves
-  nothing.
-- **`satisfies never`**: `applySessionSlices` in `sessionFold.ts` is partial
-  by design (the run arm takes the rest) and stays so. `transcriptFold.ts`'s
+  inputs (follow-up records, ids, filtered controls); one builder saves nothing.
+- **`satisfies never`**: `applySessionFacts` in `sessionViewUpdate.ts` is partial by
+  design (the run arm takes the rest) and stays so. `transcriptUpdate.ts`'s
   `record` switch covers all ten transcript event kinds today but has no
-  `satisfies never`, so a new kind would compile and vanish from a durable
-  fold. Lane 4 is that guard.
+  `satisfies never`, so a new kind would compile and vanish from a durable fold.
+  Lane 4 is that guard.
 - **Cross-protocol switches**: `admitSwitch`
   (`agent/runtime/modelAccess/routeDecision.ts`) already refuses them
-  (`DIFFERENT_FORMAT`). It compares backends, not protocols, which is
-  stricter on purpose: a run keeps its backend (`shared/schemas/runFacts.ts`,
-  `ModelBackendSchema`), and a stored Responses history replays its
-  reasoning's `encrypted_content` (`packages/llm/src/api/openaiResponsesLower.ts`),
-  which only the vendor that issued it accepts. Its refusal text says
-  "conversation format" for both cases.
+  (`DIFFERENT_FORMAT`). It compares backends, not protocols, which is stricter
+  on purpose: a run keeps its backend (`shared/schemas/runFacts.ts`,
+  `ModelBackendSchema`), and a stored Responses history replays its reasoning's
+  `encrypted_content` (`packages/llm/src/api/openaiResponsesLower.ts`), which
+  only the vendor that issued it accepts. Its refusal text says "conversation
+  format" for both cases.
 
 `wakeAt` and `deferred` are features, not fixes, and move to lane 5.
 
@@ -341,20 +340,21 @@ writer items needs code; one guard does:
 
 On 2026-10-21 the owner set this order:
 
-1. `fix/race-conditions-one-owner`. It edits session open and close, the
-   inbox and `runRegistry`, so it lands before lane 2b.
-2. `feat/script-launched-goal`. It edits the goal plugin, which lane 4b moves.
-3. The debt-cleanup branches (`claude/debt-*`). Their item 2 folds the llm
-   OAuth files, so the `.catch` removal in lane 3 waits for it. Item 7 changes
-   `openSettings` in both GUI host request files, so lane 7 waits for it.
-   Item 5 (#14197) shrinks the deep-import baseline before lane 1 deletes
-   it. Item 8 (#14198) was closed unmerged, so lane 1 moves its two imports
-   (`AgentTrace`, `describeFollowUpFailure`) itself.
+1. `fix/race-conditions-one-owner`. It edits session open and close, the inbox
+   and `runRegistry`, so it lands before lane 2b. Merged (#14210).
+2. `feat/script-launched-goal` (#14201, open). It edits the goal plugin, which
+   lane 4b moves.
+3. The debt-cleanup branches (`claude/debt-*`), all merged or closed by
+   2026-10-22. Item 2 (#14193) folded the llm OAuth files ahead of lane 3's
+   `.catch` removal. Item 7 (#14191) changed `openSettings` in both GUI host
+   request files. Item 5 (#14197) shrank the deep-import baseline. Item 8
+   (#14198) was closed unmerged, so lane 1 moves its two imports (`AgentTrace`,
+   `describeFollowUpFailure`) itself.
 4. This design's lanes.
 
-One later PR is not in the owner's order but also precedes the lanes whose
-files it edits: #14199 (fallback chains; `agent/runtime`, the llm OAuth files,
-`claudeAgent.ts`) before lanes 2b, 3 and 4.
+One later PR is not in the owner's order but also precedes the lanes whose files
+it edits: #14199 (open; fallback chains: `agent/runtime`, the llm OAuth files,
+`claudeAgent.ts`) before lanes 2b and 3.
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
 first: finishing the move of tool-edit approval into the loop, and putting the
@@ -386,40 +386,40 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   `SessionEvents.ts`, the two most-edited files. That is why it follows the
   race-fix branch.
 - **The fence may show that a built-in needs something no app plugin should
-  have.** Such a tool is engine code: it moves to `tools/`, and no new export
-  is added for it.
+  have.** Such a tool is engine code: it moves to `tools/`, and no new export is
+  added for it.
 - **Alias scoping** must still serve `tsconfig.test-kernel.json`, which today
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
   is the only check.
 - **`wakeAt`** is free only before the freeze.
-- Non-goals: a second dialect, third-party code in process, a daemon, request
-  or task kinds, in-process hooks, and cross-protocol history conversion. A
-  model switch across protocols is refused early.
+- Non-goals: a second dialect, third-party code in process, a daemon, request or
+  task kinds, in-process hooks, and cross-protocol history conversion. A model
+  switch across protocols is refused early.
 
-Still open after this design: about 350 lines of duplicated lowering across
-the llm adapters and OpenRouter's hand-rolled transport; `sessionFold.ts` at
-1,229 lines; the CLI approval stack versus the webview request panels; and
-four CLAUDE.md rules with no check (the barrel ban, the single-caller ban,
-renderer `Date.now()`, and silent degradation outside the harness and llm).
+Still open after this design: about 350 lines of duplicated lowering across the
+llm adapters and OpenRouter's hand-rolled transport; `sessionViewUpdate.ts` at 1,166
+lines; the CLI approval stack versus the webview request panels; and four
+CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
+`Date.now()`, and silent degradation outside the harness and llm).
 
 ## Owner questions
 
 1. **The Promise entry.** Ship it as the argued exception to the 2026-09-21
-   ruling, or keep the Effect-only surface? _Recommend: ship it last;
-   deleting it costs one file._
+   ruling, or keep the Effect-only surface? _Recommend: ship it last; deleting
+   it costs one file._
 2. **`./host`.** Keep about 37 host-composition names on a subpath with no
    stability promise, or move them into `packages/texra`? _Recommend: the
    subpath now, and move them as the hosts' imports shrink._
-3. **History as a package.** Keep it as a lint zone in `session/` until a
-   second embedder is named? _Recommend: yes; the rename stays cheap._
+3. **History as a package.** Keep it as a lint zone in `session/` until a second
+   embedder is named? _Recommend: yes; the rename stays cheap._
 4. **The `texra.` namespace.** Prefix at the store boundary, with stored keys
    unchanged? _Recommend: yes; nothing migrates._
 
 ## Verified
 
-- Read `main` at `08455c8`, and re-checked the load-bearing claims at
-  `1a553be`: `Database.ts:18`, `:68-69`, `:241`, `:246`, `:1032`;
+- Read `main` at `08455c8`, and re-checked the load-bearing claims at `1a553be`:
+  `Database.ts:18`, `:68-69`, `:241`, `:246`, `:1032`;
   `processRuntime.ts:27-42`, `:97-120`; `stateSettings.ts:72`, `:858`;
   `PromptBuilder.ts:32`; `RunHistory.ts:365-377` against `SessionHandle.ts:316`;
   `tools/plugins.ts:182`; `runtimePresentationEvents.ts:20-26`;
@@ -427,8 +427,8 @@ renderer `Date.now()`, and silent degradation outside the harness and llm).
   (547), `agentPresets.ts` (192), `common/teams` (372), `iconNames.ts` (138),
   `copilotRouting.ts` (225) and `quotaFallbackRoutes.ts` (71).
 - The import graph was computed by resolving every `tsconfig.json` alias over
-  about 1,400 files and 10,000 import statements at `08455c8` (the exact
-  figures depend on the file filter). The harness deep-import set matches
+  about 1,400 files and 10,000 import statements at `08455c8` (the exact figures
+  depend on the file filter). The harness deep-import set matches
   `config/ratchets/harness-deep-import-baseline.json` exactly.
 - The pi-durable comparison reads its `README.md`, `package.json` (1.3.0),
   `CHANGELOG.md` and `docs/spec.md` at `earendil-works/pi` main.

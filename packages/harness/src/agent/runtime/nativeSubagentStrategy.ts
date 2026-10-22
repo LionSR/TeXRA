@@ -46,6 +46,8 @@ export interface ChildRunLaunchOptions {
   readonly parentOffered?: readonly OfferedTool[];
   /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
   readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
+  /** The history a fresh child is born on: a fork's (`forkSeed`). */
+  readonly seed?: RegisterRunOptions['seed'];
 }
 
 interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
@@ -144,7 +146,7 @@ export function createNativeSubagentStrategy(
             params.runId,
             {
               ...executeOptions,
-              registration: params.registration,
+              registration: { ...params.registration, seed: params.seed },
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
             },

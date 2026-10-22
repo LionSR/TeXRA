@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import {
   DisplaySessionEventSchema,
   pluginFactFloor,
@@ -33,27 +32,37 @@ export interface TraceFactArm {
   readonly upcasters: readonly unknown[];
 }
 
+/** Plugin facts a built-in plugin wrote before this build retired them:
+ *  a trace that holds one is from an earlier build, rejected, not stripped. */
+const RETIRED_FACTS: ReadonlySet<string> = new Set(['goal/state']);
+
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
- * against the harness's built-in arms and the app's `appArms`: a fact
+ * against the app's plugin arms (`appArms`): a fact
  * outside its arm's versions (`pluginFactFloor`), or whose value the arm's
- * schema refuses, throws, naming it; one whose plugin this build lacks is
- * left out. A trace is display data and runs no upcaster, so a version an
- * upcaster would bring forward is refused by the schema, never misread.
+ * schema rejects, throws, naming it, as does a retired built-in fact no
+ * current plugin owns;
+ * one whose plugin this build lacks is left out. A trace is display data and runs no upcaster, so a version an
+ * upcaster would bring forward is rejected by the schema, never misread.
  */
 export function readTraceFacts(
   document: TraceDocument,
   appArms: readonly TraceFactArm[],
 ): TraceDocument {
   const arms = new Map(
-    [...Object.values(HARNESS_PLUGIN_ARMS).flat(), ...appArms].map(
-      (arm): [string, TraceFactArm] => [`${arm.plugin}/${arm.kind}`, arm],
-    ),
+    appArms.map((arm): [string, TraceFactArm] => [
+      `${arm.plugin}/${arm.kind}`,
+      arm,
+    ]),
   );
   const events = document.events.filter((event) => {
     if (event.type !== 'plugin.fact') return true;
     const name = `${event.plugin}/${event.kind}`;
     const arm = arms.get(name);
+    if (arm === undefined && RETIRED_FACTS.has(name))
+      throw new Error(
+        `the plugin fact ${name} was written by an earlier build; this build no longer reads it.`,
+      );
     if (arm === undefined) return false;
     if (event.version < pluginFactFloor(arm) || event.version > arm.version)
       throw new Error(

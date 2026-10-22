@@ -125,12 +125,8 @@ export function jitteredExponentialBackoffMs(
 // runId
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a 12-char lowercase-hex ID (48 bits of entropy). Shared by
- * schemas that constrain IDs to hex (run IDs, inquiry thread IDs,
- * goal IDs).
- */
-export const hexId12 = customAlphabet('0123456789abcdef', 12);
+/** Generate a 12-char lowercase-hex ID (48 bits of entropy). */
+const hexId12 = customAlphabet('0123456789abcdef', 12);
 
 /** Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
  *  two minting sites (`deriveRunId` is the other), so the brand is
@@ -142,8 +138,8 @@ export function generateRunId(): RunId {
 /**
  * Generate a short unique ID for non-schema-constrained uses (temp
  * filenames, log entry IDs). Defaults to nanoid's standard 21-char
- * URL-safe alphabet; pass `size` for a shorter ID. Use {@link hexId12}
- * instead when a schema constrains the ID to lowercase hex.
+ * URL-safe alphabet; pass `size` for a shorter ID. A run id, which its
+ * schema constrains to lowercase hex, is `generateRunId`'s.
  */
 export function generateShortId(size?: number): string {
   return nanoid(size);

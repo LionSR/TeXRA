@@ -5,6 +5,7 @@ import { MODEL_CONFIGS, lookup } from 'llm-zoo';
 
 import {
   getEnabledModels,
+  type ModelOption,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { CopilotModelRoute } from '@model/copilotRouting';
@@ -12,7 +13,6 @@ import {
   DEFAULT_HELPER_MODEL,
   DEFAULT_MODELS,
 } from '@shared/constants/defaultModels';
-import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -30,23 +30,31 @@ type SettingsModelSelectionControllerDeps = ConstructorParameters<
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
-const modelOptions = (models: readonly string[]): ModelOptionData[] =>
-  models
-    .map((model) => {
-      const config = lookup(model);
-      return config
-        ? { value: model, label: config.label, provider: config.provider }
-        : { value: model, label: model };
-    })
-    .map((option) => ({
-      ...option,
-      availability: 'provider-key',
-    }));
-
 const resolveModelOptions = (
   _stores: ModelOptionStores,
   models: readonly string[],
-): Effect.Effect<ModelOptionData[]> => Effect.succeed(modelOptions(models));
+): Effect.Effect<ModelOption[]> =>
+  Effect.succeed(
+    models.map((model): ModelOption => {
+      const config = lookup(model);
+      return config
+        ? {
+            model,
+            availability: 'provider-key',
+            published: config,
+            config,
+            route: { kind: 'openrouter' },
+            source: config.provider,
+            savedEffort: undefined,
+            reasoning: undefined,
+          }
+        : {
+            model,
+            availability: 'unknown-model',
+            unavailableReason: `Model "${model}" is not recognized.`,
+          };
+    }),
+  );
 
 function createController(
   overrides: Partial<SettingsModelSelectionControllerDeps> = {},

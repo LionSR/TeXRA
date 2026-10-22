@@ -19,8 +19,7 @@ import {
 } from '../support/repoScan';
 
 /**
- * Architecture ratchet for the 1.0 store
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §1):
+ * Architecture ratchet for the 1.0 store:
  * the row codec is the one module that knows a stored shape. Nothing above
  * it sees a `'<type>.<N>'` string, a `version` column or an upcaster, and
  * nothing below it reads a payload field: the only SQLite JSON function a

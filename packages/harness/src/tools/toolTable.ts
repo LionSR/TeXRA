@@ -16,10 +16,7 @@ import {
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type {
-  LogWriteError,
-  SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
@@ -32,7 +29,6 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { RunState } from '@shared/session/runState';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
@@ -107,46 +103,6 @@ export type InstalledToolReader = Effect.Effect<{
   readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;
-
-/**
- * What decides that a parked run continues, pinned by
- * each step beside its tools; with none, the run
- * parks. `atIdle` answers the synthetic turn's text or null; `canContinue`
- * is false when the run ends here or a follow-up is queued. `onResume` runs
- * at a resumed activation's first step that pins it, before the activation
- * decides anything: continuation does not survive a resume on its own.
- */
-export interface Continuation<R = never> {
-  readonly atIdle: (park: {
-    readonly session: SessionHandle;
-    readonly runId: RunId;
-    readonly state: RunState;
-    readonly canContinue: boolean;
-  }) => Effect.Effect<string | null, Error, R>;
-  readonly onResume: (run: {
-    readonly session: SessionHandle;
-    readonly runId: RunId;
-  }) => Effect.Effect<void, Error, R>;
-}
-
-/**
- * A built-in plugin's {@link Continuation}, as its `Plugin` value carries it:
- * opaque, because a continuation reads the session and only
- * `defineBuiltinPlugin` makes one. An app's plugin reaches runs through its
- * tools' `ChildRuns`, never the session.
- */
-export interface PluginContinuation {
-  readonly _: unique symbol;
-}
-
-/** The continuation `defineBuiltinPlugin` gave `plugin`, if any: the one
- *  maker of a `PluginContinuation` makes it from a `Continuation`. */
-export const continuationOf = (plugin: Plugin | null): Continuation | null => {
-  // cast: a `PluginContinuation` is a `Continuation` (`defineBuiltinPlugin`).
-  const continuation = plugin?.continuation as unknown as
-    Continuation | undefined;
-  return continuation ?? null;
-};
 
 /**
  * A plugin's section of each request's system text, rendered from the tool
@@ -249,7 +205,7 @@ export function agentBlockOf<A>(
 }
 
 /** The process's plugins by plugin id: what each contributes (its tools,
- *  continuation, prompt section and layers) is read off its value. */
+ *  prompt section and layers) is read off its value. */
 export interface ToolTable {
   /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
@@ -265,16 +221,15 @@ export interface ToolTable {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id or a tool name, claims the parked runs'
- * continuation or one request kind's decisions twice, claims an agent-file
- * block another plugin or the persona owns, or gives a switch to a plugin
- * with no availability probe is a defect of the list, refused when it is
- * built.
+ * plugin id or a tool name, claims one request kind's decisions twice,
+ * claims an agent-file
+ * block another plugin or the persona owns, gives a switch to a plugin
+ * with no availability probe, or lacks a plugin another `requires` is a
+ * defect of the list, rejected when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool<Error, PluginToolServices>>();
-  let continued: string | null = null;
   const decisions = new Map<string, RequestDecisionHook>();
   const refuse = (reason: string): never => {
     throw new Error(`The plugin list is not valid: ${reason}`);
@@ -293,13 +248,6 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         refuse(`tool ${name} of plugin ${plugin.id} is another plugin's.`);
       byName.set(name, tool);
     }
-    if (plugin.continuation !== undefined) {
-      if (continued !== null)
-        refuse(
-          `plugin ${plugin.id} continues parked runs, which plugin ${continued} already does.`,
-        );
-      continued = plugin.id;
-    }
     if (plugin.decision !== undefined) {
       if (decisions.has(plugin.decision.kind))
         refuse(
@@ -310,6 +258,12 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     if (plugin.availability === undefined && plugin.toggle !== undefined)
       refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
+  const [missing] = plugins.flatMap(({ id, requires }) =>
+    (requires ?? []).flatMap((needed) =>
+      entries.has(needed) ? [] : [`plugin ${id} runs on plugin ${needed}`],
+    ),
+  );
+  if (missing !== undefined) refuse(`${missing}, which is not listed.`);
   const owned = plugins.flatMap(({ agentBlock }) => agentBlock ?? []);
   const blocks = new Map(owned.map((block) => [block.key, block] as const));
   if (

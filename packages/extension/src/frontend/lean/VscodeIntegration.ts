@@ -33,7 +33,10 @@ import {
   createLeanServerRoster,
   type LeanServerRoster,
 } from '@texra/tools/lean/leanServerRegistry';
-import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
+import {
+  LeanFileCommandFailed,
+  type LeanLanguageServicesShape,
+} from '@texra/tools/lean/leanLanguageServices';
 import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'VscodeLeanIntegration';
@@ -242,20 +245,26 @@ function executeFileCommand(
   globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
-): Effect.Effect<boolean> {
+): Effect.Effect<void, LeanFileCommandFailed> {
   return Effect.gen(function* () {
     yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
-    return true;
   }).pipe(
-    // The port answers this one with a boolean, so the reason is only worth
-    // saying once — in the log, rather than nowhere as it was before the
-    // failures were typed.
-    Effect.catch((failure) =>
-      Effect.logWarning(
-        `Lean "${command}" on ${filePath} did not run: ${failure.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+    Effect.mapError(
+      (failure) =>
+        new LeanFileCommandFailed({
+          // A missing extension is a setup problem; every other failure
+          // (an editor refusal, an activation fault, a rejected command)
+          // already says what to do in its message.
+          reason:
+            failure._tag === 'LeanExtensionUnavailable' &&
+            failure.reason === 'not-installed'
+              ? 'toolchain_unavailable'
+              : 'failed',
+          message: failure.message,
+          cause: failure,
+        }),
     ),
   );
 }
@@ -428,6 +437,9 @@ function fetchDiagnosticsForFile(
     return {
       ok: true,
       diagnostics: getDiagnostics(opened.success.absolutePath),
+      // VS Code's diagnostics collection carries no elaboration progress,
+      // so this adapter cannot tell a still-elaborating file apart.
+      complete: true,
     } satisfies FetchDiagnosticsResult;
   });
 }

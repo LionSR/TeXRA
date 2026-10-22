@@ -27,6 +27,7 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
@@ -47,13 +48,15 @@ import type { SessionHandle } from '../SessionHandle';
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
- * its opening batch (null: a resume, whose cell activates the run) with
+ * its opening batch (null: a resume, whose cell activates the run), on the
+ * history a fork is born with when it has a `seed`, with
  * the trace held until then (`opening`), and `entered` runs once that
  * batch commits. `initialUserMessage`: a fresh
  * run's instruction, logged once its opening inserted the launch's media.
  */
 interface LaunchEntry {
   readonly registration: readonly SessionEventDraft[] | null;
+  readonly seed?: readonly RunHistoryDraft[] | null;
   readonly opening: Alongside;
   readonly entered: Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
@@ -247,12 +250,13 @@ export const agentRunLayer = (
           !textOnly &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run of any agent but
-        // a plugin agent that names its tools; a child gets what it declares,
-        // narrowed to its parent's.
+        // a plugin agent that names its tools, and a `self()` child, which
+        // runs as its caller; any other child gets what it declares. A child
+        // is narrowed to its parent's either way.
         injectInstalled:
           script === null &&
           !textOnly &&
-          parentOffered === undefined &&
+          (parentOffered === undefined || config.asCaller === true) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
@@ -263,8 +267,13 @@ export const agentRunLayer = (
       // newest config's); a fresh run binds the launch model under today's
       // default route.
       const folded = yield* runHistory.load(runId);
-      const backend = folded?.backend ?? undefined;
-      const persisted = backend === undefined ? null : folded;
+      // A fork binds as its source was bound at the cut (its seed's row).
+      const seeded = ctx.entry.seed?.findLast(
+        (row) => row.type === 'run.config',
+      );
+      const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
+      const persisted = folded?.backend != null ? folded : fromSeed;
+      const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
       const modelConfig = ctx.modelConfig;
       // The routes this run declines: a resumed run replays the set its rows

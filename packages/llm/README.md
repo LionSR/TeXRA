@@ -281,10 +281,3 @@ its live check belongs to an Extension Development Host job.
 What the live tier does not claim: SSE parsing belongs to the vendor SDKs, so
 the package makes no bounded-stream-memory claim, and cleanup joins foreign
 finalizers, so it makes no bounded-stop-latency claim either.
-
-## Background
-
-[The package study](../../.agents/docs/implemented/architecture/2026-09-06-llm-package-architecture-study.md)
-and
-[the joint runtime contract](../../.agents/docs/implemented/architecture/2026-09-06-llm-runtime-contract.md)
-are the design this package implements.

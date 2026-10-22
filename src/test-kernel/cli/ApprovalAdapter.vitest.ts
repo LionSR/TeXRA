@@ -386,7 +386,7 @@ describe('buildToolEditApprovalContent', () => {
       // automatic cancellation, never as that person's rejection.
       expect(result).toEqual({
         action: 'cancel',
-        cause: 'CLI approval prompt failed.',
+        cause: 'CLI approval prompt failed: terminal input closed',
       });
     }),
   );

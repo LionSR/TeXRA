@@ -11,7 +11,10 @@ import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
-import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import {
+  DEFINED_AGENT_COPY,
+  DELEGATION_APPROVAL_COPY,
+} from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -100,9 +103,13 @@ function agentProposalMetadataLines({
   // A script's request for its `agent` calls: what approving allows, the
   // first agent, and the calls it issued first; its code is the scrolling
   // text below, under its line count.
+  const defined: MetadataLine[] = payload.persona
+    ? [{ segments: [{ text: DEFINED_AGENT_COPY.heading(payload.persona) }] }]
+    : [];
   if (payload.script) {
     const { calls } = payload.script;
     return [
+      ...defined,
       { segments: [{ text: SCRIPT_REQUEST_COPY.grant }], tone: 'warning' },
       {
         segments: [
@@ -143,6 +150,7 @@ function agentProposalMetadataLines({
         { text: agentProposalLabel(payload) },
       ],
     },
+    ...defined,
   ];
   if (payload.workingDirectory) {
     lines.push({
@@ -202,6 +210,18 @@ function MetadataLineRow(props: {
   return line.marginTop ? <Box marginTop={1}>{text}</Box> : text;
 }
 
+/** The text a proposal scrolls: a script's code or the agent's task, after
+ *  a defined agent's system prompt. */
+function proposalText(payload: AgentProposalPermission): string {
+  const { script, persona } = payload;
+  const body = script ? script.source : payload.instruction;
+  if (!persona) return body;
+  const label = script
+    ? SCRIPT_REQUEST_COPY.code(script)
+    : DEFINED_AGENT_COPY.instructionLabel;
+  return `${DEFINED_AGENT_COPY.promptLabel}:\n${persona.prompt ?? ''}\n\n${label}:\n${body}`;
+}
+
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
@@ -238,7 +258,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         hiddenNoun={script ? 'code rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
         scrollHint={script ? 'scroll code' : 'scroll prompt'}
-        text={script ? script.source : props.payload.instruction}
+        text={proposalText(props.payload)}
         width={instructionWidth}
       />
     </ConfirmCard>

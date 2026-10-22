@@ -55,8 +55,8 @@ interface PtySessionHandle {
 }
 
 export interface DesktopPtyHostOptions {
-  /** Default working directory for new sessions: the active paper's root. */
-  cwd?: () => string | undefined;
+  /** Working directory for every session, decided by the owner. */
+  readonly cwd: string;
   /** Streams pty output to the renderer. */
   onData(sessionId: string, data: string): void;
   /** Reports process exit so the UI can mark the session finished. */
@@ -77,7 +77,6 @@ export interface DesktopPtyHost {
     id: string;
     cols: number;
     rows: number;
-    cwd?: string;
   }): Promise<PtySessionHandle | undefined>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
@@ -181,7 +180,7 @@ export function createDesktopPtyHost(
   const sessions = new Map<string, PtySessionHandle>();
 
   return {
-    async create({ id, cols, rows, cwd }) {
+    async create({ id, cols, rows }) {
       const existing = sessions.get(id);
       if (existing) return existing;
 
@@ -237,7 +236,7 @@ export function createDesktopPtyHost(
           name: 'xterm-256color',
           cols: size.cols,
           rows: size.rows,
-          cwd: cwd ?? options.cwd?.() ?? process.cwd(),
+          cwd: options.cwd,
           env: ptyEnvironment(),
         });
       } catch (error) {

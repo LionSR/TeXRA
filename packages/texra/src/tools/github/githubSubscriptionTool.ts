@@ -436,13 +436,15 @@ interface OpenPullSummary {
   head?: { ref?: string };
 }
 
+/** The repository's default branch as GitHub reports it; a response that
+ *  names none leaves it unconfirmed rather than guessed. */
 const getDefaultBranch = (
   owner: string,
   repo: string,
-): Effect.Effect<string, Error, GitHubServices> =>
+): Effect.Effect<string | undefined, Error, GitHubServices> =>
   Effect.map(
     ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
-    (repository) => repository.default_branch ?? 'main',
+    (repository) => repository.default_branch,
   );
 
 function parseOriginHeadDefaultBranch(ref: string): string | undefined {
@@ -486,7 +488,8 @@ const listOpenPullSuggestions = (
     },
   );
 
-/** Neither half is essential: each recovers to its absence, concurrently. */
+/** Neither half is essential: each recovers, logged, to the local origin/HEAD
+ *  hint or to no suggestions, concurrently. */
 const getFindCurrentFallbackInfo = (
   owner: string,
   repo: string,
@@ -499,10 +502,18 @@ const getFindCurrentFallbackInfo = (
 > =>
   Effect.zip(
     getDefaultBranch(owner, repo).pipe(
-      Effect.catch(() => getLocalDefaultBranchHint(cwd, settings)),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `The default branch of ${owner}/${repo} could not be read; using origin/HEAD: ${error.message}`,
+        ).pipe(Effect.andThen(getLocalDefaultBranchHint(cwd, settings))),
+      ),
     ),
     listOpenPullSuggestions(owner, repo).pipe(
-      Effect.catch(() => Effect.succeed('')),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `The open PRs of ${owner}/${repo} could not be listed: ${error.message}`,
+        ).pipe(Effect.as('')),
+      ),
     ),
     { concurrent: true },
   ).pipe(

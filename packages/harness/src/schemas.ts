@@ -240,8 +240,6 @@ export {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 export { parseJsonWith, safeParseJson } from '@common/parsing/safeParseJson';
-// The goal plugin's row, as a renderer reads a run's goal from it.
-export { goalStateOf, type GoalState } from '@shared/plugins/goal';
 // An exported run (`assembleTrace`), as a static viewer parses it back.
 export {
   readTraceFacts,

@@ -10,14 +10,17 @@
  * recorded only where a step opens, so the fork's first step records its
  * own. Nothing pending is copied (no follow-up, request or retry permit),
  * its usage starts at zero, and the source's plugin facts stay with the
- * source, so a goal it ran is not the fork's.
+ * source. `forkSeed` is the same cut as a child its caller launches at
+ * once: a script's `self()`.
  */
 import { Effect } from 'effect';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import {
   qualifyAggregateId,
+  requestParksItsCaller,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -28,6 +31,18 @@ import { generateRunId } from '@utils/core';
 import { configRow, positionRow, rowAggregate } from './loop/rows';
 import type { SessionHandle } from './SessionHandle';
 
+/** Whether nothing is in flight: no invocation, response or undecided
+ *  request its caller waits on (an external inquiry stands across turns,
+ *  its answer a follow-up). A turn's beginning is quiet (its input is in,
+ *  nothing answered it yet), so a child can be forked there. */
+const isQuiet = (state: RunState): boolean =>
+  state.invocation === null &&
+  state.pendingResponse === null &&
+  Object.values(state.requests).every(
+    (request) =>
+      request.decision !== null || !requestParksItsCaller(request.payload),
+  );
+
 /**
  * Whether the run stands at a settled position (HQ4): at a turn boundary,
  * with no invocation (nor its retry), response (nor its calls) or undecided
@@ -37,9 +52,7 @@ const isSettled = (state: RunState): boolean =>
   (state.phase === 'waiting' || state.phase === 'halted') &&
   // Input consumed for a turn that has not run is inside that turn.
   state.at !== 'turn.ready' &&
-  state.invocation === null &&
-  state.pendingResponse === null &&
-  Object.values(state.requests).every((request) => request.decision !== null);
+  isQuiet(state);
 
 const refused = (reason: string) => new Rejected({ reason });
 
@@ -50,47 +63,44 @@ export const runNoun = (
 ): 'task' | 'agent' =>
   session.view.run(runId)?.parentId == null ? 'task' : 'agent';
 
-/**
- * Fork run `from` at `at`, the `seq` of a settled position in its run
- * history, or at the end of its last completed turn when `at` is null (a
- * run in a turn now is forked from before it). Returns the new run's id;
- * the run is written whole and left for its host to resume.
- */
-export const forkRun = Effect.fn('forkRun')(function* (
+/** Where a fork of `from` starts: a position of it with nothing in flight, `at` or (null)
+ *  the latest, its state there, and its launch facts. */
+const cutOf = Effect.fn('forkRun.cut')(function* (
   session: SessionHandle,
-  from: { readonly id: RunId; readonly uid: string },
+  from: RunId,
   at: number | null,
-): Effect.fn.Return<RunId, Rejected | Error> {
-  const records = getRunRecords(session, from.id);
+  /** A child's fork: the latest such point committed before this
+   *  commit, a turn's beginning included. */
+  before?: number,
+) {
+  const records = getRunRecords(session, from);
   const config = yield* records.readConfig();
   if (config === null || config.script != null) {
     return yield* refused('Only a conversation can be forked.');
   }
-  const aggregate = qualifyAggregateId('run', from.id);
-  const start = (yield* session.log.records(from.id)).find(
+  const aggregate = qualifyAggregateId('run', from);
+  const start = (yield* session.log.records(from)).find(
     (row) => row.type === 'run.start',
   );
   if (start?.type !== 'run.start') {
     return yield* refused(
-      `The ${runNoun(session, from.id)} ${from.id} has no recorded start.`,
+      `The ${runNoun(session, from)} ${from} has no recorded start.`,
     );
   }
-  // The title the source shows: its newest user title over any later model
-  // title, as the fold reads it, with its authorship.
-  const titles = (yield* session.log.rows(aggregate, [
-    'run.description',
-  ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
-  const title =
-    titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
   // The cut is a position row: a turn boundary of the source, not any seq.
   const parks = (yield* session.log.rows(aggregate, ['run.position'])).filter(
     (row) =>
       row.type === 'run.position' &&
-      (row.payload.at === 'waiting' || row.payload.at === 'halted'),
+      (before === undefined
+        ? row.payload.at === 'waiting' || row.payload.at === 'halted'
+        : row.commit < before &&
+          ['waiting', 'halted', 'turn.begin'].includes(row.payload.at)),
   );
   const settledAt = (seq: number) =>
-    Effect.map(session.runHistory.load(from.id, seq), (state) =>
-      state !== null && state.phase !== null && isSettled(state)
+    Effect.map(session.runHistory.load(from, seq), (state) =>
+      state !== null &&
+      state.phase !== null &&
+      (before === undefined ? isSettled(state) : isQuiet(state))
         ? { seq, state }
         : null,
     );
@@ -110,16 +120,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
       'A fork starts at a settled point of a conversation: the end of one of its turns.',
     );
   }
-  const { seq: cut, state } = found;
-  const runId = generateRunId();
-  // The view, and the input it answers with the content it names (its
-  // base system text and instruction). The structured result of a turn the
-  // fork never ran stays the source's. The offered tools and the system
-  // text a step adds are the fork's first step's to record, as for any run.
-  const { input } = state;
-  const named = [input.system, input.instruction].flatMap((digest) =>
-    digest === undefined ? [] : [digest],
-  );
   // A child's fork is a root: the task its ancestors were given, and the
   // structured result its parent's call asked for, are not its. It runs on
   // the model its source was on at the cut, bound as it was.
@@ -128,8 +128,27 @@ export const forkRun = Effect.fn('forkRun')(function* (
     outputSchema: _schema,
     ...launched
   } = config;
-  const record = { ...launched, model: state.modelId ?? launched.model };
-  const rows: RunHistoryDraft[] = [
+  const record = { ...launched, model: found.state.modelId ?? launched.model };
+  return { ...found, start, record };
+});
+
+/**
+ * The rows that seed `runId` with `state`'s view and `messages`: the input
+ * it answers with the content it names (its base system text and
+ * instruction). The structured result of a turn the fork never ran stays
+ * the source's. The offered tools and the system text a step adds are the
+ * fork's first step's to record, as for any run.
+ */
+const viewRows = (
+  runId: RunId,
+  state: RunState,
+  messages: RunState['messages'],
+): RunHistoryDraft[] => {
+  const { input } = state;
+  const named = [input.system, input.instruction].flatMap((digest) =>
+    digest === undefined ? [] : [digest],
+  );
+  return [
     {
       type: 'context.edit',
       aggregateId: rowAggregate(runId),
@@ -138,7 +157,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
         trigger: null,
         base: null,
         range: { from: 0, to: 0 },
-        messages: state.messages,
+        messages,
         usage: null,
         input,
       },
@@ -148,16 +167,29 @@ export const forkRun = Effect.fn('forkRun')(function* (
       aggregateId: rowAggregate(runId),
       payload: { digest, value: state.contents[digest] },
     })),
-    ...(state.backend === null
-      ? []
-      : [
-          configRow(runId, record, record.model, {
-            backend: state.backend,
-            declinedRoutes: state.declinedRoutes,
-          }),
-        ]),
-    positionRow(runId, state, 'waiting'),
   ];
+};
+
+/**
+ * Fork run `from` at `at`, the `seq` of a position in its run
+ * history, or at the end of its last completed turn when `at` is null (a
+ * run in a turn now is forked from before it). Returns the new run's id;
+ * the run is written whole and left for its host to resume.
+ */
+export const forkRun = Effect.fn('forkRun')(function* (
+  session: SessionHandle,
+  from: { readonly id: RunId; readonly uid: string },
+  at: number | null,
+): Effect.fn.Return<RunId, Rejected | Error> {
+  const { seq: cut, state, start, record } = yield* cutOf(session, from.id, at);
+  // The title the source shows: its newest user title over any later model
+  // title, as the run state reads it, with its authorship.
+  const titles = (yield* session.log.rows(qualifyAggregateId('run', from.id), [
+    'run.description',
+  ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
+  const title =
+    titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
+  const runId = generateRunId();
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
@@ -172,7 +204,18 @@ export const forkRun = Effect.fn('forkRun')(function* (
   const cell = yield* session.runHistory.open(runId, {
     registration: Effect.succeed(registration),
   });
-  yield* cell.append(rows);
+  yield* cell.append([
+    ...viewRows(runId, state, state.messages),
+    ...(state.backend === null
+      ? []
+      : [
+          configRow(runId, record, record.model, {
+            backend: state.backend,
+            declinedRoutes: state.declinedRoutes,
+          }),
+        ]),
+    positionRow(runId, state, 'waiting'),
+  ]);
   // And unclaimed: the host's to resume, as any waiting conversation is.
   // The rows are durable whatever happens to the claim, so a release that
   // fails only says so; the next process proves this one dead first.
@@ -184,4 +227,58 @@ export const forkRun = Effect.fn('forkRun')(function* (
     ),
   );
   return runId;
+});
+
+/**
+ * Conversation `from` as a child of a `self()` call will open on it: the
+ * agent configuration it launches with, and the history its opening commits
+ * instead of a prompt (`RegisterRunOptions.seed`), its first message ending
+ * on `prompt`. The child is launched fresh, never resumed, so it starts
+ * with the grants its parent's script holds. The cut is the conversation as
+ * it stood before commit `before` (the script's start): the beginning of
+ * the turn that issued the script, or the wait before it, so every call of
+ * one script forks the same history whatever the conversation does since.
+ */
+export const forkSeed = Effect.fn('forkSeed')(function* (
+  session: SessionHandle,
+  from: RunId,
+  before: number,
+  runId: RunId,
+  prompt: string,
+  /** The source's row the child is bound as of (`undefined`: its latest). */
+  boundAt: number | undefined,
+): Effect.fn.Return<
+  { readonly record: AgentConfig; readonly seed: RunHistoryDraft[] },
+  Rejected | Error
+> {
+  const { state, record } = yield* cutOf(session, from, null, before);
+  const text = { kind: 'text' as const, text: prompt };
+  // The prompt is the next user message; a cut that already ends on one
+  // (a turn's beginning) takes it as that message's last part.
+  const last = state.messages.at(-1);
+  const messages =
+    last?.role === 'user'
+      ? [
+          ...state.messages.slice(0, -1),
+          { ...last, content: [...last.content, text] },
+        ]
+      : [...state.messages, { role: 'user' as const, content: [text] }];
+  // Bound as the source was when it issued the call, not at the cut: a
+  // route its turn declined since stays declined (`AgentRun` binds a seeded
+  // launch from this row).
+  const bound = (yield* session.runHistory.load(from, boundAt)) ?? state;
+  const model = bound.modelId ?? record.model;
+  const binding =
+    bound.backend === null
+      ? []
+      : [
+          configRow(runId, { ...record, model }, model, {
+            backend: bound.backend,
+            declinedRoutes: bound.declinedRoutes,
+          }),
+        ];
+  return {
+    record: { ...record, model },
+    seed: [...viewRows(runId, state, messages), ...binding],
+  };
 });

@@ -39,6 +39,7 @@ import {
   approvalPolicyDenialMessage,
   humanInputDenialMessage,
   retryDenialMessage,
+  type ApprovalPolicyDecision,
   type ApprovalPolicyDenial,
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -70,19 +71,17 @@ import type {
 const canPresent = (session: SessionHandle): boolean =>
   !session.interactions.approvalPromptsUnavailable;
 
-/**
- * The policy's answer for an executable request (a plan, or any
- * approval-gated tool) under what the host can answer. One reading for
- * every run of the session, whoever triggers it.
- */
-const executableDecision = (
+/** The policy's answer for an executable request (a plan, or any
+ *  approval-gated tool) under what the host can answer: one reading for
+ *  every run, which a plugin hook's `permission_mode` shares. */
+export const executableDecision = (
   session: SessionHandle,
   runId: RunId,
   policy = session.approvals.policy(runId),
   // A run whose delegated work is bypassed (an Auto-approve launch) is
   // asked nothing: every approval it would open is granted.
   scopedBypass = session.approvals.bypass(runId, 'superYolo') !== null,
-) =>
+): ApprovalPolicyDecision =>
   decideApproval({
     policy,
     promptRequired: true,

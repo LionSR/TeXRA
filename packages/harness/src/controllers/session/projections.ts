@@ -1,6 +1,5 @@
 /**
- * The store's projections
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §5):
+ * The store's projections:
  * the display and listing tables no row stores, each maintained by a pure
  * projector over decoded events. Their upkeep runs the projectors in
  * `Database`'s append transaction, making the writes they return; before a

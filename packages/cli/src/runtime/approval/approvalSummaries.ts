@@ -9,6 +9,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
+import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -119,9 +120,23 @@ export function formatAgentProposalFileGroup(
   return `${label}: ${visibleFiles.join(', ')}${suffix}`;
 }
 
+/** An agent the call defines: its name and tools, then its prompt. */
+function definedAgentLines(
+  proposal: AgentProposalPermission,
+  promptLines: readonly string[],
+): readonly string[] {
+  if (!proposal.persona) return [];
+  return [
+    DEFINED_AGENT_COPY.heading(proposal.persona),
+    `${DEFINED_AGENT_COPY.promptLabel}:`,
+    ...promptLines.map((line) => `  ${line}`),
+  ];
+}
+
 function agentProposalApprovalSummary(
   proposal: AgentProposalPermission,
   instructionLines: readonly string[],
+  promptLines: readonly string[],
   boundFileGroups: boolean,
 ): string {
   const workingDirectory = proposal.workingDirectory?.trim();
@@ -137,6 +152,7 @@ function agentProposalApprovalSummary(
     return [
       `Script agent request: ${SCRIPT_REQUEST_COPY.title(script)}`,
       SCRIPT_REQUEST_COPY.grant,
+      ...definedAgentLines(proposal, promptLines),
       scriptRequestFirstAgentLine(
         proposal.agent,
         getModelLabel(proposal.model),
@@ -154,6 +170,7 @@ function agentProposalApprovalSummary(
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
+    ...definedAgentLines(proposal, promptLines),
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...fileGroups,
     'Instruction:',
@@ -170,22 +187,34 @@ export function buildAgentProposalApprovalContent(
   );
   const boundedInstructionLines =
     boundedAgentProposalInstructionLines(instructionLines);
+  // A defined agent's prompt is bounded as the instruction is.
+  const promptLines = agentProposalInstructionLines(
+    proposal.persona?.prompt ?? '',
+  );
+  const boundedPromptLines = boundedAgentProposalInstructionLines(promptLines);
   const fileGroups = getProposalFileGroups(proposal);
   const hasHiddenContent =
     !equalLines(boundedInstructionLines, instructionLines) ||
+    !equalLines(boundedPromptLines, promptLines) ||
     fileGroups.some(
       (group) => group.files.length > AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
     );
   const summary = agentProposalApprovalSummary(
     proposal,
     boundedInstructionLines,
+    boundedPromptLines,
     true,
   );
   return hasHiddenContent
     ? {
         summary,
         details: () =>
-          agentProposalApprovalSummary(proposal, instructionLines, false),
+          agentProposalApprovalSummary(
+            proposal,
+            instructionLines,
+            promptLines,
+            false,
+          ),
       }
     : { summary };
 }

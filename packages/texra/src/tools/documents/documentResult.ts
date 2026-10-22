@@ -122,7 +122,7 @@ function documentsDelivery(value: DocumentsResult, runId: RunId): string[] {
   const lines: string[] = [];
   if (value.diffsUnavailable) {
     lines.push(
-      `<diffs-unavailable reason="${escapeAttr(value.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
+      `<diffs-unavailable reason="${escapeAttr(value.diffsUnavailable)}">Diffs are missing: read the output files directly to review the changes.</diffs-unavailable>`,
     );
   }
   if (value.outputs.length > 0) {
@@ -218,7 +218,9 @@ function truncateDiff(diff: string, maxLines: number): string {
  * {@link LARGE_CHANGE_RATIO}) are flagged so the orchestrator knows the diff
  * may be truncated and can read the full output file for context.
  *
- * Files without an original (new files) or where reading fails are omitted.
+ * Files without an original (new files) or with no change are omitted; a
+ * file whose diff could not be computed is answered in `failed`, so the
+ * caller can say so rather than reading it as unchanged.
  */
 const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
   function* (storageRoot: string, runId: RunId, outputs: OutputFileSummary[]) {
@@ -227,7 +229,7 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
       outputs,
       (o) =>
         Effect.gen(function* () {
-          if (!o.originalPath) return null;
+          if (!o.originalPath) return { kind: 'none' } as const;
           const [original, modified] = yield* Effect.all(
             [
               readNormalizedFile(fs, o.originalPath),
@@ -246,7 +248,7 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
           }
 
           const diff = yield* unifiedDiffOf(original, modified);
-          if (!diff) return null;
+          if (!diff) return { kind: 'none' } as const;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
@@ -256,21 +258,32 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
             diffRelPath: `diffs/${safeName}.diff`,
             largeChange,
           };
-          return { summary, content: truncateDiff(diff, limit) };
+          return {
+            kind: 'written',
+            summary,
+            content: truncateDiff(diff, limit),
+          } as const;
         }).pipe(
-          // File read failure is non-fatal — skip diff for this file — but
-          // surface the skip so a missing diff is not indistinguishable from an
-          // unchanged file (matching the loud diff-unavailable note the caller
-          // boundary logs).
+          // A file read failure costs that file's diff, not the others', and
+          // is answered as failed so the result says the diff is missing
+          // rather than reading the file as unchanged.
           Effect.catch((error) =>
             Effect.logWarning(
               `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
-            ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+            ).pipe(
+              withLogChannel(CHANNEL),
+              Effect.as({
+                kind: 'failed',
+                path: o.relativePath,
+                reason: toErrorMessage(error),
+              } as const),
+            ),
           ),
         ),
       { concurrency: 'unbounded' },
     );
-    const written = computed.filter((diff) => diff !== null);
+    const written = computed.filter((diff) => diff.kind === 'written');
+    const failed = computed.filter((diff) => diff.kind === 'failed');
     if (written.length > 0) {
       const runDir = new RunFileService(runId, {
         storage: storageRoot,
@@ -286,7 +299,7 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
         { concurrency: 'unbounded', discard: true },
       );
     }
-    return written.map((diff) => diff.summary);
+    return { summaries: written.map((diff) => diff.summary), failed };
   },
 );
 
@@ -312,5 +325,15 @@ export const computeDocumentDiffs = Effect.fn('documents.diffs')(function* (
     ).pipe(withLogChannel(CHANNEL));
     return { diffsUnavailable: reason };
   }
-  return { diffs: computed.success };
+  const { summaries, failed } = computed.success;
+  return {
+    diffs: summaries,
+    ...(failed.length > 0
+      ? {
+          diffsUnavailable: `No diff could be computed for ${failed
+            .map((file) => `${file.path} (${file.reason})`)
+            .join(', ')}`,
+        }
+      : {}),
+  };
 });

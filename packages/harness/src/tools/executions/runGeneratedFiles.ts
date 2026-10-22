@@ -84,17 +84,20 @@ function walkRunStorage(
       // failure (permissions, corrupt storage) still degrades to empty, but
       // loudly — the warn is the surfacing mechanism, matching the
       // outputDiscovery/externalInquiryStorage fallback precedent (#10630).
-      Effect.catch((error) =>
-        error.reason._tag === 'NotFound'
-          ? Effect.succeed([] as string[])
-          : Effect.logWarning(
-              `Unreadable run directory '${fullPath}'; listing it as empty`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-              Effect.as([] as string[]),
-            ),
-      ),
+      // The run directory itself has no rest to keep: its failure propagates
+      // rather than reading as "no generated files".
+      Effect.catch((error) => {
+        if (error.reason._tag === 'NotFound')
+          return Effect.succeed([] as string[]);
+        if (relativePath === '') return Effect.fail(error);
+        return Effect.logWarning(
+          `Unreadable run directory '${fullPath}'; listing it as empty`,
+        ).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.as([] as string[]),
+        );
+      }),
     );
 
     const files: RunGeneratedFile[] = [];

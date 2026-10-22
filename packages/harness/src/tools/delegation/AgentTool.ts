@@ -5,7 +5,7 @@
  * opened on the plugin's recipe.
  *
  * Called from a script it awaits the child and returns the child's envelope
- * (`{ ...output, outcome, cost }`), unless `background` detaches it; called
+ * (`{ ...output, outcome, cost, spent }`), unless `background` detaches it; called
  * directly it detaches, as a delegation always has, except in a one-shot
  * run, which waits. The script's `agent` calls share one approval request
  * showing its source; a direct call proposes itself. A completed
@@ -15,26 +15,14 @@
  * (`agentChild.ts`).
  */
 
-// Node imports
-import { createHash } from 'node:crypto';
-
 // Third-party imports
-import {
-  Cause,
-  Data,
-  Effect,
-  Exit,
-  FileSystem,
-  Result,
-  Semaphore,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Data, Effect, Exit, Result, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
-import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
+import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
@@ -42,7 +30,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
-  qualifyAggregateId,
+  AGENT_SOURCE,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -63,7 +51,14 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { agentChildRunId, earlierChild, recoverAgentChild } from './agentChild';
+import {
+  agentChildRunId,
+  countLaunch,
+  earlierChild,
+  fingerprint,
+  recoverAgentChild,
+  reusable,
+} from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
   executeSubagentInBand,
@@ -71,6 +66,7 @@ import {
 } from './inBandSubagentRun';
 import {
   memoriesField,
+  personaField,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
   withToolUseSubagentHandoffInstruction,
@@ -82,9 +78,6 @@ import {
   describeSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';
-
-/** Most children one script may launch. */
-const AGENT_CALL_LIMIT = 1000;
 
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
 class AgentTimedOut extends Data.TaggedError('AgentTimedOut')<{
@@ -109,6 +102,7 @@ const LAUNCH_FIELDS = {
     .string()
     .min(1, 'agentName is required')
     .describe('The agent to run. It works with its own tools.'),
+  persona: personaField,
   model: z
     .string()
     .nullish()
@@ -165,6 +159,8 @@ type AgentInput = z.infer<typeof AgentInputSchema>;
 export interface ChildLaunch {
   readonly tool: string;
   readonly agentName: string;
+  /** An agent the call defines, named `agentName`: no catalog entry. */
+  readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
   readonly schema: Record<string, unknown> | null | undefined;
@@ -249,109 +245,9 @@ const scriptRequest = (
     });
   });
 
-/** The bytes behind a workflow call's files, hashed for its reuse key. */
-const fingerprint = Effect.fn('agent.fingerprint')(function* (
-  paths: readonly (readonly string[])[],
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const hash = createHash('sha256');
-  for (const [group, files] of paths.entries())
-    for (const [index, file] of files.entries()) {
-      const bytes = yield* fs.readFile(file);
-      hash.update(`${group}\0${index}\0${bytes.length}\0`);
-      hash.update(bytes);
-    }
-  return hash.digest('hex');
-});
-
-/**
- * The runs whose completed calls a call may reuse: the run that issued
- * the `script` call, and the background script runs it launched. A call of
- * a background script's run reaches its parent and its siblings this way.
- */
-const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
-  const { session, runId } = call.run;
-  const view = yield* session.view.read([]);
-  const root =
-    view.runs.get(runId)?.identity.kind === 'script'
-      ? (view.runs.get(runId)?.parentId ?? runId)
-      : runId;
-  return [
-    root,
-    ...(view.runs.get(root)?.childIds ?? []).filter(
-      (id) => view.runs.get(id)?.identity.kind === 'script',
-    ),
-  ];
-});
-
-/**
- * A completed call in the reuse scope whose key is `key`, or a refusal when
- * one of this same script holds it: two calls of one script that would
- * answer the same must say how they differ (`id`). Read from the runs'
- * `tool.result` rows; only an executed result carries a key.
- */
-const reusable = Effect.fn('agent.reusable')(function* (
-  call: RunToolCall,
-  script: ScriptScope,
-  key: string,
-) {
-  const siblings = yield* script.shared(
-    'agent:keys',
-    Effect.sync(() => new Map<string, string>()),
-  );
-  const { callId } = call;
-  // Claimed before the read yields, so two calls at once cannot both pass.
-  const claimed = siblings.get(key);
-  if (claimed !== undefined && claimed !== callId)
-    return errorResult(
-      'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
-      { name: 'DuplicateCall' },
-    );
-  siblings.set(key, callId);
-  const { log } = call.run.session;
-  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
-  )).flat();
-  const found = rows.flatMap((row) =>
-    row.type === 'tool.result' &&
-    row.payload.result.status === 'executed' &&
-    row.payload.result.reuseKey === key
-      ? [
-          {
-            responseId: row.payload.responseId,
-            callId: row.payload.callId,
-            result: row.payload.result,
-          },
-        ]
-      : [],
-  );
-  const mine = `${script.callId}/`;
-  // A sibling a resume handed back from its row never ran here to claim.
-  if (
-    found.some(
-      (row) =>
-        row.responseId === call.responseId &&
-        row.callId.startsWith(mine) &&
-        row.callId !== callId,
-    )
-  )
-    return errorResult(
-      'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
-      { name: 'DuplicateCall' },
-    );
-  const origin = found.at(-1);
-  if (origin === undefined) return null;
-  const from = origin.result.reusedFrom ?? origin.callId;
-  return {
-    ...origin.result,
-    output: `Reused the result of call ${from}: nothing ran again.\n\n${origin.result.output ?? ''}`,
-    reusedFrom: from,
-  } satisfies ToolResult;
-});
-
 /** What an ended child becomes for its call: its envelope (a recipe's read
  *  through its block), or the error a script's `await` throws for it. */
-const childResult = Effect.fn('AgentTool.childResult')(function* (
+export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
@@ -372,6 +268,7 @@ const childResult = Effect.fn('AgentTool.childResult')(function* (
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
   const config = yield* getRunRecords(call.run.session, runId).readConfig();
+  const { runs } = yield* call.run.session.view.read([]);
   const recipe = yield* readRecipeResult(
     config,
     result.output,
@@ -388,17 +285,14 @@ const childResult = Effect.fn('AgentTool.childResult')(function* (
       ...(recipe !== undefined && { changes: recipe.changes }),
       runId,
       outcome: result.outcome,
-      cost: result.usage?.totalCost ?? 0,
+      cost: runs.get(runId)?.treeUsage.cost ?? result.usage?.totalCost ?? 0,
+      spent: runs.get(call.run.runId)?.treeUsage.cost ?? 0,
     }),
     ...(key !== undefined && { reuseKey: key }),
   };
 });
 
-/**
- * One call. A script's awaited calls hold one of the session's child-run
- * budget for the whole call, taken first thing, so they start in the order
- * the script issued them and at most the budget run at once.
- */
+/** One call: a script's awaited calls within {@link scriptChildBudget}. */
 export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
@@ -406,18 +300,12 @@ export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   const script = yield* IssuingScript;
   if (script === null || launch.background === true)
     return yield* agentCall(call, launch);
-  const budget = yield* script.shared(
-    'agent:budget',
-    Effect.flatMap(
-      resolveChildRunConcurrencyBudget(call.env.roots),
-      (permits) => Semaphore.make(permits),
-    ),
-  );
+  const budget = yield* scriptChildBudget(call.env.roots, script);
   return yield* budget.withPermits(1)(agentCall(call, launch));
 });
 
 /** A child's run failed the call: timed out, or ended without an answer. */
-function failedResult(agentName: string, error: Error): ToolResult {
+export function failedResult(agentName: string, error: Error): ToolResult {
   if (error instanceof AgentTimedOut)
     return errorResult(
       `'${agentName}' did not finish within ${error.timeoutMs} ms; its run was stopped.`,
@@ -437,8 +325,11 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { run } = call;
   const script = (yield* IssuingScript) ?? undefined;
   const { session, runId: parentRunId } = run;
-  const agent = yield* requireAgent(call.env.roots, launch.agentName, run);
-  const { task, files } = launch;
+  const { task, files, persona } = launch;
+  const agent =
+    persona == null
+      ? yield* requireAgent(call.env.roots, launch.agentName, run)
+      : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
@@ -484,6 +375,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = run.toolPolicy.stopAfterCycle === true;
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
+  // A task, a structured call and a trusted script's call reach the child
+  // verbatim; any other is handed off with the parent's instruction.
+  const handsOff = task === null && outputSchema === undefined && !trusted;
   // Q2: a completed call with the same prompt, options and file bytes. The
   // requested model, not the one availability resolves to, so a reuse does
   // not depend on which credentials are configured now.
@@ -500,7 +394,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       ? sha256({
           tool: launch.tool,
           prompt: launch.prompt,
+          ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
+          ...(persona != null && { persona }),
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
@@ -579,20 +475,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const proposal: AgentProposal = AgentProposalSchema.parse({
     agent: agent.name,
     agentSource: agent.source,
+    ...(persona != null && { persona }),
     model: selected.value,
     memories: launch.memories,
     ...(workingDirectory !== undefined && { workingDirectory }),
     task: task !== null,
-    // A task's prompt is its instruction, a structured call answers through
-    // its schema, and a trusted script's call reaches the agent verbatim:
-    // none takes a hand-off.
-    instruction:
-      task !== null || outputSchema !== undefined || trusted
-        ? launch.prompt
-        : withToolUseSubagentHandoffInstruction(
-            launch.prompt,
-            call.instruction,
-          ),
+    instruction: handsOff
+      ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
+      : launch.prompt,
     inputFiles: inputs.map(({ file }) => file),
     contextFiles,
     mediaFiles: media.map(({ file }) => file),
@@ -618,20 +508,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       );
     return decided;
   }
-  // A script launches at most AGENT_CALL_LIMIT children, counted here,
-  // just before a launch: a reused, recovered, refused or unavailable call
-  // launches none, and a resume's replayed calls never reach here.
   if (script !== undefined) {
-    const launches = yield* script.shared(
-      'agent:launches',
-      Effect.sync(() => ({ count: 0 })),
-    );
-    if (launches.count >= AGENT_CALL_LIMIT)
-      return errorResult(
-        `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${agent.name}' did not run.`,
-        { name: 'CallLimit' },
-      );
-    launches.count += 1;
+    const limited = yield* countLaunch(script, agent.name);
+    if (limited !== null) return limited;
   }
 
   // The asking script's `script`; the child's (with `options`) is set below.
@@ -644,6 +523,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
+    // An approval that picked a catalog agent drops the one defined here.
+    persona:
+      approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.delegationAgentScope,
     ...taskConfig,
@@ -696,11 +578,11 @@ export const agentTool = () =>
     scriptGlobal: { positional: 'prompt' },
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:
-      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
+      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     slow: true,
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
-From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost }\`. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
+From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
@@ -710,6 +592,11 @@ It returns the agent's final reply, or a \`schema\` value. Pick the agent whose 
       launchChildAgent({
         tool: 'agent',
         agentName: input.agentName,
+        persona: input.persona && {
+          name: input.agentName,
+          prompt: input.persona.prompt,
+          tools: input.persona.tools ?? [],
+        },
         prompt: input.prompt,
         model: input.model,
         schema: input.schema,

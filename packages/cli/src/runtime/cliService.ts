@@ -326,20 +326,16 @@ function withCliService<A>(
 /**
  * Whether `owner`, the holder of a run's claim, is the storage root's
  * running service: a chat continues such a run through the service rather
- * than refusing it as held by another process.
+ * than refusing it as held by another process. A service that cannot be
+ * asked (wedged, or its record unreadable) fails: the caller says why
+ * instead of naming the holder as some other process.
  */
 export function heldByService(
   owner: OwnerId,
-): Effect.Effect<boolean, never, GlobalValues> {
+): Effect.Effect<boolean, ServiceUnavailable, GlobalValues> {
   return Effect.gen(function* () {
     if (yield* envFlag(NO_SERVICE)) return false;
-    const info = yield* probeCliService.pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `The TeXRA service did not answer (${error.message}); a task it holds is treated as another process's`,
-        ).pipe(Effect.as(null)),
-      ),
-    );
+    const info = yield* probeCliService;
     if (info === null) return false;
     const { hostname: host, pid } = ownerIdentity(owner);
     return pid === info.pid && host.toLowerCase() === hostname().toLowerCase();

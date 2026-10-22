@@ -36,7 +36,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
@@ -44,7 +43,6 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import { goalContinuation } from '@tools/goal/goalContinuation';
 import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
@@ -85,11 +83,11 @@ export const globalValuesOver = <E, R>(
 /** The plugin table a store or catalog suite runs over: every row kind and
  *  agent-file block TeXRA's plugins own, and no tool. */
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
-  toolTable([{ id: 'goal', arms: HARNESS_PLUGIN_ARMS.goal }, ...ARMED_PLUGINS]),
+  toolTable([...ARMED_PLUGINS]),
 );
 
-/** The bare runtime's plugins: goal mode's continuation (and its switch) and
- *  the row kinds TeXRA's plugins own, but no tool (the real table loads every
+/** The bare runtime's plugins: goal mode's switch and the row kinds
+ *  TeXRA's plugins own, but no tool (the real table loads every
  *  tool): a suite that resolves a run's tools runs on the session graph's
  *  runtime or provides `pluginCatalogLayer`. */
 const BARE_PLUGINS: readonly Plugin[] = [
@@ -97,8 +95,6 @@ const BARE_PLUGINS: readonly Plugin[] = [
     id: 'goal',
     toggle: 'off',
     availability: { check: () => Effect.succeed(true) },
-    continuation: goalContinuation,
-    arms: HARNESS_PLUGIN_ARMS.goal,
   }),
   ...ARMED_PLUGINS,
 ];

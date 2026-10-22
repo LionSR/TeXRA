@@ -114,6 +114,7 @@ function host(): CliRuntimeHost {
 function tui(
   presentationHost = host(),
   contextOverrides: Partial<CliContext> = {},
+  preview?: (runId: RunId, requestId: string) => Effect.Effect<null, Error>,
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
   setTestApprovalPolicy(cliContext.approvalPolicy);
@@ -125,6 +126,7 @@ function tui(
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
         requests: testDefaultSession().requests,
+        ...(preview ? { preview } : {}),
         secrets,
         settings: settingsStores.stores,
         runtime: testRuntime(),
@@ -451,6 +453,37 @@ describe('TUI request decisions', () => {
         ).toBe(true),
       );
     }),
+  );
+
+  it.effect.each([
+    {
+      label: 'a failed fetch',
+      fetched: Effect.fail(new Error('service connection closed')),
+      reason: 'the service did not send it (service connection closed)',
+    },
+    {
+      label: 'a preview no host staged',
+      fetched: Effect.succeed(null),
+      reason: "no host staged this edit's preview",
+    },
+  ])(
+    'says the preview of a served edit is unavailable after $label, never an empty diff',
+    ({ fetched, reason }) =>
+      Effect.gen(function* () {
+        tui(host(), {}, () => fetched);
+        const runId = runIdFor(`edit-unavailable-${reason}`);
+        yield* ensureRun(runId);
+        yield* Effect.forkChild(requestEdit(runId));
+
+        // The fetch lands after the request is listed, over anything staged.
+        yield* waitFor(() =>
+          expect(currentApproval.get()?.payload).toMatchObject({
+            kind: 'toolEdit',
+            data: { runId },
+            tui: { kind: 'unavailable', reason },
+          }),
+        );
+      }),
   );
 
   it.effect(

@@ -2,7 +2,7 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 
@@ -20,6 +20,7 @@ import {
   scrollPageRows,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type { ToolEditApprovalPayload } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
@@ -72,21 +73,38 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       )}
       onDecide={props.onDecide}
     >
-      <EditApprovalDiff
-        availableRows={props.availableRows}
-        payload={props.payload}
-        title={title}
-      />
+      {props.payload.tui.kind === 'preview' ? (
+        <EditApprovalDiff
+          availableRows={props.availableRows}
+          content={props.payload.tui.content}
+          payload={props.payload}
+          title={title}
+        />
+      ) : (
+        <>
+          <Text dimColor>
+            +{props.payload.data.addedLines} / −
+            {props.payload.data.removedLines} · source:{' '}
+            {props.payload.data.sourceTool}
+          </Text>
+          <Text color={COLOR_WARNING}>
+            Preview unavailable: {props.payload.tui.reason}
+          </Text>
+        </>
+      )}
     </ConfirmCard>
   );
 }
 
 function EditApprovalDiff({
   availableRows,
+  content,
   payload,
   title,
 }: {
   readonly availableRows?: number;
+  /** The staged preview the diff shows. */
+  readonly content: ToolEditContent;
   readonly payload: ToolEditApprovalPayload;
   readonly title: string;
 }): React.JSX.Element {
@@ -94,7 +112,7 @@ function EditApprovalDiff({
   const feedback = useContext(ConfirmCardFeedback);
   const [feedbackExitCount, setFeedbackExitCount] = useState(0);
   const feedbackWasCompactRef = useRef(false);
-  const { data, tui } = payload;
+  const { data } = payload;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
     availableRows,
@@ -105,7 +123,7 @@ function EditApprovalDiff({
   const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
 
   // The request's own diff, shared by the summary line and the inline view.
-  const { hunks } = tui;
+  const { hunks } = content;
   const diffRows = useMemo(
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],

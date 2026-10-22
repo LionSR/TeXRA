@@ -121,7 +121,7 @@ Standing rules from the 2026-07 tech-debt re-calibration, which found that a run
 
 ## 14. Fewer-elements rulings (2026-07-07)
 
-Mirrors [`.agents/docs/implemented/process/2026-07-07-fewer-elements.md`](../../../../.agents/docs/implemented/process/2026-07-07-fewer-elements.md) §7 (R1, R5-R8). On conflict, #6951's single-ownership section wins. Correctness and security fixes are exempt from the doc's R3/R4 sequencing rules, never from these checks.
+These rules (R1, R5-R8) are owned here; the 2026-07-07 note they came from is retired. On conflict, #6951's single-ownership section wins. Correctness and security fixes are exempt from sequencing, never from these checks.
 
 - **No dual-system resting state (R1).** A code-to-code shim/projection/dual-write/alias merges only if the PR that deletes it is already open and cited in the PR body. Persisted-data read shims get no exception under 1.0 (§11).
 - **Churn-class ban (R5).** Reject reflow/reformat of files the PR does not functionally touch (check: files in the diff with only whitespace/formatting hunks). Reject styles/file splits without net element accounting. Single-caller extractions remain banned (§13); #7070 is the canonical violation.

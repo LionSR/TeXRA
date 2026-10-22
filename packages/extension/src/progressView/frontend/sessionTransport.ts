@@ -19,6 +19,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { z } from 'zod';
 
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -31,6 +32,7 @@ import {
   type Subscribe,
   type UpMessage,
 } from '@texra/shared/session/sessionFrames';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import {
   installWebviewRuntime,
@@ -41,10 +43,11 @@ import type { SessionView } from '@texra-ai/harness/schemas';
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
 
-type WireSurfaceAction = Extract<
-  DownMessage,
-  { kind: 'surface.action' }
->['action'];
+/** What the transport hands the surfaces: the host's `surface.action`, or
+ *  its own report of a frame it could not read. */
+type WireSurfaceAction =
+  | Extract<DownMessage, { kind: 'surface.action' }>['action']
+  | Extract<SurfaceAction, { kind: 'reportError' }>;
 
 /** The shell is the one port of a webview graph. */
 const SHELL_PORT = 'shell';
@@ -102,6 +105,15 @@ interface OpenSession extends WebviewSession {
   readonly inbox: Queue.Queue<EventsFrame>;
 }
 
+/** The routing fields of a down-message that failed its schema: enough to
+ *  find the session, generation, or request it was for. */
+const DownEnvelopeSchema = z.object({
+  kind: z.string(),
+  session: z.string(),
+  generation: z.number().optional(),
+  requestId: z.string().optional(),
+});
+
 /** What a request answers when its session closed before the host did. */
 const CANCELLED: Response['result'] = {
   ok: false,
@@ -133,10 +145,43 @@ export function installWebviewTransport(
     Queue.offerUnsafe(session.inbox, frame);
   };
 
+  /** A down-message that failed its schema is the host's defect. A response
+   *  settles its request `Invalid` rather than hang it; a frame of the live
+   *  generation is said on the surface's notice, since its events are lost
+   *  until the view reopens. */
+  const reportMalformed = (data: unknown, error: z.ZodError): void => {
+    console.error('[progress] malformed session message', data, error);
+    const envelope = DownEnvelopeSchema.safeParse(data);
+    if (!envelope.success) return;
+    const { kind, session: key, generation, requestId } = envelope.data;
+    const session = sessions.get(key);
+    if (!session) return;
+    if (kind === 'response' && requestId !== undefined) {
+      const settle = session.pending.get(requestId);
+      if (!settle) return;
+      session.pending.delete(requestId);
+      runtime.runSync(
+        Deferred.succeed(settle, {
+          ok: false,
+          error: {
+            _tag: 'Invalid',
+            reason: 'The host sent a malformed response.',
+          },
+        }),
+      );
+    } else if (kind === 'events' && generation === session.generation) {
+      surfaceListener(key, {
+        kind: 'reportError',
+        reason:
+          'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
+      });
+    }
+  };
+
   const receive = (data: unknown): void => {
     const parsed = DownMessageSchema.safeParse(data);
     if (!parsed.success) {
-      console.warn('[progress] malformed session message', data, parsed.error);
+      reportMalformed(data, parsed.error);
       return;
     }
     const message = parsed.data;

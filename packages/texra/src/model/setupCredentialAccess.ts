@@ -1,9 +1,10 @@
 import {
   Settings,
+  StateReadFailed,
   readModelOptions,
-  type LanguageModel,
   type ModelOptionStores,
   type PlatformSecrets,
+  type SettingHost,
 } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
@@ -26,7 +27,7 @@ import type { SettingsStores } from '@texra-ai/harness';
  * `includeAccessListFallback` offers OpenRouter's setup model while the
  * OpenRouter switch is off, as a last resort: the extension prompts first and
  * turns the switch on for that launch (`requiresOpenRouter`), while desktop
- * has no prompt to explain the flip and opts out.
+ * and the CLI have no prompt to explain the flip and opt out.
  */
 export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
   function* (
@@ -60,36 +61,48 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
       };
     }
     if (
-      !includeAccessListFallback ||
-      (yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER))
+      includeAccessListFallback &&
+      !(yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER)) &&
+      (yield* hasUsableApiKey(secrets, 'openRouter'))
     ) {
-      return null;
+      return {
+        model: SETUP_MODEL_BY_PROVIDER.openRouter,
+        requiresOpenRouter: true,
+      };
     }
-    return (yield* hasUsableApiKey(secrets, 'openRouter'))
-      ? { model: SETUP_MODEL_BY_PROVIDER.openRouter, requiresOpenRouter: true }
-      : null;
+    // A key that could not be read is neither a credential nor its absence:
+    // with nothing runnable, the answer is unknown, not "none".
+    const unreadable = candidates.find(
+      ([, model]) => rows.get(model)?.availability === 'key-unreadable',
+    );
+    if (unreadable !== undefined) {
+      return yield* new StateReadFailed({
+        key: unreadable[0],
+        message: `Could not read the ${unreadable[0]} key, so whether setup has a model is unknown.`,
+        cause: undefined,
+      });
+    }
+    return null;
   },
 );
 
 /**
- * True when the setup assistant has a model to launch with, the OpenRouter
- * last resort included. A check that cannot be answered is logged and read as
- * no credential, so a broken store sends the user to onboarding instead of
- * failing the gate.
+ * True when `host`'s setup launch has a model to launch with. An OpenRouter
+ * key counts while the OpenRouter switch is off only on the extension, whose
+ * launch turns the switch on for itself; desktop, the CLI and an embedder
+ * cannot, so they never report a credential they then fail to launch with.
+ * A check that cannot be answered fails typed: an unreadable store is not
+ * the fact "no credential", and each caller decides what an unknown answer
+ * means for its surface.
  */
-export function hasUsableSetupCredential(
+export const hasUsableSetupCredential = (
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<boolean, never, LanguageModel> {
-  return resolveSetupLaunchModel(stores, secrets, true).pipe(
+  host: SettingHost,
+) =>
+  resolveSetupLaunchModel(stores, secrets, host === 'vscode').pipe(
     Effect.map((resolution) => resolution !== null),
-    Effect.catch((failure) =>
-      Effect.logWarning(
-        `Setup credential check failed; treating it as no credential: ${failure.message}`,
-      ).pipe(Effect.as(false)),
-    ),
   );
-}
 
 /** The picker's model options as the follow-up controls list them, read live. */
 export const loadModelOptions = (stores: ModelOptionStores) =>

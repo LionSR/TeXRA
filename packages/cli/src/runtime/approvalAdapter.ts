@@ -125,7 +125,7 @@ const askHeadlessUserQuestion = Effect.fn(
     ).pipe(withLogChannel(CHANNEL));
     return {
       action: 'cancel',
-      cause: 'CLI user question prompt failed.',
+      cause: `CLI user question prompt failed: ${toErrorMessage(asked.failure)}`,
     } satisfies RequestDecision;
   }
 
