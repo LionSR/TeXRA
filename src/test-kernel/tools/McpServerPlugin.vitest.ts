@@ -67,14 +67,22 @@ require('node:readline')
         inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       }] } });
     else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'exit') {
-      // A grandchild holding stdout answers after this process has exited.
+      // A grandchild holding stdout answers once this process is gone: it
+      // says it is up, this process exits, and the end of their IPC channel
+      // is its cue. Detached, since on Windows libuv puts a child that is not
+      // in a kill-on-close job, and it would die with this process unheard.
       const answer = { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'late' }] } };
-      require('node:child_process').spawn(
-        process.execPath,
-        ['-e', 'process.stdout.write(process.argv[1])', JSON.stringify(answer) + '\\n'],
-        { stdio: ['ignore', 'inherit', 'inherit'] },
-      );
-      process.exit(0);
+      require('node:child_process')
+        .spawn(
+          process.execPath,
+          [
+            '-e',
+            "process.on('disconnect', () => process.stdout.write(process.argv[1])); process.send('up');",
+            JSON.stringify(answer) + '\\n',
+          ],
+          { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], detached: true, windowsHide: true },
+        )
+        .once('message', () => process.exit(0));
     }
     else if (method === 'tools/call')
       send({ jsonrpc: '2.0', id, result: { content: [{
