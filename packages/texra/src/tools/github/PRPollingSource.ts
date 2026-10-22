@@ -446,7 +446,7 @@ export class PRPollingSource extends PollingSourceBase<
         state,
         formatPRClosed(state.slug, pr.pullNumber, prData.merged),
       );
-      this.detach(key);
+      this.detach(key, state);
       return false;
     }
     // New push invalidates prior CI terminal state — the next completion

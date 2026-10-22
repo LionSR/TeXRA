@@ -29,6 +29,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  Fiber,
   FileSystem,
   Layer,
   type PlatformError,
@@ -250,7 +251,7 @@ const make = ({
     yield* Effect.addFinalizer(() => stopProcess(handle));
 
     const stderrTail = yield* Ref.make('');
-    yield* Effect.forkScoped(
+    const stderrDrained = yield* Effect.forkScoped(
       handle.stderr.pipe(
         Stream.decodeText(),
         Stream.tap((text) => Effect.logWarning(`[${root}] ${text.trimEnd()}`)),
@@ -312,10 +313,16 @@ const make = ({
     });
 
     // The server is gone: record its end, drop file state, close the
-    // connection with the end as the reason.
+    // connection with the end as the reason. The exit can precede the end of
+    // its output, so the close waits for stdout and stderr to drain (bounded:
+    // a grandchild may hold the pipes): a reply already written still
+    // reaches its request instead of failing as disposed.
     yield* Effect.forkScoped(
       Effect.gen(function* () {
         const end = describeEnd(yield* Effect.result(handle.exitCode));
+        yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
+          concurrency: 'unbounded',
+        }).pipe(Effect.timeoutOption(SHUTDOWN_TIMEOUT));
         const tail = (yield* Ref.get(stderrTail)).slice(-1000);
         yield* Effect.logInfo(
           `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,

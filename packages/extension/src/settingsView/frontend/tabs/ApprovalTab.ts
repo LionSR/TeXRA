@@ -56,6 +56,9 @@ export class ApprovalTab extends LitElement {
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
   @property({ type: Number }) goalMaxCostUsd =
     GOAL_MAX_COST_SETTING.defaultValue;
+  /** The approval snapshot's acknowledgement generation (see
+   *  `settingsSnapshotRevisions`). */
+  @property({ attribute: false }) ackGeneration = 0;
   @property({ type: String }) resumeOnOpen: string =
     RESUME_ON_OPEN_SETTING.defaultValue;
 
@@ -127,6 +130,7 @@ export class ApprovalTab extends LitElement {
               min: GOAL_MAX_COST_SETTING.min,
               max: GOAL_MAX_COST_SETTING.max,
               step: 0.5,
+              ackGeneration: this.ackGeneration,
               onChange: (value) =>
                 postStateSetting(GOAL_MAX_COST_SETTING.configKey, value),
             })}

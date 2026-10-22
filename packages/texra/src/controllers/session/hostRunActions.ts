@@ -482,6 +482,8 @@ export const createHostRunActions = (
       },
     });
 
+    /** Retry requests a Copilot fallback is switching here. */
+    const switching = new Set<string>();
     /** The Copilot subscription's fallback: a replacement run on the user's
      *  own key for the model Copilot served, then the pending retry is
      *  cancelled in its favor. */
@@ -781,7 +783,19 @@ export const createHostRunActions = (
       }),
       useOwnApiKey(request) {
         const offer = request.credentialSwitch;
-        if (offer.kind === 'copilot-fallback') return copilotFallback(request);
+        if (offer.kind === 'copilot-fallback') {
+          // Checked and claimed in one step: a second click would otherwise
+          // pass the pending check while the first awaits admission, and
+          // start a second replacement before the first cancels the retry.
+          const claim = `${request.runId}/${request.requestId}`;
+          return Effect.suspend(() => {
+            if (switching.has(claim)) return Effect.void;
+            switching.add(claim);
+            return copilotFallback(request).pipe(
+              Effect.ensuring(Effect.sync(() => switching.delete(claim))),
+            );
+          });
+        }
         return apiKeyRetry.useOwnApiKey({
           stream: request.runId,
           requestId: request.requestId,
