@@ -10,8 +10,8 @@ write a test that earns its place, and the shared fixtures and fakes.
 by what it reaches, not by how many tests it has:
 
 - **`pure`** — suites that reach no host: no setup file, no fake platform, no
-  DOM, one module registry shared between files. Roughly 8x cheaper per suite
-  than `kernel`, and deterministic, because nothing in it installs or replaces
+  DOM, one module registry shared between files. Several times cheaper per
+  suite than `kernel`, and deterministic, because nothing in it installs or replaces
   anything.
 - **`kernel`** — everything that needs a host: the fake platform installed per
   file, each file in its own module registry. The DOM suites (`progressView`,

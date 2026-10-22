@@ -1,22 +1,17 @@
 # Kernel suite wall time: the module registry, not the tests
 
-Status: proposed — measured 2026-09-10. The `pure` tier (D1) landed the same
-day in `vitest.config.mjs`: 276 of 741 suites, membership computed from each
-suite's source, 276/276 green in default order and under file-order shuffles
-(seeds 7 and 11), ~27s for the tier. The 37 suites a scan cannot classify —
-modules under test that read the host themselves, one pair sharing terminal
-state — are kept by name in `config/ratchets/pure-tier-kernel-suites.json`,
-found by running each candidate alone with no host (a deterministic fail).
-That list is D2's worklist in priority order. The `kernel` flip (D2) is
-blocked on moving the state that leaks between suites behind Effect layers,
-which is the 1.0 direction anyway.
+Status: proposed. The `pure` tier landed on 2026-09-10 in `vitest.config.mjs`:
+a module registry shared between files, membership computed from each suite's
+source, no list of exempt suites (`src/test-kernel/AGENTS.md`, "Test tiers").
+Still open: the `kernel` project runs with `isolate: true`, one module
+registry per file, and that is where the suite's wall time goes.
 
-Correction to the first baseline below: the ">45 min unfinished" run was not a
-clean measurement. A clean full run of the current isolated config on the same
-machine is **8m45s** (741 suites). The shared-registry number stands, so the
-payoff of the `kernel` flip is ~3.5x on the full suite, not 20x.
+The numbers below are the 2026-09-10 measurement (741 suites then; about 440
+today, after consolidation). A clean full run of the isolated config was
+**8m45s**; the shared-registry number stands, so the payoff of a `kernel`
+flip was sized at ~3.5x on the full suite. Re-measure before acting on it.
 
-## Finding
+## Finding (measured 2026-09-10)
 
 `npm test` is slow because every one of the ~741 kernel suites rebuilds its
 whole import closure from scratch. Assertions are under a tenth of the work.
@@ -57,7 +52,7 @@ Full suite, same machine:
 CI's own figure for the current config is ~10 min per shard, two shards, on
 2-vCPU runners.
 
-## Why the flip is blocked
+## Why the flip was blocked (2026-09-10)
 
 A shared registry exposes every cross-file leak, and the leaks are
 order-dependent: which files share a worker depends on timing. Pinning the
@@ -89,87 +84,51 @@ function`, `client.buildURL is not a function`. 164 of 741 suites call
 3. **Module-scope singletons installed by one file, observed by the next.**
    `Sessions not initialized: call installProcessRuntime()`, `The default
 session has not been initialized`, unhandled `ExecutionLeaseLostError`
-   rejections from `src/agent/storage/executionLease.ts` (20 of 37 unhandled
-   errors), `session.onResult is not a function`. 82 suites pull in
-   `sessionTestUtils`, 23 reference the execution lease.
+   rejections from the execution lease (20 of 37 unhandled errors),
+   `session.onResult is not a function`.
 
-### Effect form alone does not fix it
+## Where the leak classes stand (2026-10-22)
 
-70 of the 741 suites already use `@effect/vitest` (352 `it.effect` /
-`it.live` / `it.scoped` sites), and 24 of them are among the 209 leakers —
-the same rate as the rest (34% vs 28%). Their failures are the same shape:
-`Cannot read properties of undefined (reading 'selfIdentity' | 'onRelease' |
-'emit' | 'getToolUseFollowUpTarget')` and `vi.fn()` call counts — a handle a
-neighbouring file replaced. Nothing that a test's own layer provided leaked;
-everything the test reached _outside_ its layer did.
-
-That is the actual boundary. The session graph is already Effect-native: a
-`LayerMap` keyed by storage root under one `ManagedRuntime`
-(`src/controllers/session/sessionLayer.ts`), and `setupPlatform.ts` builds a
-`ManagedRuntime` per install. What is not Layer-provided is exactly what
-leaks: `platform()` is a module global behind `initPlatform()` read at 74
-production sites with no service behind it; `ownedLeases` in
-`src/agent/storage/executionLease.ts:130` is a module-scope `Map`; and the
-process runtime is installed once per process
-(`installProcessRuntime`), so a suite that disposes or re-installs it
-changes what the next suite's `it.effect` runs against.
+- **Class 1 (Lit registry)** is structural and stays isolated: a Lit element
+  class is bound to the window that first loaded it.
+- **Class 2 (partial `vi.mock` factories)** shrank: one suite still mocks
+  `@platform/*`, and 82 suites still call `vi.mock`. A `vi.mock` moves its
+  suite to `kernel`, where it stays isolated.
+- **Class 3 (module-scope singletons)** lost its named sources: the
+  `platform()` module global, `installProcessRuntime` and the execution
+  lease are gone from production. What remains is the kernel's per-file
+  setup done as import-time side effects:
+  `src/test-kernel/support/defaultSessionTestSetup.ts` opens the default
+  session with `Effect.runSync` when imported (about 80 suites import it or
+  `sessionGraphTestSetup.ts`), and a shared registry evaluates that once per
+  worker, for the first file only.
 
 ## Proposal
 
-Fix the leaks at their sources, then flip `isolate: false` as the default with
-a shrink-only pinned list for what remains. Not the other way round: the
-pinned list only converges once the shared set is deterministic, and it is
-only deterministic once classes 2 and 3 are gone.
+Move each kernel suite's per-file setup out of import-time side effects into
+a layer scoped to the suite (`it.layer(...)`), so a shared registry has
+nothing to evaluate once per worker. Then re-run `--no-isolate` on the
+non-DOM kernel tree, and flip it to a shared registry with a shrink-only
+pinned list for what still leaks. Keep the DOM suites (`progressView`,
+`settings`, `frontend`, `desktop`) isolated.
 
-The remedy is the Effect-native one, not a per-file reset hook: a hook that
-scrubs module globals before each suite is a transitional adapter whose purpose
-disappears once the globals are services, which AGENTS.md rules out building.
-A test that gets its dependencies from a layer scoped to the test cannot leak
-them by construction, so the fix and the 1.0 migration are the same work,
-done in this order:
-
-- Class 3: put the state behind layers and give suites their own. The
-  execution-lease registry becomes a service scoped under the session layer
-  (it is per-root state already). Suites that today install or dispose the
-  process runtime instead build a test runtime with `it.layer(...)` — the
-  `ManagedRuntime` that `setupPlatform.ts` already constructs is the seed —
-  so the process-global one is never touched from a test.
-- Class 2: the platform. `platform()` behind a service is the 74-site
-  migration; until it lands, the discipline is `setupPlatform(...)` overrides
-  (which restore after each test) instead of `vi.mock('@platform/*')`, and
-  any `vi.mock` that remains is complete (`importOriginal` spread) so a leaked
-  mock is still a working module. Once the platform is a layer, the
-  `vi.mock`s become `it.layer(TestPlatform)` and the discipline is unneeded.
-- Class 1 stays isolated. Pin the DOM suites (`progressView`, `settings`,
-  `frontend`, `desktop`, `webview` — ~50 files) into an `isolate: true`
-  project; a Lit element class is bound to a window, and no layer changes
-  that.
-
-Converting a suite to `it.effect` without moving what it reaches into a layer
-changes nothing — the 24 leaking Effect suites are the measurement of that.
+Not a per-file reset hook: a hook that scrubs module globals before each
+suite is a transitional adapter whose purpose disappears once the state is
+in layers, which AGENTS.md rules out building. Converting a suite to
+`it.effect` without moving what it reaches into a layer changes nothing — the
+24 leaking Effect suites in the 2026-09-10 run measured exactly that.
 
 Tried and measured on the way here, so nobody repeats them: `vmThreads` /
 `vmForks` (33% faster, break cross-realm `instanceof Error`);
 `vi.resetModules()` in a first setup file under `isolate: false` (6.2s on
 `latex`, but on the full suite it re-evaluates the heavy graphs like isolation
 and retains the invalidated ones — three workers at 5.2 / 3.7 / 3.7 GB, the
-machine swapping at 28 min); and moving the process-runtime install from a
-module-scope flag to `tryProcessRuntime()` with a per-file dispose in
-`setupFakePlatform.ts` (217 failing files against the 136 baseline). The last
-one fails for the reason that sizes the whole job: the kernel's per-file setup
-is import-time side effects — `import '@test/support/sessionGraphTestSetup'`,
-`defaultSessionTestSetup.ts` calling `initializeDefaultSession()` at import —
-and a shared registry evaluates each of those once per worker, for the first
-file only. The only per-file points are `setupFiles` (before a file's
-`vi.mock`s, which the seam's own comment rules out) or explicit calls in each
-file's body. So the migration is per suite, by design of the current kernel.
-
-Once 2 and 3 are done, re-run `--no-isolate` on the non-DOM tree. The target
-is the measured floor: the shared project ran 567 suites in 81s here, against
-a full run that does not finish in 45 minutes.
-
-Until then, `npm run test:changed` is the commit-loop gate; `npm test` stays
-the pre-PR gate.
+machine swapping at 28 min); and a per-file dispose of the process runtime in `setupFakePlatform.ts`
+(217 failing files against the 136 baseline). The last one fails for the
+reason that sizes the whole job: per-file setup done at import runs once per
+worker under a shared registry. The only per-file points are `setupFiles`
+(before a file's `vi.mock`s, which rules it out) or explicit calls in each
+file's body. So the migration is per suite.
 
 ## Reproduction
 

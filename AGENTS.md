@@ -18,10 +18,9 @@ nested `AGENTS.md`; read it before working there:
 
 TeXRA 1.0 is the next release generation, developed on `main`, with breaking
 changes to the application and its stored state (accepted 2026-09-09; a
-development target, not a claim that 1.0 has shipped). The
-[implementation and retirement plan](.agents/docs/proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)
-records the audited removal targets. `release/0.40` carries focused fixes for
-existing users under the released storage and execution contracts.
+development target, not a claim that 1.0 has shipped). `release/0.40` carries
+focused fixes for existing users under the released storage and execution
+contracts.
 
 - **Project terminology.** Use **project** for the user's working unit in
   product text, documentation, and new or revised application interfaces. A
@@ -120,7 +119,7 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `packages/harness/src/controllers/session/`.
+- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `packages/texra/src/controllers/session/`.
 
 ### Naming conventions
 
@@ -321,12 +320,11 @@ which changes persisted hash output).
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `packages/harness/src/agent/`, `packages/harness/src/model/`, `packages/harness/src/tools/`, `packages/harness/src/controllers/`, `packages/harness/src/shared/`, and the whole app, `packages/texra/src/`. Do not add new `@agent/*` imports under `packages/harness/src/shared/` or `packages/texra/src/ui/`; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
+1. **Never import `vscode` in VS Code-free zones.** The zones (the whole harness, the whole app, `packages/llm/src/`, `packages/desktop/src/` and the webview frontends) and the rule against new `@agent/*` imports under `packages/harness/src/shared/` and `packages/texra/src/ui/` are in CLAUDE.md "Separation of concerns: VS Code coupling".
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
-   - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
+   - The Effect `FileSystem` (`stat(...).type === 'File'` / `'Directory'`) — not `vscode.FileType`
    - `isFileNotFoundError(err)` from `@common/errors/errorPredicates` — not `instanceof vscode.FileSystemError`
-   - Use `number` for file type annotations instead of `vscode.FileType` — the numeric values are compatible
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 

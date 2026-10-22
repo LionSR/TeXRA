@@ -1,6 +1,6 @@
 /**
  * The session store's physical schema
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §2,
+ * (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md` §2,
  * §3): its tables, columns, indexes and PRAGMAs, the open sequence that
  * brings a file to them, and `SCHEMA_VERSION` in SQLite's `user_version`.
  *

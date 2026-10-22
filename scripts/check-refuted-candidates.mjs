@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Refuted-candidate CI gate — refactorability gates
-// .agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md
+// .agents/docs/implemented/process/2026-09-20-agent-refactorability-gates.md
 // section 2, the second of its two enforcement points.
 //
 // config/ratchets/refuted-candidates.json records the refactor candidates

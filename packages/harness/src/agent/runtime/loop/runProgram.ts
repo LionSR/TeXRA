@@ -3,8 +3,7 @@
  * and the exit protocol every run settles. What the loop does between them
  * stays in `toolUse.ts`. There is no hook record: the surface is values and
  * total functions, and the loop writes its own three-argument
- * `Effect.acquireUseRelease` (the run-loop design,
- * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
+ * `Effect.acquireUseRelease`.
  */
 
 import { Cause, Effect, Exit, SubscriptionRef } from 'effect';

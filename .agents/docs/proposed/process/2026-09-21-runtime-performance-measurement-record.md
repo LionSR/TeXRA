@@ -5,18 +5,21 @@ status: proposed
 
 # Runtime performance measurement record
 
-This is the single measurement record
-[#12427](https://github.com/LionSR/TeXRA/issues/12427) and the completion
-protocol's §5 amendment ask for: the three measurements that stay after the
-amendment struck the rest, each with machine, dataset, revision, units,
-method, a proposed numeric budget, and a reading status. The three are
-**cold open**, **stop latency with controlled non-zero work**, and
-**commit latency under contention**; each is a _measure once_ item, not a
-standing gate.
+This is the single measurement record that
+[#12427](https://github.com/LionSR/TeXRA/issues/12427) (closed) asked for:
+three measurements, each with machine, dataset, revision, units, method, a
+proposed numeric budget, and a reading status. The three are **cold open**,
+**stop latency with controlled non-zero work**, and **commit latency under
+contention**; each is a _measure once_ item, not a standing gate.
 
-Every other criterion the protocol's §5 carried is struck and not re-listed
+Every other runtime criterion once proposed is struck and not re-listed
 here: live idle memory, replay memory, two-project operation, bytes written
 versus retained file size, and missed event-loop deadlines.
+
+Still open as of 2026-10-22: no reading has been taken, no measurement
+harness exists on `main`, and nothing schedules one. The procedures below
+were written against the 2026-09-21 tree; the code paths they cite are
+updated to today's.
 
 **No performance reading is taken in this record, and none is estimated.**
 The environment facts below are the only numbers recorded here; they were
@@ -57,14 +60,14 @@ never merged.
   and time from `spawn` to an observable endpoint at the "session ready"
   boundary (the session store open and the runtime installed), with nothing
   after it included. Neither binary emits a dedicated ready signal today: the
-  CLI caches `initializeDefaultSession` and opens the store lazily, only when
+  CLI memoizes the process session and opens the store lazily, only when
   a command evaluates `services.session`
-  (`packages/cli/src/runtime/initPlatform.ts:343-368`, `:407`, `:444-455`),
+  (`packages/cli/src/runtime/initPlatform.ts`),
   so the measurable proxy is a trivial command that touches the session,
   timed `spawn` → process exit, with the command doing no work after the
-  open; the desktop's only readiness marker fires after renderer startup and
-  includes work beyond this boundary
-  (`packages/desktop/tests/e2e/electronApp.ts:120-129`), so the desktop
+  open; the desktop's only readiness marker (`desktopReady`) fires after renderer
+  startup and includes work beyond this boundary
+  (`packages/desktop/tests/e2e/electronApp.ts`), so the desktop
   reading needs an instrumented probe or harness event before it can be
   taken. Measure cold (OS page cache dropped) and warm; 20 launches each.
 - **Proposed budget (unvalidated).** p95 cold open ≤ **1,000 ms** on the
@@ -81,9 +84,8 @@ never merged.
   stopped while that work is in flight. The controlled work must be
   abort-aware: the shipped stop contract interrupts the run and propagates
   cancellation into the in-flight model and tool work
-  (`2026-09-04-agent-runtime-on-effect.md:767-775`;
-  `src/agent/runtime/AgentLaunchContext.ts:500-507`), and the fixture must let
-  that happen. The 100 ms figures size the work; they are not a floor the
+  (`packages/harness/src/agent/runtime/AgentLaunchContext.ts`), and the
+  fixture must let that happen. The 100 ms figures size the work; they are not a floor the
   stop waits out. A fixture that runs to its full configured duration after
   the stop would measure an artificial mandatory wait and would not detect
   regressions in cancellation propagation, which is the user-visible part of
@@ -111,9 +113,9 @@ never merged.
   SQLite `texra.db` in WAL mode — the shared-writer scenario, named for
   projects (not papers, per the issue comment). Each project root gets its
   own storage provider, its own storage directory, and its own `texra.db`
-  (`packages/desktop/src/main/desktopProjects.ts:256-277`,
-  `src/platform/defaults/workspaceStorage.ts:41-50`,
-  `src/controllers/session/Database.ts:271-281`), so "two projects, one
+  (`packages/desktop/src/main/desktopProjects.ts`,
+  `packages/harness/src/platform/defaults/workspaceStorage.ts`,
+  `packages/harness/src/controllers/session/Database.ts`), so "two projects, one
   store" is not a topology the application composes. The contention being
   measured is SQLite's single writer, exercised by two processes on the same
   project root's store.

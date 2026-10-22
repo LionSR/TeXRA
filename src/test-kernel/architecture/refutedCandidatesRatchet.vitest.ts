@@ -1,5 +1,5 @@
 // Refuted-candidate shape ratchet (refactorability gates,
-// .agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md
+// .agents/docs/implemented/process/2026-09-20-agent-refactorability-gates.md
 // section 2). The rulings that refused `withPerKeyLane` onto `Semaphore` and
 // `ModelRetryGate` onto `Schedule` are prose, so every autonomous pass
 // re-proposes them. config/ratchets/refuted-candidates.json holds them as
