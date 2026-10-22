@@ -3,6 +3,7 @@ description: The golden store's interactive chat, run as a goal, switched mid-ru
 tools:
   - plan
   - codex
+  - bash
 
 prompt: |-
   GOLDEN-CHAT: plan, run the plan as a goal, complete it.

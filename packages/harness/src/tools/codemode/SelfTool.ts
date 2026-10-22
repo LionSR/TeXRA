@@ -2,7 +2,7 @@
  * `self(prompt, opts)`: a script's function that runs this agent again, as
  * a child of the call. Forked (the default), the child continues the
  * conversation as it stood when the script started, with `prompt` added to
- * the message that started it (`forkChild`); fresh, it starts from `prompt` alone with the
+ * the message that started it (`forkSeed`); fresh, it starts from `prompt` alone with the
  * conversation's files and memories. Either way it is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
  * The goal is this function in a loop (`goalScript`).
@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
-import { forkChild } from '@agent/runtime/forkRun';
+import { forkSeed } from '@agent/runtime/forkRun';
 import { offeredBy } from '@agent/runtime/loop/step';
 import {
   IssuingScript,
@@ -29,11 +29,7 @@ import {
   agentChildRunId,
   recoverAgentChild,
 } from '@tools/delegation/agentChild';
-import { childRunDescription } from '@tools/delegation/childRun';
-import {
-  executeSubagentInBand,
-  resumeSubagentInBand,
-} from '@tools/delegation/inBandSubagentRun';
+import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
 import { describeSubagentProgress } from '@tools/delegation/subagentRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -117,52 +113,38 @@ const runSelf = Effect.fn('self.call')(function* (
     return yield* childResult(call, name, recovered.success, undefined);
 
   const runId = agentChildRunId(call);
-  const parentOffered = yield* offeredBy(run);
+  const { rootUserInstruction: _root, ...launch } = config;
+  // Forked, the child is born on the conversation's history; fresh, on the
+  // prompt alone. Either way it is launched, never resumed, so it starts
+  // with the grants its parent holds now.
   const launched = yield* Effect.result(
-    input.fork
-      ? Effect.gen(function* () {
-          yield* forkChild(session, source, before, {
-            runId,
-            parentRunId,
-            parentCard: call.logId,
-            parentCallId: call.callId,
-            prompt: input.prompt,
-            ...(outputSchema !== undefined && { outputSchema }),
-            ...(input.label != null && {
-              description: childRunDescription(input.label),
-            }),
-          });
-          return yield* resumeSubagentInBand({
-            session,
-            runId,
-            parentRunId,
-            parentOffered,
-            notify,
-          });
-        })
-      : Effect.gen(function* () {
-          const { rootUserInstruction: _root, ...launch } = config;
-          const bound = yield* SynchronizedRef.get(run.model);
-          return yield* executeSubagentInBand({
-            session,
-            runId,
-            parentRunId,
-            configPayload: AgentConfigSchema.parse({
-              ...launch,
-              script: null,
-              model: bound.modelId,
-              instruction: input.prompt,
-              displayInstruction: null,
-              outputFiles: [],
-              outputSchema: outputSchema ?? null,
-              cli: null,
-            }),
-            parentOffered,
-            parentCard: call.logId,
-            parentCallId: call.callId,
-            notify,
-          });
+    Effect.gen(function* () {
+      const forked = input.fork
+        ? yield* forkSeed(session, source, before, runId, input.prompt)
+        : null;
+      return yield* executeSubagentInBand({
+        session,
+        runId,
+        parentRunId,
+        configPayload: AgentConfigSchema.parse({
+          ...(forked?.record ?? {
+            ...launch,
+            model: (yield* SynchronizedRef.get(run.model)).modelId,
+            instruction: input.prompt,
+            displayInstruction: null,
+            outputFiles: [],
+            cli: null,
+          }),
+          script: null,
+          outputSchema: outputSchema ?? null,
         }),
+        ...(forked !== null && { seed: forked.seed }),
+        parentOffered: yield* offeredBy(run),
+        parentCard: call.logId,
+        parentCallId: call.callId,
+        notify,
+      });
+    }),
   );
   return Result.isFailure(launched)
     ? failedResult(name, launched.failure)

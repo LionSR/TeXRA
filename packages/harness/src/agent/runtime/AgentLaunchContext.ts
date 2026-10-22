@@ -291,17 +291,17 @@ const enterRun = Effect.fn('enterRun')(function* (
     const events = held ?? [];
     carried = events.findIndex((e) => e.type.startsWith('stream.'));
     if (carried < 0) carried = events.length;
-    const rows = events.slice(0, carried).flatMap((e) => {
-      const row = runEventDraft(runId, e);
-      return row === null ? [] : [row];
-    });
+    const rows = events
+      .slice(0, carried)
+      .flatMap((e) => runEventDraft(runId, e) ?? []);
     return { rows, committed: Effect.void };
   });
   const entered = Effect.sync(() => {
     for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
     held = null;
   }).pipe(Effect.andThen(input.onAdmitted?.(runId) ?? Effect.void));
-  return { logger, entry: { registration, opening, entered } };
+  const seed = input.registration?.seed ?? null;
+  return { logger, entry: { registration, seed, opening, entered } };
 });
 
 /**

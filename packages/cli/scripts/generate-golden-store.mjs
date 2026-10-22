@@ -31,7 +31,8 @@
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
  *   (`r` on the approval), which runs the goal template as a background
  *   script of the chat whose one round, a fork of the chat (`self()`),
- *   submits its verdict, and the chat's turn on the goal's result; then
+ *   runs a command under the goal's grant, unasked, and submits its
+ *   verdict, and the chat's turn on the goal's result; then
  *   `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved

@@ -87,6 +87,9 @@ const text = (value: string): TurnResult['content'] => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
 ];
 
+/** What the golden chat's goal round reports, and its result carries. */
+const ANSWERED = 'The golden chat is answered.';
+
 /**
  * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
  * a system prompt names its part, a step is its count of tool results, and a
@@ -182,24 +185,21 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
-    // The goal's round: the chat forked by the goal's script (`self()`),
-    // ends with its verdict.
-    if (turn.tools.some(({ name }) => name === 'submit_output'))
-      return Effect.succeed([
-        call('submit_output', {
-          status: 'done',
-          report: 'The golden chat is answered.',
-        }),
-      ]);
-    if (results.length === 0)
-      return Effect.succeed([
-        call('plan', { objective: 'Answer the golden chat, then stop.' }),
-      ]);
+    // The goal's round (`self()`): a command its grant approves, a verdict.
+    const round = turn.tools.some(({ name }) => name === 'submit_output');
+    const step = round
+      ? [
+          call('bash', { command: 'echo goal round', description: 'Goal' }),
+          call('submit_output', { status: 'done', report: ANSWERED }),
+        ]
+      : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
+    if (round || results.length === 0)
+      return Effect.succeed(step.slice(results.length, results.length + 1));
     if (said.includes('After the model switch.'))
       return Effect.succeed(text('Answered after the model switch.'));
     return Effect.succeed(
       text(
-        said.includes('The golden chat is answered.')
+        said.includes(ANSWERED)
           ? 'Golden chat goal complete.'
           : 'The plan runs as a goal.',
       ),

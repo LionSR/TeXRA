@@ -387,7 +387,12 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       ...(recipe !== undefined && { changes: recipe.changes }),
       runId,
       outcome: result.outcome,
-      cost: result.usage?.totalCost ?? 0,
+      // What the child and every run under it spent: a goal's cap counts it.
+      cost:
+        (yield* call.run.session.view.read([])).runs.get(runId)?.treeUsage
+          .cost ??
+        result.usage?.totalCost ??
+        0,
     }),
     ...(key !== undefined && { reuseKey: key }),
   };

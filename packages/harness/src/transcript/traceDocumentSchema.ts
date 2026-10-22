@@ -32,12 +32,16 @@ export interface TraceFactArm {
   readonly upcasters: readonly unknown[];
 }
 
+/** Plugin facts a built-in plugin wrote before this build retired them:
+ *  a trace that holds one is from an earlier build, refused, not stripped. */
+const RETIRED_FACTS: ReadonlySet<string> = new Set(['goal/state']);
+
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
  * against the app's plugin arms (`appArms`): a fact
  * outside its arm's versions (`pluginFactFloor`), or whose value the arm's
- * schema refuses, throws, naming it; one whose plugin this build lacks is
- * left out. A trace is display data and runs no upcaster, so a version an
+ * schema refuses, throws, naming it, as does a retired built-in fact;
+ * one whose plugin this build lacks is left out. A trace is display data and runs no upcaster, so a version an
  * upcaster would bring forward is refused by the schema, never misread.
  */
 export function readTraceFacts(
@@ -53,6 +57,10 @@ export function readTraceFacts(
   const events = document.events.filter((event) => {
     if (event.type !== 'plugin.fact') return true;
     const name = `${event.plugin}/${event.kind}`;
+    if (RETIRED_FACTS.has(name))
+      throw new Error(
+        `the plugin fact ${name} was written by an earlier build; this build no longer reads it.`,
+      );
     const arm = arms.get(name);
     if (arm === undefined) return false;
     if (event.version < pluginFactFloor(arm) || event.version > arm.version)

@@ -179,6 +179,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(yield* cell.current),
       ...{ modelId: bound.modelId, ...binding },
     };
+    // A fork is born on the history it was cut from, its turn ready.
+    const { seed } = run.entry;
+    if (seed != null) {
+      const born = [
+        ...seed,
+        configRow(runId, run.config, bound.modelId, binding),
+        positionRow(runId, opening, 'turn.ready'),
+      ];
+      yield* cell
+        .append(born, run.entry.opening)
+        .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
+      run.callbacks.onProgress?.({ kind: 'started' });
+      return cell;
+    }
     // Keep preparation interruptible inside the masked acquire.
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {

@@ -30,7 +30,10 @@ import {
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
-import type { RunInputDraft } from '@shared/session/runStateFold';
+import type {
+  RunHistoryDraft,
+  RunInputDraft,
+} from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -101,6 +104,9 @@ export interface RegisterRunOptions {
   readonly descriptionBy?: 'model' | 'user';
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
+  /** A fork's history, which its opening commits in place of a prompt
+   *  (`forkSeed`): the run is born on it, not resumed onto it. */
+  readonly seed?: readonly RunHistoryDraft[];
 }
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
