@@ -59,7 +59,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'exportTranscript',
   'fileAction',
   'fork',
-  'gettingStarted',
   'launch',
   'latexdiff',
   'latexdiffs',
@@ -109,7 +108,6 @@ type HostVerb<A> = Effect.Effect<
 >;
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
-type GettingStartedRequest = Extract<HostRequest, { kind: 'gettingStarted' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
@@ -159,7 +157,6 @@ export interface SharedHostRequestBindings {
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   openInstallGuide(tool: string): HostVerb<void>;
-  gettingStarted(action: GettingStartedRequest['action']): HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
    *  takes. */
@@ -410,9 +407,6 @@ export function handleSharedHostRequest(
         return done;
       case 'openInstallGuide':
         yield* host.openInstallGuide(request.tool);
-        return done;
-      case 'gettingStarted':
-        yield* host.gettingStarted(request.action);
         return done;
       case 'onboarding':
         switch (request.action) {

@@ -224,8 +224,8 @@ const shortcutAcceleratorsById = new Map<string, string | undefined>(
   desktopMenuEntries.map((entry) => [entry.id, entry.accelerator]),
 );
 // One name per action: chrome labels and tooltips quote the command catalog
-// verbatim (the same source the palette and the Settings shortcut list read)
-// instead of paraphrasing it in sentence case.
+// verbatim (the same source the palette reads) instead of paraphrasing it in
+// sentence case.
 const commandLabelsById = new Map<string, string>(
   desktopMenuEntries.map((entry) => [entry.id, entry.label]),
 );
@@ -683,17 +683,9 @@ const shortcuts = createDesktopShortcutRegistry({
 const palette = createDesktopCommandPalette({
   document,
   actions: desktopRendererCommandActions,
-  getShortcuts: () => shortcuts.entries(),
   platform: rendererPlatform,
 });
 document.body.append(palette.element);
-shortcuts.subscribe((entries) => {
-  shortcutAcceleratorsById.clear();
-  for (const entry of entries) {
-    shortcutAcceleratorsById.set(entry.id, entry.accelerator);
-  }
-  rerenderShell();
-});
 
 // Clear the active run so the conversation shell shows its empty state.
 function returnToLauncher(): void {

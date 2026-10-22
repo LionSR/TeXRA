@@ -104,12 +104,12 @@ describe('session Surface ownership', () => {
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
 
     const refuse = response();
-    surfaces.hostRequest(KEY, { kind: 'extractFigures' });
+    surfaces.hostRequest(KEY, { kind: 'popOut' });
     // Open another paper while the first paper's request remains pending.
     surfaces.sync([KEY, 'other-paper']);
     const error = {
       _tag: 'Rejected',
-      reason: 'Figure extraction is unavailable.',
+      reason: 'Pop-out to editor is unavailable.',
     } as const;
     refuse({ ok: false, error });
     await Promise.resolve();

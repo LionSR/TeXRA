@@ -12,8 +12,7 @@ import type { PlatformError } from 'effect/PlatformError';
  * `system()` does. When the child ends, the command interrupts its own fiber
  * if the child ended because of that Ctrl-C, so the outcome does not race
  * process exit. Each caller's boundary maps the interruption to exit 130:
- * `defineCliCommand` for the pager and `texra tools`, `notifyCliUpdate` for
- * the self-update.
+ * `defineCliCommand` for the pager, `notifyCliUpdate` for the self-update.
  */
 let foregroundHolders = 0;
 let interruptedWhileHeld = false;

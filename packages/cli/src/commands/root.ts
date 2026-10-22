@@ -48,7 +48,6 @@ import { serveCommand, serviceCommand } from './service';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
 import { tasksCommand } from './tasks';
-import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { headlessRunCommand } from './workflow';
 
@@ -99,7 +98,6 @@ export const rootCommand = withUsageSections(
       agents: agentsCommand,
       skills: skillsCommand,
       plugin: pluginCommand,
-      tools: toolsCommand,
       team: teamCommand,
       models: modelsCommand,
       auth: authCommand,

@@ -380,82 +380,6 @@ function validateTeamListAvailability() {
   }
 }
 
-function findToolRecord(records, id) {
-  return records.find((record) => record.id === id);
-}
-
-function validateToolsCommand() {
-  const cwd = makeScratch('texra-cli-tools-cwd-');
-  const home = makeScratch('texra-cli-tools-home-');
-  try {
-    const env = isolatedCliHomeEnv(home);
-    const runTools = (args) =>
-      run(
-        process.execPath,
-        [binaryPath, 'tools', ...args, '--cwd', cwd, '--print', '--no-color'],
-        { cwd: repoRoot, env },
-      );
-
-    const initial = runTools(['list', '--output-format', 'json']);
-    assertSuccess(initial, 'texra tools list JSON');
-    const records = parseJson(initial.stdout, 'tools list JSON');
-    assert(Array.isArray(records), 'tools list JSON should be an array');
-    const target = records.find((record) => record.toggleable === true);
-    assert(
-      target,
-      `tools list should include a toggleable integration\nstdout:\n${initial.stdout}`,
-    );
-
-    const disabled = runTools(['disable', target.id]);
-    assertSuccess(disabled, `texra tools disable ${target.id}`);
-    assert(
-      disabled.stdout.includes(`Disabled ${target.id}.`),
-      `tools disable should confirm the target id\nstdout:\n${disabled.stdout}`,
-    );
-
-    const afterDisable = runTools(['list', '--output-format', 'json']);
-    assertSuccess(afterDisable, 'texra tools list JSON after disable');
-    const disabledRecord = findToolRecord(
-      parseJson(afterDisable.stdout, 'tools list JSON after disable'),
-      target.id,
-    );
-    assert(
-      disabledRecord?.enabled === false,
-      `tools disable should persist enabled=false for ${target.id}\nstdout:\n${afterDisable.stdout}`,
-    );
-
-    const enabled = runTools(['enable', target.id]);
-    assertSuccess(enabled, `texra tools enable ${target.id}`);
-    assert(
-      enabled.stdout.includes(`Enabled ${target.id}.`),
-      `tools enable should confirm the target id\nstdout:\n${enabled.stdout}`,
-    );
-
-    const afterEnable = runTools(['list', '--output-format', 'json']);
-    assertSuccess(afterEnable, 'texra tools list JSON after enable');
-    const enabledRecord = findToolRecord(
-      parseJson(afterEnable.stdout, 'tools list JSON after enable'),
-      target.id,
-    );
-    assert(
-      enabledRecord?.enabled === true,
-      `tools enable should persist enabled=true for ${target.id}\nstdout:\n${afterEnable.stdout}`,
-    );
-
-    const ndjson = runTools(['list', '--output-format', 'ndjson']);
-    assertSuccess(ndjson, 'texra tools list NDJSON');
-    assert(
-      parseNdjson(ndjson.stdout, 'tools list NDJSON').every(
-        (record) => record.kind === 'tool-status',
-      ),
-      'tools list NDJSON records should have kind=tool-status',
-    );
-  } finally {
-    removeScratch(cwd);
-    removeScratch(home);
-  }
-}
-
 function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [binaryPath, 'run', 'polish', '--input', '--print']),
@@ -3623,7 +3547,6 @@ async function validateCliRunArtifacts(options = {}) {
   }
   validateBinarySmoke();
   validateTeamListAvailability();
-  validateToolsCommand();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();

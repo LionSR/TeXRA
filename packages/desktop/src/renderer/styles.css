@@ -399,7 +399,6 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-command-palette-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--wa-space-xs);
   min-height: 32px;
   padding: var(--wa-space-2xs) var(--wa-space-s);
@@ -425,20 +424,9 @@ wa-input.desktop-command-palette-input::part(input) {
   padding: var(--wa-space-3xs) var(--wa-space-2xs);
 }
 
-.desktop-command-palette-customize::part(base) {
-  min-height: var(--height-control-compact);
-  padding-inline: var(--wa-space-2xs);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
 @media (max-width: 540px) {
-  .desktop-command-palette-help {
-    display: none;
-  }
-
   .desktop-command-palette-footer {
-    justify-content: flex-end;
+    display: none;
   }
 }
 
