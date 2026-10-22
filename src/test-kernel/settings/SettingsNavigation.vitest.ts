@@ -10,7 +10,7 @@ vi.mock('@texra/shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavEntry } from '@settingsView/frontend/settingsNav';
-import type { SettingsTabPanelName } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTabPanelName } from '@texra/shared/settingsView/settingsTarget';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 

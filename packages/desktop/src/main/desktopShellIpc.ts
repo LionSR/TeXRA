@@ -1,6 +1,6 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,

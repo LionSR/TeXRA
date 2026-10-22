@@ -1,6 +1,6 @@
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   toElectronAccelerator,
   type DesktopPlatform,

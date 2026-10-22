@@ -136,7 +136,7 @@ export abstract class BaseRunContent extends LitElement {
                 this.dispatchEvent(
                   SessionUiEvents.host({
                     kind: 'openSettings',
-                    section: 'plugins',
+                    target: 'plugins',
                   }),
                 )}
               >${fix}</wa-button
