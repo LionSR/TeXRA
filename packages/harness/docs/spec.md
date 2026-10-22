@@ -174,12 +174,14 @@ then classified by the reader (`controllers/session/rowCodec.ts:267-332`):
 
 A read of one run's history or records MUST fail on any row that does not decode
 (`controllers/session/rowReader.ts:159-182`). A listing or a tail leaves an
-earlier build's or a corrupt row out with one warning and marks its run
-unreadable (`controllers/session/rowReader.ts:183-191`); a row a newer build
-wrote fails every read, listing and tail included, because it means a newer
-build now writes this store (`controllers/session/rowReader.ts:181-182`). A run
-whose rows do not decode cannot be opened or resumed
-(`shared/session/runHistory.ts:98-104`, `agent/runtime/resumeRun.ts:251-252`).
+earlier build's or a corrupt row out with one warning; when the row is on a
+`run` aggregate it also marks that run unreadable, and a bad row on a `plugin`
+aggregate marks no run (`controllers/session/rowReader.ts:183-192`); a row a
+newer build wrote fails every read, listing and tail included, because it means
+a newer build now writes this store
+(`controllers/session/rowReader.ts:181-182`). A run whose rows do not decode
+cannot be opened or resumed (`shared/session/runHistory.ts:98-104`,
+`agent/runtime/resumeRun.ts:251-252`).
 
 ## 3. Row kinds
 
@@ -273,15 +275,15 @@ A run's history is written through its run cell, `RunCell.append`, which commits
 one batch per call (`agent/runtime/RunHistory.ts:404-415`). The loop's write
 points are normative:
 
-| #   | Fact                                 | Rule                                                                                 | Code                                                                                                         |
-| --- | ------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| W1  | `model.message` `attempt`            | commits before the billed request leaves the process                                 | `agent/runtime/ModelInvoker.ts:489-511`; summary: `:789-801`                                                 |
-| W2  | `model.message` `response`           | commits, with `run.position` `response.ready`, before any tool call dispatches       | `agent/runtime/ModelInvoker.ts:385-401`; `agent/runtime/loop/toolUse.ts:342-349`                             |
-| W3  | `tool.intent`                        | commits after PreToolUse hooks and the guard, before the body runs, once per attempt | `agent/runtime/loop/toolUseDispatch.ts:576-608`; `agent/runtime/loop/toolGuard.ts:119-129`                   |
-| W4  | `tool.result`                        | commits, with the call's card rows, before the delivery that lets the loop continue  | `agent/runtime/loop/toolUseDispatch.ts:434-457`, `:709-732`, `:1164-1169`                                    |
-| W5  | `run.position`                       | commits at every wait and every halt                                                 | `agent/runtime/loop/toolUse.ts:263`, `:292-294`, `:461`, `:534-545`; `agent/storage/runLifecycle.ts:239-273` |
-| W6  | `model.message` `failed`             | commits for every failed attempt, naming the next move                               | `agent/runtime/ModelInvoker.ts:622-682`, `:714-716`; `agent/runtime/run/invocation.ts:383-393`               |
-| W7  | `request.opened` / `request.decided` | the opening commits before any wait; a decision commits once                         | `agent/runtime/requestPolicy.ts:272-290`, `:341-353`                                                         |
+| #   | Fact                                 | Rule                                                                                                                                 | Code                                                                                                         |
+| --- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| W1  | `model.message` `attempt`            | commits before the billed request leaves the process                                                                                 | `agent/runtime/ModelInvoker.ts:489-511`; summary: `:789-801`                                                 |
+| W2  | `model.message` `response`           | commits, with `run.position` `response.ready`, before any tool call dispatches                                                       | `agent/runtime/ModelInvoker.ts:385-401`; `agent/runtime/loop/toolUse.ts:342-349`                             |
+| W3  | `tool.intent`                        | commits after PreToolUse hooks and the guard, before the body runs, once per attempt                                                 | `agent/runtime/loop/toolUseDispatch.ts:576-608`; `agent/runtime/loop/toolGuard.ts:119-129`                   |
+| W4  | `tool.result`                        | commits, with the call's card rows, before the delivery that lets the loop continue                                                  | `agent/runtime/loop/toolUseDispatch.ts:434-457`, `:709-732`, `:1164-1169`                                    |
+| W5  | `run.position`                       | commits at every loop-boundary wait and every halt; a request's wait keeps the position in force and writes `request.opened` instead | `agent/runtime/loop/toolUse.ts:263`, `:292-294`, `:461`, `:534-545`; `agent/storage/runLifecycle.ts:239-273` |
+| W6  | `model.message` `failed`             | commits for every failed attempt, naming the next move                                                                               | `agent/runtime/ModelInvoker.ts:622-682`, `:714-716`; `agent/runtime/run/invocation.ts:383-393`               |
+| W7  | `request.opened` / `request.decided` | the opening commits before any wait; a decision commits once                                                                         | `agent/runtime/requestPolicy.ts:272-290`, `:341-353`                                                         |
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
@@ -325,8 +327,10 @@ outcome, and every other position MUST NOT carry one
 in the same batch as the run's `run.end`
 (`agent/storage/runLifecycle.ts:239-273`, `agent/runtime/loop/rows.ts:66-79`).
 
-**W6.** Every failed attempt MUST commit a `failed` row whose `next` is the move
-after it (`agent/runtime/run/invocation.ts:383-393`,
+**W6.** Every failed attempt that reaches failure recording MUST commit a
+`failed` row whose `next` is the move after it; a renewed observation of an
+accepted operation repeats without one (section 6)
+(`agent/runtime/run/invocation.ts:383-393`,
 `agent/runtime/ModelInvoker.ts:622-639`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
 (`agent/runtime/ModelInvoker.ts:670-681`, `shared/session/runHistory.ts:141`).
@@ -631,17 +635,17 @@ publisher job leaves neither half on disk
 
 What survives at each commit point follows from sections 2 to 8:
 
-| Cut after                    | On resume                                                                                                                                                                                                                                |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `attempt`                    | The attempt has no outcome: resent, or asked again if a person admitted the invocation (section 6).                                                                                                                                      |
-| `accepted`                   | The operation is observed under its recorded deadline, not resubmitted (`shared/session/inFlight.ts:211-212`).                                                                                                                           |
-| `response`                   | The response is reused; no new invocation is made for it (`agent/runtime/loop/toolUse.ts:342-353`).                                                                                                                                      |
-| a call's requests, no intent | The call re-enters the request it asked (`shared/session/inFlight.ts:363-364`).                                                                                                                                                          |
-| `tool.intent`, no result     | Re-run only if both the stored and the current tool declare `replay: 'safe'` and the stored arguments validate; else settled as outcome unknown (`agent/runtime/loop/toolUseDispatch.ts:740-767`, `agent/runtime/run/tools.ts:107-138`). |
-| `tool.result`                | The settlement is reused; the call is not run again (`agent/runtime/loop/toolUseDispatch.ts:1034-1035`).                                                                                                                                 |
-| delivery `append`            | The loop continues to the next step from `results.ready` (`shared/session/runRows.ts:96-104`).                                                                                                                                           |
-| `request.opened`             | The request stays pending under the same id, or is cancelled if unbound (section 7.2).                                                                                                                                                   |
-| `run.end` with `halted`      | The run is finished; a resume answers `finished` (`agent/runtime/resumeRun.ts:203-206`).                                                                                                                                                 |
+| Cut after                    | On resume                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempt`                    | The attempt has no outcome: resent, or asked again if a person admitted the invocation (section 6).                                                                                                                                                                                                                                                                                                        |
+| `accepted`                   | The operation is observed under its recorded deadline, not resubmitted (`shared/session/inFlight.ts:211-212`).                                                                                                                                                                                                                                                                                             |
+| `response`                   | The response is reused; no new invocation is made for it (`agent/runtime/loop/toolUse.ts:342-353`).                                                                                                                                                                                                                                                                                                        |
+| a call's requests, no intent | The call re-enters the request it asked (`shared/session/inFlight.ts:363-364`).                                                                                                                                                                                                                                                                                                                            |
+| `tool.intent`, no result     | If the call opened a request that still stands, the call runs again and rejoins that request under its id (`shared/session/inFlight.ts:346-369`). Otherwise it is re-run only if both the stored and the current tool declare `replay: 'safe'` and the stored arguments validate; else settled as outcome unknown (`agent/runtime/loop/toolUseDispatch.ts:740-767`, `agent/runtime/run/tools.ts:107-138`). |
+| `tool.result`                | The settlement is reused; the call is not run again (`agent/runtime/loop/toolUseDispatch.ts:1034-1035`).                                                                                                                                                                                                                                                                                                   |
+| delivery `append`            | The loop continues to the next step from `results.ready` (`shared/session/runRows.ts:96-104`).                                                                                                                                                                                                                                                                                                             |
+| `request.opened`             | The request stays pending under the same id, or is cancelled if unbound (section 7.2).                                                                                                                                                                                                                                                                                                                     |
+| `run.end` with `halted`      | The lifecycle is over. A recipe task stays finished, and a resume answers `finished` (`agent/runtime/resumeRun.ts:203-206`); a loop-driven conversation continues on a resume in a new lifecycle, from the phase `halted` kept (`shared/session/runActions.ts:97-99`).                                                                                                                                     |
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot
