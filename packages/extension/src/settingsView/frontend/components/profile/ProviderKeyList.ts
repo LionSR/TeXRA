@@ -23,6 +23,7 @@ import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 
@@ -230,8 +231,6 @@ export class ProviderKeyList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const rows = this.providerKeyStatuses;
-
     const description =
       "Add a key from each provider's developer console. Kimi Code and GLM Coding Plan keys go on their rows; a ChatGPT or Grok plan signs in below instead.";
 
@@ -247,7 +246,11 @@ export class ProviderKeyList extends LitElement {
           role="list"
           aria-label="Provider API keys"
         >
-          ${rows.map((entry) => this.renderRow(entry))}
+          ${
+            this.providerKeyStatuses.length === 0
+              ? renderLoadingState('Loading API keys…')
+              : this.providerKeyStatuses.map((entry) => this.renderRow(entry))
+          }
         </div>
       </div>
     `;
