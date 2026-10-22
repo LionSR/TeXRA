@@ -83,7 +83,11 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      hasUsableSetupCredential(roots, secrets).pipe(
+      // The check runs on every host and cannot tell whether its host's setup
+      // launch turns OpenRouter on, so it counts a key as the extension does.
+      hasUsableSetupCredential(roots, secrets, {
+        openRouterFallback: true,
+      }).pipe(
         // A check that cannot be answered is reported as unknown, not as a
         // missing credential the user would be told to add again.
         Effect.catch((failure) =>

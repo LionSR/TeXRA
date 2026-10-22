@@ -25,7 +25,7 @@ import type { SettingsStores } from '@texra-ai/harness';
  * `includeAccessListFallback` offers OpenRouter's setup model while the
  * OpenRouter switch is off, as a last resort: the extension prompts first and
  * turns the switch on for that launch (`requiresOpenRouter`), while desktop
- * has no prompt to explain the flip and opts out.
+ * and the CLI have no prompt to explain the flip and opt out.
  */
 export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
   function* (
@@ -71,16 +71,21 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
 );
 
 /**
- * True when the setup assistant has a model to launch with, the OpenRouter
- * last resort included. A check that cannot be answered fails typed: an
- * unreadable store is not the fact "no credential", and each caller decides
- * what an unknown answer means for its surface.
+ * True when the caller's setup launch has a model to launch with. Whether an
+ * OpenRouter key counts while the OpenRouter switch is off is the caller's
+ * host's answer, not a default: `openRouterFallback` is true only where that
+ * launch turns the switch on for itself (the extension), so a host whose
+ * launch cannot (desktop, CLI) never reports a credential it then fails to
+ * launch with. A check that cannot be answered fails typed: an unreadable
+ * store is not the fact "no credential", and each caller decides what an
+ * unknown answer means for its surface.
  */
 export const hasUsableSetupCredential = (
   stores: SettingsStores,
   secrets: PlatformSecrets,
+  launch: { readonly openRouterFallback: boolean },
 ) =>
-  resolveSetupLaunchModel(stores, secrets, true).pipe(
+  resolveSetupLaunchModel(stores, secrets, launch.openRouterFallback).pipe(
     Effect.map((resolution) => resolution !== null),
   );
 

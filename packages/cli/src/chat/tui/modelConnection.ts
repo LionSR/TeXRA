@@ -54,6 +54,13 @@ interface HeldMessage {
 let heldMessage: HeldMessage | undefined;
 
 /**
+ * The CLI picks the chat's model with `selectCliRunnableModel`, which never
+ * turns the OpenRouter switch on, so an OpenRouter key counts only while the
+ * user has the switch on.
+ */
+const CLI_SETUP_LAUNCH = { openRouterFallback: false } as const;
+
+/**
  * With no model connected, keep a chat message (the latest wins) and put the
  * connect panel back in front; the connection sends it. Slash commands never
  * wait: `/login` is how a connection happens. True when the message was held.
@@ -79,7 +86,7 @@ export function holdUntilConnected(message: HeldMessage): boolean {
 export const checkModelConnection = Effect.fn('checkModelConnection')(
   function* (services: CliPlatformServices) {
     const probe = yield* Effect.result(
-      hasUsableSetupCredential(services, services.secrets),
+      hasUsableSetupCredential(services, services.secrets, CLI_SETUP_LAUNCH),
     );
     if (probe._tag === 'Failure') {
       yield* Effect.logWarning(
@@ -114,7 +121,11 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   const { stores, secrets, runtime } = context;
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
-  const ready = yield* hasUsableSetupCredential(stores, secrets);
+  const ready = yield* hasUsableSetupCredential(
+    stores,
+    secrets,
+    CLI_SETUP_LAUNCH,
+  );
   if (!ready) return;
   modelConnectionNeeded.set(false);
   const selection = yield* Effect.exit(
