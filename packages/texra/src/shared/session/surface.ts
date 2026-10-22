@@ -128,7 +128,8 @@ export type SurfaceRefusal = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
   readonly session: string;
-  /** The last failed request from this surface. Never persisted. */
+  /** The last failed request from this surface, or a failure one of its
+   *  components reports on the same notice (`reportError`). Never persisted. */
   readonly requestError: SurfaceRefusal | null;
   /**
    * The shown run, decided once: `pruneSurface` applies the surface's
@@ -381,6 +382,9 @@ export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }
   | { readonly kind: 'selectNew' }
   | { readonly kind: 'dismissRequestError' }
+  /** A failure in the component itself, before any request went out (a
+   *  pasted image it could not read), shown on the request notice. */
+  | { readonly kind: 'reportError'; readonly reason: string }
   | { readonly kind: 'toggleDrawer' }
   | { readonly kind: 'drawer'; readonly open: boolean }
   | { readonly kind: 'toolsSheet'; readonly open: boolean }
@@ -426,6 +430,11 @@ export function applySurfaceAction(
   switch (action.kind) {
     case 'dismissRequestError':
       return { ...surface, requestError: null };
+    case 'reportError':
+      return {
+        ...surface,
+        requestError: { _tag: 'Rejected', reason: action.reason },
+      };
     case 'select':
       return { ...surface, selected: action.runId, drawerOpen: false };
     case 'selectNew':

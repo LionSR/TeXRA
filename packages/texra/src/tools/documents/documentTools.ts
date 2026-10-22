@@ -7,7 +7,7 @@
  * from its rows and commits them again; none holds state between calls, so
  * a resumed recipe replays against the rows.
  */
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Effect, Exit, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, Settings } from '@texra-ai/harness';
@@ -22,6 +22,7 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RunIdSchema,
+  toErrorMessage,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
@@ -51,6 +52,7 @@ import {
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
 import {
+  latexdiffDisplayName,
   roundOutputsToOutputSummaries,
   OUTPUT_END_TAG,
 } from '@texra/shared/plugins/documentOutputs';
@@ -102,23 +104,32 @@ const openTask = Effect.fn('documents.openTask')(function* (
   const { fileService } = docs.deps;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
-  // not, though it exists.
+  // not, though it exists. Why it did not read is kept for the refusal.
   const located = (files: readonly string[]) =>
     Effect.forEach(files.filter(Boolean), (file) => {
       const absolutePath = fileService.locateSource(file).absolutePath;
-      return Effect.map(
-        fs.readFile(absolutePath).pipe(
-          Effect.as(true),
-          Effect.orElseSucceed(() => false),
-        ),
-        (ok) => ({ path: file, absolutePath, ok }),
+      return fs.readFile(absolutePath).pipe(
+        Effect.match({
+          onSuccess: () => ({ path: file, absolutePath, error: null }),
+          onFailure: (error) => ({
+            path: file,
+            absolutePath,
+            error: toErrorMessage(error),
+          }),
+        }),
+        Effect.map((read) => ({ ...read, ok: read.error === null })),
       );
     });
   const inputs = yield* located([...config.inputFiles, ...config.mediaFiles]);
-  if (inputs.length === 0 || inputs.some((input) => !input.ok))
+  const unreadable = inputs.filter((input) => !input.ok);
+  if (inputs.length === 0 || unreadable.length > 0)
     return yield* Effect.fail(
       new ToolError(
-        `The document task of '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text).`,
+        `The document task of '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
+          unreadable.length > 0
+            ? `cannot read ${unreadable.map((input) => `${input.path} (${input.error})`).join(', ')}.`
+            : 'it has none.'
+        }`,
       ),
     );
   const contexts = yield* located(config.contextFiles);
@@ -375,8 +386,9 @@ export const DocumentCompileTool = defineTool({
 export const DocumentDiffTool = defineTool({
   name: 'document_diff',
   description:
-    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs }`, the diff files it wrote. Run it after `document_compile`, not beside it: each call records the run's documents whole.",
-  scriptReturns: '{ diffs: string[] }',
+    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs, failed, notRun }`: the diff files it wrote, the documents whose diff failed with why, and why no diff ran at all (latexdiff not installed, or the pass failed), else null. Run it after `document_compile`, not beside it: each call records the run's documents whole.",
+  scriptReturns:
+    '{ diffs: string[]; failed: { document: string; error: string }[]; notRun: string | null }',
   replay: 'safe',
   schema: z.strictObject({ revision: RevisionSchema }),
   execute: Effect.fn('document_diff')(function* ({ revision }) {
@@ -388,35 +400,43 @@ export const DocumentDiffTool = defineTool({
           `Revision ${revision + 1} has no outputs to diff.`,
           'Nothing to diff',
         ),
-        value: { diffs: [] },
+        value: { diffs: [], failed: [], notRun: null },
       };
-    const { artifacts, entries } = yield* docs.diff
-      .handleLatexdiffOfOutput(
+    const { artifacts, entries, notRun } =
+      yield* docs.diff.handleLatexdiffOfOutput(
         revision,
         outputs,
         traceFileLineage(docs.state, docs.baseFiles, revision),
-      )
-      .pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterrupts(cause)
-            ? Effect.failCause(cause)
-            : Effect.sync(() => {
-                docs.deps.logger.warn('latexdiff failed', {
-                  data: Cause.squash(cause),
-                });
-                return { artifacts: [], entries: [] };
-              }),
-        ),
       );
     ensureRoundData(docs.state, revision).latexdiffs = entries;
     if (yield* autoOpensPdf(docs)) yield* present(docs, artifacts);
-    const diffs = artifacts.map(fileLocationDisplayPath);
+    const diffs = entries.flatMap((entry) =>
+      entry.status === 'ok' ? [fileLocationDisplayPath(entry.diff)] : [],
+    );
+    const failed = entries.flatMap((entry) =>
+      entry.status === 'failed'
+        ? [{ document: latexdiffDisplayName(entry), error: entry.error }]
+        : [],
+    );
+    const pdfs = artifacts.map(fileLocationDisplayPath);
+    // What the model reads: the diffs, each failed pair with its error, and
+    // why no pair ran, each said apart from a revision with nothing to diff.
+    let lines = [`Revision ${revision + 1} has no document pairs to diff.`];
+    let summary = `${diffs.length} diffs`;
+    if (notRun !== null) {
+      lines = [`No diffs for revision ${revision + 1}: ${notRun}.`];
+      summary = 'No diffs ran';
+    } else if (entries.length > 0) {
+      lines = [
+        diffs.length > 0 ? `Diffs: ${diffs.join(', ')}.` : 'No diffs written.',
+        ...(pdfs.length > 0 ? [`Diff PDFs: ${pdfs.join(', ')}.`] : []),
+        ...failed.map((f) => `Diff failed for ${f.document}: ${f.error}`),
+      ];
+      if (failed.length > 0) summary += `, ${failed.length} failed`;
+    }
     return {
-      ...executed(
-        diffs.length > 0 ? `Diffs: ${diffs.join(', ')}` : 'No diffs written.',
-        `${diffs.length} diffs`,
-      ),
-      value: { diffs },
+      ...executed(lines.join('\n'), summary),
+      value: { diffs, failed, notRun },
       facts: [docs.fact()],
     };
   }),

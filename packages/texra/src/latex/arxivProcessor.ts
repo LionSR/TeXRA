@@ -467,10 +467,11 @@ class ArxivSourceProcessor {
         paperDirFull,
       ));
       if (needsDownload) {
-        // `Effect.scoped` closes the staging directory's finalizer here, on
-        // success, failure and interruption alike.
-        yield* Effect.scoped(
-          this.fetchAndPlaceSource(id, paperDirFull, isRoot, progressCallback),
+        yield* this.fetchAndPlaceSource(
+          id,
+          paperDirFull,
+          isRoot,
+          progressCallback,
         );
       }
 
@@ -544,11 +545,37 @@ class ArxivSourceProcessor {
   }
 
   /**
-   * Download the arXiv source tarball into a unique staging directory, reject
-   * PDF-only submissions, and place the source files into the paper root. The
-   * staging directory, and a paper directory this call created but did not
-   * finish, are removed by scope finalizers, so the caller must run this
-   * inside `Effect.scoped`.
+   * Remove the paper directory an unfinished download created: a partial
+   * tree holding one `.tex` would pass `hasExistingSource` on the next
+   * download, which would then report an incomplete source as downloaded.
+   * A removal that fails is a warning, and its message is what the
+   * download's own failure carries, so the user knows to remove the tree.
+   * @returns null once removed, else the message naming what is left.
+   */
+  private removeUnfinishedPaperDir(
+    paperDirFull: string,
+  ): Effect.Effect<string | null, never, FileSystem.FileSystem> {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return yield* fs.remove(paperDirFull, { recursive: true, force: true });
+    }).pipe(
+      Effect.as(null),
+      Effect.catch((error) => {
+        const message = `A partial source was left at ${paperDirFull} (${toErrorMessage(error.reason.cause ?? error)}); remove it before downloading again.`;
+        return Effect.logWarning(message).pipe(Effect.as(message));
+      }),
+      withLogChannel(ARXIV_CHANNEL),
+    );
+  }
+
+  /**
+   * Download the arXiv source and place it into the paper directory
+   * (`stageAndPlaceSource`). A paper directory this download creates is its
+   * own until the source is fully placed: any other exit -- a PDF-only
+   * submission, a failed extraction, or Cancel mid-extraction -- removes it
+   * (`removeUnfinishedPaperDir`), and a failure whose directory could not be
+   * removed says so. A directory that was already there, and the workspace
+   * root, belong to the user and stay.
    */
   private readonly fetchAndPlaceSource = Effect.fn(
     'arxivProcessor.fetchAndPlaceSource',
@@ -562,13 +589,6 @@ class ArxivSourceProcessor {
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
       const fs = yield* FileSystem.FileSystem;
-      // A paper directory this download creates is its own until the source is
-      // fully placed. Any other exit -- a PDF-only submission, a failed
-      // extraction, or Cancel mid-extraction -- removes it, because tar writes
-      // straight into it and a partial tree holding one `.tex` would pass
-      // `hasExistingSource` on the next Download. A directory that was already
-      // there, and the workspace root, belong to the user and stay.
-      //
       // The claim is the create itself: a non-recursive `makeDirectory` either
       // makes the directory, and this download owns it, or fails
       // `AlreadyExists`, and it is the user's or a concurrent download's. An
@@ -590,14 +610,56 @@ class ArxivSourceProcessor {
                 ),
               ),
           );
-      yield* Effect.addFinalizer((exit) =>
-        ownsPaperDir && !Exit.isSuccess(exit)
-          ? this.cleanUpBestEffort(paperDirFull, 'paper dir', {
-              recursive: true,
-            })
-          : Effect.void,
+      // `Effect.scoped` closes the staging directory's finalizer here, on
+      // success, failure and interruption alike, before the paper directory
+      // that holds it is removed.
+      const placed = Effect.scoped(
+        this.stageAndPlaceSource(id, paperDirFull, progressCallback),
       );
+      if (!ownsPaperDir) return yield* placed;
+      const removeUnfinished = this.removeUnfinishedPaperDir(paperDirFull);
+      return yield* placed.pipe(
+        // Cancel or a defect reads no failure message: the warning is all.
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) &&
+          (Cause.hasInterrupts(exit.cause) || !Cause.hasFails(exit.cause))
+            ? Effect.asVoid(removeUnfinished)
+            : Effect.void,
+        ),
+        // A failure carries what its cleanup left behind; with a partial
+        // tree in place, trying again cannot help, so it is permanent.
+        Effect.catch((error) =>
+          Effect.flatMap(removeUnfinished, (left) =>
+            Effect.fail(
+              left === null
+                ? error
+                : new ArxivSourcePermanentError({
+                    message: `${error.message} ${left}`,
+                  }),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
+  /**
+   * Download the arXiv source tarball into a unique staging directory in the
+   * paper directory, reject PDF-only submissions, and place the source files
+   * into the paper root. The staging directory is removed by a scope
+   * finalizer, so the caller must run this inside `Effect.scoped`.
+   */
+  private readonly stageAndPlaceSource = Effect.fn(
+    'arxivProcessor.stageAndPlaceSource',
+  )(
+    { self: this },
+    function* (
+      this: ArxivSourceProcessor,
+      id: string,
+      paperDirFull: string,
+      progressCallback: DownloadSourceOptions['progressCallback'],
+    ) {
+      const fs = yield* FileSystem.FileSystem;
       // A staging directory of this download's own: a fixed name derived from
       // the id would be shared by two downloads of the same paper, which
       // would then stream into one archive file and remove each other's

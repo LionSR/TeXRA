@@ -8,7 +8,9 @@
  * {@link LeanStartError}, keeping the errno for the pool's file-table
  * retry), and handles `textDocument/didOpen` lazily on the first request
  * that touches a file. Diagnostics arrive via `publishDiagnostics` and are
- * buffered per file; position requests wait for a quiet window first.
+ * buffered per file; Lean's `$/lean/fileProgress` says when the file's
+ * current version is elaborated, which diagnostics and position requests
+ * wait for first.
  *
  * Release is the scope's finalizers, in order: the shutdown protocol
  * (`shutdown` request under its bound, `exit`, SIGTERM, wait, SIGKILL, wait),
@@ -55,6 +57,7 @@ import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticForm
 import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
+  LeanFileProgressParams,
   LspDiagnostic,
   LspPublishDiagnosticsParams,
 } from '../leanTypes';
@@ -115,14 +118,21 @@ export class LeanServer extends Context.Service<
      * then finds nothing left to do). Idempotent; concurrent callers join.
      */
     readonly shutdown: Effect.Effect<void>;
-    readonly diagnostics: (
-      filePath: string,
-    ) => Effect.Effect<LeanDiagnostic[], LeanSessionError>;
     /**
-     * Open the file (if needed), wait for Lean's diagnostics to settle, and
-     * send a position-scoped LSP request. Position requests like
-     * `$/lean/plainGoal` return stale data if the elaborator hasn't finished:
-     * the quiet-window wait is the only way to get correct goal state.
+     * Open the file (if needed) and wait for Lean to elaborate it. `complete`
+     * is false when the wait ended first: the diagnostics are those so far.
+     */
+    readonly diagnostics: (filePath: string) => Effect.Effect<
+      {
+        readonly diagnostics: LeanDiagnostic[];
+        readonly complete: boolean;
+      },
+      LeanSessionError
+    >;
+    /**
+     * Open the file (if needed), wait for Lean to elaborate it, and send a
+     * position-scoped LSP request. Position requests like `$/lean/plainGoal`
+     * return stale data if the elaborator hasn't finished.
      */
     readonly requestSettled: <T>(
       filePath: string,
@@ -149,7 +159,12 @@ interface OpenedFile {
   version: number;
   diagnostics: LeanDiagnostic[];
   lastDiagnosticsAt: number;
-  /** Completed by the next `publishDiagnostics`; failed when the state is abandoned. */
+  /** Lean's last `$/lean/fileProgress` for this version, if it sent one. */
+  progress: 'unreported' | 'processing' | 'elaborated';
+  /**
+   * Completed by the next `publishDiagnostics` or `$/lean/fileProgress`;
+   * failed when the state is abandoned.
+   */
   next: Deferred.Deferred<void, LeanSessionDisposed>;
 }
 
@@ -274,6 +289,13 @@ const make = ({
       openFiles.clear();
     });
 
+    /** Wake the file's waiters; each re-arms on the fresh deferred. */
+    const wakeWaiters = (state: OpenedFile) => {
+      const arrived = state.next;
+      state.next = Deferred.makeUnsafe();
+      return Deferred.succeed(arrived, undefined);
+    };
+
     const handlePublishDiagnostics = (params: LspPublishDiagnosticsParams) =>
       Effect.gen(function* () {
         const absolute = yield* fileUriToPath(params.uri);
@@ -282,10 +304,22 @@ const make = ({
         if (!state) return;
         state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
         state.lastDiagnosticsAt = yield* Clock.currentTimeMillis;
-        // Wake the quiet-window waiters; each re-arms on the fresh deferred.
-        const arrived = state.next;
-        state.next = Deferred.makeUnsafe();
-        yield* Deferred.succeed(arrived, undefined);
+        yield* wakeWaiters(state);
+      });
+
+    const handleFileProgress = (params: LeanFileProgressParams) =>
+      Effect.gen(function* () {
+        const absolute = yield* fileUriToPath(params.textDocument.uri);
+        if (!absolute) return;
+        const state = openFiles.get(absolute);
+        // A report on a version since replaced says nothing about this one.
+        if (state?.version !== params.textDocument.version) return;
+        state.progress = params.processing.some(
+          (range) => (range.kind ?? 1) === 1,
+        )
+          ? 'processing'
+          : 'elaborated';
+        yield* wakeWaiters(state);
       });
 
     const rpc: JsonRpcConnection = yield* makeJsonRpcConnection({
@@ -297,6 +331,8 @@ const make = ({
             return handlePublishDiagnostics(
               params as LspPublishDiagnosticsParams,
             );
+          case '$/lean/fileProgress':
+            return handleFileProgress(params as LeanFileProgressParams);
           case 'window/logMessage':
             return Effect.logDebug(`[${root}] ${JSON.stringify(params)}`).pipe(
               withLogChannel(LOG_CHANNEL),
@@ -451,6 +487,7 @@ const make = ({
         existing.version = version;
         existing.diagnostics = [];
         existing.lastDiagnosticsAt = 0;
+        existing.progress = 'unreported';
         yield* live.notify('textDocument/didChange', {
           textDocument: { uri: pathToUri(absolute), version },
           contentChanges: [{ text }],
@@ -460,6 +497,7 @@ const make = ({
           version,
           diagnostics: [],
           lastDiagnosticsAt: 0,
+          progress: 'unreported',
           next: Deferred.makeUnsafe(),
         });
         yield* live.notify('textDocument/didOpen', {
@@ -474,28 +512,30 @@ const make = ({
     });
 
     /**
-     * Wait until diagnostics have arrived and none followed for a quiet window,
-     * giving up silently after the overall diagnostics wait.
+     * Wait until Lean reports the file's current version elaborated, and say
+     * whether it did. A server that has reported no progress for the version
+     * settles on a diagnostics quiet window instead, and the overall wait
+     * bounds both; either of those ends the wait unelaborated (`false`).
      */
-    const waitForDiagnosticsQuiet = Effect.fn(
-      'LeanServer.waitForDiagnosticsQuiet',
-    )(
+    const waitForElaboration = Effect.fn('LeanServer.waitForElaboration')(
       function* (absolute: string) {
         const state = openFiles.get(absolute);
-        if (!state) return;
+        if (!state) return false;
         for (;;) {
           if (openFiles.get(absolute) !== state) {
             return yield* new LeanSessionDisposed();
           }
+          if (state.progress === 'elaborated') return true;
           // The ambient clock, the one `handlePublishDiagnostics` stamps
           // `lastDiagnosticsAt` with: a handle captured at layer build would
           // compare this window against another fiber's timeline.
           const now = yield* Clock.currentTimeMillis;
           if (
+            state.progress === 'unreported' &&
             state.lastDiagnosticsAt &&
             now - state.lastDiagnosticsAt >= DIAGNOSTICS_QUIET_WINDOW_MS
           ) {
-            return;
+            return false;
           }
           yield* Deferred.await(state.next).pipe(
             Effect.timeoutOption(Duration.millis(DIAGNOSTICS_QUIET_WINDOW_MS)),
@@ -504,7 +544,7 @@ const make = ({
       },
       Effect.timeoutOrElse({
         duration: DIAGNOSTICS_WAIT,
-        orElse: () => Effect.void,
+        orElse: () => Effect.succeed(false),
       }),
     );
 
@@ -513,17 +553,17 @@ const make = ({
     ) {
       const absolute = path.resolve(filePath);
       yield* ensureFileOpen(absolute, false).pipe(onFileLane(absolute));
-      yield* waitForDiagnosticsQuiet(absolute);
-      return absolute;
+      const complete = yield* waitForElaboration(absolute);
+      return { absolute, complete };
     });
 
     const diagnostics = Effect.fn('LeanServer.diagnostics')(function* (
       filePath: string,
     ) {
-      const absolute = yield* openAndSettle(filePath);
+      const { absolute, complete } = yield* openAndSettle(filePath);
       const state = openFiles.get(absolute);
       if (!state) return yield* new LeanSessionDisposed();
-      return state.diagnostics;
+      return { diagnostics: state.diagnostics, complete };
     });
 
     const requestSettled = Effect.fn('LeanServer.requestSettled')(function* <T>(
@@ -532,7 +572,7 @@ const make = ({
       column: number,
       method: string,
     ) {
-      const absolute = yield* openAndSettle(filePath);
+      const { absolute } = yield* openAndSettle(filePath);
       const live = yield* requireRpc;
       return yield* live.request<T>(method, {
         textDocument: { uri: pathToUri(absolute) },

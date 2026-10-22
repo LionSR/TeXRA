@@ -9,13 +9,9 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
+import { z } from 'zod';
 
-import {
-  CopilotRoutes,
-  Skills,
-  hasExtension,
-  withLogChannel,
-} from '@texra-ai/harness';
+import { CopilotRoutes, Skills, hasExtension } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
@@ -269,12 +265,24 @@ export class SettingsViewMessageHandler {
     return Effect.suspend(() => {
       this.activeView = webviewView;
       const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      return parsed.success
-        ? this.body.handleMessage(parsed.data, this.handlerRegistry)
-        : Effect.logDebug('Message validation failed').pipe(
-            Effect.annotateLogs({ data: message, error: parsed.error.message }),
-            withLogChannel(this.channel),
-          );
+      if (parsed.success) {
+        return this.body.handleMessage(parsed.data, this.handlerRegistry);
+      }
+      // The webview's `postMessage` is untyped per command, so a malformed
+      // request is a frontend bug the user just triggered with a click:
+      // dropping it quietly would leave that click doing nothing.
+      const command =
+        typeof message === 'object' &&
+        message !== null &&
+        'command' in message &&
+        typeof message.command === 'string'
+          ? message.command
+          : 'unknown';
+      return showLoggedErrorMessage(
+        this.channel,
+        `Settings could not handle the '${command}' request`,
+        z.prettifyError(parsed.error),
+      ).pipe(Effect.asVoid);
     });
   }
 

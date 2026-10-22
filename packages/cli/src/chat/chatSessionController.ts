@@ -459,8 +459,16 @@ export function createChatSessionController(
             requests
               .request({ kind: 'request.preview', runId, requestId })
               .pipe(
-                Effect.map((outcome) =>
-                  outcome.kind === 'preview' ? outcome.preview : null,
+                // `request.preview` answers with a preview, null included;
+                // any other outcome is a broken protocol, not a missing one.
+                Effect.flatMap((outcome) =>
+                  outcome.kind === 'preview'
+                    ? Effect.succeed(outcome.preview)
+                    : Effect.die(
+                        new Error(
+                          `request.preview answered with a ${outcome.kind} outcome`,
+                        ),
+                      ),
                 ),
               ),
       secrets,
@@ -1101,8 +1109,9 @@ export function createChatSessionController(
       );
     });
     // Recovery is attached before the delivery enters the queue. A failure or
-    // a throw from the body is reported to the transcript; an interruption is
-    // the queue's scope closing, which is not a delivery failure.
+    // a throw from the body is reported to the transcript, also when it came
+    // with an interruption (a finalizer that failed while unwinding one); a
+    // bare interruption is the queue's scope closing, not a delivery failure.
     followUpQueue.enqueue(
       deliverFollowUp.pipe(
         Effect.ensuring(
@@ -1112,7 +1121,7 @@ export function createChatSessionController(
           }),
         ),
         Effect.catchCause((cause) =>
-          Cause.hasInterrupts(cause)
+          Cause.hasInterruptsOnly(cause)
             ? Effect.interrupt
             : Effect.sync(() =>
                 appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),

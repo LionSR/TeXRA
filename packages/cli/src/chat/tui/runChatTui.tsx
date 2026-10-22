@@ -331,6 +331,11 @@ export async function runChat(
       // so - display-only, so the agent waits for the user's first message.
       const startupNotice = init.startupNotice;
       if (startupNotice) startupNotices.push(startupNotice);
+      const { history: inputHistory, readFailure } = yield* loadInputHistory;
+      if (readFailure !== null)
+        startupNotices.push(
+          `Input history could not be read (${toErrorMessage(readFailure)}); ↑/↓ and Ctrl-R start from this session's entries.`,
+        );
       return {
         startupNotices,
         services,
@@ -340,7 +345,7 @@ export async function runChat(
         runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
-        inputHistory: yield* loadInputHistory,
+        inputHistory,
         // The drain lives as long as the process runtime; the graceful exit
         // waits on `idle` before that runtime is disposed.
         followUpQueue: yield* makeFollowUpDeliveryQueue(runtime.scope),

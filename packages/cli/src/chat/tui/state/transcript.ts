@@ -230,7 +230,10 @@ export function describeRequestError(error: RequestError): string {
     case 'Rejected':
       return error.reason;
     case 'Internal':
-      return `The request failed inside TeXRA (ref ${error.ref}); see the log.`;
+      // Only the background service answers `Internal` here; a detached one
+      // logs the cause under this ref to `run/serve.log` in the storage root
+      // (`servicePaths`), and this CLI's own log sink is silent.
+      return `The TeXRA service failed the request (ref ${error.ref}); a background service logs the cause under that ref in ~/.texra/run/serve.log.`;
   }
 }
 
@@ -249,16 +252,16 @@ const CHANNEL = 'cli.transcript';
 /**
  * A runtime request that defected in process: `SessionBridge` logs the cause
  * and answers `Internal`; with no bridge in the middle the same defect is
- * logged here and worded for the surface that issued the request.
+ * logged here and worded for the surface that issued the request. The CLI's
+ * log sink is silent, so the wording carries the cause itself.
  */
 export function reportRequestDefect(
   cause: Cause.Cause<unknown>,
 ): Effect.Effect<string> {
-  return Effect.logError(
-    `Runtime request failed: ${toErrorMessage(Cause.squash(cause))}`,
-  ).pipe(
+  const message = toErrorMessage(Cause.squash(cause));
+  return Effect.logError(`Runtime request failed: ${message}`).pipe(
     withLogChannel(CHANNEL),
-    Effect.as('The request failed inside TeXRA; see the log.'),
+    Effect.as(`The request failed inside TeXRA: ${message}`),
   );
 }
 

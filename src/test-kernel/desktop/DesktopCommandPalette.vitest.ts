@@ -21,6 +21,7 @@ interface DesktopCommandPaletteModule {
       openWorkbench(kind: 'logs'): void;
       showSettings(tab?: string): void;
     };
+    getShortcuts: () => readonly { id: string; accelerator?: string }[];
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
@@ -82,6 +83,7 @@ describe('desktop command palette', () => {
     const controller = createDesktopCommandPalette({
       document,
       actions: createActionsStub(),
+      getShortcuts: () => [],
       platform: 'darwin',
       ...options,
     });
@@ -145,5 +147,24 @@ describe('desktop command palette', () => {
 
     expect(actions.showSettings).toHaveBeenCalledWith('models/models');
     expect(controller.element.open).toBe(false);
+  });
+
+  it('shows the registry accelerator, not the menu default, for a removed shortcut', async () => {
+    // Save File defaults to Cmd+S; the user removed it, so the registry
+    // lists the command with no accelerator.
+    const controller = await mountPalette({
+      getShortcuts: () => [{ id: 'texra.desktop.saveFile' }],
+    });
+    controller.open();
+    await flushDialogTicks();
+    setWaInputValue(controller.element, 'save file');
+    await flushDialogTicks();
+
+    expect(paletteCommandIds(controller.element)).toEqual([
+      'texra.desktop.saveFile',
+    ]);
+    expect(
+      controller.element.querySelector('.desktop-command-palette-meta'),
+    ).toBeNull();
   });
 });

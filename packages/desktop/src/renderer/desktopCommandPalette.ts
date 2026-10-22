@@ -45,7 +45,9 @@ export interface CommandPaletteController {
 interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
-  getShortcuts?: () => readonly DesktopShortcutEntry[];
+  /** The shortcut registry's entries: the one owner of each command's
+   *  accelerator, user overrides and removals included. */
+  getShortcuts: () => readonly DesktopShortcutEntry[];
   platform: DesktopPlatform;
 }
 
@@ -113,7 +115,7 @@ export function createDesktopCommandPalette({
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] => {
     const shortcutsById = new Map(
-      (getShortcuts?.() ?? []).map((entry) => [entry.id, entry]),
+      getShortcuts().map((entry) => [entry.id, entry]),
     );
     return getDesktopCommandMenuEntries(platform).map((entry) =>
       toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
@@ -358,10 +360,7 @@ function toPaletteEntry(
     id: entry.id,
     label: entry.label,
     icon: entry.icon,
-    meta: formatDesktopAccelerator(
-      shortcut?.accelerator ?? entry.accelerator,
-      platform,
-    ),
+    meta: formatDesktopAccelerator(shortcut?.accelerator, platform),
     category: entry.category,
   };
 }

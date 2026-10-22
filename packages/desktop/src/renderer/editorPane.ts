@@ -457,6 +457,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       const generation = refreshGeneration;
       const writeEpoch = file.writeEpoch;
       const contents = await callbacks.readFile(path);
+      // A successful re-read of a clean file retires an earlier failed one's
+      // notice.
+      if (!disposed && !file.dirty) notice.clear(path);
       // The read crosses IPC. Recheck all local state so an edit, save, or
       // newer refresh can supersede this result while it is in flight.
       if (
@@ -551,9 +554,12 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const modelRefreshes = [...files].flatMap(([path, file]) =>
       file.model
         ? [
-            syncCleanModel(path, file, file.model).catch((error: unknown) =>
-              callbacks.onError(error),
-            ),
+            // A failed re-read leaves the editor on the last version read,
+            // still clean, so a later save would overwrite whatever the
+            // agent wrote (or recreate a file it removed): say so.
+            syncCleanModel(path, file, file.model).catch((error: unknown) => {
+              if (!disposed) notice.report(path, 'reload', error);
+            }),
           ]
         : [],
     );

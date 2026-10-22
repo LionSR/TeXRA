@@ -22,8 +22,11 @@ const CHANNEL = 'cli.chat';
  *   the count is zero.
  * - **A delivery cannot fail.** Its type admits no error, so the caller
  *   attaches recovery before the delivery enters the queue. A defect (a
- *   throw from the body) is logged at the drain and the worker continues;
- *   an interruption is the scope closing and stops the drain.
+ *   throw from the body) is logged at the drain and the worker continues,
+ *   and so does a delivery that ended interrupted: only the drain's own
+ *   interruption, the scope closing, stops it, at its next `take`. A
+ *   delivery's cause cannot tell the two apart (a joined fiber another
+ *   fiber interrupted reads the same), so it never ends the drain.
  *
  * A `Semaphore` with a `FiberSet` of forked deliveries was the alternative,
  * and it does not fit: a semaphore cannot drop its waiters, so `clear` would
@@ -64,8 +67,8 @@ export const makeFollowUpDeliveryQueue = (
           Effect.ensuring(
             restore(delivery).pipe(
               Effect.catchCause((cause) =>
-                Cause.hasInterrupts(cause)
-                  ? Effect.failCause(cause)
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
                   : Effect.logWarning(
                       `A follow-up delivery failed: ${toErrorMessage(Cause.squash(cause))}`,
                     ).pipe(withLogChannel(CHANNEL)),

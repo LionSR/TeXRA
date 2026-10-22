@@ -41,7 +41,12 @@ import type {
 } from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
-  readonly toolEdit: ToolEditContent;
+  /** What a tool edit's card shows: the preview staged for it, or why there
+   *  is none to show. A card never stands an empty diff in for a missing
+   *  preview: the user would approve a write they never saw. */
+  readonly toolEdit:
+    | { readonly kind: 'preview'; readonly content: ToolEditContent }
+    | { readonly kind: 'unavailable'; readonly reason: string };
 }
 
 /**

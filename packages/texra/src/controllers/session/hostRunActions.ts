@@ -407,28 +407,16 @@ export const createHostRunActions = (
           request.payload.kind === 'retry',
       );
 
-    const retryNotSettled =
-      (runId: RunId, requestId: string) =>
-      (cause: unknown): Effect.Effect<boolean> =>
-        Effect.logWarning(
-          `Retry request ${requestId} of run ${runId} could not be settled`,
-        ).pipe(
-          Effect.annotateLogs({ data: cause }),
-          withLogChannel(CHANNEL),
-          Effect.as(false),
-        );
-
+    // A settle the session refuses fails with its refusal, which the host
+    // arm that took the request presents: a retry left parked must not look
+    // like one that went through. Defects go to that same boundary.
     const settleRetry = (
       runId: RunId,
       requestId: string,
       decision:
         | { action: 'retry'; credentials: 'configured' | 'personal' }
         | { action: 'cancel' },
-    ): Effect.Effect<boolean> =>
-      // A settle that fails for any reason — the request's own error or a
-      // defect — is logged and reports false, as the Promise edge's rejection
-      // handler did. Interruption is not caught: it belongs to the caller's
-      // fiber.
+    ): Effect.Effect<void, RequestRefusal> =>
       session
         .request({
           kind: 'request.decide',
@@ -437,9 +425,15 @@ export const createHostRunActions = (
           decision,
         })
         .pipe(
-          Effect.as(true),
-          Effect.catch(retryNotSettled(runId, requestId)),
-          Effect.catchDefect(retryNotSettled(runId, requestId)),
+          Effect.asVoid,
+          Effect.mapError((error): RequestRefusal =>
+            isRequestRefusal(error)
+              ? error
+              : new Unavailable({
+                  runId,
+                  reason: 'The retry could not be settled.',
+                }),
+          ),
         );
 
     const apiKeyRetry = new ProgressApiKeyRetryController({

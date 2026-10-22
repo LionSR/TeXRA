@@ -163,18 +163,29 @@ export function runResumeCommand(
     }
     // A conversation the service holds continues there: the chat is its
     // client, so the service stays the run's one writer.
-    if (
-      refusal?.kind === 'held_elsewhere' &&
-      (documentTask ||
-        !(yield* heldByService(context.storageRoot, refusal.owner)))
-    ) {
-      // The owner named by the pid and machine its claim recorded: the two
-      // parts of an identity a user can act on.
-      const { pid, hostname } = ownerIdentity(refusal.owner);
-      writeTextStderr(
-        `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
-      );
-      return CliExitCode.Usage;
+    if (refusal?.kind === 'held_elsewhere') {
+      const inService = documentTask
+        ? Result.succeed(false)
+        : yield* Effect.result(
+            heldByService(context.storageRoot, refusal.owner),
+          );
+      // A service that cannot be asked may be the holder: its own reason
+      // (how to stop a wedged one) is what the user can act on.
+      if (Result.isFailure(inService)) {
+        writeTextStderr(
+          `Task ${id} is held by another process, which may be the TeXRA service, and the service could not be asked: ${inService.failure.reason}`,
+        );
+        return CliExitCode.Usage;
+      }
+      if (!inService.success) {
+        // The owner named by the pid and machine its claim recorded: the
+        // two parts of an identity a user can act on.
+        const { pid, hostname } = ownerIdentity(refusal.owner);
+        writeTextStderr(
+          `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
+        );
+        return CliExitCode.Usage;
+      }
     }
 
     // A resumed task continues under the approval it was launched with: a

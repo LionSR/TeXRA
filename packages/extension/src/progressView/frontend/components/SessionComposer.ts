@@ -13,7 +13,6 @@
  * polish, dictation, pickers, and pasted images, a `RuntimeRequest` for a
  * follow-up. It holds no draft of its own.
  */
-import { Predicate } from 'effect';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -356,26 +355,32 @@ export class SessionComposer extends LitElement {
     event.preventDefault();
     const pastedText = event.clipboardData?.getData('text/plain') || '';
     const target = this.textArea;
-    const images = await Promise.all(
-      files.map(
-        async ({ file, type }): Promise<ExtractedClipboardImage | null> => {
-          const base64 = await readFileAsBase64(file);
-          if (!base64) return null;
-          return {
-            fileName: generatePastedImageName(getExtensionFromMimeType(type)),
-            base64,
-            mediaType: type,
-          };
-        },
-      ),
+    const reads = await Promise.all(
+      files.map(async ({ file, type }) => ({
+        type,
+        read: await readFileAsBase64(file),
+      })),
     );
-    const added = images.filter(Predicate.isNotNullish);
-    if (added.length === 0) return;
+    const added: ExtractedClipboardImage[] = [];
+    const failures: string[] = [];
+    for (const { type, read } of reads) {
+      if (read.ok) {
+        added.push({
+          fileName: generatePastedImageName(getExtensionFromMimeType(type)),
+          base64: read.base64,
+          mediaType: type,
+        });
+      } else {
+        failures.push(`${type}: ${read.error.message}`);
+      }
+    }
     for (const image of added) {
       this.dispatchEvent(
         SessionUiEvents.host({ kind: 'savePastedImage', ...image }),
       );
     }
+    // The paste was taken over above, so its text goes in even when every
+    // image failed: otherwise the failure would also cost the typed text.
     const insert = appendClipboardImageChips(
       pastedText,
       added.map(({ fileName }) => fileName),
@@ -383,7 +388,8 @@ export class SessionComposer extends LitElement {
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.settleHost`).
     const pending = added.map(({ fileName }) => ({ fileName, path: null }));
-    if (target && this.isConnected) {
+    // An empty insert (every image failed, no text) leaves the selection be.
+    if (insert !== '' && target && this.isConnected) {
       // setRangeText fires no input event, so the draft is set explicitly.
       target.setRangeText(
         insert,
@@ -394,15 +400,28 @@ export class SessionComposer extends LitElement {
       this.setText(target.value, {
         images: [...this.draft.images, ...pending],
       });
-    } else {
+    } else if (insert !== '') {
       this.setText(`${this.text}${insert}`, {
         images: [...this.draft.images, ...pending],
       });
     }
-    this.announcement =
+    const attached =
       added.length === 1
         ? 'Image attached.'
         : `${added.length} images attached.`;
+    if (failures.length === 0) {
+      this.announcement = attached;
+      return;
+    }
+    const skipped =
+      failures.length === 1
+        ? 'a pasted image'
+        : `${failures.length} of ${files.length} pasted images`;
+    const reason = `Couldn't attach ${skipped} (${failures.join('; ')}).`;
+    this.dispatchEvent(
+      SessionUiEvents.surface({ kind: 'reportError', reason }),
+    );
+    this.announcement = added.length > 0 ? `${attached} ${reason}` : reason;
   };
 
   private replyToParent(parentId: RunId): void {

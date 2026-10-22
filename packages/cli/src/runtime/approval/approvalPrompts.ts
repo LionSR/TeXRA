@@ -288,7 +288,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       // than speaking for one: the cause says so.
       const failed: RequestDecision = {
         action: 'cancel',
-        cause: 'CLI approval prompt failed.',
+        cause: `CLI approval prompt failed: ${toErrorMessage(error)}`,
       };
       return Effect.logWarning(
         `The CLI approval prompt failed: ${toErrorMessage(error)}`,
