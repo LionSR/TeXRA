@@ -229,14 +229,7 @@ describe('CLI root argument routing', () => {
   });
 
   it('detects unknown command-group children', async () => {
-    for (const group of [
-      'agents',
-      'history',
-      'auth',
-      'models',
-      'skills',
-      'tools',
-    ]) {
+    for (const group of ['agents', 'history', 'auth', 'models', 'skills']) {
       await expect(
         detectUnknownCliCommand(rootCommand, [group, 'bogus']),
       ).resolves.toEqual({

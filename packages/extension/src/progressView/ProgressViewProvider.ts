@@ -279,6 +279,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           label: folder.name,
           value: folder.uri.fsPath,
         })) ?? [],
+      gettingStartedBanner: true,
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       // The banner says a credential stopped working, so it is raised only

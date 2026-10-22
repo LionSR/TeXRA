@@ -102,12 +102,6 @@ export const commandCatalog = [
     enablement: '!virtualWorkspace',
   },
   {
-    id: 'texra.extractTikzFigures',
-    extensionRegistry: true,
-    title: 'Extract TikZ Figures from Current File',
-    category: 'TeXRA',
-  },
-  {
     id: 'texra.compileTikzFigures',
     extensionRegistry: true,
     title: 'Compile TikZ Figures from Current File',
