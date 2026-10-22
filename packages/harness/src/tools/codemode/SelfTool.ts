@@ -53,27 +53,39 @@ const SelfInputSchema = z.strictObject({
 type SelfInput = z.infer<typeof SelfInputSchema>;
 
 /**
- * The conversation `self()` runs again, and the commit its forks cut before:
- * the caller itself, mid-turn in its script, or the conversation a
- * background script belongs to, as it stood when that script started.
+ * The agent `self()` runs again, the conversation its forks copy, and the
+ * commit they cut before. In the caller's own script that is the caller,
+ * mid-turn. A background script is its conversation's agent: the
+ * conversation it launched from (its recorded parent, whether or not it was
+ * since detached) as it stood when the script started. A task's script is
+ * its own agent, with no conversation to fork.
  */
-const conversationOf = Effect.fn('self.conversation')(function* (
-  call: RunToolCall,
-) {
+const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const { run } = call;
-  if (run.config.script == null)
-    return { source: run.runId, before: Number.POSITIVE_INFINITY };
+  const { script } = run.config;
+  if (script == null)
+    return {
+      config: run.config,
+      source: run.runId,
+      before: Number.POSITIVE_INFINITY,
+    };
+  if (script.kind !== 'background')
+    return { config: run.config, source: null, before: 0 };
   const start = (yield* run.session.log.records(run.runId)).find(
     (row) => row.type === 'run.start',
   );
-  const parent = run.session.view.run(run.runId)?.parentId ?? null;
-  if (start === undefined || parent === null)
+  const parent = start?.type === 'run.start' ? start.parent?.id : undefined;
+  const config =
+    parent === undefined
+      ? null
+      : yield* getRunRecords(run.session, parent).readConfig();
+  if (start === undefined || parent === undefined || config === null)
     return yield* Effect.fail(
       new ToolError(
-        `self() needs the conversation the script ${run.runId} belongs to.`,
+        `self() needs the conversation the script ${run.runId} launched from.`,
       ),
     );
-  return { source: parent, before: start.commit };
+  return { config, source: parent, before: start.commit };
 });
 
 const runSelf = Effect.fn('self.call')(function* (
@@ -82,11 +94,10 @@ const runSelf = Effect.fn('self.call')(function* (
 ) {
   const { run } = call;
   const { session, runId: parentRunId } = run;
-  const { source, before } = yield* conversationOf(call);
-  const config = yield* getRunRecords(session, source).readConfig();
-  if (config === null)
+  const { config, source, before } = yield* selfOf(call);
+  if (input.fork && source === null)
     return errorResult(
-      `The conversation ${source} has no stored configuration.`,
+      "A task's script has no conversation to fork: call self() with `fork: false`.",
     );
   const name = config.agent;
   const outputSchema =
@@ -113,15 +124,16 @@ const runSelf = Effect.fn('self.call')(function* (
     return yield* childResult(call, name, recovered.success, undefined);
 
   const runId = agentChildRunId(call);
-  const { rootUserInstruction: _root, ...launch } = config;
+  const { rootUserInstruction: _root, script: _script, ...launch } = config;
   // Forked, the child is born on the conversation's history; fresh, on the
   // prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
   const launched = yield* Effect.result(
     Effect.gen(function* () {
-      const forked = input.fork
-        ? yield* forkSeed(session, source, before, runId, input.prompt)
-        : null;
+      const forked =
+        input.fork && source !== null
+          ? yield* forkSeed(session, source, before, runId, input.prompt)
+          : null;
       return yield* executeSubagentInBand({
         session,
         runId,
