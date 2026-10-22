@@ -371,7 +371,12 @@ process.stdin.on('end', function answer() {
     // Up once its record names it: what every client finds it by.
     const { socket } = await until(
       'the service',
-      () => JSON.parse(run(['service', 'status', '--output-format', 'json'])),
+      () => {
+        const status = JSON.parse(
+          run(['service', 'status', '--output-format', 'json']),
+        );
+        return status.online ? status : null;
+      },
       handle,
     );
     const call = (tag, payload) =>

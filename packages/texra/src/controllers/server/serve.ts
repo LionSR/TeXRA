@@ -147,10 +147,16 @@ export const serve = Effect.fn('server.serve')(function* (
   };
   const values = yield* GlobalValues;
   const ended = yield* Deferred.make<ServeExit>();
-  // Whether the service is leaving, and the task admissions under way: one
-  // value, so an admission is claimed in the same step that checks for a
-  // drain, and a drain never misses a start that is not a held run yet.
-  const admissions = yield* Ref.make({ draining: false, admitting: 0 });
+  // Whether the service is leaving, the task admissions under way, and how
+  // many were ever admitted: one value, so an admission is claimed in the
+  // same step that checks for a drain, a drain never misses a start that is
+  // not a held run yet, and an idle exit never ends one begun since it
+  // looked.
+  const admissions = yield* Ref.make({
+    draining: false,
+    admitting: 0,
+    admitted: 0,
+  });
   let clients: Effect.Effect<number> = Effect.succeed(0);
   // Once: a drain releases the record early, and the exit releases what is
   // left.
@@ -183,7 +189,14 @@ export const serve = Effect.fn('server.serve')(function* (
       Ref.modify(admissions, (state) =>
         state.draining
           ? [false, state]
-          : [true, { ...state, admitting: state.admitting + 1 }],
+          : [
+              true,
+              {
+                ...state,
+                admitting: state.admitting + 1,
+                admitted: state.admitted + 1,
+              },
+            ],
       ),
       (admitted) =>
         admitted
@@ -253,7 +266,7 @@ export const serve = Effect.fn('server.serve')(function* (
   const check = Effect.gen(function* () {
     // Read before the runs: once draining, no admission starts, and one
     // that ended since this read holds its run.
-    const { draining, admitting } = yield* Ref.get(admissions);
+    const { draining, admitting, admitted } = yield* Ref.get(admissions);
     const running = yield* runningTasks(projects);
     // A drained service waits for the tasks at work; a conversation parked
     // here is stopped with the service, resumable.
@@ -264,9 +277,17 @@ export const serve = Effect.fn('server.serve')(function* (
         yield* Deferred.succeed(ended, 'drained');
       return;
     }
-    const busy = running > 0 || (yield* control.clients) > 0;
+    const busy = running > 0 || admitting > 0 || (yield* control.clients) > 0;
     idleSince = busy ? null : (idleSince ?? now);
-    if (idleSince !== null && now - idleSince >= idleAfter) yield* end('idle');
+    if (idleSince === null || now - idleSince < idleAfter) return;
+    // Idle only if nothing was admitted since the read above: the leave is
+    // the same step as that check, so a start that won it keeps its run.
+    const idle = yield* Ref.modify(admissions, (state) =>
+      state.draining || state.admitting > 0 || state.admitted !== admitted
+        ? [false, state]
+        : [true, { ...state, draining: true }],
+    );
+    if (idle) yield* end('idle');
   });
   yield* Effect.forkScoped(
     check.pipe(Effect.repeat(Schedule.spaced(CHECK_INTERVAL))),

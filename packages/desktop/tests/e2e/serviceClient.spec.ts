@@ -150,8 +150,8 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
     try {
       // The service the app started, as its record names it.
       await expect
-        .poll(() => status(thisBuild, home), { timeout: 60_000 })
-        .not.toBeNull();
+        .poll(() => status(thisBuild, home).online, { timeout: 60_000 })
+        .toBe(true);
       const started = status(thisBuild, home);
       pids.add(started.pid);
       // A CLI of the same build finds the app's service, which the app is
