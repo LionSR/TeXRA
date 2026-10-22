@@ -128,11 +128,11 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
-  const settling = (id: RunId): boolean => {
+  const stillRunning = (id: RunId): boolean => {
     const run = runs.get(id);
     return (
       run !== undefined &&
-      (run.durableOutcome === null || run.childIds.some(settling))
+      (run.durableOutcome === null || run.childIds.some(stillRunning))
     );
   };
   const running = rows
@@ -148,7 +148,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         : [];
     })
     .find((goal) =>
-      runs.has(goal) ? settling(goal) : session.runs.get(goal) !== undefined,
+      runs.has(goal)
+        ? stillRunning(goal)
+        : session.runs.get(goal) !== undefined,
     );
   if (running !== undefined)
     return errorResult(

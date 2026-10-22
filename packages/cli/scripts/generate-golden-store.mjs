@@ -560,10 +560,10 @@ async function generate(root) {
   };
   const chatRun = () =>
     query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
-  // The turn the chat parked after, once a park is its latest position, and
-  // the wait for a park after `turn`: the goal's result wakes the chat, so
-  // which turn a step lands on is not fixed.
-  const parkedTurn = () => {
+  // The turn the chat is waiting after, once waiting is its latest position,
+  // and the wait for it to be waiting after `turn`: the goal's result wakes
+  // the chat, so which turn a step lands on is not fixed.
+  const waitingTurn = () => {
     const [last] = query(
       cli.store(),
       `SELECT json_extract(e.data, '$.payload.at') AS at,
@@ -575,12 +575,12 @@ async function generate(root) {
     );
     return last?.at === 'waiting' ? last.turn : null;
   };
-  const parkedAfter = (label, turn) =>
+  const waitingAfter = (label, turn) =>
     until(
       label,
       () => {
-        const parked = parkedTurn();
-        return parked !== null && parked > turn ? parked : null;
+        const waiting = waitingTurn();
+        return waiting !== null && waiting > turn ? waiting : null;
       },
       tty,
     );
@@ -625,16 +625,16 @@ async function generate(root) {
   // The goal's result, delivered once its round has verified it, opens the
   // chat's turn that reports it.
   await shows("the goal's result", 'Golden chat goal complete.');
-  let turn = await parkedAfter('the chat parked on the goal result', 0);
+  let turn = await waitingAfter('the chat waiting on the goal result', 0);
   await send('/model gemini38f');
   await shows('the model switch notice', 'Model switched to gemini38f');
   await send('After the model switch.');
-  turn = await parkedAfter('the chat parked after the model switch', turn);
+  turn = await waitingAfter('the chat waiting after the model switch', turn);
   // A `/compact` wakes the chat: its turn's request commits the
   // `context.edit` that replaces the history with its summary.
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
-  await parkedAfter('the chat parked after the compaction', turn);
+  await waitingAfter('the chat waiting after the compaction', turn);
   // A turn that launches a Codex child and is then held, a message typed
   // behind it, and the user's stop: the follow-up stays queued on the
   // stopped run, and the stop detaches the parked child.

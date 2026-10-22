@@ -225,7 +225,7 @@ export interface ToolTable {
  * claims an agent-file
  * block another plugin or the persona owns, gives a switch to a plugin
  * with no availability probe, or lacks a plugin another `requires` is a
- * defect of the list, refused when it is built.
+ * defect of the list, rejected when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();

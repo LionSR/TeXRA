@@ -32,7 +32,7 @@ import { configRow, positionRow, rowAggregate } from './loop/rows';
 import type { SessionHandle } from './SessionHandle';
 
 /** Whether nothing is in flight: no invocation, response or undecided
- *  request that parks its caller (an external inquiry stands across turns,
+ *  request its caller waits on (an external inquiry stands across turns,
  *  its answer a follow-up). A turn's beginning is quiet (its input is in,
  *  nothing answered it yet), so a child can be forked there. */
 const isQuiet = (state: RunState): boolean =>
@@ -63,13 +63,13 @@ export const runNoun = (
 ): 'task' | 'agent' =>
   session.view.run(runId)?.parentId == null ? 'task' : 'agent';
 
-/** Where a fork of `from` starts: a settled position of it, `at` or (null)
+/** Where a fork of `from` starts: a position of it with nothing in flight, `at` or (null)
  *  the latest, its state there, and its launch facts. */
 const cutOf = Effect.fn('forkRun.cut')(function* (
   session: SessionHandle,
   from: RunId,
   at: number | null,
-  /** A child's fork: the latest settled point committed before this
+  /** A child's fork: the latest such point committed before this
    *  commit, a turn's beginning included. */
   before?: number,
 ) {
@@ -171,7 +171,7 @@ const viewRows = (
 };
 
 /**
- * Fork run `from` at `at`, the `seq` of a settled position in its run
+ * Fork run `from` at `at`, the `seq` of a position in its run
  * history, or at the end of its last completed turn when `at` is null (a
  * run in a turn now is forked from before it). Returns the new run's id;
  * the run is written whole and left for its host to resume.
@@ -183,7 +183,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
 ): Effect.fn.Return<RunId, Rejected | Error> {
   const { seq: cut, state, start, record } = yield* cutOf(session, from.id, at);
   // The title the source shows: its newest user title over any later model
-  // title, as the fold reads it, with its authorship.
+  // title, as the run state reads it, with its authorship.
   const titles = (yield* session.log.rows(qualifyAggregateId('run', from.id), [
     'run.description',
   ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
@@ -236,7 +236,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
  * on `prompt`. The child is launched fresh, never resumed, so it starts
  * with the grants its parent's script holds. The cut is the conversation as
  * it stood before commit `before` (the script's start): the beginning of
- * the turn that issued the script, or the park before it, so every call of
+ * the turn that issued the script, or the wait before it, so every call of
  * one script forks the same history whatever the conversation does since.
  */
 export const forkSeed = Effect.fn('forkSeed')(function* (

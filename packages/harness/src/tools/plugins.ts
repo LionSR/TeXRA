@@ -141,7 +141,7 @@ export interface Plugin {
   /** The agent-file block it owns (`AgentBlock`), on or off. */
   readonly agentBlock?: AgentBlock;
   /** The plugins it runs on, by id: a list that holds it without them is
-   *  refused. */
+   *  rejected. */
   readonly requires?: readonly string[];
 }
 

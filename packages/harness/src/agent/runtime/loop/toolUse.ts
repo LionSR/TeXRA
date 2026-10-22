@@ -464,13 +464,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
           restoring &&= queued;
-          // A root's park opens a step, recorded like a request's; a
+          // A root's wait opens a step, recorded like a request's; a
           // child's idle is its parent's.
           if (!isChild()) {
             const step = yield* openStep(state, 'park');
             if (step.rows.length > 0) state = yield* cell.append(step.rows);
           }
-          // Every park is idle, a failed turn's too: a resume acks the first.
+          // Every wait is idle, a failed turn's too: a resume acks the first.
           run.callbacks.onIdle?.();
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
@@ -481,7 +481,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // The host port stays attached: `/model`, `/compact` land here.
           const batch = yield* followUps.wait;
           if (batch === null) {
-            // The input ended under the parked loop: a cancellation.
+            // The input ended under the waiting loop: a cancellation.
             return finish(
               state,
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,

@@ -212,8 +212,8 @@ const runSelf = Effect.fn('self.call')(function* (
 /** The `self` function of a script. */
 export const SelfTool = defineTool({
   name: 'self',
-  // A resumed call finds the child its earlier attempt launched and settles
-  // from it, or resumes it under its own id: it never launches a second one.
+  // A resumed call finds the child its earlier attempt launched and takes
+  // its result, or resumes it under its own id: it never launches a second one.
   replay: 'safe',
   // A script's calls run beside each other, held to the child-run budget.
   lane: 'own',

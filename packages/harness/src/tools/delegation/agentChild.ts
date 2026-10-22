@@ -226,7 +226,7 @@ const spentBy = (call: RunToolCall) =>
   );
 
 /**
- * A completed call in the reuse scope whose key is `key`, or a refusal when
+ * A completed call in the reuse scope whose key is `key`, or a rejection when
  * one of this same script holds it: two calls of one script that would
  * answer the same must say how they differ (`id`). Read from the runs'
  * `tool.result` rows; only an executed result carries a key.

@@ -85,7 +85,7 @@ export interface StepTools {
 }
 
 /** The run's current step, the scope that holds its pin, and the tools it
- *  withheld for approval. `holding` while only parks
+ *  withheld for approval. `holding` while only waits
  *  have opened steps in a resumed activation: its hold on the record is not
  *  spent yet. */
 export interface OpenStep {
@@ -445,12 +445,12 @@ const openStep = Effect.fn('Step.open')(function* (
  * calls against the step that offered them; for a response a resume found
  * pending, against a step pinned for the dispatch and held to the record,
  * which records nothing. A call to a tool whose identity changed or that
- * left since it was offered is stale: it settles as `tool_unavailable`,
+ * left since it was offered is stale: its result is `tool_unavailable`,
  * like a name the run was never offered, and the step names the tool. A
- * park opens a step too, recorded like a request's, so a parked run holds
+ * wait opens a step too, recorded like a request's, so a waiting run holds
  * only what its plugins offer now. The
  * first request or dispatch step a resumed activation opens is held to the
- * record, and so is every park before it, which leaves the hold unspent.
+ * record, and so is every wait before it, which leaves the hold unspent.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
