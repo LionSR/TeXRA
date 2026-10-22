@@ -265,7 +265,7 @@ write points: `packages/harness/AGENTS.md` "Run loop architecture".
 
 **There is no flow engine.** A run is one Effect program that appends rows to
 the run history (`packages/harness/src/shared/session/runHistory.ts`) and continues from the
-folded `RunState` each `RunCell.append` returns; resume is the same function
+`RunState` each `RunCell.append` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Every model call retries in one loop (`run/invocation.ts`) whose

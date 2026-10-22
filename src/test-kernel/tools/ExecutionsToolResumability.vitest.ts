@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

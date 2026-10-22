@@ -29,10 +29,10 @@ import {
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { callRequestId } from '@shared/session/inFlight';
 import {
-  foldRunState,
+  applyRunRows,
   unboundRequests,
   type RunHistoryDraft,
-} from '@shared/session/runStateFold';
+} from '@shared/session/runState';
 import { fold } from '@shared/session/sessionFold';
 import {
   acceptsFollowUp,
@@ -1522,7 +1522,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
 ].map((draft, index) => runHistoryRow(index + 1, draft));
 
 const through = (count: number, ...extra: Record<string, unknown>[]) =>
-  foldRunState(null, [
+  applyRunRows(null, [
     ...TURN_ROWS.slice(0, count),
     ...extra.map((draft, index) => runHistoryRow(count + index + 1, draft)),
   ]);
@@ -1534,7 +1534,7 @@ const stateOf = <A, E>(result: Result.Result<A, E>): A => {
 const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
   Result.isFailure(result) ? result.failure.reason : 'success';
 
-describe('foldRunState', () => {
+describe('applyRunRows', () => {
   it.each([
     [
       'after the body started, before its result: outcome unknown, never fabricated',
@@ -1714,7 +1714,7 @@ describe('foldRunState', () => {
         // C6: the response row is the production source of the anchor, so the
         // cold fold a resume reads must restore it.
         const restored = stateOf(
-          foldRunState(null, [
+          applyRunRows(null, [
             ...TURN_ROWS.slice(0, 2),
             runHistoryRow(
               3,
@@ -1750,7 +1750,7 @@ describe('foldRunState', () => {
         // it: continuing from an anchor over a prefix that is gone is the
         // same window in the other direction.
         expect(
-          stateOf(foldRunState(restored, [runHistoryRow(12, compaction)]))
+          stateOf(applyRunRows(restored, [runHistoryRow(12, compaction)]))
             ?.continuation,
         ).toBeNull();
       },
@@ -1873,7 +1873,7 @@ describe('foldRunState', () => {
       () => {
         expect(
           stateOf(
-            foldRunState(null, [
+            applyRunRows(null, [
               runHistoryRow(1, {
                 type: 'run.start',
                 identity: { kind: 'agent', agent: 'chat' },
@@ -1936,12 +1936,12 @@ describe('foldRunState', () => {
     expect(state?.at).toBe('turn.end');
     expect(state?.turn).toBe(1);
     // Incremental and cold folds are the same computation.
-    const half = stateOf(foldRunState(null, TURN_ROWS.slice(0, 6)));
-    expect(stateOf(foldRunState(half, TURN_ROWS.slice(6)))).toEqual(state);
+    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
+    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);
   });
 
   it.each([
-    ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
+    ['out-of-order', () => applyRunRows(null, [TURN_ROWS[1], TURN_ROWS[0]])],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
       // A call's attempt never goes back: attempt 2's body started, so

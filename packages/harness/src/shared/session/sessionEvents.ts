@@ -26,7 +26,7 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
-import type { RunStateRowType } from './runStateFold';
+import type { RunStateRowType } from './runState';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {

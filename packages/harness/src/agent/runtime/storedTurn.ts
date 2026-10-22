@@ -31,7 +31,7 @@ import type {
 import {
   RunHistoryInconsistent,
   type RunHistoryDraft,
-} from '@shared/session/runStateFold';
+} from '@shared/session/runState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { z } from 'zod';
 

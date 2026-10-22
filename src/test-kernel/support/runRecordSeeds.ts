@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import { freshRunState } from '@shared/session/runStateFold';
+import { freshRunState } from '@shared/session/runState';
 import {
   qualifyAggregateId,
   RunRecordFieldsSchema,
