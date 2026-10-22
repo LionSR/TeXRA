@@ -29,6 +29,7 @@ import {
 } from '@texra-ai/harness';
 import {
   type RuntimeRequest,
+  type RunView,
   type SessionView,
   AgentConfigSchema,
   type AgentConfig,
@@ -342,13 +343,24 @@ export function createChatSessionController(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
 
-  /** A level that shows `runId` live here: the activation a continuation
-   *  resumed, which the view folds after the session answered. */
-  const liveHereAgain = (runId: RunId): Effect.Effect<void> =>
+  /** A level that shows `runId` continued since `before`, its level when
+   *  the message was sent: live here, or already parked or ended again.
+   *  The activation folds after the session answered, and a turn that ends
+   *  before this looks leaves no live level to see, only its park or end. */
+  const continuedSince = (
+    runId: RunId,
+    before: RunView | undefined,
+  ): Effect.Effect<void> =>
     viewChanges.pipe(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
-        return run !== undefined && run.ownedHere && isLiveRun(run);
+        if (run === undefined) return false;
+        if (run.ownedHere && isLiveRun(run)) return true;
+        return (
+          before !== undefined &&
+          (run.forkPoint !== before.forkPoint ||
+            run.durableOutcome !== before.durableOutcome)
+        );
       }),
       Stream.runHead,
       Effect.asVoid,
@@ -1024,6 +1036,7 @@ export function createChatSessionController(
      * both queued on the run and lost from the input.
      */
     const deliverFollowUp = Effect.gen(function* () {
+      let stopped: RunView | undefined;
       const continuing =
         interrupted !== undefined && session.interruptedRunId === interrupted;
       if (continuing) {
@@ -1031,6 +1044,7 @@ export function createChatSessionController(
         // continues the run, and the chat holds the slot while it resumes.
         yield* Effect.ignoreCause(session.runSettled ?? Effect.void);
         yield* settledHere(interrupted);
+        stopped = runSession.view.current().runs.get(interrupted);
         if (session.interruptedRunId === interrupted)
           preparing = claimPreparingRoot(interrupted);
       }
@@ -1104,7 +1118,10 @@ export function createChatSessionController(
               outcome.value.wake == null &&
               session.interruptedRunId === interrupted
             )
-              adoptResumedRoot(followUpTarget, liveHereAgain(followUpTarget));
+              adoptResumedRoot(
+                followUpTarget,
+                continuedSince(followUpTarget, stopped),
+              );
             const presentation = presentFollowUpResult(
               outcome.value.status === 'sent'
                 ? { status: 'sent' }

@@ -9,6 +9,7 @@ import {
   Cause,
   Context,
   Effect,
+  FileSystem,
   Layer,
   Option,
   Predicate,
@@ -46,11 +47,31 @@ const NO_LOCAL_STATE: LocalRuntimeState = {
   resumeBlocked: [],
 };
 
-/** A store this cold read may not open because none is there: its
- *  directory is gone, or SQLite finds no file to open without creating it. */
-const absent = (error: DatabaseOpenFailed): boolean =>
-  cannotOpen(Cause.fail(error)) ||
-  (Predicate.hasProperty(error.cause, 'code') && error.cause.code === 'ENOENT');
+/** Whether this cold read failed because no store is there: its directory
+ *  is gone, or SQLite could not open a file that does not exist. SQLite's
+ *  CANTOPEN also names a store it may not open (permissions, a bad path),
+ *  which stays the read's failure. */
+const absent = (
+  error: DatabaseOpenFailed,
+): Effect.Effect<boolean, never, FileSystem.FileSystem> => {
+  if (
+    Predicate.hasProperty(error.cause, 'code') &&
+    error.cause.code === 'ENOENT'
+  )
+    return Effect.succeed(true);
+  if (!cannotOpen(Cause.fail(error))) return Effect.succeed(false);
+  return FileSystem.FileSystem.pipe(
+    Effect.flatMap((fs) => fs.exists(error.path)),
+    Effect.map((exists) => !exists),
+    // Unknown: the open's own failure stands.
+    Effect.catch((cause) =>
+      Effect.logWarning(`Could not check whether ${error.path} exists`).pipe(
+        Effect.annotateLogs({ data: cause }),
+        Effect.as(false),
+      ),
+    ),
+  );
+};
 
 /**
  * The view of the session stored at `storage`, folded from its listing,
@@ -105,6 +126,10 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
     );
   });
   return yield* Effect.scoped(read).pipe(
-    Effect.catchIf(absent, () => Effect.succeed(Option.none<SessionView>())),
+    Effect.catch((error) =>
+      Effect.flatMap(absent(error), (gone) =>
+        gone ? Effect.succeed(Option.none<SessionView>()) : Effect.fail(error),
+      ),
+    ),
   );
 });

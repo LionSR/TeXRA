@@ -1139,4 +1139,44 @@ describe('createChatSessionController', () => {
     expect(session.runId).toBe('a11111');
     expect(chatTuiCanStartRootRun(session)).toBe(false);
   });
+
+  it('frees the slot of a continuation that ended before the chat looked', async () => {
+    // The resumed turn ran and ended before the chat's adoption read the
+    // fold: no level it reads shows the run live, yet the run did continue.
+    holdRun('a11111' as RunId);
+    const view = installableViewRef();
+    installSession({ view });
+    const session = makeSession({
+      runId: 'a11111' as RunId,
+      interruptedRunId: 'a11111' as RunId,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        served: true,
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
+      }),
+    );
+    mocks.request.mockImplementation((req: RuntimeRequest) =>
+      Effect.gen(function* (): Effect.fn.Return<Outcome> {
+        if (req.kind === 'followUp.send')
+          yield* SubscriptionRef.set(
+            view,
+            viewWith([
+              makeRunView({
+                id: 'a11111' as RunId,
+                status: RUN_OUTCOME.COMPLETED,
+                durableOutcome: RUN_OUTCOME.COMPLETED,
+              }),
+            ]),
+          );
+        return { kind: 'followUp', status: 'sent' };
+      }),
+    );
+
+    await runSubmit(ctrl, 'Carry on.');
+
+    await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(true));
+    expect(session.interruptedRunId).toBeUndefined();
+  });
 });

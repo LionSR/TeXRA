@@ -155,6 +155,9 @@ export const serve = Effect.fn('server.serve')(function* (
     ...state,
     draining: true,
   })).pipe(Effect.andThen(release));
+  // Every end leaves first, so no task is admitted once the run has ended.
+  const end = (exit: ServeExit) =>
+    leave.pipe(Effect.andThen(Deferred.succeed(ended, exit)), Effect.asVoid);
   const control: Context.Service.Shape<typeof ServiceControl> = {
     version: BUILD_VERSION,
     socket,
@@ -176,8 +179,7 @@ export const serve = Effect.fn('server.serve')(function* (
           : Effect.void,
     ),
     idleAfter: Duration.fromInputUnsafe(options.idleAfter),
-    stop: (drain) =>
-      drain ? leave : Deferred.succeed(ended, 'stopped').pipe(Effect.asVoid),
+    stop: (drain) => (drain ? leave : end('stopped')),
   };
   const protocol = yield* Layer.build(
     RpcServer.layerProtocolSocketServer.pipe(
@@ -257,16 +259,13 @@ export const serve = Effect.fn('server.serve')(function* (
     }
     const busy = running > 0 || (yield* control.clients) > 0;
     idleSince = busy ? null : (idleSince ?? now);
-    if (idleSince !== null && now - idleSince >= idleAfter)
-      yield* Deferred.succeed(ended, 'idle');
+    if (idleSince !== null && now - idleSince >= idleAfter) yield* end('idle');
   });
   yield* Effect.forkScoped(
     check.pipe(Effect.repeat(Schedule.spaced(CHECK_INTERVAL))),
   );
   yield* Effect.forkScoped(
-    Deferred.await(options.shutdown).pipe(
-      Effect.andThen(Deferred.succeed(ended, 'stopped')),
-    ),
+    Deferred.await(options.shutdown).pipe(Effect.andThen(end('stopped'))),
   );
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);

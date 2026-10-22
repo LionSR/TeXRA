@@ -182,14 +182,15 @@ const claimHolds = (database: DatabaseShape) => {
   });
   const hold: SessionLog['hold'] = (runId, options = {}) => {
     const id = qualifyAggregateId('run', runId);
-    return Effect.uninterruptibleMask((restore) =>
+    // Taking the claim and recording it are one step: a claim committed
+    // under an interrupt that landed before `taken` would never be released.
+    return Effect.uninterruptible(
       Effect.gen(function* () {
         const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
         holds.set(id, held);
         held.count += 1;
         yield* Effect.addFinalizer(() => letGo(id, held));
-        if ((yield* restore(database.acquireClaims([id]))).length > 0)
-          held.taken = true;
+        if ((yield* database.acquireClaims([id])).length > 0) held.taken = true;
         if (options.ends === true) held.ended = true;
       }),
     );

@@ -493,23 +493,29 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   /** Discard this file's edits for what is on disk now (a save found it
    *  rewritten and the user chose the disk's version). */
-  async function reload(path: string): Promise<void> {
+  function reload(path: string): Promise<void> {
     const file = files.get(path);
     const model = file?.model;
-    if (!file || !model) return;
-    const contents = await callbacks.readFile(path);
-    if (disposed || file.model !== model) return;
-    file.disk = contents;
-    file.syncing = true;
-    try {
-      model.setValue(contents);
-    } finally {
-      file.syncing = false;
-    }
-    file.dirty = false;
-    callbacks.onDirtyChange(path, false);
-    notice.clear(path);
-    renderTree();
+    if (!file || !model) return Promise.resolve();
+    const version = model.getVersionId();
+    return onModelSyncLane(file, async () => {
+      const contents = await callbacks.readFile(path);
+      // Typing since the choice is newer than it: keep it, and the file's
+      // base, so its save asks again.
+      if (disposed || file.model !== model || model.getVersionId() !== version)
+        return;
+      file.disk = contents;
+      file.syncing = true;
+      try {
+        model.setValue(contents);
+      } finally {
+        file.syncing = false;
+      }
+      file.dirty = false;
+      callbacks.onDirtyChange(path, false);
+      notice.clear(path);
+      renderTree();
+    });
   }
 
   async function open(path: string): Promise<void> {
@@ -613,47 +619,52 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   }
 
   /** Save the open file. `overwrite`: replace whatever the file holds now,
-   *  the user's answer to a save that found it rewritten. */
-  async function save(overwrite = false): Promise<void> {
+   *  the user's answer to a save that found it rewritten. Saves of one file
+   *  take its lane in turn, so each sends the base the one before it wrote. */
+  function save(overwrite = false): Promise<void> {
     const path = openPath;
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || callbacks.isReadOnly?.(path)) return;
-    const savedVersion = model.getVersionId();
-    const contents = model.getValue();
-    file.activeWrites += 1;
-    file.writeEpoch += 1;
-    try {
-      const outcome = await callbacks.writeFile(
-        path,
-        contents,
-        overwrite ? null : (file.disk ?? null),
-      );
-      if (outcome === 'changedOnDisk') {
-        if (!disposed)
-          notice.changedOnDisk(path, {
-            overwrite: () => void open(path).then(() => save(true)),
-            reload: () => void reload(path),
-          });
-        return;
-      }
-      file.disk = contents;
-      if (
-        disposed ||
-        file.model !== model ||
-        model.getVersionId() !== savedVersion
-      )
-        return;
-      file.dirty = false;
-      callbacks.onDirtyChange(path, false);
-      notice.clear(path);
-      renderTree();
-    } catch (error) {
-      if (!disposed) notice.report(path, 'save', error);
-    } finally {
-      file.activeWrites -= 1;
+    if (!path || !file || !model || callbacks.isReadOnly?.(path))
+      return Promise.resolve();
+    return onModelSyncLane(file, async () => {
+      if (disposed || file.model !== model) return;
+      const savedVersion = model.getVersionId();
+      const contents = model.getValue();
+      file.activeWrites += 1;
       file.writeEpoch += 1;
-    }
+      try {
+        const outcome = await callbacks.writeFile(
+          path,
+          contents,
+          overwrite ? null : (file.disk ?? null),
+        );
+        if (outcome === 'changedOnDisk') {
+          if (!disposed)
+            notice.changedOnDisk(path, {
+              overwrite: () => void open(path).then(() => save(true)),
+              reload: () => void reload(path),
+            });
+          return;
+        }
+        file.disk = contents;
+        if (
+          disposed ||
+          file.model !== model ||
+          model.getVersionId() !== savedVersion
+        )
+          return;
+        file.dirty = false;
+        callbacks.onDirtyChange(path, false);
+        notice.clear(path);
+        renderTree();
+      } catch (error) {
+        if (!disposed) notice.report(path, 'save', error);
+      } finally {
+        file.activeWrites -= 1;
+        file.writeEpoch += 1;
+      }
+    });
   }
 
   renderTree();
