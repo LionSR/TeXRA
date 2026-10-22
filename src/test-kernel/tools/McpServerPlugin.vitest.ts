@@ -70,7 +70,9 @@ require('node:readline')
       // A grandchild holding stdout answers once this process is gone: it
       // says it is up, this process exits, and the end of their IPC channel
       // is its cue. Detached, since on Windows libuv puts a child that is not
-      // in a kill-on-close job, and it would die with this process unheard.
+      // detached in a kill-on-close job, and it would die with this process
+      // unheard. Its stderr is not inherited, so only the stdout wait covers
+      // the late answer.
       const answer = { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'late' }] } };
       require('node:child_process')
         .spawn(
@@ -80,7 +82,7 @@ require('node:readline')
             "process.on('disconnect', () => process.stdout.write(process.argv[1])); process.send('up');",
             JSON.stringify(answer) + '\\n',
           ],
-          { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], detached: true, windowsHide: true },
+          { stdio: ['ignore', 'inherit', 'ignore', 'ipc'], detached: true, windowsHide: true },
         )
         .once('message', () => process.exit(0));
     }
