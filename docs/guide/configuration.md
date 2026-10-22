@@ -179,8 +179,8 @@ $5 and is always a user-wide setting, never read from a project
 failed ones too, and any agent a round left running. It is checked after
 each round, so a single long round can overshoot it. When the cap is
 reached the goal ends paused and says why; raise the cap and run the goal
-again to continue. `0` removes the cap. A goal has no round limit and stops
-after 24 hours.
+again to continue. `0` removes the cap. A goal has no round limit. Each
+time it runs it stops after 24 hours; resuming it starts a new 24 hours.
 
 ## File discovery
 

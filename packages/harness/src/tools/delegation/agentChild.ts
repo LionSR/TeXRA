@@ -44,6 +44,35 @@ import { errorResult } from '@tools/core/result';
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
 
+/** Most children one script may launch, by `agent()` and `self()` together. */
+const AGENT_CALL_LIMIT = 1000;
+
+/**
+ * Counts the child `script` is about to launch, or returns the error result
+ * once it has launched `AGENT_CALL_LIMIT`. Called just before a launch: a
+ * reused, recovered or rejected call launches none, and a resume's replayed
+ * calls never reach it.
+ */
+export const countLaunch = (
+  script: ScriptScope,
+  name: string,
+): Effect.Effect<ToolResult | null> =>
+  Effect.map(
+    script.shared(
+      'agent:launches',
+      Effect.sync(() => ({ count: 0 })),
+    ),
+    (launches) => {
+      if (launches.count >= AGENT_CALL_LIMIT)
+        return errorResult(
+          `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${name}' did not run.`,
+          { name: 'CallLimit' },
+        );
+      launches.count += 1;
+      return null;
+    },
+  );
+
 /** The child run one attempt of a call runs under, `call`'s own by
  *  default ({@link callChildRunId}). */
 export const agentChildRunId = (

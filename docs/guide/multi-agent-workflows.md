@@ -101,7 +101,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 ## Limits
 
-- A script launches at most 1000 agents. Reused calls do not count.
+- A script launches at most 1000 agents, its `agent()` and `self()` calls together. Reused calls do not count.
 - The session's child-run budget sets how many agents run at once.
 - The script's own code gets 30 seconds of CPU and 64 MB of memory. Time spent waiting on agents does not count, so this only stops a loop that never waits.
 - The wall clock defaults to 60 minutes and can be set from 1 second to 24 hours with `timeoutMs`.

@@ -53,6 +53,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import {
   agentChildRunId,
+  countLaunch,
   earlierChild,
   fingerprint,
   recoverAgentChild,
@@ -77,9 +78,6 @@ import {
   describeSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';
-
-/** Most children one script may launch. */
-const AGENT_CALL_LIMIT = 1000;
 
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
 class AgentTimedOut extends Data.TaggedError('AgentTimedOut')<{
@@ -510,20 +508,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       );
     return decided;
   }
-  // A script launches at most AGENT_CALL_LIMIT children, counted here,
-  // just before a launch: a reused, recovered, refused or unavailable call
-  // launches none, and a resume's replayed calls never reach here.
   if (script !== undefined) {
-    const launches = yield* script.shared(
-      'agent:launches',
-      Effect.sync(() => ({ count: 0 })),
-    );
-    if (launches.count >= AGENT_CALL_LIMIT)
-      return errorResult(
-        `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${agent.name}' did not run.`,
-        { name: 'CallLimit' },
-      );
-    launches.count += 1;
+    const limited = yield* countLaunch(script, agent.name);
+    if (limited !== null) return limited;
   }
 
   // The asking script's `script`; the child's (with `options`) is set below.

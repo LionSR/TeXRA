@@ -17,6 +17,7 @@ import {
   IssuingScript,
   requireToolRun,
   type RunToolCall,
+  type ScriptScope,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
@@ -32,6 +33,7 @@ import { errorResult } from '@tools/core/result';
 import { childResult, failedResult } from '@tools/delegation/AgentTool';
 import {
   agentChildRunId,
+  countLaunch,
   recoverAgentChild,
 } from '@tools/delegation/agentChild';
 import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
@@ -130,6 +132,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
 const runSelf = Effect.fn('self.call')(function* (
   call: RunToolCall,
   input: SelfInput,
+  script: ScriptScope,
 ) {
   const { run } = call;
   const { session, runId: parentRunId } = run;
@@ -162,6 +165,8 @@ const runSelf = Effect.fn('self.call')(function* (
   if (recovered.success.kind === 'ended')
     return yield* childResult(call, name, recovered.success, undefined);
 
+  const limited = yield* countLaunch(script, name);
+  if (limited !== null) return limited;
   const runId = agentChildRunId(call);
   const { rootUserInstruction: _root, script: _script, ...launch } = config;
   // Forked, the child is born on the conversation's history; fresh, on the
@@ -233,6 +238,6 @@ Forked (the default), the child continues this conversation as it stood when the
       if (script === null)
         return errorResult('self() runs only inside a script.');
       const budget = yield* scriptChildBudget(call.env.roots, script);
-      return yield* budget.withPermits(1)(runSelf(call, input));
+      return yield* budget.withPermits(1)(runSelf(call, input, script));
     }),
 });

@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file.
   goal's script and its rounds, and the conversation's own approvals stay as
   they were. The spend cap (`texra.goal.maxCostUsd`) counts everything the
   goal has spent, failed rounds and agents a round left running included,
-  and a goal stops after 24 hours. The `plan` tool takes only
+  and a goal stops after 24 hours of running (resuming it starts a new 24
+  hours). The `plan` tool takes only
   `objective`: its `pause` and `complete` commands are gone. Runs written by
   an earlier build are listed as such and are not resumed.
 - **SDK: a parked run never continues itself.** `Plugin.continuation`,
