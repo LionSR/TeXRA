@@ -34,7 +34,7 @@ release shipped.
 ```
  readers          SessionView fold · RunState fold · plugin readers · history query store
                           ▲ decoded SessionEvent, or a typed refusal
- folds &          sessionFold · runStateFold · transcriptFold      (read payloads; never SQL)
+ folds &          sessionFold · runState · transcriptFold      (read payloads; never SQL)
  projections      projectors (listing, usage, model)               (pure TS over decoded events)
                           ▲
  history &        SessionEvents inbox (one publisher) → Database.appendAll
@@ -52,7 +52,7 @@ release shipped.
 | Row codec               | `rowCodec.ts`, `rowReader.ts`; the registry in `packages/harness/src/shared/schemas/rowVersions.ts`       | `type` and `version` columns, the `data` JSON layout, blob externalization, the (kind, logical id) ↔ `AggregateId` mapping, the gate | SQL statements beyond its column lists; fold semantics           |
 | Run history / publisher | `Database.ts` (the one writer), `packages/harness/src/agent/runtime/SessionEvents.ts` (the one publisher) | envelopes (seq, commit, origin, at), claims, aggregate lifecycle edges, transactions                                                 | stored shapes: it hands drafts to the codec and gets events back |
 | Projections             | `projections.ts`                                                                                          | its own tables and versions; `listingKeyOf`, `pendingKeyOf`, `sumUsageStats`                                                         | `event.data`: it reads decoded events only                       |
-| Folds                   | `packages/harness/src/shared/session/{sessionFold,runStateFold,transcriptFold}.ts`                        | payload fields                                                                                                                       | columns, versions, SQL                                           |
+| Folds                   | `packages/harness/src/shared/session/{sessionFold,runState,transcriptFold}.ts`                        | payload fields                                                                                                                       | columns, versions, SQL                                           |
 | Current values          | `currentValues.ts`                                                                                        | `current_value`, `input_history`, family schemas                                                                                     | events                                                           |
 
 **Two invariants.** Nothing above the codec sees a stored shape: no

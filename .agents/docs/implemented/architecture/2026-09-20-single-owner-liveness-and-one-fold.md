@@ -25,9 +25,9 @@ rather than synchronized.
   (`event_sequence.owner_id`, `packages/harness/src/controllers/session/Database.ts`),
   so a lost claim writes nothing.
 - **No snapshot restates rows.** A run resumes from `foldRunState` over its
-  rows (`packages/harness/src/shared/session/runStateFold.ts`); the facts a
+  rows (`packages/harness/src/shared/session/runState.ts`); the facts a
   snapshot once carried each have their own row.
-- **One reducer for the rows both folds read.** `runStateFold` (what the
+- **One reducer for the rows both folds read.** `runState` (what the
   loop continues from) and `sessionFold` (what people see) apply
   `run.position`, `request.opened`, `request.decided`, `followup.queued`
   and `followup.consumed` through one module,
