@@ -53,6 +53,7 @@ import {
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 /** A document task's planned pass count: its agent's catalog entry, by the
  *  key the launch recorded or, for a plain name only, the agent name. A
@@ -212,25 +213,11 @@ export class ProgressApp extends LitElement {
   private renderRequestError(): TemplateResult | typeof nothing {
     const error = this.surface?.requestError;
     if (!error) return nothing;
-    let message: string;
-    switch (error._tag) {
-      case 'Rejected':
-      case 'Unavailable':
-      case 'Invalid':
-        message = error.reason;
-        break;
-      case 'NotOwner':
-        message = 'This task is controlled by another TeXRA window.';
-        break;
-      case 'Internal':
-        message = 'The request failed. See the TeXRA log for details.';
-        break;
-    }
     return html`<wa-callout class="request-notice" variant="danger">
       ${waIcon('circle-exclamation', { slot: 'icon' })}
       <div class="request-notice-content">
         <div>
-          ${message}
+          ${requestErrorText(error)}
           ${
             error._tag === 'Rejected' && error.docsPage
               ? html`<a

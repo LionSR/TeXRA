@@ -56,6 +56,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -86,7 +87,6 @@ import {
   appendLocalNotice,
   appendLocalUserTranscript,
   clearLocalTranscript,
-  describeRequestError,
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
@@ -372,7 +372,7 @@ export function createChatSessionController(
   const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
     requests.request(req).pipe(
       Effect.match({
-        onFailure: describeRequestError,
+        onFailure: requestErrorText,
         onSuccess: () => undefined,
       }),
     );
@@ -1072,7 +1072,7 @@ export function createChatSessionController(
               Effect.match({
                 onFailure: (error) => ({
                   kind: 'refused' as const,
-                  reason: describeRequestError(error),
+                  reason: requestErrorText(error),
                 }),
                 onSuccess: (value) =>
                   value.kind === 'followUp'

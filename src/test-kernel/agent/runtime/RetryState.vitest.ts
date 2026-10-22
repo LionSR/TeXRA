@@ -77,7 +77,7 @@ import {
   type RunCell,
 } from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runState';
 import { Settings } from '@shared/config/settings';
 import {
   setTestApprovalPolicy,

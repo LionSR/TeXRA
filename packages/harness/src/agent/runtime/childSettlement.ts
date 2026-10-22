@@ -32,7 +32,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunInputDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runState';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionHandle } from './SessionHandle';
 

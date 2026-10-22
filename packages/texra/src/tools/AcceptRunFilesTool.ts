@@ -74,61 +74,44 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
 // Rejection bookkeeping
 // ============================================================================
 
-/** One declined file: the refusal a person or a policy gave it. */
+/** One declined file: the decision a person or a policy gave it. */
 interface RecordedRejection {
   readonly path: string;
-  readonly refusal: RefusalDecision;
+  readonly decision: RefusalDecision;
 }
 
+/** The declining kinds, highest first: a cancellation outranks a denial,
+ *  which outranks a person's rejection. */
+const DECLINE_RANK = ['cancel', 'deny', 'reject'] as const;
+
 /**
- * The one refusal a whole-run rejection reports: a cancellation outranks a
- * denial, which outranks a person's rejection, and the feedback every
- * rejected file collected rides the person's arm.
+ * The one decision a whole-run rejection reports: the highest-ranked kind
+ * among the declined files, with the texts of every file of that kind
+ * joined.
  */
-function summarizeRefusals(rejections: readonly RecordedRejection[]): {
-  readonly path: string;
-  readonly refusal: RefusalDecision;
-} {
-  const of = <A extends RefusalDecision['action']>(action: A) =>
-    rejections.filter(
-      (
-        r,
-      ): r is RecordedRejection & {
-        refusal: Extract<RefusalDecision, { action: A }>;
-      } => r.refusal.action === action,
-    );
-  const cancelled = of('cancel');
-  const denied = of('deny');
-  const rejected = of('reject');
-  const pathOf = (group: readonly RecordedRejection[]) =>
-    group.length > 1 ? 'multiple files' : group[0]!.path;
-  const lines = (values: readonly (string | null | undefined)[]) =>
-    values.filter((v): v is string => !!v).join('\n');
-  if (cancelled.length > 0) {
-    return {
-      path: pathOf(cancelled),
-      refusal: {
-        action: 'cancel',
-        cause: lines(cancelled.map((r) => r.refusal.cause)) || null,
-      },
-    };
+function summarizeRejections(
+  rejections: readonly RecordedRejection[],
+): RecordedRejection {
+  const action = DECLINE_RANK.find((kind) =>
+    rejections.some((r) => r.decision.action === kind),
+  )!;
+  const group = rejections.filter((r) => r.decision.action === action);
+  const path = group.length > 1 ? 'multiple files' : group[0]!.path;
+  const text = group
+    .map(({ decision: d }) => {
+      if (d.action === 'cancel') return d.cause;
+      return d.action === 'deny' ? d.reason : d.feedback;
+    })
+    .filter((value) => !!value)
+    .join('\n');
+  switch (action) {
+    case 'cancel':
+      return { path, decision: { action, cause: text || null } };
+    case 'deny':
+      return { path, decision: { action, reason: text } };
+    case 'reject':
+      return { path, decision: { action, feedback: text || null } };
   }
-  if (denied.length > 0) {
-    return {
-      path: pathOf(denied),
-      refusal: {
-        action: 'deny',
-        reason: lines(denied.map((r) => r.refusal.reason)),
-      },
-    };
-  }
-  return {
-    path: pathOf(rejected),
-    refusal: {
-      action: 'reject',
-      feedback: lines(rejected.map((r) => r.refusal.feedback)) || null,
-    },
-  };
 }
 
 // ============================================================================
@@ -315,7 +298,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     });
 
     if (approval.action !== 'apply') {
-      rejections.push({ path: entry.original, refusal: approval });
+      rejections.push({ path: entry.original, decision: approval });
       results.push(`rejected: ${entry.original}${mappingNote}`);
       continue;
     }
@@ -365,10 +348,10 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   }
 
   // All changed files rejected: one rejection result, worded by the
-  // refusal that outranks the others.
+  // decision that outranks the others.
   if (rejections.length === changed && acceptedEntries.length === 0) {
-    const { path, refusal } = summarizeRefusals(rejections);
-    return buildApprovalRejectedResult(path, 'accept_run_files', refusal);
+    const { path, decision } = summarizeRejections(rejections);
+    return buildApprovalRejectedResult(path, 'accept_run_files', decision);
   }
 
   // Phase 3: Clean up diff files from workspace for accepted files
