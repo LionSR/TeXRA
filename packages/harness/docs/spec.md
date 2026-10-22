@@ -70,9 +70,9 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/Database.ts:104`, `:228-231`); the file name and the
+(`controllers/session/Database.ts:104`, `:225-228`); the file name and the
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
-same schema in memory (`controllers/session/Database.ts:228-239`).
+same schema in memory (`controllers/session/Database.ts:225-239`).
 
 The store MUST carry application id `0x54655852` and schema version 101 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts:33-39`,
@@ -89,7 +89,7 @@ open SHALL be moved, with its WAL and shared-memory files, to
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
 on (`controllers/session/storeSchema.ts:243-250`). Every write transaction the
 database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
-(`controllers/session/Database.ts:418-425`). File maintenance runs outside it:
+(`controllers/session/Database.ts:419-426`). File maintenance runs outside it:
 the one-time `VACUUM` at setup, page reclaim in autocommit `incremental_vacuum`
 steps, and the `VACUUM INTO` copy a store moved aside takes, none of which
 writes a row (`controllers/session/storeSchema.ts:182-186`, `:305`,
@@ -128,7 +128,7 @@ Every row a session writes is written by a job on one inbox drained by one
 fiber. Claims are not rows: a hold inside a job takes its claim in that job's
 transaction, a hold outside one in a write transaction of its own, and either is
 released in the transaction of the scope that closes it, which need not be a job
-(`controllers/session/sessionStore.ts:150-197`). Jobs SHALL run in the order
+(`controllers/session/sessionStore.ts:143-202`). Jobs SHALL run in the order
 they were enqueued, one at a time, and the table's commit order is that order
 (`agent/runtime/SessionEvents.ts:240-248`). A job other than an ordering barrier
 (`transact(job, order)`, below) is one SQLite transaction: its appends commit
@@ -153,7 +153,7 @@ The publisher offers these doors:
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:298`). A job MAY run again whole
 when SQLite reports the database busy, so a job body MUST be database-only
-(`controllers/session/Database.ts:450-468`). Effects a job schedules with
+(`controllers/session/Database.ts:451-469`). Effects a job schedules with
 `afterCommit` SHALL run only after its transaction commits, never for an attempt
 that rolled back (`shared/session/sessionEvents.ts:49-81`). At the close
 deadline the running job is cut and every queued job refused
@@ -163,17 +163,17 @@ is a defect; a detached one is logged and dropped
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
-(`controllers/session/sessionStore.ts:257-266`). A claim a failed transaction
+(`controllers/session/sessionStore.ts:255-264`). A claim a failed transaction
 took is released best effort: a refused release is logged and the claim stays
 until another process proves this one dead
-(`controllers/session/sessionStore.ts:224-236`, `:264`). A trace row emitted on
+(`controllers/session/sessionStore.ts:222-234`, `:262`). A trace row emitted on
 its own reaches the publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:102-106`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts:597-600`,
 `agent/runtime/loop/toolUse.ts:534-537`). `SessionLog.settled` is the barrier
 after every job enqueued before it
-(`controllers/session/sessionStore.ts:308-310`).
+(`controllers/session/sessionStore.ts:306-308`).
 
 ### 2.4 Row versions and the store gate
 
@@ -181,7 +181,7 @@ Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-141`).
 A row MUST be written at its kind's current version
 (`controllers/session/rowCodec.ts:178-180`). The `stored_kind` table records the
 highest version each kind was written at
-(`controllers/session/Database.ts:606-607`).
+(`controllers/session/Database.ts:607-608`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
@@ -189,9 +189,9 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows are left out of every read (below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
-writes beside them (`controllers/session/Database.ts:296`, `:450-466`).
+writes beside them (`controllers/session/Database.ts:298`, `:451-467`).
 Releasing claims is the one write it skips: it writes no row and only gives back
-this process's claims (`controllers/session/Database.ts:450-454`, `:988-996`). A
+this process's claims (`controllers/session/Database.ts:451-455`, `:988-996`). A
 core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:372-378`). Kinds a build deleted are listed as
 retired; their rows fail only their own run's reads
@@ -230,7 +230,7 @@ run the gate: a row of a core kind this build lacks, written by a newer build
 after this one opened the store, reads as corrupt until the next write's gate
 refuses the store; a plugin kind whose plugin this build lacks is left out of
 reads and passes the gate (`controllers/session/rowCodec.ts:285`,
-`controllers/session/Database.ts:455-466`). A run whose rows do not decode
+`controllers/session/Database.ts:456-467`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:98-104`,
 `agent/runtime/resumeRun.ts:251-252`).
 
@@ -606,7 +606,7 @@ operation, the renewed observation repeats with no row and is never a resend
 
 There is no daemon. Several processes MAY open one store at once; each holds its
 own connection, publisher and fold, and sees the others' commits through a 250
-ms poll of SQLite's `data_version` (`controllers/session/Database.ts:357-388`).
+ms poll of SQLite's `data_version` (`controllers/session/Database.ts:358-389`).
 
 ### 7.1 Claims
 
@@ -617,14 +617,14 @@ creates it and claims it for the writer
 `DatabaseNotOwner`, and nothing written, unless the writer holds the claim and
 the aggregate is open (`controllers/session/Database.ts:115-122`, `:641-653`). A
 `plugin.fact` on a `plugin` aggregate borrows an unheld claim for its own
-transaction only (`controllers/session/Database.ts:620-624`, `:766-771`).
+transaction only (`controllers/session/Database.ts:621-624`, `:766-771`).
 
 A process takes a claim in one write transaction that reads the claim state and
 moves it (`controllers/session/Database.ts:905-923`). It MUST NOT take a claim
 from another owner unless that owner is proven dead, or its liveness is
 unprovable and the user is deleting a single run
 (`controllers/session/storeAside.ts:70-84`,
-`controllers/session/Database.ts:546-559`). The transaction reads the owners
+`controllers/session/Database.ts:547-560`). The transaction reads the owners
 itself; one it holds no verdict for rolls it back whole, is proven off the write
 lock, and the transaction runs again with that verdict
 (`controllers/session/storeAside.ts:86-111`). A live owner refuses with
@@ -643,7 +643,7 @@ Liveness is proven from the owner identity alone, with no clock
 | pid exists, start identity unreadable        | `unprovable` |
 
 Releasing a claim sets `owner_id` to null where this process holds it, and
-writes no row (`controllers/session/Database.ts:480-481`, `:988-996`).
+writes no row (`controllers/session/Database.ts:481-482`, `:988-996`).
 
 ### 7.2 Resume under a claim
 
@@ -692,7 +692,7 @@ A process MUST NOT:
   (`controllers/session/SessionRequests.ts:159-171`)
 - resume a run a live process holds (`agent/runtime/resumeRun.ts:195-196`)
 - write rows to a store a newer build wrote (giving back its own claims is
-  allowed) (`controllers/session/Database.ts:463-466`)
+  allowed) (`controllers/session/Database.ts:464-467`)
 
 A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:176-198`,
@@ -866,21 +866,21 @@ These existing suites check the sections above. Paths are under
 - **2.3 publisher**: `controllers/session/sessionEvents.vitest.ts:429` (enqueue
   order), `:2435` (a rejected batch rolls back whole), `:2001`, `:2099`;
   `support/crashConformance.ts:1120` (one job, one transaction)
-- **2.4 versions and gate**: `schemas/rowVersions.vitest.ts:113`, `:131`,
-  `:165`; `controllers/session/sessionEvents.vitest.ts:1771` (newer build
+- **2.4 versions and gate**: `schemas/rowVersions.vitest.ts:115`, `:133`,
+  `:167`; `controllers/session/sessionEvents.vitest.ts:1771` (newer build
   refused), `:1849` (undecodable row), `:1918` (earlier build's row);
   `controllers/session/goldenStore.vitest.ts:215`
 - **3 row kinds**: `controllers/session/goldenStore.vitest.ts:215` (every golden
-  row decodes); `schemas/rowVersions.vitest.ts:113`
+  row decodes); `schemas/rowVersions.vitest.ts:115`
 - **4 write points**: `support/crashConformance.ts:761`, `:1176`
-- **5 fold**: `controllers/session/sessionEvents.vitest.ts:3419` (live state
-  equals reloaded state), `:3451` (batch contract);
+- **5 fold**: `controllers/session/sessionEvents.vitest.ts:3441` (live state
+  equals reloaded state), `:3473` (batch contract);
   `controllers/session/goldenStore.vitest.ts:367`
 - **6 retry**: `agent/runtime/RetryState.vitest.ts:630`, `:708`, `:872` (asks
   again after a stop), `:972` (budget), `:1004` (unchain once), `:1088`;
   `agent/runtime/ModelRetryGate.vitest.ts:119`
 - **7 claims**: `controllers/session/sessionEvents.vitest.ts:843`, `:924`,
-  `:2722`, `:2961` (another OS process), `:3073` (dead owner reclaimed), `:3123`
+  `:2722`, `:2961` (another OS process), `:3073` (dead owner reclaimed), `:3145`
   (second writer fenced); `agent/runtime/resumeRun.vitest.ts:97`
 - **8 requests**: `controllers/session/sessionEvents.vitest.ts:717`;
   `support/crashConformance.ts:49-52`
@@ -914,17 +914,17 @@ These existing suites check the sections above. Paths are under
 
 ## 12. Open questions
 
-1. CLAUDE.md names the publisher's jobs `publish`, `exclusive`, `detach` and
-   `settle`, and the core-concepts note names `publish`, `exclusive` and
-   `detach`. The code's doors are `transact`, `detach`, `removeRun` and `drain`
-   on `SessionEvents` (`agent/runtime/SessionEvents.ts:357-368`), and
-   `transact`, `publish` and `settled` on `SessionLog`
-   (`agent/runtime/SessionHandle.ts:89-110`). This spec uses the code's names.
-2. CLAUDE.md, the durable-harness note and a comment in
-   `shared/session/runStateFold.ts:2` name the commit path
-   `RunHistory.appendBatch`. No such member exists; the code's path is
-   `RunCell.append` (`shared/session/runHistory.ts:151-156`).
-3. `packages/harness/AGENTS.md` and the README say `tool.intent` commits after a
+1. The dated core-concepts note under `.agents/docs/proposed/` names the
+   publisher's jobs `publish`, `exclusive` and `detach`, and it and the
+   durable-harness note name the commit path `RunHistory.appendBatch`. The
+   code's doors are `transact`, `detach`, `removeRun` and `drain` on
+   `SessionEvents` (`agent/runtime/SessionEvents.ts:357-368`), and `transact`,
+   `publish` and `settled` on `SessionLog`
+   (`agent/runtime/SessionHandle.ts:89-110`); the commit path is
+   `RunCell.append` (`shared/session/runHistory.ts:151-156`). CLAUDE.md and the
+   agent guidance were corrected in #14218; the notes keep the names they were
+   written with. This spec uses the code's names.
+2. `packages/harness/AGENTS.md` and the README say `tool.intent` commits after a
    call's hooks, guard and approval. The guard asks only for tools with a
    declared command guard or `requiresApproval`; a tool whose body opens its own
    request, such as a file edit's approval
@@ -932,18 +932,18 @@ These existing suites check the sections above. Paths are under
    (`agent/runtime/loop/toolGuard.ts:45-47`). Resume handles that case
    (`shared/session/inFlight.ts:346-370`), but the stated order is not
    universal.
-4. The durable-harness note states the contract as "no attempt is billed twice".
+3. The durable-harness note states the contract as "no attempt is billed twice".
    The code resends an attempt that no person admitted and whose outcome no row
    recorded (`shared/session/inFlight.ts:217`); the earlier attempt may have
    been billed. The suite asserts at most one committed response per invocation
    (I3), not one billing.
-5. The durable-harness note says "the fold refuses `run.end` on a parent whose
+4. The durable-harness note says "the fold refuses `run.end` on a parent whose
    projection holds an open owned call". The refusal found is in the run
    lifecycle, not the fold (`agent/storage/runLifecycle.ts:282-296`, `:319`).
-6. The core-concepts note says an uncertain storage failure is fatal for the
+5. The core-concepts note says an uncertain storage failure is fatal for the
    session. The code ends the run and fails the call
    (`shared/session/runHistory.ts:68-86`); no code was found that closes the
    session on such a failure.
-7. The durable-harness note says "the specification is the tests, not prose".
+6. The durable-harness note says "the specification is the tests, not prose".
    This document restates the tests and the code; where it and they disagree,
    they win.
