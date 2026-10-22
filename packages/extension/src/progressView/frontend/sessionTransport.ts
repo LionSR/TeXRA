@@ -32,6 +32,7 @@ import {
   type Subscribe,
   type UpMessage,
 } from '@texra/shared/session/sessionFrames';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import {
   installWebviewRuntime,
@@ -42,10 +43,11 @@ import type { SessionView } from '@texra-ai/harness/schemas';
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
 
-type WireSurfaceAction = Extract<
-  DownMessage,
-  { kind: 'surface.action' }
->['action'];
+/** What the transport hands the surfaces: the host's `surface.action`, or
+ *  its own report of a frame it could not read. */
+type WireSurfaceAction =
+  | Extract<DownMessage, { kind: 'surface.action' }>['action']
+  | Extract<SurfaceAction, { kind: 'reportError' }>;
 
 /** The shell is the one port of a webview graph. */
 const SHELL_PORT = 'shell';
@@ -101,12 +103,6 @@ interface OpenSession extends WebviewSession {
   /** The frames the host sent, in arrival order; one fiber of the session's
    *  scope feeds them to the frames service. */
   readonly inbox: Queue.Queue<EventsFrame>;
-  /** The aggregates the current generation reads, re-read on a recovery. */
-  aggregateIds: readonly Subscribe['aggregates'][number]['id'][];
-  /** A resubscribe after a malformed frame is in flight; cleared by the
-   *  frame that completes its replay, so a host that keeps sending one
-   *  fails the surface instead of looping. */
-  recovering: boolean;
 }
 
 /** The routing fields of a down-message that failed its schema: enough to
@@ -146,17 +142,14 @@ export function installWebviewTransport(
       );
       return;
     }
-    if (frame.generation === session.generation && frame.replayComplete)
-      session.recovering = false;
     Queue.offerUnsafe(session.inbox, frame);
   };
 
-  /** A down-message that failed its schema is the host's defect, but
-   *  dropping it would lose a frame's events (or the `replayComplete` the
-   *  surface waits on) or hang a request: a frame of the live generation
-   *  re-reads the session from its folded position, and a response settles
-   *  its request `Invalid`. */
-  const recoverMalformed = (data: unknown, error: z.ZodError): void => {
+  /** A down-message that failed its schema is the host's defect. A response
+   *  settles its request `Invalid` rather than hang it; a frame of the live
+   *  generation is said on the surface's notice, since its events are lost
+   *  until the view reopens. */
+  const reportMalformed = (data: unknown, error: z.ZodError): void => {
     console.error('[progress] malformed session message', data, error);
     const envelope = DownEnvelopeSchema.safeParse(data);
     if (!envelope.success) return;
@@ -177,28 +170,18 @@ export function installWebviewTransport(
         }),
       );
     } else if (kind === 'events' && generation === session.generation) {
-      if (session.recovering) {
-        console.error(
-          `[progress] session ${key} keeps sending malformed frames; its transcript is incomplete until the view reopens`,
-        );
-        return;
-      }
-      const { folded } = session.view$.get();
-      subscribe(
-        session,
-        session.aggregateIds.map((id) => ({
-          id,
-          fromSeq: folded.get(id) ?? 0,
-        })),
-      );
-      session.recovering = true;
+      surfaceListener(key, {
+        kind: 'reportError',
+        reason:
+          'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
+      });
     }
   };
 
   const receive = (data: unknown): void => {
     const parsed = DownMessageSchema.safeParse(data);
     if (!parsed.success) {
-      recoverMalformed(data, parsed.error);
+      reportMalformed(data, parsed.error);
       return;
     }
     const message = parsed.data;
@@ -278,34 +261,6 @@ export function installWebviewTransport(
     );
   };
 
-  const subscribe = (
-    session: WebviewSession,
-    aggregates: Subscribe['aggregates'],
-  ): void => {
-    session.generation += 1;
-    const message: Subscribe = {
-      kind: 'subscribe',
-      session: session.key,
-      generation: session.generation,
-      debug: session.view$.get().debug,
-      cursor: session.view$.get().cursor,
-      aggregates,
-    };
-    // Begin the generation and replace the shell's transcript set before
-    // the host answers (PRD 8.1): the fold reopens its reads on the set.
-    const open = sessions.get(session.key);
-    if (!open) throw new Error(`Session ${session.key} is not open`);
-    const { graph } = open;
-    open.aggregateIds = aggregates.map(({ id }) => id);
-    open.recovering = false;
-    runtime.runSync(
-      graph.frames
-        .begin(message.generation)
-        .pipe(Effect.andThen(graph.view.subscribe(SHELL_PORT, aggregates))),
-    );
-    post(message);
-  };
-
   return {
     receive,
     open(key) {
@@ -346,8 +301,6 @@ export function installWebviewTransport(
         scope,
         pending,
         inbox,
-        aggregateIds: [],
-        recovering: false,
         view$: toSignal(runtime, graph.view.changes, graph.view.current()),
         host$: toSignal(
           runtime,
@@ -359,7 +312,28 @@ export function installWebviewTransport(
       sessions.set(key, session);
       return session;
     },
-    subscribe,
+    subscribe(session, aggregates) {
+      session.generation += 1;
+      const message: Subscribe = {
+        kind: 'subscribe',
+        session: session.key,
+        generation: session.generation,
+        debug: session.view$.get().debug,
+        cursor: session.view$.get().cursor,
+        aggregates,
+      };
+      // Begin the generation and replace the shell's transcript set before
+      // the host answers (PRD 8.1): the fold reopens its reads on the set.
+      const open = sessions.get(session.key);
+      if (!open) throw new Error(`Session ${session.key} is not open`);
+      const { graph } = open;
+      runtime.runSync(
+        graph.frames
+          .begin(message.generation)
+          .pipe(Effect.andThen(graph.view.subscribe(SHELL_PORT, aggregates))),
+      );
+      post(message);
+    },
     request,
     async answer(message, timeoutMs) {
       const result = await request(message, timeoutMs);

@@ -457,9 +457,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       const generation = refreshGeneration;
       const writeEpoch = file.writeEpoch;
       const contents = await callbacks.readFile(path);
-      // A successful re-read of a clean file retires an earlier failed one's
-      // notice.
-      if (!disposed && !file.dirty) notice.clear(path);
       // The read crosses IPC. Recheck all local state so an edit, save, or
       // newer refresh can supersede this result while it is in flight.
       if (
@@ -469,11 +466,14 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         file.activeWrites > 0 ||
         model.getVersionId() !== version ||
         refreshGeneration !== generation ||
-        file.writeEpoch !== writeEpoch ||
-        model.getValue() === contents
+        file.writeEpoch !== writeEpoch
       ) {
         return;
       }
+      // Only a read that is accepted retires an earlier notice, so a save
+      // that failed while this read was in flight keeps its warning.
+      notice.clear(path);
+      if (model.getValue() === contents) return;
       file.syncing = true;
       try {
         model.setValue(contents);
