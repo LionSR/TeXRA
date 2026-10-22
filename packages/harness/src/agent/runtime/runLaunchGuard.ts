@@ -8,7 +8,7 @@ import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
 import { endIn, finalizeRun } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { classifyAgentError } from '@common/errors';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
   qualifyAggregateId,

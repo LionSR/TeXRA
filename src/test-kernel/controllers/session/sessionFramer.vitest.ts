@@ -356,7 +356,7 @@ describe('session framer', () => {
           );
         }),
       );
-    }).pipe(Effect.provide(fakeProcessServices()), Effect.withLogger(capture));
+    }).pipe(Effect.withLogger(capture), Effect.provide(fakeProcessServices()));
   });
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {

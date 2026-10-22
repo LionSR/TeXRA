@@ -1,4 +1,4 @@
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
 export interface CommandKeybinding {
   key: string;

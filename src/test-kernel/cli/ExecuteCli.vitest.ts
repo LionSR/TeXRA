@@ -19,7 +19,7 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
-import { AgentError } from '@common/errors';
+import { AgentError } from '@common/errors/agentErrors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
 import {
   APPROVAL_BYPASS_KINDS,

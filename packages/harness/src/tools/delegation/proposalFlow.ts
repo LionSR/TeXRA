@@ -32,14 +32,13 @@ import {
   approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
-import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import type { ApprovalMeta } from './subagentRun';
+import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',

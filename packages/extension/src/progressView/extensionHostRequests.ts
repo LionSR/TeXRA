@@ -557,15 +557,7 @@ export function createExtensionHostRequests(
         action,
         handleLatexdiffCommitAction(roots, action, baseFile, commit),
       ),
-    openSettings: (section) => {
-      if (section === 'teams') return commandVerb('texra.showTeamSettings');
-      if (section === 'models') return commandVerb('texra.showModels');
-      if (section === 'plugins')
-        return commandVerb('texra.showDashboard', 'plugins');
-      if (section === 'general')
-        return commandVerb('texra.showDashboard', 'general/approval');
-      return commandVerb('texra.showDashboard');
-    },
+    openSettings: (target) => commandVerb('texra.showDashboard', target),
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
     setApiKey: commandVerb('texra.setApiKey').pipe(
@@ -580,7 +572,6 @@ export function createExtensionHostRequests(
         ),
       ),
     ),
-    openAgentSettings: commandVerb('texra.showAgents'),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) yield* commandVerb('revealFileInOS', vscode.Uri.file(dir));

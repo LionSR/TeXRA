@@ -12,7 +12,7 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { persistedParentRunId } from '@agent/storage/runRecords';
-import { classifyAgentError } from '@common/errors';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
   qualifyAggregateId,
   aggregateTarget,

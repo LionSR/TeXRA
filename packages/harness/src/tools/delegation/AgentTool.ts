@@ -54,7 +54,6 @@ import {
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
-import { delegatedChildGrants } from '@tools/approval';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
@@ -80,6 +79,7 @@ import {
 } from './inputFields';
 import { decideDelegation, requireAgent } from './proposalFlow';
 import {
+  delegatedChildGrants,
   describeSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';

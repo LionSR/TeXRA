@@ -13,10 +13,9 @@ import type { ExportNode } from '@agent/export/schemas';
 import type { LiveRun } from '@agent/runtime/runs';
 import { runRefusal, type RunRefusal } from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunResult } from '@agent/storage/resultMeta';
 import { deriveResumability } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
   type RunWorkspaceFile,

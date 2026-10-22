@@ -8,25 +8,33 @@ import { describe } from 'vitest';
 
 import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
+import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
+import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
 import { createFakeUIHosts } from '../support/FakeHosts';
 import { nodePlatformLayer } from '../support/fsTestUtils';
 
-function createController(options?: {
-  confirmResponses?: readonly boolean[];
-}): {
-  controller: SettingsMemoryController;
-  hosts: ReturnType<typeof createFakeUIHosts>;
-} {
-  const hosts = createFakeUIHosts({
-    confirmResponses: options?.confirmResponses,
+/** The Memory page over a capturing view; a reported failure fails the test. */
+function createMemoryPage(options: { confirmResponses: readonly boolean[] }) {
+  const posted: SettingsViewOutboundMessage[] = [];
+  const { handlers } = settingsMemoryCommands({
+    bindings: {
+      post: (message) =>
+        Effect.flatMap(message, (built) =>
+          Effect.sync(() => {
+            posted.push(built);
+          }),
+        ),
+      prompt: createFakeUIHosts(options).prompt,
+      openPath: () => Effect.void,
+      revealPath: () => Effect.void,
+    },
+    present: {
+      report: (_prefix, cause) => Effect.die(cause),
+      reported: (_prefix, program) => Effect.orDie(program),
+    },
   });
-
-  return {
-    controller: new SettingsMemoryController({ prompt: hosts.prompt }),
-    hosts,
-  };
+  return { handlers, posted };
 }
 
 /**
@@ -63,19 +71,21 @@ const withMemoryTree = <A, E>(
     );
   }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer));
 
-describe('SettingsMemoryController', () => {
+const deleteNotes = {
+  command: SETTINGS_VIEW_COMMANDS.DELETE_MEMORY,
+  storagePath: 'memories/notes',
+  displayPath: '/memories/notes',
+} as const;
+
+describe('settingsMemoryCommands', () => {
   it.effect('leaves memory files untouched when deletion is cancelled', () =>
     withMemoryTree((storage) =>
       Effect.gen(function* () {
-        const { controller } = createController({ confirmResponses: [false] });
+        const page = createMemoryPage({ confirmResponses: [false] });
 
-        assert.equal(
-          yield* controller.deleteMemory({
-            storagePath: 'memories/notes',
-            displayPath: '/memories/notes',
-          }),
-          null,
-        );
+        yield* page.handlers.deleteMemory(deleteNotes);
+
+        assert.deepEqual(page.posted, []);
         assert.equal(
           existsSync(path.join(storage, 'memories', 'notes', 'item.md')),
           true,
@@ -84,15 +94,12 @@ describe('SettingsMemoryController', () => {
     ),
   );
 
-  it.effect('deletes confirmed memory files and returns refreshed data', () =>
+  it.effect('deletes confirmed memory files and posts refreshed data', () =>
     withMemoryTree((storage) =>
       Effect.gen(function* () {
-        const { controller } = createController({ confirmResponses: [true] });
+        const page = createMemoryPage({ confirmResponses: [true] });
 
-        const message = yield* controller.deleteMemory({
-          storagePath: 'memories/notes',
-          displayPath: '/memories/notes',
-        });
+        yield* page.handlers.deleteMemory(deleteNotes);
 
         // The folder goes with its contents (a recursive remove), inside the
         // session's storage root; the file beside it stays.
@@ -104,9 +111,11 @@ describe('SettingsMemoryController', () => {
           existsSync(path.join(storage, 'memories', 'keep.md')),
           true,
         );
-        assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
+        const [message, ...rest] = page.posted;
+        assert.deepEqual(rest, []);
+        assert.ok(message?.command === SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
         assert.deepEqual(
-          message?.items.map((item) => item.storagePath),
+          message.items.map((item) => item.storagePath),
           ['memories/keep.md'],
         );
       }),

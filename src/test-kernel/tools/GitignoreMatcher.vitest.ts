@@ -20,7 +20,8 @@ const fsState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@utils/system/platformPaths', () => ({
+vi.mock('@utils/system/platformPaths', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/platformPaths')>()),
   safeHomedir: () => fsState.homeDirectory,
 }));
 

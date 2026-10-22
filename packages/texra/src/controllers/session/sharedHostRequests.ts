@@ -21,6 +21,7 @@ import { Effect } from 'effect';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -108,7 +109,6 @@ type HostVerb<A> = Effect.Effect<
 >;
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
-type OpenSettingsRequest = Extract<HostRequest, { kind: 'openSettings' }>;
 type GettingStartedRequest = Extract<HostRequest, { kind: 'gettingStarted' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
@@ -149,17 +149,12 @@ export interface SharedHostRequestBindings {
     baseFile: string,
     commit: string,
   ): HostVerb<void>;
-  /** Settings at a section, or where it was last left without one. The
-   *  agents section goes through {@link openAgentSettings}. */
-  openSettings(
-    section: Exclude<OpenSettingsRequest['section'], 'agents'>,
-  ): HostVerb<void>;
+  /** Settings at a target, or where it was last left without one. */
+  openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
   readonly setApiKey: HostVerb<void>;
   readonly openApiKeyGuide: HostVerb<void>;
-  /** The agent settings. */
-  readonly openAgentSettings: HostVerb<void>;
   readonly openCustomAgentDirectory: HostVerb<void>;
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
@@ -388,9 +383,7 @@ export function handleSharedHostRequest(
         yield* latexdiffs(request);
         return done;
       case 'openSettings':
-        yield* request.section === 'agents'
-          ? host.openAgentSettings
-          : host.openSettings(request.section);
+        yield* host.openSettings(request.target ?? undefined);
         return done;
       case 'apiKeyBanner':
         yield* request.action === 'set' ? host.setApiKey : host.openApiKeyGuide;
@@ -398,14 +391,14 @@ export function handleSharedHostRequest(
       case 'agentConfigBanner':
         switch (request.action) {
           case 'edit':
-            yield* host.openAgentSettings;
+            yield* host.openSettings('agents/library');
             return done;
           case 'dir':
             // Without a custom directory there is nothing to reveal, so the
             // banner's link is the agent settings instead.
             yield* request.customDirSet === true
               ? host.openCustomAgentDirectory
-              : host.openAgentSettings;
+              : host.openSettings('agents/library');
             return done;
           case 'docs':
             yield* host.openAgentDocs;

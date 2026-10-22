@@ -27,12 +27,11 @@ import {
   type AggregateId,
   type ResultMeta,
   type RunEnd,
+  type RunOutcome,
   type SessionEvent,
   type RunId,
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
-
-import type { RunResult } from './resultMeta';
 
 /** One child turn's identity: `key` names the child-run attempt that
  *  accepted it and `index` its position in that attempt. */
@@ -257,6 +256,16 @@ export const withChildSpend = <
       ),
     })),
   );
+
+/**
+ * The public value of one run's result endpoint (`readResult`): the run's
+ * terminal result with the output as its delivery reported it, or a
+ * background command's own record. The terminal fields are absent while the
+ * run has not ended.
+ */
+export type RunResult =
+  | Extract<ResultMeta, { producer: 'backgroundBash' }>
+  | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
