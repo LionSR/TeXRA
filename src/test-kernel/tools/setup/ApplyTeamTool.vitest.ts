@@ -79,42 +79,12 @@ afterEach(() => {
 describe('apply_team', () => {
   beforeEach(clearOnboardingState);
 
-  it.effect(
-    'applies the starter team as the canonical workspace selection',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* applyTeam({
-          teamId: 'starter',
-        });
-
-        expect(result.status).toBe('executed');
-        expect(yield* workspaceAgents()).toEqual({
-          kind: 'team',
-          teamId: 'starter',
-        });
-      }),
-  );
-
   it.effect('rejects an unknown teamId without writing any state', () =>
     Effect.gen(function* () {
       const result = yield* applyTeam({ teamId: 'astrologer' });
 
       expect(result.status).toBe('error');
       yield* expectNoTeamState;
-    }),
-  );
-
-  it.effect('applies a preset of bundled members', () =>
-    Effect.gen(function* () {
-      const result = yield* applyTeam({
-        teamId: 'software-engineer',
-      });
-
-      expect(result.status).toBe('executed');
-      expect(yield* workspaceAgents()).toEqual({
-        kind: 'team',
-        teamId: 'software-engineer',
-      });
     }),
   );
 

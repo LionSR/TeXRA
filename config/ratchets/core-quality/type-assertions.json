@@ -17,7 +17,7 @@
   "packages/harness/src/shared/schemas/logPayload.ts": 1,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 2,
   "packages/harness/src/shared/session/runRows.ts": 3,
-  "packages/harness/src/shared/session/sessionFold.ts": 1,
+  "packages/harness/src/shared/session/sessionViewUpdate.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 1,
   "packages/harness/src/tools/codemode/ScriptTool.ts": 1,
   "packages/harness/src/tools/executions/runGeneratedFiles.ts": 2,

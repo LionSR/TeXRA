@@ -70,9 +70,9 @@ export function recordLogRow(
       // cuts; the rest of a batch taken at that park share its cut, so only
       // the first offers it, and the first message of all cuts before
       // nothing.
-      const forkAt = d.ix.seenUserMessage ? d.ix.lastPark : null;
+      const forkAt = d.ix.seenUserMessage ? d.ix.lastWait : null;
       d.ix.seenUserMessage = true;
-      d.ix.lastPark = null;
+      d.ix.lastWait = null;
       write(d, {
         kind: 'log',
         base,
