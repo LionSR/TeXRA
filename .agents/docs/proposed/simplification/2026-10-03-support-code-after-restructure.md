@@ -122,6 +122,15 @@ changes no pin.
 Still open: one resolver for hooks and servers. Not done because it changes
 which hooks load, and with that the hook trust digests.
 
+The hook side in detail: `runHook` spawns with `extendEnv: false` and
+`PATH: process.env.PATH ?? '/usr/bin:/bin'`; `pinHook` resolves over
+`process.env.PATH ?? ''`, so with PATH unset the hook is left dynamic rather
+than pinned against that fallback. The extension host writes the extended
+PATH into `process.env.PATH` once it activates (`initializeLatexSupport`), so
+there hooks see it too; the CLI and the desktop app do not.
+`hasPackageManager` (`toolChecks.ts`) calls `whichOnExtendedPath` instead of
+a second copy of it.
+
 ## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
 
 `src/utils/files/fsEntryExists.ts`: `entryExists` reads a path under a
