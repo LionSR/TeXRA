@@ -41,6 +41,7 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
+import { interactiveTerminalFailure } from './terminalRequirements';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -324,6 +325,24 @@ function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
     ambient.isCi ||
     !ambient.stdinIsTty;
   return headless ? 'headless' : 'interactive';
+}
+
+/**
+ * Whether this invocation can run an interactive terminal session: the
+ * mode `cliMode` decides, and the terminal checks `texra chat` refuses on.
+ * Bare `texra` routes by this, so it never starts a chat that would refuse.
+ */
+export function isInteractiveCli(
+  globalArgs: CliGlobalArgs,
+  ambient: CliAmbientState,
+): boolean {
+  return (
+    interactiveTerminalFailure({
+      mode: cliMode(globalArgs, ambient),
+      stdoutIsTty: ambient.stdoutIsTty,
+      termIsDumb: ambient.termIsDumb,
+    }) === undefined
+  );
 }
 
 export interface BuildCliContextInit {

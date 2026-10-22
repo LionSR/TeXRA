@@ -339,7 +339,8 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
     const hooks: ConfiguredHook[] = [];
     const unsupported: string[] = [];
     // Handlers whose `if` the harness does not evaluate: they run on every
-    // call their matcher matches, said once at debug level.
+    // call their matcher matches (which the trust listing describes), and
+    // the departure from the plugin's own configuration is warned once.
     const unevaluated: string[] = [];
     const add = (source: string, config: z.infer<typeof HooksConfigSchema>) => {
       const found = configuredHooks(source, config);
@@ -383,7 +384,7 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
       add('manifest', config.data);
     }
     if (unevaluated.length > 0)
-      yield* Effect.logDebug(
+      yield* Effect.logWarning(
         `Plugin ${name}: hook \`if\` conditions are not evaluated, so these hooks run on every call their matcher matches: ${unevaluated.join('; ')}`,
       );
     return { hooks, unsupported };
