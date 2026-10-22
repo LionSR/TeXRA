@@ -107,7 +107,18 @@ async function checks() {
   // this window launches runs there, not in the window. The runner checks
   // that the service outlives the window.
   if (process.platform === 'win32') return;
-  const record = path.join(serviceRun, 'serve.json');
+  // The service names itself in its log once it holds the record: the
+  // newest such line is the running one.
+  const listening = () => {
+    if (!existsSync(serviceLog)) return undefined;
+    const lines = [
+      ...readFileSync(serviceLog, 'utf8').matchAll(
+        /TeXRA service (\S+) listening on \S*serve-(\d+)\.sock/g,
+      ),
+    ];
+    const last = lines.at(-1);
+    return last && { version: last[1], pid: Number(last[2]) };
+  };
   const until = async (label, check) => {
     const end = Date.now() + 60_000;
     while (!check()) {
@@ -116,9 +127,9 @@ async function checks() {
     }
   };
   await step('the service record', () =>
-    until('the service record', () => existsSync(record)),
+    until('the service record', () => listening() !== undefined),
   );
-  const info = JSON.parse(readFileSync(record, 'utf8'));
+  const info = listening();
   assert.equal(
     info.version,
     extension.packageJSON.version,

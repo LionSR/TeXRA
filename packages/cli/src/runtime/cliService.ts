@@ -23,6 +23,7 @@ import {
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import {
   AppState,
+  type GlobalValues,
   setLogSink,
   withLogChannel,
   type Sessions,
@@ -272,11 +273,11 @@ const quietClient = Effect.sync(() =>
 );
 
 /** The hello of the storage root's service, or null when none answers. */
-export function probeCliService(
-  storageRoot: string,
-): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
-  return quietClient.pipe(Effect.andThen(probeRecordedService(storageRoot)));
-}
+export const probeCliService: Effect.Effect<
+  ServiceInfo | null,
+  ServiceUnavailable,
+  GlobalValues
+> = quietClient.pipe(Effect.andThen(probeRecordedService));
 
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
  *  chat runs here, as where the service cannot run. */
@@ -287,7 +288,7 @@ const NO_SERVICE = 'TEXRA_NO_SERVICE';
  *  it is: what the chat uses. */
 export function reachCliService(
   storageRoot: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+): Effect.Effect<ServiceConnection, Error, Scope.Scope | GlobalValues> {
   return withCliService(storageRoot, ensureService);
 }
 
@@ -295,7 +296,7 @@ export function reachCliService(
  *  service again when it goes away. */
 export function linkCliService(
   storageRoot: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return withCliService(storageRoot, linkService);
 }
 
@@ -306,8 +307,8 @@ function withCliService<A>(
   reach: (
     storageRoot: string,
     start: Effect.Effect<void, Error>,
-  ) => Effect.Effect<A, Error, Scope.Scope>,
-): Effect.Effect<A, Error, Scope.Scope> {
+  ) => Effect.Effect<A, Error, Scope.Scope | GlobalValues>,
+): Effect.Effect<A, Error, Scope.Scope | GlobalValues> {
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
       ? Effect.fail(new Error(`${NO_SERVICE} is set`))
@@ -328,12 +329,11 @@ function withCliService<A>(
  * than refusing it as held by another process.
  */
 export function heldByService(
-  storageRoot: string,
   owner: OwnerId,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, GlobalValues> {
   return Effect.gen(function* () {
     if (yield* envFlag(NO_SERVICE)) return false;
-    const info = yield* probeCliService(storageRoot).pipe(
+    const info = yield* probeCliService.pipe(
       Effect.catch((error) =>
         Effect.logWarning(
           `The TeXRA service did not answer (${error.message}); a task it holds is treated as another process's`,
@@ -350,7 +350,7 @@ export function heldByService(
  *  its own result. */
 export function connectCliService(
   storageRoot: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
+): Effect.Effect<ServiceConnection, Error, Scope.Scope | GlobalValues> {
   return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
 }
 

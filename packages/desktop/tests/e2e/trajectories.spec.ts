@@ -379,6 +379,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
           session,
           title: 'output.pdf',
           pdfUrl,
+          build: 1,
         },
         '*',
       );
@@ -406,6 +407,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
         session,
         title: 'malicious',
         pdfUrl: 'http://evil.com/x.pdf',
+        build: 1,
       },
       '*',
     );

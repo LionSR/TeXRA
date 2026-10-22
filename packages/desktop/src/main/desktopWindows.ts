@@ -14,6 +14,10 @@ import type { RunId } from '@texra-ai/harness/schemas';
  */
 export type DesktopSpawn = (
   program: Effect.Effect<void, never, ProcessServices>,
+  /** `startImmediately` runs the program's first synchronous steps in the
+   *  caller's (the environment layer builds synchronously), so a lane it
+   *  enters first is claimed in the order the callbacks fired. */
+  options?: { readonly startImmediately?: boolean },
 ) => void;
 
 export function desktopSpawner(
@@ -24,8 +28,10 @@ export function desktopSpawner(
   workspace?: string,
 ): DesktopSpawn {
   const env = workspaceEnvironmentLayer(workspace);
-  return (program) => {
-    runtime.runFork(Effect.forkIn(Effect.provide(program, env), scope));
+  return (program, options) => {
+    runtime.runFork(
+      Effect.forkIn(Effect.provide(program, env), scope, options),
+    );
   };
 }
 
