@@ -20,24 +20,24 @@ its kind is its `type` column.
 
 ## 1. Terms
 
-| Term         | Meaning                                                                                                                                                                               |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Process      | One OS process with one process identity, `[hostname, pid, processStart]`, stamped on every row it writes (`shared/schemas/sessionEvent.ts:55-75`).                                   |
-| Storage root | One directory holding one store file.                                                                                                                                                 |
-| Session      | The process's handle on one storage root: its store connection, its one publisher, its fold and its live runs.                                                                        |
-| Aggregate    | A keyed sequence of rows. Kinds are `run` (keyed by run id) and `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/sessionEvent.ts:103-112`).                                         |
-| Run          | One `run` aggregate. It exists while its `run.start` row exists and no `run.removed` has closed it (`controllers/session/Database.ts:674-683`, `:772-784`).                           |
-| Turn         | One input answered by the model: from `turn.begin` to `turn.end` (`agent/runtime/loop/toolUse.ts:288-294`, `:534-537`).                                                               |
-| Invocation   | One model call of a turn or a compaction summary, identified by `invocationId` (`shared/schemas/runHistoryEvent.ts:49-52`).                                                           |
-| Attempt      | One try of an invocation, numbered from 1; `attempt` grows only for a retry of the same invocation (`shared/schemas/runHistoryEvent.ts:44-48`, `shared/session/inFlight.ts:111-118`). |
-| Step         | One model call as the loop prepares it: its offered tools and system text, recorded on `tools.offered` when they change (`agent/runtime/loop/toolUse.ts:371-374`).                    |
-| Response     | One completed provider turn, committed as a `model.message` `response` row with a minted `responseId` (`shared/schemas/runHistoryEvent.ts:188-206`).                                  |
-| Tool call    | One local call of a response, keyed by its `callId`, or a call a `script` call's guest issued (`shared/schemas/runHistoryEvent.ts:349-370`).                                          |
-| Request      | A wait on a person: a `request.opened` row, closed by one `request.decided` row (`shared/schemas/sessionEvent.ts:373-386`).                                                           |
-| Claim        | The write authority over one aggregate: the `owner_id` column of its sequence row (`controllers/session/storeSchema.ts:56-67`).                                                       |
-| Fold         | `foldRunState`, the pure function from a run's rows to the `RunState` the loop continues from (`shared/session/runStateFold.ts:535-552`).                                             |
-| Publisher    | `SessionEvents`, the one inbox through which a session writes (`agent/runtime/SessionEvents.ts:219-370`).                                                                             |
-| Commit, seq  | `commit` orders rows across the store; `seq` orders rows within an aggregate (`controllers/session/storeSchema.ts:72-82`).                                                            |
+| Term         | Meaning                                                                                                                                                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Process      | One OS process with one process identity, `[hostname, pid, processStart]`, stamped on every row it writes (`shared/schemas/sessionEvent.ts:55-75`).                                                                                                                  |
+| Storage root | One directory holding one store file.                                                                                                                                                                                                                                |
+| Session      | The process's handle on one storage root: its store connection, its one publisher, its fold and its live runs.                                                                                                                                                       |
+| Aggregate    | A keyed sequence of rows. Kinds are `run` (keyed by run id) and `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/sessionEvent.ts:103-112`).                                                                                                                        |
+| Run          | One `run` aggregate. It exists while its `run.start` row exists and no `run.removed` has closed it (`controllers/session/Database.ts:674-683`, `:772-784`).                                                                                                          |
+| Turn         | One loop cycle, delimited by `turn.begin` and `turn.end`; usually one input answered by the model, but a script's handed-down call or a failed or cancelled invocation ends a turn with no answer (`agent/runtime/loop/toolUse.ts:288-294`, `:355-356`, `:534-537`). |
+| Invocation   | One model call of a turn or a compaction summary, identified by `invocationId` (`shared/schemas/runHistoryEvent.ts:49-52`).                                                                                                                                          |
+| Attempt      | One try of an invocation, numbered from 1; `attempt` grows only for a retry of the same invocation (`shared/schemas/runHistoryEvent.ts:44-48`, `shared/session/inFlight.ts:111-118`).                                                                                |
+| Step         | One model call as the loop prepares it: its offered tools and system text, recorded on `tools.offered` when they change (`agent/runtime/loop/toolUse.ts:371-374`).                                                                                                   |
+| Response     | One completed provider turn, committed as a `model.message` `response` row with a minted `responseId` (`shared/schemas/runHistoryEvent.ts:188-206`).                                                                                                                 |
+| Tool call    | One local call of a response, keyed by its `callId`, or a call a `script` call's guest issued (`shared/schemas/runHistoryEvent.ts:349-370`).                                                                                                                         |
+| Request      | A wait on a person: a `request.opened` row, closed by one `request.decided` row (`shared/schemas/sessionEvent.ts:373-386`).                                                                                                                                          |
+| Claim        | The write authority over one aggregate: the `owner_id` column of its sequence row (`controllers/session/storeSchema.ts:56-67`).                                                                                                                                      |
+| Fold         | `foldRunState`, the pure function from a run's rows to the `RunState` the loop continues from (`shared/session/runStateFold.ts:535-552`).                                                                                                                            |
+| Publisher    | `SessionEvents`, the one inbox through which a session writes (`agent/runtime/SessionEvents.ts:219-370`).                                                                                                                                                            |
+| Commit, seq  | `commit` orders rows across the store; `seq` orders rows within an aggregate (`controllers/session/storeSchema.ts:72-82`).                                                                                                                                           |
 
 ## 2. The store
 
@@ -185,12 +185,14 @@ not (`controllers/session/rowReader.ts:82-83`, `:159-182`). A listing or a tail
 leaves an earlier build's or a corrupt row out with one warning; when the row is
 on a `run` aggregate it also marks that run unreadable, and a bad row on a
 `plugin` aggregate marks no run (`controllers/session/rowReader.ts:183-192`); a
-row of a known kind at a version above this build's fails every read, listing
-and tail included, because it means a newer build now writes this store
-(`controllers/session/rowReader.ts:181-182`). Reads do not run the gate: a row
-of a kind this build lacks, written by a newer build after this one opened the
-store, reads as corrupt until the next write's gate refuses the store
-(`controllers/session/rowCodec.ts:285`,
+row of a known kind at a version above this build's fails any read that selects
+it, listing and tail included, because it means a newer build now writes this
+store; a read whose query does not select that row (a display tail of display
+kinds, a listing of listing rows) can still succeed, while writes and projection
+catch-up stay gated (`controllers/session/rowReader.ts:181-182`). Reads do not
+run the gate: a row of a kind this build lacks, written by a newer build after
+this one opened the store, reads as corrupt until the next write's gate refuses
+the store (`controllers/session/rowCodec.ts:285`,
 `controllers/session/Database.ts:455-466`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:98-104`,
 `agent/runtime/resumeRun.ts:251-252`).
@@ -209,20 +211,24 @@ ignored by name, and an unknown kind is refused
 
 Read through the run history, and by the store's usage projection, which turns
 the priced usage on `response` and `context.edit` rows into a projected `usage`
-row (`controllers/session/projections.ts:102-121`, `:141-160`); never sent to a
-renderer (`shared/schemas/sessionEvent.ts:412-440`).
+row (`controllers/session/projections.ts:102-121`, `:141-160`), and by the
+display reader, which selects `tool.result` to fill the adjacent `tool.end`
+card's result before it drops the private row
+(`controllers/session/rowCodec.ts:96-101`,
+`controllers/session/rowReader.ts:224-246`). The private rows themselves are
+never sent to a renderer (`shared/schemas/sessionEvent.ts:412-440`).
 
-| Kind            | Folded | Meaning                                                                                                                                                                     |
-| --------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model.message` | yes    | One arm per invocation fact: `attempt`, `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`, `append` (`shared/schemas/runHistoryEvent.ts:136-235`). |
-| `context.edit`  | yes    | Replaces messages `[from, to)` of the model's view; cause `compaction`, `reset`, `handoff` or `fork` (`shared/schemas/runHistoryEvent.ts:316-339`).                         |
-| `tool.intent`   | yes    | A call's body starts, at an attempt number (`shared/schemas/runHistoryEvent.ts:385-392`).                                                                                   |
-| `script.call`   | yes    | A call a `script` guest issued, with its arguments (`shared/schemas/runHistoryEvent.ts:349-370`).                                                                           |
-| `tool.result`   | yes    | A call's one settlement and its disposition (`shared/schemas/runHistoryEvent.ts:401-450`).                                                                                  |
-| `tools.offered` | yes    | The step's offered tools, system text and hooks, when they changed (`shared/schemas/sessionEvent.ts:424`).                                                                  |
-| `context.blob`  | yes    | Model-facing content stored by sha256 address (`shared/schemas/sessionEvent.ts:425`).                                                                                       |
-| `hook.outcome`  | yes    | A hook point's recorded outcome; a recorded point never runs again (`shared/session/runStateFold.ts:465-473`).                                                              |
-| `child.turn`    | no     | A child loop's turn identity and fate, `accepted` or `settled` (`shared/schemas/sessionEvent.ts:435-439`).                                                                  |
+| Kind            | Folded | Meaning                                                                                                                                                                                                                                           |
+| --------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model.message` | yes    | One arm per invocation fact: `attempt`, `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`, `append` (`shared/schemas/runHistoryEvent.ts:136-235`).                                                                       |
+| `context.edit`  | yes    | Replaces messages `[from, to)` of the model's view; cause `compaction`, `reset`, `handoff` or `fork` (`shared/schemas/runHistoryEvent.ts:316-339`).                                                                                               |
+| `tool.intent`   | yes    | The point after which a call's body may have run, at an attempt number; it commits just before the body starts, so it does not prove the body ran (`shared/schemas/runHistoryEvent.ts:385-392`, `agent/runtime/loop/toolUseDispatch.ts:591-608`). |
+| `script.call`   | yes    | A call a `script` guest issued, with its arguments (`shared/schemas/runHistoryEvent.ts:349-370`).                                                                                                                                                 |
+| `tool.result`   | yes    | A call's one settlement and its disposition (`shared/schemas/runHistoryEvent.ts:401-450`).                                                                                                                                                        |
+| `tools.offered` | yes    | The step's offered tools, system text and hooks, when they changed (`shared/schemas/sessionEvent.ts:424`).                                                                                                                                        |
+| `context.blob`  | yes    | Model-facing content stored by sha256 address (`shared/schemas/sessionEvent.ts:425`).                                                                                                                                                             |
+| `hook.outcome`  | yes    | A hook point's recorded outcome; a recorded point never runs again (`shared/session/runStateFold.ts:465-473`).                                                                                                                                    |
+| `child.turn`    | no     | A child loop's turn identity and fate, `accepted` or `settled` (`shared/schemas/sessionEvent.ts:435-439`).                                                                                                                                        |
 
 The `model.message` arms:
 
@@ -655,10 +661,12 @@ harness's built-ins and under a full app's plugins
 (`src/test-kernel/controllers/session/crashConformanceBuiltins.vitest.ts:9`,
 `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:9`).
 
-Its method: drive a clean run over a real store, record the commit each write
-transaction ended at, and for each such commit N copy the store, cut it to
-commits 1..N, hand its claims to a dead owner, reopen it in a fresh session and
-resume the root run (`src/test-kernel/support/crashConformance.ts:8-27`).
+Its method: drive a clean run over a real store, record the event commit each
+event-writing transaction ended at (claim-only writes leave no distinct point;
+the points are deduplicated by commit), and for each such commit N copy the
+store, cut it to commits 1..N, hand its claims to a dead owner, reopen it in a
+fresh session and resume the root run
+(`src/test-kernel/support/crashConformance.ts:8-27`).
 
 The guarantees, numbered as in the package README:
 
