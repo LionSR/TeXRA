@@ -131,8 +131,10 @@ is a defect; a detached one is logged and dropped
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
 (`controllers/session/sessionStore.ts:257-266`). A claim a failed transaction
-took SHALL be released (`controllers/session/sessionStore.ts:224-236`, `:264`).
-Trace rows reach the publisher through `SessionLog.publish`
+took is released best effort: a refused release is logged and the claim stays
+until another process proves this one dead
+(`controllers/session/sessionStore.ts:224-236`, `:264`). Trace rows reach the
+publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:102-106`), and `SessionLog.settled` is the
 barrier after every job enqueued before it
 (`controllers/session/sessionStore.ts:308-310`).
@@ -428,8 +430,12 @@ The move a `failed` row records is decided once, by `failedNext`
   `agent/runtime/run/invocation.ts:292-296`).
 - A retryable failure answers `retry` while the automatic attempts the rows
   record, `unchain` excluded, are fewer than the budget
-  (`shared/session/inFlight.ts:271-274`). The budget is counted from rows, so a
-  crash does not refill it.
+  (`shared/session/inFlight.ts:271-274`). For a turn's invocation the budget is
+  counted from rows, so a crash does not refill it. A compaction summary holds
+  its invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); its
+  `attempt` and `failed` rows are an audit the run fold skips
+  (`shared/session/turnMoves.ts:255-263`), so a resumed summary starts a fresh
+  budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts:275-277`).
@@ -518,12 +524,12 @@ or an `externalInquiry` (`shared/session/runStateFold.ts:249-270`).
 
 ### 7.3 What a second process may and may not do
 
-| A process MAY                                             | Code                                             |
-| --------------------------------------------------------- | ------------------------------------------------ |
-| read every committed row, listing and tail                | `controllers/session/Database.ts:798-904`        |
-| create a new run, which it then owns                      | `controllers/session/Database.ts:115-122`        |
-| fork a run another process holds, from its committed rows | `controllers/session/SessionRequests.ts:160-163` |
-| take over a run whose owner is proven dead                | `controllers/session/storeAside.ts:69-83`        |
+| A process MAY                                                 | Code                                             |
+| ------------------------------------------------------------- | ------------------------------------------------ |
+| read every committed row its build can read, listing and tail | `controllers/session/Database.ts:798-904`        |
+| create a new run, which it then owns                          | `controllers/session/Database.ts:115-122`        |
+| fork a run another process holds, from its committed rows     | `controllers/session/SessionRequests.ts:160-163` |
+| take over a run whose owner is proven dead                    | `controllers/session/storeAside.ts:69-83`        |
 
 | A process MUST NOT                                                                | Code                                             |
 | --------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -601,17 +607,17 @@ resume the root run (`src/test-kernel/support/crashConformance.ts:8-27`).
 
 The guarantees, numbered as in the package README:
 
-| #   | Guarantee                                                                                                                                             | Asserted by                         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork.      | `crashConformance.ts:30-32`, `:761` |
-| I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                     | `crashConformance.ts:33`, `:761`    |
-| I3  | One model invocation has at most one committed response.                                                                                              | `crashConformance.ts:38`, `:761`    |
-| I4  | A command runs only after its approval; an unfinished call that is not replay-safe, whose outcome is unknown, runs again only after a person's retry. | `crashConformance.ts:34-35`, `:761` |
-| I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row.       | `crashConformance.ts:39-40`, `:873` |
-| I6  | A child's result is delivered to its parent once, never lost, including while the parent was held elsewhere.                                          | `crashConformance.ts:865-886`       |
-| I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                              | `crashConformance.ts:41`, `:761`    |
-| I8  | A run's halt commits with its end; a stopped run never reads as interrupted.                                                                          | `crashConformance.ts:43-44`, `:761` |
-| I9  | Turning off a run's shell bypass is acknowledged only after its row is durable.                                                                       | `crashConformance.ts:53-54`, `:761` |
+| #   | Guarantee                                                                                                                                                                                                                                                                           | Asserted by                         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork.                                                                                                                                    | `crashConformance.ts:30-32`, `:761` |
+| I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                                                                                                                                                   | `crashConformance.ts:33`, `:761`    |
+| I3  | One model invocation has at most one committed response.                                                                                                                                                                                                                            | `crashConformance.ts:38`, `:761`    |
+| I4  | A command runs only after its approval; an unfinished call that is not replay-safe, whose outcome is unknown, runs again only after a person's retry.                                                                                                                               | `crashConformance.ts:34-35`, `:761` |
+| I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row, except one deliberately paused with a `child.park` `paused` row so it can be called again (`tools/delegation/childRun.ts:163-172`). | `crashConformance.ts:39-40`, `:873` |
+| I6  | A child's result is delivered to its parent once, never lost, including while the parent was held elsewhere.                                                                                                                                                                        | `crashConformance.ts:865-886`       |
+| I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                                                                                                                                                            | `crashConformance.ts:41`, `:761`    |
+| I8  | A run's halt commits with its end; a stopped run never reads as interrupted.                                                                                                                                                                                                        | `crashConformance.ts:43-44`, `:761` |
+| I9  | Turning off a run's shell bypass is acknowledged only after its row is durable.                                                                                                                                                                                                     | `crashConformance.ts:53-54`, `:761` |
 
 The paths in this table are under `src/test-kernel/support/`. I1 is equality
 with a clean run because the suite's validation model is deterministic. Against
