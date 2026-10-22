@@ -8,7 +8,12 @@ import * as os from 'node:os';
 import { Effect } from 'effect';
 
 // Local imports
-import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
+import {
+  apiKeyEnvName,
+  exposeApiKey,
+  lookupApiKey,
+  type SecretsFailed,
+} from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { executeCommand, inheritedEnv } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -168,7 +173,11 @@ function claudeKeychainCredentialProbes(
  */
 export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   options: { platform?: NodeJS.Platform } = {},
-): Effect.fn.Return<NodeJS.ProcessEnv, never, Secrets | ChildProcessSpawner> {
+): Effect.fn.Return<
+  NodeJS.ProcessEnv,
+  SecretsFailed,
+  Secrets | ChildProcessSpawner
+> {
   const apiKeyVar = apiKeyEnvName('anthropic');
   // The other providers' keys stay out of the subprocess: what its tools
   // print comes back as a tool result. Its own Anthropic key is resolved below.
@@ -195,16 +204,10 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   if (env[apiKeyVar]) return env;
 
   // 3. Fall back to the Settings-managed secret. An unreadable secret store
-  //    leaves the subprocess with no credential at all, so say so rather than
-  //    letting it surface as an opaque "Invalid API key" from Claude Code.
+  //    fails as itself: launching with no credential would surface it as an
+  //    opaque "Invalid API key" from Claude Code.
   const secrets = yield* Secrets;
-  const managed = yield* lookupApiKey(secrets, 'anthropic').pipe(
-    Effect.catchTag('SecretsFailed', (error) =>
-      Effect.logWarning(
-        `Failed to read the managed Anthropic API key: ${error.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
-    ),
-  );
+  const managed = yield* lookupApiKey(secrets, 'anthropic');
   if (managed) {
     env[apiKeyVar] = exposeApiKey(managed);
   }

@@ -6,17 +6,17 @@
  * so the agent gets exit code + output. When integration isn't available —
  * custom shell, user
  * disabled the auto-inject, remote SSH edge cases — falls back to
- * `sendText` and returns an empty captured result; the caller sees the
- * same shape as a Ctrl+C interruption and re-probes with `probe_environment`.
+ * `sendText` and returns no exit code and no output, with `outputLost`
+ * saying why; the caller re-probes with `probe_environment`.
  *
  * The runner is an `Effect`: VS Code refusing a terminal or faulting the
  * shell execution reaches the setup tool as `TerminalRunFailed`, and the
  * output drain runs on a child fiber, so a stream error is a value this
- * program discards rather than a rejection nobody is waiting on.
+ * program reports as `outputLost` rather than a rejection nobody is waiting on.
  */
 
 // Third-party imports
-import { Effect, Fiber, Option, Stream } from 'effect';
+import { Cause, Effect, Fiber, Option, Ref, Stream } from 'effect';
 import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
@@ -69,7 +69,12 @@ export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
             cause,
           }),
       });
-      return { exitCode: undefined, output: '', timedOut: false };
+      return {
+        exitCode: undefined,
+        output: '',
+        outputLost: 'shell integration is not active in this terminal',
+        timedOut: false,
+      };
     }
 
     return yield* captureExecution(integration, args);
@@ -150,11 +155,14 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
 
   // Open the stream on this frame so no chunk is missed, then drain it on a
   // child fiber: a late stream error (terminal closed after we stopped
-  // reading) is a value this program discards, not an unhandled rejection.
+  // reading) is a value this program reports, not an unhandled rejection.
   // Opening it is a host call of its own: a terminal disposed between
   // `executeCommand` and here throws synchronously, and that is this run
   // failing, not a defect. The exit-code fiber is a child of this one, so
   // failing here tears its subscription down with it.
+  // The tail read so far, kept outside the drain so a stream error or a drain
+  // timeout still reports what had arrived.
+  const tail = yield* Ref.make('');
   const stream = yield* Effect.try({
     try: () => execution.read(),
     catch: (cause) =>
@@ -167,11 +175,11 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
       }),
   });
   const reader = yield* Effect.forkChild(
-    drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Terminal output stream failed; reporting no output: ${error.message}`,
-        ).pipe(Effect.as('')),
+    Stream.fromAsyncIterable(stream, ensureError).pipe(
+      Stream.runForEach((chunk: string) =>
+        Ref.update(tail, (read) =>
+          (read + chunk).slice(-TERMINAL_OUTPUT_MAX_CHARS),
+        ),
       ),
     ),
     // Start on this frame so iteration begins before the caller suspends on
@@ -183,47 +191,36 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
 
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
-  const output = yield* Fiber.join(reader).pipe(
+  const outputLost = yield* Fiber.join(reader).pipe(
     Effect.timeout(READER_DRAIN_MS),
-    Effect.catch(() =>
-      Effect.logWarning(
-        `Terminal output did not drain within ${READER_DRAIN_MS}ms; reporting no output.`,
-      ).pipe(Effect.as('')),
-    ),
+    Effect.as(undefined),
+    Effect.catch((failure) => Effect.succeed(describeOutputLoss(failure))),
   );
+  if (outputLost !== undefined) {
+    yield* Effect.logWarning(
+      `Terminal output not fully captured: ${outputLost}`,
+    );
+  }
 
   return {
     // `None` is the timeout; `Some(undefined)` is VS Code reporting no exit
     // code for a command that did end. Both read as an absent exit code, and
     // only the first is a timeout.
     exitCode: Option.getOrUndefined(raced),
-    output: truncateTerminalOutput(output),
+    output: truncateTerminalOutput(yield* Ref.get(tail)),
+    ...(outputLost === undefined ? {} : { outputLost }),
     timedOut: Option.isNone(raced),
   };
 });
 
+/** Why the drain stopped short: it outran its bound, or the stream failed. */
+function describeOutputLoss(failure: Error | Cause.TimeoutError): string {
+  return Cause.isTimeoutError(failure)
+    ? `the output did not finish draining within ${READER_DRAIN_MS}ms`
+    : `the output stream failed: ${failure.message}`;
+}
+
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {
   return stripAnsi(output).slice(-TERMINAL_OUTPUT_MAX_CHARS);
-}
-
-/**
- * Drain an async iterable into a length-capped sliding-window tail,
- * bounding in-flight memory while streaming. The final ANSI strip and cap
- * happen via {@link truncateTerminalOutput}. A chunk error fails the effect;
- * the fiber that drains decides what to do with it.
- */
-function drainStreamTail(
-  stream: AsyncIterable<string>,
-  maxChars: number,
-): Effect.Effect<string, Error> {
-  return Stream.fromAsyncIterable(stream, ensureError).pipe(
-    Stream.runFold(
-      () => '',
-      (buf: string, chunk: string) => {
-        const next = buf + chunk;
-        return next.length > maxChars ? next.slice(-maxChars) : next;
-      },
-    ),
-  );
 }

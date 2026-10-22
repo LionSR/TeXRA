@@ -276,13 +276,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           label: folder.name,
           value: folder.uri.fsPath,
         })) ?? [],
+      gettingStartedBanner: true,
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       // The banner says a credential stopped working, so it is raised only
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
         Effect.all([
-          hasUsableSetupCredential(this.roots, this.secrets).pipe(
+          hasUsableSetupCredential(this.roots, this.secrets, 'vscode').pipe(
             withLogChannel('Setup Credentials'),
           ),
           getFirstRunDone(globalState),

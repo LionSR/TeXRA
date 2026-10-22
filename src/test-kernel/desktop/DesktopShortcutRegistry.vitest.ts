@@ -3,12 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 interface ShortcutRegistry {
-  entries(): readonly {
-    id: string;
-    accelerator?: string;
-  }[];
-  subscribe(listener: () => void): () => void;
-  update(id: string, accelerator: string | undefined): void;
   dispose(): void;
 }
 

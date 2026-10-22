@@ -8,7 +8,7 @@ Follow the checklist below to see the extension in action:
 3. [Stage your input, reference, and auxiliary files](command:texra.mainView.focus) from the TeXRA main view.
 4. Pick an agent and model that match your task (the walkthrough highlights common choices).
 5. Enable auto-extraction to collect image paths and TikZ blocks before the run. You can also run
-   [Extract TikZ figures](command:texra.extractTikzFigures) on its own.
+   [Compile TikZ figures](command:texra.compileTikzFigures) on its own.
 6. [Run the agent](command:texra.execute) and watch the Progress view update in real time.
 7. Open the generated outputs, compare them with the original file, and iterate.
 

@@ -186,8 +186,8 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   }
 });
 
-/** Wire the shared Overleaf/ShareLaTeX clone workflow to VS Code's secret
- *  storage, input prompts, and terminal/progress UI. All decision logic
+/** Wire the shared Overleaf/ShareLaTeX clone workflow to the secret store
+ *  and VS Code's input prompts and terminal/progress UI. All decision logic
  *  (token validation, precondition checks, auth-failure retry) lives in
  *  `@latex/overleafClone`; this only renders it. */
 function buildOverleafClonePorts(

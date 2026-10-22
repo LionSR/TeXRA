@@ -33,7 +33,6 @@ function makeActions(): ExtensionCommandActions {
     indentCurrentTeX: asyncNoop(),
     fixCompilation: asyncNoop(),
     getTeXCount: asyncNoop(),
-    extractTikzFigures: asyncNoop(),
     compileTikzFigures: asyncNoop(),
     cloneOverleafProject: asyncNoop(),
     removeApiKey: asyncNoop(),

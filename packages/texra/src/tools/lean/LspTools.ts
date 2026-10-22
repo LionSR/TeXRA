@@ -185,7 +185,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
       );
     }
     return errorResult(
-      `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
+      `Could not open file ${file}: ${result.message}\n\nMake sure the file exists and is accessible.`,
       { summary: 'Failed to open file' },
     );
   }
@@ -196,6 +196,18 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   // navigation. The tool result below still carries the diagnostic list.
   yield* services.navigateToFirstError?.(absoluteFile, diagnostics) ??
     Effect.void;
+
+  if (!result.complete) {
+    // Diagnostics so far are not the file's verdict: an empty list must not
+    // read as a clean file, nor a partial one as all its errors.
+    const pending = `Lean has not finished elaborating ${file} yet (${formatResultCount(diagnostics.length, 'diagnostic')} so far); call again to get the complete result.`;
+    return executed(
+      command === 'list' && diagnostics.length > 0
+        ? `${pending}\n\n${formatGroupedSections(diagnostics)}`
+        : pending,
+      'Still elaborating',
+    );
+  }
 
   const counts = countBySeverity(diagnostics);
   const countsStr = formatCounts(counts);
@@ -262,18 +274,29 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
     return Effect.gen(function* () {
       const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
-      const success = yield* services.executeFileCommand(
-        command,
-        yield* leanFilePath(file, call),
-        yield* leanRunId(services),
-      );
-      if (!success) {
-        return errorResult(
-          `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
-          { summary: 'Command failed' },
+      return yield* services
+        .executeFileCommand(
+          command,
+          yield* leanFilePath(file, call),
+          yield* leanRunId(services),
+        )
+        .pipe(
+          Effect.as(executed(`Executed "${command}" on ${file}`, description)),
+          // The adapter's cause is the answer; setup guidance only when the
+          // cause is the setup.
+          Effect.catchTag('LeanFileCommandFailed', (failure) =>
+            Effect.succeed(
+              errorResult(
+                `Could not execute "${command}" on ${file}: ${failure.message}${
+                  failure.reason === 'toolchain_unavailable'
+                    ? `\n\n${LEAN_TOOLCHAIN_HELP}`
+                    : ''
+                }`,
+                { summary: 'Command failed' },
+              ),
+            ),
+          ),
         );
-      }
-      return executed(`Executed "${command}" on ${file}`, description);
     }).pipe(
       catchLeanFailure(
         (cause) => `Error: ${toErrorMessage(cause)}`,

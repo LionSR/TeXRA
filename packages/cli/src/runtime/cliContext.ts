@@ -41,6 +41,7 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
+import { interactiveTerminalFailure } from './terminalRequirements';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -57,6 +58,9 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
+  /** The policy this invocation's launches run under: the configured one,
+   *  narrowed by {@link requestedApprovalPolicy} through
+   *  {@link effectiveApprovalPolicy}. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
@@ -323,6 +327,24 @@ function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
   return headless ? 'headless' : 'interactive';
 }
 
+/**
+ * Whether this invocation can run an interactive terminal session: the
+ * mode `cliMode` decides, and the terminal checks `texra chat` refuses on.
+ * Bare `texra` routes by this, so it never starts a chat that would refuse.
+ */
+export function isInteractiveCli(
+  globalArgs: CliGlobalArgs,
+  ambient: CliAmbientState,
+): boolean {
+  return (
+    interactiveTerminalFailure({
+      mode: cliMode(globalArgs, ambient),
+      stdoutIsTty: ambient.stdoutIsTty,
+      termIsDumb: ambient.termIsDumb,
+    }) === undefined
+  );
+}
+
 export interface BuildCliContextInit {
   readonly globalArgs: CliGlobalArgs;
   readonly ambient?: CliAmbientState;
@@ -435,9 +457,10 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
             parseApprovalPolicy,
             configWarnings,
           ));
-    const approvalPolicy: ApprovalPolicy =
-      requestedApprovalPolicy ??
-      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
+    const approvalPolicy = effectiveApprovalPolicy(
+      requestedApprovalPolicy,
+      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY),
+    );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(

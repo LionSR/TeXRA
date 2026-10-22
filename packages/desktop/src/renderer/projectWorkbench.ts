@@ -256,7 +256,9 @@ export function createProjectWorkbench(options: {
  * The persisted layout, or a fresh one when there is none or it no longer
  * parses (a tab kind this build does not have). The layout is view state, so
  * an unreadable one is reset rather than failing the whole project, and the
- * reset is logged with its cause.
+ * reset is logged with its cause. The project name shares the blob but is
+ * user-typed, not view state: a still-valid one survives the reset, which is
+ * written back over the blob.
  */
 function restoredLayout(session: string, restored: unknown): DesktopShellState {
   if (restored === null) return initialDesktopShellState();
@@ -272,5 +274,11 @@ function restoredLayout(session: string, restored: unknown): DesktopShellState {
   console.warn(
     `[desktop] resetting the unreadable workbench layout of ${session}: ${parsed.error.message}`,
   );
-  return initialDesktopShellState();
+  const kept = DesktopShellStateSchema.pick({ projectName: true }).safeParse(
+    restored,
+  );
+  return {
+    ...initialDesktopShellState(),
+    ...(kept.success ? { projectName: kept.data.projectName } : {}),
+  };
 }

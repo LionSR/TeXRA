@@ -154,7 +154,11 @@ export const memoryEnabled = settingSignal<boolean>(
 // ---------------------------------------------------------------------------
 // Profile state
 // ---------------------------------------------------------------------------
-export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
+/** Null until the host's first profile message: an unknown key state, never
+ *  rendered as "not set". */
+export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[] | null>(
+  () => null,
+);
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------

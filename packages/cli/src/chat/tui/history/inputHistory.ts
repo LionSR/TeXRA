@@ -1,7 +1,6 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
-import { Clock, Effect, Semaphore } from 'effect';
+import { Clock, Effect, Result, Semaphore } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
 import { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@texra-ai/harness/node';
 import type { InputHistoryRecord } from '@texra-ai/harness/schemas';
 
@@ -19,27 +18,24 @@ export interface InputHistory {
   length(): number;
 }
 
-/** The process's global-root handle serves the history; browsing stays
- *  synchronous. */
+/**
+ * The process's global-root handle serves the history; browsing stays
+ * synchronous. A stored history that cannot be read is returned as
+ * `readFailure` for the caller to say so: this session's history starts
+ * empty, and a later push may retry storage.
+ */
 export const loadInputHistory: Effect.Effect<
-  InputHistory,
+  { readonly history: InputHistory; readonly readFailure: Error | null },
   never,
   GlobalDatabase
 > = Effect.gen(function* () {
   const database = yield* GlobalDatabase;
-  // History failure must not prevent typing. A subsequent push may retry storage.
-  let records: readonly InputHistoryRecord[] =
-    yield* database.inputHistory.read.pipe(
-      Effect.catch((error) =>
-        Effect.logWarning('Input history could not be read.').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel('cli.tui'),
-          Effect.as([]),
-        ),
-      ),
-    );
+  const read = yield* Effect.result(database.inputHistory.read);
+  let records: readonly InputHistoryRecord[] = Result.isSuccess(read)
+    ? read.success
+    : [];
   const pushes = Semaphore.makeUnsafe(1);
-  return {
+  const history: InputHistory = {
     push: (line) =>
       pushes.withPermit(
         Effect.gen(function* () {
@@ -70,5 +66,9 @@ export const loadInputHistory: Effect.Effect<
     length() {
       return records.length;
     },
+  };
+  return {
+    history,
+    readFailure: Result.isFailure(read) ? read.failure : null,
   };
 });

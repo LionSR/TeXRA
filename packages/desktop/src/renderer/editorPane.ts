@@ -480,6 +480,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       ) {
         return;
       }
+      // Only a read that is accepted retires an earlier notice, so a save
+      // that failed while this read was in flight keeps its warning.
+      notice.clear(path);
       file.disk = contents;
       if (model.getValue() === contents) return;
       file.syncing = true;
@@ -589,9 +592,12 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const modelRefreshes = [...files].flatMap(([path, file]) =>
       file.model
         ? [
-            syncCleanModel(path, file, file.model).catch((error: unknown) =>
-              callbacks.onError(error),
-            ),
+            // A failed re-read leaves the editor on the last version read,
+            // still clean, so a later save would overwrite whatever the
+            // agent wrote (or recreate a file it removed): say so.
+            syncCleanModel(path, file, file.model).catch((error: unknown) => {
+              if (!disposed) notice.report(path, 'reload', error);
+            }),
           ]
         : [],
     );

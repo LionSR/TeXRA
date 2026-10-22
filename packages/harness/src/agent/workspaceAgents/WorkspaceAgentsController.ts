@@ -393,7 +393,7 @@ export class WorkspaceAgentsController<
 
   removeTeamPreset(
     teamId: string,
-    removePreset: () => Effect.Effect<void, StateWriteFailed>,
+    removePreset: () => Effect.Effect<void, StateWriteFailed | StateReadFailed>,
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.repoState,

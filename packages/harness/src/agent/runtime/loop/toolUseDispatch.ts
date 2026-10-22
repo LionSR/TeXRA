@@ -72,7 +72,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
-import { findStorageRefusal } from '@shared/session/runHistory';
+import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
@@ -637,7 +637,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         );
       } else {
         const refused = findStorageRefusal(invoked.cause);
-        if (refused) return yield* Effect.fail(refused);
+        if (refused) return yield* Effect.fail(runRefusal(runId, refused));
         const { message, diagnostics } = normalizeToolCallError(
           fact.toolName,
           Cause.squash(invoked.cause),

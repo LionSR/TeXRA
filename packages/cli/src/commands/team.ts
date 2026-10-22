@@ -1,15 +1,7 @@
 import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
-import {
-  AgentCatalog,
-  Settings,
-  type ProcessServices,
-} from '@texra-ai/harness';
+import { AgentCatalog, type ProcessServices } from '@texra-ai/harness';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -18,11 +10,7 @@ import {
 import { findTeamPreset } from '@common/teams/TeamPresets';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
-import {
-  effectiveApprovalPolicy,
-  failUsage,
-  type CliContext,
-} from '../runtime/cliContext';
+import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
@@ -147,14 +135,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
   // The policy the team's launch runs under: an Ask request under a Block
   // project runs under Block, which needs no prompt.
   const rejectsHeadlessAsk =
-    context.mode === 'headless' &&
-    effectiveApprovalPolicy(
-      context.requestedApprovalPolicy ?? context.approvalPolicy,
-      Settings.getConfig<ApprovalPolicy>(
-        services.config,
-        APPROVAL_POLICY_CONFIG_KEY,
-      ),
-    ) === 'ask';
+    context.mode === 'headless' && context.approvalPolicy === 'ask';
   const plan = yield* loadTeamRunPlan(init, services);
   if (rejectsHeadlessAsk) {
     writeTextStderr(

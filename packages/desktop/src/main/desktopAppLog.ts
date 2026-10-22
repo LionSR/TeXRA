@@ -51,6 +51,8 @@ export function getDesktopLogDirectory(): string {
     app.setAppLogsPath();
     return app.getPath('logs');
   } catch {
+    // Where Electron cannot name a logs folder, the log lives under userData;
+    // this is the one answer the writer, the viewer and "Open log folder" read.
     return join(app.getPath('userData'), 'logs');
   }
 }

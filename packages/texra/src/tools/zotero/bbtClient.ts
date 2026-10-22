@@ -149,32 +149,57 @@ export const BbtCollectionChainSchema: z.ZodType<BbtCollectionChain> = z.lazy(
     }),
 );
 
+/** A creator's display name, from whichever name fields the reply set. */
+const creatorName = (creator: z.infer<typeof CslCreatorSchema>): string => {
+  if (creator.family)
+    return creator.given
+      ? `${creator.family}, ${creator.given}`
+      : creator.family;
+  if (creator.lastName)
+    return creator.firstName
+      ? `${creator.lastName}, ${creator.firstName}`
+      : creator.lastName;
+  return creator.name ?? '';
+};
+
 /**
- * CSL JSON item returned by Better BibTeX item.search.
+ * An item Better BibTeX's item.search returned, parsed once into the one
+ * shape the search tool reads.
  *
- * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON) plus
- * the BBT-specific `citekey` field, narrowed to the fields the search tool
- * reads per the boundary rule above. Reference:
+ * The reply is CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON) plus the
+ * BBT-specific `citekey`, narrowed to the fields the search tool reads per the
+ * boundary rule above; Zotero-native fields (`creators`, `itemType`, `date`,
+ * `lastName`/`firstName`) may appear instead, so which field answers is
+ * decided here and nowhere downstream. Reference:
  * https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
  */
-export const BbtSearchResultItemSchema = z.object({
-  /** Citation key from Better BibTeX KeyManager */
-  citekey: z.string(),
-  /** CSL item type (article-journal, book, chapter, etc.) */
-  type: z.string().nullish(),
-  /** Item title */
-  title: z.string().nullish(),
-  /** Authors */
-  author: z.array(CslCreatorSchema).nullish(),
-  /** Publication/issue date */
-  issued: CslDateSchema.nullish(),
-
-  // Zotero-style fields (legacy, may appear)
-  itemType: z.string().nullish(),
-  creators: z.array(CslCreatorSchema).nullish(),
-  date: z.string().nullish(),
-});
-export type BbtSearchResultItem = z.infer<typeof BbtSearchResultItemSchema>;
+export const BbtSearchResultItemSchema = z
+  .object({
+    /** Citation key from Better BibTeX KeyManager */
+    citekey: z.string(),
+    /** CSL item type (article-journal, book, chapter, etc.) */
+    type: z.string().nullish(),
+    title: z.string().nullish(),
+    author: z.array(CslCreatorSchema).nullish(),
+    /** Publication/issue date */
+    issued: CslDateSchema.nullish(),
+    itemType: z.string().nullish(),
+    creators: z.array(CslCreatorSchema).nullish(),
+    date: z.string().nullish(),
+  })
+  .transform((item) => {
+    const year = item.issued?.['date-parts']?.[0]?.[0];
+    return {
+      citekey: item.citekey,
+      title: item.title || null,
+      creators: (item.author || item.creators || [])
+        .map(creatorName)
+        .filter(Boolean),
+      year: year === undefined ? item.date || null : String(year),
+      type: item.type || item.itemType || null,
+    };
+  });
+export type BbtSearchResultItem = z.output<typeof BbtSearchResultItemSchema>;
 
 /**
  * The `ToolError` for a Better BibTeX request that did not produce a body:

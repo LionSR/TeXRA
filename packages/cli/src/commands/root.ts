@@ -1,6 +1,7 @@
-import { defineCommand, runCommand } from 'citty';
+import { defineCommand, parseArgs, runCommand } from 'citty';
 
 import {
+  isInteractiveCli,
   readCliAmbientState,
   readCliArgv,
   readCliVersion,
@@ -25,7 +26,7 @@ import {
   formatUnknownCliFlag,
 } from './_helpers/dispatch';
 import { getExitCode, setExitCode } from './_helpers/exitCode';
-import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
+import { AGENT_RUN_GLOBAL_ARGS, pickGlobalArgs } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
 import { authCommand } from './auth';
@@ -47,13 +48,20 @@ import { serveCommand, serviceCommand } from './service';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
 import { tasksCommand } from './tasks';
-import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { headlessRunCommand } from './workflow';
 
+/** The argv `runCli` dispatches, for the default route (citty resolves
+ *  `default` with no arguments). */
+let routedArgs: readonly string[] = [];
+
 function defaultRootSubcommand(): 'chat' | 'help' {
-  const ambient = readCliAmbientState();
-  return ambient.stdinIsTty && ambient.stdoutIsTty ? 'chat' : 'help';
+  const args = [...routedArgs];
+  const globalArgs = pickGlobalArgs(
+    parseArgs(args, AGENT_RUN_GLOBAL_ARGS),
+    args,
+  );
+  return isInteractiveCli(globalArgs, readCliAmbientState()) ? 'chat' : 'help';
 }
 
 export const rootCommand = withUsageSections(
@@ -90,7 +98,6 @@ export const rootCommand = withUsageSections(
       agents: agentsCommand,
       skills: skillsCommand,
       plugin: pluginCommand,
-      tools: toolsCommand,
       team: teamCommand,
       models: modelsCommand,
       auth: authCommand,
@@ -99,8 +106,8 @@ export const rootCommand = withUsageSections(
       version: versionCommand,
       help: helpCommand,
     },
-    // No subcommand on bare `texra`: start an interactive chat when both TTYs
-    // are interactive; fall through to synthetic `help` otherwise.
+    // No subcommand on bare `texra`: start an interactive chat where `texra
+    // chat` would run; fall through to synthetic `help` otherwise.
     default: defaultRootSubcommand,
   }),
   [
@@ -160,6 +167,7 @@ export async function runCli(
   );
   rawArgs = await reorderNestedGlobalFlags(rootCommand, rawArgs);
   setUsageColorOverrideFromRawArgs(rawArgs);
+  routedArgs = rawArgs;
 
   const unknownCommand = await detectUnknownCliCommand(rootCommand, rawArgs);
   if (unknownCommand) {

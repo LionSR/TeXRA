@@ -215,10 +215,10 @@ export function startFollowUpWake(
  * needs nothing: the runner was started for it (a failed resume leaves it to
  * the next explicit Resume), or its sender saw nothing running and resumed
  * the run itself; the one resume per run (`Inbox.resumeOnce`) joins the two.
- * A runner that ended because the user stopped the run owes nothing for a
- * message queued before the stop: a stopped run stays stopped, and that
- * message waits for the user's next message or Resume. A failure to read is
- * logged.
+ * When the run was stopped, `since` is the commit the stop was asked at
+ * (`RunRegistry.stop()`, which stamps it before any detach batch): a message
+ * queued before the stop belonged to the stopped turn and stays queued, and
+ * one sent after it is resumed. A failure to read is logged.
  */
 export const wakeAfterGeneration = (
   runId: RunId,
@@ -237,19 +237,11 @@ export const wakeAfterGeneration = (
     );
     const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
       'followup.queued',
-      'run.end',
     ]);
-    // A message the user's stop left queued waits for them; one queued
-    // after the stop is owed its wake.
-    const end = rows.findLast((row) => row.type === 'run.end');
-    const from =
-      end?.type === 'run.end' && end.outcome === 'cancelled'
-        ? Math.max(since, end.commit)
-        : since;
     const landedSince = rows.some(
       (row) =>
         row.type === 'followup.queued' &&
-        row.commit > from &&
+        row.commit > since &&
         queued.has(row.followUpId),
     );
     if (landedSince) yield* startFollowUpWake(runId, session);

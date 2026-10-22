@@ -260,22 +260,26 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
 
     const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
     const secrets = yield* Secrets;
-    const keyOrigin = yield* lookupApiKeyOrigin(secrets, 'anthropic').pipe(
-      // A secret store that will not answer is not the same fact as an
-      // unset key, so the environment fallback names the failure.
+    // A secret store that will not answer is not the same fact as an unset
+    // key. An environment key is still known (the launch uses it first);
+    // without one the origin is unknown, and the detail says why.
+    const key = yield* lookupApiKeyOrigin(secrets, 'anthropic').pipe(
+      Effect.map((origin) => ({ origin, failure: null })),
       Effect.catchTag('SecretsFailed', (failure) =>
         Effect.logWarning(
-          `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
+          `Reading the Anthropic API key failed: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
             Config.String(anthropicApiKeyEnv).pipe(Config.option, Effect.orDie),
           ),
-          Effect.map((value) =>
-            Option.isSome(value) && value.value
-              ? ('env' as const)
-              : ('none' as const),
-          ),
+          Effect.map((env) => ({
+            origin:
+              Option.isSome(env) && env.value
+                ? ('env' as const)
+                : ('unknown' as const),
+            failure: failure.message,
+          })),
         ),
       ),
     );
@@ -286,17 +290,19 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
       ),
     );
     const authBits: string[] = [];
-    if (keyOrigin === 'secret') {
+    if (key.origin === 'secret') {
       authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
     }
-    if (keyOrigin === 'env') {
+    if (key.origin === 'env') {
       authBits.push(`${anthropicApiKeyEnv} (environment)`);
     }
     if (hasOauthToken) authBits.push('CLAUDE_CODE_OAUTH_TOKEN');
-    const authNote =
+    let authNote =
       authBits.length > 0
         ? `Auth detected: ${authBits.join(', ')}.`
         : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected: the CLI will use whatever `claude login` session you have.';
+    if (key.failure !== null)
+      authNote = `${authBits.length > 0 ? authNote : 'No CLAUDE_CODE_OAUTH_TOKEN detected.'} The ${anthropicApiKeyEnv} in TeXRA Settings could not be read (${key.failure}).`;
 
     return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
   }),

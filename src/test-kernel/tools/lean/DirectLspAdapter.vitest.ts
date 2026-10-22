@@ -133,6 +133,17 @@ function handle(message) {
         ]
       }
     });
+    send({
+      jsonrpc: '2.0',
+      method: '$/lean/fileProgress',
+      params: {
+        textDocument: {
+          uri: message.params.textDocument.uri,
+          version: message.params.textDocument.version
+        },
+        processing: []
+      }
+    });
     if (countPath) fs.appendFileSync(countPath, 'diagnostics\\n');
   }
 }
@@ -372,6 +383,40 @@ describe('LeanServerPool', () => {
           yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN)),
         ).toMatchObject({ ok: true });
         expect(yield* starts).toBe(1);
+      }),
+  );
+
+  it.effect(
+    'reports a file still elaborating past the quiet window as incomplete, not clean',
+    () =>
+      Effect.gen(function* () {
+        let child: FakeLeanChild | undefined;
+        spawnOverride.current = () => {
+          child = createFakeLeanChild({ elaborating: true });
+          return child;
+        };
+        const { pool } = yield* openPool();
+        yield* TestClock.adjust('1 millis');
+        const done = yield* Deferred.make<void>();
+        const pending = yield* Effect.forkChild(
+          pool
+            .fetchDiagnosticsForFile(filePath, NO_RUN)
+            .pipe(Effect.ensuring(Deferred.succeed(done, undefined))),
+        );
+        yield* eventually(() =>
+          expect(child?.received).toContain('textDocument/didOpen'),
+        );
+        // Far past the quiet window after the empty diagnostics; the wait
+        // ends only at its deadline, with the elaboration unfinished.
+        while (!(yield* Deferred.isDone(done))) {
+          yield* Effect.promise(() => delay(10));
+          yield* TestClock.adjust('1 second');
+        }
+        expect(yield* Fiber.join(pending)).toEqual({
+          ok: true,
+          diagnostics: [],
+          complete: false,
+        });
       }),
   );
 
@@ -882,7 +927,11 @@ describe('directLeanLanguageServices', () => {
           kind: 'toolchain_unavailable',
           message: 'Lean adapter was stopped.',
         });
-        expect(yield* Fiber.join(fileCommand)).toBe(false);
+        expect(yield* Effect.flip(Fiber.join(fileCommand))).toMatchObject({
+          _tag: 'LeanFileCommandFailed',
+          reason: 'failed',
+          message: 'Lean adapter was stopped.',
+        });
         expect(yield* Fiber.join(hover)).toEqual({
           data: null,
           error: 'Lean adapter was stopped.',
@@ -999,6 +1048,8 @@ function createFakeLeanChild(options?: {
   silent?: boolean;
   /** Answer `initialize` only once this settles. */
   initializeGate?: Promise<void>;
+  /** Report every opened file as still elaborating, with no diagnostics yet. */
+  elaborating?: boolean;
 }): FakeLeanChild {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
@@ -1015,7 +1066,7 @@ function createFakeLeanChild(options?: {
   function handle(message: {
     id?: number;
     method?: string;
-    params?: { textDocument?: { uri?: string } };
+    params?: { textDocument?: { uri?: string; version?: number } };
   }): void {
     if (message.method) received.push(message.method);
     if (message.method === 'initialize') {
@@ -1033,6 +1084,31 @@ function createFakeLeanChild(options?: {
     if (message.method === 'textDocument/didOpen') {
       const uri = message.params?.textDocument?.uri;
       if (!uri) return;
+      const progress = (processing: unknown[]) =>
+        send({
+          jsonrpc: '2.0',
+          method: '$/lean/fileProgress',
+          params: {
+            textDocument: {
+              uri,
+              version: message.params?.textDocument?.version,
+            },
+            processing,
+          },
+        });
+      if (options?.elaborating) {
+        const range = {
+          start: { line: 0, character: 0 },
+          end: { line: 1, character: 0 },
+        };
+        progress([{ range, kind: 1 }]);
+        send({
+          jsonrpc: '2.0',
+          method: 'textDocument/publishDiagnostics',
+          params: { uri, diagnostics: [] },
+        });
+        return;
+      }
       send({
         jsonrpc: '2.0',
         method: 'textDocument/publishDiagnostics',
@@ -1051,6 +1127,7 @@ function createFakeLeanChild(options?: {
           ],
         },
       });
+      progress([]);
     }
   }
 

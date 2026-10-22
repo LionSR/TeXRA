@@ -40,7 +40,6 @@ import './tabs/PluginsTab';
 import './tabs/SkillsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
-import './tabs/ShortcutsTab';
 
 // Local imports - module-scope settings state + composed message handlers
 import { settingsViewHandlers } from './messageDispatcher';
@@ -195,22 +194,17 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   }
 
   /**
-   * The pages and sections this host shows: Shortcuts edits desktop key
-   * bindings only, and the recommended VS Code settings exist only in VS Code.
+   * The pages and sections this host shows: the recommended VS Code settings
+   * exist only in VS Code, and Appearance only on the desktop.
    */
   private navEntries(): readonly SettingsNavEntry[] {
     const desktop = this.isDesktopHost;
-    return SETTINGS_NAV_ENTRIES.flatMap((entry) => {
-      if (entry.panel === 'shortcuts' && !desktop) return [];
-      return [
-        {
-          ...entry,
-          sections: entry.sections.filter(({ section }) =>
-            desktop ? section !== 'vscode' : section !== 'appearance',
-          ),
-        },
-      ];
-    });
+    return SETTINGS_NAV_ENTRIES.map((entry) => ({
+      ...entry,
+      sections: entry.sections.filter(({ section }) =>
+        desktop ? section !== 'vscode' : section !== 'appearance',
+      ),
+    }));
   }
 
   private renderSettingsNavigation(
@@ -434,8 +428,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
                 .telemetryEnabled=${telemetryEnabled.get()}
               ></privacy-tab>
             `;
-      case 'shortcuts':
-        return html`<shortcuts-tab></shortcuts-tab>`;
     }
     // Exhaustiveness guard: `activePanel` is a `SettingsTabPanelName`, so every
     // entry in `SETTINGS_TAB_ORDER` must have a case above. A tab appended to

@@ -120,7 +120,8 @@ type SurfaceRejection = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
   readonly session: string;
-  /** The last failed request from this surface. Never persisted. */
+  /** The last failed request from this surface, or a failure one of its
+   *  components reports on the same notice (`reportError`). Never persisted. */
   readonly requestError: SurfaceRejection | null;
   /**
    * The shown run, decided once: `pruneSurface` applies the surface's
@@ -318,9 +319,13 @@ export function pruneSurface(
 
 /**
  * The launcher's selections against the host's catalogs: a model the
- * catalog no longer enables moves to the first enabled one (the current
- * one when none is), and a working directory that is no longer an open
- * root clears to the default. Returns the same record when both hold.
+ * catalog no longer enables moves to the first available one (the first
+ * enabled one when none is), and a working directory that is no longer an
+ * open root clears to the default. A model the catalog still enables stays
+ * chosen while it is unavailable (an unreadable key store, a pending
+ * Copilot consent): the picker shows why, and a launch fails with that
+ * reason rather than running a model the user did not pick. Returns the
+ * same record when both hold.
  */
 export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const { launch } = surface;
@@ -328,15 +333,11 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const current = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
-  if (
-    host.modelOptions.length > 0 &&
-    !(current && isModelOptionAvailable(current))
-  ) {
+  if (host.modelOptions.length > 0 && current === undefined) {
     const next =
       host.modelOptions.find((option) => isModelOptionAvailable(option)) ??
-      current ??
       host.modelOptions[0];
-    if (next.value !== launch.model) patch.model = next.value;
+    patch.model = next.value;
   }
   if (
     launch.workingDirectory !== '' &&
@@ -374,6 +375,9 @@ export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }
   | { readonly kind: 'selectNew' }
   | { readonly kind: 'dismissRequestError' }
+  /** A failure in the component itself, before any request went out (a
+   *  pasted image it could not read), shown on the request notice. */
+  | { readonly kind: 'reportError'; readonly reason: string }
   | { readonly kind: 'toggleDrawer' }
   | { readonly kind: 'drawer'; readonly open: boolean }
   | { readonly kind: 'toolsSheet'; readonly open: boolean }
@@ -419,6 +423,11 @@ export function applySurfaceAction(
   switch (action.kind) {
     case 'dismissRequestError':
       return { ...surface, requestError: null };
+    case 'reportError':
+      return {
+        ...surface,
+        requestError: { _tag: 'Rejected', reason: action.reason },
+      };
     case 'select':
       return { ...surface, selected: action.runId, drawerOpen: false };
     case 'selectNew':

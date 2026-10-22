@@ -3,7 +3,7 @@
  * there, keyed by plugin id, in dashboard order. The plugin value
  * (`@tools/plugins`) says what a plugin contributes to a run; this record
  * is the app's copy beside it, which the settings view's Plugins page and
- * `texra tools` read. A plugin with no card is listed on no dashboard.
+ * the CLI's `/plugins` read. A plugin with no card is listed on no dashboard.
  */
 
 // Local imports

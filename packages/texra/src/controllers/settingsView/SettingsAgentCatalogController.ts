@@ -10,12 +10,16 @@ import {
   parseAgentModePresets,
   type AgentSource,
 } from '@texra-ai/harness/schemas';
+import {
+  StateReadFailed,
+  type StateStore,
+  type WorkspaceAgentsController,
+} from '@texra-ai/harness';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import type { WorkspaceAgentsController, StateStore } from '@texra-ai/harness';
 import type { AgentModePreset } from '@texra-ai/harness/schemas';
 
 interface SettingsAgentCatalogEntry {
@@ -128,7 +132,7 @@ export class SettingsAgentCatalogController {
 
       return yield* this.deps.repoState
         .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
-          Result.succeed([...presetRecords(stored), preset]),
+          Result.map(presetRecords(stored), (records) => [...records, preset]),
         )
         .pipe(Effect.as(preset));
     });
@@ -143,8 +147,8 @@ export class SettingsAgentCatalogController {
         .removeTeamPreset(presetId, () =>
           this.deps.repoState
             .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
-              Result.succeed(
-                presetRecords(stored).filter(
+              Result.map(presetRecords(stored), (records) =>
+                records.filter(
                   (record) =>
                     !Predicate.isObject(record) || record.id !== presetId,
                 ),
@@ -221,7 +225,20 @@ export class SettingsAgentCatalogController {
 }
 
 /** The stored preset records as they are, unparsed, so a catalog write
- *  preserves records this version cannot read. */
-function presetRecords(stored: unknown): unknown[] {
-  return Array.isArray(stored) ? stored : [];
+ *  preserves records this version cannot read. A stored value that is not a
+ *  list refuses the write: rewriting it from an empty list would erase it. */
+function presetRecords(
+  stored: unknown,
+): Result.Result<unknown[], StateReadFailed> {
+  if (stored == null) return Result.succeed([]);
+  return Array.isArray(stored)
+    ? Result.succeed(stored)
+    : Result.fail(
+        new StateReadFailed({
+          key: WorkspaceStateKey.CUSTOM_TEAMS,
+          message:
+            'The saved custom teams are not a list; fix or remove that setting before changing a team.',
+          cause: stored,
+        }),
+      );
 }

@@ -22,7 +22,11 @@ import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
-import { PersonaSchema, AgentNameSchema } from '@shared/schemas';
+import {
+  PersonaSchema,
+  AgentNameSchema,
+  type AgentScanIssue,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
@@ -151,15 +155,17 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
 
 /**
  * The catalog entries of the agents of the installed plugins that load now
- * (enabled, and trusted as they are). A file that does not read is no entry,
- * and a tool a file names that the harness has no counterpart for is
- * dropped; both are logged.
+ * (enabled, and trusted as they are), and the files that did not read: no
+ * entry, logged, and returned so a launch that misses one names why. A tool
+ * a file names that the harness has no counterpart for is dropped and
+ * logged.
  */
 export const scanPluginAgents = Effect.gen(function* () {
   const { loadable } = yield* readInstalledPluginLoad({
     globalState: yield* AppState,
   });
   const entries: AgentEntry[] = [];
+  const issues: AgentScanIssue[] = [];
   for (const { record, plugin } of loadable) {
     for (const relative of plugin.agents) {
       const file = path.join(record.path, relative);
@@ -168,6 +174,7 @@ export const scanPluginAgents = Effect.gen(function* () {
         yield* Effect.logWarning(
           `Plugin agent ${file} is not loaded: ${read.failure.message}`,
         ).pipe(withLogChannel('agentRegistry'));
+        issues.push({ path: file, message: read.failure.message });
         continue;
       }
       const agent = read.success;
@@ -178,5 +185,5 @@ export const scanPluginAgents = Effect.gen(function* () {
       entries.push(pluginAgentEntry(agent, file));
     }
   }
-  return entries;
+  return { entries, issues };
 });

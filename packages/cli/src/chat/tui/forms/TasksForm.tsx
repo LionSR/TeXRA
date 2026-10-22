@@ -249,7 +249,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         if (preview === undefined) return undefined;
         return preview === null
           ? { kind: 'edit', data: payload.data }
-          : { kind: 'modal', payload: { ...payload, tui: preview } };
+          : {
+              kind: 'modal',
+              payload: {
+                ...payload,
+                tui: { kind: 'preview', content: preview },
+              },
+            };
       }
       case 'retry':
         // Switching onto the user's own key is the host's that runs the

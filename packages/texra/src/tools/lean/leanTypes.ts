@@ -131,6 +131,16 @@ export interface LspPublishDiagnosticsParams {
   diagnostics: LspDiagnostic[];
 }
 
+/**
+ * Lean's `$/lean/fileProgress` notification: the ranges of the document
+ * version still being elaborated. `kind` 1 (or absent) is processing, 2 a
+ * fatal error that will not finish; nothing processing means elaborated.
+ */
+export interface LeanFileProgressParams {
+  textDocument: { uri: string; version: number };
+  processing: { range: LspRange; kind?: number }[];
+}
+
 interface LspRange {
   start: LspPosition;
   end: LspPosition;
@@ -177,7 +187,15 @@ export interface LeanDiagnostic extends GenericDiagnostic {
  * read as "could not open file".
  */
 export type FetchDiagnosticsResult =
-  | { readonly ok: true; readonly diagnostics: LeanDiagnostic[] }
+  | {
+      readonly ok: true;
+      readonly diagnostics: LeanDiagnostic[];
+      /**
+       * False when Lean had not reported the file elaborated by the end of
+       * the wait: `diagnostics` are the ones so far, not the file's verdict.
+       */
+      readonly complete: boolean;
+    }
   | {
       readonly ok: false;
       readonly kind: 'file_missing' | 'toolchain_unavailable';

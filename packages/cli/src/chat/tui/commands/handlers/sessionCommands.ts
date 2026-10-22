@@ -1,7 +1,11 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import { runBypasses, isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  isLiveRun,
+  runBypasses,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -24,6 +28,7 @@ import {
 } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
+  appendLocalErrorTranscript,
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
@@ -91,7 +96,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         ? runViewOf(view, run.parentId)
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
-    const model = run?.model ?? (meta.model || context.initialModel);
+    const model = run?.model ?? meta.model;
     const activeSkills = yield* activeSkillNamesFor(
       context.runtimeSession,
       activeRunId,
@@ -102,7 +107,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     );
     appendLocalNotice(
       formatCliSessionStatus({
-        agent: meta.agent || context.initialAgent,
+        agent: meta.agent,
         model,
         teamName: meta.teamName,
         // A completed request's route cannot change, so it outranks the
@@ -175,12 +180,20 @@ export function resumeInterruptedTasks(
     );
     return Effect.forEach(
       tasks,
-      // A refusal is the task's own line; the rest still resume.
+      // A refusal is the task's own transcript line, as the single-task
+      // `/resume` reports one; the rest still resume.
       (task) =>
         runSession
           .resume(task.runId, { interactive: true })
           .pipe(
-            Effect.ignore({ log: 'Warn', message: `Resuming ${task.runId}` }),
+            Effect.catch((refused) =>
+              Effect.sync(() =>
+                appendLocalErrorTranscript(
+                  `Could not resume ${task.title}: ${toErrorMessage(refused)}`,
+                  task.runId,
+                ),
+              ),
+            ),
           ),
       { concurrency: 'unbounded', discard: true },
     ).pipe(Effect.forkDetach, Effect.asVoid);

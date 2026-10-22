@@ -47,6 +47,11 @@ import {
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
 import {
+  ToolError,
+  type ProcessChildStrategy,
+  type ChildRuns,
+} from '@texra-ai/harness/plugins';
+import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
@@ -77,11 +82,6 @@ import {
   readClaudeCodeRun,
   type ClaudeCodeRun,
 } from './claudeAgentShared';
-import type {
-  ProcessChildStrategy,
-  ToolError,
-  ChildRuns,
-} from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -591,7 +591,17 @@ const launchClaudeAgentSession = Effect.fn(
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, context.parentWorkingDirectory);
   // The env block reads the process environment and `Secrets`: no workspace.
-  const env = yield* config.buildClaudeAgentEnv();
+  const env = yield* config
+    .buildClaudeAgentEnv()
+    .pipe(
+      Effect.mapError(
+        (failure) =>
+          new ToolError(
+            `Could not read the managed Anthropic API key: ${failure.message}`,
+            { cause: failure },
+          ),
+      ),
+    );
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
     Effect.orDie,
   );

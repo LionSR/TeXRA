@@ -181,20 +181,21 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     roots,
   };
   // Snapshots the base files once per run (an earlier call's or attempt's
-  // stand); a failure costs only the in-place diffs, and says so.
+  // stand). The snapshots are the run's restore point and the diff base an
+  // in-place rewrite is compared against, so a failed capture stops the task
+  // rather than letting it rewrite files it could not restore. The harness
+  // already keeps an absent file and a failed dependency mirror out of it.
   const baseFiles = yield* fileService
     .prepareRunWorkspace(sources, {
       linkFiles: supportFiles(roots.workspace, config),
     })
     .pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
-            { data: error },
-          );
-          return sources;
-        }),
+      Effect.mapError(
+        (error) =>
+          new ToolError(
+            `Run ${runId} could not snapshot the documents it starts from: ${toErrorMessage(error)}`,
+            { cause: error },
+          ),
       ),
     );
   return {

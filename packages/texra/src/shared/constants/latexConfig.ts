@@ -31,7 +31,7 @@ export const LATEX_FORMATTER_VALUES = [
   'tex-fmt',
   'none',
 ] as const;
-type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
+export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
 
 /** Documented defaults — match the values that used to live in package.json. */
 export const LATEX_CONFIG_DEFAULTS = {

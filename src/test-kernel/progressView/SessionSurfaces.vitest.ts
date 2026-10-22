@@ -20,8 +20,10 @@ import {
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Response } from '@texra/shared/session/sessionFrames';
 import {
+  emptySurface,
   LaunchPatchSchema,
   PersistedSurfaceSchema,
+  reconcileLaunch,
 } from '@texra/shared/session/surface';
 import {
   createWebviewStorage,
@@ -102,12 +104,12 @@ describe('session Surface ownership', () => {
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
 
     const refuse = response();
-    surfaces.hostRequest(KEY, { kind: 'extractFigures' });
+    surfaces.hostRequest(KEY, { kind: 'popOut' });
     // Open another paper while the first paper's request remains pending.
     surfaces.sync([KEY, 'other-paper']);
     const error = {
       _tag: 'Rejected',
-      reason: 'Figure extraction is unavailable.',
+      reason: 'Pop-out to editor is unavailable.',
     } as const;
     refuse({ ok: false, error });
     await Promise.resolve();
@@ -115,6 +117,34 @@ describe('session Surface ownership', () => {
     expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
     surfaces.act(KEY, { kind: 'dismissRequestError' });
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
+  });
+
+  it('keeps a chosen model through an outage and moves one the catalog dropped', () => {
+    const host = (
+      ...modelOptions: HostSnapshot['modelOptions']
+    ): HostSnapshot => ({
+      ...emptyHostSnapshot({
+        key: KEY,
+        name: 'Paper',
+        initials: 'P',
+        subtitle: '/paper',
+      }),
+      modelOptions,
+    });
+    const chosen = (model: string) => {
+      const surface = emptySurface(KEY);
+      return { ...surface, launch: { ...surface.launch, model } };
+    };
+    const outage = host(
+      { value: 'claude', label: 'Claude', availability: 'key-unreadable' },
+      { value: 'gpt', label: 'GPT', availability: 'provider-key' },
+    );
+    // Enabled but unavailable: the user's pick stands.
+    expect(reconcileLaunch(chosen('claude'), outage).launch.model).toBe(
+      'claude',
+    );
+    // No longer enabled: the first available model replaces it.
+    expect(reconcileLaunch(chosen('retired'), outage).launch.model).toBe('gpt');
   });
 
   it('parses a host launch patch without defaulting the fields it omits', () => {

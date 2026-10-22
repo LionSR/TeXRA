@@ -5,8 +5,9 @@
  * desktop is open. No authentication required - purely local communication.
  *
  * Capabilities:
- * - Add items by URL (Zotero extracts metadata from page)
- * - Add items with manual metadata (title, authors, year, etc.)
+ * - Add items by URL alone (Zotero extracts metadata from the page)
+ * - Add items with manual metadata (title, authors, year, etc.), a URL given
+ *   with them saved as the item's `url` field
  *
  * Related tools (require Better BibTeX plugin):
  * - zotero_search: Search library via BBT JSON-RPC (item.search)
@@ -41,7 +42,7 @@ const ZoteroItemSchema = z
     url: z
       .string()
       .describe(
-        'URL of the item to add. Zotero will try to extract metadata from the page.',
+        'URL of the item. Given alone, Zotero saves a snapshot of the page and extracts its metadata from it; given with any other field, the item is saved with exactly the metadata provided and this URL as its URL field.',
       )
       .nullish(),
     title: z
@@ -105,6 +106,7 @@ type ZoteroCreator =
 /** Canonical shape of a Zotero Connector `saveItems` item. */
 interface ZoteroConnectorItem {
   itemType: string;
+  url?: string;
   title?: string;
   creators?: ZoteroCreator[];
   date?: string;
@@ -137,6 +139,7 @@ function toZoteroItem(
   const result: ZoteroConnectorItem = {
     itemType: item.itemType || 'journalArticle',
   };
+  if (item.url) result.url = item.url;
   if (item.title) result.title = item.title;
   if (creators) result.creators = creators;
   if (item.year) result.date = item.year;
@@ -149,8 +152,10 @@ function toZoteroItem(
 }
 
 /**
- * Add one item: an item with a URL is saved as a snapshot of that page;
- * otherwise its manual metadata is saved.
+ * Add one item: a URL given alone is saved as a snapshot of that page, whose
+ * metadata Zotero extracts; an item with any metadata is saved with that
+ * metadata, its URL (if any) a field of the item. A snapshot takes no
+ * metadata, so sending one for an item that has some would drop it.
  */
 const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   item: z.infer<typeof ZoteroItemSchema>,
@@ -158,17 +163,22 @@ const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   collectionBody: object,
 ) {
   const itemLabel = item.url || item.title || 'Unknown item';
-  const result: ConnectorResult = item.url
-    ? yield* callZoteroConnector(
-        'saveSnapshot',
-        { url: item.url, ...collectionBody },
-        port,
-      )
-    : yield* callZoteroConnector(
-        'saveItems',
-        { items: [toZoteroItem(item)], ...collectionBody },
-        port,
-      );
+  const { url, ...metadata } = item;
+  const hasMetadata = Object.values(metadata).some((value) =>
+    Array.isArray(value) ? value.length > 0 : Boolean(value),
+  );
+  const result: ConnectorResult =
+    url && !hasMetadata
+      ? yield* callZoteroConnector(
+          'saveSnapshot',
+          { url, ...collectionBody },
+          port,
+        )
+      : yield* callZoteroConnector(
+          'saveItems',
+          { items: [toZoteroItem(item)], ...collectionBody },
+          port,
+        );
   return { item: itemLabel, ...result };
 });
 
