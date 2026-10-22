@@ -40,9 +40,7 @@ route's key, and CI runs it only on the `live-llm` label
 (`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
 is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
 journeys run through the real `texra run` NDJSON on each cheap model the script lists. It runs
-only on demand, on the `live-journeys` label or by dispatch
-(`.github/workflows/live-journeys.yml`), never on a schedule or in `npm test`;
-in CI a missing model key fails the run, locally it skips that model.
+only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 

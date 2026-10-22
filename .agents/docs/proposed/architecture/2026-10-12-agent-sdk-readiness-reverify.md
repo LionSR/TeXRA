@@ -132,7 +132,7 @@ an added indirection tier — one `Effect` per run appending one history, one
      (e.g. a row's birth, its user/model update, and its settled form), which is
      fine — none of them is a second writer of the **loop's** history, and that
      is the single-writer invariant this audit checks. (The run-state fold,
-     `shared/session/runStateFold.ts`, classifies which row types it folds into
+     `shared/session/runState.ts`, classifies which row types it folds into
      `RunState` versus ignores — `run.description`, `run.result` and `child.turn`
      sit in its ignored set, folded by their own readers — so it is a row-type
      classification, not a row-to-writer map.) `SessionHandle`

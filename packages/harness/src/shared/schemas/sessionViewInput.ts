@@ -1,7 +1,8 @@
 /**
- * The fold's transient input arms: the read a durable row came from, live text chunks,
- * the local runtime snapshot, the transcript subscription set, and the
- * replay and drain markers. None carries a seq.
+ * The inputs a `SessionView` is built from besides the durable rows
+ * themselves: the read a durable row came from, live text chunks, the local
+ * runtime snapshot, the transcript subscription set, and the replay and
+ * drain markers. None carries a seq.
  */
 import { z } from 'zod';
 
@@ -17,7 +18,7 @@ import {
  * The read that delivered a durable row: the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */
-export const FoldEventSchema = z.object({
+export const EventInputSchema = z.object({
   _tag: z.literal('event'),
   read: z.enum(['listing', 'aggregate', 'all']),
   event: DisplaySessionEventSchema,
@@ -26,7 +27,7 @@ export const FoldEventSchema = z.object({
 /**
  * A live text delta for one row, carrying its own offsets into the row's
  * in-flight text: the transient analogue of `seq`.
- * The fold ignores a chunk whose `to` is not past the text it holds,
+ * The view ignores a chunk whose `to` is not past the text it holds,
  * otherwise truncates at `from` and appends, so a redelivery in any order is
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
  * into one exactly. Never durable, never a seq.
@@ -101,10 +102,10 @@ export const LocalRuntimeStateSchema = z.object({
 export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
 
 /**
- * The aggregates whose transcript tier the view holds, each with the seq
- * its history is read from. Every value of the set
- * is a fold input: an aggregate entering it gets its `folded` entry, one
- * leaving it loses its transcript tier.
+ * The aggregates whose transcripts the view holds, each with the seq its
+ * history is read from. Every value of the set is a view input: an
+ * aggregate entering it gets its `transcriptSeq` entry, one leaving it loses
+ * its transcript.
  */
 export const TranscriptSubscriptionSchema = z.object({
   id: AggregateIdSchema,
@@ -131,8 +132,8 @@ export type ExistenceReconciliation = z.infer<
   typeof ExistenceReconciliationSchema
 >;
 
-const FoldInputSchema = z.discriminatedUnion('_tag', [
-  FoldEventSchema,
+const SessionViewInputSchema = z.discriminatedUnion('_tag', [
+  EventInputSchema,
   TextChunkSchema,
   z.object({ _tag: z.literal('debug'), enabled: z.boolean() }),
   z.object({ _tag: z.literal('local'), local: LocalRuntimeStateSchema }),
@@ -152,4 +153,4 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
     existence: ExistenceReconciliationSchema,
   }),
 ]);
-export type FoldInput = z.infer<typeof FoldInputSchema>;
+export type SessionViewInput = z.infer<typeof SessionViewInputSchema>;

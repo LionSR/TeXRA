@@ -22,7 +22,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@utils/core';
 
 import { configRow, positionRow, rowAggregate } from './loop/rows';

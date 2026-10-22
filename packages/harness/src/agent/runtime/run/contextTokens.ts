@@ -7,7 +7,7 @@
  * history, it is that estimate alone.
  */
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 
 /** The text a model reads at the standard ~4 characters a token; media and reasoning do not count. */
 export function estimateMessageTokens(

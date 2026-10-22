@@ -15,7 +15,7 @@ Document tasks are built for **deep, single-shot thinking**: deriving or checkin
 If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one agent, a team lead can run several document tasks at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
-Every agent can chat. Only an agent whose file has a `task` block can also run a document task; the agent picker lists those under **Document task**.
+Only an agent whose file has a `task` block runs a document task. The agent picker marks those agents with a file icon, and picking one starts its document task on your files; any other agent chats.
 
 <AgentModesCompare />
 <p class="hero-caption">A document task reasons once per revision and writes a versioned, diffable file; a chat converses and calls tools turn by turn. This is the first thing to pick for any task. On the CLI, <code>texra run polish --input …</code> runs a document task and <code>texra chat --agent research</code> opens a chat.</p>

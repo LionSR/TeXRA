@@ -12,9 +12,10 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { describeWireRefusal, watchTask } from '@cli/runtime/taskAttach';
+import { watchTask } from '@cli/runtime/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import type { GlobalValues, Outcome } from '@texra-ai/harness';
 
 /** One level of the attached task, as the view paints it. */
@@ -66,7 +67,7 @@ export function followAttachedTask(
           Effect.mapError((error) =>
             error._tag === 'RpcClientError'
               ? error
-              : new Error(describeWireRefusal(error)),
+              : new Error(requestErrorText(error)),
           ),
         ),
     });
@@ -77,7 +78,7 @@ export function followAttachedTask(
         const run = view.runs.get(task.runId);
         // Gone: held once and dropped since (deleted), or its history read
         // and no run in it.
-        if (run === undefined && (seen || view.folded.has(aggregate)))
+        if (run === undefined && (seen || view.transcriptSeq.has(aggregate)))
           return Effect.fail(
             new Error('The task is no longer in its project.'),
           );

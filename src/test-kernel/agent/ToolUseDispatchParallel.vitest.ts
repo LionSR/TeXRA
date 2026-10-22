@@ -63,7 +63,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runState';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';

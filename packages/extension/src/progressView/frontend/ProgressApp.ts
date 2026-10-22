@@ -53,6 +53,7 @@ import {
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 /** A document task's planned pass count: its agent's catalog entry, by the
  *  key the launch recorded or, for a plain name only, the agent name. A
@@ -84,6 +85,7 @@ import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
+import { launchAgentOption } from './components/composerChipMenus';
 import type { HeaderMenuItem } from './components/RunHeader';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -212,25 +214,11 @@ export class ProgressApp extends LitElement {
   private renderRequestError(): TemplateResult | typeof nothing {
     const error = this.surface?.requestError;
     if (!error) return nothing;
-    let message: string;
-    switch (error._tag) {
-      case 'Rejected':
-      case 'Unavailable':
-      case 'Invalid':
-        message = error.reason;
-        break;
-      case 'NotOwner':
-        message = 'This task is controlled by another TeXRA window.';
-        break;
-      case 'Internal':
-        message = 'The request failed. See the TeXRA log for details.';
-        break;
-    }
     return html`<wa-callout class="request-notice" variant="danger">
       ${waIcon('circle-exclamation', { slot: 'icon' })}
       <div class="request-notice-content">
         <div>
-          ${message}
+          ${requestErrorText(error)}
           ${
             error._tag === 'Rejected' && error.docsPage
               ? html`<a
@@ -444,9 +432,11 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document task reads Input and Context, so only it gets the file
-    // section; a chat attaches through the composer alone.
-    const documentPass = launch.sessionType === 'task';
+    // Only a document task reads Input and Context, so only an agent with
+    // one gets the file section; a chat attaches through the composer alone.
+    const documentPass =
+      launch.launchTarget === 'agent' &&
+      launchAgentOption(launch, host)?.rounds !== undefined;
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
