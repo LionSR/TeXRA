@@ -2,7 +2,7 @@
  * TeXRA's probed integrations: Wolfram, Zotero, Lean 4, GitHub
  * activity, external inquiries and the two agent CLIs. Each is a plugin
  * value of TeXRA's list (`@tools/registry`); the install and sign-in copy
- * its dashboard card and `texra tools` show is its card (`@tools/pluginCards`).
+ * its dashboard card and `/plugins` show is its card (`@tools/pluginCards`).
  */
 
 // Third-party imports

@@ -8,13 +8,12 @@ import { z } from 'zod';
 /**
  * The settings pages in nav order — single source of truth for tab names,
  * spelled the one way they travel: the panel name on the wire (`SET_TAB.tab`)
- * and in every `data-panel` selector. `shortcuts` is desktop-only.
+ * and in every `data-panel` selector.
  * Retired internal panels are removed together with their producers and
  * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
   'general',
-  'shortcuts',
   'models',
   'agents',
   'memory',
@@ -42,7 +41,6 @@ export const SETTINGS_PAGE_SECTIONS = {
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
   general: ['appearance', 'approval', 'privacy', 'git'],
-  shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
 /** A section of page `P`, e.g. `'teams'` for `'agents'`. */

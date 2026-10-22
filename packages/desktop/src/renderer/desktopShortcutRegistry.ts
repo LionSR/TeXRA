@@ -1,15 +1,3 @@
-import type {
-  DesktopShortcutEntry,
-  DesktopShortcutOverrides,
-  DesktopShortcutService,
-} from '@texra/shared/commands/shortcutPreferences';
-import {
-  DESKTOP_SHORTCUT_STORAGE_KEY,
-  DesktopShortcutOverridesSchema,
-  installDesktopShortcutService,
-  keyboardEventToAccelerator,
-} from '@texra/shared/commands/shortcutPreferences';
-
 import {
   toElectronAccelerator,
   type DesktopPlatform,
@@ -30,9 +18,11 @@ export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
  * read: the shell's accelerator hints call it too, before this registry
  * exists (a bootstrap failure leaves no registry at all).
  */
-export function desktopCommandPaletteShortcut(
-  platform: DesktopPlatform,
-): DesktopShortcutEntry {
+export function desktopCommandPaletteShortcut(platform: DesktopPlatform): {
+  readonly id: typeof DESKTOP_COMMAND_PALETTE_ID;
+  readonly label: string;
+  readonly accelerator: string;
+} {
   const entry = commandCatalogById.get(DESKTOP_COMMAND_PALETTE_ID);
   if (!entry?.keybinding) {
     throw new Error(
@@ -42,7 +32,6 @@ export function desktopCommandPaletteShortcut(
   return {
     id: DESKTOP_COMMAND_PALETTE_ID,
     label: entry.shortTitle ?? entry.title,
-    category: entry.category,
     accelerator: toElectronAccelerator(entry.keybinding, platform),
   };
 }
@@ -54,80 +43,23 @@ interface DesktopShortcutRegistryOptions {
   readonly platform: DesktopPlatform;
 }
 
-export interface DesktopShortcutRegistry extends DesktopShortcutService {
-  dispose(): void;
-}
-
-/** Installs the one desktop shortcut dispatcher and Settings service. */
+/** Installs the one desktop shortcut dispatcher over the catalog's fixed
+ *  accelerators. */
 export function createDesktopShortcutRegistry(
   options: DesktopShortcutRegistryOptions,
-): DesktopShortcutRegistry {
+): { dispose(): void } {
   const view = options.document.defaultView;
   const { platform } = options;
-  let overrides = readOverrides(view?.localStorage);
-  const listeners = new Set<
-    (entries: readonly DesktopShortcutEntry[]) => void
-  >();
-  const menuEntries = getDesktopCommandMenuEntries(platform);
-
-  function entries(): DesktopShortcutEntry[] {
-    return [desktopCommandPaletteShortcut(platform), ...menuEntries].map(
-      (entry) => {
-        const override = overrides[entry.id];
-        // `null` overrides (explicitly removed shortcuts) are dropped by the
-        // truthy spread below, so they need no explicit normalization.
-        const accelerator =
-          override === undefined ? entry.accelerator : override;
-        return {
-          id: entry.id,
-          label: entry.label,
-          category: entry.category,
-          ...(entry.accelerator
-            ? { defaultAccelerator: entry.accelerator }
-            : {}),
-          ...(accelerator ? { accelerator } : {}),
-        };
-      },
-    );
-  }
-
-  function notify(): void {
-    const currentEntries = entries();
-    for (const listener of listeners) {
-      listener(currentEntries);
-    }
-  }
-
-  function update(id: string, accelerator: string | undefined): void {
-    if (
-      !menuEntries.some((entry) => entry.id === id) &&
-      id !== DESKTOP_COMMAND_PALETTE_ID
-    ) {
-      return;
-    }
-    overrides = {
-      ...overrides,
-      [id]: accelerator ?? null,
-    };
-    view?.localStorage.setItem(
-      DESKTOP_SHORTCUT_STORAGE_KEY,
-      JSON.stringify(overrides),
-    );
-    notify();
-  }
-
-  function reset(): void {
-    overrides = {};
-    view?.localStorage.removeItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-    notify();
-  }
+  const entries = [
+    desktopCommandPaletteShortcut(platform),
+    ...getDesktopCommandMenuEntries(platform),
+  ];
 
   function handleKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.repeat) return;
-    if (isRecordingShortcut(view, event)) return;
     const accelerator = keyboardEventToAccelerator(event, platform);
     if (!accelerator) return;
-    const entry = entries().find(
+    const entry = entries.find(
       (candidate) =>
         candidate.accelerator?.toLowerCase() === accelerator.toLowerCase(),
     );
@@ -153,30 +85,11 @@ export function createDesktopShortcutRegistry(
   // input; a capturing application listener used to steal both.
   view?.addEventListener('keydown', handleKeydown);
 
-  const registry: DesktopShortcutRegistry = {
-    entries,
-    subscribe(
-      listener: (entries: readonly DesktopShortcutEntry[]) => void,
-    ): () => void {
-      listeners.add(listener);
-      try {
-        listener(entries());
-      } catch (error) {
-        listeners.delete(listener);
-        throw error;
-      }
-      return () => listeners.delete(listener);
-    },
-    update,
-    reset,
+  return {
     dispose(): void {
-      listeners.clear();
       view?.removeEventListener('keydown', handleKeydown);
-      uninstallService();
     },
   };
-  const uninstallService = installDesktopShortcutService(registry);
-  return registry;
 }
 
 /**
@@ -192,19 +105,6 @@ function isElementFrom(
     view as (Window & { Element?: typeof Element }) | null | undefined
   )?.Element;
   return ElementConstructor != null && target instanceof ElementConstructor;
-}
-
-function isRecordingShortcut(
-  view: Window | null | undefined,
-  event: KeyboardEvent,
-): boolean {
-  return event
-    .composedPath()
-    .some(
-      (target) =>
-        isElementFrom(view, target) &&
-        target.matches('.shortcut-recorder[data-recording="true"]'),
-    );
 }
 
 /**
@@ -246,28 +146,49 @@ function hasPrimaryModifier(event: KeyboardEvent): boolean {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
-  if (!storage) return {};
-  const raw = storage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const result = DesktopShortcutOverridesSchema.safeParse(parsed);
-    if (result.success) return result.data;
-    // A present-but-invalid overrides blob is user-authored state, and the
-    // next `update` rewrites the whole key: falling back to {} silently would
-    // turn one bad write into the permanent loss of every other binding.
-    console.warn(
-      '[desktop] Stored keyboard shortcut overrides failed validation; falling back to defaults.',
-      result.error,
-    );
-  } catch (error) {
-    // Malformed JSON resolves to the same empty defaults as a failed schema
-    // parse, with the same loudness for the same reason.
-    console.warn(
-      '[desktop] Stored keyboard shortcut overrides are not readable JSON; falling back to defaults.',
-      error,
-    );
+const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift', 'AltGraph']);
+
+const FUNCTION_KEY_PATTERN = /^F\d{1,2}$/i;
+
+/** Converts a DOM keyboard chord into the canonical Electron-style form. */
+function keyboardEventToAccelerator(
+  event: KeyboardEvent,
+  platform: DesktopPlatform,
+): string | undefined {
+  if (MODIFIER_KEYS.has(event.key)) return undefined;
+  const key = normalizeKeyboardKey(event.key);
+  if (!key) return undefined;
+
+  const parts: string[] = [];
+  if (platform === 'darwin' && event.metaKey) parts.push('Command');
+  if (event.ctrlKey) parts.push('Control');
+  if (event.altKey) parts.push(platform === 'darwin' ? 'Option' : 'Alt');
+  if (event.shiftKey) parts.push('Shift');
+  if (platform !== 'darwin' && event.metaKey) parts.push('Super');
+  if (parts.length === 0 && !FUNCTION_KEY_PATTERN.test(key)) return undefined;
+  return [...parts, key].join('+');
+}
+
+const SUPPORTED_NAMED_KEYS: Record<string, string> = {
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  End: 'End',
+  Enter: 'Enter',
+  Escape: 'Escape',
+  Home: 'Home',
+  PageDown: 'PageDown',
+  PageUp: 'PageUp',
+  Tab: 'Tab',
+};
+
+function normalizeKeyboardKey(key: string): string | undefined {
+  if (key === ' ') return 'Space';
+  if (key.length === 1 || FUNCTION_KEY_PATTERN.test(key)) {
+    return key.toUpperCase();
   }
-  return {};
+  return SUPPORTED_NAMED_KEYS[key];
 }

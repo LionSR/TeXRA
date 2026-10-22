@@ -28,9 +28,8 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **General**: **Privacy** (telemetry) and **Git** (the
   GitHub token and Git commit attribution).
 
-The desktop app adds a **Shortcuts** page. Commands such as **TeXRA: Agent
-Team Settings** or **TeXRA: Git Settings** open their page on the matching
-sub-tab.
+Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
+open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
 Provider transport knobs (OpenAI background responses, parallel tool calls, the

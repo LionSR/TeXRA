@@ -27,8 +27,8 @@
  *   fact, its diffs included, and the recipe's `run.end` with its documents
  *   as `output.structured`.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
- *   "Keep agents running" turned on in `/config` and a plugin's
- *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
+ *   "Keep agents running" turned on in `/config`, Codex switched on in
+ *   `/plugins`, and a plugin's `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
  *   (`r` on the approval, the `goal` plugin fact) and the goal completed,
  *   then `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
@@ -481,7 +481,6 @@ const RUN_OF_AGENT = `SELECT s.logical_id AS id FROM event e
 
 async function generate(root) {
   const cli = scenario(root);
-  cli.run(['tools', 'enable', 'multi-agent', '--print']);
 
   cli.run([
     'run',
@@ -534,7 +533,6 @@ async function generate(root) {
   ]);
 
   // The chat's Codex call runs the hook plugin's `PostToolUse` hook.
-  cli.run(['tools', 'enable', 'codex', '--print']);
   cli.run(['plugin', 'install', cli.hooks, '--print']);
   cli.run(['plugin', 'enable', 'golden-hooks', '--print'], 'y\n');
 
@@ -592,6 +590,16 @@ async function generate(root) {
   await until(
     'the closed /config',
     () => !tty.screen().includes('/config'),
+    tty,
+  );
+  // Codex on, in `/plugins`, before the chat's first turn binds its tools.
+  await send('/plugins');
+  await pick('OpenAI Codex CLI');
+  await shows('Codex on', 'OpenAI Codex CLI — on');
+  tty.write('\x1b');
+  await until(
+    'the closed /plugins',
+    () => !tty.screen().includes('/plugins'),
     tty,
   );
   await send('Start the golden chat.');
