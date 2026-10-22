@@ -22,8 +22,6 @@ import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-// Local imports - progress view events
-
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 

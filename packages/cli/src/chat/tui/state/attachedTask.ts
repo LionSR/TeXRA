@@ -78,7 +78,7 @@ export function followAttachedTask(
         const run = view.runs.get(task.runId);
         // Gone: held once and dropped since (deleted), or its history read
         // and no run in it.
-        if (run === undefined && (seen || view.folded.has(aggregate)))
+        if (run === undefined && (seen || view.transcriptSeq.has(aggregate)))
           return Effect.fail(
             new Error('The task is no longer in its project.'),
           );

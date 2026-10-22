@@ -187,11 +187,7 @@ const opensRequest = (
         new DatabaseWriteFailed({ path: 'probe', cause: null }),
       );
     }) as Append;
-    const tx = {
-      append,
-      claim: () => Effect.void,
-      afterCommit: () => Effect.void,
-    };
+    const tx = { append, claim: () => Effect.void };
     return Effect.map(Effect.exit(work(tx)), () => opens);
   });
 

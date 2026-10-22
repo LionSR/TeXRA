@@ -210,26 +210,14 @@ interface DiffLineStyle {
 // `+`/`-` marker kept in `line.text` still distinguishes them, so this degrades
 // rather than breaks; gating the bands on truecolor support would add a code
 // path for a case that already reads correctly.
-const DIFF_ADDED_BG = '#dff4e8';
-const DIFF_ADDED_FG = '#16351f';
-const DIFF_REMOVED_BG = '#f7d9dc';
-const DIFF_REMOVED_FG = '#4a171b';
-
-/**
- * Full-width bands for changed lines. Use light backgrounds plus explicit
- * foreground colors so text stays readable on both light and dark terminals.
- * Context lines stay un-banded and dim.
- */
+//
+// Full-width bands for changed lines: light backgrounds plus explicit
+// foreground colors so text stays readable on both light and dark terminals.
+// Context lines stay un-banded and dim.
 const DIFF_LINE_STYLE: Partial<Record<DiffDisplayLine['kind'], DiffLineStyle>> =
   {
-    added: {
-      backgroundColor: DIFF_ADDED_BG,
-      color: DIFF_ADDED_FG,
-    },
-    removed: {
-      backgroundColor: DIFF_REMOVED_BG,
-      color: DIFF_REMOVED_FG,
-    },
+    added: { backgroundColor: '#dff4e8', color: '#16351f' },
+    removed: { backgroundColor: '#f7d9dc', color: '#4a171b' },
   };
 
 function DiffLine({

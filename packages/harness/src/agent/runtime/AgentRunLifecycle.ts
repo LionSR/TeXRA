@@ -31,7 +31,8 @@ import { RunHandle } from './RunHandle';
 import { registryOf, type AgentRunServices, Runs } from './runRegistry';
 import { receiveTerminalFailure } from './terminalResultToast';
 import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
-import type { TransactionPart } from './childSettlement';
+import type { ChildRunTurns } from './childRunLoop';
+import type { TransactionPart } from './childTurnResult';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
@@ -44,16 +45,14 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
-type Settlement = Effect.Effect<TransactionPart | undefined>;
-
 export interface RunLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
   /** Fires once with the run's id, right after its handle is tracked (F-2),
    *  forked detached: nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
-  /** A child's last-turn settlement, from the result its run ends with. */
-  settleEnd?: (result: RunEndResult) => Settlement;
+  /** A child's last turn result, from the result its run ends with. */
+  finishLastTurn?: ChildRunTurns<RunEndResult>['finishLastTurn'];
 }
 
 interface FinalizeRunTerminalParams {
@@ -76,9 +75,10 @@ interface FinalizeRunTerminalParams {
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
-  /** A child's last-turn settlement under the resolved outcome: its rows
-   *  commit with the `run.end` row (`childSettlement.ts`). */
-  readonly settle?: (outcome: RunOutcome) => Settlement;
+  /** A child's last turn result under the resolved outcome. */
+  readonly lastTurn?: (
+    outcome: RunOutcome,
+  ) => Effect.Effect<TransactionPart | undefined>;
   /**
    * Stop precedence: a stop that reached the run before this finalizer —
    * `Cause.hasInterrupts` on the cause that brought the run here, or the
@@ -90,8 +90,8 @@ interface FinalizeRunTerminalParams {
 
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
-  /** The `run.end` row write's failure: the terminal still settled and
-   *  untracked, and the event reports FAILED with its reason. */
+  /** The `run.end` row write's failure: the terminal still ran and
+   *  untracked the handle, and the event reports FAILED with its reason. */
   readonly persistFailure?: Error;
   /** False for a run that never opened: no row was written, so its
    *  failure is its launch's to present. */
@@ -153,16 +153,16 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       ...(error ? { error } : {}),
       output,
     };
-    const settlement = params.settle && (yield* params.settle(outcome));
+    const lastTurn = params.lastTurn && (yield* params.lastTurn(outcome));
     const finalization = yield* finalizeRun(session, {
       runId: handle.runId,
       outcome,
       error,
       output,
-      settlement,
+      lastTurn,
     }).pipe(Effect.result);
     // Guard the cleanup: a throw from untrack's listeners must not escape
-    // past a settled result. Only this handle's registration goes; a run
+    // past a saved result. Only this handle's registration goes; a run
     // that started again is its successor's.
     yield* Effect.try({
       try: () => runs.untrackIfCurrent(handle),
@@ -257,23 +257,23 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     },
     options?.parentRunId ?? null,
   );
-  const settleEnd = options?.settleEnd;
+  const finish = options?.finishLastTurn;
   // The terminal finalizer; outcome and error facts vary per exit, and a
-  // child's last turn (`settledBy`) settles under the resolved outcome.
+  // child's last turn (`lastResult`) is finished under the resolved outcome.
   const finalizeTerminal = ({
-    settledBy,
+    lastResult,
     ...arm
   }: Pick<
     FinalizeRunTerminalParams,
     'outcome' | 'error' | 'output' | 'stopped'
-  > & { settledBy?: RunEndResult }) =>
+  > & { lastResult?: RunEndResult }) =>
     finalizeRunTerminal({
       session,
       handle,
       stage: ctx.parentStage,
       ...arm,
-      ...(settledBy && settleEnd
-        ? { settle: (o) => settleEnd(withResolvedOutcome(settledBy, o)) }
+      ...(lastResult && finish
+        ? { lastTurn: (o) => finish(withResolvedOutcome(lastResult, o)) }
         : {}),
     });
   /**
@@ -353,7 +353,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       error,
       output: carried?.output,
       stopped,
-      settledBy: subagentResult,
+      lastResult: subagentResult,
     });
     // The exits below report the terminal fact the finalizer published.
     const resolvedOutcome = finalized.event.outcome;
@@ -373,7 +373,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     return yield* Effect.fail(failure);
   });
   // The flow is an Effect: a fiber interruption reaches its provider work
-  // directly, and its finalizers settle before the resources below are
+  // directly, and its finalizers run before the resources below are
   // disposed. A fresh run is born with its opening, a resume activates
   // with its cell: both inside the flow, so this terminal ends either.
   const run = Effect.suspend(() => runner(handle));
@@ -398,7 +398,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       return finalizeTerminal({
         outcome: result.outcome,
         output: result.output,
-        settledBy: result,
+        lastResult: result,
       }).pipe(
         // An end that did not save fails the run, saying why.
         Effect.flatMap(({ event, persistFailure }) =>

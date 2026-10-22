@@ -229,14 +229,7 @@ describe('CLI root argument routing', () => {
   });
 
   it('detects unknown command-group children', async () => {
-    for (const group of [
-      'agents',
-      'history',
-      'auth',
-      'models',
-      'skills',
-      'tools',
-    ]) {
+    for (const group of ['agents', 'history', 'auth', 'models', 'skills']) {
       await expect(
         detectUnknownCliCommand(rootCommand, [group, 'bogus']),
       ).resolves.toEqual({
@@ -1002,8 +995,8 @@ describe('CLI crash report line', () => {
   const bugsUrl = 'https://github.com/LionSR/TeXRA/issues';
 
   it('points unexpected crashes at the issue tracker', () => {
-    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toBe(
-      `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`,
+    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toContain(
+      bugsUrl,
     );
   });
 

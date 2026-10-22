@@ -239,10 +239,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           const entry = catalog.get('setup');
           this.surfaceAction({
             kind: 'launch',
-            patch: {
-              sessionType: 'chat',
-              agent: entry ? agentKeyOf(entry) : 'setup',
-            },
+            patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
           });
         }),
     });
@@ -279,6 +276,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           label: folder.name,
           value: folder.uri.fsPath,
         })) ?? [],
+      gettingStartedBanner: true,
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       // The banner says a credential stopped working, so it is raised only
@@ -662,11 +660,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(
         Effect.sync(() => {
           const agent = options.selectedAgent;
-          if (agent)
-            this.surfaceAction({
-              kind: 'launch',
-              patch: { sessionType: 'chat', agent },
-            });
+          if (agent) this.surfaceAction({ kind: 'launch', patch: { agent } });
         }),
       ),
     );

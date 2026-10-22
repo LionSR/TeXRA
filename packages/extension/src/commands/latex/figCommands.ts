@@ -7,7 +7,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
-import { ensureError, truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -23,57 +22,6 @@ import type {
 } from '@texra-ai/harness';
 
 const CHANNEL = 'FigCommands';
-
-export function handleExtractTikzFigures(
-  roots: WorkspaceRoots,
-): Effect.Effect<void, never, ProcessServices> {
-  return runGuardedLatexCommand(
-    roots,
-    {
-      channel: CHANNEL,
-      action: 'extract TikZ figures',
-      errorMessage: 'extractTikzFigures command failed',
-    },
-    ({ relativePath: filePath }) =>
-      Effect.gen(function* () {
-        yield* Effect.logDebug(
-          `Processing LaTeX file for TikZ figures: ${filePath}`,
-        ).pipe(withLogChannel(CHANNEL));
-
-        const labeledTikzPictures = yield* TikzPictureManager.extract(
-          pathToLocationIn(roots.workspace, filePath),
-        );
-
-        if (labeledTikzPictures.length === 0) {
-          yield* showLoggedInfoMessage(
-            CHANNEL,
-            'No TikZ figures found in the current file',
-          );
-          return;
-        }
-
-        const items = labeledTikzPictures.map(([label, pictures]) => ({
-          label: `${label} (${pictures.length} TikZ ${pluralize(pictures.length, 'picture')})`,
-          description: `Figure with label: ${label}`,
-          detail: truncateWithEllipsis(pictures[0], 100),
-        }));
-
-        const selected = yield* quickPick(items, {
-          placeHolder: 'Found TikZ figures (select to copy label)',
-          prompt: 'Select a TikZ figure label to copy to the clipboard',
-          canPickMany: false,
-        });
-        if (!selected) return;
-
-        const label = selected.label.split(' (')[0];
-        yield* Effect.tryPromise({
-          try: async () => vscode.env.clipboard.writeText(label),
-          catch: ensureError,
-        });
-        yield* showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`);
-      }),
-  );
-}
 
 export function handleCompileTikzFigures(
   roots: WorkspaceRoots,

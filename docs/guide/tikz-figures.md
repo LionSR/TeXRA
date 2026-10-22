@@ -134,15 +134,15 @@ When automatic extraction is enabled, TeXRA will:
 3. <wa-icon library="texra" name="output"></wa-icon> Compile the figures into standalone PDFs.
 4. <wa-icon library="texra" name="eye"></wa-icon> Make both the TikZ code and compiled PDFs available to the agent.
 
-### Manual extraction commands
+### Compile from the Command Palette
 
-You can also extract TikZ figures from the Command Palette:
+You can also compile TikZ figures from the Command Palette:
 
 1. Open a LaTeX file containing TikZ figures.
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Run **TeXRA: Extract TikZ Figures from Current File**.
+3. Run **TeXRA: Compile TikZ Figures from Current File**.
 
-This creates standalone files for each TikZ figure in your document.
+This wraps each TikZ figure in a standalone file, compiles it, and lets you open the result.
 
 ### Agent tool calls
 

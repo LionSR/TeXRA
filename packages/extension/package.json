@@ -180,11 +180,6 @@
         "enablement": "!virtualWorkspace"
       },
       {
-        "command": "texra.extractTikzFigures",
-        "title": "Extract TikZ Figures from Current File",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.compileTikzFigures",
         "title": "Compile TikZ Figures from Current File",
         "category": "TeXRA"
@@ -420,10 +415,6 @@
         },
         {
           "command": "texra.getTeXCount",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.extractTikzFigures",
           "when": "texra.activated"
         },
         {

@@ -28,22 +28,6 @@ export function toElectronAccelerator(
   return key.split('+').map(toElectronAcceleratorPart).join('+');
 }
 
-/**
- * Maps a browser `navigator.platform` string to a `DesktopPlatform` so
- * renderer code can share one platform rule instead of re-deriving it with
- * divergent checks. The macOS regex deliberately also matches the iOS
- * navigator.platform values (`iPhone`/`iPod`/`iPad`).
- */
-export function detectBrowserPlatform(
-  platform: string = typeof navigator !== 'undefined'
-    ? (navigator.platform ?? '')
-    : '',
-): DesktopPlatform {
-  if (/Mac|iPhone|iPod|iPad/.test(platform)) return 'darwin';
-  if (platform.toLowerCase().includes('win')) return 'win32';
-  return 'linux';
-}
-
 export function formatDesktopAccelerator(
   accelerator: string | undefined,
   platform: DesktopPlatform,

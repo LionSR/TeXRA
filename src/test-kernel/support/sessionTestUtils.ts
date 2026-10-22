@@ -21,10 +21,10 @@ import {
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import type { TranscriptView } from '@shared/session/sessionView';
-import { foldTranscriptEvent } from '@shared/session/transcriptFold';
+import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
 import {
   emptyTranscript,
-  resetTranscriptOwnership,
+  emptyTranscriptIndexes,
 } from '@shared/session/transcriptState';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -169,22 +169,23 @@ export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   });
 
 /**
- * A standalone run trace whose events fold straight into a transcript with
- * deterministic source coordinates, for tests that exercise the fold without
- * a session. Each event is its own publication level, as a session frame of
- * one.
+ * A standalone run trace whose events go straight into a transcript with
+ * deterministic source coordinates, for tests that exercise the transcript
+ * reducer without a session. Each event is its own update call, as a
+ * session frame of one.
  */
 export function createTestRunTrace(runId: RunId) {
-  // Fixture run ids need not be well-formed; the fold only stamps them.
+  // Fixture run ids need not be well-formed; the reducer only stamps them.
   const aggregate = JSON.stringify(['run', runId]) as AggregateId;
   const ctx = { debug: false, lifecycleToTaskGroups: true };
+  const ix = emptyTranscriptIndexes();
   let transcript: TranscriptView = emptyTranscript();
   let seq = 1;
   const apply = (fact: object) => {
     seq += 1;
-    resetTranscriptOwnership();
-    transcript = foldTranscriptEvent(
+    transcript = applyTranscriptEvent(
       transcript,
+      { ix, owned: new WeakSet() },
       { ...fact, aggregateId: aggregate, seq, at: seq } as SessionEvent,
       ctx,
     );
@@ -194,14 +195,14 @@ export function createTestRunTrace(runId: RunId) {
   });
   return {
     trace,
-    /** The phase the run reached; the fold settles its open rows on it. */
+    /** The phase the run reached; the reducer closes its open rows on it. */
     settlePhase: (phase: RunPhase) => {
       if (phase === RUN_PHASE.RUNNING) apply({ type: 'run.activate' });
       else if (phase === RUN_PHASE.WAITING) {
         apply({ type: 'run.position', payload: { at: 'waiting' } });
       } else apply({ type: 'run.end', outcome: phase });
     },
-    /** The run history's final-answer row (`response.finalized`), folded
+    /** The run history's final-answer row (`response.finalized`), applied
      *  in its place beside the trace. */
     finalize: (text: string) => apply({ type: 'response.finalized', text }),
     transcript: () => transcript,

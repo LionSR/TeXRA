@@ -205,19 +205,15 @@ interface WorkflowOutputResolutionOptions {
   readonly storageRoot: string;
 }
 
-function outputCopyRelativePath(output: OutputFileSummary): string {
-  const relativePath =
-    output.relativePath || path.basename(output.absolutePath);
-  return getSafeDocumentRelativePath(
-    stripWorkflowRoundDir(toPosixPath(relativePath)),
-  );
-}
-
 function outputCopyRelativePathForExpectedOutput(
   output: OutputFileSummary,
   expectedRelativePaths: readonly string[],
 ): string {
-  const generatedRelativePath = outputCopyRelativePath(output);
+  const generatedRelativePath = getSafeDocumentRelativePath(
+    stripWorkflowRoundDir(
+      toPosixPath(output.relativePath || path.basename(output.absolutePath)),
+    ),
+  );
   if (expectedRelativePaths.length === 0) return generatedRelativePath;
 
   const generatedName = path.posix.basename(toPosixPath(generatedRelativePath));

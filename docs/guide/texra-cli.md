@@ -1,6 +1,5 @@
 <script setup>
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
-import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
@@ -553,30 +552,11 @@ process.
 
 ## Tools and integrations
 
-The CLI can inspect the same external agent integrations shown in the extension
-settings:
-
-```bash
-texra tools list
-texra tools status codex
-texra tools disable codex
-texra tools enable codex
-texra tools install codex
-texra tools auth codex
-```
-
-`tools list` reports each integration id, name, category, enabled state, and
-detection result.
-
-<CliToolsListHero />
-
-<p class="hero-caption"><code>tools list</code> reports six columns per integration: a status dot marks the enabled state, a check or cross marks whether the backing tool was detected on this machine, and the note carries the registered install command when something is missing.</p>
-
-Use `--output-format json` or `--output-format ndjson` for
-scripts. `tools install <id>` prints the install guide and registered command;
-it only runs the command when passed `--run`. In the interactive TUI, `/plugins`
-lists the same plugins, with installed plugins and MCP servers beside them, and
-switches the ones that can be switched on or off.
+In the interactive TUI, `/plugins` lists TeXRA's plugins, including the
+external agent integrations shown in the extension settings, with installed
+plugins and MCP servers beside them, and switches the ones that can be switched
+on or off. Plugins you install yourself are also managed from the shell with
+`texra plugin` (see above).
 
 ## Models and memories
 

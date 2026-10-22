@@ -1,180 +1,23 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { ToolCatalog, type ToolProbeInputs } from '@texra-ai/harness';
+import { ToolCatalog } from '@texra-ai/harness';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
-import {
-  buildToolDashboardItems,
-  visibleToolPlugins,
-} from '@texra/controllers/settingsView/ToolDashboardData';
-import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ToolPluginSetup } from '@texra/tools/pluginCards';
-
-type CliToolGuideKind = 'install' | 'auth';
-
-export interface CliToolGuide {
-  readonly text: string;
-  readonly command?: string;
-}
+import { visibleToolPlugins } from '@texra/controllers/settingsView/ToolDashboardData';
 
 /**
- * The external integrations `texra tools` manages: the shared dashboard
- * projection for the CLI host, minus the built-in groups that need no setup.
- *
- * The calling surface runs this on the process runtime its composition root
- * installed, so the disabled-tool read inside the builder (`AppState`) and the
- * toggle that follows it hit the same store. `probeInputs` is the `--cwd`
- * project the same init opened and its configuration, carried as data for the
- * probes that need them.
+ * Switch a probed plugin the CLI lists on or off; `false` when it has no
+ * switch. A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
  */
-export function readCliToolStatuses(probeInputs: ToolProbeInputs) {
-  return Effect.map(buildToolDashboardItems(probeInputs), (items) =>
-    items.filter((item) => item.requiresSetup),
-  );
-}
-
-export function readCliToolStatus(probeInputs: ToolProbeInputs, id: string) {
-  return Effect.map(readCliToolStatuses(probeInputs), (items) =>
-    items.find((item) => item.id === id),
-  );
-}
-
-/** A probed plugin the CLI's dashboard lists, with its card; built-in
- *  plugins need no setup. */
-const findCliToolDef = (id: string) =>
-  Effect.map(ToolRegistry, ({ entries }) =>
-    visibleToolPlugins(entries, 'cli').find(
-      ({ card, plugin }) => card.id === id && plugin.availability !== undefined,
-    ),
-  );
-
-export const readCliToolGuide = (id: string, kind: CliToolGuideKind) =>
-  Effect.map(findCliToolDef(id), (def) =>
-    def === undefined ? undefined : cliToolGuide(def.card.setup ?? {}, kind),
-  );
-
-function cliToolGuide(
-  setup: ToolPluginSetup,
-  kind: CliToolGuideKind,
-): CliToolGuide {
-  if (kind === 'install') {
-    const lines = [
-      setup.installGuide ?? setup.configNotes ?? 'No install guide.',
-    ];
-    if (setup.installCommand) {
-      lines.push('', `Command: ${setup.installCommand}`);
-    }
-    if (setup.installUrl) {
-      lines.push(`URL: ${setup.installUrl}`);
-    }
-    return { text: lines.join('\n'), command: setup.installCommand };
-  }
-
-  const lines = [setup.authNote ?? setup.configNotes ?? 'No auth guide.'];
-  if (setup.authCommand) {
-    lines.push('', `Command: ${setup.authCommand}`);
-  }
-  return { text: lines.join('\n'), command: setup.authCommand };
-}
-
 export function setCliToolEnabled(id: string, enabled: boolean) {
-  return Effect.flatMap(findCliToolDef(id), (def) =>
-    def?.plugin.toggle !== undefined
-      ? // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
-        Effect.flatMap(ToolCatalog, (catalog) =>
+  return Effect.flatMap(ToolRegistry, ({ entries }) => {
+    const def = visibleToolPlugins(entries, 'cli').find(
+      ({ card, plugin }) => card.id === id && plugin.availability !== undefined,
+    );
+    return def?.plugin.toggle !== undefined
+      ? Effect.flatMap(ToolCatalog, (catalog) =>
           catalog.setEnabled(id, enabled),
         ).pipe(Effect.as(true))
-      : Effect.succeed(false),
-  );
-}
-
-/**
- * The raw dependency probe outcome behind a dashboard status: `null` only when
- * the probe itself failed, which is the one case the status carries no yes/no
- * answer about the dependency.
- */
-function cliToolDetected(item: ToolDashboardItem): boolean | null {
-  return item.status === 'unknown' ? null : item.status === 'available';
-}
-
-/** The toggle state, or `null` for a group that cannot be toggled. */
-function cliToolEnabled(item: ToolDashboardItem): boolean | null {
-  return item.toggleable === true ? (item.enabled ?? null) : null;
-}
-
-function cliToolCommand(
-  item: ToolDashboardItem,
-  kind: 'command' | 'auth',
-): string | undefined {
-  for (const action of item.installActions) {
-    if (action.kind === kind) return action.command;
-  }
-  return undefined;
-}
-
-function cliToolNote(item: ToolDashboardItem): string {
-  const installCommand = cliToolCommand(item, 'command');
-  if (cliToolDetected(item) === false && installCommand) return installCommand;
-  return (
-    item.statusLabel ??
-    item.authNote ??
-    item.configNotes ??
-    installCommand ??
-    ''
-  );
-}
-
-function formatCliBoolean(value: boolean | null): string {
-  if (value == null) return '-';
-  return value ? 'yes' : 'no';
-}
-
-export function formatCliToolNotFoundMessage(id: string): string {
-  return `Tool integration not found: ${id}`;
-}
-
-export function formatCliToolNotToggleableMessage(id: string): string {
-  return `Tool integration is not toggleable: ${id}`;
-}
-
-export function formatCliToolMissingInstallCommandMessage(id: string): string {
-  return `No install command is registered for ${id}.`;
-}
-
-export function formatCliToolList(items: readonly ToolDashboardItem[]): string {
-  if (items.length === 0) return 'No external tools found.';
-  const header = 'ID\tNAME\tCATEGORY\tENABLED\tDETECTED\tNOTE';
-  const rows = items.map((item) =>
-    [
-      item.id,
-      item.name,
-      item.category,
-      formatCliBoolean(cliToolEnabled(item)),
-      formatCliBoolean(cliToolDetected(item)),
-      cliToolNote(item),
-    ].join('\t'),
-  );
-  return [header, ...rows].join('\n');
-}
-
-export function formatCliToolStatus(item: ToolDashboardItem): string {
-  const installCommand = cliToolCommand(item, 'command');
-  const authCommand = cliToolCommand(item, 'auth');
-  const note = cliToolNote(item);
-  const lines: string[] = [
-    `id: ${item.id}`,
-    `name: ${item.name}`,
-    `category: ${item.category}`,
-    `status: ${item.status}`,
-    `enabled: ${formatCliBoolean(cliToolEnabled(item))}`,
-    `detected: ${formatCliBoolean(cliToolDetected(item))}`,
-  ];
-  if (item.statusLabel) lines.push(`statusLabel: ${item.statusLabel}`);
-  if (note) lines.push(`note: ${note}`);
-  if (installCommand) lines.push(`installCommand: ${installCommand}`);
-  if (authCommand) lines.push(`authCommand: ${authCommand}`);
-  if (item.statusDetail) {
-    lines.push('', item.statusDetail);
-  }
-  return lines.join('\n');
+      : Effect.succeed(false);
+  });
 }

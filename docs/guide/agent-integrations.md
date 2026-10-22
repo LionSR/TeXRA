@@ -1,7 +1,6 @@
 <script setup>
 import IntegrationCard from '../.vitepress/components/IntegrationCard.vue';
 import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vue';
-import CliToolsLifecycleHero from '../.vitepress/components/CliToolsLifecycleHero.vue';
 </script>
 
 # Agent integrations
@@ -31,12 +30,9 @@ Both integrations follow the same setup flow from the TeXRA Settings.
 <IntegrationCard />
 <p class="hero-caption">Each integration has its own row: a <strong>Needs setup</strong> row expands its setup actions, and <strong>Re-check</strong> flips it to <strong>Ready</strong> with a settings summary.</p>
 
-The same flow runs step for step in a terminal: detect, install, sign in,
-recheck.
-
-<CliToolsLifecycleHero />
-
-<p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>status</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
+In the terminal client, `/plugins` lists the same integrations with their
+state and switches each one on or off. Install and sign in to each CLI with its
+own installer and sign-in command.
 
 Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: an **Approval policy** select (Ask, Block, or Auto-approve; default Ask) plus two toggles shown under Ask, **Require approval for file edits** and **Require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
 

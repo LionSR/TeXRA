@@ -1,10 +1,11 @@
 /**
- * The transcript fold's working state (PRD one-fold-three-renderers, 5.2):
- * what each written id left behind, the row and group positions, the open
- * cards and streams, and the live text, kept beside each `TranscriptView`
- * value in a module-private map so a host can neither depend on nor mutate
- * it. `transcriptFold.ts` writes it one event at a time; `paint` turns a
- * written slot into the row every host renders.
+ * A run's transcript working state: what each written id left behind, the
+ * row and group positions, the open cards and streams, and the live text.
+ * Its owner keeps it beside the `TranscriptView` it builds, never on it (the
+ * session view's updater keeps one per run, a cold read its own), so a host
+ * can neither depend on nor mutate it. `transcriptUpdate.ts` writes it one
+ * event at a time; `paint` turns a written slot into the row every host
+ * renders.
  */
 import {
   TOOL_CALL_STATUS,
@@ -39,7 +40,7 @@ import {
 
 import type { TranscriptView } from './sessionView';
 
-/** What a run's transcript is folded under. */
+/** What a run's transcript is built under. */
 export interface TranscriptContext {
   /** The surface shows debug-level log rows. */
   readonly debug: boolean;
@@ -52,11 +53,12 @@ export interface TranscriptContext {
 }
 
 // ---------------------------------------------------------------------------
-// Working state (fold-owned, never on the view)
+// Working state (never on the view)
 // ---------------------------------------------------------------------------
 
-/** What an id's writes left behind: what the events that write it again,
- *  its live text, and the open-work questions read. */
+/** The current state of one row id (a stage, a text stream, a tool card or a
+ *  log row): what a later event for the same id updates, and what `paint`
+ *  turns into the row. */
 export type Slot =
   | {
       readonly kind: 'stage';
@@ -107,53 +109,30 @@ export interface TranscriptIndexes {
   readonly activeTools: Set<string>;
   /** This turn's model-response stream, which `response.finalized` closes. */
   pendingModelResponseId: string | undefined;
-  /** The run parked or ended: cards and streams stay closed until it runs. */
+  /** The run is waiting or ended: cards and streams stay closed until it
+   *  runs again. */
   closed: boolean;
   /** Live text per row id, beside the rows rather than inside them: a chunk
-   *  can reach the fold before its row (PRD 5.2). A row paints its durable
-   *  text joined with this entry; the entry goes when the row finalizes, the
-   *  run ends, the run is removed, or its transcript tier is evicted. */
+   *  can arrive before its row. A row paints its durable text joined with
+   *  this entry; the entry goes when the row finalizes or the run ends, and
+   *  with the whole state when the run is removed or unsubscribed. */
   readonly live: Map<string, string>;
   /** Measured live text per streaming row id, extended per chunk rather than
    *  re-measured; a running tool card's is empty. */
   readonly cursors: Map<string, TranscriptText>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
-  /** The `seq` of the run's newest park (a `run.position` at `waiting` or
-   *  `halted`): the settled point a user message that follows forks at. */
-  lastPark: number | null;
-  /** A user message has been taken: a park before the first one (a fork's
+  /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
+   *  `halted`): the point a user message that follows forks at. */
+  lastWait: number | null;
+  /** A user message has been taken: a wait before the first one (a fork's
    *  seed) cuts before nothing. */
   seenUserMessage: boolean;
 }
 
-const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
-
-export function indexesOf(transcript: TranscriptView): TranscriptIndexes {
-  const indexes = INDEXES.get(transcript);
-  if (!indexes) {
-    throw new Error('TranscriptView value was not created by the fold');
-  }
-  return indexes;
-}
-
-/** A replaced transcript value sharing the previous value's indexes. */
-export function replaceTranscript(
-  transcript: TranscriptView,
-  patch: Partial<TranscriptView>,
-): TranscriptView {
-  const next: TranscriptView = { ...transcript, ...patch };
-  INDEXES.set(next, indexesOf(transcript));
-  return next;
-}
-
-export function emptyTranscript(): TranscriptView {
-  const transcript: TranscriptView = {
-    rows: [],
-    taskGroups: [],
-    settledRows: 0,
-  };
-  INDEXES.set(transcript, {
+/** A fresh run's working state. */
+export function emptyTranscriptIndexes(): TranscriptIndexes {
+  return {
     rowIndex: new Map(),
     taskGroupIndex: new Map(),
     compactionState: createCompactionActivityProjection(),
@@ -167,56 +146,63 @@ export function emptyTranscript(): TranscriptView {
     live: new Map(),
     cursors: new Map(),
     thinkingRowId: undefined,
-    lastPark: null,
+    lastWait: null,
     seenUserMessage: false,
-  });
-  return transcript;
+  };
+}
+
+/** A transcript with no rows. */
+export function emptyTranscript(): TranscriptView {
+  return { rows: [], taskGroups: [], settledRows: 0 };
 }
 
 // ---------------------------------------------------------------------------
-// Copy on touch (D5)
+// Copy on first write
 // ---------------------------------------------------------------------------
 
 /**
- * The row and group arrays this level created: written directly. Any other
- * array belongs to a published level and is copied on its first write. Reset
- * at the start of every level (`resetTranscriptOwnership`), so a throw
- * mid-fold cannot carry ownership into the next call.
+ * A run's working state, and the arrays the current update call created:
+ * those are written in place. Any other array belongs to a transcript already
+ * returned, so it is copied on its first write; one call copies each array at
+ * most once, however many events it applies.
  */
-let owned = new WeakSet<object>();
-
-/** Start a new publication level: nothing built before it is written. */
-export function resetTranscriptOwnership(): void {
-  owned = new WeakSet();
+export interface TranscriptWork {
+  readonly ix: TranscriptIndexes;
+  readonly owned: WeakSet<object>;
 }
 
+/** `transcript[key]`, writable: copied into `transcript` unless this call
+ *  created it. */
 export function writableArray<K extends 'rows' | 'taskGroups'>(
+  work: TranscriptWork,
   transcript: TranscriptView,
   key: K,
 ): TranscriptView[K] {
   const current = transcript[key];
-  if (owned.has(current)) return current;
+  if (work.owned.has(current)) return current;
   const copy = [...current] as TranscriptView[K];
-  owned.add(copy);
+  work.owned.add(copy);
   transcript[key] = copy;
   return copy;
 }
 
 export function rowById(
   transcript: TranscriptView,
+  ix: TranscriptIndexes,
   id: string,
 ): TranscriptRow | undefined {
-  const at = indexesOf(transcript).rowIndex.get(id);
+  const at = ix.rowIndex.get(id);
   return at === undefined ? undefined : transcript.rows[at];
 }
 
 /** The one writer of `rows`: in place by id, else inserted in `seqNo` order. */
 export function upsertRow(
+  work: TranscriptWork,
   transcript: TranscriptView,
   row: TranscriptRow,
 ): void {
-  const rows = writableArray(transcript, 'rows');
-  const { rowIndex } = indexesOf(transcript);
+  const rows = writableArray(work, transcript, 'rows');
+  const { rowIndex } = work.ix;
   const at = rowIndex.get(row.id);
   if (at !== undefined) {
     rows[at] = row;
@@ -241,13 +227,13 @@ export function upsertRow(
 }
 
 export function upsertCompactionRows(
+  work: TranscriptWork,
   transcript: TranscriptView,
   changedIndices: readonly number[],
 ): void {
-  const { compactionState } = indexesOf(transcript);
   for (const blockIndex of changedIndices) {
-    const block = compactionState.blocks[blockIndex];
-    if (block) upsertRow(transcript, compactionActivityRow(block));
+    const block = work.ix.compactionState.blocks[blockIndex];
+    if (block) upsertRow(work, transcript, compactionActivityRow(block));
   }
 }
 
@@ -271,8 +257,7 @@ export function isStreamingTextRow(
 // ---------------------------------------------------------------------------
 
 /** One event's working copy: the next value and the slots it wrote. */
-export interface Draft {
-  readonly ix: TranscriptIndexes;
+export interface Draft extends TranscriptWork {
   readonly next: TranscriptView;
   readonly ctx: TranscriptContext;
   readonly at: number;
@@ -343,8 +328,8 @@ function rowOf(
 
 /**
  * Paint one written slot. A streaming row joins its durable fields with its
- * live text, which may have arrived first (PRD 5.2, "In-flight text"); a
- * finalizing row drops that text, so a late chunk cannot reopen it.
+ * live text, which may have arrived first; a finalizing row drops that text,
+ * so a late chunk cannot reopen it.
  */
 export function paint(d: Draft, slot: Slot): void {
   const { ix, next } = d;
@@ -354,16 +339,16 @@ export function paint(d: Draft, slot: Slot): void {
   const runningTool =
     slot.kind === 'tool' && slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
   // One holder of a row's live text, `live`, whichever arrives first: chunks
-  // extend it, and a row that folds before any chunk seeds it with the text
-  // it carried, so the chunk re-delivering that text from offset zero ends
+  // extend it, and a row applied before any chunk seeds it with the text it
+  // carried, so the chunk re-delivering that text from offset zero ends
   // within the length held and is dropped.
   if (streamingText && slot.text && !ix.live.has(id)) {
     ix.live.set(id, slot.text);
   }
   const live = streamingText || runningTool ? ix.live.get(id) : undefined;
   const row = rowOf(slot, live, d.ctx);
-  if (row) upsertRow(next, row);
-  const current = rowById(next, id);
+  if (row) upsertRow(d, next, row);
+  const current = rowById(next, ix, id);
   if (current?.kind === 'thinking') {
     const newest = ix.thinkingRowId;
     const at = ix.rowIndex.get(id)!;

@@ -10,7 +10,7 @@ import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
   CHILD,
-  foldAll,
+  viewOf,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
 import {
@@ -102,12 +102,12 @@ describe('session Surface ownership', () => {
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
 
     const refuse = response();
-    surfaces.hostRequest(KEY, { kind: 'extractFigures' });
+    surfaces.hostRequest(KEY, { kind: 'popOut' });
     // Open another paper while the first paper's request remains pending.
     surfaces.sync([KEY, 'other-paper']);
     const error = {
       _tag: 'Rejected',
-      reason: 'Figure extraction is unavailable.',
+      reason: 'Pop-out to editor is unavailable.',
     } as const;
     refuse({ ok: false, error });
     await Promise.resolve();
@@ -171,7 +171,7 @@ describe('session Surface ownership', () => {
       ).drafts,
     ).toEqual([[ROOT, 'Saved text']]);
 
-    view.set(foldAll(buildScenario().events));
+    view.set(viewOf(buildScenario().events));
     await Promise.resolve();
     expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)?.text).toBe(
       'Saved text',
@@ -188,7 +188,7 @@ describe('session Surface ownership', () => {
   });
 
   it('retains the complete draft on rejected admission and clears only an unchanged accepted draft', async () => {
-    view.set(foldAll(buildScenario().events));
+    view.set(viewOf(buildScenario().events));
     const image = { fileName: 'figure.png', path: '/pasted/figure.png' };
     surfaces.act(KEY, {
       kind: 'draft',
@@ -248,7 +248,7 @@ describe('session Surface ownership', () => {
   it.each(['polish', 'record'] as const)(
     'returns %s to its originating draft after selection changes',
     async (operation) => {
-      view.set(foldAll(buildScenario().events));
+      view.set(viewOf(buildScenario().events));
       const finish = response();
       const request: HostRequest =
         operation === 'polish'

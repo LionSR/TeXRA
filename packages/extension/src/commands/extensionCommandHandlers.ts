@@ -89,7 +89,6 @@ export interface ExtensionCommandActions {
   indentCurrentTeX(): CommandProgram;
   fixCompilation(): CommandProgram;
   getTeXCount(): CommandProgram;
-  extractTikzFigures(): CommandProgram;
   compileTikzFigures(): CommandProgram;
   cloneOverleafProject(): CommandProgram;
   removeApiKey(): CommandProgram;
@@ -144,7 +143,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.indentCurrentTeX': (actions) => actions.indentCurrentTeX(),
   'texra.fixCompilation': (actions) => actions.fixCompilation(),
   'texra.getTeXCount': (actions) => actions.getTeXCount(),
-  'texra.extractTikzFigures': (actions) => actions.extractTikzFigures(),
   'texra.compileTikzFigures': (actions) => actions.compileTikzFigures(),
   [EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT]: (actions) =>
     actions.cloneOverleafProject(),

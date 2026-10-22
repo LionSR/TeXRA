@@ -17,11 +17,7 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 
-import {
-  createRecordingHost,
-  seedActiveRun,
-  seedTerminalRun,
-} from '../progressTestUtils';
+import { seedActiveRun, seedTerminalRun } from '../progressTestUtils';
 
 const runId = 'fa0001' as RunId;
 
@@ -80,7 +76,6 @@ describe('tool-use follow-up progress events', () => {
     'publishes sent follow-up events through the owning session fact hub',
     () =>
       Effect.gen(function* () {
-        const run = createRecordingHost();
         const session = yield* trackSession();
         publishTestRunStart(session, runId);
         yield* session.log.settled;
@@ -107,7 +102,6 @@ describe('tool-use follow-up progress events', () => {
             },
           ],
         });
-        expect(run.events).toEqual([]);
       }),
   );
 

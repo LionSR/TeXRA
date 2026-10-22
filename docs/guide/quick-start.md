@@ -108,10 +108,10 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 
 The dropdown menus at the bottom of the instruction box pick the agent
 (e.g. `polish` for improving writing) and the model (e.g. `anthropic/claude-sonnet-5-5`). The
-agent menu has three sections: **Chat** lists every agent, **Document task**
-lists the agents that also have a document task, and the third lists teams.
-The section you pick from decides what kind of run starts: there is no
-separate mode to set.
+agent menu lists each agent once, then your teams. The agent you pick
+decides what kind of run starts: one marked with a file icon runs its
+document task on your files, and any other agent or a team chats. There is
+no separate mode to set.
 Then write a specific instruction in the text area:
 
 ```
