@@ -53,7 +53,7 @@ import {
   type SkillCatalogEntry,
   type ToolDefinition,
 } from '@shared/schemas';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';

@@ -24,7 +24,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
 import type { MessageSchema } from '@texra-ai/llm';

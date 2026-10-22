@@ -120,16 +120,16 @@ export const EMPTY_DRAFT: Draft = Object.freeze({
 type WorkbenchLayout = Readonly<Record<string, unknown>>;
 
 /**
- * A refusal a surface paints. Cancellation is the user's own doing, so it
- * stays quiet and never reaches a surface field.
+ * A failed request a surface paints. Cancellation is the user's own
+ * doing, so it stays quiet and never reaches a surface field.
  */
-export type SurfaceRefusal = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
+type SurfaceRejection = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
 
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
   readonly session: string;
   /** The last failed request from this surface. Never persisted. */
-  readonly requestError: SurfaceRefusal | null;
+  readonly requestError: SurfaceRejection | null;
   /**
    * The shown run, decided once: `pruneSurface` applies the surface's
    * `SelectionRule`, so every reader takes the field as is. `null` is the
@@ -144,7 +144,7 @@ export interface Surface {
   readonly sending: ReadonlySet<RunId | 'launch'>;
   /** The error the runtime answered this surface's last request on a stream
    *  with, until the next request on that stream. Never persisted. */
-  readonly rejected: ReadonlyMap<RunId, SurfaceRefusal>;
+  readonly rejected: ReadonlyMap<RunId, SurfaceRejection>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;

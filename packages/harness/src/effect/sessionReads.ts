@@ -11,7 +11,10 @@ import { Effect, type PlatformError, Stream, SubscriptionRef } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import type { LiveRun } from '@agent/runtime/runs';
-import { runRefusal, type RunRefusal } from '@agent/runtime/runClassification';
+import {
+  runRejection,
+  type RunRejection,
+} from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
@@ -79,8 +82,8 @@ export interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
-  /** Why a resume of it here is refused, or null when it may proceed. */
-  readonly readRefusal: () => Effect.Effect<RunRefusal | null, Error>;
+  /** Why a resume of it here is rejected, or null when it may go ahead. */
+  readonly readRejection: () => Effect.Effect<RunRejection | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -250,7 +253,7 @@ export function sessionReads(
             deriveResumability(runId, handle),
             (decision) => decision.kind === 'checkpoint',
           ),
-        readRefusal: () => runRefusal(runId, handle),
+        readRejection: () => runRejection(runId, handle),
         readConversation: () => readCompletedRunConversation(runId, handle),
         readTrace: () => assembleTrace(runId, handle),
       };

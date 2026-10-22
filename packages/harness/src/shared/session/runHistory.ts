@@ -1,12 +1,12 @@
 /**
  * The run history: the only reader of run-history-private payloads and the
- * only writer of the rows a run's state is folded from, each through one
+ * only writer of the rows a run's state is rebuilt from, each through one
  * run's {@link RunCell}. `load` reads, `open` hands out the cell every write
  * of the run goes through.
  *
- * Stateless by construction. A cell holds its run's `RunState`, folded from
- * the batches it commits; that is what makes `foldRunState` provably the
- * same function on the live path and on resume, and it keeps a session-root
+ * Stateless by construction. A cell holds its run's `RunState`, rebuilt
+ * from the batches it commits; that is what makes `applyRunRows` the same
+ * function on the live path and on resume, and it keeps a session-root
  * service free of per-run mutable cache.
  */
 import { Cause, Context, Data, type Effect, type Scope } from 'effect';
@@ -23,10 +23,10 @@ import type {
   RunHistoryDraft,
   RunHistoryInconsistent,
   RunState,
-} from './runStateFold';
+} from './runState';
 
 /**
- * A refusal the run history itself decided. Database failures are NOT folded into
+ * A refusal the run history itself decided. Database failures are kept OUT of
  * this type: reporting a disk error as a stolen claim is the silent-
  * degradation defect in a different costume, so `open` and `load` keep
  * them in their error channel beside it.
@@ -46,10 +46,10 @@ import type {
  * - `unprepared-history`: `PreparedHistorySchema` over the history the batch
  *   assembles, at the write boundary of every batch that appends to or
  *   rewrites it, and on cold load.
- * - `inconsistent`: the rows do not fold; `cause` says why. From `load`, and
- *   from `RunCell.append` before it publishes: a batch is folded first and
- *   refused with nothing committed, because a published row the fold rejects
- *   is a run no later `load` can read.
+ * - `inconsistent`: the rows cannot be applied; `cause` says why. From
+ *   `load`, and from `RunCell.append` before it publishes: a batch is applied
+ *   first and refused with nothing committed, because a published row the
+ *   row handlers reject is a run no later `load` can read.
  * A violated `RunCell.append` precondition is a caller defect
  * (`Effect.die`), not an arm: the loop must not handle it.
  */
@@ -85,7 +85,7 @@ export function findStorageRefusal(
   return undefined;
 }
 
-/** The same append, every row admitted: held by the run's cell and the
+/** The same append, every row type allowed: used by the run's cell and the
  *  session's requests (`request.opened`/`decided`) alone. */
 export const runStateAppend = (
   append: Append,
@@ -93,8 +93,9 @@ export const runStateAppend = (
   // cast: one function; the narrowing is the type fence, not a runtime one.
   append as never;
 
-/** A run whose rows do not load: they do not fold, or one does not decode
- *  (corrupt, or an earlier build's); never a store that cannot be read. */
+/** A run whose rows do not load: they cannot be applied, or one does not
+ *  decode (corrupt, or an earlier build's); never a store that cannot be
+ *  read. */
 export const unloadable = (
   error: unknown,
 ): error is RunHistoryRefused | DatabaseReadFailed =>
@@ -109,10 +110,10 @@ export type CellError =
 
 /**
  * One run's state holder and the only writer of the rows its state is
- * folded from: the opening, every step, settlement and delivery, the input
+ * rebuilt from: the opening, every step, tool result and delivery, the input
  * it consumes, a compaction's edit, a model switch and its end all commit
  * through {@link RunCell.append}, and nothing sets the state it holds but
- * what that folds back. The loop hands the same cell to the invoker and the
+ * what that returns. The loop hands the same cell to the invoker and the
  * dispatch unit, so no run service keeps a copy of the state it commits
  * against.
  */
@@ -120,15 +121,15 @@ export interface RunCell {
   readonly runId: RunId;
   /** The state the run continues from. Nothing mirrors it. */
   readonly current: Effect.Effect<RunState>;
-  /** The state the cell opened on: what a resume folded from stored rows,
+  /** The state the cell opened on: what a resume rebuilt from stored rows,
    *  or a fresh run's before its opening batch. */
   readonly opened: RunState;
   /**
-   * Commit one batch against the current state and hold what the fold gives
-   * back. Rows that read the state (a step, a settlement, a delivery) are
+   * Commit one batch against the current state and hold the state the batch
+   * leaves. Rows that read the state (a step, a tool result, a delivery) are
    * built from the state the batch commits against. Read-append-write is
    * one uninterruptible region under the cell's lock, the wait for the lock
-   * included: a settlement queued behind a sibling when the run stops
+   * included: a tool result queued behind a sibling when the run stops
    * belongs to a tool that already ran, and committing it keeps a resume
    * from running it again. `alongside` decides another aggregate's rows,
    * appended after the batch's in its one append: a child turn's delivery
@@ -144,7 +145,7 @@ export interface RunCell {
    * - a `model.message` `append` naming `sourceResponse` requires that
    *   response to be the pending one, and its first message to be a tool
    *   group carrying, at each call's ordinal, that call's committed
-   *   settlement (committed before, or earlier in this batch): the canonical
+   *   result (committed before, or earlier in this batch): the canonical
    *   tool message binds results to calls positionally, the run history
    *   keys them by `callId`.
    */
@@ -157,9 +158,9 @@ export interface RunCell {
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` a surface landed), in commit
-   * order, whatever this cell appended since. Folding one such row onto the
-   * cell instead cannot work once a sibling call's settlement has committed
-   * after it.
+   * order, whatever this cell appended since. Applying one such row to the
+   * cell's state instead cannot work once a sibling call's result has
+   * committed after it.
    */
   readonly refresh: Effect.Effect<
     RunState,
@@ -185,7 +186,7 @@ export interface RunOpening<E = never> {
     state: RunState | null,
   ) => Effect.Effect<readonly SessionEventDraft[], E>;
   /**
-   * The publisher job the caller is inside: the cell folds the run's rows
+   * The publisher job the caller is inside: the cell reads the run's rows
    * in that job and appends through its transaction, never a nested one,
    * and takes no claim, so the job's other rows and the cell's commit
    * together.
@@ -198,16 +199,16 @@ export class RunHistory extends Context.Service<
   RunHistory,
   {
     /**
-     * Fold a run's rows into its state. `null` only when no run history row
-     * has folded; a run's input folds nothing. Run history rows without
-     * an opening `run.position` are a malformed aggregate and fail
-     * `inconsistent`, because folding an `attempt` or a `response` into a
+     * Rebuild a run's state from its rows. `null` only when no run history
+     * row was applied; a run's input changes no state. Run history rows
+     * without an opening `run.position` are corrupt history and fail
+     * `inconsistent`, because applying an `attempt` or a `response` to a
      * fresh run is how a paid invocation gets issued twice. Reads the run
-     * aggregate in full: the state is the fold of every row.
+     * aggregate in full: the state comes from every row.
      */
     readonly load: (
       run: RunId,
-      /** Fold only the rows up to this `seq`: the run as it stood there. */
+      /** Read only the rows up to this `seq`: the run as it stood there. */
       through?: number,
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
