@@ -315,15 +315,17 @@ attempt the same way, with `purpose: 'summary'`
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
-**W2.** A completed provider turn (one invocation's answer; a loop turn may hold
-none, or several as the loop calls the model again after tool results) MUST
-commit once, as one `response` row with a fresh `responseId`, in the batch that
-moves the position to `response.ready`. It carries one dispatch fact per local
-call the harness dispatches; an editor's language-model turn carries none,
-because its host runs its calls (`agent/runtime/run/tools.ts:59-60`)
-(`agent/runtime/ModelInvoker.ts:378-401`,
+**W2.** A completed provider turn of a loop invocation (one invocation's answer;
+a loop turn may hold none, or several as the loop calls the model again after
+tool results) MUST commit once, as one `response` row with a fresh `responseId`,
+in the batch that moves the position to `response.ready`. It carries one
+dispatch fact per local call the harness dispatches; an editor's language-model
+turn carries none, because its host runs its calls
+(`agent/runtime/run/tools.ts:59-60`) (`agent/runtime/ModelInvoker.ts:378-401`,
 `shared/schemas/runHistoryEvent.ts:236-296`). The loop MUST dispatch only the
-pending response its fold holds (`agent/runtime/loop/toolUse.ts:342-349`).
+pending response its fold holds (`agent/runtime/loop/toolUse.ts:342-349`). W2
+does not cover a compaction summary, whose answer its caller lands as a
+`context.edit`, or a helper call, which records no row (W1).
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
 guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:576-608`,
