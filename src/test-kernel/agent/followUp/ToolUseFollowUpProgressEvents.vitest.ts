@@ -64,7 +64,6 @@ describe('tool-use follow-up progress events', () => {
     handle.attachControls({
       oneShot: false,
       requestImmediateCompaction: () => Effect.void,
-      editView: () => Effect.void,
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
     });

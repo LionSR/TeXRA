@@ -274,10 +274,7 @@ const decideRequest = (
 /** Answered by the run's live loop once its resume here settles (none: refused): a /compact or /model sent mid-resume waits until the run rests. */
 const viaControls = (
   deps: RequestDeps,
-  req: Extract<
-    RuntimeRequest,
-    { kind: `run.${'compact' | 'reset' | 'model'}` }
-  >,
+  req: Extract<RuntimeRequest, { kind: `run.${'compact' | 'model'}` }>,
 ): Effect.Effect<Outcome, RequestError> =>
   Effect.gen(function* () {
     const { runId } = req;
@@ -289,12 +286,12 @@ const viaControls = (
       return yield* unavailable(
         req.kind === 'run.compact'
           ? `This ${noun} has no conversation to compact.`
-          : `Resume the ${noun} to ${req.kind === 'run.reset' ? 'reset it' : 'switch its model'}.`,
+          : `Resume the ${noun} to switch its model.`,
       );
-    let action = controls.requestImmediateCompaction();
-    if (req.kind === 'run.reset')
-      action = controls.editView(req.handoff ?? null);
-    if (req.kind === 'run.model') action = controls.switchModel(req.model);
+    const action =
+      req.kind === 'run.model'
+        ? controls.switchModel(req.model)
+        : controls.requestImmediateCompaction();
     return yield* action.pipe(
       Effect.mapError((error) => unavailable(error.message)),
       Effect.as(done),
@@ -384,7 +381,6 @@ const handle = (
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single');
     case 'run.compact':
-    case 'run.reset':
     case 'run.model':
       return viaControls(deps, req);
     case 'run.rename':

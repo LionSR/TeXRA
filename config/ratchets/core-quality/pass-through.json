@@ -1,6 +1,5 @@
 {
   "packages/harness/src/agent/runtime/executeAgent.ts": 2,
-  "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/storage/runRecords.ts": 1,
   "packages/harness/src/agent/trace/index.ts": 1,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 2,

@@ -290,33 +290,6 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
   });
 }
 
-/** `/handoff <text>` and `/reset`: the focused task continues in a fresh
- *  context, from the text, or from the next message. */
-function resetCliTask(
-  runSession: Session,
-  handoff: string | null,
-): Effect.Effect<void> {
-  return Effect.suspend(() => {
-    const runId = selectedRunIdSignal.get();
-    if (runId === undefined) {
-      setTransientNotice('No task to hand off.');
-      return Effect.void;
-    }
-    return runSession.request({ kind: 'run.reset', runId, handoff }).pipe(
-      Effect.match({
-        onFailure: (error) => appendLocalRequestRefusal(error, runId),
-        onSuccess: () =>
-          appendLocalNotice(
-            handoff === null
-              ? 'Reset: the model no longer sees the conversation before this point and answers your next message from it alone.'
-              : 'Handed off: the model no longer sees the conversation before this point and continues from your text.',
-            runId,
-          ),
-      }),
-    );
-  });
-}
-
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
  *  focused agent messages it. */
@@ -341,29 +314,6 @@ export function sessionContributions(
           category: 'session',
           echo: 'ifPersists',
           handler: (_remainder, context) => forkCliTask(context),
-        },
-        {
-          name: 'handoff',
-          description:
-            'Continue in a fresh context that starts from your text: /handoff <text>',
-          category: 'session',
-          echo: 'ifPersists',
-          handler: (remainder) => {
-            const text = remainder.trim();
-            if (text !== '') return resetCliTask(runSession, text);
-            setTransientNotice(
-              'Usage: /handoff <text the task continues from>',
-            );
-            return Effect.void;
-          },
-        },
-        {
-          name: 'reset',
-          description:
-            'Clear what the model sees of this task; it answers your next message alone',
-          category: 'session',
-          echo: 'ifPersists',
-          handler: () => resetCliTask(runSession, null),
         },
         {
           name: 'rename',

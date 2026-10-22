@@ -59,15 +59,6 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     ...runScoped,
     at: z.int().positive().nullish(),
   }),
-  /**
-   * Clear the model's view of this run at its next park; with `handoff`, the
-   * cleared view starts from that text, which the run then answers.
-   */
-  z.object({
-    kind: z.literal('run.reset'),
-    ...runScoped,
-    handoff: z.string().min(1).nullish(),
-  }),
   /** Switch a live run to `model` from its next model boundary. */
   z.object({
     kind: z.literal('run.model'),

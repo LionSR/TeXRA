@@ -1,5 +1,5 @@
 name: golden_fork
-description: The golden store's forked conversation, and the handoff that continues its fork.
+description: The golden store's forked conversation.
 
 prompt: |-
   GOLDEN-FORK: say what you were shown.

@@ -236,8 +236,8 @@ function goldenTurn(
         : text('Script done.'),
     );
   }
-  // The fork and its handoff: each reply names its view's user messages by
-  // their last lines, so the store records what the edit left.
+  // The fork: each reply names its view's user messages by their last
+  // lines, so the store records what the edit left.
   if (system.includes('GOLDEN-FORK')) {
     const users = turn.messages.flatMap((message) =>
       message.role === 'user'
@@ -429,8 +429,7 @@ export function validationModel(config: ModelConfig): {
       content = text('Earlier turns, summarized.');
     } else if (echo) {
       // The user messages the request carries, in order, each by its last
-      // 60 characters: what a fork, a reset, a handoff or a compaction left
-      // of the model's view.
+      // 60 characters: what a fork or a compaction left of the model's view.
       const seen = turn.messages.flatMap((message) =>
         message.role === 'user'
           ? message.content.flatMap((part) =>

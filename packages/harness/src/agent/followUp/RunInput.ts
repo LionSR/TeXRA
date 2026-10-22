@@ -3,21 +3,10 @@
  * the run's rows still queue. The rows are the authority; this holds no
  * copy of them.
  */
-import { Deferred, Effect, Latch } from 'effect';
+import { Effect, Latch } from 'effect';
 
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { isInstruction } from './followUpMessages';
-
-/**
- * A host's edit of a parked run's view (durable harness, gap 3): a reset
- * (`handoff` null) or a handoff, the reset with the user's note as the
- * message the next turn answers. `done` settles when its rows commit, or
- * fails when they are refused or the run's input ends first.
- */
-export interface ViewEdit {
-  readonly handoff: string | null;
-  readonly done: Deferred.Deferred<void, Error>;
-}
 
 /** The message a `/compact` on a parked run wakes it with: the compaction
  *  runs at that turn's model boundary, which consumes the request. */
@@ -25,18 +14,16 @@ const COMPACTION_REQUEST =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 /**
- * What a run takes from its input: queued follow-ups in commit order, a
+ * What a run takes from its input: queued follow-ups in commit order, or a
  * maintenance turn (a `/compact` with nothing else queued, or the loop's
- * continuation), which never shares a batch with follow-ups, or a view
- * edit, taken before either.
+ * continuation), which never shares a batch with follow-ups.
  */
 export type FollowUpBatch =
   | {
       readonly kind: 'followUps';
       readonly followUps: readonly QueuedFollowUp[];
     }
-  | { readonly kind: 'synthetic'; readonly text: string }
-  | { readonly kind: 'edit'; readonly edit: ViewEdit };
+  | { readonly kind: 'synthetic'; readonly text: string };
 
 /**
  * One generation's reader. A take reads the run's readable rows (`pending`)
@@ -51,9 +38,6 @@ export type FollowUpBatch =
  */
 export class RunInput {
   private readonly signal = Latch.makeUnsafe(false);
-  private edit: ViewEdit | null = null;
-  /** The follow-ups queued when the edit was: delivered before it. */
-  private beforeEdit: ReadonlySet<string> = new Set();
   private ended = false;
 
   /** The run's queued follow-ups, read from its committed rows. */
@@ -89,21 +73,6 @@ export class RunInput {
     Latch.openUnsafe(this.signal);
   }
 
-  /**
-   * Queue one view edit, taken after the follow-ups already queued and
-   * before anything queued later. False while another is queued or once the
-   * generation has ended.
-   */
-  editView(edit: ViewEdit): Effect.Effect<boolean> {
-    return Effect.map(this.pending, (pending) => {
-      if (this.ended || this.edit !== null) return false;
-      this.edit = edit;
-      this.beforeEdit = new Set(pending.map((f) => f.followUpId));
-      Latch.openUnsafe(this.signal);
-      return true;
-    });
-  }
-
   /** A `/compact` is pending: it wakes a parked run. */
   private readonly compacting: Effect.Effect<boolean> = Effect.suspend(() =>
     Effect.map(this.controls, (controls) =>
@@ -111,42 +80,30 @@ export class RunInput {
     ),
   );
 
-  /** Whether a take would return now: a view edit, a `/compact`, or a
-   *  readable message is queued. */
+  /** Whether a take would return now: a `/compact` or a readable message
+   *  is queued. */
   readonly hasQueued: Effect.Effect<boolean> = Effect.suspend(() =>
-    this.edit !== null
-      ? Effect.succeed(true)
-      : Effect.zipWith(
-          this.compacting,
-          this.pending,
-          (compacting, pending) => compacting || pending.length > 0,
-        ),
+    Effect.zipWith(
+      this.compacting,
+      this.pending,
+      (compacting, pending) => compacting || pending.length > 0,
+    ),
   );
 
-  /** The queued messages, when they are all a take would read now: no view
-   *  edit is queued. Nothing is taken; it only reads. */
+  /** The queued messages, when there are any. Nothing is taken; it only
+   *  reads. */
   readonly takeQueued: Effect.Effect<Extract<
     FollowUpBatch,
     { kind: 'followUps' }
   > | null> = Effect.suspend(() =>
     Effect.map(this.pending, (followUps) =>
-      this.edit === null && followUps.length > 0
-        ? ({ kind: 'followUps', followUps } as const)
-        : null,
+      followUps.length > 0 ? ({ kind: 'followUps', followUps } as const) : null,
     ),
   );
 
-  /** End the generation: what is pending stays queued on the run's rows; a
-   *  view edit nobody took fails. */
+  /** End the generation: what is pending stays queued on the run's rows. */
   end(): void {
     this.ended = true;
-    if (this.edit !== null) {
-      Deferred.doneUnsafe(
-        this.edit.done,
-        Effect.fail(new Error('The task stopped before its view was edited.')),
-      );
-      this.edit = null;
-    }
     Latch.openUnsafe(this.signal);
   }
 
@@ -158,16 +115,6 @@ export class RunInput {
         // Closed before the read: a signal landing after it reopens the wait.
         Latch.closeUnsafe(this.signal);
         const pending = yield* this.pending;
-        const edit = this.edit;
-        if (edit !== null) {
-          const earlier = pending.filter((f) =>
-            this.beforeEdit.has(f.followUpId),
-          );
-          if (earlier.length > 0)
-            return { kind: 'followUps', followUps: earlier } as const;
-          this.edit = null;
-          return { kind: 'edit', edit } as const;
-        }
         if (pending.length > 0) {
           return { kind: 'followUps', followUps: pending } as const;
         }

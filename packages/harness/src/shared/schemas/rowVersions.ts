@@ -130,7 +130,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v4: stateless Google responses may have a null provider ID. Older builds
   // must refuse the newer store rather than parse those rows as corrupt.
   'model.message': { version: 4, upcast: [] },
-  'context.edit': V1,
+  // v2: the causes are `compaction` and `fork` alone (no upcaster, as
+  // `run.config`: an earlier build's edit of another cause would fail its
+  // run as damaged rather than read as that build's).
+  'context.edit': { version: 2, upcast: [] },
   'tool.intent': V1,
   'script.call': V1,
   'tool.result': V1,

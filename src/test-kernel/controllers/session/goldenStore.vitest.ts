@@ -10,8 +10,8 @@
  * incremental tables hold; a listing that differs from the fold over the
  * whole history; a store a newer build wrote that opens, or is rewritten;
  * and the durable harness's row shapes read back other than written: a fork
- * whose `run.start` does not name its source, a fork or handoff
- * `context.edit` missing or out of order, an awaited child without the call
+ * whose `run.start` does not name its source, a fork's seed
+ * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
  * (`crashConformance*.vitest.ts`), which truncates a clean store at every
  * commit and resumes it, but for one a real kill made: `golden_effect`,
@@ -108,8 +108,7 @@ const CODEX = RunIdSchema.parse('a0000000000b');
 const SCRIPTED = RunIdSchema.parse('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
 const DEFINED = '2aafdfd4becaaa1df690b36a';
-/** A headless run, the fork `texra resume --fork` made of it, and the
- *  handoff that continued the fork. */
+/** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = RunIdSchema.parse('a0000000000e');
 const FORKED = RunIdSchema.parse('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
@@ -299,8 +298,8 @@ describe('the golden 1.0 store', () => {
         { kind: 'compact', trigger: 'user' },
       ]);
       // The durable harness's row shapes (H2): a fork's start names its
-      // source, and its first history row seeds the source's view; a handoff
-      // cuts the fork's view to its note; an awaited child names the call
+      // source, and its first history row seeds the source's view; an
+      // awaited child names the call
       // that owns it, and a Codex child, which nobody awaits, names none.
       const forked = qualifyAggregateId('run', FORKED);
       expect(
@@ -322,10 +321,7 @@ describe('the golden 1.0 store', () => {
             ? [[event.payload.cause, event.payload.messages.length > 0]]
             : [],
         ),
-      ).toEqual([
-        ['fork', true],
-        ['handoff', false],
-      ]);
+      ).toEqual([['fork', true]]);
       expect(
         events.flatMap((event) =>
           event.type === 'run.start' && event.parent !== null

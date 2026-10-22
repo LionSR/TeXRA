@@ -29,7 +29,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
  * be stopped; while it works, an
  * agent's run takes approval grants, and a conversation (not a task's
- * recipe) its compaction and a reset or handoff. Nothing that rewrites or
+ * recipe) its compaction. Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest settled point, before any turn it is in now). After, a
@@ -49,7 +49,6 @@ export function runActions(
     | 'substate'
     | 'identity'
     | 'recipe'
-    | 'parentId'
     | 'forkPoint'
   >,
   stranded: boolean,
@@ -65,8 +64,6 @@ export function runActions(
       'stop',
       ...(agent ? (['grant'] as const) : []),
       ...(compact ? (['compact'] as const) : []),
-      // An agent's view is its parent's to edit, never the user's.
-      ...(compact && run.parentId === null ? (['reset'] as const) : []),
       'rename',
       ...(forkable(run) ? (['fork'] as const) : []),
       ...inspectActions(),
@@ -128,7 +125,6 @@ const ACTION_LABEL: Record<RunAction, string> = {
   resume: 'Resume',
   runNew: 'Run again',
   fork: 'Forking',
-  reset: 'Handing off',
   files: "Working with the run's files",
   delete: 'Deleting',
   rename: 'Renaming',
