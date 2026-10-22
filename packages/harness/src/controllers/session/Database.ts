@@ -23,7 +23,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   Clock,
   Context,
-  Scope,
   Effect,
   Exit,
   FileSystem,
@@ -392,30 +391,30 @@ export const databaseLayer = (
       const withTransaction = SqlClient.makeWithTransaction({
         transactionService: sql.transactionService,
         spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: Effect.gen(function* () {
-          const mode = yield* TxMode;
-          const scope = yield* Scope.make();
-          const connection = yield* Scope.provide(sql.reserve, scope);
-          // Publish the committed write before the reserved connection is
-          // released, including when interruption is pending after COMMIT.
-          yield* Scope.addFinalizerExit(scope, (exit) =>
-            mode === 'write' && Exit.isSuccess(exit)
-              ? Effect.gen(function* () {
-                  yield* observe(
-                    commitFromRows(
-                      yield* connection.executeUnprepared(
-                        highWater,
-                        [],
-                        undefined,
+        acquireConnection: (restore) =>
+          Effect.gen(function* () {
+            const mode = yield* TxMode;
+            const connection = yield* restore(sql.reserve);
+            // Runs before the release (added after it): a COMMIT is published
+            // before the connection goes, even with an interrupt pending.
+            yield* Effect.addFinalizer((exit) =>
+              mode === 'write' && Exit.isSuccess(exit)
+                ? Effect.gen(function* () {
+                    yield* observe(
+                      commitFromRows(
+                        yield* connection.executeUnprepared(
+                          highWater,
+                          [],
+                          undefined,
+                        ),
                       ),
-                    ),
-                  );
-                  yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                }).pipe(Effect.orDie)
-              : Effect.void,
-          );
-          return [scope, connection] as const;
-        }),
+                    );
+                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                  }).pipe(Effect.orDie)
+                : Effect.void,
+            );
+            return connection;
+          }),
         begin: (connection) =>
           Effect.flatMap(TxMode, (mode) =>
             connection.executeUnprepared(

@@ -6,6 +6,7 @@ import { PassThrough } from 'node:stream';
 
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
+import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import { makeJsonRpcConnection } from '@tools/jsonRpc';
@@ -230,6 +231,26 @@ describe('JsonRpcConnection', () => {
       expect(yield* Effect.flip(connection.request('late'))).toMatchObject({
         _tag: 'JsonRpcConnectionDisposed',
         message: 'test teardown',
+      });
+    }),
+  );
+
+  // A peer that closed its stdin but keeps its stdout open never ends the
+  // input: the close waits for it only so long.
+  it.effect('closes after a writer failure though the input stays open', () =>
+    Effect.gen(function* () {
+      const connection = yield* makeJsonRpcConnection({
+        input: chunksOf(new PassThrough()),
+        output: Sink.fail(new Error('EPIPE')),
+        onNotification: () => Effect.void,
+      });
+      const pending = yield* Effect.forkChild(
+        Effect.flip(connection.request('stranded')),
+      );
+      yield* TestClock.adjust('2 seconds');
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: 'JsonRpcConnectionDisposed',
+        message: 'JSON-RPC output failed: EPIPE',
       });
     }),
   );

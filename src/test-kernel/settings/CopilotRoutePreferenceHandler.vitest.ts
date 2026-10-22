@@ -371,9 +371,10 @@ describe('Copilot route preference handler', () => {
           expect(Cause.pretty(cause)).toContain(cleanup.message);
         }
         if (scenario === 'denied-with-cleanup-failure') {
+          // The cleanup defect elects the denial to a defect too.
           expect(
             cause.reasons.some((reason) => Cause.isFailReason(reason)),
-          ).toBe(true);
+          ).toBe(false);
           expect(Cause.pretty(cause)).toContain(denial.message);
         } else {
           expect(

@@ -679,16 +679,13 @@ describe('native editor model', () => {
           ),
         );
         if (!Exit.isFailure(exit)) throw new Error('Expected failure.');
+        // A cleanup defect elects the primary failure to a defect too.
         expect(
-          exit.cause.reasons.find(Cause.isFailReason)?.error,
-        ).toMatchObject({
-          kind: 'malformed-output',
-        });
-        expect(
-          exit.cause.reasons.find(Cause.isDieReason)?.defect,
-        ).toMatchObject({
-          cause: cleanup,
-        });
+          exit.cause.reasons.filter(Cause.isDieReason).map((r) => r.defect),
+        ).toEqual([
+          expect.objectContaining({ kind: 'malformed-output' }),
+          expect.objectContaining({ cause: cleanup }),
+        ]);
         expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
       }),
   );

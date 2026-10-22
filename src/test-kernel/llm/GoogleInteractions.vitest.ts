@@ -874,24 +874,29 @@ describe('canonical Google Interactions protocol', () => {
         yield* Fiber.join(interruption);
         const exit = yield* Fiber.await(fiber);
         assert(exit._tag === 'Failure');
-        if (timedOut) {
+        const deadline = {
+          kind: 'observation-deadline',
+          operation,
+          responseId: 'int_1',
+        };
+        const defects = exit.cause.reasons
+          .filter(Cause.isDieReason)
+          .map((reason) => reason.defect);
+        if (!timedOut) expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        if (kind === 'deadline') {
+          expect(defects).toHaveLength(0);
           expect(
             exit.cause.reasons.find(Cause.isFailReason)?.error,
-          ).toMatchObject({
-            kind: 'observation-deadline',
-            operation,
-            responseId: 'int_1',
-          });
-        } else expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-        if (kind === 'deadline')
-          expect(exit.cause.reasons.filter(Cause.isDieReason)).toHaveLength(0);
-        else {
-          expect(
-            exit.cause.reasons.find(Cause.isDieReason)?.defect,
-          ).toMatchObject({
-            cause: failure,
-            ...(kind === 'submit' ? {} : { operation, responseId: 'int_1' }),
-          });
+          ).toMatchObject(deadline);
+        } else {
+          // A cleanup defect elects the deadline failure to a defect too.
+          expect(defects).toEqual([
+            ...(timedOut ? [expect.objectContaining(deadline)] : []),
+            expect.objectContaining({
+              cause: failure,
+              ...(kind === 'submit' ? {} : { operation, responseId: 'int_1' }),
+            }),
+          ]);
         }
         expect(fetchModel).toHaveBeenCalledTimes(1);
         if (kind !== 'cancel')
@@ -1625,16 +1630,17 @@ describe('canonical Google Interactions protocol', () => {
             Stream.runDrain(configured.streamTurn(prepared)),
           );
           assert(exit._tag === 'Failure');
+          // A cleanup defect elects the primary failure to a defect too.
           expect(
-            exit.cause.reasons.find(Cause.isFailReason)?.error,
-          ).toMatchObject({
-            kind: 'malformed-output',
-            responseId: 'int_1',
-            model: 'gemini-test',
-          });
-          expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
+            exit.cause.reasons.filter(Cause.isDieReason).map((r) => r.defect),
+          ).toEqual([
+            expect.objectContaining({
+              kind: 'malformed-output',
+              responseId: 'int_1',
+              model: 'gemini-test',
+            }),
             cleanupFailure,
-          );
+          ]);
         } else if (phase === 'successful-take') {
           const exit = yield* Effect.exit(
             configured.streamTurn(prepared).pipe(
