@@ -207,9 +207,7 @@ describe('plugin rosters', () => {
         'setup',
         [
           'probe_environment',
-          'verify_setup',
           'unset_api_key',
-          'list_api_keys',
           'invoke_command',
           'install_vscode_extension',
           'read_config',
