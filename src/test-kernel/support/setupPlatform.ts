@@ -11,42 +11,30 @@
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
  */
-// The two services by their own modules, not the package barrel: a setup
-// file loads before a suite's `vi.mock` registrations, and the barrel would
-// cache `NodeChildProcessSpawner`'s `node:child_process` ahead of a suite
-// that mocks it. The harness spawner is lazy for the same reason
-// (`nodeSpawnerLayer`).
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Context, Effect, Layer, RcMap } from 'effect';
-import { afterEach, beforeEach } from 'vitest';
+import { ConfigProvider, Context, Effect, Layer } from 'effect';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 import type { AgentCatalogShape } from '@agent/index/agentCatalog';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { RouteRetries } from '@agent/runtime/run/invocation';
+import type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   GlobalValues,
   type ProcessServices,
   type SessionOwner,
 } from '@platform/processRuntime';
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
+import {
+  AgentDirectories,
+  AppState,
+  type AgentDirectoriesPort,
+  type StateStore,
+} from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
-import {
-  GlobalDatabase,
-  ProjectDatabases,
-  type CurrentValues,
-  type Database,
-  type DatabaseOpenFailed,
-} from '@shared/session/database';
+import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
@@ -57,10 +45,9 @@ import {
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
 import { goalContinuation } from '@tools/goal/goalContinuation';
-import { toolCatalogLayer } from '@tools/liveTools';
 import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { nodeSpawnerLayer } from './childProcessTestLayer';
+import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
@@ -100,6 +87,44 @@ export const globalValuesOver = <E, R>(
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
   toolTable([{ id: 'goal', arms: HARNESS_PLUGIN_ARMS.goal }, ...ARMED_PLUGINS]),
 );
+
+/** The bare runtime's plugins: goal mode's continuation (and its switch) and
+ *  the row kinds TeXRA's plugins own, but no tool (the real table loads every
+ *  tool): a suite that resolves a run's tools runs on the session graph's
+ *  runtime or provides `pluginCatalogLayer`. */
+const BARE_PLUGINS: readonly Plugin[] = [
+  defineBuiltinPlugin({
+    id: 'goal',
+    toggle: 'off',
+    availability: { check: () => Effect.succeed(true) },
+    continuation: goalContinuation,
+    arms: HARNESS_PLUGIN_ARMS.goal,
+  }),
+  ...ARMED_PLUGINS,
+];
+
+/** The kernel's composition over the fake host: `processLayer`'s options
+ *  with `plugins` under the storage root `root`. The setting rows travel
+ *  with the fake host's config (`ConfigProvider.catalog`). */
+export const testProcessOptions = (
+  plugins: readonly Plugin[],
+  root: string,
+): ProcessLayerOptions => ({
+  // Under the worker's storage root: its global storage, and its mcp.json
+  // rather than the developer's `~/.texra/mcp.json`.
+  storageRoot: root,
+  plugins,
+  secrets: fakeHostSecrets,
+  appState: AppState.layer(fakeHostAppState),
+  languageModel: fakeHostLanguageModel,
+  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+  toolAvailability: unprobedToolAvailability,
+  // The harness reports no usage; the telemetry suite starts its own.
+  usageLog: UsageLog.disabled,
+  // The suite's captured entries are the assertion surface: emit every
+  // level the programs run and let each test filter what it reads.
+  minimumLogLevel: 'Trace',
+});
 
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
@@ -309,143 +334,102 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 }
 
 /**
- * Installs a fake host right now. Suites needing an ad hoc, one-off install
- * (rather than the standard per-test `setupPlatform` wiring below) call this.
- *
- * The harness modules are imported at call time, not statically: a suite
- * that calls `vi.resetModules()` gets fresh module instances, and the install
- * must land in the instances the code under test will import next.
+ * Binds `host` as the installed one: the host the delegating process services
+ * read, its environment and its workspace roots. The kernel's setup file
+ * binds the suite-default host this way before a suite's modules load, and
+ * leaves the process services to `installFakeHost` after collection.
  */
-export async function installFakeHost(host: FakeHost): Promise<void> {
-  const [
-    { initTestWorkspaceRoots },
-    { initTestProcessRuntime, testSessionOwner, tryTestProcessRuntime },
-    { Layer, ManagedRuntime },
-    { testHttpClientLayer },
-    { Secrets },
-    { AgentDirectories, AppState },
-    { LanguageModel },
-    { unprobedToolAvailability },
-    { SessionOwner: SessionOwnerTag },
-    { AgentCatalog },
-    { processStoresLayer },
-  ] = await Promise.all([
-    import('@test/support/testWorkspaceRoots'),
-    import('./testProcessRuntime'),
-    import('effect'),
-    import('@test/support/fetchTestUtils'),
-    import('@platform/secrets'),
-    import('@platform/interfaces'),
-    import('@platform/languageModel'),
-    import('./toolAvailabilityTestLayer'),
-    import('@platform/processRuntime'),
-    import('@agent/index/agentCatalog'),
-    import('@controllers/session/appStateStore'),
-  ]);
+export async function bindFakeHost(host: FakeHost): Promise<void> {
+  const { initTestWorkspaceRoots } =
+    await import('@test/support/testWorkspaceRoots');
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
   Object.assign(harnessEnv, host.env ?? {});
+  initTestWorkspaceRoots(host.roots);
+}
+
+/**
+ * Installs a fake host right now, and builds the process services and the
+ * bare runtime over it on the first install of a module instance. Suites
+ * needing an ad hoc, one-off install (rather than the standard per-test
+ * `setupPlatform` wiring below) call this.
+ *
+ * The harness modules are imported at call time, not statically: a suite
+ * that calls `vi.resetModules()` gets fresh module instances, and the install
+ * must land in the instances the code under test will import next. The
+ * kernel's first build runs after the suite is collected, so the production
+ * modules load over the suite's `vi.mock` registrations, as the session
+ * graph's do.
+ */
+export async function installFakeHost(host: FakeHost): Promise<void> {
+  const [
+    { initTestProcessRuntime, testSessionOwner, tryTestProcessRuntime },
+    { Layer, ManagedRuntime },
+    { testHttpClientLayer },
+    { SessionOwner: SessionOwnerTag },
+    { AgentCatalog },
+    { ownerProcessLayer },
+  ] = await Promise.all([
+    import('./testProcessRuntime'),
+    import('effect'),
+    import('@test/support/fetchTestUtils'),
+    import('@platform/processRuntime'),
+    import('@agent/index/agentCatalog'),
+    // The production composition even in a suite that mocks its module
+    // (`AgentPackage`'s stand-in composes over this runtime).
+    vi.importActual<typeof import('@controllers/session/sessionLayer')>(
+      '@controllers/session/sessionLayer',
+    ),
+  ]);
+  await bindFakeHost(host);
   // The process services, over whichever host is installed when a member is
-  // called: hosts change per test, the runtime does not. These imports
-  // stay eager: the process runtime is built synchronously by
-  // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
-  // layer here fails every one of them.
-  processServices ??= Layer.mergeAll(
-    // The installed runtime's session owner, read per call: a root launch
-    // asks it whether its session is still open.
-    Layer.succeed(SessionOwnerTag)({
-      open: (init) =>
-        Effect.flatMap(testSessionOwner, (owner) => owner.open(init)),
-      list: Effect.flatMap(testSessionOwner, (owner) => owner.list),
-      holds: (session) =>
-        Effect.flatMap(testSessionOwner, (owner) => owner.holds(session)),
-      close: (root) =>
-        Effect.flatMap(testSessionOwner, (owner) => owner.close(root)),
-      closeAll: Effect.flatMap(testSessionOwner, (owner) => owner.closeAll),
-    }),
-    UsageLog.disabled,
-    ProcessIdentity.layer(processOwnerId('test')),
-    testHttpClientLayer,
-    // The same standard-library filesystem and path services the process
-    // roots provide, over the real temp roots the harness runs on; the
-    // spawner is merged below, since the tool table's compositions take it.
-    NodeFileSystem.layer,
-    NodePath.layer,
-    // The process environment, hermetic: the installed host's `env`, never
-    // the developer's shell.
-    ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
-    // The process's one route retry gate, as `processLayer` serves it.
-    Layer.effect(RouteRetries, ModelRetryGate.make),
-    // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation (and its switch) and the row kinds TeXRA's plugins own: a
-    // suite that resolves a run's tools runs on the session graph's runtime
-    // or provides `pluginCatalogLayer`.
-    toolCatalogLayer(
-      toolTable([
-        defineBuiltinPlugin({
-          id: 'goal',
-          toggle: 'off',
-          availability: { check: () => Effect.succeed(true) },
-          continuation: goalContinuation,
-          arms: HARNESS_PLUGIN_ARMS.goal,
-        }),
-        ...ARMED_PLUGINS,
-      ]),
-    ).pipe(
-      // What a plugin's process layer is built over.
-      Layer.provide(
-        Layer.mergeAll(
-          NodeFileSystem.layer,
-          NodePath.layer,
-          AppState.layer(fakeHostAppState),
-        ),
-      ),
-    ),
-    // The records above are mocked, so the bare runtime's global-root handle
-    // is too: a suite that reads it provides its own innermost.
-    Layer.mock(GlobalDatabase, {
-      values: {} as CurrentValues,
-      inputHistory: {} as GlobalDatabase['Service']['inputHistory'],
-    }),
-    Layer.effect(
-      ProjectDatabases,
-      RcMap.make({
-        lookup: (
-          storage: string,
-        ): Effect.Effect<Database['Service'], DatabaseOpenFailed> =>
-          Effect.die(
-            new Error(
-              `No project database for ${storage}: provide projectDatabaseLayer.`,
-            ),
-          ),
+  // called: hosts change per test, the runtime does not. The production
+  // composition, which builds synchronously over the mocked global root (so
+  // `testRuntime().runSync` callers need no prior build), then the members
+  // the kernel serves in its place, merged last so each shadows the
+  // production one.
+  if (!processServices) {
+    const production = ownerProcessLayer({
+      ...testProcessOptions(BARE_PLUGINS, host.roots.storageRoot),
+      processStart: Effect.succeed('test'),
+      // The records above are mocked, so the bare runtime's global-root
+      // handle is too: a suite that reads it provides its own innermost.
+      globalDatabase: Layer.mock(GlobalDatabase, {
+        values: {} as CurrentValues,
+        inputHistory: {} as GlobalDatabase['Service']['inputHistory'],
       }),
-    ),
-    // The Lean plugin's port, which a step serves its tools; a suite that
-    // exercises a Lean tool provides its own innermost.
-    // The run-end stop is absent, as on a host whose Lean integration owns
-    // server lifetime: the mock's placeholder for it would die on every run.
-    Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    Secrets.layer(fakeHostSecrets),
-    AppState.layer(fakeHostAppState),
-    LanguageModel.layer(fakeHostLanguageModel),
-    AgentDirectories.layer(fakeHostAgentDirectories),
-    unprobedToolAvailability,
-    // The cross-workspace storage view the process runtime serves, over the
-    // installed host's global root. A suite that exercises it directly
-    // provides its own view innermost.
-    Layer.provide(
-      globalStorageFsLayer(current?.roots.globalStorage ?? ''),
-      Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
-    ),
-  ).pipe(
-    Layer.provideMerge(nodeSpawnerLayer),
-    // The process's stores, over the mocked global and project handles.
-    (services) => Layer.provideMerge(processStoresLayer, services),
-    // The process's agent catalog, over the services above: one for every
-    // runtime these services build, as a process has one. A suite loads it
-    // (`refresh`) when it reads agents.
-    (services) =>
-      Layer.provideMerge(
+    });
+    processServices = Layer.merge(
+      production,
+      Layer.mergeAll(
+        // The installed runtime's session owner, read per call: a root
+        // launch asks it whether its session is still open.
+        Layer.succeed(SessionOwnerTag)({
+          open: (init) =>
+            Effect.flatMap(testSessionOwner, (owner) => owner.open(init)),
+          list: Effect.flatMap(testSessionOwner, (owner) => owner.list),
+          holds: (session) =>
+            Effect.flatMap(testSessionOwner, (owner) => owner.holds(session)),
+          close: (root) =>
+            Effect.flatMap(testSessionOwner, (owner) => owner.close(root)),
+          closeAll: Effect.flatMap(testSessionOwner, (owner) => owner.closeAll),
+        }),
+        // `globalThis.fetch` read per request, so a suite's stub reaches it:
+        // production's fetch reference keeps the first one the worker saw.
+        // Fresh, since the production client is the same memoized layer.
+        Layer.fresh(testHttpClientLayer),
+        // The process environment, hermetic: the installed host's `env`,
+        // never the developer's shell.
+        ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
+        // The Lean plugin's port, which a step serves its tools; a suite
+        // that exercises a Lean tool provides its own innermost. The
+        // run-end stop is absent, as on a host whose Lean integration owns
+        // server lifetime: the mock's placeholder for it would die on every
+        // run.
+        Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
+        // The process's agent catalog: one for every runtime these services
+        // build, as a process has one. A suite loads it (`refresh`) when it
+        // reads agents.
         Layer.effect(
           AgentCatalog,
           Effect.suspend(() =>
@@ -459,16 +443,12 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
                 ),
           ),
         ),
-        services,
-      ),
-  );
-  initTestWorkspaceRoots(host.roots);
+      ).pipe(Layer.provide(production)),
+    );
+  }
   // A bare process runtime for the Promise-facing boundaries that run
-  // fibers (the loopback sign-in). The session graph family is not installed
-  // here: `sessionGraphTestSetup` loads the graph's production modules, and
-  // a suite imports it (through `sessionTestUtils` or
-  // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
-  // this install, called from a setup file or a `beforeEach`, cannot promise.
+  // fibers (the loopback sign-in), kept when a suite's import already
+  // installed the session graph's (`sessionGraphTestSetup`).
   if (tryTestProcessRuntime() == null) {
     initTestProcessRuntime(
       ManagedRuntime.make(
