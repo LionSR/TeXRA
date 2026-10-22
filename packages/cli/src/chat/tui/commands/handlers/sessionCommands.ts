@@ -2,7 +2,6 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
 import {
-  goalStateOf,
   isLiveRun,
   runBypasses,
   toErrorMessage,
@@ -90,7 +89,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const view = currentView();
     const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
-    const goal = run === undefined ? undefined : goalStateOf(run);
     // The children a status line counts: the active run's, else its
     // parent's (a focused leaf reports its siblings' activity).
     const countedParent =
@@ -121,7 +119,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
             : runBypasses(view, activeRunId),
         statusLabel: run && runStatusLabel(run.statusKey),
         activeChildSessions,
-        goal: goal?.active ? goal : undefined,
         activeSkills,
         sessionId: run ? context.session.runId : undefined,
         commandName: context.cliContext.commandName,

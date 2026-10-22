@@ -1,273 +1,246 @@
 ---
 created: 2026-09-24
-status: implemented — #13083, #13084, #13088, #13089, #13090, #13092, #13093, #13094, #13111, #13114
+status: implemented
 ---
 
-# The plugin architecture: plugins as data, a pinned composition per run
+# The plugin architecture: plugins as values, tools pinned per step
 
-This note describes how plugins work on `main` as of 2026-09-24. It is the
-owner of the topic; the rulings it relies on are in the
-[architecture rulings ledger](./2026-08-01-architecture-rulings-ledger.md), and
-the [Effect-native runtime system design](../../proposed/architecture/2026-09-10-effect-native-runtime-system-design.md)
-records how this departs from the `ToolRegistry` it proposed.
+This note describes how plugins work on `main`. It is the owner of the topic;
+the rulings it relies on are in the
+[architecture rulings ledger](./2026-08-01-architecture-rulings-ledger.md),
+and the step boundary is the one the
+[core concepts](./2026-09-26-core-concepts.md) note
+names (invariants 6 and 7).
 
 ## Owner rulings
 
-Four owner decisions (2026-09-23 and 2026-09-24) frame the work:
+- **Everything is a plugin.** Each extensible subsystem is contributed by a
+  `Plugin` value keyed by a stable id. The harness's built-ins are plugins,
+  and the app (TeXRA) is built from its own plugins beside them.
+- **No new formats.** Plugins are TypeScript values, not a manifest format
+  of our own. User-authored inputs reuse existing shapes: MCP servers use
+  Claude Code's `.mcp.json` shape, installed plugins are Claude Code or Codex
+  plugin directories, agents stay YAML and skills stay `SKILL.md`.
+- **Hooks and data plugins are the extension mechanism** (ledger, "SDK and
+  typed-RPC deferral (D11)"). Typed-RPC code plugins, `History.writer`, an
+  open schema registry and a `PluginModule` interface are not built until a
+  named plugin cannot be MCP + hooks + data.
+- **A plugin's switch gates everything it contributes** (ledger, D9): its
+  tools, its bundled skills and its bundled agents.
 
-- **Everything is a plugin.** Each extensible subsystem gets a typed
-  contribution list keyed by a stable plugin id, installed by code at
-  startup. The rulings ledger records this in the amendment to "`defineTool`'s
-  default `R` is frozen SDK surface", which also opened the SDK tool contract
-  to change.
-- **No new formats.** Plugins are TypeScript data in the tree, not a manifest
-  file format. The one user-authored input, MCP servers, reuses Claude Code's
-  `.mcp.json` shape. Agents stay YAML, skills stay `SKILL.md`.
-- **Effect unstable modules are allowed** for this work. The MCP client spawns
-  servers through `effect/unstable/process` (`src/tools/mcp/mcpServer.ts`).
-- **LOC is not the gate.** Several PRs in this line net-add lines (#13089 +76,
-  #13093 +179, #13094 +52); each states what it removed instead.
+## A plugin is a value
 
-## Plugins are data with stable ids
+`Plugin` (`packages/harness/src/tools/plugins.ts`) is one record:
 
-`src/tools/plugins.ts` holds `TOOL_PLUGINS`, one list of
-`{ id, toolNames, name, category, description, availability?, injectedWhen?, layer?, skills?, ... }`
-(#13084). It imports no tool implementation. Every tool belongs to exactly
-one plugin; two hidden plugins, `core` and `setup`, own the tools no dashboard
-card lists. The ids are the persisted toggle keys. From this one list the
-tree derives the dashboard items for all three hosts, the probe set
-(`src/tools/pluginAvailability.ts`, `src/tools/toolProbes.ts`), first-install
-toggle seeding, install and auth actions, and the `texra tools` guides.
+| Field          | What it contributes                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | Stable, persisted: the switch key, the plugin an offered tool records, and the `resources/plugins/<id>/` directory. Never reused.    |
+| `tools`        | Its tools by registered name. Each tool belongs to exactly one plugin.                                                               |
+| `availability` | The probe of an external dependency; its tools are withheld while the dependency is missing.                                         |
+| `toggle`       | A user switch and its first-install position. A switched plugin must have `availability` (`ALWAYS_AVAILABLE` when nothing to probe). |
+| `injectedWhen` | Tools offered to every agent with tools while the plugin (and an optional boolean setting) is on.                                    |
+| `continuation` | What a parked run does next (built-ins only, `defineBuiltinPlugin`). At most one plugin in a list continues parked runs.             |
+| `prompt`       | One `PromptSection` of each request's system text.                                                                                   |
+| `processLayer` | Process-lifetime services, up while the plugin is on or a step pins it; its `drain` runs in the shutdown protocol.                   |
+| `sessionLayer` | Session-lifetime services, one build per open session; work that outlives its step holds it with `PluginHold`.                       |
+| `decision`     | Its side of a decision on a pending request of the kind it owns (`RequestDecisionHook`).                                             |
+| `arms`         | The row kinds it owns, written as `plugin.fact` through the one publisher.                                                           |
+| `agentBlock`   | The one top-level block of an agent file it owns (`AgentBlock`).                                                                     |
 
-Tools themselves are plain values (#13083): `defineTool` returns an object
-with `definition`, execution flags, `guard` and `call`. `BaseTool` is deleted,
-and the SDK exports `DefinedTool`.
+Tools are plain values: `defineTool` (`packages/harness/src/tools/core/definition.ts`)
+returns a `DefinedTool` with its definition, execution flags, `guard` and
+`call`. An app writes a plugin with `definePlugin`, which checks at compile
+time that a tool needing a service is served by one of its plugin's own
+layers, then erases that type. Authors import all of this from
+`@texra-ai/harness/plugins` (`packages/harness/src/plugins.ts`).
 
-`src/tools/registry.ts` maps plugin id to `{ toolName: tool }` and builds
-`TOOL_TABLE` from it. `satisfies` checks against the manifest make these type
-errors: a missing or extra tool name, an unknown or duplicate plugin id, a
-tool name claimed by two plugins, empty `toolNames`, and a toggleable plugin
-without `availability`.
+`toolTable` (`packages/harness/src/tools/toolTable.ts`) builds the process's
+`ToolTable` from the ordered plugin list and refuses a defective list when it
+is built: a malformed or repeated id, a tool name claimed twice, two
+continuations, two decision hooks for one request kind, an agent-file key
+owned twice or equal to a persona key, or a switch without a probe. The
+`ToolRegistry` service holds the table; `pluginCatalogLayer`
+(`packages/harness/src/tools/pluginCatalog.ts`) builds it, and the tool
+catalog over it, from the list an entry passes to `processLayer`.
 
-## The live catalog and the step
+How a host shows a plugin is not on the value. TeXRA keeps its dashboard copy
+by id in `TEXRA_PLUGIN_CARDS` (`packages/texra/src/tools/pluginCards.ts`),
+which the settings view's Plugins page reads.
 
-Superseded on 2026-09-27: the owner ruled that setup changes apply live at
-every step boundary and are recorded
-([core concepts](../../proposed/architecture/2026-09-26-core-concepts.md),
-"Central primitives" and invariants 6 and 7). The `Composition` value, the
-`Compositions` `LayerMap` and the run-lifetime pin are deleted; tools are the
-first kind on the two central primitives.
+## Harness built-ins and the app's plugins
 
-- **Registry** (`src/tools/liveRegistry.ts`). A generic generational
-  catalog: `contribute(owner, entries)` adds entries until the caller's
-  scope closes, every change rebuilds one immutable generation published on
-  `current` (a `SubscriptionRef`), a name another owner holds is refused
-  with `RegistryConflict`, and an owner's later contribution supersedes its
-  earlier one while both are open. `pin` holds a generation for the
-  caller's scope; generations are refcounted by digest in an `RcMap`, so a
-  generation no one pins drains even after `current` moved on.
-- **The tool catalog** (`LiveTools`, `src/tools/liveTools.ts`). Each
-  built-in plugin contributes its manifest table while its switch is on;
-  `sync(disabled)` opens or closes those contributions, so toggling a plugin
-  changes `current`. Each loaded MCP server contributes the tools it listed
-  while some run holds it (`hold`, refcounted per spec and revision, so runs
-  naming one server share one process). Every entry carries its identity:
-  the sha256 of its definition as the model is shown it (name, description,
-  schema) and its plugin's revision (a digest of the plugin's tools for a
-  built-in, the keyed env revision for MCP). Plugin layers are built per
-  pinned generation through one `MemoMap`, so generations that share a
-  plugin share one build of its layer.
-- **Step** (`src/agent/runtime/loop/step.ts`). Every model request opens a
-  step: it syncs the switches from the run's global state, pins the current
-  generation (hand over hand: the previous step's pin closes once the new
-  one holds), and resolves the offered tools from it
-  (`resolveStepTools`, `src/agent/runtime/agentToolResolution.ts`: declared
-  tools, MCP expansion, probes, host and approval gates, injections,
-  delegation annotation, the run's own tools). When the offered set differs
-  from the run's last record, the step returns a `tools.offered` row (each
-  tool's name, digest, plugin and revision), which the loop appends through
-  `RunHistory.appendBatch` before the request. A fresh run records its first
-  set in its opening batch.
-- **Stale calls.** A response's calls run against the step that offered
-  them, restricted to the tools whose identity still matches the latest
-  `tools.offered` row. A call to a tool that left or changed settles as
-  `tool_unavailable` and the turn continues.
-- **Resume.** The first step a resumed activation opens offers the recorded
-  tools that are still in the catalog as the same tool, in recorded order,
-  and names each one gone or changed (warn log and transcript). Later steps
-  are live again. A missing tool is still a loud warning, not a blocked run.
-- **Children.** A delegated child receives what its parent's step offered
-  (`ToolPolicy.parentOffered`) and is narrowed to those names with the same
-  identity, on the same catalog; a child naming an MCP server none of whose
-  tools its parent was offered is refused before it starts
-  (`childToolRefusal`). A resumed child is held to its own record.
-- **Round mode.** A workflow agent's rounds open no step and offer no tools.
+`packages/harness/src/tools/builtinPlugins.ts` defines the built-ins and
+exports `harnessBuiltins`:
 
-The continuation policy is still chosen once, when the loop is set up, from
-the plugins switched on then.
+- `file-ops`: `bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
+  (an app passes the `WriteFilter` that `write_file` applies);
+- `web`: `web_search`, `web_fetch`;
+- `memory-workflow`: `memory` (injected while memory is on) and
+  `executions`, with a prompt section;
+- `goal`: the `plan` tool, the parked-run continuation, and the `goal/state`
+  arm;
+- `multi-agent`: the `agent` tool, which runs a named agent as a child run;
+- `codemode`: the `script` tool, whose session layer is the QuickJS code
+  sandbox the scripts run in.
 
-**Ruled 2026-09-30 (ledger, "Plugin gating, presets..." and "SDK and typed
-RPC"):** the extension mechanism is hooks and data plugins. Typed-RPC code
-plugins, `History.writer`, an open schema registry and a `PluginModule`
-interface are not built until a named plugin cannot be MCP + hooks + data.
+TeXRA's list is `texraPlugins` (`packages/texra/src/tools/registry.ts`): the
+built-ins with TeXRA's options beside the app's own plugins (LaTeX, arXiv,
+Wolfram, Zotero, Lean 4, GitHub subscriptions, external inquiry, Codex,
+Claude agent, `core`, `setup`, `copilot`, `documents`), in dashboard order.
+Nothing in the harness names an app plugin; `pluginBoundaryRatchet`
+(`src/test-kernel/architecture/pluginBoundaryRatchet.vitest.ts`) holds that
+line. The VS Code host passes `copilot` its process layer, which exposes the
+research tools of the plugins that are on to Copilot.
 
-## Loadable plugins: MCP servers
+## Agent-file blocks
 
-Local stdio MCP servers from `~/.texra/mcp.json` are the first loadable plugin
-kind (#13092). `src/tools/mcp/mcpConfig.ts` validates the file with Zod; an
-invalid entry is skipped and the resolving run's transcript says why. Each
-server becomes a `LoadedPlugin` with id `mcp:<name>`, a `spec` and an
-`acquire`, loaded through `mcpPluginLoader` in `src/tools/registry.ts`.
+A plugin may own one top-level block of an agent file (`Plugin.agentBlock`:
+a `key`, a Zod `schema`, and an optional `result` describing how its runs
+read to whoever launched them). The catalog scan checks the block against the
+schema and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
+whose block fails, or that carries a key no listed plugin owns, is refused
+like any other invalid definition. The plugin reads a block with
+`agentBlockOf`. An agent carrying a block is a task: it declares no tools and
+runs only through a launch its plugin builds (a `script` of kind `recipe`).
+The harness reads nothing inside the block. The one owner today is the
+documents plugin's `task:` block (`DOCUMENT_TASK_BLOCK`).
+
+## The tool catalog and the step
+
+- **The catalog** (`ToolCatalog`, `packages/harness/src/tools/liveTools.ts`).
+  Built-in plugins are on while their switch is (one with no switch always
+  is); the switches live in the global state store and reach the catalog as
+  a stream, so a flip in any process sharing that state applies at once. A
+  plugin's `processLayer` is up once per process while it is on or a step
+  uses it. Every resource is an `RcMap` entry in its lifetime's scope.
+- **A session's catalog** (`sessionTools`,
+  `packages/harness/src/tools/sessionTools.ts`), one per project in that
+  session's scope, owns the project's plugin session layers and its MCP
+  servers, and pins each step's tools.
+- **The step** (`packages/harness/src/agent/runtime/loop/step.ts`). Each model
+  request opens a step, and so does a park. It applies the switches and the
+  enabled, trusted installed plugins, pins the current generation, and
+  resolves the offered tools (`resolveStepTools`,
+  `packages/harness/src/agent/runtime/agentToolResolution.ts`), the
+  continuation, the hooks and the prompt sections of the plugins it pinned.
+  The pin is held hand over hand, so a response's calls run against the tools
+  its request offered. When the offered set, continuation, hooks or rendered
+  context differ from the run's last record, the step returns a
+  `tools.offered` row (each tool's name, digest, plugin and revision), which
+  the loop appends through the run's one writer before the request.
+- **Stale calls.** A call to a tool that left or changed since its request
+  settles as `tool_unavailable` and the turn continues.
+- **Resume.** A resumed run's first step offers the recorded tools that are
+  still in the catalog with the same identity (digest of name and input
+  schema, plugin id and revision) and names each one gone or changed. Later
+  steps are live again. A description change is recorded as a new offered set
+  and is not part of identity.
+- **Children.** A child launched by the `agent` tool is narrowed to what its
+  parent's step offered (`parentOffered`), with the same identity; a child
+  naming an MCP server none of whose tools its parent was offered is refused
+  before it starts (`childToolRefusal`).
+- **Resume blockers.** A run whose agent is missing, or whose agent comes
+  from an installed plugin that is off or untrusted, stays interrupted with a
+  `ResumeBlocker` of kind `agentMissing`, `pluginOff` or `pluginUntrusted`
+  (`packages/harness/src/agent/runtime/resumeBlocker.ts`) and resumes when the
+  catalog has it back. A switched-off tool plugin is not a blocker; its tools
+  are withheld.
+
+## MCP servers
+
+The user's stdio servers come from `~/.texra/mcp.json` in the `.mcp.json`
+shape (`packages/harness/src/tools/mcp/mcpConfig.ts`, parsed by
+`packages/harness/src/common/plugins/mcpServers.ts`). An entry that does not
+validate is skipped and the resolving run's transcript says why.
 
 - An agent gets a server's tools by naming `mcp__<server>__<tool>` or
-  `mcp__<server>__*` in its YAML `tools:`. A run that names no MCP tool reads
-  no file and starts no server.
-- A hold is keyed by the spec (command, args, env names) and a revision: an
-  HMAC of env values under a per-process key, so values never enter a row
-  but an edit still yields a new revision. Open runs keep the old server;
-  runs naming the same spec and revision share one process, which stops
-  with the last run holding it.
-- The client is the repo's Effect JSON-RPC connection (`src/tools/jsonRpc.ts`,
-  moved from the Lean code, with newline framing and a `ping` answer).
-- Every MCP call goes through the one approval authority: the tool declares a
-  `guard.bash` string, so `guardedToolCall`
-  (`src/agent/runtime/loop/toolGuard.ts`) routes it to `requestBashApproval`
-  (`src/tools/approval/bashApproval.ts`). MCP tools require approval, are
-  `slow`, and are not `parallelSafe`.
+  `mcp__<server>__*` in its `tools:`. A run that names none reads no file and
+  starts no server. Each server is plugin `mcp:<server>`.
+- A server process is keyed by its spec (command, args, env names), a keyed
+  digest of its env values (so values never enter a row but an edit is a new
+  revision), and the project's `.env`. It runs in its project's session pool
+  (`projectServers`), shared by that project's runs, kept 30 minutes past its
+  last holder and stopped with the session; no server is shared across
+  projects.
+- The client is the harness's Effect JSON-RPC connection
+  (`packages/harness/src/tools/jsonRpc.ts`, newline framing), spawned through
+  `effect/process` (`packages/harness/src/tools/mcp/mcpServer.ts`).
+- Every MCP call goes through the one approval authority: the loop's guard
+  (`guardedToolCall`, `packages/harness/src/agent/runtime/loop/toolGuard.ts`)
+  routes it to `requestBashApproval`. MCP tools are never parallel-safe, and
+  are replay-safe only when the server marks them read-only or idempotent.
 - A server that fails to start yields no tools and a transcript warning; the
   run still opens.
 
-Deferred: project-level `.texra/mcp.json` (needs a content-hash trust prompt),
-HTTP/SSE transports, `tools/list_changed`, resources/prompts/sampling, and a
-dashboard card for servers.
+Not read: a project-level `.texra/mcp.json` (a checked-in file that spawns
+processes needs a trust prompt first). Remote MCP transports are not built
+(owner: stdio only for now).
+
+## Installed plugins
+
+Claude Code and Codex plugin directories (`.claude-plugin/plugin.json`,
+`.codex-plugin/plugin.json`, with `skills/`, `commands/`, `agents/`,
+`.mcp.json` beside them) install from git, a local path or a marketplace
+(`packages/harness/src/common/plugins/`). Enabling one asks the user to trust
+it as it is: the decision covers its version and a digest of every file it
+ships, each MCP server's spec and env values, and the scripts its hooks run
+(`pluginTrust.ts`, `pluginDigest.ts`); a changed digest asks again. An
+enabled, trusted plugin contributes its MCP servers, skills and agents
+(source `plugin`, named `<plugin>:<name>`). Its Claude Code command hooks run
+out of process, never in the harness process (`pluginHooks.ts`), at the run
+loop's points (`packages/harness/src/agent/runtime/loop/hooks.ts`), and each
+outcome is a `hook.outcome` row ([code plugins and hooks](./2026-09-28-code-plugins-hooks-v1.md)).
+A plugin with LSP servers is refused.
 
 ## Other contribution lists
 
 The same rule (static data, stable id, installed once, no runtime register or
-unregister) now covers:
+unregister) covers:
 
-- **Model providers** (#13094). `MODEL_PROVIDER_PLUGINS` in
-  `src/shared/constants/modelProviderPlugins.ts` merges seven per-provider
-  tables into one descriptor per provider. Compile-time checks fail the build
-  when an llm-zoo provider lacks a `compatibilityKey` or a stated `baseUrl`.
-  Wire protocols, key redaction patterns and state keys stay core.
-- **CLI slash commands** (#13093). `installSlashCommands` in
-  `packages/cli/src/chat/tui/commands/slashRegistry.ts` installs the
-  contributions built in `registerBuiltins.tsx` and throws on a duplicate id,
-  name or alias.
-- **Skill sources** (#13114). `src/skills/skillSources.ts` folds
-  `SkillSourceContribution`s by tier from a fixed table; the fold stamps the
-  scope, so a contribution cannot choose one. `ToolPlugin.skills: true` lets a
-  tool plugin ship skills: lean4's five Lean skills live in
-  `packages/extension/resources/plugins/lean4/skills/`, passed to
-  `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Ruled
-  2026-09-30 (D9): plugin skills and agents are gated by the plugin's switch;
-  until that lands, they are not.
-- **Bundled agent directories.** `ToolPlugin.agents: true` lets a tool plugin
-  ship bundled tool-use agents: lean4's five Lean agents live in
-  `packages/extension/resources/plugins/lean4/agents/`. The host bootstrap
-  installs those directories with `installPluginAgentDirectories`
-  (`src/agent/index/BundledAgentDirectories.ts`), and the `builtInToolUse`
-  scan pools them with the core directory. They are the same YAML in the same
-  persisted source, so agent keys do not change and no agent source is added.
-
-- **Continuation at idle.** `ToolPlugin.continuation: true` declares that a
-  plugin decides what a parked tool-use run does next; `PLUGIN_CONTINUATIONS`
-  in `src/tools/registry.ts` holds its policy, and a `satisfies` check keeps
-  the table and the manifest flags in step. A step pins the continuation of
-  the plugins it found switched on (#13387), so a switched-off plugin applies
-  at the next step; with none on, the run parks. The `goal` plugin (the `plan`
-  tool) is the one contributor. The loop still owns the queue, the child
-  check and `stopAfterCycle`; the policy only answers "another turn, or
-  park?".
-- **Prompt sections** (amended 2026-09-28, ledger "Plugins own typed tables at
-  their seams"). `ToolPlugin.promptSection: true` lets a plugin add one
-  `(ctx) => string` section to a request's system text, from
-  `PLUGIN_PROMPT_SECTIONS`, consulted only for plugins the step pinned.
-  `memory-workflow` is the one contributor.
-- **Process and session layers.** `processLayer: true` (one entry in
-  `PLUGIN_PROCESS_LAYERS`, GitHub subscriptions and their delivery drain),
-  `sessionLayer: true` (`PLUGIN_SESSION_LAYERS`, the Codex and Claude session
-  registries, one per open session) and `hostLayer: true` (the VS Code
-  host's Copilot tools) declare the plugin's resources. Each is up while the
-  plugin is switched on or a step pins it.
-- **Event arms.** `rows: true` declares row kinds of its own: an arm in
-  `PLUGIN_EVENT_ARMS` (`src/tools/pluginArms.ts`), written as a `plugin.fact`
-  through the one publisher (goal state is the one contributor). The store
-  checks each row against its arm and keeps a row whose arm this build lacks
-  unread.
+- **Model providers.** `MODEL_PROVIDER_PLUGINS`
+  (`packages/llm/src/providers/providerPlugins.ts`), one descriptor per
+  provider.
+- **CLI slash commands.** `installSlashCommands`
+  (`packages/cli/src/chat/tui/commands/slashRegistry.ts`) installs the
+  contributions built in `registerBuiltins.tsx` and throws on a duplicate
+  plugin id, name or alias.
+- **Skill sources.** `packages/harness/src/skills/skillSources.ts` folds
+  `SkillSourceContribution`s by tier; a tool plugin's bundled skills are at
+  `resources/plugins/<id>/skills` and its switch gates them.
+- **Bundled agent directories.** A tool plugin's bundled agents are at
+  `resources/plugins/<id>/agents`, installed by
+  `installPluginAgentDirectories`
+  (`packages/harness/src/agent/index/BundledAgentDirectories.ts`); they are
+  `builtIn`-source agents in the same YAML, listed while the plugin is on.
 
 ## What is deliberately core
 
-These are not plugin surfaces, and a proposal to open one needs its own owner
-decision:
+These are not plugin surfaces; opening one needs its own owner decision.
 
-- **Agent sources.** Agents are one unified YAML format loaded by
-  `src/agent/runtime/agentLoad.ts` from its fixed sources (bundled
-  `packages/extension/resources/agents/`, user, remote). A plugin-contributed agent kind would be a second
-  format and a second loader for the same thing. A plugin's bundled agents
-  (above) add directories to the existing `builtInToolUse` source, not a
-  source or a kind.
-- **The rest of the system prompt.** `src/agent/prompt/PromptBuilder.ts` owns
-  it, and a plugin's section (above) is consulted only for the plugins the
-  step pinned, so what a request sends follows the offered set the step
-  records.
-- **The run loop.** `src/agent/runtime/loop/toolUse.ts` is the only run
-  program (workflow agents run it in round mode since the one-run-program
-  series). v1 plugins have no task kinds, so a plugin cannot add a step, a
-  node or a wait; its one loop input is the continuation table.
-- **The run history.** `appendBatch` on the run history
-  (`src/shared/session/runHistory.ts`) is the one writer of run rows, and the
-  session's one publisher (`SessionEvents`) the one writer of every other
-  row. A plugin owns no second channel: its own rows are typed `plugin.fact`
-  arms in the one closed schema (amended 2026-09-28), and the offered-tool
-  record is the `tools.offered` row.
+- **Agent sources.** The agent catalog
+  (`packages/harness/src/agent/index/agentCatalog.ts`) scans the custom
+  directory, the bundled directories and the loaded plugins, in one YAML
+  format. A plugin adds directories or one owned block, not an agent kind or
+  a second loader.
+- **The run loop.** `packages/harness/src/agent/runtime/loop/toolUse.ts` is
+  the only run program. A plugin adds no step, node, task kind or wait; its
+  loop inputs are its continuation, prompt section and hooks.
+- **The run history.** `RunCell.append` (from `RunHistory.open`,
+  `packages/harness/src/shared/session/runHistory.ts`) is the one writer of a
+  run's rows, and the session log's `transact` the door for every other row.
+  A plugin's own rows are typed `plugin.fact` arms in the one closed schema;
+  the store checks each row against its arm and keeps a row whose arm this
+  build lacks unread.
 - **Approval authority.** One approval queue and policy, pinned by
   `src/test-kernel/architecture/approvalPolicyAuthorityRatchet.vitest.ts`.
-  Plugin tools, MCP included, request approval through it rather than
-  carrying their own.
+  Plugin tools, MCP included, request approval through it.
 
-## Prior art: what was adopted and what was rejected
+## Refused designs
 
-Adopted from pi Pico5:
-
-- stable plugin ids, used as persisted keys;
-- tool names unique across plugins, a clash failing loudly (here at compile
-  time for the static table, at startup for slash commands and skill sources);
-- code re-registers everything at startup, and contribution registries are
-  rebuilt rather than mutated;
-- the run pins its composition, a child joins its parent's, and a changed
-  composition builds beside the old one with refcounted revisions;
-- resume offers what was recorded and is still available, loudly naming what
-  is gone (adapted in #13088 to a model-visible error result).
-
-TeXRA's own ruling, not taken from Pico5: no task kinds, and plugin state
-only as typed arms of the one event schema. Pico5 has task kinds, hooks per
-kind, and Documents. The v1 "no hooks" half is superseded: a third-party code
-plugin's command hooks run out of process over the Claude Code hooks protocol
-(#13481, `2026-09-28-code-plugins-hooks-v1.md`), and the 2026-09-30 ruling
-(D11) makes hooks and data plugins the extension mechanism. That is not a
-task-kind mechanism or per-kind hooks, which stay refused, and `toolUse.ts`
-stays the only run program. The continuation policy and the documents
-plugin's after-turn handler are single-contributor hooks in Pico's terms.
-
-Adopted from deepseek-harness: presets reduced to data (the `Composition`
-value, so a named preset can later be a stored composition) and the
-`mcp__<server>__<tool>` naming scheme.
-
-Rejected:
-
-- `Composition.skills`, a `SkillSources` service, and select-only/except
-  grouping of skill roots (#13114); claiming Lean skills by name in the shared
-  bundled root instead of moving them;
-- the Lean pool as a plugin layer (#13090);
-- an idle TTL on the `Compositions` map, `Layer.fresh` on plugin layers, and
-  per-composition plugin layers;
+- A manifest file format of our own, and runtime register/unregister.
+- Task kinds and per-kind hooks; `toolUse.ts` stays the only run program.
 - `@modelcontextprotocol/sdk` (a Promise client inside an Effect layer) and
-  `McpSchema` with `RpcClient` (needs a custom stdio protocol and still does
-  not answer server requests) for the MCP client (#13092);
-- a manifest file format and runtime register/unregister.
-
-Gating plugin skills and agents, left open here as a separate owner decision,
-is ruled (D9, 2026-09-30): they are gated by the plugin's switch, not by a
-run-pinned composition (which #13364 deleted).
+  `McpSchema` with `RpcClient` as the MCP client.
+- A `SkillSources` service and per-composition skill grouping.
+- A run-pinned `Composition` and a `Compositions` map: setup changes apply at
+  every step boundary and are recorded.

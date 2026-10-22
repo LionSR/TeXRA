@@ -1,5 +1,5 @@
 {
-  "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose (.agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md section 2). Each candidate carries an `id`, the `symbols` that carry its shape, and a `ruling` anchor holding the evidence. Two enforcement points, because a pure-tier suite has no PR body. (1) src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts pins every symbol's `signature` — the declaration with its bodies elided as `{…}`, comments stripped, whitespace collapsed — so a symbol that changes shape fails until the baseline is updated in the same PR. (2) .github/workflows/refuted-candidates.yml fails a pull request whose diff touches a refuted symbol's declaration unless the PR body cites that candidate's `id`. Neither gate forbids the change: they require the author to have read the ruling and to say so. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
+  "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose (.agents/docs/implemented/process/2026-09-20-agent-refactorability-gates.md section 2). Each candidate carries an `id`, the `symbols` that carry its shape, and a `ruling` anchor holding the evidence. Two enforcement points, because a pure-tier suite has no PR body. (1) src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts pins every symbol's `signature` — the declaration with its bodies elided as `{…}`, comments stripped, whitespace collapsed — so a symbol that changes shape fails until the baseline is updated in the same PR. (2) .github/workflows/refuted-candidates.yml fails a pull request whose diff touches a refuted symbol's declaration unless the PR body cites that candidate's `id`. Neither gate forbids the change: they require the author to have read the ruling and to say so. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
   "candidates": [
     {
       "id": "EFF-ADOPT-config-provider",
@@ -75,7 +75,7 @@
       "id": "RT-execute-command-lift",
       "candidate": "executeCommand as one lifted round trip",
       "why": "It is a program reached from 56 files, not a lane with a single foreign edge.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#8-refuted-candidates-do-not-re-mine",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-candidates-do-not-re-mine",
       "symbols": [
         {
           "file": "packages/harness/src/utils/system/execUtils.ts",
@@ -88,7 +88,7 @@
       "id": "RT-install-cli-process-runtime",
       "candidate": "installCliProcessRuntime as an Effect program",
       "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20. What changed (wave 3): its one await was the package manifest read, which is now synchronous, so the install is a plain function returning the runtime and its Promise face is gone; nothing to lift into Effect.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
@@ -101,7 +101,7 @@
       "id": "RT-desktop-pty-host-effect",
       "candidate": "The desktop PTY host as an Effect",
       "why": "Built, measured, reverted: the file would become a runtime effect importer whose catch sites two of five are irreducibly synchronous, so it needs Effect.runSync in a module holding no runtime. Measured +21 LoC for one lift removed.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
           "file": "packages/desktop/src/main/desktopPtyHost.ts",
@@ -114,7 +114,7 @@
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
       "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
-      "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-heldsessions-and-externalroots-stay-ruled-2026-09-20",
+      "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
       "symbols": [
         {
           "file": "packages/harness/src/utils/files/externalRoots.ts",

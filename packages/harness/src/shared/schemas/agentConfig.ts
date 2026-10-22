@@ -58,6 +58,12 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
    * `inline`), named `agent`; recorded so a resume runs it with no file.
    */
   persona: InlinePersonaSchema.nullish(),
+  /**
+   * A `self()` child: it runs as its caller, so it is offered the installed
+   * plugins' tools as a top-level run is, still narrowed to what its
+   * caller's step offered.
+   */
+  asCaller: z.boolean().nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   instruction: z.string().prefault(''),
   /** Original user instruction preserved across nested tool-use delegation. */

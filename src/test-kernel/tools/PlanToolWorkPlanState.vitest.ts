@@ -1,21 +1,18 @@
 // Test composition imports
+import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import type { Goal } from '@shared/plugins/goal';
 import type { Plan, RequestDecision, RunId } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { clearGoal, goalOf, startGoal } from '@tools/goal/goalRows';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
 
@@ -41,7 +38,7 @@ const followUpPlan: Plan = {
   objective: [
     'Implement the approved follow-up plan.',
     '',
-    'Retarget the active goal at the newly approved objective.',
+    'Keep it gated after delegated work is approved.',
   ].join('\n'),
 };
 
@@ -84,21 +81,15 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   return { session, awaitPlanRequest };
 });
 
-function startPlanUpdate(
-  runId: RunId,
-  objective: string,
-  /** Seed the run's session before the tool reads it (an in-flight goal). */
-  seed?: (session: SessionHandle) => Effect.Effect<void, Error>,
-) {
+function startPlanUpdate(runId: RunId, objective: string) {
   return Effect.gen(function* () {
     const { session, awaitPlanRequest } = yield* planSession(runId);
-    if (seed) yield* seed(session);
     // The plans the run shows, in order: what its parent and its view read.
     const shown: (Plan | null)[] = [];
     const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
-      tool.call({ command: 'update', objective }).pipe(
+      tool.call({ objective }).pipe(
         Effect.provide(
           nativeToolTestLayer({
             run: {
@@ -176,7 +167,7 @@ describe('PlanTool — update (plan approval)', () => {
           );
 
           const resultFiber = yield* Effect.forkScoped(
-            PlanTool.call({ command: 'update', ...followUpPlan }).pipe(
+            PlanTool.call(followUpPlan).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
@@ -235,183 +226,5 @@ describe('PlanTool — update (plan approval)', () => {
         expect(outcome.userInstruction).toBeUndefined();
       }),
     ),
-  );
-
-  it.live(
-    'approve_and_goal starts a goal using the plan document as the objective',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const runId = generateRunId();
-          yield* Effect.tryPromise(() => installFakePlatform());
-
-          const { result, session, decide } = yield* startPlanUpdate(
-            runId,
-            plan.objective,
-          );
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              yield* clearGoal(session, runId);
-              session.followUps.forget(runId);
-            }).pipe(Effect.orDie),
-          );
-
-          decide({ action: 'approve_and_goal' });
-
-          const outcome = yield* result;
-          expect(outcome.status).toBe('executed');
-
-          const goal = goalOf(session, runId);
-          expect(goal).not.toBeNull();
-          expect(goal!.status).toBe('active');
-          // The approved plan document seeds the goal verbatim.
-          expect(goal!.objective).toBe(plan.objective);
-          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
-          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
-            false,
-          );
-        }),
-      ),
-  );
-
-  it.live(
-    'approve_and_goal applies the explicitly broadened approval scope',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const runId = generateRunId();
-          yield* Effect.tryPromise(() => installFakePlatform());
-
-          const { result, session, decide } = yield* startPlanUpdate(
-            runId,
-            plan.objective,
-          );
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              yield* clearGoal(session, runId);
-              session.followUps.forget(runId);
-            }).pipe(Effect.orDie),
-          );
-
-          decide({ action: 'approve_and_goal', autoApproveAll: true });
-
-          expect(yield* result).toMatchObject({
-            status: 'executed',
-          });
-          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
-          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
-            true,
-          );
-          expect(session.approvals.bypass(runId, 'superYolo') !== null).toBe(
-            true,
-          );
-        }),
-      ),
-  );
-
-  it.live(
-    'approve_and_goal retargets an existing goal to the approved plan',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const runId = generateRunId();
-          yield* Effect.tryPromise(() => installFakePlatform());
-
-          let existing: Goal | undefined;
-          const { result, session, decide } = yield* startPlanUpdate(
-            runId,
-            followUpPlan.objective,
-            (planned) =>
-              Effect.gen(function* () {
-                existing = yield* startGoal(planned, runId, 'Old objective');
-              }),
-          );
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              yield* clearGoal(session, runId);
-              session.followUps.forget(runId);
-            }).pipe(Effect.orDie),
-          );
-
-          decide({ action: 'approve_and_goal' });
-
-          const outcome = yield* result;
-          expect(outcome.status).toBe('executed');
-          expect(outcome.summary).toMatch(/retargeted/i);
-
-          const goal = goalOf(session, runId);
-          expect(goal).not.toBeNull();
-          expect(goal!.goalId).toBe(existing?.goalId);
-          expect(goal!.status).toBe('active');
-          expect(goal!.objective).toBe(followUpPlan.objective);
-          expect(goal!.objective).not.toContain('Old objective');
-          expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true);
-          expect(session.approvals.bypass(runId, 'toolEdit') !== null).toBe(
-            false,
-          );
-        }),
-      ),
-  );
-});
-
-describe('PlanTool — pause/complete (goal lifecycle)', () => {
-  // A run of its own per case: the default session's plane outlives the test,
-  // and a run begins with exactly one `run.start`.
-  let RUN_ID: RunId;
-
-  beforeEach(async () => {
-    await installFakePlatform();
-    RUN_ID = generateRunId();
-    publishTestRunStart(testDefaultSession(), RUN_ID);
-    await Effect.runPromise(testDefaultSession().log.settled);
-  });
-
-  function callTool(input: unknown) {
-    const tool = PlanTool;
-    return tool.call(input).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: { runId: RUN_ID, session: testDefaultSession(), toolPolicy: {} },
-        }),
-      ),
-    );
-  }
-
-  /** Put a goal on the run: its committed row folds before the tool reads it. */
-  const seedGoal = Effect.fn('test.seedGoal')(function* () {
-    yield* startGoal(
-      testDefaultSession(),
-      RUN_ID,
-      'Drive the plan to completion.',
-    );
-  });
-
-  it.effect('pauses an active goal with a reason', () =>
-    Effect.gen(function* () {
-      yield* seedGoal();
-      const result = yield* callTool({
-        command: 'pause',
-        reason: 'Need API credentials from the user.',
-      });
-      expect(result.status).toBe('executed');
-      yield* testDefaultSession().log.settled;
-      expect(goalOf(testDefaultSession(), RUN_ID)?.status).toBe('paused');
-    }),
-  );
-
-  it.effect('completes an active goal by ending the pursuit', () =>
-    Effect.gen(function* () {
-      yield* seedGoal();
-      const result = yield* callTool({
-        command: 'complete',
-        reason: 'Ran pnpm test; all 142 tests pass.',
-      });
-      expect(result.status).toBe('executed');
-      expect(result.output).toContain('all 142 tests pass');
-      // A finished goal is not archived: the run's next row states that none
-      // is in flight, so the wait-node loop has nothing to continue.
-      yield* testDefaultSession().log.settled;
-      expect(goalOf(testDefaultSession(), RUN_ID)).toBeNull();
-    }),
   );
 });

@@ -2,87 +2,35 @@
 
 Date: 2026-10-03
 Status: proposed
-Origin: lane 3 of the 2026-10-03b simplification sweep. It covered the
-host-agnostic support code (`src/utils/`, `src/common/`, `src/platform/`,
-`src/hosts/`, `src/logger/`, `src/eventBus/`) after code-as-tool
-(#13616–#13626), plugins-as-values (M2 #13643/#13646, M3 #13652), M4
-(#13644) and the GUI lanes.
+Origin: lane 3 of the 2026-10-03b simplification sweep over the host-agnostic
+support code, now under `packages/harness/src/{utils,common,platform,logger,eventBus}/`.
+Its behaviour-preserving finds merged in #13670. Of the findings it left, the
+`LanguageModelPort.onDidChange` split, the `entryTypeIn` ENOTDIR fix, the
+second config-path derivation, `ConfigProvider.inspect`'s `| undefined` and
+the `@common/errors` barrel have since been settled (the barrel is gone;
+AGENTS.md says to import the leaf module). The `initializeNodeRuntimeSkills`
+inline was dropped: the package split made it a published `./node` export
+(`packages/harness/src/node.ts`) whose caller, `bootstrapHost`, now lives in
+the app, which may not import `@skills`. What follows is still open.
 
-The knip ratchet already had no entry under these trees, and the sweep found
-no new dead export. Every `AppSignals` key has an emitter and at least one
-subscriber. Every `AgentDirectoriesPort` member has a caller.
-
-The batched PR that carries this note implemented these finds:
-
-- deleted `LanguageModelPort.isAvailable`, `PromptHost.error`,
-  `PromptConfirmOptions.cancelLabel` and `isThenable`;
-- trimmed the TUI host to the three members the CLI uses;
-- folded `workspaceRoot.ts` into `locateInWorkspace` and `xmlConversion.ts`
-  into `extractScratchpad`;
-- removed the second read of each category's primary prompt file;
-- made `pathExists` reuse `absentReason`, and moved `hookProtocol` onto
-  `safeParseJson` and `mcpServer` onto `truncatedHexId`;
-- tightened `ConfigWriteFailed.target`, and un-exported nine types that only
-  their own file names.
-
-The findings below were not implemented. Each one changes behavior, widens a
-ratchet, or needs an owner's call.
-
-## 1. `initializeNodeRuntimeSkills` is a one-caller forward that holds an upward edge
-
-`src/platform/defaults/nodeHost.ts` exports `initializeNodeRuntimeSkills` and
-`NodeRuntimeSkillOptions`. The only production caller is
-`src/controllers/hostBootstrap.ts` (`bootstrapHost`). The body is a single
-`installSkillContributions({...})` call. It is the module's only reason to
-import `@skills`, which is the `platform → skills` value edge in
-`config/ratchets/architecture-edges-baseline.json`. The header's "so hosts
-cannot drift" rationale is gone, because every host already goes through
-`bootstrapHost`.
-
-Proposal: inline the call into `bootstrapHost`, move `NodeRuntimeSkillOptions`
-beside `HostBootstrapInit`, and point the four `CliSkills.vitest.ts` calls and
-the `CliInitPlatform.vitest.ts` mock at `installSkillContributions`.
-
-Why it was not done here: the inline swaps the upward `platform → skills`
-edge for a new `controllers → skills` edge. That edge is not in the
-baseline, and the baseline rule is "never widen". It needs an owner's
-ruling that the swap counts as a shrink. The likely answer is yes, since
-`controllers` is the orchestration layer and `platform` is not.
-
-## 2. `LanguageModelPort.onDidChange` is a VS Code concern on the shared port
-
-`src/platform/languageModel.ts`: the only subscriber is
-`packages/extension/src/extension.ts`, which listens on the port it built
-itself and re-emits `languageModelsChanged`. Host-neutral code listens to
-that `AppSignal`, never to the port. `UNAVAILABLE_LANGUAGE_MODEL_PORT`
-carries a no-op only to satisfy the interface.
-
-Proposal: `createLanguageModelPort` returns the port together with its
-change subscription, and the extension wires the signal from that. The port
-then shrinks to `selectModels` and `acquire`. `selectModels` could also take
-its selector as required, since the one caller (`copilotRouting.ts`)
-always passes `{ vendor: 'copilot' }`.
-
-Not done: it changes the factory's return shape and the extension's
-activation wiring. That deserves its own diff, so it is not bundled with the
-deletions.
-
-## 3. Silent catches in the plugin hook runner and digest
+## 1. Silent catches in the plugin hook runner and digest
 
 These are catch-alls with no predicate, which §15 of the review checklist
 classes as masking:
 
-- `src/common/plugins/pluginHooks.ts`, `runHook`:
-  - `handle.exitCode.pipe(Effect.catch(() => Effect.succeed(null)))` turns
-    every exit-code failure into "exited, code null". The comment only
-    justifies a signal kill.
+- `packages/harness/src/common/plugins/pluginHooks.ts`, `runHook`:
+  - `handle.exitCode.pipe(Effect.orElseSucceed(() => null))` turns every
+    exit-code failure into "exited, code null". The comment only justifies a
+    signal kill.
   - `Fiber.join(readers).pipe(Effect.timeoutOption(STDIO_GRACE), Effect.ignore)`
     drops stdout and stderr read or decode failures without a log.
-- `src/common/plugins/pluginDigest.ts`, `walk`: `fs.readLink(full)` recovers
-  every failure as "not a link". The `fs.stat` that follows surfaces most
-  real I/O errors, but the predicate should name EINVAL and ENOENT.
-- `src/utils/files/externalRoots.ts`, `readLinkOrUndefined`: the comment says
-  EINVAL or ENOENT, but the bare `catch` also absorbs EACCES and ELOOP.
+- `packages/harness/src/common/plugins/pluginDigest.ts`, `walk`:
+  `fs.readLink(full)` recovers every failure as "not a link". The `fs.stat`
+  that follows surfaces most real I/O errors, but the predicate should name
+  EINVAL and ENOENT.
+- `packages/harness/src/utils/files/externalRoots.ts`, `readLinkOrUndefined`:
+  the comment says EINVAL or ENOENT, but the bare `catch` also absorbs EACCES
+  and ELOOP.
 
 Proposal: give each one a code predicate, or log at `warn` before
 recovering.
@@ -91,7 +39,7 @@ Not done: each changes which failures surface, and the hook runner's
 verdicts are pinned by `HookProtocol.vitest.ts`. A behavior-preserving
 sweep is the wrong place for that.
 
-## 4. Two plugin pins resolve a program on different PATHs (server spawn decided and done)
+## 2. Hooks and MCP servers resolve a program on different PATHs
 
 `pluginDigest.ts` (`externalFiles`) resolves an MCP server command with
 `whichOnExtendedPath`. `pluginHooks.ts` (`pinHook`) resolves a hook program
@@ -99,96 +47,22 @@ with `which.sync(program, { path: process.env.PATH })`. If a binary is only
 on the extended PATH, it pins for a server but is refused for a hook, and
 the two can pin different binaries for the same name.
 
-The sharper mismatch was inside the server path. `mcpServer.ts` (`connect`)
-spawns the bare `server.command` with `extendEnv: false`, and Node looks a
-bare command up on the child env's PATH. That PATH was the process's, or a
-project `.env`'s, never extended. So a command found only in an extra
-directory (`/opt/homebrew/bin` under a Dock-launched VS Code) pinned and then
-failed to spawn, and a `.env` PATH could run a binary other than the pinned
-one. The hooks were already consistent: `pinHook` and `runHook` both use
-`process.env.PATH`.
-
-There were two options: (a) give the server spawn the extended PATH the pin
-resolves over, or (b) pin the server on the env it spawns with. The decision
-is (a). `serverEnv` now sets PATH to the extended process PATH, the string
-`whichOnExtendedPath` searches. A project `.env` PATH gives way to it, with
-a `warn` log, because the pin cannot see `.env`; the `.env`'s other
-variables pass as before. A server entry's own `env.PATH`, which is part of
-its trusted digest, still wins and is extended. Such a server still resolves
-its command on a PATH the pin does not read. Option (b) would have moved
-every server pin, and with it every persisted trust digest. Option (a)
-changes no pin.
+The server side is settled: its spawn gets the extended PATH its pin
+resolves over, so a server runs the binary it pinned without moving any
+persisted trust digest. The hooks are consistent with themselves: `runHook`
+spawns with `extendEnv: false` and `PATH: process.env.PATH ?? '/usr/bin:/bin'`,
+and `pinHook` resolves over `process.env.PATH ?? ''`, so with PATH unset the
+hook is left dynamic rather than pinned against that fallback. The extension
+host writes the extended PATH into `process.env.PATH` once it activates, so
+there hooks see it too; the CLI and the desktop app do not.
 
 Still open: one resolver for hooks and servers. Not done because it changes
 which hooks load, and with that the hook trust digests.
 
-The hook side in detail: `runHook` spawns with `extendEnv: false` and
-`PATH: process.env.PATH ?? '/usr/bin:/bin'`; `pinHook` resolves over
-`process.env.PATH ?? ''`, so with PATH unset the hook is left dynamic rather
-than pinned against that fallback. The extension host writes the extended
-PATH into `process.env.PATH` once it activates (`initializeLatexSupport`), so
-there hooks see it too; the CLI and the desktop app do not.
-`hasPackageManager` (`toolChecks.ts`) calls `whichOnExtendedPath` instead of
-a second copy of it.
-
-## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
-
-`src/utils/files/fsEntryExists.ts`: `entryExists` reads a path under a
-regular file as absent (`absentReason` covers ENOTDIR). `entryTypeIn` only
-recovered `NotFound`, so the same path failed with `BadResource`, even though
-its doc said "only absence is recovered". `entryTypeIn` now recovers through
-`absentReason`. `entryExists` keeps its `exists` probe rather than becoming
-`entryTypeIn(...) !== undefined`: `AcceptRunFilesProgressEvents.vitest.ts`
-and `ToolUseWait.vitest.ts` stub `FileSystem.exists` (the latter parks the
-run on it), so that collapse is a test rewrite, not a code change.
-
-## 6. Config file paths derived twice (done with M7)
-
-`packages/cli/src/runtime/cliConfig.ts` recomputed the global and local
-`config.json` paths that `src/platform/defaults/nodeStores.ts` had already
-opened. The M7 settings split made `JsonStore.filePath` readable, and the
-CLI's warnings now name `store.filePath`, so the second derivation is gone
-with no new helper.
-
-## 7. `ConfigProvider.inspect` is typed `| undefined` (done with M7)
-
-No production implementation returned `undefined`. The port now returns
-`ConfigInspection<T>`, the test fake returns an empty inspection for an
-unknown key, and the four production callers lost their `?.`.
-
-## 8. `@common/errors` is a barrel with mixed import paths
-
-`src/common/errors/index.ts` re-exports `formatError`, the error predicates,
-`classifyAgentError` and `AgentError`. AGENTS.md documents it as a public
-surface, and about 17 production files import through it. Four import the
-same symbols from the defining files instead:
-
-- `settingsHostBindings.ts`
-- `toolProbes.ts`
-- `terminalResultToast.ts`
-- `modelFailure.ts`
-
-Either is fine, but having both is not. Proposal: pick one path. Under
-"no convenience barrels" the answer is the defining files, plus an AGENTS.md
-edit and the two `import('@common/errors')` mocks in `ExecuteCli.vitest.ts`.
-That is an owner call on the documented surface.
-
 ## Rejected
 
-- **`filterNotNull`, `filterNotNullish` and `isObject` → Effect `Predicate`:**
-  - The bodies are identical, but that is 54+ call sites of churn for no
-    element drop.
-  - `@utils/core` is browser-safe, and `Predicate` would pull `effect` into
-    webview call sites that do not import it today.
-- **One shared `sha256Hex`:** every remaining site is a one-line call to
-  native `crypto.hash` (#13613). A helper would add an export and remove
-  none.
-- **Folding `gitAuthorEnv.ts` into `execUtils.ts`:** that is a file move
-  with one consumer, which is M8's job.
 - **Narrowing `PromptMessageItem` to `T`:** `VscodeUiHost.confirm` builds
   its own close-affordance item through it. Moving that inside the host
   trades one type arm for a private items path.
-- **`linkAbortSignals`, `throwAggregated`, `clampOptional`, `clampIndex`:**
-  each has one production caller, but each is a documented member of its
-  family in `@utils/core`. Inlining would scatter the abort-link rationale.
-- **`planTeamRuns`:** it has two callers (the CLI and `resolveTeamLaunch`).
+- **Inlining `planTeamRuns`:** it has two callers (the CLI's `team` command
+  and `loadTeamOptions`).

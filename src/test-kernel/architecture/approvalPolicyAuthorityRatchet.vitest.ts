@@ -53,7 +53,6 @@ const OVERRIDE_CALL_ALLOWLIST = new Set([
  */
 const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/runApprovalQueue.ts',
-  'packages/harness/src/agent/runtime/loop/step.ts',
   // An Auto-approve launch's grants, on its `run.start`.
   'packages/harness/src/agent/runtime/rootLaunch.ts',
   // `policy.set`, the one host door, committed as its row.
@@ -61,8 +60,8 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   // A delegated child's grants, from how its proposal was approved.
   'packages/harness/src/tools/delegation/subagentRun.ts',
   'packages/harness/src/tools/delegation/AgentTool.ts',
-  // A goal's grant, committed with its goal row.
-  'packages/harness/src/tools/goal/goalRows.ts',
+  // A plan run as a goal: the grants the person chose, on the goal's run.
+  'packages/harness/src/tools/plan/PlanTool.ts',
 ]);
 
 const EVALUATOR_CALL =

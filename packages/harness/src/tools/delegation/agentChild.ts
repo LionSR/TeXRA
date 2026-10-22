@@ -9,11 +9,18 @@
  * `run.end` is its durable answer. A child a crash or a stop cut short is
  * resumed under its own id, not launched again; any other ended child's
  * end is the call's answer, which the model reads and decides on.
+ *
+ * A script's awaited call may also be answered by a completed call before
+ * it with the same prompt, options and file bytes (`reusable`).
  */
 
+// Node imports
+import { createHash } from 'node:crypto';
+
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { offeredBy } from '@agent/runtime/loop/step';
 
 // Local imports
 import {
@@ -22,17 +29,49 @@ import {
   readChildTurnState,
 } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { type RunToolCall } from '@agent/runtime/RunCall';
+import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
+  qualifyAggregateId,
   RUN_OUTCOME,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
+  type ToolResult,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { errorResult } from '@tools/core/result';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
+
+/** Most children one script may launch, by `agent()` and `self()` together. */
+const AGENT_CALL_LIMIT = 1000;
+
+/**
+ * Counts the child `script` is about to launch, or returns the error result
+ * once it has launched `AGENT_CALL_LIMIT`. Called just before a launch: a
+ * reused, recovered or rejected call launches none, and a resume's replayed
+ * calls never reach it.
+ */
+export const countLaunch = (
+  script: ScriptScope,
+  name: string,
+): Effect.Effect<ToolResult | null> =>
+  Effect.map(
+    script.shared(
+      'agent:launches',
+      Effect.sync(() => ({ count: 0 })),
+    ),
+    (launches) => {
+      if (launches.count >= AGENT_CALL_LIMIT)
+        return errorResult(
+          `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${name}' did not run.`,
+          { name: 'CallLimit' },
+        );
+      launches.count += 1;
+      return null;
+    },
+  );
 
 /** The child run one attempt of a call runs under, `call`'s own by
  *  default ({@link callChildRunId}). */
@@ -163,10 +202,117 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
           session,
           runId: earlier,
           parentRunId,
+          // Narrowed as it launched: to what this call's step offers.
+          parentOffered: yield* offeredBy(call.run),
           notify: recovery.notify,
         }),
       );
       return { kind: 'ended', runId: earlier, result };
     }
   }
+});
+
+/** The bytes behind a workflow call's files, hashed for its reuse key. */
+export const fingerprint = Effect.fn('agent.fingerprint')(function* (
+  paths: readonly (readonly string[])[],
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const hash = createHash('sha256');
+  for (const [group, files] of paths.entries())
+    for (const [index, file] of files.entries()) {
+      const bytes = yield* fs.readFile(file);
+      hash.update(`${group}\0${index}\0${bytes.length}\0`);
+      hash.update(bytes);
+    }
+  return hash.digest('hex');
+});
+
+/**
+ * The runs whose completed calls a call may reuse: the run that issued
+ * the `script` call, and the background script runs it launched. A call of
+ * a background script's run reaches its parent and its siblings this way.
+ */
+const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
+  const { session, runId } = call.run;
+  const view = yield* session.view.read([]);
+  const root =
+    view.runs.get(runId)?.identity.kind === 'script'
+      ? (view.runs.get(runId)?.parentId ?? runId)
+      : runId;
+  return [
+    root,
+    ...(view.runs.get(root)?.childIds ?? []).filter(
+      (id) => view.runs.get(id)?.identity.kind === 'script',
+    ),
+  ];
+});
+
+/** What the calling run and every run under it have spent so far. */
+const spentBy = (call: RunToolCall) =>
+  Effect.map(
+    call.run.session.view.read([]),
+    ({ runs }) => runs.get(call.run.runId)?.treeUsage.cost ?? 0,
+  );
+
+/**
+ * A completed call in the reuse scope whose key is `key`, or a rejection when
+ * one of this same script holds it: two calls of one script that would
+ * answer the same must say how they differ (`id`). Read from the runs'
+ * `tool.result` rows; only an executed result carries a key.
+ */
+export const reusable = Effect.fn('agent.reusable')(function* (
+  call: RunToolCall,
+  script: ScriptScope,
+  key: string,
+) {
+  const siblings = yield* script.shared(
+    'agent:keys',
+    Effect.sync(() => new Map<string, string>()),
+  );
+  const { callId } = call;
+  const duplicate = errorResult(
+    'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
+    { name: 'DuplicateCall' },
+  );
+  // Claimed before the read yields, so two calls at once cannot both pass.
+  const claimed = siblings.get(key);
+  if (claimed !== undefined && claimed !== callId) return duplicate;
+  siblings.set(key, callId);
+  const { log } = call.run.session;
+  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
+  )).flat();
+  const found = rows.flatMap((row) =>
+    row.type === 'tool.result' &&
+    row.payload.result.status === 'executed' &&
+    row.payload.result.reuseKey === key
+      ? [{ ...row.payload, result: row.payload.result }]
+      : [],
+  );
+  const mine = `${script.callId}/`;
+  // A sibling a resume handed back from its row never ran here to claim.
+  if (
+    found.some(
+      (row) =>
+        row.responseId === call.responseId &&
+        row.callId.startsWith(mine) &&
+        row.callId !== callId,
+    )
+  )
+    return duplicate;
+  const origin = found.at(-1);
+  if (origin === undefined) return null;
+  const from = origin.result.reusedFrom ?? origin.callId;
+  const { value } = origin.result;
+  return {
+    ...origin.result,
+    output: `Reused the result of call ${from}: nothing ran again.\n\n${origin.result.output ?? ''}`,
+    reusedFrom: from,
+    // What this run has spent is read now, not where the result was made.
+    ...(typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) && {
+        value: { ...value, spent: yield* spentBy(call) },
+      }),
+  } satisfies ToolResult;
 });

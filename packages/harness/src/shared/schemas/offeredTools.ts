@@ -1,8 +1,8 @@
 /**
  * The payload of a run history's `tools.offered` arm (`sessionEvent.ts`):
- * what one step of a run offered the model, each tool's identity, and the
- * continuation the step pinned; and the `context.blob` arm, the one store of
- * the model-facing content those rows and every `attempt` row name by digest.
+ * what one step of a run offered the model and each tool's identity; and
+ * the `context.blob` arm, the one store of the model-facing content those
+ * rows and every `attempt` row name by digest.
  */
 import { z } from 'zod';
 
@@ -32,16 +32,14 @@ const OfferedToolSchema = z.strictObject({
 export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 
 /**
- * The tools a step offers, in offer order, the plugin whose continuation
- * decides what the run does when it parks (null: it parks), the plugins
- * whose prompt contributions shape its requests' system text, and that
- * text: the whole set, appended at the step whenever it differs from the one
- * the run's previous step recorded. The latest one is what the run was last
- * offered, which a resume and every call are checked against.
+ * The tools a step offers, in offer order, the plugins whose prompt
+ * contributions shape its requests' system text, and that text: the whole
+ * set, appended at the step whenever it differs from the one the run's
+ * previous step recorded. The latest one is what the run was last offered,
+ * which a resume and every call are checked against.
  */
 export const ToolsOfferedPayloadSchema = z.strictObject({
   tools: z.array(OfferedToolSchema).readonly(),
-  continuation: z.string().min(1).nullable(),
   /** The names of the skills the step lists, in listing order. */
   skills: z.array(z.string().min(1)).readonly(),
   /** The address of the system text the run's requests send: its base text

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * Regenerate the golden 1.0 session store,
- * `src/test-kernel/fixtures/storage/golden-1.0.sql`
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §11):
+ * `src/test-kernel/fixtures/storage/golden-1.0.sql`:
  *
  *   pnpm --filter @texra-ai/cli run golden:store            # build, then write
  *   pnpm --filter @texra-ai/cli run golden:store -- --no-build
@@ -28,9 +27,13 @@
  *   as `output.structured`.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config`, Codex switched on in
- *   `/plugins`, and a plugin's `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
- *   (`r` on the approval, the `goal` plugin fact) and the goal completed,
- *   then `/model` and a message, so the switch is recorded at the run's
+ *   `/plugins`, and a plugin's `PostToolUse` hook on `codex` enabled: a
+ *   plan the user runs as a goal
+ *   (`r` on the approval), which runs the goal template as a background
+ *   script of the chat whose one round, a fork of the chat (`self()`),
+ *   runs a command under the goal's grant, unasked, and submits its
+ *   verdict, and the chat's turn on the goal's result; then
+ *   `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
  *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
@@ -45,7 +48,8 @@
  *   rows commit in one order.
  * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
  *   its read tool with `searchTools` and `describeTool`, then reads and runs
- *   one command in a `Promise.all`.
+ *   one command in a `Promise.all`, then runs an agent it defines
+ *   (`persona`), narrowed to the tools the script's run was offered.
  * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
@@ -554,18 +558,28 @@ async function generate(root) {
   };
   const chatRun = () =>
     query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
-  const waiting = (turn) =>
+  // The turn the chat is waiting after, once waiting is its latest position,
+  // and the wait for it to be waiting after `turn`: the goal's result wakes
+  // the chat, so which turn a step lands on is not fixed.
+  const waitingTurn = () => {
+    const [last] = query(
+      cli.store(),
+      `SELECT json_extract(e.data, '$.payload.at') AS at,
+         json_extract(e.data, '$.payload.turn') AS turn
+       FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'run.position'
+       ORDER BY e."commit" DESC LIMIT 1`,
+      [chatRun()],
+    );
+    return last?.at === 'waiting' ? last.turn : null;
+  };
+  const waitingAfter = (label, turn) =>
     until(
-      `the chat waiting after turn ${turn}`,
-      () =>
-        query(
-          cli.store(),
-          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'run.position'
-             AND json_extract(e.data, '$.payload.at') = 'waiting'
-             AND json_extract(e.data, '$.payload.turn') = ?`,
-          [chatRun(), turn],
-        ).length > 0,
+      label,
+      () => {
+        const waiting = waitingTurn();
+        return waiting !== null && waiting > turn ? waiting : null;
+      },
       tty,
     );
   // "Keep agents running" on, in `/config`: the user's stop detaches the
@@ -594,6 +608,14 @@ async function generate(root) {
   );
   // Codex on, in `/plugins`, before the chat's first turn binds its tools.
   await send('/plugins');
+  await shows('the plugin list', 'Switch plugins on or off');
+  // The list shows a window around its cursor: walk down to Codex's row.
+  await until(
+    'the OpenAI Codex CLI row in view',
+    () =>
+      /\w\. OpenAI Codex CLI/.test(tty.screen()) || void tty.write('\x1b[B'),
+    tty,
+  );
   await pick('OpenAI Codex CLI');
   await shows('Codex on', 'OpenAI Codex CLI — on');
   tty.write('\x1b');
@@ -616,16 +638,19 @@ async function generate(root) {
     tty,
   );
   tty.write('r');
-  await waiting(1);
+  // The goal's result, delivered once its round has verified it, opens the
+  // chat's turn that reports it.
+  await shows("the goal's result", 'Golden chat goal complete.');
+  let turn = await waitingAfter('the chat waiting on the goal result', 0);
   await send('/model gemini38f');
   await shows('the model switch notice', 'Model switched to gemini38f');
   await send('After the model switch.');
-  await waiting(2);
+  turn = await waitingAfter('the chat waiting after the model switch', turn);
   // A `/compact` wakes the chat: its turn's request commits the
   // `context.edit` that replaces the history with its summary.
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
-  await waiting(3);
+  await waitingAfter('the chat waiting after the compaction', turn);
   // A turn that launches a Codex child and is then held, a message typed
   // behind it, and the user's stop: the follow-up stays queued on the
   // stopped run, and the stop detaches the parked child.
@@ -666,12 +691,13 @@ async function generate(root) {
   tty.write('Queued behind the held turn.');
   await shows('the typed follow-up', '› Queued behind the held turn.');
   tty.write('\r');
-  // Two messages typed to the open chat, the Codex turn's result, and this.
+  // The goal's result, two messages typed to the open chat, the Codex
+  // turn's result, and this.
   await until(
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 4,
+        AND json_extract(e.data, '$.control') IS NULL`) === 5,
     tty,
   );
   tty.write('\x03');
@@ -1029,8 +1055,6 @@ const NANO_KEYS = new Set([
   'operationId',
 ]);
 const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
-/** A goal's random id (`goal_` and 12 hex digits). */
-const GOAL_ID = /goal_[0-9a-f]{12}/g;
 /** Numbers that measure wall time. */
 const TIMING_KEYS = new Set([
   'wallTimeMs',
@@ -1040,6 +1064,9 @@ const TIMING_KEYS = new Set([
   'elapsedTime',
 ]);
 const BASE_AT = Date.UTC(2026, 0, 1);
+
+/** The script functions whose call names the child run it launches. */
+const CHILD_CALLS = new Set(['agent', 'self']);
 
 function normalize(file, root) {
   const db = new DatabaseSync(file);
@@ -1067,7 +1094,6 @@ function normalize(file, root) {
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
   const nanos = tokens((n) => `golden${n.toString().padStart(15, '0')}`);
-  const goals = tokens((n) => `goal_${n.toString(16).padStart(12, '0')}`);
   const times = tokens((n) => new Date(BASE_AT + n * 1000).toISOString());
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
@@ -1082,7 +1108,6 @@ function normalize(file, root) {
     if (typeof value === 'string') {
       for (const match of value.match(UUID) ?? []) uuids.get(match);
       for (const match of value.match(ISO) ?? []) times.get(match);
-      for (const match of value.match(GOAL_ID) ?? []) goals.get(match);
       if (NANO_KEYS.has(key) && NANO.test(value))
         nanos.get(NANO.exec(value)[1]);
       return;
@@ -1093,9 +1118,9 @@ function normalize(file, root) {
   };
   for (const row of rows) collect(row.value, '');
 
-  // An `agent` call's child run is named by the call (`agentChildRunId`:
-  // its run, response, call and attempt), so a resume finds it by deriving
-  // that name again. Such a child is renamed by the same derivation over
+  // An `agent` or `self` call's child run is named by the call
+  // (`agentChildRunId`: its run, response, call and attempt), so a resume
+  // finds it by deriving that name again. Such a child is renamed by the same derivation over
   // the normalized names, not by order, or no resume would find it.
   const derive = (fields) =>
     createHash('sha256')
@@ -1105,7 +1130,10 @@ function normalize(file, root) {
   const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
   const children = new Map();
   for (const [index, row] of rows.entries()) {
-    if (row.type !== 'script.call' || row.value.payload.toolName !== 'agent')
+    if (
+      row.type !== 'script.call' ||
+      !CHILD_CALLS.has(row.value.payload.toolName)
+    )
       continue;
     const { scriptCallId, callId } = row.value.payload;
     const intents = rows.filter(
@@ -1171,7 +1199,6 @@ function normalize(file, root) {
     ...roots.map((prefix) => [prefix, '/golden']),
     // The bundle's own resources, which the system prompt lists.
     [realpathSync.native(validationRoot), '/texra'],
-    ...goals.seen,
     ...[...ids.seen].map(([from, to]) => [
       new RegExp(`(?<![0-9a-f])${from}(?![0-9a-f])`, 'g'),
       to,

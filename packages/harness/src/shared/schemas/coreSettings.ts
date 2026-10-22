@@ -111,11 +111,11 @@ export const RESUME_ON_OPEN_SETTING = Object.freeze({
 export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
 
 /**
- * Bounds, default, and copy for `goal.maxCostUsd`: the run tree's total spend
- * at which an active goal pauses instead of opening its next turn, and `0`
- * disables the cap. Read at each idle, so it needs no field on the goal's own
- * row. Shared by the catalog row and the goal continuation so the two cannot
- * disagree about the range.
+ * Bounds, default, and copy for `goal.maxCostUsd`: what a goal's rounds may
+ * spend before it pauses instead of starting another round, and `0`
+ * disables the cap. Read when the goal launches, into its script. Shared by
+ * the catalog row and the goal launch so the two cannot disagree about the
+ * range.
  */
 export const GOAL_MAX_COST_SETTING = Object.freeze({
   configKey: 'texra.goal.maxCostUsd',
@@ -123,5 +123,5 @@ export const GOAL_MAX_COST_SETTING = Object.freeze({
   min: 0,
   max: 10_000,
   description:
-    'Spend in US dollars, across the run and its subagents, at which an autonomous goal pauses instead of starting another turn. Raise it to let the goal continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
+    'Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
 } as const);

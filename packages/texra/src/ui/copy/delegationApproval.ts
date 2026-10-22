@@ -1,4 +1,7 @@
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalBypassKind,
+  InlinePersona,
+} from '@texra-ai/harness/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
@@ -49,6 +52,17 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
   progressViewToggle:
     'Auto-approve later agent work, file edits, and shell commands in this task',
 } as const);
+
+/**
+ * An agent the call defines (`AgentProposal.persona`), as every approval
+ * surface shows it: its name and the tools it asks for, then its prompt.
+ */
+export const DEFINED_AGENT_COPY = Object.freeze({
+  heading: (persona: Pick<InlinePersona, 'name' | 'tools'>) =>
+    `Defines agent '${persona.name}' · tools: ${persona.tools?.length ? persona.tools.join(', ') : 'none'}`,
+  promptLabel: 'Its system prompt',
+  instructionLabel: 'Its task',
+});
 
 /**
  * Host-specific user copy for the plan "Run as Goal" grant. Commands-only is

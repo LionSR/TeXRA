@@ -12,6 +12,30 @@ All notable changes to this project will be documented in this file.
   start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
   connection, and the harness's session database follows the new contract,
   which 4.0.5 lacks.
+- **Goal mode is a script.** **Run as goal** on a plan now runs the goal
+  template, a background script of the conversation whose rounds are the
+  same agent again: each round continues the conversation as it stood when
+  the goal started, with the objective and the last round's report, and
+  ends by submitting a verdict. The goal ends when a round verifies the
+  objective, a round needs you, or the rounds reach the spend cap, and its
+  result arrives in the conversation. The conversation no longer keeps
+  itself going, so the run header's goal chip and `/status`'s goal lines are
+  gone. The commands or agent work a goal auto-approves are approved in the
+  goal's script and its rounds, and the conversation's own approvals stay as
+  they were. The spend cap (`texra.goal.maxCostUsd`) counts everything the
+  goal has spent, failed rounds and agents a round left running included,
+  and a goal stops after 24 hours of running (resuming it starts a new 24
+  hours). The `plan` tool takes only
+  `objective`: its `pause` and `complete` commands are gone. Runs written by
+  an earlier build are listed as such and are not resumed.
+- **SDK: a parked run never continues itself.** `Plugin.continuation`,
+  `PluginContinuation`, and `goalStateOf` and `GoalState` in
+  `@texra-ai/harness/schemas` are gone, and the built-in plugins own no row
+  kinds. `ITool.scriptGlobal.withScript` marks a function of scripts alone
+  (`self()`), offered whenever the script tool is. A child that declares the
+  script tool gets it, and those functions, whatever its parent was
+  offered.
+
 - **Four little-used controls are gone.**
   - The desktop app no longer shows the "No LaTeX files yet" card, whose
     buttons only said they needed the VS Code extension; open a folder with
@@ -638,6 +662,19 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Scripts can run their agent again: `self(prompt, options)`.** It runs
+  the same agent with the same tools as a child of the call, forked from
+  the conversation as it stood when the script started (or from the prompt
+  alone with `fork: false`), and resolves as `agent()` does. Nothing is
+  proposed again: the user approved the script. A loop of `self()` calls
+  that checks each reply is how a goal runs.
+- **A script can define an agent on the spot.** An `agent()` call with a
+  `persona` (`{ prompt, tools }`) runs an agent the call defines, named by
+  its `agentName`, instead of one from the catalog, for that call alone.
+  It gets only the tools its caller has, and the approval card shows its
+  prompt and the tools it asks for. `agent()` and `self()` results also
+  carry `spent`: what the calling run has spent in all so far, beside the
+  child's own `cost`.
 - **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
   Each subscription model now takes the input window the Codex backend
   grants it (500K for GPT-6.1 Sol, 272K for the others) instead of one

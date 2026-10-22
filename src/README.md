@@ -1,7 +1,7 @@
 # The source map: the harness, the app, and the test suite
 
 TeXRA's production code lives in three workspace packages (split design
-`.agents/docs/proposed/architecture/2026-10-02-harness-package-split.md`):
+`.agents/docs/implemented/architecture/2026-10-02-harness-package-split.md`):
 
 - `packages/harness/src` (`@texra-ai/harness`): the Effect-only agent
   harness: the run loop and its history, sessions and storage, the plugin
