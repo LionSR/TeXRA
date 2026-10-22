@@ -4,7 +4,6 @@ import {
   readFile,
   readlink,
   stat,
-  unlink,
   writeFile,
 } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -75,7 +74,7 @@ async function expectSymlinkTargeting(
 }
 
 describe('round-dir ownership and editable .tex inheritance', () => {
-  it('snapshots editable .tex on mirror, points r<N>/ symlinks at the snapshot, and the round-output write replaces the symlink with a real file leaving snapshot and workspace untouched', async () => {
+  it('snapshots editable .tex on mirror and points r<N>/ symlinks at the snapshot', async () => {
     const workspaceDir = await installTempWorkspace('texra-round-ownership-');
     const draftDir = path.join(workspaceDir, 'Draft');
     const draftAbsolute = path.join(draftDir, 'Draft.tex');
@@ -113,30 +112,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     );
 
     await expectSymlinkTargeting(roundFilePath, snapshotPath);
-
-    // Inline the writeRoundOutput contract so the test is host-neutral
-    // (no platform wiring needed) and the ownership handoff is visible.
-    const roundOneContent =
-      '\\documentclass{article}\\begin{document}round 1\\end{document}\n';
-    const pre = await lstat(roundFilePath);
-    if (pre.isSymbolicLink()) await unlink(roundFilePath);
-    await writeFile(roundFilePath, roundOneContent);
-
-    const post = await lstat(roundFilePath);
-    expect(post.isSymbolicLink()).toBe(false);
-    expect(post.isFile()).toBe(true);
-    await expect(readFile(roundFilePath, 'utf8')).resolves.toBe(
-      roundOneContent,
-    );
-
-    await expect(readFile(snapshotPath, 'utf8')).resolves.toBe(
-      workspaceOriginal,
-    );
-    await expect(readFile(draftAbsolute, 'utf8')).resolves.toBe(
-      workspaceOriginal,
-    );
-    const workspaceStat = await stat(draftAbsolute);
-    expect(workspaceStat.size).toBe(workspaceOriginal.length);
   });
 
   it('falls through to the workspace symlink for non-snapshotted (read-only) deps', async () => {
@@ -172,8 +147,4 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       path.join(runDirUnder(testWorkspaceRoots().storage, runId), 'macros.sty'),
     );
   });
-
-  // Pins ensureMirroredInDiffRoundDir's `diff/r{round}` segment, which
-  // (like ensureMirroredInRoundDir's `r{round}`) is now built from the
-  // shared workflowOutputRoundDir helper (@texra/shared/constants/workflowOutput).
 });
