@@ -6,25 +6,25 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
+import {
+  AgentConfigSchema,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { type DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 
 // Local file imports
@@ -48,6 +48,34 @@ export function describeSubagentProgress(
         : undefined;
     case 'overview':
       return `Subagent '${agentName}': ${update.toolCallCount} tool calls, ${update.filesChanged.length} files changed`;
+  }
+}
+
+/** How a delegation was approved, as the child's own grants record it:
+ *  by the user's one-off answer (`inherit`), or by the run's proposal
+ *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
+export type DelegatedChildApproval =
+  'inherit' | 'auto-approved' | 'goal-approved';
+
+/**
+ * The grants a delegated child is registered with, stamped on its
+ * `run.start`. Beyond them it inherits its parent's live grants through the
+ * parent edge, kind by kind, so the CLI's distinct AUTO-BASH and
+ * AUTO-APPROVE grants reach it exactly as set, and a toggle on the parent
+ * after the child started reaches it too. A child a goal's grant approved
+ * gets a goal grant of its own, never a human value, so a resume leaves it
+ * off until a human re-arms the goal.
+ */
+export function delegatedChildGrants(
+  approval: DelegatedChildApproval,
+): ApprovalGrants {
+  switch (approval) {
+    case 'inherit':
+      return NO_APPROVAL_GRANTS;
+    case 'auto-approved':
+      return { own: { toolEdit: 'on' }, goal: [] };
+    case 'goal-approved':
+      return { own: {}, goal: ['toolEdit'] };
   }
 }
 
@@ -85,7 +113,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
       config: AgentConfigSchema.parse(childConfigPayload),
       session: parentSession,

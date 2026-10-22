@@ -14,7 +14,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { testPluginServicesLayer } from '@test/support/testPluginServices';
-import { goalOf, pauseGoal, startGoal } from '@tools/goal';
+import { goalOf, pauseGoal, startGoal } from '@tools/goal/goalRows';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { generateRunId } from '@utils/core';
 

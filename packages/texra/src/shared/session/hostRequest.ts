@@ -15,6 +15,7 @@ import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
 } from '@texra/shared/launcher/fileTypes';
+import { SettingsTargetSchema } from '@texra/shared/settingsView/settingsTarget';
 
 import { LaunchSurfaceSchema } from './surface';
 
@@ -102,13 +103,11 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('popBack') }),
   z.object({ kind: z.literal('refreshCommits') }),
   z.object({ kind: z.literal('refreshFiles') }),
-  /** Settings at a section, or where it last was when `section` is absent
+  /** Settings at a target, or where it last was when `target` is absent
    *  (the header's gear). */
   z.object({
     kind: z.literal('openSettings'),
-    section: z
-      .enum(['agents', 'teams', 'models', 'plugins', 'general'])
-      .nullish(),
+    target: SettingsTargetSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
    *  `Surface.launch` field the paths return to. */
@@ -158,6 +157,10 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
         kind: z.literal('write'),
         path: z.string(),
         contents: z.string(),
+        /** What the editor last read from the file: the write lands only
+         *  while the file still holds it (else `changedOnDisk`). Null
+         *  overwrites whatever is there. */
+        base: z.string().nullable(),
       }),
     ]),
   }),

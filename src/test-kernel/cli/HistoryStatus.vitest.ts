@@ -5,10 +5,7 @@ import { beforeEach, describe, expect } from 'vitest';
 import { Effect } from 'effect';
 
 import { registerRun } from '@agent/storage/runLifecycle';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   cliRunStanding,
   HISTORY_RUN_STATUS,
@@ -19,7 +16,7 @@ import {
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import { withProcessServices } from '@platform/processRuntime';
-import { qualifyAggregateId } from '@shared/schemas';
+import { AgentConfigSchema, qualifyAggregateId } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { seedRows } from '@test/support/sessionTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

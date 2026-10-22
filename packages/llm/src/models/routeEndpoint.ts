@@ -2,12 +2,16 @@
  * The endpoint of one model route, resolved as an explicit URL, and the one
  * owner of endpoint precedence. The package binds a model to a stated
  * deployment endpoint (it never falls back to an SDK default), so the
- * providers the handler left to their SDKs are named here. Precedence: a
- * per-model base URL, then the route's own (Kimi Code, OpenRouter), then the
- * host's endpoint for the provider (`RouteFacts.endpoints`: a dashboard URL,
- * or the default of the region its toggle picks), then the provider plugin's
- * default (`baseUrl` in `../providers/providerPlugins.ts`). A GLM Coding Plan
- * key takes its region's Responses endpoint, the same one an API key does.
+ * providers the handler left to their SDKs are named here. A subscription
+ * token is accepted only at its own surface, so a ChatGPT subscription goes
+ * to the Codex backend and a Grok subscription to the xAI plugin's default,
+ * never to a per-model, dashboard or OpenRouter endpoint. Otherwise the
+ * precedence is: a per-model base URL, then the route's own (Kimi Code,
+ * OpenRouter), then the host's endpoint for the provider
+ * (`RouteFacts.endpoints`: a dashboard URL, or the default of the region its
+ * toggle picks), then the provider plugin's default (`baseUrl` in
+ * `../providers/providerPlugins.ts`). A GLM Coding Plan key takes its
+ * region's Responses endpoint, the same one an API key does.
  */
 
 import { findModelProviderPlugin } from '../providers/providerPlugins.js';
@@ -18,20 +22,40 @@ import type { ModelRoute, RouteFacts } from './modelRoute.js';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 /**
+ * The Codex backend a ChatGPT subscription bills. It already includes the
+ * `codex` path segment, so the Responses `/responses` suffix yields
+ * `.../codex/responses`.
+ */
+const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+
+/** A provider plugin's default endpoint, when it states one URL. */
+function pluginEndpoint(provider: string): string | undefined {
+  const baseUrl = findModelProviderPlugin(provider)?.baseUrl;
+  return typeof baseUrl === 'string' ? baseUrl : undefined;
+}
+
+/**
  * The endpoint `route` sends `config`'s requests to, or `undefined` when no
  * endpoint is stated for the provider (a regional provider the host gave no
  * endpoint).
  */
 export function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'provider' | 'baseUrl'>,
-  route: Extract<ModelRoute, { kind: 'openrouter' | 'api-key' }>,
+  route: Extract<
+    ModelRoute,
+    {
+      kind:
+        'openrouter' | 'api-key' | 'chatgpt-subscription' | 'xai-subscription';
+    }
+  >,
   facts: Pick<RouteFacts, 'endpoints'>,
 ): string | undefined {
+  if (route.kind === 'chatgpt-subscription') return CODEX_BACKEND_BASE_URL;
+  if (route.kind === 'xai-subscription') return pluginEndpoint('xai');
   if (config.baseUrl) return config.baseUrl;
   if (route.kind === 'openrouter') return OPENROUTER_BASE_URL;
   if (route.usageRoute === 'kimi-code-subscription') return KIMI_CODE_BASE_URL;
   const hostUrl = facts.endpoints[config.provider];
   if (hostUrl) return hostUrl;
-  const baseUrl = findModelProviderPlugin(config.provider)?.baseUrl;
-  return typeof baseUrl === 'string' ? baseUrl : undefined;
+  return pluginEndpoint(config.provider);
 }

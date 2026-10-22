@@ -147,4 +147,32 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       path.join(runDirUnder(testWorkspaceRoots().storage, runId), 'macros.sty'),
     );
   });
+
+  // Failure mode: a mirror created over an entry already at its path
+  // removed whatever stood there, the run's own file included.
+  it('never replaces a real file at the mirror path with a link', async () => {
+    const workspaceDir = await installTempWorkspace('texra-mirror-own-file-');
+    const stylePath = path.join(workspaceDir, 'macros.sty');
+    await writeFile(stylePath, 'workspace\n');
+
+    const runId = RunIdSchema.parse('c3c3c3c3c3c3');
+    const runFile = path.join(
+      runDirUnder(testWorkspaceRoots().storage, runId),
+      'macros.sty',
+    );
+    await mkdir(path.dirname(runFile), { recursive: true });
+    await writeFile(runFile, 'the run wrote this\n');
+
+    const fileService = new RunFileService(runId, testWorkspaceRoots());
+    await runFileServiceProgram(
+      fileService.mirrorWorkspaceFile(
+        createWorkspaceLocation(stylePath, 'macros.sty'),
+      ),
+    );
+
+    expect((await lstat(runFile)).isSymbolicLink()).toBe(false);
+    await expect(readFile(runFile, 'utf8')).resolves.toBe(
+      'the run wrote this\n',
+    );
+  });
 });

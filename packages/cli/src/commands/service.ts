@@ -56,7 +56,7 @@ function installServiceLogSink(): void {
         const data = entry.annotations.data;
         writeTextStderr(
           [
-            `${new Date().toISOString()} ${String(entry.level)} ${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
+            `${entry.timestamp} ${String(entry.level)} ${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
             // The cause and payload a warning carries are what makes a
             // service log answerable after the fact.
             ...(entry.cause === undefined
@@ -157,7 +157,7 @@ export const serveCommand = defineCliCommand({
 
 function statusText(info: ServiceInfo | null, context: CliContext): string {
   if (info === null)
-    return `No TeXRA service is running (${servicePaths(context.storageRoot).record}).`;
+    return `No TeXRA service is running for ${context.storageRoot}.`;
   return [
     `TeXRA service ${info.version} (protocol ${info.protocol})`,
     `  pid:      ${info.pid}`,
@@ -179,27 +179,25 @@ function emitStatus(context: CliContext, info: ServiceInfo | null): void {
 }
 
 /** Ask the service to stop and wait until it no longer answers. */
-function stopService(context: CliContext) {
-  return Effect.gen(function* () {
-    const info = yield* probeCliService(context.storageRoot);
-    if (info === null) return null;
-    yield* askServiceToStop(info.socket, false);
-    yield* probeCliService(context.storageRoot).pipe(
-      Effect.flatMap((answer) =>
-        answer === null ? Effect.void : Effect.fail('running' as const),
-      ),
-      Effect.retry(Schedule.spaced('200 millis')),
-      Effect.timeout(STOP_TIMEOUT),
-      Effect.mapError(
-        () =>
-          new Error(
-            `The TeXRA service (pid ${info.pid}) did not stop within ${STOP_TIMEOUT}.`,
-          ),
-      ),
-    );
-    return info;
-  });
-}
+const stopService = Effect.gen(function* () {
+  const info = yield* probeCliService;
+  if (info === null) return null;
+  yield* askServiceToStop(info.socket, false);
+  yield* probeCliService.pipe(
+    Effect.flatMap((answer) =>
+      answer === null ? Effect.void : Effect.fail('running' as const),
+    ),
+    Effect.retry(Schedule.spaced('200 millis')),
+    Effect.timeout(STOP_TIMEOUT),
+    Effect.mapError(
+      () =>
+        new Error(
+          `The TeXRA service (pid ${info.pid}) did not stop within ${STOP_TIMEOUT}.`,
+        ),
+    ),
+  );
+  return info;
+});
 
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
@@ -207,7 +205,7 @@ const statusCommand = defineCliCommand({
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
-    probeCliService(context.storageRoot).pipe(
+    probeCliService.pipe(
       Effect.map((info) => {
         emitStatus(context, info);
         return CliExitCode.Success;
@@ -224,8 +222,8 @@ const stopCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
-  run: (context) =>
-    stopService(context).pipe(
+  run: () =>
+    stopService.pipe(
       Effect.map((stopped) => {
         writeTextStderr(
           stopped === null
@@ -244,7 +242,7 @@ const restartCommand = defineCliCommand({
   catchExitCode: CliExitCode.AgentError,
   run: (context) =>
     Effect.gen(function* () {
-      yield* stopService(context);
+      yield* stopService;
       const { info } = yield* Effect.scoped(
         connectCliService(context.storageRoot),
       );

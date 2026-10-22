@@ -8,6 +8,7 @@ import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
+import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -257,6 +258,12 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     }),
   );
 
+  // Which binding answers a renderer message is read on this lane. A reload's
+  // reset claims it in `did-navigate`'s own step, so the new document's first
+  // `subscribe` (or terminal) reaches the binding the reset makes, never the
+  // one it is about to close.
+  const routing = withPerKeyLane(new Map<string, PerKeyLane>(), 'routing');
+
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
@@ -264,7 +271,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   bootstrapDesktopWindowLifecycle({
     webContents: window.webContents,
     workspaceIpc: {
-      disposeRendererResources: () => spawn(resetForNewDocument),
+      disposeRendererResources: () =>
+        spawn(routing(resetForNewDocument), { startImmediately: true }),
     },
     showDiscardDialog: host.showDiscardDialog,
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
@@ -291,7 +299,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             ),
           );
     }),
-    claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, bindings.workspaceRoute),
+    claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, (message) =>
+      routing(Effect.suspend(() => bindings.workspaceRoute(message))),
+    ),
     {
       // The project list the renderer asks for once it boots, and its select
       // and close requests.
@@ -351,14 +361,18 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             console.warn('Dropped a session message with no session key');
             return;
           }
-          const binding = bindings.get(addressed.data.session);
-          if (!binding) {
-            console.warn(
-              `Dropped a renderer message for session ${addressed.data.session}: not open`,
-            );
-            return;
-          }
-          spawn(binding.port.receive(message));
+          const { session } = addressed.data;
+          const receive = Effect.suspend(() => {
+            const binding = bindings.get(session);
+            return binding
+              ? binding.port.receive(message)
+              : Effect.sync(() =>
+                  console.warn(
+                    `Dropped a renderer message for session ${session}: not open`,
+                  ),
+                );
+          });
+          spawn(routing(receive), { startImmediately: true });
         },
       }),
     ),

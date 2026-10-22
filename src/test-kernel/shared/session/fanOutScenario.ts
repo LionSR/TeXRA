@@ -8,7 +8,7 @@
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   qualifyAggregateId,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
@@ -201,7 +201,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
-    config: AgentConfigFieldsSchema.parse({
+    config: AgentConfigSchema.parse({
       model: 'claude-sonnet-4-5',
       instruction: 'review the draft',
       agent: 'review',
@@ -235,7 +235,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
-    config: AgentConfigFieldsSchema.parse({
+    config: AgentConfigSchema.parse({
       model: 'claude-sonnet-4-5',
       instruction: 'search',
     }),
@@ -338,7 +338,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',
-    config: AgentConfigFieldsSchema.parse({
+    config: AgentConfigSchema.parse({
       model: 'unused',
       instruction: 'npm test',
     }),

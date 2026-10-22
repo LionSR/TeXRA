@@ -5,10 +5,8 @@ import { html, type TemplateResult } from 'lit';
 
 import '@settingsView/frontend/SettingsApp';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import type {
-  PluginRow,
-  SettingsTarget,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
 const ROWS: PluginRow[] = [
   {

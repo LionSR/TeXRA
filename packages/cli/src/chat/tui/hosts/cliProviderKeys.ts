@@ -15,7 +15,6 @@ import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
 } from '@texra/controllers/settingsView/SettingsProfileKeyController';
-import { getProviderDisplayName } from '@texra/model/providerPresentation';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
@@ -38,8 +37,7 @@ const viaTui = (
     new SettingsProfileKeyController({
       secrets,
       prompt: tuiUi,
-      getProviderDisplayName: (candidate) =>
-        getProviderDisplayName(stores, candidate),
+      stores,
     }),
   ).pipe(
     Effect.mapError((error) =>

@@ -16,6 +16,7 @@ import {
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
+import type { GlobalValues } from '@texra-ai/harness';
 
 /** The service bundle: the packaged app's, or the extension build's in a
  *  development run. */
@@ -34,7 +35,7 @@ function serviceBundle(mainDir: string): string | undefined {
 export function reachDesktopService(
   dataRoot: string,
   mainDir: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope> {
+): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return Effect.suspend(() => {
     if (dataRoot !== defaultNodeStorageRoot())
       return Effect.fail(

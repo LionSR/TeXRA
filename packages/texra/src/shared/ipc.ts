@@ -66,6 +66,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.
   UPDATE_STATE_SETTING: 'updateStateSetting',
+  SET_SKILL_ENABLED: 'setSkillEnabled',
   // Tool dashboard commands
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',

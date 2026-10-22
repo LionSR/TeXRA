@@ -94,7 +94,7 @@ import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   qualifyAggregateId,
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
   RUN_PHASE,
@@ -2406,7 +2406,7 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const config = AgentConfigFieldsSchema.parse({
+        const config = AgentConfigSchema.parse({
           model: 'test-model',
         });
         const configured: SessionEventDraft = {
@@ -3119,6 +3119,28 @@ describe('the C1 event table and the C6 publisher', () => {
       );
     });
   });
+
+  // Failure mode: a hold taken inside a publisher job and one taken outside
+  // it were counted apart, so the job's hold, let go first, released the
+  // claim the other still held the run by.
+  it.effect('keeps a claim a job and a caller share until both let go', () =>
+    Effect.gen(function* () {
+      const store = yield* makeSessionStore('/workspace/framing');
+      yield* store.deliver(() => {});
+      yield* store.log.transact([runStart]);
+      yield* (yield* Database).releaseClaims([qualifyAggregateId('run', RUN)]);
+      const job = yield* Scope.make();
+      yield* store.log.transact(() =>
+        store.log.hold(RUN).pipe(Scope.provide(job)),
+      );
+      yield* store.log.hold(RUN);
+      yield* Scope.close(job, Exit.void);
+      expect(yield* store.log.owns(RUN)).toBe(true);
+    }).pipe(
+      Effect.provide(ProcessIdentity.layer(SELF)),
+      Effect.provide(graph([])),
+    ),
+  );
 
   it.effect(
     'fences a second writer and transfers only released claims together',

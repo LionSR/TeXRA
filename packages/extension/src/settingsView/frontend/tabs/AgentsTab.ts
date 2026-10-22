@@ -26,10 +26,8 @@ import {
 import { pluralize } from '@texra-ai/harness/transcript';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import {
-  type AgentSelectionItem,
-  type SettingsSectionName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import {
   commonViewStyles,
   designTokens,
@@ -106,7 +104,8 @@ export class AgentsTab extends LitElement {
     'library';
   @property({ attribute: false }) compactionThresholdPercent =
     MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
-  /** Parent-owned acknowledgement generation; changes force a re-render even when all field values are unchanged. */
+  /** Parent-owned acknowledgement generation; a change repaints the number
+   *  rows' saved values even when all field values are unchanged. */
   @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) modelRetryMaxAttempts =
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue;
@@ -192,10 +191,7 @@ export class AgentsTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div
-        class="agents-container tab-content-container"
-        data-ack-generation=${this.ackGeneration}
-      >
+      <div class="agents-container tab-content-container">
         ${this.renderSection()}
       </div>
     `;
@@ -268,6 +264,7 @@ export class AgentsTab extends LitElement {
           min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
           max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
           unit: '%',
+          ackGeneration: this.ackGeneration,
           // Clearing the field commits 0, which is the documented way to
           // disable compaction — not a no-op edit to be reverted.
           revertOnEmpty: false,
@@ -284,6 +281,7 @@ export class AgentsTab extends LitElement {
           min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
           max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
           step: 1,
+          ackGeneration: this.ackGeneration,
           revertOnEmpty: false,
           onChange: (value) =>
             postStateSetting(MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey, value),
@@ -307,6 +305,7 @@ export class AgentsTab extends LitElement {
           min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
           max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
           step: 1,
+          ackGeneration: this.ackGeneration,
           onChange: (value) =>
             postStateSetting(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, value),
         })}

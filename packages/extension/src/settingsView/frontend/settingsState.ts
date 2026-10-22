@@ -54,13 +54,18 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
-  type SettingsSectionName,
-  type SettingsTabPanelName,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type {
+  SettingsSectionName,
+  SettingsTabPanelName,
+} from '@texra/shared/settingsView/settingsTarget';
 import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+import type {
+  MemoryViewItem,
+  SettingsViewSnapshot,
+} from '@texra-ai/harness/schemas';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
@@ -205,13 +210,14 @@ export const resumeOnOpen = settingSignal<string>(
   RESUME_ON_OPEN_SETTING.configKey,
 );
 /**
- * Monotonic acknowledgement generation for the agents payload. Incremented
- * on every outbound agents settings message — including a rebroadcast that
- * carries the same values after a rejected/failed write — so SettingsApp
- * re-renders the Agents branch and `live()` can restore the acknowledged
- * committed value on the number input.
+ * Each catalog snapshot's acknowledgement generation, bumped on every
+ * snapshot message of that kind, including a rebroadcast that carries the
+ * same values after a rejected or failed write, so a number row riding it
+ * repaints the acknowledged value over the edit (`ackGeneration`).
  */
-export const agentsSettingsRevision = trackedSignal<number>(() => 0);
+export const settingsSnapshotRevisions = trackedSignal<
+  Readonly<Partial<Record<SettingsViewSnapshot, number>>>
+>(() => ({}));
 
 // ---------------------------------------------------------------------------
 // Approval and tool-safety settings state

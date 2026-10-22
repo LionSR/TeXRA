@@ -144,8 +144,8 @@ Another code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - **Start simple**: Choose the most direct solution, using built-ins (objects, Maps, Sets, arrays), host APIs, and JSON for state. A new abstraction earns its place only when it clearly reduces complexity.
 - **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
 - **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
-  - `@common/errors` — classification and surfacing: `classifyAgentError`, the SDK-error inspection under `sdkError/`, `errorPredicates`. Reach for this when the _kind_ of failure changes what happens next.
-  - `@utils/errors/errorMessage` — the `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`, and `formatError` (a prefixed, truncated message). Browser-safe, which `@common/errors` is not required to be.
+  - `@common/errors/*` — classification and surfacing: `classifyAgentError` (`@common/errors/agentErrorClassification`), the SDK-error inspection under `@common/errors/sdkError/`, and `@common/errors/errorPredicates`. There is no barrel; import the leaf module. Reach for these when the _kind_ of failure changes what happens next.
+  - `@utils/errors/errorMessage` — the `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`, and `formatError` (a prefixed, truncated message). Browser-safe, which `@common/errors/*` is not required to be.
 
 ### Testing discipline
 
@@ -292,7 +292,7 @@ For good separation of concerns and platform independence, core business logic s
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
-   - `isFileNotFoundError(err)` from `@common/errors` — not `instanceof vscode.FileSystemError`
+   - `isFileNotFoundError(err)` from `@common/errors/errorPredicates` — not `instanceof vscode.FileSystemError`
    - Use `number` for file type annotations instead of `vscode.FileType` — the numeric values are compatible
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.

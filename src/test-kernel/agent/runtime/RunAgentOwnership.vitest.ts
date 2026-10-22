@@ -16,11 +16,10 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   claimHolder,

@@ -77,11 +77,11 @@ import {
 } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   aggregateTarget,
   type RunEndOutput,

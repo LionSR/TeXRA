@@ -29,7 +29,6 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   resumeOwnRun,
   resumeRun,
@@ -37,7 +36,7 @@ import {
 } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {

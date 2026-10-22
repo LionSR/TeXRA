@@ -83,7 +83,7 @@ export interface Approver {
  * newest attached handler (`active`), until interrupted: every request a
  * parked run waits on here (the attention rule every host reads), once,
  * through the session's one `request.decide`. It reads each view, and the
- * current one again when `wake` says it became the newest, since a parked
+ * settled one again when `wake` says it became the newest, since a parked
  * run publishes none. A decision the session refuses to record is tried
  * again briefly, then logged and its request offered again on the next
  * view; a handler still deciding a request that left the view (another
@@ -145,8 +145,15 @@ function answerRequests(
             ),
       ),
     );
+  // A wake reads the view once the log settled: a decision the handler
+  // that left committed is folded by then, never asked about again.
   const woken = Stream.fromQueue(wake).pipe(
-    Stream.mapEffect(() => SubscriptionRef.get(session.view.ref)),
+    Stream.mapEffect(() =>
+      Effect.andThen(
+        session.log.settled,
+        SubscriptionRef.get(session.view.ref),
+      ),
+    ),
   );
   return Stream.merge(session.view.changes, woken).pipe(
     Stream.runForEach((view) =>
@@ -250,7 +257,7 @@ export function attachHost(
     };
     // Attaching withdraws the older handler's prompts in flight: the newest
     // asks them again. Leaving wakes the handler that becomes the newest: it
-    // re-reads the current view, where a request this one asked still waits.
+    // re-reads the settled view, where a request this one asked still waits.
     yield* Effect.acquireRelease(
       Effect.gen(function* () {
         const older = approvers.at(-1);

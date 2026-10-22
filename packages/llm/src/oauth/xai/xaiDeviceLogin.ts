@@ -25,10 +25,10 @@ import {
   XAI_DEVICE_DEFAULT_EXPIRES_SEC,
   XAI_DEVICE_DEFAULT_INTERVAL_SEC,
   XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC,
-} from './xaiConstants.js';
+  type XaiSession,
+} from './xaiProvider.js';
 import { pollDeviceToken, requestDeviceCode } from './xaiOAuthClient.js';
 import type { HttpClient } from 'effect/http';
-import type { XaiSession } from './xaiSessionTypes.js';
 
 /**
  * Run the device-code flow end to end and persist the session. Succeeds with

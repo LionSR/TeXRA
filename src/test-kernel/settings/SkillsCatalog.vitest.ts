@@ -45,10 +45,11 @@ describe('skills catalog', () => {
     expect(root.querySelectorAll('.catalog-row')).toHaveLength(2);
     root.querySelector<HTMLElement>('.catalog-row-toggle')!.click();
     expect(mocks.postMessage).toHaveBeenLastCalledWith(
-      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED,
       {
         key: WorkspaceStateKey.DISABLED_SKILLS,
-        value: ['unrelated', 'review'],
+        item: 'review',
+        enabled: false,
       },
     );
     const source = root.querySelector('wa-select')!;
@@ -69,10 +70,11 @@ describe('skills catalog', () => {
     sourceToggle.checked = true;
     sourceToggle.dispatchEvent(new Event('change', { bubbles: true }));
     expect(mocks.postMessage).toHaveBeenLastCalledWith(
-      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED,
       {
         key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-        value: [],
+        item: 'user',
+        enabled: true,
       },
     );
   });

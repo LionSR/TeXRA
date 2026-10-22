@@ -8,7 +8,7 @@ import {
   SharedAttempt,
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
-import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
+import { lookupApiKey } from '@texra-ai/llm';
 import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -127,9 +127,10 @@ export class SubscriptionUsageService {
     // `requestTimeoutMs` is the one deadline over the request and body read.
     return Object.freeze({
       chatgpt: {
-        // A 401 on a token its stored expiry still calls fresh forces one
-        // refresh; a refresh the server refuses clears the session, so the
-        // account reads as signed out instead of "ready to use".
+        // A 401 on a token its stored expiry still calls fresh refreshes
+        // that token, while it is still the stored one; a refresh the server
+        // refuses clears the session, so the account reads as signed out
+        // instead of "ready to use".
         fetch: () => {
           const fetchOnce = Effect.flatMap(
             this.loadChatGptCredential(),
@@ -138,24 +139,27 @@ export class SubscriptionUsageService {
                 ? fetchChatGptUsage(credential, this.requestTimeoutMs)
                 : Effect.succeed(null),
           );
-          return fetchOnce.pipe(
-            Effect.catchIf(
-              (error) =>
-                HttpClientError.isHttpClientError(error) &&
-                error.reason._tag === 'StatusCodeError' &&
-                error.reason.response.status === 401,
-              () =>
-                Effect.andThen(
-                  codexCoordinator(this.secrets).refreshRejected(),
-                  fetchOnce,
+          return Effect.flatMap(this.loadChatGptCredential(), (sent) =>
+            sent === null
+              ? Effect.succeed(null)
+              : fetchChatGptUsage(sent, this.requestTimeoutMs).pipe(
+                  Effect.catchIf(
+                    (error) =>
+                      HttpClientError.isHttpClientError(error) &&
+                      error.reason._tag === 'StatusCodeError' &&
+                      error.reason.response.status === 401,
+                    () =>
+                      codexCoordinator(this.secrets)
+                        .refreshRejected(sent.accessToken)
+                        .pipe(Effect.andThen(fetchOnce)),
+                  ),
                 ),
-            ),
           );
         },
       },
       kimiCode: {
         fetch: () =>
-          Effect.flatMap(this.loadApiKey('kimiCode'), (apiKey) =>
+          Effect.flatMap(lookupApiKey(this.secrets, 'kimiCode'), (apiKey) =>
             apiKey
               ? fetchKimiCodeUsage(apiKey, this.requestTimeoutMs)
               : Effect.succeed(null),
@@ -165,7 +169,7 @@ export class SubscriptionUsageService {
         resolveVariant: () =>
           Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
         fetch: (useChina) =>
-          Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
+          Effect.flatMap(lookupApiKey(this.secrets, 'glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
@@ -197,15 +201,6 @@ export class SubscriptionUsageService {
       ...(session.accountId ? { accountId: session.accountId } : {}),
     };
   });
-
-  /** A coding-plan provider's API key, from secret storage or the environment. */
-  private loadApiKey(
-    provider: 'kimiCode' | 'glm',
-  ): Effect.Effect<string | undefined, SecretsFailed> {
-    return Effect.map(lookupApiKey(this.secrets, provider), (key) =>
-      key === undefined ? undefined : exposeApiKey(key),
-    );
-  }
 
   /** Drop cached and in-flight work after credentials or accounts change. */
   invalidate(provider?: SubscriptionUsageProvider): void {
