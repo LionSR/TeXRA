@@ -1,9 +1,6 @@
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import type { RunId } from '@shared/schemas';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';

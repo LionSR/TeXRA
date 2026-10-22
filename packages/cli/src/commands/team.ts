@@ -5,7 +5,11 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { AgentCatalog, Settings } from '@texra-ai/harness';
+import {
+  AgentCatalog,
+  Settings,
+  type ProcessServices,
+} from '@texra-ai/harness';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -50,10 +54,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import {
-  type CliRunServices,
-  executeCliToolUseConfig,
-} from '../runtime/executeCli';
+import { executeCliToolUseConfig } from '../runtime/executeCli';
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -135,7 +136,7 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 export const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
   init: TeamRunInit,
-): Effect.fn.Return<number, Error, CliRunServices> {
+): Effect.fn.Return<number, Error, ProcessServices> {
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {

@@ -11,14 +11,12 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  AgentConfigSchema,
   USER_FOLLOW_UP_SUPPORT,
   type OfferedTool,
   type RunId,
