@@ -1,5 +1,9 @@
 // Test composition imports
 import '@test/support/sessionGraphTestSetup';
+// `runHistoryExport` calls `initCliPlatform` unconditionally; the real one
+// bootstraps platform agent directories keyed by `resourcesPath`, which is
+// unrelated to (and heavier than) what these tests exercise.
+import '@test/support/cliInitPlatformMock';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
@@ -26,9 +30,9 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   emptyRunEndOutput,
   MESSAGE_TYPES,
@@ -75,23 +79,7 @@ const historySession = (): LocalSession => {
   };
 };
 
-// `runHistoryExport` calls this unconditionally; the real implementation
-// bootstraps platform agent directories keyed by `resourcesPath`, which is
-// unrelated to (and heavier than) what these tests exercise.
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', async () => {
-  const { Effect } = await import('effect');
-  const { testRuntime } = await import('@test/support/testProcessRuntime');
-  return {
-    installCliProcessRuntime: vi.fn(() => testRuntime()),
-    disposeCliProcessRuntime: Effect.void,
-  };
-});
-
-// Imported after vi.mock so the mocked dependencies are in place.
+// The CLI modules under test, over the mocks registered above.
 import { runHistoryExport } from '@cli/commands/history';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';

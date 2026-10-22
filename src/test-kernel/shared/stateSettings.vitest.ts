@@ -19,10 +19,6 @@ import type {
 } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
-import {
-  FakeScopedConfigProvider,
-  FakeStateStore,
-} from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
@@ -353,7 +349,9 @@ describe('Settings', () => {
             ] as const;
             for (const [stored, expected] of cases) {
               const { stores, config } = makeFakeSettingsStores();
-              if (stored !== undefined) config.set(setting.configKey, stored);
+              if (stored !== undefined) {
+                yield* config.update(setting.configKey, stored);
+              }
               yield* Effect.promise(() => installPlatform({}, { config }));
               assert.equal(
                 yield* Settings.get(stores, entry.key),
@@ -389,16 +387,9 @@ describe('Settings', () => {
           const entry = TEXRA_SETTINGS.byKey(key);
           assert.ok(entry, `missing catalog entry ${key}`);
           assert.equal(entry.configTarget, 'global', `${key} configTarget`);
-          const config = new FakeScopedConfigProvider();
-          config.seedGlobal(key, true);
-          config.seedWorkspace(key, false);
-          const stores = {
-            host: 'vscode' as const,
-            config,
-            workspaceState: new FakeStateStore(),
-            repoState: new FakeStateStore(),
-            globalState: new FakeStateStore(),
-          };
+          const { stores, config } = makeFakeSettingsStores();
+          yield* config.update(key, true, 'global');
+          yield* config.update(key, false, 'workspace');
           assert.equal(yield* Settings.get<boolean>(stores, key), true, key);
         }
       }),

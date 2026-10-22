@@ -2,19 +2,23 @@ import { Predicate } from 'effect';
 
 /** Check if an error represents a file-not-found condition. */
 export function isFileNotFoundError(err: unknown): boolean {
-  const code = (err as { code?: string })?.code;
-  return code === 'ENOENT' || code === 'FileNotFound';
+  return (
+    Predicate.hasProperty(err, 'code') &&
+    (err.code === 'ENOENT' || err.code === 'FileNotFound')
+  );
 }
 
 /** Check if an error represents "a parent path component is a file, not a directory". */
 export function isNotADirectoryError(err: unknown): boolean {
-  return (err as { code?: string })?.code === 'ENOTDIR';
+  return Predicate.hasProperty(err, 'code') && err.code === 'ENOTDIR';
 }
 
 /** Check if an error is "dynamic import couldn't find the module" (Node + ESM variants). */
 export function isModuleNotFoundError(err: unknown): boolean {
-  const code = (err as { code?: string })?.code;
-  return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND';
+  return (
+    Predicate.hasProperty(err, 'code') &&
+    (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND')
+  );
 }
 
 /** `err` followed by its `cause` chain, outermost first. Shared traversal for
@@ -52,7 +56,8 @@ export function findInCauseChain<T>(
 /** Check if an error represents a "no space left on device" condition. */
 export function isDiskFullError(err: unknown): boolean {
   return causeChain(err).some(
-    (current) => (current as { code?: string }).code === 'ENOSPC',
+    (current) =>
+      Predicate.hasProperty(current, 'code') && current.code === 'ENOSPC',
   );
 }
 

@@ -12,40 +12,14 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
-import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
+import {
+  LATEX_RECOMMENDED_SETTINGS,
+  LATEX_WORKSHOP_EXT_ID,
+  type LatexRecommendedSetting,
+  type LatexRecommendedSettingField,
+} from '@texra/shared/constants/latexToolchain';
 
 const CHANNEL = 'latexSettingsHandlers';
-
-type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
-
-/**
- * A recommended setting: a scalar written as is, or an object merged
- * key-by-key into whatever the user already has set (rather than overwritten
- * wholesale).
- */
-type LatexRecommendedSetting =
-  | { readonly kind: 'scalar'; readonly key: string; readonly value: string }
-  | {
-      readonly kind: 'object';
-      readonly key: string;
-      readonly value: Readonly<Record<string, boolean>>;
-    };
-
-/** Recommended LaTeX-related VS Code settings and their target values. */
-const LATEX_RECOMMENDED_SETTINGS: Readonly<
-  Record<LatexRecommendedSettingField, LatexRecommendedSetting>
-> = {
-  outDir: {
-    kind: 'scalar',
-    key: 'latex-workshop.latex.outDir',
-    value: '%DIR%/build/',
-  },
-  autoRevealExclude: {
-    kind: 'object',
-    key: 'explorer.autoRevealExclude',
-    value: { '**/build/': true },
-  },
-};
 
 /**
  * Whether a recommended setting is explicitly set to its recommended value.

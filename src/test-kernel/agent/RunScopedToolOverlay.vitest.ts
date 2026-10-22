@@ -9,7 +9,6 @@ import { Effect, Layer, SynchronizedRef } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { apiKeyEnvName, apiKeySecretName } from '@texra-ai/llm';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
@@ -21,7 +20,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
-import { PersonaSchema } from '@shared/schemas';
+import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';

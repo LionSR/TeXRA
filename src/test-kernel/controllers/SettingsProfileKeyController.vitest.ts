@@ -7,6 +7,7 @@ import { describe } from 'vitest';
 import { SecretsFailed } from '@texra-ai/llm';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 
 async function createController(options?: {
@@ -46,8 +47,7 @@ async function createController(options?: {
     controller: new SettingsProfileKeyController({
       secrets,
       prompt: hosts.prompt,
-      getProviderDisplayName: (provider) =>
-        Effect.succeed(provider === 'openai' ? 'OpenAI' : provider),
+      stores: makeFakeSettingsStores().stores,
     }),
     hosts,
     secrets,

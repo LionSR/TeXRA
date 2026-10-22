@@ -29,11 +29,15 @@ const CHANNEL = 'OutputDiffStats';
 // ============================================================================
 
 /** Computes diff statistics between base and output files. */
-function computeDiffStats(
-  baseLocation: FileLocation | null,
-  outputLocation: FileLocation,
-): Effect.Effect<DiffStats, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+const computeDiffStats = Effect.fn('documents.computeDiffStats')(
+  function* (
+    baseLocation: FileLocation | null,
+    outputLocation: FileLocation,
+  ): Effect.fn.Return<
+    DiffStats,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     const fs = yield* FileSystem.FileSystem;
     const read = (absolutePath: string) =>
       fs
@@ -50,26 +54,25 @@ function computeDiffStats(
     );
 
     return diffLineChanges(baseContent, outContent);
-  }).pipe(
-    // An unreadable side of the pair yields no stats rather than failing the
-    // round, but never silently: a missing file is expected on a historical
-    // run and logged at debug, anything else at warn.
-    Effect.catch((err) => {
-      const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-      // The reads fail as `PlatformError`s, whose `reason` carries the
-      // errno classification the raw Node error used to.
-      const write =
-        err instanceof PlatformError.PlatformError &&
-        err.reason._tag === 'NotFound'
-          ? Effect.logDebug
-          : Effect.logWarning;
-      return write(message).pipe(
-        withLogChannel(CHANNEL),
-        Effect.as<DiffStats>({}),
-      );
-    }),
-  );
-}
+  },
+  // An unreadable side of the pair yields no stats rather than failing the
+  // round, but never silently: a missing file is expected on a historical
+  // run and logged at debug, anything else at warn.
+  Effect.catch((err) => {
+    const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
+    // The reads fail as `PlatformError`s, whose `reason` carries the
+    // errno classification the raw Node error used to.
+    const write =
+      err instanceof PlatformError.PlatformError &&
+      err.reason._tag === 'NotFound'
+        ? Effect.logDebug
+        : Effect.logWarning;
+    return write(message).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as<DiffStats>({}),
+    );
+  }),
+);
 
 /** The +/- diff stats must be computed against the immutable pre-run
  *  snapshot (in-place workflows overwrite the live file, so the snapshot is
@@ -82,23 +85,21 @@ function computeDiffStats(
  *  gone (e.g. the source was renamed or deleted after a historical run) so
  *  "compare" doesn't abort on a missing base. Non-snapshot locations pass
  *  through unchanged. */
-function toWorkspaceOrigin(
+const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
   workspace: string | undefined,
   loc: FileLocation | null,
-): Effect.Effect<FileLocation | null, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    if (!loc || loc.kind !== 'runStorage') return loc;
-    const resolved = pathToLocationIn(workspace, loc.relativePath);
-    // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
-    // a file counts and a dangling one (or a directory) does not.
-    const isFile = yield* fs.stat(resolved.absolutePath).pipe(
-      Effect.map((info) => info.type === 'File'),
-      Effect.catchIf(absentReason, () => Effect.succeed(false)),
-    );
-    return resolved.kind === 'workspace' && isFile ? resolved : loc;
-  });
-}
+): Effect.fn.Return<FileLocation | null, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  if (!loc || loc.kind !== 'runStorage') return loc;
+  const resolved = pathToLocationIn(workspace, loc.relativePath);
+  // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
+  // a file counts and a dangling one (or a directory) does not.
+  const isFile = yield* fs.stat(resolved.absolutePath).pipe(
+    Effect.map((info) => info.type === 'File'),
+    Effect.catchIf(absentReason, () => Effect.succeed(false)),
+  );
+  return resolved.kind === 'workspace' && isFile ? resolved : loc;
+});
 
 // ============================================================================
 // Public API

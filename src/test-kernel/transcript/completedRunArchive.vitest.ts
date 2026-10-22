@@ -5,14 +5,16 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { withProcessServices } from '@platform/processRuntime';
-import { LOG_LEVELS, MESSAGE_TYPES, qualifyAggregateId } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  qualifyAggregateId,
+} from '@shared/schemas';
 import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
 import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

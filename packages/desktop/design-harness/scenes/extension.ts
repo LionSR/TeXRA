@@ -5,7 +5,7 @@
 import { html, type TemplateResult } from 'lit';
 
 import {
-  AgentConfigFieldsSchema,
+  AgentConfigSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
@@ -618,7 +618,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     });
     log.emit(ROOT, T.root, {
       type: 'run.config',
-      config: AgentConfigFieldsSchema.parse({
+      config: AgentConfigSchema.parse({
         agent: 'review',
         script: {
           code: 'return await tools.document_propose({});',

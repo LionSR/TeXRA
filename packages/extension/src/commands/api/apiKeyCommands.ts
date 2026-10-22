@@ -8,15 +8,11 @@ import {
   type ApiKeyProviderId,
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
-import {
-  getProviderDisplayName,
-  getProviderKeyUrl,
-} from '@texra/model/providerPresentation';
+import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
@@ -37,14 +33,15 @@ function createProfileKeyController(
   return new SettingsProfileKeyController({
     secrets,
     prompt: vscodeUi,
-    getProviderDisplayName: (provider) =>
-      getProviderDisplayName(stores, provider),
+    stores,
   });
 }
 
 /**
  * Prompt for an API key with a native button that opens the provider's key
  * portal without closing the input box, so the user can paste straight away.
+ * Answers `undefined` when dismissed, and closes the input when the wait is
+ * interrupted.
  */
 function promptForApiKey(
   provider: ApiKeyProviderId,
@@ -67,10 +64,18 @@ function promptForApiKey(
       if (keyUrl) void vscode.env.openExternal(vscode.Uri.parse(keyUrl));
     }
   });
-  return settleQuickInput(ib, (accept) => {
-    ib.onDidAccept(() => {
-      accept(ib.value);
-    });
+  return Effect.callback<string | undefined>((resume) => {
+    let settled = false;
+    const accept = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resume(Effect.succeed(value));
+      ib.dispose();
+    };
+    ib.onDidAccept(() => accept(ib.value));
+    ib.onDidHide(() => accept(undefined));
+    ib.show();
+    return Effect.sync(() => ib.dispose());
   });
 }
 

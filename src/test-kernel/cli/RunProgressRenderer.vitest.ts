@@ -6,7 +6,6 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   createRunProgressRenderer,
@@ -19,6 +18,7 @@ import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgress
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
+  AgentConfigSchema,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,

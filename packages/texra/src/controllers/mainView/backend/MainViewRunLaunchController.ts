@@ -135,18 +135,18 @@ export function launchApprovalOptions({
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */
-export function prepareSurfaceLaunch(
-  { launch, instruction }: LaunchRequest,
-  /** The requesting session's slots and storage root, carried as data: the
-   *  pasted-image paths it names are joined onto its root rather than
-   *  resolved from an ambient read at this depth. */
-  roots: LaunchRoots,
-): Effect.Effect<
-  ValidatedRunRequest,
-  Rejected | StateReadFailed,
-  AgentCatalog
-> {
-  return Effect.gen(function* () {
+export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
+  function* (
+    { launch, instruction }: LaunchRequest,
+    /** The requesting session's slots and storage root, carried as data: the
+     *  pasted-image paths it names are joined onto its root rather than
+     *  resolved from an ambient read at this depth. */
+    roots: LaunchRoots,
+  ): Effect.fn.Return<
+    ValidatedRunRequest,
+    Rejected | StateReadFailed,
+    AgentCatalog
+  > {
     let preparation: LaunchPreparation;
     if (launch.launchTarget !== 'team') {
       // AgentConfigSchema prefaults agent/model; reject missing UI selections
@@ -206,5 +206,5 @@ export function prepareSurfaceLaunch(
       });
     }
     return preparation.request;
-  });
-}
+  },
+);

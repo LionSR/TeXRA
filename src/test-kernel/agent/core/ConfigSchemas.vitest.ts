@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { describe, it } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@shared/schemas';
 
 /**
  * `agentSource` is persisted (run `config.json`, trace documents), so

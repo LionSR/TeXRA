@@ -36,7 +36,6 @@ import {
 } from '@test/support/sessionEnd';
 import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
@@ -211,13 +210,12 @@ export function createTestRunTrace(runId: RunId) {
   };
 }
 
-/** Set the project's approval policy: the setting every session over
- *  `roots` (by default the installed fake host's) decides by. */
+/** Set the approval policy, in the `local` scope its row is written to: the
+ *  setting every session over `roots` (by default the installed fake
+ *  host's) decides by. */
 export function setTestApprovalPolicy(
   policy: ApprovalPolicy,
   { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
 ): void {
-  if (!(config instanceof FakeConfigProvider))
-    throw new Error('The installed fake host has no fake config to set.');
-  config.set(APPROVAL_POLICY_CONFIG_KEY, policy);
+  Effect.runSync(config.update(APPROVAL_POLICY_CONFIG_KEY, policy, 'local'));
 }

@@ -2,11 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import type { RunId } from '@shared/schemas';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
   ProgressFollowUpController,

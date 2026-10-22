@@ -14,24 +14,17 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
-import {
-  API_KEY_PROVIDER_IDS,
-  apiProviderOfSecretName,
-  loadApiKeyStatusMap,
-} from '@texra-ai/llm';
+import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
   CopilotRoutes,
   readModelOptions,
-  Settings,
-  type SettingsStores,
   type StorageFs,
   withLogChannel,
   withSessionFs,
 } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
-  providerEndpointKey,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
@@ -55,6 +48,7 @@ import {
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
+import { buildProfileMessage } from '@texra/controllers/settingsView/profileMessage';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import {
@@ -67,15 +61,10 @@ import {
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
-  type UpdateProfileMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import {
-  getProviderDisplayName,
-  getProviderKeyUrl,
-} from '@texra/model/providerPresentation';
+import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import type {
@@ -97,51 +86,6 @@ type SettingsArms = SettingsViewInboundHandlerRegistry<
 const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
   Partial<Record<SubscriptionProviderId, SubscriptionUsageProvider>>
 > = { chatgpt: 'chatgpt' };
-
-/** The canonical `UPDATE_PROFILE` message: every API-key provider with its
- *  key status and native controls. */
-const buildProfileMessage = Effect.fn('settings.buildProfileMessage')(
-  function* (
-    stores: SettingsStores,
-    secrets: PlatformSecrets,
-  ): Effect.fn.Return<UpdateProfileMessage, Error> {
-    const secretStatuses = yield* loadApiKeyStatusMap(secrets);
-    const providerKeyStatuses = yield* Effect.forEach(
-      API_KEY_PROVIDER_IDS,
-      (provider) =>
-        Effect.gen(function* () {
-          const endpointKey = providerEndpointKey(provider);
-          return {
-            provider,
-            displayName: yield* getProviderDisplayName(stores, provider),
-            status: secretStatuses[provider],
-            customEndpoint: endpointKey
-              ? yield* Settings.get<string>(stores, endpointKey)
-              : '',
-            supportsCustomEndpoint: endpointKey !== undefined,
-            providerSettings: yield* Effect.forEach(
-              TEXRA_SETTINGS.modelsTab(provider),
-              ({ entry, surface }) =>
-                Settings.get(stores, entry.key).pipe(
-                  Effect.map((value) => {
-                    const { provider: _provider, ...display } = surface;
-                    return {
-                      ...display,
-                      key: entry.key,
-                      value: value === true,
-                    };
-                  }),
-                ),
-            ),
-          };
-        }),
-    );
-    return {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      providerKeyStatuses,
-    };
-  },
-);
 
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
@@ -353,8 +297,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const profileKeys = new SettingsProfileKeyController({
     secrets,
     prompt: bindings.prompt,
-    getProviderDisplayName: (provider) =>
-      getProviderDisplayName(roots, provider),
+    stores: roots,
   });
   // A failed key write leaves the profile and the Models page showing the
   // key as it was before the attempt. The report is the notice: a repaint
