@@ -16,23 +16,18 @@ import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/setting
 import type { SettingsStores } from '@texra-ai/harness';
 
 /** Read one settings-view snapshot from the host's stores. */
-export function buildSettingsSnapshotMessage(
-  snapshot: DerivedSettingsSnapshot,
-  stores: SettingsStores,
-) {
-  return Effect.gen(function* () {
-    return {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot,
-      values: Object.fromEntries(
-        yield* Effect.forEach(
-          TEXRA_SETTINGS.snapshotEntries(snapshot),
-          (entry) =>
-            Settings.get(stores, entry.key).pipe(
-              Effect.map((value) => [entry.key, value] as const),
-            ),
+export const buildSettingsSnapshotMessage = Effect.fn(
+  'buildSettingsSnapshotMessage',
+)(function* (snapshot: DerivedSettingsSnapshot, stores: SettingsStores) {
+  return {
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+    snapshot,
+    values: Object.fromEntries(
+      yield* Effect.forEach(TEXRA_SETTINGS.snapshotEntries(snapshot), (entry) =>
+        Settings.get(stores, entry.key).pipe(
+          Effect.map((value) => [entry.key, value] as const),
         ),
       ),
-    };
-  });
-}
+    ),
+  };
+});

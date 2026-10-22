@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Data, Effect, Exit, Fiber } from 'effect';
+import { Cause, Clock, Data, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -148,7 +148,7 @@ const executeInBand = Effect.fn('executeInBand')(
       launch.kind === 'fresh'
         ? launch.definition.config
         : launch.identity.agentConfig;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = yield* startDetachedChildRunLoop({

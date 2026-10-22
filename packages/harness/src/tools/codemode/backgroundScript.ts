@@ -6,7 +6,7 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Effect, SynchronizedRef } from 'effect';
+import { Clock, Effect, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -97,8 +97,8 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         agentName: title,
         budgeted: true,
         buildLaunch: () =>
-          restore(Effect.void).pipe(
-            Effect.as(
+          restore(Clock.currentTimeMillis).pipe(
+            Effect.map((startedAt) =>
               createScriptRunStrategy({
                 definition,
                 // Registered with its opening, which its run commits.
@@ -113,7 +113,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
                 runId,
                 parentRunId,
                 session,
-                startedAt: Date.now(),
+                startedAt,
                 ...(workingDirectory != null && { workingDirectory }),
                 parentOffered,
                 title,

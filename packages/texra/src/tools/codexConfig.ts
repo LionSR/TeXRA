@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
@@ -162,9 +162,7 @@ function catalogEfforts(
   if (!catalog.success) return undefined;
   const entry = catalog.data.models.find(
     (item): item is BundledCodexModel =>
-      typeof item === 'object' &&
-      item != null &&
-      (item as BundledCodexModel).slug === slug,
+      Predicate.hasProperty(item, 'slug') && item.slug === slug,
   );
   const efforts = (entry?.supported_reasoning_levels ?? [])
     .map((level) => level.effort)
