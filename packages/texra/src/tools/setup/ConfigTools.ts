@@ -13,7 +13,11 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import {
+  executed,
+  nullishWithDefault,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import { type StateSettingEntry } from '@texra-ai/harness/schemas';
 import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -95,12 +99,9 @@ const UpdateConfigInputSchema = z.strictObject({
     .describe(
       "New value, validated against the setting's schema. Call read_config first to see what the setting controls.",
     ),
-  target: z
-    .enum(['user', 'workspace'])
-    .prefault('user')
-    .describe(
-      '"user" updates the global setting shared across workspaces; "workspace" scopes the change to the current workspace only.',
-    ),
+  target: nullishWithDefault(z.enum(['user', 'workspace']), 'user').describe(
+    '"user" updates the global setting shared across workspaces; "workspace" scopes the change to the current workspace only.',
+  ),
 });
 
 type UpdateConfigInput = z.infer<typeof UpdateConfigInputSchema>;
