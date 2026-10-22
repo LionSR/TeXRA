@@ -40,7 +40,7 @@ import {
 import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
-export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
+const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
 
 // SDK stream parsing does not validate the JSON values it returns.
 const WireTextSchema = z.strictObject({

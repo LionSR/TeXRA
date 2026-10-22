@@ -116,34 +116,10 @@
       "name": "isAllowedExternalUrl"
     },
     {
-      "file": "packages/llm/src/oauth/deviceAuthorization.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceCodeTimedOut"
-    },
-    {
-      "file": "packages/llm/src/oauth/deviceAuthorization.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "SessionCompletionFailed"
-    },
-    {
       "file": "packages/llm/src/oauth/oauthRequest.ts",
       "category": "unused",
       "kind": "exports",
       "name": "OAuthUnexpectedResponse"
-    },
-    {
-      "file": "packages/llm/src/oauth/xai/xaiOAuthClient.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceAuthorizationDenied"
-    },
-    {
-      "file": "packages/llm/src/oauth/xai/xaiOAuthClient.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceCodeExpired"
     },
     {
       "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",

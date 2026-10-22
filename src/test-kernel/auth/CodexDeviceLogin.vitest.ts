@@ -10,9 +10,9 @@ import { jsonResponse } from '@test/support/fetchTestUtils';
 import {
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
-} from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+  type CodexSession,
+} from '../../../packages/llm/src/oauth/codex/codexProvider.js';
 import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
-import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
 
 /**
  * Drive the flow through the wire: the usercode endpoint answers once, and

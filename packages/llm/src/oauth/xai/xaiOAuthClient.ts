@@ -27,14 +27,12 @@ import {
   XAI_DEVICE_CODE_GRANT_TYPE,
   XAI_SCOPE,
   XAI_TOKEN_URL,
-} from './xaiConstants.js';
-import {
   XaiDeviceCodeSchema,
   XaiTokenResponseSchema,
-} from './xaiSessionTypes.js';
+} from './xaiProvider.js';
 
 /** The user refused the device authorization (terminal, re-auth required). */
-export class DeviceAuthorizationDenied extends Data.TaggedError(
+class DeviceAuthorizationDenied extends Data.TaggedError(
   'DeviceAuthorizationDenied',
 )<{
   readonly message: string;
@@ -42,7 +40,7 @@ export class DeviceAuthorizationDenied extends Data.TaggedError(
 }> {}
 
 /** The server expired the device code before the user approved. */
-export class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
+class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
   readonly message: string;
   readonly status: number;
 }> {}

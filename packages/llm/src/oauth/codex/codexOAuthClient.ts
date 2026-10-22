@@ -23,11 +23,9 @@ import {
   CODEX_CLIENT_ID,
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
-} from './codexConstants.js';
-import {
   CodexDeviceTokenSchema,
   CodexDeviceUserCodeSchema,
-} from './codexSessionTypes.js';
+} from './codexProvider.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',

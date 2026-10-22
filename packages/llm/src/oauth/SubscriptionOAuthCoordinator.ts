@@ -95,9 +95,7 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   ): S;
 }
 
-export interface SubscriptionOAuthCoordinatorInit<
-  S extends SubscriptionSession,
-> {
+interface SubscriptionOAuthCoordinatorInit<S extends SubscriptionSession> {
   storage: SubscriptionSessionStorage;
   policy: SubscriptionOAuthPolicy<S>;
   /** Token grants; defaults to the policy's form endpoint. */
