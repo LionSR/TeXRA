@@ -28,6 +28,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "LICENSE.txt",
     "NOTICE.txt"
   ],
