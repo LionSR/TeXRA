@@ -49,17 +49,6 @@ export const OpenPdfTool = defineTool({
     const { env } = yield* ToolContext;
     const run = yield* callerRun;
     const runId = run?.runId;
-    const trimmedPath = input.path.trim();
-    // An absolute path inside this run's own storage directory, resolved
-    // against the run's own storage root (`session.roots.storage`).
-    const runDirectory =
-      runId && new RunFileService(runId, env.roots).runDirectory;
-    const runRelative =
-      runDirectory &&
-      path.isAbsolute(trimmedPath) &&
-      isPathWithin(runDirectory, trimmedPath)
-        ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
-        : '';
     const openPdf = (yield* EditorHost).at(env.roots.storage).openPdf;
     if (!openPdf) {
       return yield* Effect.fail(
@@ -69,9 +58,20 @@ export const OpenPdfTool = defineTool({
       );
     }
 
+    const trimmedPath = input.path.trim();
     if (!trimmedPath) {
       return yield* Effect.fail(new ToolError('path is required.'));
     }
+    // An absolute path inside this run's own storage directory names a
+    // run-storage file; anything else resolves as a tool path.
+    const runDirectory =
+      runId && new RunFileService(runId, env.roots).runDirectory;
+    const runRelative =
+      runDirectory &&
+      path.isAbsolute(trimmedPath) &&
+      isPathWithin(runDirectory, trimmedPath)
+        ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
+        : '';
     const location: FileLocation =
       runId && runRelative
         ? createRunStorageLocation(trimmedPath, runRelative, runId)

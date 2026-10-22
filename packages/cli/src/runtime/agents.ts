@@ -61,11 +61,6 @@ export function resolveCliRunAgent(
   );
 }
 
-/** Resolve the agent a display command names, by the catalog's rule. */
-export function resolveCliAgent(identifier: string) {
-  return Effect.map(AgentCatalog, (catalog) => catalog.get(identifier));
-}
-
 export function loadCliAgentList(
   stores: WorkspaceAgentsStores,
   options: CliAgentListOptions = {},

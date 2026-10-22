@@ -103,14 +103,14 @@ function appendLocalTranscriptEntry(
   if (!normalized) return;
   const view = currentView();
   const active = selectedRunId.get();
+  // A local row lands on the root run once one exists, else on the active
+  // run's parent (or the active run itself), else on the pre-run transcript.
   const runId =
     explicitRunId ??
-    resolveLocalTranscriptRunId({
-      activeRunId: active,
-      fallbackRunId: CLI_LOCAL_RUN_ID,
-      parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
-      rootRunId: rootRunId.get(),
-    });
+    rootRunId.get() ??
+    (active === undefined
+      ? CLI_LOCAL_RUN_ID
+      : (runViewOf(view, active)?.parentId ?? active));
   focusRun(runId, { when: 'unset' });
   const afterSeq = rowSeq(runViewOf(view, runId)?.transcript.rows.at(-1));
   notices.set([
@@ -125,24 +125,6 @@ function appendLocalTranscriptEntry(
       ),
     },
   ]);
-}
-
-/** Which run a local row belongs to. Module-private: this is the one answer,
- *  and `appendLocalTranscriptEntry` is the one caller that needs it. */
-function resolveLocalTranscriptRunId({
-  activeRunId,
-  fallbackRunId,
-  parentOf,
-  rootRunId,
-}: {
-  readonly activeRunId: RunId | undefined;
-  readonly fallbackRunId: RunId;
-  readonly parentOf: (runId: RunId) => RunId | undefined;
-  readonly rootRunId: RunId | undefined;
-}): RunId {
-  if (rootRunId) return rootRunId;
-  if (activeRunId === undefined) return fallbackRunId;
-  return parentOf(activeRunId) ?? activeRunId;
 }
 
 /** The pre-run notices become the root's opening rows once it exists. */

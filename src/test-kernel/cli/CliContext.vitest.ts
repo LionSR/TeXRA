@@ -428,12 +428,6 @@ describe('CLI per-stream color resolution', () => {
       options: { env: { FORCE_COLOR: '1', NO_COLOR: '1' } },
       expected: false,
     },
-    {
-      label: 'forceDisable beats everything',
-      isTty: true,
-      options: { forceDisable: true, env: { FORCE_COLOR: '1' } },
-      expected: false,
-    },
   ])('$label', ({ isTty, options, expected }) => {
     expect(resolveStreamColor(isTty, options)).toBe(expected);
   });

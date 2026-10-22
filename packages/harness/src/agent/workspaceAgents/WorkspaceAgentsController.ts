@@ -206,22 +206,6 @@ export class WorkspaceAgentsController<
     return { entries: [...entries.values()], missing, keys: [...keys] };
   }
 
-  /** Team identity a selection resolves to, following inherit to the default. */
-  private teamIdOf(selection: WorkspaceAgentsSelection) {
-    return Effect.gen({ self: this }, function* () {
-      if (selection.kind === 'inherit') {
-        return yield* this.getDefaultTeamId();
-      }
-      return selection.kind === 'team' ? selection.teamId : undefined;
-    });
-  }
-
-  private hasPreset(teamId: string) {
-    return Effect.gen({ self: this }, function* () {
-      return (yield* this.allPresets()).some((preset) => preset.id === teamId);
-    });
-  }
-
   /**
    * Resolve a selection once, answering both questions the snapshot asks of
    * it: what the workspace effectively runs, and — when the selection names a
@@ -229,8 +213,14 @@ export class WorkspaceAgentsController<
    */
   private resolveEffectiveSelection(selection: WorkspaceAgentsSelection) {
     return Effect.gen({ self: this }, function* () {
-      const teamId = yield* this.teamIdOf(selection);
-      if (teamId && !(yield* this.hasPreset(teamId))) {
+      // The team a selection names, following inherit to the default.
+      let teamId: string | undefined;
+      if (selection.kind === 'inherit') teamId = yield* this.getDefaultTeamId();
+      else if (selection.kind === 'team') teamId = selection.teamId;
+      if (
+        teamId &&
+        !(yield* this.allPresets()).some((preset) => preset.id === teamId)
+      ) {
         return {
           effectiveSelection: { kind: 'all' as const },
           missingTeamId: teamId,
@@ -245,15 +235,6 @@ export class WorkspaceAgentsController<
         };
       }
       return { effectiveSelection: selection, missingTeamId: undefined };
-    });
-  }
-
-  /** The keys the effective selection lists, or `null` for every agent. */
-  private effectiveKeys() {
-    return Effect.gen({ self: this }, function* () {
-      return (
-        (yield* this.selectionKeys(yield* this.getEffectiveSelection())) ?? null
-      );
     });
   }
 
@@ -359,9 +340,9 @@ export class WorkspaceAgentsController<
     return serializeWorkspaceWrite(
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
-        const keys = yield* this.effectiveKeys();
+        const keys = yield* this.getEnabledAgentKeys();
         const target =
-          keys === null
+          keys === undefined
             ? (yield* visibleAgents(
                 this.deps.repoState,
                 this.deps.getAgents(),

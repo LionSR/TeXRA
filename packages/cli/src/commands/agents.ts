@@ -16,7 +16,6 @@ import {
   formatCliNewerBuiltInNotice,
   loadCliAgentList,
   missingAgentMessage,
-  resolveCliAgent,
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -70,12 +69,13 @@ function listAgents(context: CliContext, options: CliAgentListOptions = {}) {
 function showAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const entry = yield* resolveCliAgent(name);
+    const catalog = yield* AgentCatalog;
+    const entry = catalog.get(name);
     if (!entry) {
       writeTextStderr(missingAgentMessage(name));
       return CliExitCode.Usage;
     }
-    if (!context.quietLogs && (yield* AgentCatalog).newerBuiltIn(entry)) {
+    if (!context.quietLogs && catalog.newerBuiltIn(entry)) {
       writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
     }
 
