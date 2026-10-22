@@ -85,6 +85,7 @@ import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
+import { launchAgentOption } from './components/composerChipMenus';
 import type { HeaderMenuItem } from './components/RunHeader';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -431,9 +432,11 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document task reads Input and Context, so only it gets the file
-    // section; a chat attaches through the composer alone.
-    const documentPass = launch.sessionType === 'task';
+    // Only a document task reads Input and Context, so only an agent with
+    // one gets the file section; a chat attaches through the composer alone.
+    const documentPass =
+      launch.launchTarget === 'agent' &&
+      launchAgentOption(launch, host)?.rounds !== undefined;
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );

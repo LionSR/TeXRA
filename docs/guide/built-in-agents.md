@@ -16,7 +16,6 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
   columns="2"
   :groups="[
     {
-      label: 'Chat',
       items: [
         { name: 'assistant', icon: 'comment' },
         { name: 'prover', icon: 'lightbulb' },
@@ -32,7 +31,6 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
       ],
     },
     {
-      label: 'Document task',
       items: [
         { name: 'correct', icon: 'check' },
         { name: 'polish', icon: 'sparkle', active: true },
@@ -46,7 +44,7 @@ TeXRA ships with built-in agents tailored for rigorous research workflows and sc
   ]"
 />
 
-<p class="hero-caption">The agent picker, with a <strong>Chat</strong> section (every agent can chat; a few shown on the left) and a <strong>Document task</strong> section (the agents that also run a document task, right), with the selected agent (<code>polish</code>) highlighted.</p>
+<p class="hero-caption">The agent picker lists each agent once: the chat agents (a few shown on the left) and the agents with a document task (right), which the picker marks with a file icon. Picking one, like the selected <code>polish</code>, starts its document task on your files.</p>
 
 The same catalog is available from any terminal:
 

@@ -7,9 +7,12 @@ import { Effect, absurd } from 'effect';
 
 // Local imports - shared types and errors
 import {
+  AgentCatalog,
   Rejected,
   type StateReadFailed,
   type AgentDelegationScope,
+  type StartInput,
+  type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
 import {
   formatTeamLaunchBlockedMessage,
@@ -22,17 +25,12 @@ import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@texra/controllers/session/runRequests';
-import type { SessionType } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
-import type {
-  AgentCatalog,
-  StartInput,
-  WorkspaceAgentsStores,
-} from '@texra-ai/harness';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -49,14 +47,25 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   launch: LaunchRequest['launch'],
   instruction: string,
   agent: string,
-  sessionType: SessionType,
   roots: LaunchRoots,
   team?: {
     readonly delegationAgentScope: AgentDelegationScope;
     readonly cli: { readonly teamId: string };
   },
 ): Effect.fn.Return<LaunchPreparation, StateReadFailed, AgentCatalog> {
-  const task = sessionType === 'task';
+  // The agent decides the mode: one with a document task runs it over the
+  // files; any other agent, and a team's lead, chats. An agent the catalog
+  // cannot resolve launches as a chat, whose own resolution reports the miss
+  // (the agent-config banner) or the failed load.
+  const entry = team
+    ? null
+    : yield* (yield* AgentCatalog).forLaunch(roots, agent).pipe(
+        Effect.catchTags({
+          AgentNotFound: () => Effect.succeed(null),
+          AgentCatalogLoadError: () => Effect.succeed(null),
+        }),
+      );
+  const task = entry !== null && documentTaskOf(entry) !== null ? entry : null;
   if (task && launch.inputFiles.length === 0) {
     return {
       valid: false,
@@ -99,19 +108,13 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
     ),
   };
   // A document task runs its agent's recipe over the files.
-  const launched = task
-    ? yield* documentTaskConfig(config, roots, optionsResult?.data).pipe(
-        Effect.map((built) => ({ ok: true as const, config: built })),
-        Effect.catchTags({
-          DocumentTaskRefused: (refused) =>
-            Effect.succeed({ ok: false as const, message: refused.message }),
-          AgentCatalogLoadError: (failed) =>
-            Effect.succeed({ ok: false as const, message: failed.message }),
-        }),
-      )
-    : { ok: true as const, config };
-  if (!launched.ok) return { valid: false, message: launched.message };
-  const validation = validateRunRequest({ config: launched.config });
+  const patch =
+    task && optionsResult?.success
+      ? documentTaskPatch(config, task, optionsResult.data)
+      : null;
+  const validation = validateRunRequest({
+    config: patch ? { ...config, ...patch } : config,
+  });
 
   if (!validation.valid) {
     return { valid: false, message: validation.message };
@@ -154,13 +157,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       preparation =
         !launch.agent || !launch.model
           ? { valid: false, message: 'Choose an agent and a model first.' }
-          : yield* buildLaunchRequest(
-              launch,
-              instruction,
-              launch.agent,
-              launch.sessionType,
-              roots,
-            );
+          : yield* buildLaunchRequest(launch, instruction, launch.agent, roots);
     } else {
       const teamId = launch.selectedTeamId || undefined;
       if (!teamId)
@@ -188,7 +185,6 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
                 launch,
                 instruction,
                 resolution.fields.agent,
-                'chat',
                 roots,
                 resolution.fields,
               );
