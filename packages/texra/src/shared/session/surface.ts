@@ -34,13 +34,6 @@ import type { SessionView as ReadSessionView } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 
-/**
- * What the main view launches: a task over the selected files, or
- * a chat with the selected agent.
- */
-const SessionTypeSchema = z.enum(['task', 'chat']);
-export type SessionType = z.infer<typeof SessionTypeSchema>;
-
 /** Who runs a main-view request: a single agent or a team. */
 const LaunchTargetSchema = z.enum(['agent', 'team']);
 
@@ -54,14 +47,13 @@ const UIFileFieldsSchema = NullableFileFieldsSchema.extend({
 
 /**
  * The new-task composer's selections, separate from host-derived state.
- * One agent and one instruction: the agent's category is the run type, so
- * `sessionType` is always written together with `agent` and never chosen
- * on its own.
+ * One agent and one instruction: the agent decides the run type. An agent
+ * with a document task (its option's `rounds`) runs it over the selected
+ * files; any other agent, and a team, chats.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   DocumentTaskOptionsSchema,
 ).extend({
-  sessionType: SessionTypeSchema.prefault('chat'),
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
   workingDirectory: z.string().prefault(''),
@@ -465,12 +457,13 @@ export function applySurfaceAction(
       };
     case 'launch': {
       const launch = { ...surface.launch, ...action.patch };
-      // Naming an agent targets it, and only a chat launch runs a team.
-      const toAgent =
-        action.patch.agent !== undefined || launch.sessionType !== 'chat';
+      // Naming an agent targets it.
       return {
         ...surface,
-        launch: toAgent ? { ...launch, launchTarget: 'agent' } : launch,
+        launch:
+          action.patch.agent === undefined
+            ? launch
+            : { ...launch, launchTarget: 'agent' },
       };
     }
     case 'inquiryDraft':
