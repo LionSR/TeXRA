@@ -609,6 +609,14 @@ async function generate(root) {
   );
   // Codex on, in `/plugins`, before the chat's first turn binds its tools.
   await send('/plugins');
+  await shows('the plugin list', 'Switch plugins on or off');
+  // The list shows a window around its cursor: walk down to Codex's row.
+  await until(
+    'the OpenAI Codex CLI row in view',
+    () =>
+      /\w\. OpenAI Codex CLI/.test(tty.screen()) || void tty.write('\x1b[B'),
+    tty,
+  );
   await pick('OpenAI Codex CLI');
   await shows('Codex on', 'OpenAI Codex CLI — on');
   tty.write('\x1b');
