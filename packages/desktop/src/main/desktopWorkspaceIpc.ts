@@ -277,21 +277,6 @@ export function createDesktopWorkspaceIpc(
     },
   );
 
-  /**
-   * Tell the renderer its request failed, then fail with the cause. Loud by
-   * construction: the window's router reports the cause and the request never
-   * settles in silence.
-   */
-  function reportRequestFailure<E extends Error>(
-    error: E,
-    message: DesktopWorkspaceReply,
-  ): Effect.Effect<never, E> {
-    return Effect.andThen(
-      Effect.sync(() => renderer.postToRenderer(message)),
-      Effect.fail(error),
-    );
-  }
-
   const listDirectory = Effect.fn('desktopWorkspaceIpc.listDirectory')(
     function* (directory: string) {
       const root = options.getWorkspacePath();
@@ -441,14 +426,20 @@ export function createDesktopWorkspaceIpc(
       // The handler's parameter is the whole error type this expression can
       // carry, so a second failure added here fails to compile rather than
       // being absorbed as a terminal that would not start.
+      // Surface in the terminal itself: a silent no-op looks like a shell
+      // that never printed a prompt. Then fail with the cause, so the
+      // window's router reports it and the request never settles in silence.
       Effect.catch((error: WorkspaceHostCallFailed) =>
-        // Surface in the terminal itself: a silent no-op looks like a shell
-        // that never printed a prompt.
-        reportRequestFailure(error, {
-          command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
-          sessionId,
-          message: `Could not start a terminal: ${toErrorMessage(error)}`,
-        }),
+        Effect.andThen(
+          Effect.sync(() =>
+            renderer.postToRenderer({
+              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
+              sessionId,
+              message: `Could not start a terminal: ${toErrorMessage(error)}`,
+            }),
+          ),
+          Effect.fail(error),
+        ),
       ),
     );
   }

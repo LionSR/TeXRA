@@ -125,11 +125,6 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   return pick?.value;
 });
 
-interface OpenedLatexdiffResult {
-  diffLocation: FileLocation;
-  viewerReady: boolean;
-}
-
 /**
  * Open and build one generated diff, returning its resolved location and
  * whether the viewer may be scheduled for it. A generated path alone is not
@@ -161,7 +156,7 @@ const openLatexdiffResult = Effect.fnUntraced(function* (
     preserveFocus: true,
     scheduleViewer: options.scheduleViewer,
   });
-  return { diffLocation, viewerReady } satisfies OpenedLatexdiffResult;
+  return { diffLocation, viewerReady };
 });
 
 /**

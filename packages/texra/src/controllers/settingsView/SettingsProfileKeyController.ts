@@ -1,7 +1,5 @@
-// Third-party imports
 import { Data, Effect } from 'effect';
 
-// Local imports - secrets
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
@@ -11,9 +9,6 @@ import type {
   PlatformSecrets,
   SettingsStores,
 } from '@texra-ai/harness';
-// Local imports - hosts
-// Local imports - model
-// Local imports - platform
 
 interface SettingsProfileKeyControllerDeps {
   /** The process secret store the host holds, where the keys are written. */
