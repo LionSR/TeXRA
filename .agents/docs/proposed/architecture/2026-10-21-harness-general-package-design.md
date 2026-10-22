@@ -358,8 +358,23 @@ files it edits: #14199 (fallback chains; `agent/runtime`, the llm OAuth files,
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
 first: finishing the move of tool-edit approval into the loop, and putting the
-remaining built-ins on `ToolContext`. Both are prerequisites of lane 4b and
-run as its first steps.
+remaining built-ins on `ToolContext`. Its author corrected the first on
+2026-10-22, after reading `main` at `1c68e67`. Tool-edit approval cannot move
+into the loop as bash's did. The bash guard spells its command from the input
+alone, but an edit's proposal is computed by the body, the person may change it
+in the diff view, and the body writes what was approved. So the approval is
+mid-body by necessity, and it already has one home, `applyApprovedFileEdit`
+(`tools/fileEditFlow.ts`). The `presentToolEdit` port stays: it carries the
+original and proposed content that the durable `request.opened` deliberately
+omits.
+
+Lane 4b's first steps are therefore the fence itself and moving the three
+`tools/approval/` modules into the runtime. They read `session.approvals` and
+the interactions, so under the fence's rule they are engine code, not
+`ToolContext` tools. `bashApproval.ts` and `toolEditApproval.ts` share one
+policy preamble (settings key, bypass, policy, `decideApproval`, the denial
+and its message), which the move can fold. Putting the other built-ins on
+`ToolContext` stays part of the fence.
 
 ## Risks and non-goals
 
