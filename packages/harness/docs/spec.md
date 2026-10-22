@@ -556,14 +556,17 @@ request id (`agent/runtime/ModelInvoker.ts:743-759`):
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts:265-270`,
   `agent/runtime/run/invocation.ts:292-296`).
-- A retryable failure answers `retry` while the automatic attempts the rows
-  record, `unchain` excluded, are fewer than the budget
-  (`shared/session/inFlight.ts:271-274`). For a turn's invocation the budget is
-  counted from rows, so a crash does not refill it. A compaction summary or a
-  helper call holds its invocation in memory
-  (`agent/runtime/run/modelCall.ts:107-123`); a summary's `attempt` and `failed`
-  rows are an audit the run fold skips (`shared/session/turnMoves.ts:255-263`),
-  so a resumed summary starts a fresh budget.
+- A retryable failure answers `retry` while the invocation's earlier failures,
+  `unchain` ones excluded, are fewer than the budget
+  (`shared/session/inFlight.ts:81-89`, `:271-274`). Every earlier failure
+  counts, whichever move followed it: one that a person's retry admitted spends
+  the budget as an automatic resend does, and an attempt with no recorded
+  failure spends none. For a turn's invocation the budget is counted from rows,
+  so a crash does not refill it. A compaction summary or a helper call holds its
+  invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
+  `attempt` and `failed` rows are an audit the run fold skips
+  (`shared/session/turnMoves.ts:255-263`), so a resumed summary starts a fresh
+  budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts:275-277`).
@@ -924,14 +927,13 @@ These existing suites check the sections above. Paths are under
    `RunCell.append` (`shared/session/runHistory.ts:151-156`). CLAUDE.md and the
    agent guidance were corrected in #14218; the notes keep the names they were
    written with. This spec uses the code's names.
-2. `packages/harness/AGENTS.md` and the README say `tool.intent` commits after a
-   call's hooks, guard and approval. The guard asks only for tools with a
-   declared command guard or `requiresApproval`; a tool whose body opens its own
-   request, such as a file edit's approval
-   (`tools/approval/toolEditApproval.ts:239`), asks after its intent committed
-   (`agent/runtime/loop/toolGuard.ts:45-47`). Resume handles that case
-   (`shared/session/inFlight.ts:346-370`), but the stated order is not
-   universal.
+2. `packages/harness/AGENTS.md` says `tool.intent` commits after a call's hooks,
+   guard and approval. The guard asks only for tools with a declared command
+   guard or `requiresApproval`; a tool whose body opens its own request, such as
+   a file edit's approval (`tools/approval/toolEditApproval.ts:239`), asks after
+   its intent committed (`agent/runtime/loop/toolGuard.ts:45-47`). Resume
+   handles that case (`shared/session/inFlight.ts:346-370`), but the stated
+   order is not universal.
 3. The durable-harness note states the contract as "no attempt is billed twice".
    The code resends an attempt that no person admitted and whose outcome no row
    recorded (`shared/session/inFlight.ts:217`); the earlier attempt may have
