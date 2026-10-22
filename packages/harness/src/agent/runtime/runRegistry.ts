@@ -149,10 +149,11 @@ interface RunEntry {
   /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRegistry.isLive}). */
   launches: number;
-  /** The reason of the stop that interrupted this run here, recorded before
-   *  the interrupt so the run's own cleanup reads it. A `user` reason is
-   *  never overwritten by a later `shutdown`. */
+  /** The stop that interrupted this run here, recorded before the interrupt
+   *  for its cleanup (a `user` reason outlives a later `shutdown`), and the
+   *  commit its owed wake counts from: the claim's, then the first stop's. */
   stopReason?: RunStopReason;
+  since: CommitOrdinal;
 }
 
 /** Session-owned registry of runs: one per session, built by the session
@@ -208,7 +209,7 @@ export class RunRegistry implements RunsShape {
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { launches: 0 };
+    const entry: RunEntry = { launches: 0, since: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
@@ -454,7 +455,6 @@ export class RunRegistry implements RunsShape {
       // leaves; the entry is captured at the claim, so a stale leave
       // unwinding after `dispose` decrements its own entry.
       let counted: RunEntry | undefined;
-      let since: CommitOrdinal | undefined;
       const refuseClaim = (): RunLive | undefined => {
         const held =
           inactiveStep &&
@@ -467,7 +467,7 @@ export class RunRegistry implements RunsShape {
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
-        since = this.init.session().log.now();
+        counted.since = this.init.session().log.now();
         return undefined;
       };
       const leave = (): void => {
@@ -477,8 +477,7 @@ export class RunRegistry implements RunsShape {
         if (entry === undefined) return;
         entry.launches -= 1;
         this.prune(runId, entry);
-        if (since !== undefined && !this.isLive(runId))
-          this.init.wake(runId, since);
+        if (!this.isLive(runId)) this.init.wake(runId, entry.since);
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
@@ -774,6 +773,7 @@ export class RunRegistry implements RunsShape {
   private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
     const entry = this.entries.get(runId);
     if (entry === undefined || reason === undefined) return;
+    if (!entry.stopReason) entry.since = this.init.session().log.now();
     if (entry.stopReason !== 'user') entry.stopReason = reason;
   }
 

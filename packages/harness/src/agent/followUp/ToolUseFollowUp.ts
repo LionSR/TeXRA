@@ -214,10 +214,10 @@ export function startFollowUpWake(
  * is resumed. A row queued before the arm began is not owed: the arm was its
  * wake (a resume that failed leaves it to the next explicit Resume), or its
  * sender saw no live arm and woke the run itself; the one resume per run
- * (`Inbox.resumeOnce`) joins the two. Nor is a row queued before a stop's
- * halt (`cancelled`): the stop ended the generation that would have read
- * it, and it stays queued for the user's next message or Resume, as a stop
- * with no generation draining leaves it. A failure to read is logged.
+ * (`Inbox.resumeOnce`) joins the two. A stopped generation's `since` is
+ * its stop's (`RunRegistry.markStopped`): a row queued before the stop was
+ * the stopped turn's and stays queued, one sent after it is woken. A
+ * failure to read is logged.
  */
 export const wakeAfterGeneration = (
   runId: RunId,
@@ -236,19 +236,11 @@ export const wakeAfterGeneration = (
     );
     const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
       'followup.queued',
-      'run.position',
     ]);
-    const stop = rows.findLast(
-      (row) =>
-        row.type === 'run.position' &&
-        row.payload.at === 'halted' &&
-        row.payload.outcome === 'cancelled',
-    );
-    const from = Math.max(since, stop?.commit ?? since);
     const landedSince = rows.some(
       (row) =>
         row.type === 'followup.queued' &&
-        row.commit > from &&
+        row.commit > since &&
         queued.has(row.followUpId),
     );
     if (landedSince) yield* startFollowUpWake(runId, session);
