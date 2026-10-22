@@ -261,7 +261,8 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
     const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
     const secrets = yield* Secrets;
     // A secret store that will not answer is not the same fact as an unset
-    // key: the key's origin is unknown, and the detail says why.
+    // key. An environment key is still known (the launch uses it first);
+    // without one the origin is unknown, and the detail says why.
     const key = yield* lookupApiKeyOrigin(secrets, 'anthropic').pipe(
       Effect.map((origin) => ({ origin, failure: null })),
       Effect.catchTag('SecretsFailed', (failure) =>
@@ -269,7 +270,16 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
           `Reading the Anthropic API key failed: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
-          Effect.as({ origin: 'unknown' as const, failure: failure.message }),
+          Effect.andThen(
+            Config.String(anthropicApiKeyEnv).pipe(Config.option, Effect.orDie),
+          ),
+          Effect.map((env) => ({
+            origin:
+              Option.isSome(env) && env.value
+                ? ('env' as const)
+                : ('unknown' as const),
+            failure: failure.message,
+          })),
         ),
       ),
     );
@@ -292,7 +302,7 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
         ? `Auth detected: ${authBits.join(', ')}.`
         : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected: the CLI will use whatever `claude login` session you have.';
     if (key.failure !== null)
-      authNote = `${authBits.length > 0 ? authNote : 'No CLAUDE_CODE_OAUTH_TOKEN detected.'} ${anthropicApiKeyEnv} status unknown: reading TeXRA's secret storage failed (${key.failure}).`;
+      authNote = `${authBits.length > 0 ? authNote : 'No CLAUDE_CODE_OAUTH_TOKEN detected.'} The ${anthropicApiKeyEnv} in TeXRA Settings could not be read (${key.failure}).`;
 
     return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
   }),

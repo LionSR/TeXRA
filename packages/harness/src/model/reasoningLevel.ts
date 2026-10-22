@@ -14,6 +14,7 @@ import {
   type ModelRoute,
   type ReasoningChoice,
   type ReasoningRequest,
+  wireEffort,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
 import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
@@ -199,11 +200,14 @@ export interface RouteReasoning {
   readonly fallback: SentReasoning;
 }
 
-/** One decision as what it sends. */
-function sentOf(decided: Result.Result<ReasoningChoice, Error>): SentReasoning {
+/** One decision as what it sends: the wire's own effort for it. */
+function sentOf(
+  config: ModelConfig,
+  decided: Result.Result<ReasoningChoice, Error>,
+): SentReasoning {
   if (Result.isFailure(decided)) return { refused: decided.failure.message };
-  const { thinking, effort, note } = decided.success;
-  const sent = thinking ? (effort ?? undefined) : ReasoningEffort.NONE;
+  const { note } = decided.success;
+  const sent = wireEffort(config, decided.success) ?? undefined;
   return note === undefined ? { effort: sent } : { effort: sent, note };
 }
 
@@ -221,11 +225,11 @@ export function routeReasoningOf(input: {
   readonly route: ReasoningRoute;
 }): RouteReasoning | undefined {
   const { config, request, saved, route } = input;
-  const sent = sentOf(chooseOnRoute(config, request, saved, route));
+  const sent = sentOf(config, chooseOnRoute(config, request, saved, route));
   const fallback =
     saved === undefined
       ? sent
-      : sentOf(chooseOnRoute(config, request, undefined, route));
+      : sentOf(config, chooseOnRoute(config, request, undefined, route));
   const reasoning = routeReasoning(input.runsWith, route);
   if (reasoning === undefined && !('refused' in sent)) return undefined;
   const ceiling = routeCeiling(route);
