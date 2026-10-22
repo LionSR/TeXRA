@@ -1,7 +1,6 @@
 /**
  * A plugin: what one unit of the harness contributes (its tools, the probe
- * of its dependency, its switch, its continuation, prompt section and
- * layers). The harness's built-ins are `harnessBuiltins`; an app
+ * of its dependency, its switch, its prompt section and layers). The harness's built-ins are `harnessBuiltins`; an app
  * passes its list, built-ins included, to `processLayer`, and the
  * process's `ToolRegistry` holds it, which every
  * reader takes it from: availability probes, the first-install switch seed,
@@ -47,8 +46,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
-  Continuation,
-  PluginContinuation,
   PluginHold,
   ProcessPluginLayer,
   PromptSection,
@@ -127,9 +124,6 @@ export interface Plugin {
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
-  /** A built-in's (`defineBuiltinPlugin`): decides what a parked run of its
-   *  category does next; a run's step pins it while the plugin is on. */
-  readonly continuation?: PluginContinuation;
   /** Its section of each request's system text; a run's step pins it while
    *  the plugin is switched on. */
   readonly prompt?: PromptSection;
@@ -146,6 +140,9 @@ export interface Plugin {
   readonly arms?: readonly PluginArm[];
   /** The agent-file block it owns (`AgentBlock`), on or off. */
   readonly agentBlock?: AgentBlock;
+  /** The plugins it runs on, by id: a list that holds it without them is
+   *  rejected. */
+  readonly requires?: readonly string[];
 }
 
 /**
@@ -157,7 +154,7 @@ export interface Plugin {
  * layers' services to its calls. `C`: what a tool's calls are served. */
 export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   Plugin,
-  'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
+  'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
   readonly tools?: Readonly<Record<string, ITool<Error, C | ROut>>>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
@@ -176,12 +173,18 @@ export const definePlugin: <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ) => Plugin = erase;
 
-/** A built-in's value: it may read `ToolServices` and continue parked runs. */
-export const defineBuiltinPlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut, ToolServices> & {
-    readonly continuation?: Continuation<ROut>;
-  },
-) => Plugin = erase;
+const builtins = new WeakSet<object>();
+/** The tools of the harness's own plugins. Only `defineBuiltinPlugin`, which
+ *  no public entry exports, adds to it: no app plugin passes for one. */
+export const builtinTools: Pick<WeakSet<object>, 'has'> = builtins;
+
+/** A built-in's value: its tools may read `ToolServices`. */
+export const defineBuiltinPlugin = <ROut = never>(
+  plugin: PluginDefinition<ROut, ToolServices>,
+): Plugin => {
+  for (const tool of Object.values(plugin.tools ?? {})) builtins.add(tool);
+  return erase(plugin);
+};
 
 const DisabledToolIdsSchema = z.array(z.string());
 

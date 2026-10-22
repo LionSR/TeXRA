@@ -62,7 +62,6 @@ import {
   type UserQuestionPermission,
   aggregateTarget,
 } from '@shared/schemas';
-import { goalStateOf } from '@shared/plugins/goal';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -81,7 +80,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { clearGoal, startGoal } from '@tools/goal/goalRows';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
@@ -1147,18 +1145,12 @@ async function appendHarnessPlanDecision(
   result: RequestDecision,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    await harnessRuntime.runPromise(
-      // The grant `PlanTool.startGoalForPlan` commits with the goal:
-      // commands, and nothing broader unless the user widened the scope.
-      startGoal(
-        session(),
-        HARNESS_RUN_ID,
-        PLAN_APPROVAL_OBJECTIVE,
-        result.autoApproveAll ? 'allAgentWork' : 'commands',
-      ),
-    );
+    // A plan run as a goal launches a goal run beside the chat; the chat's
+    // own grants stay as they were.
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
-    appendHarnessAssistantTranscript('PLAN-GOAL');
+    appendHarnessAssistantTranscript(
+      result.autoApproveAll ? 'PLAN-GOAL-ALL' : 'PLAN-GOAL',
+    );
     return;
   }
   appendHarnessAssistantTranscript(
@@ -1588,9 +1580,6 @@ function appendHarnessStatus(): void {
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run && runStatusLabel(run.statusKey),
       activeChildSessions: runningChildCount(view, run),
-      goal: ((goal) => (goal?.active ? goal : undefined))(
-        run && goalStateOf(run),
-      ),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
@@ -1604,7 +1593,6 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
-  void harnessRuntime.runPromise(clearGoal(session(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }

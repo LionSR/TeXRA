@@ -29,7 +29,6 @@
 
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
-import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
@@ -131,17 +130,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // The text the turn answers with, reported with its end.
   let response = '';
 
-  // A resumed root's first continuation-pinning step stands it down first.
-  let resumeUnseen = start.resume;
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, kind, isChild(), openingSystem), (step) => {
-      if (!resumeUnseen || step.continuation === null || isChild())
-        return Effect.void;
-      resumeUnseen = false;
-      return step.continuation
-        .onResume({ session, runId })
-        .pipe(Effect.provide(step.tools.services));
-    });
+    stepFor(run, state, kind, isChild(), openingSystem);
 
   // ------------------------------------------------------------ host port
   let live = false;
@@ -189,6 +179,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(yield* cell.current),
       ...{ modelId: bound.modelId, ...binding },
     };
+    // A fork is born on the history it was cut from, its turn ready.
+    const { seed } = run.entry;
+    if (seed != null) {
+      const born = [
+        ...seed,
+        configRow(runId, run.config, bound.modelId, binding),
+        positionRow(runId, opening, 'turn.ready'),
+      ];
+      yield* cell
+        .append(born, run.entry.opening)
+        .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
+      run.callbacks.onProgress?.({ kind: 'started' });
+      return cell;
+    }
     // Keep preparation interruptible inside the masked acquire.
     const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
@@ -460,20 +464,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
           restoring &&= queued;
-          // A child's idle is its parent's; the policy sees failed turns too.
-          const canContinue = !run.toolPolicy.stopAfterCycle && !queued;
-          // A park opens a step, which pins (and records) its continuation.
-          let next: string | null = null;
+          // A root's wait opens a step, recorded like a request's; a
+          // child's idle is its parent's.
           if (!isChild()) {
             const step = yield* openStep(state, 'park');
             if (step.rows.length > 0) state = yield* cell.append(step.rows);
-            if (step.continuation !== null) {
-              next = yield* step.continuation
-                .atIdle({ session, runId, state, canContinue })
-                .pipe(Effect.provide(step.tools.services));
-            }
           }
-          // Every park is idle, a failed turn's too: a resume acks the first.
+          // Every wait is idle, a failed turn's too: a resume acks the first.
           run.callbacks.onIdle?.();
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
@@ -481,21 +478,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
             );
           }
-          // A queued follow-up outranks the policy's synthetic turn.
-          let batch: FollowUpBatch | null =
-            next !== null && !(yield* followUps.hasQueued)
-              ? { kind: 'synthetic', text: next }
-              : null;
+          // The host port stays attached: `/model`, `/compact` land here.
+          const batch = yield* followUps.wait;
           if (batch === null) {
-            // The host port stays attached: `/model`, `/compact` land here.
-            batch = yield* followUps.wait;
-            if (batch === null) {
-              // The input ended under the parked loop: a cancellation.
-              return finish(
-                state,
-                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-              );
-            }
+            // The input ended under the waiting loop: a cancellation.
+            return finish(
+              state,
+              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+            );
           }
           // A reset or handoff replaces the view a background summary
           // was computed from: that summary lands, or stops, first.

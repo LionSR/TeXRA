@@ -360,7 +360,8 @@ export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions,
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
-  const runSession = options.session;
+  // A child its parent resumes in band narrows as it launched.
+  const { session: runSession, stopAfterCycle, parentOffered } = options;
   const resumed = Effect.gen(function* () {
     if (!(yield* canResume(identity.runId, runSession)))
       return yield* new ResumeSessionUnavailableError({
@@ -376,9 +377,7 @@ export function resumeToolUseFromResumeData(
       definition,
       runId: identity.runId,
       session: runSession,
-      toolPolicy: {
-        stopAfterCycle: options.stopAfterCycle,
-      },
+      toolPolicy: { stopAfterCycle, parentOffered },
     });
     return yield* runWithLifecycle(
       ctx,

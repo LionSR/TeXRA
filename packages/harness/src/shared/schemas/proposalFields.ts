@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AgentSourceSchema } from './agent';
+import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
@@ -12,6 +12,9 @@ export const BaseProposalFieldsSchema = z.object({
    * ambiguous bare name. Mirrors `agentSource` on the agent config payload.
    */
   agentSource: AgentSourceSchema.nullish(),
+  /** An agent the call defines (`agentSource` inline): what it is told and
+   *  the tools it asks for, shown to whoever approves it. */
+  persona: InlinePersonaSchema.nullish(),
   model: z.string(),
   instruction: z.string(),
   /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */

@@ -25,7 +25,6 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { goalOf, startGoal } from '@tools/goal/goalRows';
 
 // One restore after each test covers every vi.spyOn in this file.
 afterEach(() => {
@@ -61,11 +60,6 @@ describe('committed run removal', () => {
           });
           registryOf(session.runs).track(handle);
           yield* session.log.settled;
-          yield* startGoal(
-            session,
-            parent,
-            'Determine the boundary conditions.',
-          );
           publishTestRows(session, [
             {
               type: 'request.opened',
@@ -111,7 +105,6 @@ describe('committed run removal', () => {
             parent,
           );
           expect(session.log.now()).toBe(before + 1);
-          expect(goalOf(session, parent)).toBeNull();
         }),
       ),
   );

@@ -1,9 +1,10 @@
 name: golden_script
-description: The golden store's script run, which finds its read tool and gathers in one script.
+description: The golden store's script run, which finds its read tool, gathers in one script, and defines an agent there.
 tools:
   - read_file
   - bash
   - script
+  - agent
 
 prompt: |-
   GOLDEN-SCRIPT: gather in one script.

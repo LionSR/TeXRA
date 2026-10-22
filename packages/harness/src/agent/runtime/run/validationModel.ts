@@ -54,8 +54,8 @@ const results = await Promise.allSettled([
 ])
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
-/** The golden store's script: finds the reading tool, then two reads and a
- *  command in one `Promise.all`. */
+/** The golden store's script: finds the reading tool, two reads and a command
+ *  in one `Promise.all`, then an agent it defines (`persona`), narrowed. */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
@@ -63,7 +63,7 @@ const [notes, shell] = await Promise.all([
   tools[found.name]({ path: 'notes.tex' }),
   tools.bash({ command: 'echo gathered', description: 'Say gathered' }),
 ])
-return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output }`;
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, defined: (await agent('Answer from the notes.', { agentName: 'golden_reader', label: 'Defined agent', persona: { prompt: 'GOLDEN-CHILD: answer the task.', tools: ['read_file', 'executions'] } })).response }`;
 
 /** The crash suite's background script: one awaited `agent()` call, whose
  *  child the background script run owns. */
@@ -86,6 +86,9 @@ return { notes: notes.output, shell: shell.output, child: child.response }`;
 const text = (value: string): TurnResult['content'] => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
 ];
+
+/** What the golden chat's goal round reports, and its result carries. */
+const ANSWERED = 'The golden chat is answered.';
 
 /**
  * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
@@ -172,8 +175,8 @@ function goldenTurn(
         : text('Child result.'),
     );
   }
-  // The interactive chat: a plan run as a goal, the goal completed, replies
-  // after a `/model` switch and a `/compact`, told apart by what they say.
+  // The interactive chat: a plan run as a goal, its round and result, and
+  // replies after a `/model` and a `/compact`, told apart by what they say.
   if (system.includes('GOLDEN-CHAT')) {
     // A Codex child held until a stop; what is typed behind stays queued.
     if (said.includes('Hold this turn.'))
@@ -182,22 +185,23 @@ function goldenTurn(
         : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
-    const step = [
-      call('plan', {
-        command: 'update',
-        objective: 'Answer the golden chat, then stop.',
-      }),
-      call('plan', {
-        command: 'complete',
-        reason: 'The golden chat is answered.',
-      }),
-    ][results.length];
-    if (step !== undefined) return Effect.succeed([step]);
+    // The goal's round (`self()`): a command its grant approves, a verdict.
+    const round = turn.tools.some(({ name }) => name === 'submit_output');
+    const step = round
+      ? [
+          call('bash', { command: 'echo goal round', description: 'Goal' }),
+          call('submit_output', { status: 'done', report: ANSWERED }),
+        ]
+      : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
+    if (round || results.length === 0)
+      return Effect.succeed(step.slice(results.length, results.length + 1));
+    if (said.includes('After the model switch.'))
+      return Effect.succeed(text('Answered after the model switch.'));
     return Effect.succeed(
       text(
-        said.includes('After the model switch.')
-          ? 'Answered after the model switch.'
-          : 'Golden chat goal complete.',
+        said.includes(ANSWERED)
+          ? 'Golden chat goal complete.'
+          : 'The plan runs as a goal.',
       ),
     );
   }
@@ -299,11 +303,7 @@ function goldenTurn(
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
-    () =>
-      call('plan', {
-        command: 'update',
-        objective: 'Read the notes and ask a child.',
-      }),
+    () => call('plan', { objective: 'Read the notes and ask a child.' }),
     () =>
       call('agent', {
         agentName: 'golden_child',

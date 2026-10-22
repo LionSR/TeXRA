@@ -122,9 +122,11 @@ const isResponse = (row: Row) =>
 
 /** A provider's call ids restart with each model binding, so a resumed
  *  run's differ from the clean run's by their counter; run ids are minted,
- *  and a command's summary names how long it took. */
+ *  a command's summary names how long it took, and what a run has spent
+ *  (`spent`) counts the attempts a crash lost. */
 const normalized = (text: string) =>
   text
+    .replaceAll(/"spent":[\d.e-]+/g, '"spent":0')
     .replaceAll(/validation-([a-z_]+)-\d+/g, 'validation-$1')
     .replaceAll(/[0-9a-f]{12,}/g, 'ID')
     .replaceAll(/, [\d.]+m?s\)/g, ')');

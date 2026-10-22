@@ -10,14 +10,13 @@ import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
+import { SelfTool } from '@tools/codemode/SelfTool';
 import { agentTool } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
-import { goalContinuation } from '@tools/goal/goalContinuation';
 import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
@@ -38,7 +37,7 @@ const fileTools = (writeFilter?: WriteFilter) => ({
   grep: GrepTool,
 });
 
-const SCRIPT_TOOLS = { script: ScriptTool };
+const SCRIPT_TOOLS = { script: ScriptTool, self: SelfTool };
 
 /**
  * A built-in plugin: as a plugin's definition, but its tools may read the
@@ -89,18 +88,18 @@ export const memoryWorkflow: Plugin = builtin({
 });
 
 /**
- * The `plan` tool owns planning and the goal lifecycle (update, pause,
- * complete), so any agent with tools can drive the goal loop while the plugin
- * is on; the synthetic turns are its continuation. Its rows are the `goal/state` arm.
+ * Plans and goals: the `plan` tool proposes a plan, which the user may run
+ * as a goal: a background script of the conversation that runs its agent
+ * in rounds through `self()` (`goalScript`).
  */
 export const goal: Plugin = builtin({
   id: 'goal',
   tools: { plan: PlanTool },
+  // A goal is a script whose rounds are `self()`.
+  requires: ['codemode'],
   injectedWhen: { plan: true },
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-  continuation: goalContinuation,
-  arms: HARNESS_PLUGIN_ARMS.goal,
 });
 
 /** Child agents: the `agent` tool. */
@@ -113,9 +112,10 @@ export const multiAgent: Plugin = builtin({
 });
 
 /**
- * The `script` tool: a program that calls the run's other tools. An agent
- * gets it only if its configuration names it; its session layer is the code
- * sandbox the scripts run in.
+ * Code mode: the `script` tool, a program that calls the run's other tools,
+ * and `self()`, the function a script runs this agent again with. An agent
+ * gets them only if its configuration names `script`; its session layer is
+ * the code sandbox the scripts run in.
  */
 export const codemode = builtin<CodeSandbox>({
   id: 'codemode',
