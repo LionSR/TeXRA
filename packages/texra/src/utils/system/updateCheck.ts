@@ -132,7 +132,13 @@ export const runDailyUpdateCheck = <R>({
     }
     if (refreshed) {
       const stamp = records.recordChecked(host, nowMs);
-      yield* stampFailure === 'ignore' ? Effect.ignore(stamp) : stamp;
+      // A stamp that is not saved re-checks on every launch: said, not hidden.
+      yield* stampFailure === 'ignore'
+        ? Effect.ignore(stamp, {
+            log: 'Warn',
+            message: 'The update check time was not saved',
+          })
+        : stamp;
     }
     return latest;
   });

@@ -23,7 +23,6 @@ import {
   type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
-  type RunModelDecisionReason,
   type RunStopReason,
   type Session,
 } from '@texra-ai/harness';
@@ -234,9 +233,6 @@ export interface ChatSessionControllerInit {
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: FollowUpDeliveryQueue;
 
-  readonly initialAgent: string;
-  readonly initialModel: string;
-  readonly initialModelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
   /**
@@ -306,9 +302,6 @@ export function createChatSessionController(
     disposables,
     shutdownScope,
     followUpQueue,
-    initialAgent,
-    initialModel,
-    initialModelSource,
     cwd,
     getSlashCommandContext,
     secrets,
@@ -472,8 +465,16 @@ export function createChatSessionController(
             requests
               .request({ kind: 'request.preview', runId, requestId })
               .pipe(
-                Effect.map((outcome) =>
-                  outcome.kind === 'preview' ? outcome.preview : null,
+                // `request.preview` answers with a preview, null included;
+                // any other outcome is a broken protocol, not a missing one.
+                Effect.flatMap((outcome) =>
+                  outcome.kind === 'preview'
+                    ? Effect.succeed(outcome.preview)
+                    : Effect.die(
+                        new Error(
+                          `request.preview answered with a ${outcome.kind} outcome`,
+                        ),
+                      ),
                 ),
               ),
       secrets,
@@ -741,17 +742,22 @@ export function createChatSessionController(
     Deferred.doneUnsafe(preparing.slot, Effect.void);
   };
 
-  /** Adopt a resumed run's configuration and helper model. */
+  /** Adopt a resumed run's configuration and helper model. A failure is the
+   *  chat's own line (the TUI's log sink is silent): the run goes on, but the
+   *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
       const config = yield* init.records(runId).readConfig();
-      if (!config) return;
+      if (!config)
+        return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');
       yield* setCliHelperModel(stores.globalState, config.model);
     }).pipe(
       Effect.catch((error) =>
-        Effect.logWarning(
-          `Resumed run ${runId}: its configuration could not be adopted: ${toErrorMessage(error)}`,
+        Effect.sync(() =>
+          appendLocalErrorTranscript(
+            `Resumed run ${runId}: its configuration could not be adopted: ${toErrorMessage(error)}`,
+          ),
         ),
       ),
     );
@@ -867,14 +873,8 @@ export function createChatSessionController(
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
-          const currentModel = meta.model || initialModel;
           const selection = yield* selectCliRunnableModel(
-            [
-              {
-                model: currentModel,
-                reason: meta.model ? meta.modelSource : initialModelSource,
-              },
-            ],
+            [{ model: meta.model, reason: meta.modelSource }],
             {
               stores: { ...stores, secrets, runtime },
               noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
@@ -901,7 +901,7 @@ export function createChatSessionController(
           }
           startRootRun(
             {
-              agent: meta.agent || initialAgent,
+              agent: meta.agent,
               agentSource: meta.agentSource,
               model: selection.model,
               instruction,
@@ -1138,8 +1138,9 @@ export function createChatSessionController(
       );
     });
     // Recovery is attached before the delivery enters the queue. A failure or
-    // a throw from the body is reported to the transcript; an interruption is
-    // the queue's scope closing, which is not a delivery failure.
+    // a throw from the body is reported to the transcript, also when it came
+    // with an interruption (a finalizer that failed while unwinding one); a
+    // bare interruption is the queue's scope closing, not a delivery failure.
     followUpQueue.enqueue(
       deliverFollowUp.pipe(
         Effect.ensuring(
@@ -1149,7 +1150,7 @@ export function createChatSessionController(
           }),
         ),
         Effect.catchCause((cause) =>
-          Cause.hasInterrupts(cause)
+          Cause.hasInterruptsOnly(cause)
             ? Effect.interrupt
             : Effect.sync(() =>
                 appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),

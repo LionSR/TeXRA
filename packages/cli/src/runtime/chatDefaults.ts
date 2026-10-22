@@ -19,18 +19,8 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
 interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
-  readonly modelSource: ChatDefaultValueSource;
+  readonly modelSource: RunModelDecisionReason;
 }
-
-/** Chat default value sources are the shared run-model decision reasons. */
-type ChatDefaultValueSource = Extract<
-  RunModelDecisionReason,
-  | 'explicit-override'
-  | 'environment'
-  | 'workspace-config'
-  | 'user-config'
-  | 'builtin-default'
->;
 
 interface ResolveChatDefaultsInit {
   /** The setting slots the `texra.chat` section is read from. */
@@ -66,13 +56,13 @@ export function resolveChatDefaults(
     { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
   ]);
 
-  const model = modelDecision?.model;
-  // The candidate list above only uses reasons in ChatDefaultValueSource.
-  const modelSource = modelDecision?.reason as
-    ChatDefaultValueSource | undefined;
+  // The built-in default is always a candidate and every candidate is
+  // runnable here, so the decision always names one.
+  if (modelDecision === null)
+    throw new Error('The chat model decision named no model');
   return {
     agent: agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
-    model: model ?? CLI_CHEAP_START_MODEL,
-    modelSource: modelSource ?? 'builtin-default',
+    model: modelDecision.model,
+    modelSource: modelDecision.reason,
   };
 }

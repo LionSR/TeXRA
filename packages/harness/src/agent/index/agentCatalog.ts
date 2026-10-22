@@ -183,6 +183,8 @@ export function findAgentByIdentifier(
 interface CatalogState {
   entries: ReadonlyMap<string, AgentEntry>;
   customScanIssues: readonly AgentScanIssue[];
+  /** Every agent file the load skipped, plugin files too: a miss names them. */
+  skippedFiles: readonly AgentScanIssue[];
   /** Why the last load failed; absent once one publishes. */
   loadFailure: string | undefined;
   /** A source changed and its reload has not begun; cleared as a scan starts. */
@@ -210,7 +212,7 @@ const scanInto = (state: CatalogState) =>
         ),
       ),
     );
-    const [customScan, builtInScan, pluginAgents] = yield* Effect.all(
+    const [custom, builtIn, plugin] = yield* Effect.all(
       [
         scanDirectory(customRoots, 'custom'),
         scanDirectory(builtInRoots, 'builtIn'),
@@ -219,27 +221,30 @@ const scanInto = (state: CatalogState) =>
       { concurrency: 'unbounded' },
     );
     state.entries = new Map(
-      [...customScan.entries, ...builtInScan.entries, ...pluginAgents].map(
+      [...custom.entries, ...builtIn.entries, ...plugin.entries].map(
         (entry) => [agentKeyOf(entry), entry] as const,
       ),
     );
     // Only custom-agent scan issues are a product surface.
-    state.customScanIssues = Object.freeze(customScan.issues);
+    state.customScanIssues = Object.freeze(custom.issues);
+    state.skippedFiles = Object.freeze(
+      [custom, builtIn, plugin].flatMap((scan) => scan.issues),
+    );
     yield* Effect.logInfo(
       `Loaded ${state.entries.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
     ).pipe(withLogChannel(CHANNEL));
   });
 
-/** Why a launch found nothing: the load's failure and the custom files it
+/** Why a launch found nothing: the load's failure and the agent files it
  *  skipped. */
 const missMessage = (state: CatalogState, identifier: string): string =>
   `Could not find agent: ${identifier}` +
   (state.loadFailure === undefined
     ? ''
     : `. The agent catalog did not load: ${state.loadFailure}`) +
-  (state.customScanIssues.length === 0
+  (state.skippedFiles.length === 0
     ? ''
-    : `. Custom agent files that failed to load:${state.customScanIssues
+    : `. Agent files that failed to load:${state.skippedFiles
         .map((issue) => `\n  ${issue.path}: ${issue.message}`)
         .join('')}`);
 
@@ -320,6 +325,7 @@ export class AgentCatalog extends Context.Service<
       const state: CatalogState = {
         entries: new Map(),
         customScanIssues: Object.freeze([]),
+        skippedFiles: Object.freeze([]),
         loadFailure: undefined,
         changePending: false,
       };

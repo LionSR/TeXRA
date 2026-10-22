@@ -308,10 +308,13 @@ describe('runChat signal ownership wiring', () => {
     );
     mocks.loadInputHistory.mockReturnValue(
       Effect.succeed({
-        at: vi.fn(),
-        length: vi.fn(() => 0),
-        push: vi.fn(() => Effect.void),
-        reverseFind: vi.fn(),
+        history: {
+          at: vi.fn(),
+          length: vi.fn(() => 0),
+          push: vi.fn(() => Effect.void),
+          reverseFind: vi.fn(),
+        },
+        readFailure: null,
       }),
     );
     mocks.discoverTerminalCapabilities.mockResolvedValue({

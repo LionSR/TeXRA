@@ -102,7 +102,7 @@ function discoverRuntimeSkills(
   return Effect.gen(function* () {
     const result = yield* discoverSkillSources(
       foldSkillSources(installed.contributions, {
-        cwd: roots.workspace ?? home,
+        cwd: roots.workspace,
         home,
         storageRoot: roots.storageRoot,
         resourcesPath: installed.resourcesPath,

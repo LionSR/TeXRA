@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -55,14 +55,24 @@ describe('follow-up delivery queue', () => {
       }),
   );
 
-  it.effect(
-    'keeps draining after a delivery defects so idle can still open',
-    () =>
+  // Only the scope's close stops the drain: a delivery that ended
+  // interrupted (a joined fiber someone else interrupted, or a finalizer
+  // that failed while one unwound) is not the drain's own interruption.
+  it.effect.each([
+    { label: 'defects', cause: Cause.die('boom') },
+    { label: 'ends interrupted', cause: Cause.interrupt(1) },
+    {
+      label: 'ends interrupted with a defect',
+      cause: Cause.combine(Cause.interrupt(1), Cause.die('boom')),
+    },
+  ])(
+    'keeps draining after a delivery $label so idle can still open',
+    ({ cause }) =>
       Effect.gen(function* () {
         const scope = yield* Scope.make();
         const queue = yield* makeFollowUpDeliveryQueue(scope);
         const delivered: string[] = [];
-        queue.enqueue(Effect.die('boom'), () => undefined);
+        queue.enqueue(Effect.failCause(cause), () => undefined);
         queue.enqueue(
           Effect.sync(() => {
             delivered.push('after-defect');

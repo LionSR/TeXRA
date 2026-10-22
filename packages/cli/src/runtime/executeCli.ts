@@ -52,7 +52,7 @@ import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
-import { writeTextStderr } from './logSinks';
+import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import {
   type CliRunResult,
   readCliPluginPins,
@@ -324,6 +324,19 @@ export function executeCliRequest(
       }).pipe(Scope.provide(presentationScope));
     }
     const launchRunId = request.runId;
+    // A shutdown step that fails changes what the exit waits for, so it is
+    // said on stderr: the log sink is silent for every CLI command, and
+    // `runContext.quietLogs` is forced on for every headless run
+    // (`buildHeadlessRunContext`). Only the user's own `--quiet` keeps it
+    // unsaid: the log level it set from argv, which that derivation keeps.
+    const userQuiet = runContext.minimumLogLevel === 'None';
+    const sayShutdownFailure = (
+      what: string,
+      cause: string,
+    ): Effect.Effect<void> =>
+      userQuiet
+        ? Effect.void
+        : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
     // What a shutdown found: nothing yet, the launch still entering the
     // session (its fiber is interrupted, which aborts it), or the run
     // admitted (stopped through the session, its end committed by the run).
@@ -353,9 +366,10 @@ export function executeCliRequest(
               .pipe(
                 Effect.map((exists) => !exists),
                 Effect.catch((error) =>
-                  Effect.logWarning(
+                  sayShutdownFailure(
                     `Whether run ${runId} still exists could not be read; its drain goes on without waiting`,
-                  ).pipe(Effect.annotateLogs({ data: error }), Effect.as(true)),
+                    toErrorMessage(error),
+                  ).pipe(Effect.as(true)),
                 ),
               );
           }),
@@ -416,28 +430,40 @@ export function executeCliRequest(
               .pipe(
                 Effect.as(true),
                 Effect.catch((error) =>
-                  Effect.logWarning(
+                  sayShutdownFailure(
                     `Run ${launchRunId} was not stopped for the shutdown`,
-                  ).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    Effect.as(false),
-                  ),
+                    toErrorMessage(error),
+                  ).pipe(Effect.as(false)),
                 ),
               );
             // A stop that reached no live run (it had ended) promises no
             // recovery: the run's own end is what the handler waits for.
-            const inspection = stopped
-              ? yield* session.records(launchRunId).readResumable()
-              : undefined;
-            // The ordinary bounded shutdown path below remains authoritative
-            // when checkpoint inspection itself is unavailable.
+            // Decided here, from the rows before the run's end, and again by
+            // the finalization's drain after it: this early verdict is what
+            // lets the wait below outrank the deadline, which a verdict read
+            // after the end could not. When it cannot be read the ordinary
+            // bounded path below remains authoritative (its race still sees
+            // the drain start a notice), and the shutdown says so.
             const advertisesCheckpoint =
-              inspection !== undefined &&
-              (yield* advertisesInterruptedRun(
-                launchRunId,
-                inspection,
-                options.canAdvertiseInterruptedRun,
-              ).pipe(Effect.orElseSucceed(() => false)));
+              stopped &&
+              (yield* session
+                .records(launchRunId)
+                .readResumable()
+                .pipe(
+                  Effect.flatMap((inspection) =>
+                    advertisesInterruptedRun(
+                      launchRunId,
+                      inspection,
+                      options.canAdvertiseInterruptedRun,
+                    ),
+                  ),
+                  Effect.catch((error) =>
+                    sayShutdownFailure(
+                      `Run ${launchRunId}: whether it can be resumed could not be read before shutdown; its recovery notice waits only within the shutdown deadline`,
+                      toErrorMessage(error),
+                    ).pipe(Effect.as(false)),
+                  ),
+                ));
             // Wait for the run's end and its recovery notice before the
             // handler exits. A resumable run keeps shutdown alive until the
             // promised notice is flushed: that wait outranks the deadline.
@@ -487,8 +513,9 @@ export function executeCliRequest(
         // uninterruptible wait for a promised recovery notice still finishes.
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
         Effect.catchCause((cause) =>
-          Effect.logError("The run's shutdown step failed").pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
+          sayShutdownFailure(
+            "The run's shutdown step failed; the exit does not wait for its recovery notice",
+            Cause.pretty(cause),
           ),
         ),
       ),

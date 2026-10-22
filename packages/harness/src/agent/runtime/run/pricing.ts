@@ -112,7 +112,7 @@ export const reportUsage = (
           responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
           cachedInputTokens,
           reasoningTokens: usage.reasoningTokens ?? 0,
-          usageRoute: usage.usageRoute ?? 'api-key',
+          usageRoute: usageRouteOf(bound.route),
           // The usage-log edge function's wire key, which stores the run id
           // in its `stream_id` column; a server-side rename, not ours.
           ...(attribution.runId === null

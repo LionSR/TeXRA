@@ -26,6 +26,7 @@ function decodeFileUri(value: string): string | null {
   try {
     pathname = decodeURIComponent(url.pathname);
   } catch {
+    // A malformed percent-escape names no file path: the drop offers none.
     return null;
   }
   if (url.hostname && url.hostname !== 'localhost') {

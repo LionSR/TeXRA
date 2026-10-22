@@ -29,6 +29,7 @@ import {
 
 import { LeanAdapterStopped, LeanServerPool } from './leanServerPool';
 import {
+  LeanFileCommandFailed,
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '../leanLanguageServices';
@@ -103,7 +104,18 @@ const portOverPool = (
   // on.
 
   executeFileCommand: (command, filePath, runId) =>
-    foldStopped(pool.executeFileCommand(command, filePath, runId), () => false),
+    pool.executeFileCommand(command, filePath, runId).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.fail(
+              new LeanFileCommandFailed({
+                reason: 'failed',
+                message: STOPPED_MESSAGE,
+              }),
+            )
+          : Effect.failCause(cause),
+      ),
+    ),
 
   executeProjectCommand: (command, runId) =>
     pool

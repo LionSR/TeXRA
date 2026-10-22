@@ -31,7 +31,9 @@ function anthropicCost(
   rates: TurnRates,
 ): number {
   const { inputPrice, outputPrice, cacheDiscountFactor } = rates;
-  const uncached = provider.uncachedInputTokens ?? usage.inputTokens ?? 0;
+  // `usage.inputTokens` is the total with the cache classes in it, so it is
+  // never a stand-in for the uncached count: that would bill them twice.
+  const uncached = provider.uncachedInputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
   const write5m =
     provider.cacheCreation5mTokens ??

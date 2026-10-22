@@ -9,9 +9,3 @@ export function toErrorMessage(err: unknown): string {
 export function ensureError(err: unknown): Error {
   return err instanceof Error ? err : new Error(toErrorMessage(err));
 }
-
-/**
- * The log annotation key a host's sink reads a channel from; the key the
- * host's own channel annotation writes.
- */
-export const LOG_CHANNEL = 'channel';

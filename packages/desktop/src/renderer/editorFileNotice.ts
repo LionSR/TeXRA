@@ -1,6 +1,7 @@
-// The editor pane's notice: a failed editor load, open, or save is reported
-// above the editor, not only to the log. A save that fails silently leaves the
-// user believing the file is on disk, which is the one failure here that can
+// The editor pane's notice: a failed editor load, open, reload, or save is
+// reported above the editor, not only to the log. A save that fails silently
+// leaves the user believing the file is on disk, and a reload that fails
+// silently leaves them editing a version that is no longer on disk: both can
 // cost them work.
 
 import { getBasename, extractErrorMessage } from '@texra-ai/harness/schemas';
@@ -61,7 +62,7 @@ export function createEditorFileNotice(options: {
 
     report(
       path: string | undefined,
-      action: 'load' | 'open' | 'save',
+      action: 'load' | 'open' | 'reload' | 'save',
       error: unknown,
     ): void {
       options.onError(error);
@@ -70,6 +71,7 @@ export function createEditorFileNotice(options: {
       const headline = {
         load: "The editor couldn't load. Open a file to try again.",
         open: `Couldn't open ${name}.`,
+        reload: `Couldn't reload ${name} from disk. The editor shows the last version read, and saving it would overwrite the file on disk.`,
         save: `Couldn't save ${name}. Your changes are still in the editor.`,
       }[action];
       show({

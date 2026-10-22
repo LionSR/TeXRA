@@ -16,21 +16,22 @@
  */
 import { z } from 'zod';
 
+import { Effect } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import {
-  createSecretBackedCoordinator,
-  getSubscriptionSessionStatus,
-} from '../sessionAccess.js';
+import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { SubscriptionSessionBaseSchema } from '../subscriptionSessionSchema.js';
-import type { CredentialStore } from '../../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../../providers/credentials.js';
+import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type {
   SubscriptionCoordinator,
   SubscriptionSessionStatus,
 } from '../subscriptionCoordinator.js';
 import type { SubscriptionOAuthPolicy } from '../SubscriptionOAuthCoordinator.js';
-import type { Effect } from 'effect';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
 export const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
@@ -205,8 +206,6 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   },
 };
 
-const CHANNEL = 'xaiAuth';
-
 /**
  * The coordinator for the caller's secret store: one coordinator per store
  * instance, so distinct stores never share session state.
@@ -219,15 +218,15 @@ export const xaiCoordinator: (
     new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
 });
 
-/** Signed-in status, read from the caller's secret store. */
+/** Signed-in status, read from the caller's secret store. A store that
+ *  cannot be read, or a stored session that does not parse, fails. */
 export function getXaiStatus(
   secrets: CredentialStore,
-): Effect.Effect<SubscriptionSessionStatus> {
-  return getSubscriptionSessionStatus(
-    () => xaiCoordinator(secrets),
-    CHANNEL,
-    'Grok',
-  );
+): Effect.Effect<
+  SubscriptionSessionStatus,
+  SecretsFailed | SubscriptionOAuthError
+> {
+  return Effect.suspend(() => xaiCoordinator(secrets).getStatus());
 }
 
 /** The browser sign-in, bound to the registered Grok callback. */

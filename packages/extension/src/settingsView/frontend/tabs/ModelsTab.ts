@@ -36,7 +36,8 @@ export class ModelsTab extends LitElement {
 
   @property({ attribute: false }) section: SettingsSectionName<'models'> =
     'keys';
-  @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
+  @property({ attribute: false }) providerKeyStatuses:
+    ProviderKeyStatus[] | null = null;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
   @property({ attribute: false }) helperModel = '';

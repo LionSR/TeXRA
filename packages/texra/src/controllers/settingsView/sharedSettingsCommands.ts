@@ -32,7 +32,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import { UnsupportedCommandError } from '@texra/shared/utils/dispatcher';
 import {
@@ -125,8 +124,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const modelSelection = new SettingsModelSelectionController({
     stores: roots,
     secrets,
-    resolveModelOptions: (stores, models) =>
-      Effect.map(readModelOptions(stores, models), modelOptionsFrom),
+    resolveModelOptions: readModelOptions,
     copilotRoutes: CopilotRoutes.discover(),
   });
   const usage = new SubscriptionUsageService({ secrets, stores: roots });

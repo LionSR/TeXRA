@@ -21,12 +21,11 @@
 import { Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
-import { Settings } from '@texra-ai/harness';
+import { Settings, StateReadFailed } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type {
   StateStore,
-  StateReadFailed,
   StateWriteFailed,
   LanguageModel,
 } from '@texra-ai/harness';
@@ -118,13 +117,11 @@ export function planOnboardingFunnelTransition(
 interface OnboardingFunnelHost {
   /**
    * This host's usable-credential check (a subscription or any provider API
-   * key), as a program the refresh yields. It cannot fail: every host binds
-   * `hasUsableSetupCredential`, which already warns about each probe it could
-   * not answer and reads it as "no credential of that kind" — the funnel must
-   * still paint, but never silently, since that answer blanks a user who has
-   * keys back down to the first-run welcome card.
+   * key), as a program the refresh yields. A check that cannot be answered
+   * fails: it is not the fact "no credential", and reading it as one would
+   * blank a user who has keys back down to the first-run welcome card.
    */
-  readonly hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
+  readonly hasCredential: () => Effect.Effect<boolean, Error, LanguageModel>;
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
@@ -171,7 +168,20 @@ export class OnboardingFunnelRefresher {
 
   private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
     function* (this: OnboardingFunnelRefresher) {
-      const hasCredential = yield* this.host.hasCredential();
+      // An unanswered check fails the refresh before anything is applied:
+      // the funnel keeps the state it last derived, the caller's boundary
+      // reports why (on the first refresh there is no state to keep), and
+      // the next refresh asks again.
+      const hasCredential = yield* this.host.hasCredential().pipe(
+        Effect.mapError(
+          (failure) =>
+            new StateReadFailed({
+              key: 'onboarding.credential',
+              message: `The onboarding credential check failed: ${failure.message}`,
+              cause: failure,
+            }),
+        ),
+      );
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
         declined: yield* Settings.state(
@@ -199,8 +209,9 @@ export class OnboardingFunnelRefresher {
     },
   );
 
-  /** Ask for a refresh. The only failure is the flag write that clears a
-   *  stale skip; the credential probe and host publication cannot fail. */
+  /** Ask for a refresh. It fails when the credential probe or a flag read
+   *  cannot be answered, or the write that clears a stale skip fails; the
+   *  host publication cannot fail. */
   run(): Effect.Effect<
     void,
     StateReadFailed | StateWriteFailed,

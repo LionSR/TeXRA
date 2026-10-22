@@ -38,6 +38,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
+import { LeanFileCommandFailed } from '../leanLanguageServices';
 import { createLeanServerRoster } from '../leanServerRegistry';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { LeanServerInfo } from '../leanServerRegistry';
@@ -109,7 +110,7 @@ export class LeanServerPool extends Context.Service<
       command: LeanFileCommand,
       filePath: string,
       runId: RunId | undefined,
-    ) => Effect.Effect<boolean>;
+    ) => Effect.Effect<void, LeanFileCommandFailed>;
     readonly executeProjectCommand: (
       command: LeanProjectCommand,
       runId: RunId | undefined,
@@ -468,12 +469,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   )(function* (file: string, runId: RunId | undefined) {
     return yield* withServer(file, runId, (server) =>
       server.diagnostics(file).pipe(
-        Effect.map((diagnostics): FetchDiagnosticsResult => ({
+        Effect.map((result): FetchDiagnosticsResult => ({
           ok: true,
-          diagnostics,
+          ...result,
         })),
         Effect.catchTag(
-          ['LeanSessionDisposed', 'LeanSessionNotRunning'],
+          [
+            'LeanSessionDisposed',
+            'LeanSessionNotRunning',
+            'JsonRpcRequestError',
+            'JsonRpcConnectionDisposed',
+          ],
           (error): Effect.Effect<FetchDiagnosticsResult> => {
             const message = toErrorMessage(error);
             return Effect.logWarning(
@@ -484,17 +490,20 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
             );
           },
         ),
-        Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
-          // Opening/reading the file itself failed (e.g. ENOENT) — the file is
-          // the problem, so the tool keeps its "could not open file" framing.
-          const message = toErrorMessage(error);
-          return Effect.logWarning(
-            `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
-          ).pipe(
-            withLogChannel(LOG_CHANNEL),
-            Effect.as({ ok: false, kind: 'file_missing', message }),
-          );
-        }),
+        Effect.catchTag(
+          'LeanFileReadError',
+          (error): Effect.Effect<FetchDiagnosticsResult> => {
+            // Reading the file itself failed (e.g. ENOENT) — the file is the
+            // problem, so the tool keeps its "could not open file" framing.
+            const message = error.message;
+            return Effect.logWarning(
+              `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
+            ).pipe(
+              withLogChannel(LOG_CHANNEL),
+              Effect.as({ ok: false, kind: 'file_missing', message }),
+            );
+          },
+        ),
       ),
     ).pipe(
       Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
@@ -523,13 +532,18 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       return yield* withServer(filePath, runId, (server) =>
         server.restartFile(filePath),
       ).pipe(
-        Effect.as(true),
-        // Return false (LeanFileTool surfaces it as a failure result) and log
-        // the cause, so a missing or broken `lake` does not fail the call.
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
-          ).pipe(withLogChannel(LOG_CHANNEL), Effect.as(false)),
+        Effect.mapError(
+          (error) =>
+            new LeanFileCommandFailed({
+              // No Lake project, or no `lake env lean --server` to talk to.
+              reason:
+                error._tag === 'LeanProjectNotFound' ||
+                error._tag === 'LeanStartError'
+                  ? 'toolchain_unavailable'
+                  : 'failed',
+              message: toErrorMessage(error),
+              cause: error,
+            }),
         ),
       );
     },

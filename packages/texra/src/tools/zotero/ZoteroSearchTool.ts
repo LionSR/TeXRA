@@ -86,28 +86,10 @@ function describeSearch(
  */
 function formatSearchResult(item: BbtSearchResultItem): string {
   const citekey = item.citekey || 'unknown';
-  const title = item.title || 'Untitled';
-
-  // Handle both CSL JSON (author) and Zotero (creators) formats
-  const creatorList = item.author || item.creators || [];
-  const creators = creatorList
-    .map((c) => {
-      if (c.family) {
-        return c.given ? `${c.family}, ${c.given}` : c.family;
-      }
-      if (c.lastName) {
-        return c.firstName ? `${c.lastName}, ${c.firstName}` : c.lastName;
-      }
-      return c.name || '';
-    })
-    .filter(Boolean)
-    .join('; ');
-
-  // Handle date from CSL JSON or Zotero format
-  const datePart = item.issued?.['date-parts']?.[0]?.[0];
-  const year = datePart ? String(datePart) : (item.date ?? '');
-
-  const type = item.type || item.itemType || 'item';
+  const title = item.title ?? 'Untitled';
+  const creators = item.creators.join('; ');
+  const year = item.year ?? '';
+  const type = item.type ?? 'item';
 
   // Build formatted string with optional parts
   const creatorPart = creators ? ` - ${creators}` : '';

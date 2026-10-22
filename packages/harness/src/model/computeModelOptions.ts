@@ -11,6 +11,7 @@ import {
   type ModelRoute,
   providerDisplayName,
   resolveModelSource,
+  type ReasoningRequest,
   routeConfig,
   selectModel,
 } from '@texra-ai/llm';
@@ -27,6 +28,12 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
+import {
+  reasoningRouteOf,
+  routeReasoningOf,
+  servingBackend,
+  type RouteReasoning,
+} from './reasoningLevel';
 import {
   copilotRouteUnavailableReason,
   CopilotRoutes,
@@ -118,12 +125,21 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     const providerName = providerDisplayName(source);
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
+  'key-unreadable': ({ model, source, route }) => {
+    const providerName =
+      route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source);
+    return `Model "${model}" needs your ${providerName} API key, which could not be read from secret storage. Check that the store is unlocked and readable, then retry.`;
+  },
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
   // Unreachable from `optionOf` (it answers "not recognized"
   // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
+
+/** A provider's key as read: usable, absent, or a store that could not be
+ *  read, which is not an absent key. */
+type KeyStatus = boolean | 'unreadable';
 
 /**
  * Which providers have a usable API key, as plain data — the only provider-key
@@ -132,7 +148,7 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
  * said it would consult. A provider absent from the map was never read, which
  * the verdict treats as a defect rather than as an absent key.
  */
-type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, boolean>>;
+type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, KeyStatus>>;
 
 /**
  * The host facts every model's route is decided over, resolved once before
@@ -144,7 +160,7 @@ interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   /** Models whose Copilot route the user prefers. */
   copilotModels: readonly string[];
-  hasOpenRouter: boolean;
+  openRouterKey: KeyStatus;
   facts: HostRouteFacts;
 }
 
@@ -171,6 +187,8 @@ interface RoutedModel {
   readonly rawConfig: ModelConfig;
   /** The config the model runs with on its route: the row's cost and window. */
   readonly config: ModelConfig;
+  /** The effort, thinking and mode the model string asks for. */
+  readonly request: ReasoningRequest;
   readonly route: ModelRoute<CopilotModelRoute>;
   readonly gate: RouteGate;
 }
@@ -205,7 +223,8 @@ function routeGate(
     case 'xai-subscription':
       return { kind: 'xai-subscription-access', usageRoute: route.kind };
     case 'openrouter':
-      return ctx.hasOpenRouter
+      if (ctx.openRouterKey === 'unreadable') return { kind: 'key-unreadable' };
+      return ctx.openRouterKey
         ? { kind: 'openrouter-key' }
         : { kind: 'missing-key' };
     case 'api-key':
@@ -241,6 +260,7 @@ function resolveModelAvailability(
       `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
     );
   }
+  if (usable === 'unreadable') return { kind: 'key-unreadable' };
   if (!usable) return { kind: 'missing-key' };
   return { kind: 'provider-key', usageRoute: gate.usageRoute };
 }
@@ -273,9 +293,11 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
   );
 
 /**
- * One key status per provider, read once. A failed read degrades that provider
- * to unavailable and warns once for the provider, never once per model that
- * consults it (#11508), so one unreadable store cannot flood the log.
+ * One key status per provider, read once. A failed read is that provider's
+ * `unreadable` status, never "no key" (which would send a user with a working
+ * key to enter it again), and warns once for the provider, never once per
+ * model that consults it (#11508), so one unreadable store cannot flood the
+ * log.
  */
 function readProviderKeyStatuses(
   secrets: PlatformSecrets,
@@ -287,9 +309,9 @@ function readProviderKeyStatuses(
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
           Effect.logWarning(
-            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+            `Failed to read ${providerDisplayName(provider)} API key status.`,
             failure.cause,
-          ).pipe(Effect.as(false)),
+          ).pipe(Effect.as<KeyStatus>('unreadable')),
         ),
         Effect.map((usable) => [provider, usable] as const),
       ),
@@ -319,7 +341,7 @@ function buildAvailabilityContext(
       reasoningLevels: settings.reasoningLevels,
       copilotModels: settings.copilotModels,
       facts,
-      hasOpenRouter: openRouterKey.openRouter === true,
+      openRouterKey: openRouterKey.openRouter ?? false,
       keyStatuses: { ...openRouterKey, kimiCode: facts.kimiCodeKey },
     };
   });
@@ -362,6 +384,7 @@ function routeModels(models: readonly string[], ctx: ModelRouteContext) {
       routed.set(model, {
         rawConfig,
         config: routeConfig(rawConfig, route, ctx.facts),
+        request: selected.request,
         route,
         gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route, ctx),
       });
@@ -566,6 +589,12 @@ export type ModelOption =
       readonly source: string;
       /** The user's saved reasoning effort for it. */
       readonly savedEffort: ReasoningEffort | undefined;
+      /**
+       * What a run on the route sends for reasoning; absent when the model
+       * does not reason there, or no backend serves the route (an
+       * `others` model off OpenRouter, whose row is unavailable).
+       */
+      readonly reasoning: RouteReasoning | undefined;
     };
 
 /**
@@ -603,6 +632,8 @@ function optionOf(
     route.kind === 'copilot' && route.route?.access === 'allowed'
       ? route.route.effectiveConfig
       : decision.config;
+  const savedEffort = reasoningLevels[decision.config.ref];
+  const backend = servingBackend(decision.config, route);
   return {
     model,
     availability: kind,
@@ -612,7 +643,20 @@ function optionOf(
     config,
     route,
     source: modelSource(route, config),
-    savedEffort: reasoningLevels[config.ref],
+    savedEffort,
+    // The bind's own decision over the bind's inputs (`binding.ts`
+    // `reasoningOf`): the routed config, the model string's request, the
+    // saved level, and the route a fresh run's backend serves.
+    reasoning:
+      backend === undefined
+        ? undefined
+        : routeReasoningOf({
+            config: decision.config,
+            runsWith: config,
+            request: decision.request,
+            saved: savedEffort,
+            route: reasoningRouteOf(route, backend),
+          }),
   };
 }
 
