@@ -34,11 +34,11 @@ import {
 import {
   CommitOrdinalSchema,
   ExistenceReconciliationSchema,
-  FoldEventSchema,
+  EventInputSchema,
   LocalRuntimeStateSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
-  type FoldInput,
+  type SessionViewInput,
   type TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
 import { HostRequestSchema } from './hostRequest';
@@ -50,7 +50,7 @@ const SessionKeySchema = z.string().min(1);
 const GenerationSchema = z.int().nonnegative();
 const RequestIdSchema = z.string().min(1);
 
-export type FoldEvent = z.infer<typeof FoldEventSchema>;
+export type EventInput = z.infer<typeof EventInputSchema>;
 
 /** A surface's request for one session's frames, up the wire. */
 export const SubscribeSchema = z.object({
@@ -62,8 +62,8 @@ export const SubscribeSchema = z.object({
   debug: z.boolean(),
   /** 0 on a cold mount; the view's cursor on a resubscribe. */
   cursor: CommitOrdinalSchema,
-  /** The transcript tier: each `fromSeq` is `view.folded[id]`, 0 when the
-   *  view holds no entry, never the cursor. */
+  /** The transcripts asked for: each `fromSeq` is the view's
+   *  `transcriptSeq` entry, 0 when it holds none, never the cursor. */
   aggregates: z.array(TranscriptSubscriptionSchema),
 });
 export type Subscribe = z.infer<typeof SubscribeSchema>;
@@ -74,7 +74,7 @@ export const EventsFrameSchema = z.object({
   session: SessionKeySchema,
   generation: GenerationSchema,
   cursor: CommitOrdinalSchema,
-  events: z.array(FoldEventSchema),
+  events: z.array(EventInputSchema),
   chunks: z.array(TextChunkSchema),
   local: LocalRuntimeStateSchema.nullable(),
   host: HostSnapshotSchema.nullable(),
@@ -212,7 +212,7 @@ export class SessionFrames extends Context.Service<
     readonly inputs: (
       aggregates: readonly TranscriptSubscription[],
       previousDebug: boolean,
-    ) => Stream.Stream<readonly FoldInput[]>;
+    ) => Stream.Stream<readonly SessionViewInput[]>;
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
     readonly begin: (generation: number) => Effect.Effect<void>;
     /** Deliver one frame; the caller feeds them in arrival order. */
@@ -236,7 +236,7 @@ export class SessionFrames extends Context.Service<
                 Stream.mapAccum(
                   (): {
                     debug?: boolean;
-                    pending: FoldInput[];
+                    pending: SessionViewInput[];
                     complete: boolean;
                   } => ({ pending: [], complete: false }),
                   (state, frame) => {
@@ -246,7 +246,7 @@ export class SessionFrames extends Context.Service<
                     if (frame.local)
                       state.pending.push({ _tag: 'local', local: frame.local });
                     if (frame.existence !== null) {
-                      const marker: FoldInput = frame.replayComplete
+                      const marker: SessionViewInput = frame.replayComplete
                         ? {
                             _tag: 'replay.complete',
                             existence: frame.existence,
@@ -262,7 +262,7 @@ export class SessionFrames extends Context.Service<
                       if (!frame.replayComplete || state.debug === undefined)
                         return [state, []] as const;
                       const reset = state.debug !== previousDebug;
-                      const prefix: FoldInput[] = [
+                      const prefix: SessionViewInput[] = [
                         { _tag: 'debug', enabled: state.debug },
                         {
                           _tag: 'subscriptions',
@@ -275,7 +275,7 @@ export class SessionFrames extends Context.Service<
                       return [
                         {
                           ...state,
-                          pending: [] as FoldInput[],
+                          pending: [] as SessionViewInput[],
                           complete: true,
                         },
                         [[...prefix, ...state.pending]],
@@ -283,7 +283,7 @@ export class SessionFrames extends Context.Service<
                     }
                     if (frame.existence === null) return [state, []] as const;
                     return [
-                      { ...state, pending: [] as FoldInput[] },
+                      { ...state, pending: [] as SessionViewInput[] },
                       [state.pending],
                     ] as const;
                   },

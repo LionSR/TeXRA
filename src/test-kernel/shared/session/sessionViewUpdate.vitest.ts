@@ -1,8 +1,8 @@
-// The pure fold over a recorded fan-out session: a background script root, one
-// child agent run with a grandchild of its own, a background process run.
-// The scenario (`fanOutScenario.ts`) is the commit-ordered event log a
-// publisher would replay; every assertion compares the fold's output to the
-// existing shared folds it must reproduce, so the two can never drift.
+// The session view's updater over a recorded fan-out session: a background
+// script root, one child agent run with a grandchild of its own, a background
+// process run. The scenario (`fanOutScenario.ts`) is the commit-ordered event
+// log a publisher would replay; every assertion compares the view to what the
+// shared projections it must reproduce say, so the two can never drift.
 
 import { describe, expect, it } from 'vitest';
 
@@ -22,7 +22,7 @@ import {
   runIdentityDisplayName,
   SessionEventSchema,
   type DisplaySessionEvent,
-  type FoldInput,
+  type SessionViewInput,
   type RunId,
 } from '@shared/schemas';
 
@@ -33,13 +33,12 @@ import {
   unboundRequests,
   type RunHistoryDraft,
 } from '@shared/session/runStateFold';
-import { fold } from '@shared/session/sessionFold';
 import {
   acceptsFollowUp,
-  emptySessionView,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   loadSurface,
@@ -71,10 +70,10 @@ import {
   ROOT_POLICY,
   T,
   buildScenario,
-  foldAll,
   local,
   subscribe,
   tail,
+  viewOf,
 } from './fanOutScenario';
 
 function runView(view: SessionView, id: RunId): RunView {
@@ -91,14 +90,18 @@ function roundMapsOf(view: SessionView, id: RunId) {
 const alive = local({ self: [OWNER] });
 const nobody = local({ dead: [OWNER] });
 
-describe('sessionFold', () => {
+/** A fresh updater of the fixture session. */
+const paper = (cursor = 0, debug = false) =>
+  makeSessionViewUpdater('paper', cursor, debug);
+
+describe('session view update', () => {
   const scenario = buildScenario();
 
   it.each(['cancelled', 'failed', 'completed'] as const)(
     'keeps the composer available for a %s conversation with saved history',
     (status) => {
       const run = {
-        ...runView(foldAll([...scenario.events, nobody]), CHILD),
+        ...runView(viewOf([...scenario.events, nobody]), CHILD),
         parentId: null,
         status,
         durableOutcome: status,
@@ -131,17 +134,16 @@ describe('sessionFold', () => {
       outcome: 'completed',
       output: emptyRunEndOutput(),
     });
-    const listing = foldAll(
+    const updater = paper();
+    const listing = viewOf(
       [start, end].map((event) => ({
         _tag: 'event',
         read: 'listing',
         event,
       })),
+      updater,
     );
-    const history = foldAll(
-      [subscribe(ROOT), ...log.events.map(tail)],
-      listing,
-    );
+    const history = viewOf([subscribe(ROOT), ...log.events.map(tail)], updater);
     const surface = loadSurface(
       'paper',
       PersistedSurfaceSchema.parse({ selected: ROOT }),
@@ -152,10 +154,9 @@ describe('sessionFold', () => {
     expect(runView(history, ROOT).lastTimestamp).toBe(end.at);
 
     // A partial replay must never move an existing read marker backwards.
-    const partial = foldAll([tail(start), subscribe(ROOT), tail(response)]);
+    const partial = viewOf([tail(start), subscribe(ROOT), tail(response)]);
     expect(markShownRunSeen(restarted, partial)).toBe(restarted);
-    const later = fold(
-      history,
+    const later = updater.apply(
       tail(
         log.emit(ROOT, 4000, {
           type: 'run.end',
@@ -170,7 +171,7 @@ describe('sessionFold', () => {
     );
   });
 
-  it('projects completed trace facts identically live and on replay without folding the listing as transcript', () => {
+  it('projects completed trace facts identically live and on replay without applying the listing as transcript', () => {
     const log = new Log();
     const start = log.emit(CHILD, 1000, {
       type: 'run.start',
@@ -221,12 +222,12 @@ describe('sessionFold', () => {
     });
     // A verbose view: transcript verbosity is the view's own flag, read from
     // its config authority at open — never a property of a row.
-    const initial = () =>
-      foldAll(
-        [tail(start), subscribe(CHILD), alive],
-        emptySessionView('paper', 0, true),
-      );
-    const live = foldAll(
+    const initial = () => {
+      const updater = paper(0, true);
+      viewOf([tail(start), subscribe(CHILD), alive], updater);
+      return updater;
+    };
+    const live = viewOf(
       [
         tail(stage),
         tail(opened),
@@ -242,16 +243,17 @@ describe('sessionFold', () => {
       ],
       initial(),
     );
-    const listing = fold(initial(), {
+    const replayed = initial();
+    const listing = replayed.apply({
       _tag: 'event',
       read: 'listing',
       event: stage,
     });
     expect(runView(listing, CHILD).transcript.rows).toEqual([]);
-    expect(listing.folded.get(qualifyAggregateId('run', CHILD))).toBe(0);
-    const replay = foldAll(
+    expect(listing.transcriptSeq.get(qualifyAggregateId('run', CHILD))).toBe(0);
+    const replay = viewOf(
       log.events.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
-      listing,
+      replayed,
     );
     expect(runView(replay, CHILD).transcript).toEqual(
       runView(live, CHILD).transcript,
@@ -272,21 +274,23 @@ describe('sessionFold', () => {
     });
     // The same rows on a quiet view: the debug row is dropped, its cursor
     // still advances.
-    const quiet = foldAll(
+    const quietly = paper(0, false);
+    viewOf([subscribe(CHILD), alive], quietly);
+    const quiet = viewOf(
       log.events
         .filter((event) => event !== hidden)
         .map((event) => ({ _tag: 'event', read: 'aggregate', event })),
-      foldAll([subscribe(CHILD), alive], emptySessionView('paper', 0, false)),
+      quietly,
     );
-    const filtered = fold(quiet, tail(hidden));
+    const filtered = quietly.apply(tail(hidden));
     expect(filtered.runs).toBe(quiet.runs);
-    expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
+    expect(filtered.transcriptSeq.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
   });
 
   it('reproduces topology, order, labels, and launch facts from run.start', () => {
-    const view = foldAll(scenario.events);
+    const view = viewOf(scenario.events);
     const root = runView(view, ROOT);
     const child = runView(view, CHILD);
 
@@ -325,8 +329,8 @@ describe('sessionFold', () => {
     expect(view.cursor).toBe(scenario.log.events.length);
   });
 
-  it('folds the transcript through the shared row, group, and run reducers', () => {
-    const view = foldAll(scenario.events);
+  it('builds the transcript through the shared row, group, and run reducers', () => {
+    const view = viewOf(scenario.events);
     const root = runView(view, ROOT);
 
     // The script stage the pair opened and closed, and the one `agent` call
@@ -361,7 +365,7 @@ describe('sessionFold', () => {
     ]);
     expect(root.transcript.rows).toHaveLength(2);
     // The transcript tier retained the rows: the aggregate's newest seq.
-    expect(view.folded.get(qualifyAggregateId('run', ROOT))).toBe(
+    expect(view.transcriptSeq.get(qualifyAggregateId('run', ROOT))).toBe(
       Math.max(
         ...scenario.log.events
           .filter(
@@ -377,13 +381,14 @@ describe('sessionFold', () => {
     // A settled run has printed every row.
     expect(root.transcript.settledRows).toBe(root.transcript.rows.length);
 
-    // A frame folds each transcript once at its end and lands the same rows.
-    const batched = fold(emptySessionView('paper'), scenario.events);
+    // One call over the whole replay lands the same rows as one per input.
+    const batched = paper().apply(scenario.events);
     expect(runView(batched, ROOT).transcript).toStrictEqual(root.transcript);
   });
 
   it('settles status copy, rollups, groups, and the durable outcome from the activation and the end', () => {
-    const pending = foldAll([...scenario.pending, alive]);
+    const pendingUpdater = paper();
+    const pending = viewOf([...scenario.pending, alive], pendingUpdater);
     const rootPending = runView(pending, ROOT);
     expect(rootPending.status).toBe(RUN_PHASE.RUNNING);
     expect(rootPending.statusKey).toBe('running');
@@ -404,7 +409,7 @@ describe('sessionFold', () => {
       interrupted: 0,
     });
 
-    const settled = foldAll(scenario.events);
+    const settled = viewOf(scenario.events);
     const root = runView(settled, ROOT);
     expect(root.status).toBe(RUN_PHASE.COMPLETED);
     expect(root.statusKey).toBe('completed');
@@ -423,11 +428,10 @@ describe('sessionFold', () => {
 
     // The durable outcome: only the `run.end` row writes a terminal status.
     // A user stop publishes no terminal status row of its own, so until
-    // `run.end` folds the run is still in flight.
+    // `run.end` is applied the run is still in flight.
     expect(runView(pending, CHILD).status).toBe(RUN_PHASE.RUNNING);
     expect(runView(pending, CHILD).durableOutcome).toBeNull();
-    const ended = fold(
-      pending,
+    const ended = pendingUpdater.apply(
       tail(
         scenario.log.emit(CHILD, 1851, {
           type: 'run.end',
@@ -440,14 +444,14 @@ describe('sessionFold', () => {
     expect(runView(ended, CHILD).runStartedAt).toBeNull();
     expect(runView(ended, CHILD).durableOutcome).toBe('cancelled');
     // For a run this process does not own, the terminal phase is the story.
-    expect(runView(foldAll(scenario.events), CHILD).durableOutcome).toBe(
+    expect(runView(viewOf(scenario.events), CHILD).durableOutcome).toBe(
       'completed',
     );
     expect(runView(pending, GRANDCHILD).durableOutcome).toBe('completed');
   });
 
-  it('folds a pending approval to waiting only with a held owner', () => {
-    const withOwner = foldAll([...scenario.pending, alive]);
+  it('reads a pending approval as waiting only with a held owner', () => {
+    const withOwner = viewOf([...scenario.pending, alive]);
     expect(runView(withOwner, CHILD).group).toBe('waiting');
     expect(runView(withOwner, CHILD).approval).toBe('own');
     expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
@@ -465,7 +469,7 @@ describe('sessionFold', () => {
     // interrupted, never waiting. The phase stays running and the request
     // stays listed, so a resume can re-ask; the copy is what says
     // interrupted, and the interrupted path is forced open too.
-    const interrupted = foldAll([...scenario.pending, nobody]);
+    const interrupted = viewOf([...scenario.pending, nobody]);
     const child = runView(interrupted, CHILD);
     expect(child.group).toBe('interrupted');
     expect(child.approval).toBe('none');
@@ -491,7 +495,7 @@ describe('sessionFold', () => {
     });
 
     // A current claim without a liveness verdict remains held as unprovable.
-    const unknown = foldAll(scenario.pending);
+    const unknown = viewOf(scenario.pending);
     expect(runView(unknown, CHILD).group).toBe('waiting');
     expect(runView(unknown, CHILD).readOnly).toBe(true);
   });
@@ -532,7 +536,7 @@ describe('sessionFold', () => {
       });
     open(CHILD);
     open(PROCESS);
-    const view = foldAll([subscribe(CHILD, PROCESS), ...log.events.map(tail)]);
+    const view = viewOf([subscribe(CHILD, PROCESS), ...log.events.map(tail)]);
     expect(view.requests.map((r) => [r.runId, r.requestId])).toStrictEqual([
       [CHILD, 'req-1'],
       [PROCESS, 'req-1'],
@@ -540,7 +544,8 @@ describe('sessionFold', () => {
   });
 
   it('reads another live process as held and read-only, and an unreadable run as an overlay', () => {
-    const held = foldAll([...scenario.pending, local({ dead: [] })]);
+    const holding = paper();
+    const held = viewOf([...scenario.pending, local({ dead: [] })], holding);
     const child = runView(held, CHILD);
     // Somebody holds the run: waiting, not interrupted; but not ours to act on.
     expect(child.group).toBe('waiting');
@@ -549,32 +554,36 @@ describe('sessionFold', () => {
     expect(runView(held, ROOT).readOnly).toBe(true);
     expect(runView(held, ROOT).group).toBe('running');
     // The holder becomes us: the same owner, still held, now ours to act on.
-    const taken = fold(held, local({ self: [OWNER] }));
+    const taken = holding.apply(local({ self: [OWNER] }));
     expect(runView(taken, CHILD).readOnly).toBe(false);
     expect(runView(taken, ROOT).readOnly).toBe(false);
 
-    const unreadable = foldAll([
-      ...scenario.pending,
-      local({
-        self: [OWNER],
-        unreadable: [{ runId: PROCESS, reason: 'damaged' }],
-      }),
-    ]);
+    const overlaid = paper();
+    const unreadable = viewOf(
+      [
+        ...scenario.pending,
+        local({
+          self: [OWNER],
+          unreadable: [{ runId: PROCESS, reason: 'damaged' }],
+        }),
+      ],
+      overlaid,
+    );
     expect(runView(unreadable, PROCESS).readOnly).toBe(true);
     expect(runView(unreadable, PROCESS).statusNotice).toStrictEqual({
       kind: 'damaged',
     });
     expect(runView(unreadable, CHILD).readOnly).toBe(false);
 
-    // The overlay lifts with the next snapshot; the owner change touches
-    // exactly the runs that owner holds.
-    const lifted = fold(unreadable, local({ self: [OWNER] }));
+    // The overlay lifts with the next snapshot, and an owner change reaches
+    // the runs that owner holds.
+    const lifted = overlaid.apply(local({ self: [OWNER] }));
     expect(runView(lifted, PROCESS).readOnly).toBe(false);
     expect(runView(lifted, PROCESS).statusNotice).toBeNull();
-    const foreign = fold(lifted, local({ self: [OTHER_OWNER] }));
+    const foreign = overlaid.apply(local({ self: [OTHER_OWNER] }));
     expect(runView(foreign, CHILD).group).toBe('waiting');
     expect(runView(foreign, CHILD).readOnly).toBe(true);
-    const dead = fold(foreign, local({ self: [OTHER_OWNER], dead: [OWNER] }));
+    const dead = overlaid.apply(local({ self: [OTHER_OWNER], dead: [OWNER] }));
     expect(runView(dead, CHILD).group).toBe('interrupted');
   });
 
@@ -587,7 +596,11 @@ describe('sessionFold', () => {
       parent: null,
       provenance: null,
     });
-    const chunk = (from: number, to: number, text: string): FoldInput => ({
+    const chunk = (
+      from: number,
+      to: number,
+      text: string,
+    ): SessionViewInput => ({
       _tag: 'chunk',
       runId: CHILD,
       rowId: 'card',
@@ -601,24 +614,28 @@ describe('sessionFold', () => {
     };
     // What the tool prints streams to the open card as transient text (C3),
     // never as a row; a later chunk extends it.
-    const running = foldAll([
-      subscribe(CHILD),
-      ...log.events.map(tail),
-      tail(
-        log.emit(CHILD, 1601, {
-          type: 'tool.start',
-          logId: 'card',
-          toolName: 'bash',
-          input: { command: 'ls' },
-        }),
-      ),
-      chunk(0, 3, 'Hel'),
-      chunk(3, 5, 'lo'),
-    ]);
+    const updater = paper();
+    const running = viewOf(
+      [
+        subscribe(CHILD),
+        ...log.events.map(tail),
+        tail(
+          log.emit(CHILD, 1601, {
+            type: 'tool.start',
+            logId: 'card',
+            toolName: 'bash',
+            input: { command: 'ls' },
+          }),
+        ),
+        chunk(0, 3, 'Hel'),
+        chunk(3, 5, 'lo'),
+      ],
+      updater,
+    );
     expect(outputOf(running)).toContain('Hello');
     // The terminal row carries the bounded capture and closes the card: a
     // late chunk reaches nothing.
-    const settled = foldAll(
+    const settled = viewOf(
       [
         tail(
           log.emit(CHILD, 1602, {
@@ -630,7 +647,7 @@ describe('sessionFold', () => {
         ),
         chunk(5, 9, ' bye'),
       ],
-      running,
+      updater,
     );
     expect(outputOf(settled)).toContain('Hello, world');
     expect(outputOf(settled)).not.toContain('bye');
@@ -650,8 +667,15 @@ describe('sessionFold', () => {
       from: number,
       to: number,
       text: string,
-    ): FoldInput => ({ _tag: 'chunk', runId: CHILD, rowId, from, to, text });
-    const opens = (id: string): FoldInput =>
+    ): SessionViewInput => ({
+      _tag: 'chunk',
+      runId: CHILD,
+      rowId,
+      from,
+      to,
+      text,
+    });
+    const opens = (id: string): SessionViewInput =>
       tail(
         log.emit(CHILD, 1501, {
           type: 'stream.start',
@@ -659,20 +683,24 @@ describe('sessionFold', () => {
           kind: MESSAGE_TYPES.MODEL_RESPONSE,
         }),
       );
-    const closes = (id: string, finalText: string): FoldInput =>
+    const closes = (id: string, finalText: string): SessionViewInput =>
       tail(log.emit(CHILD, 1501, { type: 'stream.end', id, finalText }));
     const started = log.events.map(tail);
-    // A chunk can reach the fold before its row; a redelivered chunk and a
-    // chunk below the text held are no-ops.
-    const streaming = foldAll([
-      subscribe(CHILD),
-      ...started,
-      chunk('response-2', 0, 3, 'Ear'),
-      opens('response-1'),
-      chunk('response-1', 0, 3, 'Hel'),
-      chunk('response-1', 3, 5, 'lo'),
-      chunk('response-1', 0, 3, 'Hel'),
-    ]);
+    // A chunk can arrive before its row; a redelivered chunk and a chunk
+    // below the text held are no-ops.
+    const updater = paper();
+    const streaming = viewOf(
+      [
+        subscribe(CHILD),
+        ...started,
+        chunk('response-2', 0, 3, 'Ear'),
+        opens('response-1'),
+        chunk('response-1', 0, 3, 'Hel'),
+        chunk('response-1', 3, 5, 'lo'),
+        chunk('response-1', 0, 3, 'Hel'),
+      ],
+      updater,
+    );
     const child = runView(streaming, CHILD);
     const [first] = child.transcript.rows;
     expect(child.transcript.rows).toHaveLength(1);
@@ -682,31 +710,31 @@ describe('sessionFold', () => {
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();
     // The row that arrives after its chunks projects with them.
-    const view = fold(streaming, opens('response-2'));
+    const view = updater.apply(opens('response-2'));
     const second = runView(view, CHILD).transcript.rows[1];
     expect(second.kind === 'assistant' && second.text.full).toBe('Ear');
     // A row's held text is the chunks' own: the first seeds it from offset
     // zero and a later chunk extends it.
-    const buffered = foldAll(
+    const buffered = viewOf(
       [
         opens('response-3'),
         chunk('response-3', 0, 3, 'Buf'),
         chunk('response-3', 3, 6, 'fer'),
       ],
-      view,
+      updater,
     );
     const third = runView(buffered, CHILD).transcript.rows[2];
     expect(third.kind === 'assistant' && third.text.full).toBe('Buffer');
 
     // Durable text wins: the finalizing row drops its entry and a late chunk
     // cannot reopen it; a replacement chunk truncates at `from`.
-    const settled = foldAll(
+    const settled = viewOf(
       [
         closes('response-1', 'Hello world'),
         chunk('response-1', 5, 7, '!!'),
         chunk('response-2', 0, 4, 'Late'),
       ],
-      buffered,
+      updater,
     );
     const rows = runView(settled, CHILD).transcript.rows;
     expect(rows[0].kind === 'assistant' && rows[0].text.full).toBe(
@@ -714,8 +742,7 @@ describe('sessionFold', () => {
     );
     expect(rows[1].kind === 'assistant' && rows[1].text.full).toBe('Late');
     // The run's end closes every live row: a later chunk reaches none.
-    const done = fold(
-      settled,
+    const done = updater.apply(
       tail(
         log.emit(CHILD, 1502, {
           type: 'run.end',
@@ -724,11 +751,12 @@ describe('sessionFold', () => {
         }),
       ),
     );
-    expect(fold(done, chunk('response-2', 4, 5, '!'))).toBe(done);
+    expect(updater.apply(chunk('response-2', 4, 5, '!'))).toBe(done);
   });
 
   it('keeps listing facts in commit order and transcript rows in seq order, whichever read delivers them', () => {
-    const settled = foldAll(scenario.events);
+    const updater = paper();
+    const settled = viewOf(scenario.events, updater);
     const rootActivate = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
@@ -745,19 +773,19 @@ describe('sessionFold', () => {
         e.type === 'tool.start',
     )!;
     // An aggregate read replaying an older activation, start, or row after
-    // the tail folded the current one changes nothing, and the cursor stays.
-    const replayed = foldAll(
+    // the tail applied the current one changes nothing, and the cursor stays.
+    const replayed = viewOf(
       [
         { _tag: 'event', read: 'aggregate', event: rootActivate },
         { _tag: 'event', read: 'aggregate', event: rootStart },
         { _tag: 'event', read: 'aggregate', event: rootEntry },
       ],
-      settled,
+      updater,
     );
     expect(replayed).toBe(settled);
     expect(replayed.cursor).toBe(settled.cursor);
     // A listing or history row never advances the cursor.
-    const listed = fold(emptySessionView('paper', 5), {
+    const listed = paper(5).apply({
       _tag: 'event',
       read: 'listing',
       event: rootStart,
@@ -796,25 +824,29 @@ describe('sessionFold', () => {
     };
 
     // The cold listing read: start plus the run's total.
-    const listing = foldAll([
-      { _tag: 'event', read: 'listing', event: start },
-      {
-        _tag: 'event',
-        read: 'listing',
-        event: { ...rounds[2]!, usage: total } as DisplaySessionEvent,
-      },
-    ]);
+    const updater = paper();
+    const listing = viewOf(
+      [
+        { _tag: 'event', read: 'listing', event: start },
+        {
+          _tag: 'event',
+          read: 'listing',
+          event: { ...rounds[2]!, usage: total } as DisplaySessionEvent,
+        },
+      ],
+      updater,
+    );
     expect(runView(listing, CHILD).usage).toStrictEqual(total);
 
     // The aggregate replay then brings all three rows back: each counts once.
-    const replayed = foldAll(
+    const replayed = viewOf(
       rounds.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
-      listing,
+      updater,
     );
     expect(runView(replayed, CHILD).usage).toStrictEqual(total);
 
     // And a replay with no listing read in front reaches the same total.
-    const fromScratch = foldAll([
+    const fromScratch = viewOf([
       { _tag: 'event', read: 'aggregate', event: start },
       ...rounds.map((event) => ({
         _tag: 'event' as const,
@@ -825,7 +857,7 @@ describe('sessionFold', () => {
     expect(runView(fromScratch, CHILD).usage).toStrictEqual(total);
   });
 
-  it("folds each run's tree total once, grandchildren included", () => {
+  it("sums each run's tree total once, grandchildren included", () => {
     // Failure modes: a total that adds direct children only; a listing
     // total and its replayed turns counted twice up the tree; a run's own
     // `usage` absorbing its children's.
@@ -849,7 +881,7 @@ describe('sessionFold', () => {
         usage: { inputTokens: 10, outputTokens: 1, cost },
       });
     const turns = [turn(ROOT, 0.25), turn(CHILD, 0.5), turn(GRANDCHILD, 1)];
-    const view = foldAll(
+    const view = viewOf(
       [...starts, ...turns].map((event) => ({
         _tag: 'event' as const,
         read: 'aggregate' as const,
@@ -866,7 +898,7 @@ describe('sessionFold', () => {
 
     // A cold listing of the grandchild's total, then its replayed turn:
     // the root's total still counts that turn once.
-    const listed = foldAll([
+    const listed = viewOf([
       ...starts.map((event) => ({
         _tag: 'event' as const,
         read: 'listing' as const,
@@ -880,8 +912,8 @@ describe('sessionFold', () => {
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
     // The documents row is a latest-only listing key, so a cold read hands
-    // the fold one row per run. It carries the whole round collection, and
-    // the fold replaces rather than merges the derived maps.
+    // the view one row per run. It carries the whole round collection, and
+    // the view replaces rather than merges the derived maps.
     const log = new Log();
     const start = log.emit(CHILD, 3000, {
       type: 'run.start',
@@ -935,67 +967,78 @@ describe('sessionFold', () => {
     };
 
     // The cold listing read: the start plus the newest row of each type.
-    const listing = foldAll([
-      { _tag: 'event', read: 'listing', event: start },
-      ...secondRound.map((event) => ({
-        _tag: 'event' as const,
-        read: 'listing' as const,
-        event,
-      })),
-    ]);
+    const cold = paper();
+    const listing = viewOf(
+      [
+        { _tag: 'event', read: 'listing', event: start },
+        ...secondRound.map((event) => ({
+          _tag: 'event' as const,
+          read: 'listing' as const,
+          event,
+        })),
+      ],
+      cold,
+    );
     expect(roundMapsOf(listing, CHILD)).toStrictEqual(bothRounds);
 
     // The aggregate replay then brings the first round's rows back under the
     // listing row; the commit guard drops them and the map stands.
-    const replayed = foldAll(
+    const replayed = viewOf(
       firstRound.map((event) => ({
         _tag: 'event' as const,
         read: 'aggregate' as const,
         event,
       })),
-      listing,
+      cold,
     );
     expect(roundMapsOf(replayed, CHILD)).toStrictEqual(bothRounds);
 
     // And a replay with no listing read in front reaches the same maps.
-    const fromScratch = foldAll(
+    const scratch = paper();
+    const fromScratch = viewOf(
       [start, ...firstRound, ...secondRound].map((event) => ({
         _tag: 'event' as const,
         read: 'aggregate' as const,
         event,
       })),
+      scratch,
     );
     expect(roundMapsOf(fromScratch, CHILD)).toStrictEqual(bothRounds);
 
     // A row is the map, so a round it does not name is not in the run's
     // state: the newest row replaces what the view holds, never merges.
-    const dropped = foldAll(
+    const dropped = viewOf(
       [log.emit(CHILD, 3030, documentsRow([roundOutput(1)]))].map((event) => ({
         _tag: 'event' as const,
         read: 'all' as const,
         event,
       })),
-      fromScratch,
+      scratch,
     );
     expect(roundMapsOf(dropped, CHILD).files).toStrictEqual({
       1: [outputOf(1)],
     });
   });
 
-  it('folds transcript rows only for subscribed aggregates and evicts them on unsubscribe', () => {
-    // Nothing subscribed: listing facts fold, rows do not, and `folded`
-    // never learns a dropped row.
-    const listingOnly = foldAll(scenario.events.slice(1));
+  it('applies transcript rows only for subscribed aggregates and drops them on unsubscribe', () => {
+    // Nothing subscribed: listing facts apply, rows do not, and
+    // `transcriptSeq` never learns a dropped row.
+    const listingOnly = viewOf(scenario.events.slice(1));
     expect(runView(listingOnly, ROOT).status).toBe(RUN_PHASE.COMPLETED);
     expect(runView(listingOnly, ROOT).transcript.rows).toStrictEqual([]);
-    expect(listingOnly.folded.size).toBe(0);
+    expect(listingOnly.transcriptSeq.size).toBe(0);
 
     // The replay every transcript is subscribed to, then a narrower
     // subscription set: only the aggregates it names keep their rows.
-    const full = foldAll(scenario.events);
-    const evicted = fold(full, subscribe(CHILD));
-    expect(evicted.folded.has(qualifyAggregateId('run', ROOT))).toBe(false);
-    expect(evicted.folded.has(qualifyAggregateId('run', CHILD))).toBe(true);
+    const updater = paper();
+    viewOf(scenario.events, updater);
+    const evicted = updater.apply(subscribe(CHILD));
+    expect(evicted.transcriptSeq.has(qualifyAggregateId('run', ROOT))).toBe(
+      false,
+    );
+    expect(evicted.transcriptSeq.has(qualifyAggregateId('run', CHILD))).toBe(
+      true,
+    );
     const root = runView(evicted, ROOT);
     expect(root.transcript.rows).toStrictEqual([]);
     expect(root.transcript.taskGroups).toStrictEqual([]);
@@ -1007,8 +1050,8 @@ describe('sessionFold', () => {
 
     // A subscription can name a stream before its `run.start` commits: the
     // reader reports that aggregate as absent, having no sequence row for
-    // it, and the tier must survive that reconciliation or the run's first
-    // rows fold into nothing.
+    // it, and the subscription must survive that reconciliation or the run's
+    // first rows are dropped.
     const early = new Log();
     const id = qualifyAggregateId('run', PROCESS);
     const start = early.emit(PROCESS, 5000, {
@@ -1024,7 +1067,7 @@ describe('sessionFold', () => {
       messageType: MESSAGE_TYPES.DEFAULT,
       message: 'the first row\n',
     });
-    const started = foldAll([
+    const started = viewOf([
       subscribe(PROCESS),
       {
         _tag: 'drained',
@@ -1037,19 +1080,21 @@ describe('sessionFold', () => {
       tail(start),
       tail(row),
     ]);
-    expect(started.folded.get(id)).toBe(row.seq);
+    expect(started.transcriptSeq.get(id)).toBe(row.seq);
     expect(runView(started, PROCESS).transcript.rows).toHaveLength(1);
   });
 
-  it('re-roots the children of a tombstoned run, keeps the tombstone final, and closes the listing at the marker', () => {
+  it('re-roots the children of a removed run, keeps the removal final, and closes the listing at the marker', () => {
     const removed = scenario.log.emit(ROOT, 3000, {
       type: 'run.removed',
       runIds: [],
     });
-    const view = foldAll([tail(removed)], foldAll(scenario.events));
+    const updater = paper();
+    viewOf(scenario.events, updater);
+    const view = viewOf([tail(removed)], updater);
     expect(view.runs.has(ROOT)).toBe(false);
     expect(view.policy.has(ROOT)).toBe(false);
-    expect(view.folded.has(qualifyAggregateId('run', ROOT))).toBe(false);
+    expect(view.transcriptSeq.has(qualifyAggregateId('run', ROOT))).toBe(false);
     expect(view.order).toStrictEqual([PROCESS, CHILD]);
     expect(runView(view, CHILD).parentId).toBeNull();
     expect(runView(view, CHILD).ancestors).toStrictEqual([]);
@@ -1057,28 +1102,30 @@ describe('sessionFold', () => {
       { id: CHILD, label: runView(view, CHILD).label },
     ]);
 
-    // A read replaying the run.start beneath the tombstone does not
-    // recreate the run: the lifecycle pair shares one latest entry.
+    // A read replaying the run.start beneath the removal does not recreate
+    // the run: the lifecycle pair shares one latest entry.
     const rootStart = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'run.start',
     )!;
-    const replayed = fold(view, {
+    const replayed = updater.apply({
       _tag: 'event',
       read: 'aggregate',
       event: rootStart,
     });
     expect(replayed.runs.has(ROOT)).toBe(false);
 
-    // Listing hydration is authoritative: at the marker, a run no
-    // listing row named is gone with everything a tombstone clears.
+    // At the replay marker, a run no listing row named is gone with
+    // everything a removal clears.
     const processStart = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', PROCESS) &&
         e.type === 'run.start',
     )!;
-    const pruned = foldAll(
+    const pruning = paper();
+    viewOf(scenario.pending, pruning);
+    const pruned = viewOf(
       [
         { _tag: 'event', read: 'listing', event: processStart },
         {
@@ -1089,7 +1136,7 @@ describe('sessionFold', () => {
           },
         },
       ],
-      foldAll(scenario.pending),
+      pruning,
     );
     expect([...pruned.runs.keys()]).toStrictEqual([PROCESS]);
     expect(pruned.order).toStrictEqual([PROCESS]);
@@ -1098,9 +1145,10 @@ describe('sessionFold', () => {
   });
 
   it('lists a queued follow-up once, and not again when its delivery is replayed after consumption', () => {
-    const settled = foldAll(scenario.events);
+    const updater = paper();
+    const settled = viewOf(scenario.events, updater);
     const aggregateId = qualifyAggregateId('run', CHILD);
-    let seq = settled.folded.get(aggregateId)!;
+    let seq = settled.transcriptSeq.get(aggregateId)!;
     const row = (commit: number, draft: Record<string, unknown>) =>
       tail({
         ...draft,
@@ -1123,7 +1171,7 @@ describe('sessionFold', () => {
           },
         },
       });
-    const view = foldAll(
+    const view = viewOf(
       [
         queued(300, 'delivery-1', 'child result'),
         row(301, { type: 'followup.consumed', followUpId: 'delivery-1' }),
@@ -1132,7 +1180,7 @@ describe('sessionFold', () => {
         queued(302, 'delivery-1', 'child result'),
         queued(303, 'delivery-2', 'next result'),
       ],
-      settled,
+      updater,
     );
     expect(view.queuedFollowUps.get(CHILD)).toStrictEqual([
       { followUpId: 'delivery-2', text: 'next result' },
@@ -1140,9 +1188,10 @@ describe('sessionFold', () => {
   });
 
   it("keeps a user's title over a later model title", () => {
-    const settled = foldAll(scenario.events);
+    const updater = paper();
+    const settled = viewOf(scenario.events, updater);
     const child = qualifyAggregateId('run', CHILD);
-    const next = settled.folded.get(child)! + 1;
+    const next = settled.transcriptSeq.get(child)! + 1;
     const title = (seq: number, by: 'model' | 'user', description: string) =>
       tail({
         seq,
@@ -1154,22 +1203,23 @@ describe('sessionFold', () => {
         by,
         description,
       });
-    const renamed = [
-      title(next, 'user', 'Renamed'),
-      title(next + 1, 'model', 'Summary'),
-    ].reduce(fold, settled);
+    const renamed = viewOf(
+      [title(next, 'user', 'Renamed'), title(next + 1, 'model', 'Summary')],
+      updater,
+    );
     expect(runView(renamed, CHILD).description).toBe('Renamed');
     expect(runView(renamed, CHILD).title).toBe('Renamed');
     // An empty title names the run by its label, never by ''.
-    const blank = fold(renamed, title(next + 2, 'user', ''));
+    const blank = updater.apply(title(next + 2, 'user', ''));
     expect(runView(blank, CHILD).title).toBe(runView(blank, CHILD).label);
   });
 
-  it('mints a run from run.start alone', () => {
+  it('creates a run from run.start alone', () => {
     const ghost = 'eeeeeeeeeeee' as RunId;
-    const settled = foldAll(scenario.events);
+    const updater = paper();
+    const settled = viewOf(scenario.events, updater);
     const stamp = { seq: 1, commit: 99, origin: OWNER, at: 4000 };
-    const facts: FoldInput[] = [
+    const facts: SessionViewInput[] = [
       tail({
         ...stamp,
         aggregateId: qualifyAggregateId('run', ghost),
@@ -1180,17 +1230,17 @@ describe('sessionFold', () => {
       tail({
         ...stamp,
         aggregateId: qualifyAggregateId('run', CHILD),
-        seq: settled.folded.get(qualifyAggregateId('run', CHILD))! + 1,
+        seq: settled.transcriptSeq.get(qualifyAggregateId('run', CHILD))! + 1,
         commit: 200,
         type: 'run.detach',
       }),
     ];
-    // A fact alone cannot advance the finite-read cursor, and it mints
+    // A fact alone cannot advance the finite-read cursor, and it creates
     // nothing; severing the edge leaves the child top-level.
-    const ignored = fold(settled, facts[0]);
+    const ignored = updater.apply(facts[0]);
     expect(ignored.runs).toBe(settled.runs);
     expect(ignored.cursor).toBe(settled.cursor);
-    const detached = fold(settled, facts[1]);
+    const detached = updater.apply(facts[1]);
     expect(detached.runs.has(ghost)).toBe(false);
     expect(runView(detached, CHILD).parentId).toBeNull();
     expect(runView(detached, CHILD).ancestors).toStrictEqual([]);
@@ -1199,36 +1249,19 @@ describe('sessionFold', () => {
     expect(detached.order).toStrictEqual([PROCESS, CHILD, ROOT]);
   });
 
-  it('refuses a level it has already folded past', () => {
-    // The indexes advance in place: a second branch off one level would see
-    // the first branch's open card and paint a tool it never started.
-    const { log, pending } = buildScenario();
-    const base = foldAll(pending);
-    const toolStart = (logId: string): FoldInput =>
-      tail(
-        log.emit(CHILD, T.childDone, {
-          type: 'tool.start',
-          logId,
-          toolName: 'bash',
-          input: {},
-        }),
-      );
-    const started = fold(base, toolStart('first'));
-    expect(() => fold(base, toolStart('second'))).toThrow('superseded');
-    // The level it returned folds on.
-    expect(() => fold(started, alive)).not.toThrow();
-  });
-
-  it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {
-    const before = foldAll(scenario.events);
+  it('returns an immutable view and shares its untouched branches with the next', () => {
+    const updater = paper();
+    const before = viewOf(scenario.events, updater);
     const childBefore = runView(before, CHILD);
     const rowsBefore = childBefore.transcript.rows;
     const rowCount = rowsBefore.length;
-    const childSeq = before.folded.get(qualifyAggregateId('run', CHILD))!;
+    const childSeq = before.transcriptSeq.get(
+      qualifyAggregateId('run', CHILD),
+    )!;
     // The settled child takes a follow-up turn: its activation reopens the
     // transcript boundary the terminal outcome closed, then one streaming
     // row opens and its chunks extend it.
-    const after = fold(before, [
+    const after = updater.apply([
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 1,
@@ -1264,11 +1297,11 @@ describe('sessionFold', () => {
         text: '!!',
       },
     ]);
-    // The older level reads what it did when it was published.
+    // The older view reads what it did when it was returned.
     expect(before.runs.get(CHILD)).toBe(childBefore);
     expect(childBefore.transcript.rows).toBe(rowsBefore);
     expect(rowsBefore).toHaveLength(rowCount);
-    // The next level holds the writes ...
+    // The next view holds the writes ...
     const childAfter = runView(after, CHILD);
     expect(childAfter.transcript.rows).toHaveLength(rowCount + 1);
     const late = childAfter.transcript.rows.find((row) => row.id === 'late');
@@ -1284,8 +1317,7 @@ describe('sessionFold', () => {
     // A copy belongs to a write, not to an entry: a settled log row projects
     // a row and nothing else, so the touched run's own task groups keep
     // theirs.
-    const logged = fold(
-      after,
+    const logged = updater.apply(
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 3,
