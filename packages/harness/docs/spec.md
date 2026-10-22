@@ -446,11 +446,14 @@ The move a `failed` row records is decided once, by `failedNext`
 - A failed observation of an accepted operation is never automatic
   (`agent/runtime/run/invocation.ts:292-301`).
 
-Every automatic send MUST run under the process's `ModelRetryGate`, so all runs
-on one credential share its cooling (`agent/runtime/run/invocation.ts:42-47`,
-`:205-221`). An observation runs outside it
-(`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000 ms before an
-automatic resend (`agent/runtime/run/invocation.ts:50`, `:257-274`).
+Every automatic send MUST run under the process's `ModelRetryGate`
+(`agent/runtime/run/invocation.ts:42-47`, `:205-221`). The gate cools two keys
+per binding: a 429 the provider scoped to the model cools that model on its wire
+route, and a failure scoped to the route cools the wire route itself (provider,
+credential route, endpoint and key fingerprint), which every model on that route
+shares (`agent/runtime/modelAccess/failureInfo.ts:125-160`). An observation runs
+outside it (`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000 ms
+before an automatic resend (`agent/runtime/run/invocation.ts:50`, `:257-274`).
 
 An attempt of an invocation a person admitted, whose outcome no row recorded,
 MUST be asked about again and MUST NOT be resent unasked
@@ -594,7 +597,10 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requestPolicy.ts:370-395`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
-  (`shared/session/inFlight.ts:346-370`).
+  (`shared/session/inFlight.ts:346-370`). An open `externalInquiry` is neither:
+  it parks no caller, so no attempt re-enters it and it is not unbound; it stays
+  open until its answer arrives as a follow-up
+  (`shared/session/runStateFold.ts:249-270`).
 
 ## 9. Crash guarantees
 
