@@ -26,7 +26,7 @@ import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,
-  FoldInput,
+  SessionViewInput,
   InlinePersona,
   RequestDecision,
   RunId,
@@ -218,7 +218,7 @@ export interface Session {
     readonly watch: (
       set: readonly TranscriptSubscription[],
       from: { readonly cursor: CommitOrdinal; readonly debug: boolean },
-    ) => Stream.Stream<readonly FoldInput[]>;
+    ) => Stream.Stream<readonly SessionViewInput[]>;
   };
   /**
    * Admission: succeeds when the run exists in the session, with its stream

@@ -14,6 +14,7 @@ import { withLogChannel } from '@texra-ai/harness';
 import { transcriptText } from '@texra-ai/harness/transcript';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import {
   CLI_LOCAL_RUN_ID,
   focusRun,
@@ -201,21 +202,6 @@ export function mergeLocalNotices(
   };
 }
 
-/** The refusal a request error reads as, for the local transcript. */
-export function describeRequestError(error: RequestError): string {
-  switch (error._tag) {
-    case 'Cancelled':
-      return 'The operation was cancelled.';
-    case 'NotOwner':
-      return 'Another process owns this conversation.';
-    case 'Unavailable':
-    case 'Rejected':
-      return error.reason;
-    case 'Internal':
-      return `The request failed inside TeXRA (ref ${error.ref}); see the log.`;
-  }
-}
-
 /** A refused runtime request, worded into the run it named. The user's own
  *  cancellation is not a failure and writes nothing. */
 export function appendLocalRequestRefusal(
@@ -223,7 +209,7 @@ export function appendLocalRequestRefusal(
   runId?: RunId,
 ): void {
   if (error._tag === 'Cancelled') return;
-  appendLocalErrorTranscript(describeRequestError(error), runId);
+  appendLocalErrorTranscript(requestErrorText(error), runId);
 }
 
 const CHANNEL = 'cli.transcript';

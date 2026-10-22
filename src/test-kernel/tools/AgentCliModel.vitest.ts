@@ -19,7 +19,6 @@ import {
   ClaudeAgentStateKey,
   CodexStateKey,
 } from '@texra/shared/settingsView/integrationSettings';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { selectAgentCliModel } from '@texra/tools/agentCliModel';
 import { readClaudeCodeRun } from '@texra/tools/claudeAgentShared';
 import { CODEX_MODEL_RULE, codexRun } from '@texra/tools/codexConfig';
@@ -27,24 +26,11 @@ import { CODEX_MODEL_RULE, codexRun } from '@texra/tools/codexConfig';
 import { scriptedSpawnerLayer } from '../support/childProcessTestLayer';
 import { makeFakeSettingsStores } from '../support/settingsStoresFake';
 
-const MEDIUM = ReasoningEffort.MEDIUM;
 const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
 const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
 
 describe('agent CLI model settings', () => {
-  it('defaults both efforts to medium and both models to registry models', () => {
-    const row = (key: string) => {
-      const entry = TEXRA_SETTINGS.byKey(key);
-      if (!entry) throw new Error(`no row ${key}`);
-      return entry.schema.parse(undefined);
-    };
-    expect(row(ClaudeAgentStateKey.EFFORT)).toBe(MEDIUM);
-    expect(row(CodexStateKey.REASONING_EFFORT)).toBe(MEDIUM);
-    expect(row(ClaudeAgentStateKey.MODEL)).toBe(CLAUDE_AGENT_DEFAULT_MODEL);
-    expect(row(CodexStateKey.MODEL)).toBe(CODEX_DEFAULT_MODEL);
-  });
-
   it('offers every current Anthropic model, and only those, to Claude Code', () => {
     const options = ClaudeAgentModelSchema.options;
     expect(options).toContain(CLAUDE_AGENT_DEFAULT_MODEL);

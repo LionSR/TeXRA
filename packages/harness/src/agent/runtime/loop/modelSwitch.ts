@@ -8,7 +8,7 @@ import { Effect, SynchronizedRef } from 'effect';
 import { selectModel } from '@texra-ai/llm';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';

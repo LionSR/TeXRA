@@ -32,7 +32,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';

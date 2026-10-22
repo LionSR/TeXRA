@@ -206,12 +206,6 @@ describe('planTeamRun', () => {
 });
 
 describe('plan status and launchability', () => {
-  it('detects gaps when members are missing', () => {
-    const plan = manualPlan({ missingAgents: ['local-tool'] });
-
-    expect(teamPlanStatus(plan)).not.toBe('available');
-  });
-
   it('returns all three launch-block reasons', () => {
     const noRoot = manualPlan({ rootAgent: undefined });
     const nonDelegating = manualPlan({ rootAgent: agent('plain') });

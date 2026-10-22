@@ -378,7 +378,7 @@ by a `request.decided` row (`packages/harness/src/shared/schemas/sessionEvent.ts
 "Pending" is nothing but the fold: an opened request with no decision is
 listed in the session view's `requests`
 (`packages/harness/src/shared/session/sessionView.ts:256`;
-`packages/harness/src/shared/session/sessionFold.ts:1621-1640`), which a host reads through
+`projectRequests` in `packages/harness/src/shared/session/sessionViewUpdate.ts`), which a host reads through
 `SessionHandle.view` or the level stream `SessionHandle.viewChanges`
 (`packages/harness/src/agent/runtime/SessionHandle.ts:208-217`).
 
@@ -471,7 +471,7 @@ commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
 (`packages/harness/src/agent/runtime/SessionHandle.ts:706-788`). A loop-owned `retry` request
 is not opened there, and no such row is written for it, so an unanswered
 `retry` stays listed until a `request.decided` resolves it
-(`projectRequests`, `packages/harness/src/shared/session/sessionFold.ts:1138-1156`, rebuilds a
+(`projectRequests`, `packages/harness/src/shared/session/sessionViewUpdate.ts`, rebuilds a
 run's list from its unresolved rows). Stopping is the cancellation path, not a
 substitute for answering a run that should continue.
 

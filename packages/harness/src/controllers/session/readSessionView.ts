@@ -1,7 +1,7 @@
 /**
  * A session's view read cold, from its store alone, for a host that lists
  * the projects under a storage root without opening a session on each: the
- * listing replayed through the session's own input reader and folded once,
+ * listing replayed through the session's own input reader and applied once,
  * with the owners its unfinished runs name probed for liveness the way an
  * open session's prober does (`./ownerLiveness`).
  */
@@ -26,10 +26,9 @@ import {
   ProjectDatabases,
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/readonlyViews';
-import { fold } from '@shared/session/sessionFold';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { emptySessionView } from '@shared/session/sessionView';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 
 import { databaseLayer } from './Database';
@@ -74,8 +73,8 @@ const absent = (
 };
 
 /**
- * The view of the session stored at `storage`, folded from its listing,
- * its probed owners' deaths folded beside it; none when no store is there.
+ * The view of the session stored at `storage`, built from its listing, with
+ * its probed owners' deaths applied beside it; none when no store is there.
  * A connection this process already holds (`ProjectDatabases`) is shared;
  * otherwise the read opens the store for itself without ever creating one,
  * so a store a prune just removed is read as gone, never made again.
@@ -116,13 +115,11 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
       ),
     );
     const replay = yield* Stream.runHead(inputs.read([], 0, false));
-    const view = fold(
-      emptySessionView(storage),
-      Option.getOrElse(replay, () => []),
-    );
+    const updater = makeSessionViewUpdater(storage);
+    const view = updater.apply(Option.getOrElse(replay, () => []));
     const dead = yield* deadOwners(view, null);
     return Option.some(
-      fold(view, { _tag: 'local', local: { ...NO_LOCAL_STATE, dead } }),
+      updater.apply({ _tag: 'local', local: { ...NO_LOCAL_STATE, dead } }),
     );
   });
   return yield* Effect.scoped(read).pipe(

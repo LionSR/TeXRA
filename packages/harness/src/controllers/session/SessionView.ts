@@ -1,20 +1,20 @@
 /**
- * `SessionViewService`: the one in-process `SessionView` of a session (PRD
- * one-fold-three-renderers, 7.2). A fold fiber, forked under the layer's
- * scope, folds complete, ordered input batches (`SessionInputs.read`) into a
- * `SubscriptionRef` every renderer of the session reads; nothing else
- * writes it.
+ * `SessionViewService`: the one in-process `SessionView` of a session. An
+ * update fiber, forked under the layer's scope, applies complete, ordered
+ * input batches (`SessionInputs.read`) to the session's view updater and
+ * publishes each result to a `SubscriptionRef` every renderer of the session
+ * reads; nothing else writes it.
  *
  * The reads are re-run for every value of the transcript subscription set,
- * the first included, from the seq the view has retained for each aggregate
+ * the first included, from the seq the view has applied for each aggregate
  * and from the view's cursor: `switchMap` closes the previous set's reads,
  * and each batch arrives whole, so an incomplete or superseded read never
- * mutates the indexes held by the published view.
+ * reaches the updater.
  *
- * The service holds no log: a view across a process boundary folds over its
- * transport's inputs (`RemoteSessionView`). The plane's tail as this view has
- * folded it, `SessionStore.folded`, is derived from `ref` where the log is
- * (`sessionStore.ts`).
+ * The service holds no log: a view across a process boundary is built from
+ * its transport's inputs (`RemoteSessionView`). The plane's tail as this view
+ * has applied it, `SessionStore.folded`, is derived from `ref` where the log
+ * is (`sessionStore.ts`).
  */
 import {
   Cause,
@@ -38,11 +38,8 @@ import {
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { fold } from '@shared/session/sessionFold';
-import {
-  emptySessionView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
+import type { SessionView } from '@shared/session/sessionView';
 import { announceRunFacts, armsOf } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
@@ -54,9 +51,9 @@ export class SessionViewService extends Context.Service<
     readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
     /**
      * `ref` as a level stream: the current view on subscribe, then every
-     * later one, ending as the fold does. A reader waiting on a view the
-     * fold will never publish must not wait forever: the stream dies with
-     * the fold's defect, and ends when the graph closes under it.
+     * later one, ending as the update fiber does. A reader waiting on a view
+     * that will never be published must not wait forever: the stream dies
+     * with the fiber's defect, and ends when the graph closes under it.
      */
     readonly changes: Stream.Stream<SessionView>;
   }
@@ -68,11 +65,10 @@ export class SessionViewService extends Context.Service<
       const subscriptions = yield* TranscriptSubscriptions;
       const roots = yield* WorkspaceRoots;
       // Each replay begins with the process reader's sampled verbosity. The
-      // transport carries that same policy to the webview fold.
-      const ref = yield* SubscriptionRef.make(
-        emptySessionView(roots.storage, 0, false),
-      );
-      const folding = yield* Effect.forkScoped(
+      // transport carries that same policy to the webview's view.
+      const updater = makeSessionViewUpdater(roots.storage);
+      const ref = yield* SubscriptionRef.make(updater.current());
+      const updating = yield* Effect.forkScoped(
         SubscriptionRef.changes(subscriptions.ref).pipe(
           Stream.switchMap((set) =>
             Stream.unwrap(
@@ -81,7 +77,8 @@ export class SessionViewService extends Context.Service<
                   inputs.read(
                     set.map((entry) => ({
                       ...entry,
-                      fromSeq: view.folded.get(entry.id) ?? entry.fromSeq,
+                      fromSeq:
+                        view.transcriptSeq.get(entry.id) ?? entry.fromSeq,
                     })),
                     view.cursor,
                     view.debug,
@@ -90,25 +87,28 @@ export class SessionViewService extends Context.Service<
               ),
             ),
           ),
-          // Replay arrives as one batch. An incomplete or superseded read
-          // cannot mutate the indexes held by the published view.
+          // Replay arrives as one batch, so an incomplete or superseded read
+          // never reaches the updater.
           Stream.runForEach((batch) =>
-            SubscriptionRef.update(ref, (view) => fold(view, batch)),
+            Effect.suspend(() =>
+              SubscriptionRef.set(ref, updater.apply(batch)),
+            ),
           ),
           Effect.tapDefect((defect) =>
             Effect.logError(
-              'Session fold died; the view no longer advances',
+              'Session view update died; the view no longer advances',
               defect,
             ),
           ),
         ),
       );
-      // The fold's own exit ends the level stream (the merge halts on it): a
-      // defect fails every reader of `changes` at the boundary that named it
-      // once above; the graph closing, an interrupt, ends them cleanly.
+      // The update fiber's own exit ends the level stream (the merge halts on
+      // it): a defect fails every reader of `changes` at the boundary that
+      // named it once above; the graph closing, an interrupt, ends them
+      // cleanly.
       const changes = SubscriptionRef.changes(ref).pipe(
         Stream.merge(
-          Stream.fromEffect(Fiber.await(folding)).pipe(
+          Stream.fromEffect(Fiber.await(updating)).pipe(
             Stream.flatMap((exit) =>
               Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
                 ? Stream.failCause(exit.cause)
@@ -124,20 +124,20 @@ export class SessionViewService extends Context.Service<
 }
 
 /**
- * A session's view folded where its store is not: a webview, a renderer, a
+ * A session's view built where its store is not: a webview, a renderer, a
  * client of another process. The caller serves `SessionInputs` from its
  * transport, in the order the store's reader produced them; the layer runs
- * the same fold over them a session runs over its store, keyed by the
+ * the same updater over them a session runs over its store, keyed by the
  * session's storage root, and `subscribe` names the aggregates each of the
  * caller's ports wants transcripts for (an empty set removes the port).
  */
 export class RemoteSessionView extends Context.Service<
   RemoteSessionView,
   {
-    /** The current level. */
+    /** The current view. */
     readonly current: () => ReadonlySessionView;
-    /** The current level, then every later one; as
-     *  `SessionViewService.changes`, it ends, or dies, with the fold. */
+    /** The current view, then every later one; as
+     *  `SessionViewService.changes`, it ends, or dies, with the updates. */
     readonly changes: Stream.Stream<ReadonlySessionView>;
     readonly subscribe: (
       port: string,
@@ -145,7 +145,8 @@ export class RemoteSessionView extends Context.Service<
     ) => Effect.Effect<void>;
   }
 >()('@texra-ai/harness/session/RemoteSessionView') {
-  /** Fresh per call: two views never share a fold, even in one memo map. */
+  /** Fresh per call: two views never share an updater, even in one memo
+   *  map. */
   static layer(
     storage: string,
   ): Layer.Layer<RemoteSessionView, never, SessionInputs> {
@@ -175,8 +176,9 @@ export class RemoteSessionView extends Context.Service<
 
 /**
  * A session's view as its handle carries it (`SessionHandle.view`): the
- * fold's level, the replay it is folded from, the transcript subscriptions
- * that decide what it folds, and the local truth it folds beside the rows.
+ * current view, the replay it is built from, the transcript subscriptions
+ * that decide which transcripts it holds, and the local runtime state it
+ * applies beside the rows.
  * For the session's scope it announces what its runs' facts tell this
  * process (`announceRunFacts`).
  * `closed` is the session's: once its doors shut, a subscription or a mark
@@ -251,7 +253,9 @@ export const makeSessionViewAccess = (
                     new Error('Session input read produced no replay'),
                   ),
                 onSome: (replay) =>
-                  Effect.succeed(fold(emptySessionView(storage), replay)),
+                  Effect.sync(() =>
+                    makeSessionViewUpdater(storage).apply(replay),
+                  ),
               }),
             ),
           ),

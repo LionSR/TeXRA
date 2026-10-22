@@ -70,6 +70,6 @@ export * from './offeredTools';
 export * from './hookOutcome';
 export * from './followUp';
 export * from './sessionEvent';
-export * from './foldInput';
+export * from './sessionViewInput';
 export * from './rowVersions';
 export * from './traceEvent';

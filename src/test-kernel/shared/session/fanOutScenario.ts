@@ -1,8 +1,8 @@
 // The recorded fan-out session every renderer is checked against: a
 // background script root, one child agent run with a grandchild of its own, a
 // process run. `buildScenario` is the commit-ordered event log a
-// publisher would replay; `fanOutView` and its variants fold it into the
-// `SessionView` the fold test asserts on and the design harness renders, so
+// publisher would replay; `fanOutView` and its variants apply it to the
+// `SessionView` the view test asserts on and the design harness renders, so
 // the two can never drift.
 
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
@@ -12,18 +12,18 @@ import {
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
-  type FoldInput,
+  type SessionViewInput,
   type LocalRuntimeState,
   type RunIdentity,
   type DisplaySessionEvent,
   type RunId,
   type RunParent,
 } from '@shared/schemas';
-import { fold } from '@shared/session/sessionFold';
 import {
-  emptySessionView,
-  type SessionView,
-} from '@shared/session/sessionView';
+  makeSessionViewUpdater,
+  type SessionViewUpdater,
+} from '@shared/session/sessionViewUpdate';
+import type { SessionView } from '@shared/session/sessionView';
 import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 
 /** A process identity, never a lease token (contract C5). */
@@ -131,7 +131,7 @@ export class Log {
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
-  drained(through = this.events.length): FoldInput {
+  drained(through = this.events.length): SessionViewInput {
     const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
@@ -155,29 +155,32 @@ export class Log {
   }
 }
 
-export const tail = (event: DisplaySessionEvent): FoldInput => ({
+export const tail = (event: DisplaySessionEvent): SessionViewInput => ({
   _tag: 'event',
   read: 'all',
   event,
 });
 
-export const subscribe = (...ids: RunId[]): FoldInput => ({
+export const subscribe = (...ids: RunId[]): SessionViewInput => ({
   _tag: 'subscriptions',
   set: ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
 });
 
-export function local(state: Partial<LocalRuntimeState>): FoldInput {
+export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
   return {
     _tag: 'local',
     local: { self: [], dead: [], unreadable: [], resumeBlocked: [], ...state },
   };
 }
 
-export function foldAll(
-  inputs: readonly FoldInput[],
-  from = emptySessionView('paper'),
+/** `updater`'s view (by default a fresh one of session `paper`) after
+ *  `inputs`, each applied in its own call, as frames of one. */
+export function viewOf(
+  inputs: readonly SessionViewInput[],
+  updater: SessionViewUpdater = makeSessionViewUpdater('paper'),
 ): SessionView {
-  return inputs.reduce(fold, from);
+  for (const input of inputs) updater.apply(input);
+  return updater.current();
 }
 
 /**
@@ -443,7 +446,7 @@ export function buildScenario({ proposal = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Folded views for the renderers
+// Views for the renderers
 // ---------------------------------------------------------------------------
 
 /**
@@ -452,16 +455,16 @@ export function buildScenario({ proposal = false } = {}) {
  * the `bash` process run leading the order.
  */
 export function fanOutView(): SessionView {
-  return foldAll([...buildScenario().pending, local({ self: [OWNER] })]);
+  return viewOf([...buildScenario().pending, local({ self: [OWNER] })]);
 }
 
 /** Every recorded event of one aggregate re-owned: what the log holds when
  *  another process ran that run. */
 function ownedBy(
-  inputs: readonly FoldInput[],
+  inputs: readonly SessionViewInput[],
   aggregateId: RunId,
   ownerId: string,
-): FoldInput[] {
+): SessionViewInput[] {
   const key = qualifyAggregateId('run', aggregateId);
   return inputs.map((input) => {
     if (input._tag === 'drained' || input._tag === 'replay.complete') {
@@ -482,7 +485,7 @@ function ownedBy(
 /** `fanOutView` with no approval pending: nothing forces the tree open, so
  *  a collapsed parent shows its rollup. */
 export function withoutApproval(): SessionView {
-  return foldAll([
+  return viewOf([
     ...buildScenario().pending.filter(
       (input) =>
         !(input._tag === 'event' && input.event.type === 'request.opened'),
@@ -494,7 +497,7 @@ export function withoutApproval(): SessionView {
 /** `fanOutView` with `search` run by a process nobody holds any more: an
  *  in-flight run whose owner is gone reads as interrupted. */
 export function withInterruptedChild(): SessionView {
-  return foldAll([
+  return viewOf([
     ...ownedBy(buildScenario().pending, CHILD, OTHER_OWNER),
     local({ self: [OWNER], dead: [OTHER_OWNER] }),
   ]);
@@ -528,16 +531,12 @@ export function withWaitingGrandchild(): SessionView {
       },
     },
   });
-  return foldAll([
-    ...inputs,
-    ...log.events.map(tail),
-    local({ self: [OWNER] }),
-  ]);
+  return viewOf([...inputs, ...log.events.map(tail), local({ self: [OWNER] })]);
 }
 
 /** `fanOutView` plus its script's agent request pending on the root. */
 export function withProposal(): SessionView {
-  return foldAll([
+  return viewOf([
     ...buildScenario({ proposal: true }).pending,
     local({ self: [OWNER] }),
   ]);
