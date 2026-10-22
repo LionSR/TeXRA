@@ -903,14 +903,14 @@ These existing suites check the sections above. Paths are under
   shape is several processes on one store, each aggregate held by one claim
   (`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`,
   "No daemon; several processes on one store (D4)";
-  `.agents/docs/proposed/architecture/2026-10-02-durable-harness.md`,
+  `.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`,
   "Considered and dropped").
 - **No third-party code in process.** Third-party plugins are data, MCP servers
   and out-of-process hooks
-  (`.agents/docs/proposed/architecture/2026-10-02-durable-harness.md`, "Owner
+  (`.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`, "Owner
   rulings", item 1).
 - **No second storage backend or dialect.** There is one SQLite store on purpose
-  (`.agents/docs/proposed/architecture/2026-10-02-durable-harness.md`,
+  (`.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`,
   "Considered and dropped").
 - **Closed request kinds.** The request kinds of section 8.1 are fixed;
   typed-RPC code plugins and an open schema registry wait for a named plugin
@@ -919,38 +919,19 @@ These existing suites check the sections above. Paths are under
   "SDK and typed-RPC deferral (D11)").
 - **No exactly-once external effects.** The protocol promises one settlement per
   call, not one execution of an arbitrary external effect (section 9).
+- **No once-only billing.** The code resends an attempt that no person admitted
+  and whose outcome no row recorded (`shared/session/inFlight.ts:217`); the
+  earlier attempt may have been billed. The suite asserts at most one committed
+  response per invocation (I3), not one billing.
 
 ## 12. Open questions
 
-1. The dated core-concepts note under `.agents/docs/proposed/` names the
-   publisher's jobs `publish`, `exclusive` and `detach`, and it and the
-   durable-harness note name the commit path `RunHistory.appendBatch`. The
-   code's doors are `transact`, `detach`, `removeRun` and `drain` on
-   `SessionEvents` (`agent/runtime/SessionEvents.ts:357-368`), and `transact`,
-   `publish` and `settled` on `SessionLog`
-   (`agent/runtime/SessionHandle.ts:85-106`); the commit path is
-   `RunCell.append` (`shared/session/runHistory.ts:152-157`). CLAUDE.md and the
-   agent guidance were corrected in #14218; the notes keep the names they were
-   written with. This spec uses the code's names.
-2. `packages/harness/AGENTS.md` says `tool.intent` commits after a call's hooks,
+1. `packages/harness/AGENTS.md` says `tool.intent` commits after a call's hooks,
    guard and approval. The guard asks only for tools with a declared command
    guard or `requiresApproval`; a tool whose body opens its own request, such as
    a file edit's approval (`tools/approval/toolEditApproval.ts:236`), asks after
    its intent committed (`agent/runtime/loop/toolGuard.ts:45-47`). Resume
    handles that case (`shared/session/inFlight.ts:347-371`), but the stated
    order is not universal.
-3. The durable-harness note states the contract as "no attempt is billed twice".
-   The code resends an attempt that no person admitted and whose outcome no row
-   recorded (`shared/session/inFlight.ts:217`); the earlier attempt may have
-   been billed. The suite asserts at most one committed response per invocation
-   (I3), not one billing.
-4. The durable-harness note says "the fold refuses `run.end` on a parent whose
-   projection holds an open owned call". The refusal found is in the run
-   lifecycle, not the fold (`agent/storage/runLifecycle.ts:289-303`, `:326`).
-5. The core-concepts note says an uncertain storage failure is fatal for the
-   session. The code ends the run and fails the call
-   (`shared/session/runHistory.ts:68-86`); no code was found that closes the
-   session on such a failure.
-6. The durable-harness note says "the specification is the tests, not prose".
-   This document restates the tests and the code; where it and they disagree,
-   they win.
+2. The durable-harness note says "The tests are the contract." This document
+   restates the tests and the code; where it and they disagree, they win.
