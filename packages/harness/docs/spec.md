@@ -93,7 +93,7 @@ database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
 the one-time `VACUUM` at setup, page reclaim in autocommit `incremental_vacuum`
 steps, and the `VACUUM INTO` copy a store moved aside takes, none of which
 writes a row (`controllers/session/storeSchema.ts:182-186`, `:305`,
-`controllers/session/storeAside.ts:132-148`).
+`controllers/session/storeAside.ts:133-149`).
 
 ### 2.2 The event table and the envelope
 
@@ -623,13 +623,13 @@ A process takes a claim in one write transaction that reads the claim state and
 moves it (`controllers/session/Database.ts:905-923`). It MUST NOT take a claim
 from another owner unless that owner is proven dead, or its liveness is
 unprovable and the user is deleting a single run
-(`controllers/session/storeAside.ts:69-83`,
+(`controllers/session/storeAside.ts:70-84`,
 `controllers/session/Database.ts:546-559`). The transaction reads the owners
 itself; one it holds no verdict for rolls it back whole, is proven off the write
 lock, and the transaction runs again with that verdict
-(`controllers/session/storeAside.ts:85-110`). A live owner refuses with
+(`controllers/session/storeAside.ts:86-111`). A live owner refuses with
 `DatabaseClaimRefused`, and so does an unprovable one on every other path
-(`controllers/session/storeAside.ts:78-82`).
+(`controllers/session/storeAside.ts:79-83`).
 
 Liveness is proven from the owner identity alone, with no clock
 (`agent/storage/leaseOwnerLiveness.ts:42-90`):
@@ -682,7 +682,7 @@ A process MAY:
   (`controllers/session/SessionRequests.ts:160-163`,
   `agent/runtime/forkRun.ts:64-67`, `:85-110`)
 - take over a run whose owner is proven dead
-  (`controllers/session/storeAside.ts:69-83`)
+  (`controllers/session/storeAside.ts:70-84`)
 
 A process MUST NOT:
 
@@ -881,7 +881,7 @@ These existing suites check the sections above. Paths are under
   `agent/runtime/ModelRetryGate.vitest.ts:119`
 - **7 claims**: `controllers/session/sessionEvents.vitest.ts:843`, `:924`,
   `:2722`, `:2961` (another OS process), `:3073` (dead owner reclaimed), `:3123`
-  (second writer fenced); `agent/runtime/resumeRun.vitest.ts:98`
+  (second writer fenced); `agent/runtime/resumeRun.vitest.ts:97`
 - **8 requests**: `controllers/session/sessionEvents.vitest.ts:717`;
   `support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
