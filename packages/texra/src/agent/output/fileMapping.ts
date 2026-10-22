@@ -17,19 +17,17 @@ function normalizeLatexPath(value: string): string {
 }
 
 /**
- * Create a mapping between two file lists based on name similarity.
- * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
- * This ensures lookups work even when FileLocation objects are reconstructed.
+ * Map each source file to the target whose file name contains the source's
+ * name without its extension, the longest such name winning (`paper` matches
+ * `paper_revised.tex`). Uses string keys (comparable paths) for robust
+ * lookups, FileLocation values for data, so lookups work even when
+ * FileLocation objects are reconstructed.
  *
- * @param sourceFiles The source file locations
- * @param targetFiles The target file locations
- * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
  * @returns Map from source path to target FileLocation
  */
 export function createFileMapping(
   sourceFiles: FileLocation[],
   targetFiles: FileLocation[],
-  matchStrategy: 'basename' | 'contains' = 'basename',
 ): Map<string, FileLocation> {
   const fileMapping = new Map<string, FileLocation>();
 
@@ -49,18 +47,15 @@ export function createFileMapping(
   for (const target of targetFiles) {
     const targetPath = fileLocationDisplayPath(target);
     const targetBaseName = path.basename(targetPath);
-    const targetName = baseNameOf(targetPath);
 
     let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
 
     for (const { sourcePath, sourceName } of sources) {
-      const matches =
-        matchStrategy === 'basename'
-          ? sourceName === targetName
-          : targetBaseName.includes(sourceName);
-
-      if (matches && sourceName.length > bestMatchScore) {
+      if (
+        targetBaseName.includes(sourceName) &&
+        sourceName.length > bestMatchScore
+      ) {
         bestMatchScore = sourceName.length;
         bestMatchSourcePath = sourcePath;
       }
@@ -95,11 +90,7 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
       return;
     }
 
-    const baseToOutputMap = createFileMapping(
-      baseFiles,
-      outputFiles,
-      'contains',
-    );
+    const baseToOutputMap = createFileMapping(baseFiles, outputFiles);
 
     if (baseToOutputMap.size === 0) {
       logger?.debug('No valid file mappings for input command replacement');
