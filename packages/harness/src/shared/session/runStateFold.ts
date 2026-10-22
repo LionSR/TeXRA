@@ -1,5 +1,5 @@
 /**
- * Pure run-state replay for run history load, appendBatch, and the trace stepper:
+ * Pure run-state replay for run history load, `RunCell.append`, and the trace stepper:
  * state at a commit is exactly the state resume continues from, without IO,
  * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
  * sessionFold produces the view; this fold produces the loop's continuation.
