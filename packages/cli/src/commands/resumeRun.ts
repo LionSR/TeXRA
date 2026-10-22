@@ -165,8 +165,7 @@ export function runResumeCommand(
     // client, so the service stays the run's one writer.
     if (
       refusal?.kind === 'held_elsewhere' &&
-      (documentTask ||
-        !(yield* heldByService(context.storageRoot, refusal.owner)))
+      (documentTask || !(yield* heldByService(refusal.owner)))
     ) {
       // The owner named by the pid and machine its claim recorded: the two
       // parts of an identity a user can act on.

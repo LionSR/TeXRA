@@ -8,7 +8,7 @@ import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 
 describe('follow-up delivery queue', () => {
   it.effect(
-    'delivers one at a time, drops only unstarted deliveries on clear, and idles after the running one settles',
+    'delivers one at a time, drops only unstarted deliveries on clear (each settled by its own drop), and idles after the running one settles',
     () =>
       Effect.gen(function* () {
         const scope = yield* Scope.make();
@@ -18,6 +18,7 @@ describe('follow-up delivery queue', () => {
           Effect.sync(() => {
             delivered.push(label);
           });
+        const unexpectedDrop = () => void delivered.push('unexpected-drop');
         const firstStarted = yield* Deferred.make<void>();
         const releaseFirst = yield* Deferred.make<void>();
 
@@ -27,11 +28,14 @@ describe('follow-up delivery queue', () => {
             Effect.andThen(Deferred.await(releaseFirst)),
             Effect.andThen(record('first:end')),
           ),
+          unexpectedDrop,
         );
-        queue.enqueue(record('dropped'));
+        queue.enqueue(record('dropped'), () =>
+          delivered.push('dropped:settled'),
+        );
         yield* Deferred.await(firstStarted);
         queue.clear();
-        queue.enqueue(record('after-clear'));
+        queue.enqueue(record('after-clear'), unexpectedDrop);
         const idle = yield* queue.idle.pipe(
           Effect.andThen(record('idle')),
           Effect.forkChild,
@@ -42,6 +46,7 @@ describe('follow-up delivery queue', () => {
 
         expect(delivered).toEqual([
           'first:start',
+          'dropped:settled',
           'first:end',
           'after-clear',
           'idle',
@@ -57,11 +62,12 @@ describe('follow-up delivery queue', () => {
         const scope = yield* Scope.make();
         const queue = yield* makeFollowUpDeliveryQueue(scope);
         const delivered: string[] = [];
-        queue.enqueue(Effect.die('boom'));
+        queue.enqueue(Effect.die('boom'), () => undefined);
         queue.enqueue(
           Effect.sync(() => {
             delivered.push('after-defect');
           }),
+          () => undefined,
         );
         yield* queue.idle;
         expect(delivered).toEqual(['after-defect']);

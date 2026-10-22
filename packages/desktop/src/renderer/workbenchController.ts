@@ -534,6 +534,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
         if (panel.title !== tab.title) panel.api.setTitle(tab.title);
         if (panel.params?.dirty !== tab.dirty)
           panel.api.updateParameters({ dirty: tab.dirty });
+        if (tab.kind === 'pdf') deps.pdfPane.frameFor(tab);
       }
       const requested = getState().activeTabId;
       if (requested !== lastRequestedTab) {

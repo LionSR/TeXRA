@@ -517,6 +517,7 @@ export class SessionComposer extends LitElement {
       ? canSendFollowUp(run, this.draft, { terminalBacked: true })
       : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Start task';
+    const sending = this.surface?.sending.has(run?.id ?? 'launch') ?? false;
 
     return html`
       ${run ? this.renderRouting(run) : nothing}
@@ -597,11 +598,8 @@ export class SessionComposer extends LitElement {
               appearance: 'filled',
               variant: 'brand',
               size: 'l',
-              busy: this.run !== null && this.surface?.sending.has(this.run.id),
-              disabled:
-                !canSend ||
-                (this.run !== null &&
-                  (this.surface?.sending.has(this.run.id) ?? false)),
+              busy: sending,
+              disabled: !canSend || sending,
               onClick: this.send,
             })}</span
           >

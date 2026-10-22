@@ -15,8 +15,9 @@
  * later notifications, and refuses later requests. The scope's finalizer
  * closes with a generic reason; a writer failure (the peer's stdin is gone)
  * closes with the failure; the owner closes with the peer's end when it
- * knows it. Ending of the input stream alone does not close: the owner sees
- * the process end right after and closes with the better reason.
+ * knows it. Ending of the input stream alone does not close; it completes
+ * `inputEnded`, so an owner that sees the process exit (which can precede the
+ * end of its output) closes only once every answer the peer wrote was read.
  */
 
 import { Buffer } from 'node:buffer';
@@ -72,6 +73,8 @@ export interface JsonRpcConnection {
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
   readonly close: (reason: string) => Effect.Effect<void>;
+  /** Completes once the reader has dispatched the input's last message. */
+  readonly inputEnded: Effect.Effect<void>;
 }
 
 /** What {@link makeJsonRpcConnection} connects: the peer's byte streams,
@@ -219,6 +222,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const ids = yield* Ref.make(0);
   const closedReason = yield* Ref.make<string | undefined>(undefined);
   const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
+  const inputDone = yield* Deferred.make<void>();
   const newline = options.framing === 'newline';
   const encode = newline ? encodeLine : encodeFrame;
   const decode = newline ? takeLines : takeFrames;
@@ -336,6 +340,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
           yield* close(`JSON-RPC input failed: ${toErrorMessage(error)}`);
         }),
       ),
+      Effect.ensuring(Deferred.succeed(inputDone, undefined)),
     ),
   );
   // Registered after the fibers, so it runs before they are interrupted:
@@ -388,6 +393,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     });
   });
 
-  const connection: JsonRpcConnection = { request, notify, close };
+  const inputEnded = Deferred.await(inputDone);
+  const connection: JsonRpcConnection = { request, notify, close, inputEnded };
   return connection;
 });

@@ -115,8 +115,16 @@ export function createProjectWorkbench(options: {
       if (outcome.kind !== 'contents') throw unexpected(outcome);
       return outcome.contents;
     },
-    writeFile: async (path, contents) => {
-      await workspaceFile({ kind: 'write', path, contents });
+    writeFile: async (path, contents, base) => {
+      const outcome = await workspaceFile({
+        kind: 'write',
+        path,
+        contents,
+        base,
+      });
+      if (outcome.kind === 'changedOnDisk') return 'changedOnDisk';
+      if (outcome.kind !== 'done') throw unexpected(outcome);
+      return 'saved';
     },
     onRequestOpen: openDocument,
     onDirtyChange: (path, dirty) =>

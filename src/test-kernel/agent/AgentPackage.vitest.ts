@@ -59,6 +59,8 @@ const mocks = vi.hoisted(() => ({
   }[],
   /** The current package session's view, advanced independently of run. */
   sessionView: undefined as unknown,
+  /** What the session's `log.settled` barrier runs: a fold still pending. */
+  settled: undefined as Effect.Effect<void> | undefined,
   setTranscriptSubscriptions: vi.fn(),
 }));
 
@@ -120,8 +122,12 @@ vi.mock('@controllers/session/sessionLayer', async () => {
         }),
     };
     readonly requests = { request: mocks.decide };
-    /** Its store moved nothing aside at open. */
-    readonly log = { movedAside: null };
+    /** Its store moved nothing aside at open; its barrier folds what a
+     *  test left pending. */
+    readonly log = {
+      movedAside: null,
+      settled: Effect.suspend(() => mocks.settled ?? Effect.void),
+    };
     /** The run's trace port: the listeners a handoff installs. */
     readonly trace = {
       listen: (_runId: string, listener: (event: unknown) => void) => {
@@ -323,6 +329,7 @@ describe('agent package sessions', () => {
     vi.clearAllMocks();
     mocks.traceListeners.clear();
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
+    mocks.settled = undefined;
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RootLaunchOptions) => driveRun(options),
@@ -497,6 +504,70 @@ describe('agent package sessions', () => {
           requestId: 'r1',
           decision: { action: 'approve' },
         });
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+        ),
+      ),
+  );
+
+  // Failure mode: the newer handler decides and leaves before the session's
+  // fold reached the decision; the handler handed the request back reads
+  // the view the fold has not caught up to and asks it again.
+  it.effect(
+    'never asks the handler left behind about a request the leaving one decided',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* (yield* Sessions).open(PLATFORM.roots);
+        const olderAsked = yield* Deferred.make<void>();
+        const askedAgain = yield* Deferred.make<void>();
+        const folded = yield* Deferred.make<void>();
+        let asks = 0;
+        yield* session.attach({
+          approve: () =>
+            Deferred.succeed(
+              (asks += 1) === 1 ? olderAsked : askedAgain,
+              undefined,
+            ).pipe(Effect.andThen(Effect.never)),
+        });
+        yield* Effect.promise(() =>
+          enterRun('ae0001', { approval: 'own' } as Partial<FakeRunView>),
+        );
+        yield* SubscriptionRef.update(sessionView(), (current) => ({
+          ...current,
+          requests: [
+            {
+              runId: 'ae0001' as RunId,
+              requestId: 'r1',
+              payload: { kind: 'bash', data: {} } as never,
+              thread: null,
+            },
+          ],
+        }));
+        yield* Deferred.await(olderAsked);
+        // The decision commits; its fold waits for the log to settle.
+        const decided = yield* Deferred.make<void>();
+        mocks.decide.mockImplementationOnce(() => {
+          mocks.settled = SubscriptionRef.update(sessionView(), (current) => ({
+            ...current,
+            requests: [],
+          })).pipe(Effect.andThen(Deferred.succeed(folded, undefined)));
+          return Deferred.succeed(decided, undefined).pipe(
+            Effect.as({ kind: 'done' }),
+          );
+        });
+        const newest = yield* Scope.make();
+        yield* session
+          .attach({ approve: () => Effect.succeed({ action: 'approve' }) })
+          .pipe(Scope.provide(newest));
+        yield* Deferred.await(decided);
+        yield* Scope.close(newest, Exit.void);
+        yield* Effect.raceFirst(
+          Deferred.await(folded),
+          Deferred.await(askedAgain),
+        );
+        expect(asks).toBe(1);
       }).pipe(
         Effect.scoped,
         Effect.provide(

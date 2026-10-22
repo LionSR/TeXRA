@@ -23,7 +23,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
   type ProcessRuntime,
-  type StateStore,
+  type GlobalValues,
   WorkspaceRoots,
   ToolMissingHandler,
   withProcessServices,
@@ -134,9 +134,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     readonly toolMissingHandler?: ToolMissingHandler;
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
-    /** The project's state as the background service holds it, when the
-     *  window reached the service: no project store opens here. */
-    readonly projectState?: StateStore;
+    /** The background service this window is a client of: reached once
+     *  the runtime that serves its record exists. A window that reaches it
+     *  reads the project's state there and opens no project store. */
+    readonly service?: Effect.Effect<
+      ServiceLink,
+      Error,
+      Scope.Scope | GlobalValues
+    >;
   } = {},
 ) {
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
@@ -238,11 +243,20 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     runtime,
     Effect.gen(function* () {
       const globalState = yield* AppState;
+      const reached: Result.Result<ServiceLink, Error> =
+        extras.service === undefined || workspaceRoot === undefined
+          ? Result.fail(new Error('a window with no folder uses no service'))
+          : // Held with the project state it serves: after the sessions
+            // that read it close, before the runtime its reconnects use.
+            yield* Effect.result(
+              extras.service.pipe(Scope.provide(projectScope)),
+            );
       const projectState =
-        extras.projectState ??
-        (yield* (yield* StateStores)
-          .project(storage, workspaceRoot)
-          .pipe(Scope.provide(projectScope)));
+        Result.isSuccess(reached) && workspaceRoot !== undefined
+          ? serviceProjectState(reached.success, workspaceRoot)
+          : yield* (yield* StateStores)
+              .project(storage, workspaceRoot)
+              .pipe(Scope.provide(projectScope));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
@@ -296,7 +310,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         managed.contextEffect,
         Context.get(Sessions),
       );
-      return { secrets, runtime, roots, editors, sessions };
+      return { secrets, runtime, roots, editors, sessions, reached };
     }),
   );
 });
@@ -436,21 +450,12 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const languageModel = createLanguageModelPort(context);
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
-  // them; it reads the project's state there and opens no project store of
-  // its own. Decided once: a reconnect never re-enters it.
-  // Before the runtime exists: its link's warnings reach this host's log
-  // through the diagnostics the runtime would serve.
-  const reached = yield* reachExtensionService(context.extensionPath).pipe(
-    Effect.provide(effectDiagnosticsLayer('Trace')),
-    Effect.result,
-  );
-  const { secrets, runtime, roots, editors, sessions } =
+  // them. Decided once: a reconnect never re-enters it.
+  const { secrets, runtime, roots, editors, sessions, reached } =
     yield* initVscodePlatform(context, workspaceRoot, {
       languageModel,
       toolMissingHandler: vscodeToolMissingReporter,
-      ...(Result.isSuccess(reached) && {
-        projectState: serviceProjectState(reached.success, workspaceRoot),
-      }),
+      service: reachExtensionService(context.extensionPath),
     });
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
