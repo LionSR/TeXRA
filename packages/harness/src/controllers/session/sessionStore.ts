@@ -252,7 +252,6 @@ const transaction =
             Effect.sync(() => owned.push(...taken)),
           );
         },
-        afterCommit,
       });
       const value = yield* events
         .transact((append) => {
@@ -329,6 +328,7 @@ export const makeSessionStore = (
       },
       publish: trace.publish,
       settled,
+      afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
       records: (runId) =>

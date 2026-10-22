@@ -44,10 +44,7 @@ import {
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  startDetachedChildRunLoop,
-  type DetachedChildRunInput,
-} from './detachedChildRun';
+import { startDetachedChildRunLoop } from './detachedChildRun';
 
 const CHANNEL = 'inBandSubagentRun';
 
@@ -98,10 +95,6 @@ type InBandLaunch =
     }
   | { readonly kind: 'resume'; readonly identity: ResumeTurnIdentity };
 
-type SettledInBandTurn = Parameters<
-  NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
->[0];
-
 /** A defect as a failed `Error`; an interruption stays one. */
 const defectsAsErrors = <A, R>(
   self: Effect.Effect<A, Error, R>,
@@ -123,7 +116,7 @@ const defectsAsErrors = <A, R>(
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
  * Failure taxonomy at the read-back boundary:
- * - completion rejected, or no settled typed result / no `run.end` row
+ * - completion rejected, or no finished typed result / no `run.end` row
  *   afterwards → the infrastructure failed before the child's terminal
  *   persistence, so there is no typed result to return
  *   (SubagentDurabilityError).
@@ -134,7 +127,7 @@ const defectsAsErrors = <A, R>(
  *   terminal error message is the thrown message.
  * - terminal row says completed/cancelled → returned typed.
  *
- * A loop failure after the turn settled does not rewrite the outcome when the
+ * A loop failure after the turn finished does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
  * claim release or ending that threw afterwards leaves them whole.
  */
@@ -150,8 +143,7 @@ const executeInBand = Effect.fn('executeInBand')(
         : launch.identity.agentConfig;
     const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
-    let settledTurn: SettledInBandTurn | undefined;
-    const { completion } = yield* startDetachedChildRunLoop({
+    const { fiber, lastTurn } = yield* startDetachedChildRunLoop({
       session: options.session,
       runId,
       parentRunId: options.parentRunId,
@@ -159,10 +151,8 @@ const executeInBand = Effect.fn('executeInBand')(
       // The parent is blocked awaiting this child, so it rides the parent's
       // budget slot (child-run budget design note).
       budgeted: false,
+      awaited: true,
       ...(options.notify !== undefined && { notify: options.notify }),
-      onTurnSettled: (settled) => {
-        settledTurn = settled;
-      },
       // Built inside the loop's launch guard, like every attempt-scoped
       // setup: a throw here ends the run and releases its claim.
       buildLaunch: () =>
@@ -204,20 +194,20 @@ const executeInBand = Effect.fn('executeInBand')(
         ),
     });
 
-    const completionExit = yield* Effect.exit(Fiber.join(completion));
+    const completionExit = yield* Effect.exit(Fiber.join(fiber));
     const loopFailure = Exit.isFailure(completionExit)
       ? Cause.squash(completionExit.cause)
       : undefined;
 
-    // The loop hands this caller the settled turn's facts only once its
-    // report and result manifest are on disk; no turn settling means the run
-    // was interrupted, or a delivery write or the infrastructure failed
-    // before terminal persistence.
-    const resultMeta = settledTurn?.resultMeta;
-    if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
+    // The turn the child ended with, as its loop recorded it; none means
+    // the run was interrupted, or a delivery write or the infrastructure
+    // failed before terminal persistence.
+    const finished = lastTurn();
+    const resultMeta = finished?.resultMeta;
+    if (!finished || !resultMeta || resultMeta.producer !== 'subagent') {
       return yield* Effect.fail(
         new SubagentDurabilityError({
-          message: `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
+          message: `Subagent ${runId} ended without a finished typed result (interrupted before terminal persistence, or the run loop failed).`,
           cause: loopFailure,
         }),
       );
@@ -240,14 +230,11 @@ const executeInBand = Effect.fn('executeInBand')(
         withLogChannel(CHANNEL),
       );
     const childFailed =
-      settledTurn.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
+      finished.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
     // The raw application error when the turn threw; otherwise the terminal
-    // row's own structured error (the result-only contract). Read the
-    // settled turn's fields into consts: `settledTurn` stays assignable inside
-    // the onTurnSettled callback, so a closure cannot keep the narrowing.
-    const turnError = settledTurn.error;
+    // row's own structured error (the result-only contract).
     const childError = () =>
-      turnError ??
+      finished.error ??
       new Error(
         runEnd?.error?.message ??
           `Subagent ${runId} ended with failed outcome.`,
@@ -335,7 +322,7 @@ const executeInBand = Effect.fn('executeInBand')(
  * fiber that interruption does not reach, so this is the edge between the
  * two: interrupting the caller stops the child by run id — the loop's own
  * stop, which interrupts the child run's fiber — then waits for the child to
- * settle its own terminal record. A launch that has no live run yet is
+ * write its own terminal record. A launch that has no live run yet is
  * interrupted where it is; one whose loop started inside the launch's
  * uninterruptible hand-off is stopped once that hand-off returns.
  */
@@ -398,7 +385,7 @@ export const resumeSubagentInBand = (
   );
 
 /** Await one in-band child's program; interrupting the caller stops the
- *  child by its run id and waits for it to settle its own record. */
+ *  child by its run id and waits for it to write its own record. */
 const awaitInBand = (
   runId: RunId,
   program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,

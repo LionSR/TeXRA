@@ -5,7 +5,7 @@
  * once the view folded them) or the job a cell was opened within, and
  * `foldRunState` runs on both paths.
  */
-import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
+import { Effect, Result, SynchronizedRef } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
@@ -37,12 +37,7 @@ import type {
   HistoryMessage,
   RunHistoryRow,
 } from '@shared/session/historyTurns';
-import {
-  afterCommit,
-  noCoWrite,
-  type Append,
-  type CoWrite,
-} from '@shared/session/sessionEvents';
+import type { Alongside, Append } from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
 import type { SessionLog } from './SessionHandle';
 
@@ -256,7 +251,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   state: RunState,
   rows: readonly RunHistoryDraft[],
   registration: Effect.Effect<readonly SessionEventDraft[]>,
-  alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
+  alongside: Alongside<E>,
   within: Append | undefined,
 ) {
   const violation = contractViolation(run, rows);
@@ -299,13 +294,12 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
       const stray = born.find((row) => row.aggregateId !== target);
       if (stray !== undefined)
         return yield* broken(`a registration targets ${stray.aggregateId}`);
-      const co = yield* alongside;
+      const beside = yield* alongside;
       const written = yield* runStateAppend(append)([
         ...born,
         ...rows.map(storedDraft),
       ]);
-      yield* append(co.rows);
-      yield* afterCommit(co.committed);
+      yield* append(beside);
       return written;
     }).pipe(Effect.scoped);
   // A target no longer held open is `not-owner`, nothing written (R7).
@@ -401,7 +395,7 @@ export function makeRunHistory(
       // A SynchronizedRef: the loop, the invoker and a barrier call run on
       // one fiber, but a parallel partition settles its calls on sibling
       // fibers, and each settlement must fold onto the one before it.
-      append: (rows, alongside = noCoWrite) =>
+      append: (rows, alongside = Effect.succeed([])) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
           commit(
             sessionLog,

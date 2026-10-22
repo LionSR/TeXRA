@@ -1,14 +1,15 @@
 /**
- * Dispatch of one committed response's tool calls, from the folded state and
- * back into it. The guaranteed behaviours the node enforced, kept by
- * construction: contiguous parallel calls run concurrently under a
+ * Dispatch of one committed response's tool calls, from the run's state and
+ * back into it. What it guarantees, by construction: contiguous parallel
+ * calls run concurrently under a
  * small window while every other call is a barrier that runs alone and in
  * order; a call repeating an earlier call's name and arguments never executes
  * and derives its primary's result with no edits, attachments or mutation;
- * a result that ends the turn stops dispatch after its partition settles;
- * one interrupt cancels the whole in-flight batch through the fiber; and no
- * ordinary tool failures become model-visible results. Durable write failures
- * halt dispatch so an unsettled call is never recorded as successful.
+ * a result that ends the turn stops dispatch after its partition finishes;
+ * one interrupt cancels the whole in-flight batch through the fiber; and an
+ * ordinary tool failure becomes a model-visible error result rather than
+ * failing dispatch. Durable write failures halt dispatch so an unfinished
+ * call is never recorded as successful.
  *
  * One record per call (`PendingCall`), whichever issued it: the response, or
  * a guest of one of its `script` calls. Its rows are its only facts: the
@@ -17,13 +18,14 @@
  * `tool.intent` as the body starts, after the PreToolUse hooks, the
  * guard and its approval, with a slow tool's card; `tool.result` with its
  * card's close; and the delivering `append` with the complete tool group
- * once, when every call of the response has settled. One scheduler places
- * both origins' calls.
+ * once, when every call of the response has its result. One scheduler
+ * places both origins' calls.
  *
- * Resume reads only row data: a settled call stays settled; a duplicate
+ * Resume reads only row data: a call with a result keeps it; a duplicate
  * derives its primary; a call whose body never started re-enters what it
- * asked, or, untouched in a recovered response, is reported not started; a call whose body started re-runs when `replayable` says so, else
- * settles as outcome unknown. The model decides on retries.
+ * asked, or, untouched in a recovered response, is reported not started; a
+ * call whose body started re-runs when `replayable` says so, else gets the
+ * result "outcome unknown". The model decides on retries.
  */
 import { isDeepStrictEqual } from 'node:util';
 
@@ -79,6 +81,7 @@ import {
   attemptOf,
   callSettlementOf,
   resumedAttempt,
+  type CallResult,
   type ResumedAttempt,
   type CallStatus,
   type PendingCall,
@@ -122,7 +125,7 @@ import type { Runs } from '../runRegistry';
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
 /** How much of a running tool's output streams to its card as transient
- *  text; the settlement carries the bounded capture whatever streamed. */
+ *  text; the result carries the bounded capture whatever streamed. */
 const STREAMED_OUTPUT_MAX = 50_000;
 
 const SKIPPED_AFTER_END_TURN =
@@ -139,19 +142,14 @@ type CallFacts =
 const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
-type Settlement = Pick<
-  ToolResultPayload,
-  'disposition' | 'duplicateOf' | 'result' | 'attachments'
->;
-
-type SettledAttachment = ToolResultPayload['attachments'][number];
+type ResultAttachment = ToolResultPayload['attachments'][number];
 
 /** What a call may reach of scripting, provided around each call. */
 type ScriptServices = ScriptCalls | IssuingScript;
 
 interface DispatchOutcome {
   readonly state: RunState;
-  /** A settled result asked to end the turn. */
+  /** A call's result asked to end the turn. */
   readonly endTurn: boolean;
 }
 
@@ -161,7 +159,7 @@ interface DispatchOutcome {
  * so a value that is not JSON here is a defect in that projection, and the
  * row refuses it rather than storing a value `JSON.stringify` would throw on.
  */
-function settledResult(result: ToolResult): Settlement['result'] {
+function storedResult(result: ToolResult): CallResult['result'] {
   const { diagnostics, ...rest } = result;
   if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
   if (diagnostics === undefined) return rest;
@@ -169,30 +167,26 @@ function settledResult(result: ToolResult): Settlement['result'] {
 }
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
-const withoutEffects = (result: Settlement['result']): Settlement['result'] => {
+const withoutEffects = (result: CallResult['result']): CallResult['result'] => {
   if (result.status !== 'executed') return result;
   const { edits: _edits, files: _files, ...rest } = result;
   return rest;
 };
 
-const endsTurn = (settled: Pick<Settlement, 'result'> | null): boolean =>
-  settled?.result.status === 'executed' && settled.result.endTurn === true;
+const endsTurn = (recorded: Pick<CallResult, 'result'> | null): boolean =>
+  recorded?.result.status === 'executed' && recorded.result.endTurn === true;
 
 /**
- * Attachment bytes captured as immutable content before the settlement
+ * Attachment bytes captured as immutable content before the result
  * commits: from the tool's own payload when it carried one, from the path
  * otherwise; a capture failure records the omission and its reason.
  */
 const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
   attachments: readonly ToolFileAttachment[],
   workspaceRoot: string | undefined,
-): Effect.fn.Return<
-  readonly SettledAttachment[],
-  never,
-  FileSystem.FileSystem
-> {
+): Effect.fn.Return<readonly ResultAttachment[], never, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
-  const captured: SettledAttachment[] = [];
+  const captured: ResultAttachment[] = [];
   for (const attachment of attachments) {
     const base = {
       path: attachment.path,
@@ -235,7 +229,7 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 const UPLOAD_DEADLINE = '5 seconds';
 
 /**
- * The model-visible content of one settlement: text, then inline media, each
+ * The model-visible content of one call's result: text, then inline media, each
  * with its attachment's path. The run history keeps the bytes; whether a later
  * request sends them or a file id is the bound model's in-memory upload
  * cache's decision, made when it lowers.
@@ -245,8 +239,8 @@ const UPLOAD_DEADLINE = '5 seconds';
  * the model as the text mention only, and says so in the transcript rather
  * than degrading silently.
  */
-function settlementContent(
-  settlement: Pick<Settlement, 'result' | 'attachments'>,
+function resultContent(
+  recorded: Pick<CallResult, 'result' | 'attachments'>,
   capabilities: Parameters<typeof inlineMediaPart>[2],
   logger: AgentTrace,
 ): {
@@ -257,12 +251,12 @@ function settlementContent(
   }[];
 } {
   const text = formatToolResultAsText(
-    settlement.result,
-    settlement.attachments.length > 0
-      ? formatAttachmentSummary(settlement.attachments)
+    recorded.result,
+    recorded.attachments.length > 0
+      ? formatAttachmentSummary(recorded.attachments)
       : undefined,
   );
-  const media = settlement.attachments.flatMap((attachment) => {
+  const media = recorded.attachments.flatMap((attachment) => {
     if (attachment.content.kind !== 'base64') {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
@@ -397,14 +391,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const userInstruction =
     run.config.rootUserInstruction ??
     (at ? stored(initial, at, z.string()) : run.config.instruction);
-  // Concurrent settlements of one parallel partition serialize under the
-  // cell's lock and each folds onto the latest state.
+  // Concurrent results of one parallel partition commit one at a time under
+  // the cell's lock, each onto the latest state.
   const { append } = cell;
   const recordOf = (state: RunState, callId: string): PendingCall | null =>
     state.pendingResponse?.responseId === responseId
       ? (state.pendingResponse.records[callId] ?? null)
       : null;
-  const settledOf = (state: RunState, callId: string) =>
+  const resultOf = (state: RunState, callId: string) =>
     state.pendingResponse?.responseId === responseId
       ? callSettlementOf(state.pendingResponse, callId)
       : null;
@@ -431,10 +425,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         : own;
     }, alongside);
 
-  const settle = (
+  const commitResult = (
     fact: CallFacts,
     attempt: number,
-    settlement: Settlement,
+    result: Omit<CallResult, 'attempt'>,
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
     alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
@@ -448,7 +442,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             responseId,
             callId: fact.callId,
             attempt,
-            ...settlement,
+            ...result,
           },
         },
         ...cards(state),
@@ -458,8 +452,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   const toolOf = (fact: CallFacts) => step.registry.get(fact.toolName);
   /** The row that opens a call's card: a slow tool's commits with the
-   *  intent its body starts with, so a resume finds the card its
-   *  settlement closes; a fast tool's rides the settlement batch itself. */
+   *  intent its body starts with, so a resume finds the card its result
+   *  closes; a fast tool's rides the result's batch itself. */
   const cardStart = (
     fact: CallFacts,
     input: unknown,
@@ -477,11 +471,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ...(script !== null ? { stageId: script.stageId } : {}),
     });
   };
-  /** The card rows a settlement commits: a card its attempt's body opened
+  /** The card rows a result commits: a card its attempt's body opened
    *  only closes, any other opens and closes in the same batch. The card
    *  stores no output: a read projects it from the `tool.result` the batch
    *  commits (`rowCodec.ts`). */
-  const settledCards = (
+  const resultCards = (
     fact: CallFacts,
     input: unknown,
     status: ToolCallStatus,
@@ -520,16 +514,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     };
   };
 
-  const syntheticSettlement = (error: string): Settlement => ({
+  const skippedResult = (error: string): Omit<CallResult, 'attempt'> => ({
     disposition: 'skipped',
     duplicateOf: null,
     result: { status: 'error', error },
     attachments: [],
   });
 
-  /** Execute one call at `attempt` and commit its settlement, re-entering
+  /** Execute one call at `attempt` and commit its result, re-entering
    *  the request a resumed attempt left standing (`own`). Never fails: a
-   *  throwing tool is an error result. Interruption leaves no settlement. */
+   *  throwing tool is an error result. Interruption leaves no result. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
     fact: CallFacts,
     parsedInput: unknown,
@@ -550,7 +544,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // while it runs streams to that card as transient text, the way a
     // response's chunks reach a streaming row (C3): never a row of its own,
     // capped, and refused once the call has returned, so no chunk can be
-    // enqueued after the settlement that closes the card.
+    // enqueued after the result that closes the card.
     let accepting = false;
     let streamed = 0;
     const onToolOutput = (chunk: string): void => {
@@ -693,10 +687,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
-    // The whole card commits with the settlement (a slow tool's closes here,
+    // The whole card commits with the result (a slow tool's closes here,
     // a fast tool's opens and closes here): a terminal card outside the batch
-    // would show the call completed while recovery sees it unsettled.
-    const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
+    // would show the call completed while recovery sees it unfinished.
+    const cards = resultCards(fact, parsedInput, status, attempt, editedFiles);
     // An executed call's PostToolUse rows, the follow-ups its result answers
     // and its facts (the run's, and its plugin's own aggregates') commit too.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
@@ -706,7 +700,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         : [];
     const facts = factRows(extracted.facts, runId, plugin, run.session.log);
     yield* retireStanding;
-    yield* settle(
+    yield* commitResult(
       fact,
       attempt,
       {
@@ -715,7 +709,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             ? 'executed'
             : 'failed',
         duplicateOf: null,
-        result: settledResult(extracted.sanitizedResult),
+        result: storedResult(extracted.sanitizedResult),
         attachments,
       },
       (state) => [
@@ -732,10 +726,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   });
 
-  /** A call not yet settled, continued at its `resumedAttempt`; a call
+  /** A call with no result yet, continued at its `resumedAttempt`; a call
    *  untouched in a recovered response is reported not started. Otherwise
-   *  the body may have run: the replay rule re-runs it, or it settles as
-   *  outcome unknown, closing the card the interrupted attempt opened, and
+   *  the body may have run: the replay rule re-runs it, or its result is
+   *  "outcome unknown", closing the card the interrupted attempt opened, and
    *  the model decides what to do (verify, ask, or call again). */
   const resumeCall = Effect.fn('toolUse.resumeCall')(function* (
     fact: CallFacts,
@@ -751,18 +745,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const untouched = status.kind === 'issued' && entered.raised === 0;
     const reached = attemptOf(status);
     if (untouched && replan && scriptOf(fact) === null)
-      yield* settle(fact, 1, syntheticSettlement(SKIPPED_NOT_STARTED));
+      yield* commitResult(fact, 1, skippedResult(SKIPPED_NOT_STARTED));
     else if (
       !entered.mayHaveRun ||
       (yield* replayable(fact, step.registry, input, logger))
     )
       yield* execute(fact, input, entered);
     else
-      yield* settle(
+      yield* commitResult(
         fact,
         reached,
-        syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-        settledCards(fact, input, 'failed', reached),
+        skippedResult(SKIPPED_OUTCOME_UNKNOWN),
+        resultCards(fact, input, 'failed', reached),
       );
   });
 
@@ -829,7 +823,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         yield* Effect.addFinalizer((exit) =>
           Effect.gen(function* () {
             if (!(yield* Ref.get(stageOpened))) return;
-            const settled = settledOf(yield* cell.current, script.callId);
+            const settled = resultOf(yield* cell.current, script.callId);
             let status: 'completed' | 'failed' | 'cancelled' =
               settled?.result.status === 'executed' ? 'completed' : 'failed';
             if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
@@ -926,7 +920,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             yield* lanes.pass(op.seq);
             yield* handedBack(replayOrder.at(-1));
             const result = answer();
-            yield* settle(fact, 1, {
+            yield* commitResult(fact, 1, {
               disposition: result.status === 'executed' ? 'executed' : 'failed',
               duplicateOf: null,
               result,
@@ -951,7 +945,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               Effect.provideService(ScriptCalls, null),
             ),
           );
-          const settledNow = settledOf(yield* cell.current, callId);
+          const settledNow = resultOf(yield* cell.current, callId);
           if (settledNow === null) {
             return yield* Effect.die(
               new Error(`Script call ${callId} is unsettled after its run.`),
@@ -1035,16 +1029,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       // Settled before: nothing to do.
     } else if (fact.duplicateOf !== null && primaryAt !== null) {
       yield* lanes.finished(primaryAt);
-      const primary = settledOf(yield* cell.current, fact.duplicateOf);
+      const primary = resultOf(yield* cell.current, fact.duplicateOf);
       if (primary !== null)
-        yield* settle(fact, attempt, {
+        yield* commitResult(fact, attempt, {
           disposition: 'duplicate',
           duplicateOf: fact.duplicateOf,
           result: withoutEffects(primary.result),
           attachments: [],
         });
     } else if (endedBefore) {
-      yield* settle(fact, attempt, syntheticSettlement(SKIPPED_AFTER_END_TURN));
+      yield* commitResult(fact, attempt, skippedResult(SKIPPED_AFTER_END_TURN));
     } else {
       const input = parseCallArguments(call, logger);
       yield* Effect.scoped(
@@ -1053,7 +1047,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       );
     }
-    return endsTurn(settledOf(yield* cell.current, fact.callId));
+    return endsTurn(resultOf(yield* cell.current, fact.callId));
   });
 
   yield* Effect.forEach(
@@ -1083,20 +1077,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const bound = yield* SynchronizedRef.get(run.model);
   const media: { readonly path: string; readonly part: InputPart }[] = [];
   const results = settledPending.calls.map((fact, ordinal) => {
-    const settlement = callSettlementOf(settledPending, fact.callId);
-    if (settlement === null) {
-      throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
+    const recorded = callSettlementOf(settledPending, fact.callId);
+    if (recorded === null) {
+      throw new Error(`Call ${fact.callId} has no result at delivery.`);
     }
-    const content = settlementContent(
-      settlement,
-      bound.config.capabilities,
-      logger,
-    );
+    const content = resultContent(recorded, bound.config.capabilities, logger);
     media.push(...content.media);
     return {
       callOrdinal: ordinal,
       status:
-        settlement.result.status === 'executed'
+        recorded.result.status === 'executed'
           ? ('success' as const)
           : ('error' as const),
       content: [
