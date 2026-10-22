@@ -363,18 +363,21 @@ remaining built-ins on `ToolContext`. Its author corrected the first on
 into the loop as bash's did. The bash guard spells its command from the input
 alone, but an edit's proposal is computed by the body, the person may change it
 in the diff view, and the body writes what was approved. So the approval is
-mid-body by necessity, and it already has one home, `applyApprovedFileEdit`
-(`tools/fileEditFlow.ts`). The `presentToolEdit` port stays: it carries the
-original and proposed content that the durable `request.opened` deliberately
-omits.
+mid-body by necessity. `applyApprovedFileEdit` (`tools/fileEditFlow.ts`)
+composes it for EditTool and WriteTool; the app's AcceptRunFilesTool composes
+the same two primitives (`requestToolEditApproval`, `approvedWriteConflict`)
+directly. The `presentToolEdit` port stays: it carries the original and proposed
+content that the durable `request.opened` deliberately omits.
 
-Lane 4b's first steps are therefore the fence itself and moving the three
-`tools/approval/` modules into the runtime. They read `session.approvals` and
-the interactions, so under the fence's rule they are engine code, not
-`ToolContext` tools. `bashApproval.ts` and `toolEditApproval.ts` share one
-policy preamble (settings key, bypass, policy, `decideApproval`, the denial
-and its message), which the move can fold. Putting the other built-ins on
-`ToolContext` stays part of the fence.
+Lane 4b's first steps are therefore the fence itself and moving
+`bashApproval.ts` and `toolEditApproval.ts` out of `tools/approval/` into the
+runtime. They read `session.approvals` and the interactions, so under the
+fence's rule they are engine code, not `ToolContext` tools. The third module,
+`approvedWrite.ts`, reads neither: it is the write primitive over `ToolContext`
+and the workspace files, and it stays tool-side. The two share one policy
+preamble (settings key, bypass, policy, `decideApproval`, the denial and its
+message), which the move can fold. Putting the other built-ins on `ToolContext`
+stays part of the fence.
 
 ## Risks and non-goals
 
