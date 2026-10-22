@@ -311,6 +311,30 @@ describe('WorkspaceAgentsController', () => {
       }),
   );
 
+  it.effect(
+    'refuses a toggle over a malformed hidden list instead of rewriting it',
+    () =>
+      Effect.gen(function* () {
+        // One empty key fails the list's schema; a write built from the
+        // default would erase every other stored choice.
+        const stored = ['custom:review', ''];
+        const workspaceState = new FakeStateStore({
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: stored,
+        });
+        const workspaceAgents = controller(workspaceState, {
+          getAgents: () => [],
+        });
+
+        const failure = yield* Effect.flip(
+          workspaceAgents.setEnabledAgentKeys([]),
+        );
+        expect(failure._tag).toBe('StateReadFailed');
+        expect(
+          yield* workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS),
+        ).toEqual(stored);
+      }),
+  );
+
   it.effect('serializes concurrent toggles through one workspace owner', () =>
     Effect.gen(function* () {
       const workspaceState = new FakeStateStore();

@@ -11,10 +11,10 @@
  */
 import { Effect } from 'effect';
 
-import type {
+import {
   StateReadFailed,
-  StateStore,
-  StateWriteFailed,
+  type StateStore,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import {
   AGENT_SOURCE,
@@ -68,18 +68,33 @@ interface WorkspaceAgentEntry {
   readonly source: AgentSource;
 }
 
-/** The hidden keys, read like the workspace agents selection: a malformed value is
- *  reported and read as none. */
+/** The hidden keys. To show the agents (`read`), a malformed value is
+ *  reported and read as none, as the workspace agents selection is; to
+ *  change them (`modify`), it fails, since a write from none would erase
+ *  every stored choice. */
 function readHidden(
   repoState: StateStore,
+  purpose: 'read' | 'modify',
 ): Effect.Effect<Set<string>, StateReadFailed> {
-  return Effect.map(
-    Settings.state(
-      repoState,
-      WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
-      HiddenCustomAgentKeysSchema.prefault([]),
-    ),
-    (hidden) => new Set(hidden),
+  const key = WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS;
+  const schema = HiddenCustomAgentKeysSchema.prefault([]);
+  if (purpose === 'read')
+    return Effect.map(
+      Settings.state(repoState, key, schema),
+      (hidden) => new Set(hidden),
+    );
+  return Effect.flatMap(
+    Settings.inspectState(repoState, key, schema),
+    (stored) =>
+      stored.kind === 'value'
+        ? Effect.succeed(new Set(stored.value))
+        : Effect.fail(
+            new StateReadFailed({
+              key,
+              message: `The hidden agents list is invalid and was not changed: ${stored.cause}`,
+              cause: stored.cause,
+            }),
+          ),
   );
 }
 
@@ -99,7 +114,7 @@ export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
   entries: readonly Entry[],
   listed: readonly string[],
 ): Effect.Effect<Entry[], StateReadFailed> {
-  return Effect.map(readHidden(repoState), (hidden) =>
+  return Effect.map(readHidden(repoState, 'read'), (hidden) =>
     entries.filter(
       (entry) =>
         entry.source === AGENT_SOURCE.CUSTOM &&
@@ -124,7 +139,7 @@ export function recordCustomChoices(
   selection: readonly string[],
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
-    const hidden = yield* readHidden(repoState);
+    const hidden = yield* readHidden(repoState, 'modify');
     for (const entry of agents) {
       if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
       const key = agentKeyOf(entry);
@@ -150,7 +165,7 @@ export function forgetHiddenAgent(
   return serializeWorkspaceWrite(
     repoState,
     Effect.gen(function* () {
-      const hidden = yield* readHidden(repoState);
+      const hidden = yield* readHidden(repoState, 'modify');
       const key = agentKeyOf({ source: AGENT_SOURCE.CUSTOM, name });
       if (!hidden.delete(key)) return;
       yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
