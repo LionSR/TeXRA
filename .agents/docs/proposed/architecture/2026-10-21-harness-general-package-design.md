@@ -369,15 +369,16 @@ the same two primitives (`requestToolEditApproval`, `approvedWriteConflict`)
 directly. The `presentToolEdit` port stays: it carries the original and proposed
 content that the durable `request.opened` deliberately omits.
 
-Lane 4b's first steps are therefore the fence itself and moving
-`bashApproval.ts` and `toolEditApproval.ts` out of `tools/approval/` into the
-runtime. They read `session.approvals` and the interactions, so under the
-fence's rule they are engine code, not `ToolContext` tools. The third module,
-`approvedWrite.ts`, reads neither: it is the write primitive over `ToolContext`
-and the workspace files, and it stays tool-side. The two share one policy
-preamble (settings key, bypass, policy, `decideApproval`, the denial and its
-message), which the move can fold. Putting the other built-ins on `ToolContext`
-stays part of the fence.
+Lane 4b therefore starts with the fence itself. The three `tools/approval/`
+modules stay in `tools/`, which the layout above makes the engine, and none
+moves to `builtins/`: `bashApproval.ts` and `toolEditApproval.ts` read
+`session.approvals` and the interactions, and `approvedWrite.ts` imports
+`@agent/runtime/RunCall` and `@platform/rootedFs`, which the fence's
+public-imports rule forbids a built-in. `requestToolEditApproval` stays the one
+request path for edits, which `applyApprovedFileEdit` and AcceptRunFilesTool
+both call. The two request modules share one policy preamble (settings key,
+bypass, policy, `decideApproval`, the denial and its message), which lane 4b can
+fold. Putting the other built-ins on `ToolContext` stays part of the fence.
 
 ## Risks and non-goals
 
