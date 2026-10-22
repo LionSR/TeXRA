@@ -38,7 +38,7 @@ const OpenPdfInputSchema = z.strictObject({
   ),
 });
 
-export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
+type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
 
 export const OpenPdfTool = defineTool({
   name: 'open_pdf',
@@ -86,10 +86,10 @@ export const OpenPdfTool = defineTool({
         new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
       );
     }
-    // The path is already absolute — the resolution above produced it — so the
-    // read goes through the process filesystem. A missing path, or a path whose
-    // parent is not a directory, is "not found"; anything else (a permission
-    // denial) is the caller's to see, as the facade's own stat was.
+    // The path is already absolute — the resolution above produced it — so
+    // the read goes through the process filesystem. A missing path, or a path
+    // whose parent is not a directory, is "not found"; anything else (a
+    // permission denial) is the caller's to see, as the facade's own stat was.
     const fs = yield* FileSystem.FileSystem;
     const info = yield* fs.stat(location.absolutePath).pipe(
       Effect.catchIf(

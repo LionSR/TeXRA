@@ -122,15 +122,15 @@ export function createNativeSubagentStrategy(
             ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {
               turnPermit: turns.turnPermit,
-              settleBoundary: (turn: RunEndResult) =>
+              finishTurn: (turn: RunEndResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
-                  return turns.settleBoundary(turn);
+                  return turns.finishTurn(turn);
                 }),
-              settleEnd: (turn: RunEndResult) =>
+              finishLastTurn: (turn: RunEndResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
-                  return turns.settleEnd(turn);
+                  return turns.finishLastTurn(turn);
                 }),
             },
           };

@@ -8,20 +8,18 @@
  * journey passes on simple invariants over the files it leaves behind and on a
  * real LaTeX build of them, never on how the prose reads.
  *
- * On demand only, by label or dispatch (`.github/workflows/live-journeys.yml`):
- * it spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
+ * Run by hand only: it spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
  *     [--no-build] [--out dir]
  *
- * With no `--model` it runs every model in `MODEL_KEYS`; the workflow passes
- * none, so this map is the one list of models the journeys run.
+ * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
+ * list of models the journeys run.
  */
 
 import { spawnSync } from 'node:child_process';
 import {
-  appendFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -302,11 +300,7 @@ const funded = models.filter((model) => {
   console.warn(`[journeys] ${MODEL_KEYS[model]} is not set: skipping ${model}`);
   return false;
 });
-// Every CI run was asked for (label or dispatch), so a missing key must not
-// leave it green; a local run only warns and skips that model.
-const missingKeyFails =
-  funded.length < models.length && process.env.GITHUB_ACTIONS === 'true';
-if (funded.length === 0) process.exit(missingKeyFails ? 1 : 0);
+if (funded.length === 0) process.exit(0);
 
 if (!values['no-build']) {
   for (const script of ['build-bundle.mjs', 'copy-resources.mjs']) {
@@ -319,7 +313,7 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
-let failed = missingKeyFails;
+let failed = false;
 for (const model of funded) {
   const rows = names.map((name) => {
     try {
@@ -337,12 +331,6 @@ for (const model of funded) {
       : `PASS ${row.name} (${model}): ${row.tokens} tokens, $${row.cost.toFixed(5)}`,
   );
   console.log(lines.join('\n'));
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    appendFileSync(
-      process.env.GITHUB_STEP_SUMMARY,
-      `### Journeys on ${model}\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`,
-    );
-  }
   failed ||= rows.some((row) => row.error);
 }
 process.exit(failed ? 1 : 0);

@@ -1,8 +1,8 @@
 /**
- * The fold's durable input vocabulary (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
- * sections 5.2 and 6): the session events every process folds into
- * `SessionView`. The transient arms that never carry a seq are
- * `foldInput.ts`.
+ * The durable session events every process applies to its `SessionView`
+ * (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
+ * sections 5.2 and 6). The other view inputs, which never carry a seq, are
+ * in `sessionViewInput.ts`.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
  * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
@@ -411,7 +411,7 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
 ]);
 /**
  * The run history's private rows: the byte-exact conversation and the loop's durable state (its hooks'
- * outcomes included), read only by `foldRunState` through `RunHistory`. Never
+ * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */
 const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [

@@ -29,7 +29,7 @@ const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
   );
 
 /**
- * The one answer to "can this run resume?", before ownership (`runRefusal`
+ * The one answer to "can this run resume?", before ownership (`runRejection`
  * adds the claim). An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A task that ended does not: its recipe's result is

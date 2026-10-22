@@ -19,32 +19,13 @@ import {
   type RunOutcome,
 } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import type {
-  EventsFrame,
-  RequestErrorWire,
-} from '@texra/shared/session/sessionFrames';
+import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 import { writeNdjsonStdout, writeTextStdout } from './logSinks';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
-
-/** What a refused request says, worded for a terminal. */
-export function describeWireRefusal(error: RequestErrorWire): string {
-  switch (error._tag) {
-    case 'Cancelled':
-      return 'The request was cancelled.';
-    case 'NotOwner':
-      return `Another process owns task ${error.runId}.`;
-    case 'Unavailable':
-    case 'Rejected':
-    case 'Invalid':
-      return error.reason;
-    case 'Internal':
-      return `The request failed inside the TeXRA service (ref ${error.ref}); see its log.`;
-  }
-}
 
 /** The subscription port of this client's fold. */
 const ATTACH_PORT = 'attach';

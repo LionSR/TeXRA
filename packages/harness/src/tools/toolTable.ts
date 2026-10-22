@@ -32,7 +32,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
@@ -313,11 +313,8 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const owned = plugins.flatMap(({ agentBlock }) => agentBlock ?? []);
   const blocks = new Map(owned.map((block) => [block.key, block] as const));
   if (
-    owned.some(
-      (block, index) =>
-        owned.findIndex(({ key }) => key === block.key) !== index ||
-        block.key in AgentDefinitionSchema.shape,
-    )
+    blocks.size !== owned.length ||
+    owned.some(({ key }) => key in AgentDefinitionSchema.shape)
   )
     refuse('an agent-file key is owned twice, or is a persona key.');
   return { entries, get: (name) => byName.get(name), decisions, blocks };

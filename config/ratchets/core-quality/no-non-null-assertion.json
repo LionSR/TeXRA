@@ -1,7 +1,7 @@
 {
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
-  "packages/harness/src/shared/session/sessionFold.ts": 1,
   "packages/harness/src/shared/session/sessionView.ts": 1,
+  "packages/harness/src/shared/session/sessionViewUpdate.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 2,
   "packages/harness/src/tools/jsonRpc.ts": 1,
   "packages/harness/src/tools/memory/MemoryTool.ts": 1,

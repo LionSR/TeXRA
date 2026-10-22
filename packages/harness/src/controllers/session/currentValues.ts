@@ -26,6 +26,8 @@ import {
   INPUT_HISTORY_LIMIT,
   type CurrentValues,
   type Database,
+  type DatabaseClaimRefused,
+  type DatabaseNotOwner,
   type DatabaseReadFailed,
   DatabaseStoreNewer,
   type DatabaseWriteFailed,
@@ -78,9 +80,14 @@ export function currentValues(store: {
     statement: string,
     params?: readonly unknown[],
   ) => Effect.Effect<SqlRow | undefined, SqlError>;
+  /** A write transaction; an ownership rejection the body raised leaves
+   *  as itself. */
   readonly transact: <A, E>(
     body: Effect.Effect<A, E>,
-  ) => Effect.Effect<A, DatabaseWriteFailed>;
+  ) => Effect.Effect<
+    A,
+    Extract<E, DatabaseNotOwner | DatabaseClaimRefused> | DatabaseWriteFailed
+  >;
   readonly query: <A, E>(
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;

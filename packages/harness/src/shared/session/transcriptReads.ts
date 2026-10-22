@@ -1,6 +1,6 @@
 /**
  * Reads and live inputs over a run's transcript working state: live text
- * chunks, compaction settlement, and the activity flags.
+ * chunks, finishing open compactions, and the activity flags.
  */
 import { type TextChunk } from '@shared/schemas';
 import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
@@ -16,13 +16,13 @@ import {
 } from '@shared/transcript/projectTranscriptRow';
 
 import {
-  indexesOf,
   isStreamingTextRow,
-  replaceTranscript,
   rowById,
   upsertCompactionRows,
   upsertRow,
   writableArray,
+  type TranscriptIndexes,
+  type TranscriptWork,
 } from './transcriptState';
 import type { TranscriptView } from './sessionView';
 
@@ -31,24 +31,25 @@ import type { TranscriptView } from './sessionView';
 // ---------------------------------------------------------------------------
 
 /**
- * Apply one live chunk (PRD 5.2, "Live text"): ignored when its `to` is not
- * past the text held, otherwise the held text is truncated at `from` and the
- * chunk appended, so a redelivery in any order is a no-op and a `from: 0`
- * chunk replaces the row. An append costs the chunk, never the row; the
- * embedded-followup flag is the one whole-text scan, and it runs only while a
- * block is open or the chunk could open one. Durable text wins: a row whose
- * finalizing event has folded is never reopened. Returns null when the chunk
- * changed nothing, the same value when it only moved the held text of a row
- * not yet folded, and a new value when a row repainted.
+ * Apply one live chunk: ignored when its `to` is not past the text held,
+ * otherwise the held text is truncated at `from` and the chunk appended, so a
+ * redelivery in any order is a no-op and a `from: 0` chunk replaces the row.
+ * An append costs the chunk, never the row; the embedded-followup flag is the
+ * one whole-text scan, and it runs only while a block is open or the chunk
+ * could open one. Durable text wins: a row whose finalizing event has been
+ * applied is never reopened. Returns null when the chunk changed nothing, the
+ * same value when it only moved the held text of a row not yet applied, and a
+ * new value when a row repainted.
  */
-export function foldLiveText(
+export function applyLiveText(
   transcript: TranscriptView,
+  work: TranscriptWork,
   chunk: TextChunk,
   runLabels: RunLabels,
 ): TranscriptView | null {
-  const ix = indexesOf(transcript);
+  const { ix } = work;
   const cursor = ix.cursors.get(chunk.rowId);
-  if (!cursor && rowById(transcript, chunk.rowId)) return null;
+  if (!cursor && rowById(transcript, ix, chunk.rowId)) return null;
   const held = ix.live.get(chunk.rowId) ?? '';
   if (chunk.to <= held.length) return null;
   if (chunk.from > held.length) {
@@ -58,12 +59,12 @@ export function foldLiveText(
   }
   const text = held.slice(0, chunk.from) + chunk.text;
   ix.live.set(chunk.rowId, text);
-  // The row paints when its event folds, joined with this text.
+  // The row paints when its event is applied, joined with this text.
   if (!cursor) return transcript;
   const slot = ix.slots.get(chunk.rowId);
-  const next = replaceTranscript(transcript, {});
+  const next = { ...transcript };
   if (slot?.kind === 'tool') {
-    upsertRow(next, toolRow(slot.base, slot.log, text, runLabels));
+    upsertRow(work, next, toolRow(slot.base, slot.log, text, runLabels));
     return next;
   }
   const measured =
@@ -79,7 +80,7 @@ export function foldLiveText(
       row.kind === 'assistant' && (wasPending || chunk.text.includes('<'))
         ? hasIncompleteEmbeddedSubagentFollowup(measured.full)
         : wasPending;
-    writableArray(next, 'rows')[at] = {
+    writableArray(work, next, 'rows')[at] = {
       ...rest,
       text: measured,
       ...(pending ? { pendingEmbeddedFollowup: true } : {}),
@@ -93,15 +94,13 @@ export function foldLiveText(
       measured.full,
       slot.running,
     );
-    if (painted) upsertRow(next, painted);
+    if (painted) upsertRow(work, next, painted);
   }
   return next;
 }
 
-/** Drop a run's live text and its streaming cursors: the run ended, was
- *  removed, or lost its transcript tier (PRD 5.2, "In-flight text"). */
-export function clearLiveText(transcript: TranscriptView): void {
-  const ix = indexesOf(transcript);
+/** Drop a run's live text and its streaming cursors: the run ended. */
+export function clearLiveText(ix: TranscriptIndexes): void {
   ix.live.clear();
   ix.cursors.clear();
 }
@@ -110,31 +109,35 @@ export function clearLiveText(transcript: TranscriptView): void {
 // Reads
 // ---------------------------------------------------------------------------
 
-/** Finalize unmatched compaction starts when the turn settles. */
-export function settleTranscript(
+/** Finish the compactions still open when the turn ends. */
+export function finishOpenCompactions(
   transcript: TranscriptView,
+  work: TranscriptWork,
   finishedAt: number,
 ): TranscriptView {
   const changed = settleCompactionActivities(
-    indexesOf(transcript).compactionState,
+    work.ix.compactionState,
     finishedAt,
   );
   if (changed.length === 0) return transcript;
-  const next = replaceTranscript(transcript, {});
-  upsertCompactionRows(next, changed);
+  const next = { ...transcript };
+  upsertCompactionRows(work, next, changed);
   return next;
 }
 
 /** Whether the newest thinking row is streaming and a compaction runs. */
-export function transcriptActivity(transcript: TranscriptView): {
+export function transcriptActivity(
+  transcript: TranscriptView,
+  ix: TranscriptIndexes,
+): {
   thinkingActive: boolean;
   compactingActive: boolean;
 } {
-  const { thinkingRowId, compactionState } = indexesOf(transcript);
+  const { thinkingRowId, compactionState } = ix;
   const lastThinking =
     thinkingRowId === undefined
       ? undefined
-      : rowById(transcript, thinkingRowId);
+      : rowById(transcript, ix, thinkingRowId);
   return {
     thinkingActive: lastThinking?.kind === 'thinking' && lastThinking.streaming,
     compactingActive: compactionState.blocks.some(

@@ -56,6 +56,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -86,7 +87,6 @@ import {
   appendLocalNotice,
   appendLocalUserTranscript,
   clearLocalTranscript,
-  describeRequestError,
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
@@ -156,17 +156,17 @@ const recoverRun = <A, E, R>(
     ),
   );
 
-/**
- * Narrow commands the chat-session controller exposes to the Ink component.
- * Every mutation to {@link TuiSession} flows through one of these methods so
- * the Ink layer never directly mutates session run-state fields.
- */
 /** A view edit a resume applies once the run is back at its park:
  *  `texra resume --reset` (`handoff` null) or `--handoff <text>`. */
 export interface ResumeEdit {
   readonly handoff: string | null;
 }
 
+/**
+ * Narrow commands the chat-session controller exposes to the Ink component.
+ * Every mutation to {@link TuiSession} flows through one of these methods so
+ * the Ink layer never directly mutates session run-state fields.
+ */
 export interface ChatSessionController {
   /** Start a new root agent run from a fresh config. */
   startRootRun(config: AgentConfigPayload): void;
@@ -295,17 +295,6 @@ function takePendingSkillActivations(
   };
 }
 
-function restorePendingSkillActivations(
-  pendingSkillActivations: Map<string, string>,
-  activations: readonly SkillActivation[],
-): void {
-  for (const { name, activationPrompt } of activations) {
-    if (!pendingSkillActivations.has(name)) {
-      pendingSkillActivations.set(name, activationPrompt);
-    }
-  }
-}
-
 export function createChatSessionController(
   init: ChatSessionControllerInit,
 ): ChatSessionController {
@@ -383,7 +372,7 @@ export function createChatSessionController(
   const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
     requests.request(req).pipe(
       Effect.match({
-        onFailure: describeRequestError,
+        onFailure: requestErrorText,
         onSuccess: () => undefined,
       }),
     );
@@ -416,12 +405,6 @@ export function createChatSessionController(
   // The reason of the stop asked last, for a stop re-issued once the launch
   // gap closes.
   let stopReason: RunStopReason = 'user';
-  const requestStop = (reason: RunStopReason): void => {
-    stopReason = reason;
-    // The stop is a fact of the claim: a `user` stop is the turn's, and a
-    // shutdown carries into every claim taken while leaving.
-    session.askStop(reason);
-  };
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -856,7 +839,10 @@ export function createChatSessionController(
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
     if (reason === 'shutdown' && served) return;
-    requestStop(reason);
+    stopReason = reason;
+    // The stop is a fact of the claim: a `user` stop is the turn's, and a
+    // shutdown carries into every claim taken while leaving.
+    session.askStop(reason);
     interruptActiveRun();
   };
 
@@ -982,10 +968,11 @@ export function createChatSessionController(
       if (skillActivationClearEpoch !== pendingSkillActivationClearEpoch) {
         return;
       }
-      restorePendingSkillActivations(
-        pendingSkillActivations,
-        prepared.reservedSkillActivations,
-      );
+      for (const reserved of prepared.reservedSkillActivations) {
+        if (!pendingSkillActivations.has(reserved.name)) {
+          pendingSkillActivations.set(reserved.name, reserved.activationPrompt);
+        }
+      }
     };
     // A message to the conversation the user stopped continues it: the
     // session queues it on that run and resumes the run.
@@ -1085,7 +1072,7 @@ export function createChatSessionController(
               Effect.match({
                 onFailure: (error) => ({
                   kind: 'refused' as const,
-                  reason: describeRequestError(error),
+                  reason: requestErrorText(error),
                 }),
                 onSuccess: (value) =>
                   value.kind === 'followUp'

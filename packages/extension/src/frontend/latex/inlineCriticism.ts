@@ -118,16 +118,7 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
     (diag) => diag.code === CODE_TOOL,
   );
 
-  if (annotations.length === 0) {
-    if (manualDiagnostics.length > 0) {
-      activeCollection.set(uri, manualDiagnostics);
-    } else {
-      activeCollection.delete(uri);
-    }
-    return;
-  }
-
-  activeCollection.set(uri, [
+  const diagnostics = [
     ...manualDiagnostics,
     ...annotations.map((a) =>
       buildDiagnostic(
@@ -138,7 +129,9 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
         CODE_PARSED,
       ),
     ),
-  ]);
+  ];
+  if (diagnostics.length > 0) activeCollection.set(uri, diagnostics);
+  else activeCollection.delete(uri);
 });
 
 function handleAddOutputFiles(

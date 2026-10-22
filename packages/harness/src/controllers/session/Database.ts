@@ -472,8 +472,16 @@ export const databaseLayer = (
         failed: (cause: unknown) => E,
         gated?: boolean,
       ) => own(mode, body, gated).pipe(mapDatabaseFailure(failed));
+      /** A write transaction. An ownership rejection the body raised leaves
+       *  as itself, as it does from `job`; any other failure is the write's. */
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        transaction('write', body, writeFailed);
+        transaction('write', body, (cause) =>
+          cause instanceof DatabaseNotOwner ||
+          cause instanceof DatabaseClaimRefused
+            ? // cast: only a body raises these, so it is one of its errors.
+              (cause as Extract<E, DatabaseNotOwner | DatabaseClaimRefused>)
+            : writeFailed(cause),
+        );
       const claim = `UPDATE event_sequence SET owner_id = ?
         WHERE kind = ? AND logical_id = ? AND owner_id IS ?
           AND closed_by IS NULL RETURNING id`;
@@ -511,8 +519,8 @@ export const databaseLayer = (
             ),
           );
         });
-      /** C5: a row whose claim moved or closed refused this writer. Read it
-       *  in the refusing transaction so the typed refusal names the holder. */
+      /** A row whose claim moved or closed rejects this writer. Read in the
+       *  rejecting transaction, so the typed rejection names the holder. */
       const refuseWriter = (id: AggregateId, absent: string) =>
         Effect.gen(function* () {
           const held = (yield* readState([id]))[0];
@@ -524,15 +532,6 @@ export const databaseLayer = (
             closed,
           });
         });
-      /** A refusal about ownership leaves typed (D6 b); the transaction
-       *  wrapper carried it as the write failure's cause. A claiming
-       *  transaction's refusal may be the claim's. */
-      const ownershipRefusal = (failure: DatabaseWriteFailed) =>
-        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure;
-      const typedRefusal = Effect.mapError(ownershipRefusal);
-      const typedClaimRefusal = Effect.mapError((f: DatabaseWriteFailed) =>
-        f.cause instanceof DatabaseClaimRefused ? f.cause : ownershipRefusal(f),
-      );
       const othersOf = (observed: readonly AggregateState[]) =>
         new Set(
           observed.flatMap((row) =>
@@ -919,7 +918,7 @@ export const databaseLayer = (
                     .filter((row) => row.ownerId !== identity.ownerId)
                     .map((row) => row.aggregateId);
                 }),
-              ).pipe(typedClaimRefusal),
+              ),
         prepareRunRemoval: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
             const seen = yield* query(readDependents(id));
@@ -949,7 +948,6 @@ export const databaseLayer = (
             });
             return Effect.flatMap(ProvenOwners, (proven) =>
               transact(removing).pipe(
-                typedClaimRefusal,
                 Effect.provideService(
                   ProvenOwners,
                   new Map([...verdicts, ...proven]),
@@ -1017,7 +1015,7 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(appendRows(prepared, at)).pipe(typedRefusal);
+            return yield* transact(appendRows(prepared, at));
           }),
       };
     }),

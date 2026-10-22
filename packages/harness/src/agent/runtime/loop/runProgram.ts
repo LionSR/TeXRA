@@ -19,7 +19,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';

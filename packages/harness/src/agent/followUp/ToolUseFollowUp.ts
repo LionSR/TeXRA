@@ -1,7 +1,7 @@
 import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { runRefusal } from '@agent/runtime/runClassification';
+import { runRejection } from '@agent/runtime/runClassification';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -203,18 +203,19 @@ export function startFollowUpWake(
 }
 
 /**
- * The wake a run's last liveness arm here owes as it ends. A row landing
- * while a generation (or a hold) is live is left to it: `Sent.wake` is
- * false and its sender resumes nothing. But a loop stops reading before its
- * fiber ends (the description join, the terminal rows), and a hold reads
- * nothing at all, so a row landing then has no reader. The registry calls
- * this as the arm ends, with `since`, the commit the arm began at; once
- * every job enqueued before has committed (every such row is durable), a
- * run nobody here holds, with a message queued since then on an open input,
- * is resumed. A row queued before the arm began is not owed: the arm was its
- * wake (a resume that failed leaves it to the next explicit Resume), or its
- * sender saw no live arm and woke the run itself; the one resume per run
- * (`Inbox.resumeOnce`) joins the two. A failure to read is logged.
+ * When the last thing running this run here exits, resume it if a message
+ * arrived after the loop stopped reading. A message queued while a loop (or
+ * a hold) is live is left to it: `Sent.wake` is false and its sender resumes
+ * nothing. But a loop stops reading before its fiber ends (the description
+ * join, the terminal rows), and a hold reads nothing at all, so a message
+ * queued then has no reader. The registry calls this as that last runner
+ * exits, with `since`, the commit it started at. Once every job enqueued
+ * before has committed, a run nothing here holds, with a message queued on
+ * its open input since then, is resumed. A message queued before `since`
+ * needs nothing: the runner was started for it (a failed resume leaves it to
+ * the next explicit Resume), or its sender saw nothing running and resumed
+ * the run itself; the one resume per run (`Inbox.resumeOnce`) joins the two.
+ * A failure to read is logged.
  */
 export const wakeAfterGeneration = (
   runId: RunId,
@@ -287,14 +288,6 @@ function admitQueued(
   );
 }
 
-/** How a run's refusal reads to whoever sent the input. */
-const REFUSAL_REASON = {
-  held_elsewhere: 'owned_elsewhere',
-  finished: 'finished',
-  earlier_build: 'earlier_build',
-  unreadable: 'read_failed',
-} as const satisfies Record<string, FollowUpFailureReason>;
-
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   item: InboxItem,
@@ -327,17 +320,16 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // stopped. Anything else refuses with its worded reason. Only the one
     // run addressed is inspected.
     // A state that cannot be read cannot be continued.
-    const refusal = yield* runRefusal(runId, ownerSession).pipe(
+    const rejection = yield* runRejection(runId, ownerSession).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-          Effect.as({ kind: 'unreadable' } as const),
+          Effect.as({ kind: 'read_failed' } as const),
         ),
       ),
     );
-    if (refusal !== null)
-      return { status: 'failed', reason: REFUSAL_REASON[refusal.kind] };
+    if (rejection !== null) return { status: 'failed', reason: rejection.kind };
     if (options.mode !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
     dispatch = yield* admitQueued(runId, item, 'wake', options);

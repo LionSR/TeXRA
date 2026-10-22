@@ -1,17 +1,18 @@
 /**
  * Why a persisted run with no loop in this process cannot be resumed here,
- * read from disk facts and mutating nothing. In-memory RUNNING/WAITING means
+ * read from disk without changing anything. In-memory RUNNING/WAITING means
  * exactly "a running loop exists in this process's registry"; for every
- * other run the refusal is one of:
+ * other run the rejection is one of:
  *
- * - `held_elsewhere`: its claim is held by an owner that is alive or cannot
+ * - `owned_elsewhere`: another owner holds its claim and is alive or cannot
  *   be proven dead (another process);
  * - `finished`: `deriveResumability` finds no point to continue from;
  * - `earlier_build`: its rows were written by an earlier build.
  *
- * Null when a resume may proceed: nobody alive holds the claim, or this
- * process does with no loop behind it, which the resume takes over. The
- * refusal is shown where the user acted; nothing about it is kept. A fact
+ * Each kind is also a follow-up failure reason, so a sender's result names
+ * it as is. Null when a resume may go ahead: nobody alive holds the claim,
+ * or this process does with no loop behind it, which the resume takes over.
+ * The rejection is shown where the user acted and is not stored. A fact
  * that cannot be read fails.
  */
 import { Effect } from 'effect';
@@ -22,19 +23,19 @@ import type { OwnerId, RunId } from '@shared/schemas';
 import { claimStanding } from '@shared/session/database';
 
 /** Why this process cannot resume a run (see the module note). */
-export type RunRefusal =
-  | { readonly kind: 'held_elsewhere'; readonly owner: OwnerId }
+export type RunRejection =
+  | { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId }
   | { readonly kind: 'finished' }
   | { readonly kind: 'earlier_build' };
 
-/** The refusal a resume of `runId` here meets, or null when none. */
-export const runRefusal = Effect.fn('runRefusal')(function* (
+/** Why a resume of `runId` here is rejected, or null when it may go ahead. */
+export const runRejection = Effect.fn('runRejection')(function* (
   runId: RunId,
   session: SessionHandle,
-): Effect.fn.Return<RunRefusal | null, Error> {
+): Effect.fn.Return<RunRejection | null, Error> {
   const standing = claimStanding(yield* session.log.owner(runId));
   if (standing.kind === 'held')
-    return { kind: 'held_elsewhere', owner: standing.owner };
+    return { kind: 'owned_elsewhere', owner: standing.owner };
   const facts = yield* deriveResumability(runId, session);
   if (facts.kind === 'unreadable')
     return yield* Effect.fail(
