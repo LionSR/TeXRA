@@ -8,7 +8,7 @@ import { ensureError, type FileLocation } from '@texra-ai/harness/schemas';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 
 import {
-  findExistingLatexPath,
+  existingExternalPath,
   joinLatexPath,
   resolveLatexDir,
   stripLatexComments,
@@ -38,8 +38,10 @@ function parseGraphicspath(content: string): string[] {
 }
 
 /**
- * Resolve a figure path by searching through possible base paths and
- * extensions. Returns a path relative to `latexDir`, or null.
+ * Resolve a figure path against each search path in order, trying the figure
+ * extensions when the reference has none. The first existing file wins and
+ * later candidates are never probed. Returns a path relative to `latexDir`,
+ * or null.
  */
 const resolveFigurePath = Effect.fn('latex.resolveFigurePath')(function* (
   figPath: string,
@@ -47,12 +49,14 @@ const resolveFigurePath = Effect.fn('latex.resolveFigurePath')(function* (
   latexDir: string,
 ) {
   const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
-  const absolute = yield* findExistingLatexPath(
-    figPath,
-    searchPaths,
-    extensions,
-  );
-  return absolute === null ? null : path.relative(latexDir, absolute);
+  for (const basePath of searchPaths) {
+    const joined = path.normalize(path.join(basePath, figPath));
+    for (const ext of extensions) {
+      const hit = yield* existingExternalPath(`${joined}${ext}`);
+      if (hit !== null) return path.relative(latexDir, hit);
+    }
+  }
+  return null;
 });
 
 /**

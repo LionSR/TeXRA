@@ -131,36 +131,6 @@ export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
 );
 
 /**
- * Search `searchPaths x extensions` for the first existing file and return
- * its normalized absolute path, or null if nothing exists.
- *
- * - `relativePath` is joined against each entry in `searchPaths`.
- * - Each `extensions` entry is appended to the joined path; pass `''` to test
- *   the path as-is.
- * - The search is ordered: outer loop over `searchPaths`, inner over
- *   `extensions`. The first hit wins, and the candidates after it are never
- *   probed, so the walk stays sequential rather than a concurrent race.
- */
-export const findExistingLatexPath = Effect.fn('latex.findExistingLatexPath')(
-  function* (
-    relativePath: string,
-    searchPaths: readonly string[],
-    extensions: readonly string[],
-  ) {
-    for (const basePath of searchPaths) {
-      const joined = path.normalize(path.join(basePath, relativePath));
-      for (const ext of extensions) {
-        const hit = yield* existingExternalPath(
-          ext ? `${joined}${ext}` : joined,
-        );
-        if (hit !== null) return hit;
-      }
-    }
-    return null;
-  },
-);
-
-/**
  * Match `pattern` against `content` and split each match's first capture
  * group on commas, trimming and de-duplicating the resulting tokens (empty
  * entries are skipped). `transform` maps each trimmed token before adding it
