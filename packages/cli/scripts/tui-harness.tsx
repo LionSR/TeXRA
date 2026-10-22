@@ -81,7 +81,7 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { clearGoal, startGoal } from '@tools/goal';
+import { clearGoal, startGoal } from '@tools/goal/goalRows';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';

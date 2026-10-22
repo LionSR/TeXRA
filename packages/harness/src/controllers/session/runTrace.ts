@@ -15,7 +15,7 @@ import type {
 } from '@agent/runtime/SessionHandle';
 import type { AgentEvent } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
-import { classifyAgentError } from '@common/errors';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { writeLogLine } from '@logger/logSink';
 import {
   qualifyAggregateId,

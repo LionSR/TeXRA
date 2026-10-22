@@ -17,7 +17,7 @@ import {
   pauseGoal,
   retargetGoal,
   startGoal,
-} from '@tools/goal';
+} from '@tools/goal/goalRows';
 
 const RUN_A = RunIdSchema.parse('fa0000000a0a');
 const RUN_B = RunIdSchema.parse('fa0000000b0b');
