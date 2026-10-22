@@ -388,22 +388,20 @@ export class SessionComposer extends LitElement {
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.settleHost`).
     const pending = added.map(({ fileName }) => ({ fileName, path: null }));
-    // An empty insert (every image failed, no text) leaves the selection be.
-    if (insert !== '' && target && this.isConnected) {
-      // setRangeText fires no input event, so the draft is set explicitly.
-      target.setRangeText(
-        insert,
-        target.selectionStart,
-        target.selectionEnd,
-        'end',
-      );
-      this.setText(target.value, {
-        images: [...this.draft.images, ...pending],
-      });
-    } else if (insert !== '') {
-      this.setText(`${this.text}${insert}`, {
-        images: [...this.draft.images, ...pending],
-      });
+    // An empty insert (every image failed, no text) leaves the draft be.
+    if (insert !== '') {
+      let text = `${this.text}${insert}`;
+      if (target && this.isConnected) {
+        // setRangeText fires no input event, so the draft is set explicitly.
+        target.setRangeText(
+          insert,
+          target.selectionStart,
+          target.selectionEnd,
+          'end',
+        );
+        text = target.value;
+      }
+      this.setText(text, { images: [...this.draft.images, ...pending] });
     }
     const attached =
       added.length === 1

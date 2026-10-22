@@ -410,7 +410,6 @@ function decideRequest(
   request: AttentionRequest,
   payload: PermissionPayload,
   decision: SurfaceDecision,
-  onRefused?: () => void,
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
@@ -424,7 +423,7 @@ function decideRequest(
       runtime,
       runId,
       request.requestId,
-      onRefused,
+      undefined,
       ...runtimeArms,
     );
   }

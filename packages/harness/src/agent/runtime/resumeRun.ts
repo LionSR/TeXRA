@@ -329,7 +329,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           resume: { identity: resume, options: { ...launchOptions, onIdle } },
         };
         const { script } = resume.agentConfig;
-        completion = yield* startChildRunLoop({
+        ({ fiber: completion } = yield* startChildRunLoop({
           session,
           runId,
           parentRunId,
@@ -339,7 +339,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             script?.kind === 'background'
               ? createScriptRunStrategy({ ...native, title: script.title })
               : createNativeSubagentStrategy(native),
-        });
+        }));
       }
       // Interrupting either observation below cannot interrupt the
       // launched run's lifetime.

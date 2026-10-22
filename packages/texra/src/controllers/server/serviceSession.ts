@@ -69,8 +69,6 @@ import type {
 import type { RunEndResult } from '@texra-ai/harness/schemas';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
-/** What a call made while the link reconnects is told. */
-
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
 
@@ -334,7 +332,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
-  /** The client, once the link has one. */
   /** The client, once the link has one; or the refusal, once a newer
    *  TeXRA's service refused this window, which no reconnect undoes. */
   const connected = Stream.merge(
@@ -512,7 +509,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
       ),
     }));
-  const offline = (reason: string) => runFailure(reason);
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */
@@ -600,7 +596,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         return Effect.fail(runFailure('A service task needs its config.'));
       const refused = windowTools(input.tools);
       if (refused) return Effect.fail(refused);
-      return callService(link, offline, (client) =>
+      return callService(link, runFailure, (client) =>
         client['task.start']({
           workspace,
           runId: input.runId ?? generateRunId(),
@@ -626,7 +622,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     resume: (runId, input) => {
       const refused = windowTools(input?.tools);
       if (refused) return Effect.fail(refused);
-      return callService(link, offline, (client) =>
+      return callService(link, runFailure, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
         ),

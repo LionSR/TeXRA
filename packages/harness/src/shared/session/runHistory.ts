@@ -9,7 +9,7 @@
  * function on the live path and on resume, and it keeps a session-root
  * service free of per-run mutable cache.
  */
-import { Cause, Context, Data, type Effect, type Scope } from 'effect';
+import { Cause, Context, Data, type Effect } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import {
@@ -20,7 +20,7 @@ import {
   DatabaseRowEarlier,
   DatabaseWriteFailed,
 } from './database';
-import type { Append, CoWrite } from './sessionEvents';
+import type { Alongside, Append } from './sessionEvents';
 import type {
   RunHistoryDraft,
   RunHistoryInconsistent,
@@ -194,7 +194,7 @@ export interface RunCell {
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
-    alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
+    alongside?: Alongside<E>,
   ) => Effect.Effect<RunState, CellError | E>;
   /**
    * Re-read the run under the cell's lock: the state with every row another

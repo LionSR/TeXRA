@@ -47,7 +47,7 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import type { CoWrite } from '@shared/session/sessionEvents';
+import type { Alongside } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
@@ -79,7 +79,7 @@ export interface JoinedFollowUps {
 /** A turn's end and a child's delivery, committed with the next input. */
 export interface Boundary {
   readonly rows: readonly RunHistoryDraft[];
-  readonly alongside?: Effect.Effect<CoWrite, Error, Scope.Scope>;
+  readonly alongside?: Alongside<Error>;
 }
 
 export interface ConsumedFollowUps {

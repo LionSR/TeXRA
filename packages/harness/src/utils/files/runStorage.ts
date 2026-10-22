@@ -30,7 +30,6 @@ import {
   runStorageAbsolutePathUnder,
   runStorageLocationUnder,
   shouldSkipRelocation,
-  snapshotExists,
 } from './runStorageFs';
 import { locateInWorkspace } from './workspaceFS';
 
@@ -166,9 +165,23 @@ export class RunFileService {
         this.runId,
       );
       return yield* Effect.gen(function* () {
-        if (yield* snapshotExists(snapshotAbsolute)) return snapshot;
-
         const fs = yield* FileSystem.FileSystem;
+        // Only absence reads as "no snapshot": any other stat failure fails the
+        // capture, so a permissions error never silently forces a re-copy over a
+        // real snapshot.
+        const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
+          Effect.as(true),
+          Effect.catchIf(isAbsent, () => Effect.succeed(false)),
+          Effect.mapError(
+            (error) =>
+              new Error(
+                `Failed to inspect snapshot destination ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+          ),
+        );
+        if (hasSnapshot) return snapshot;
+
         const stats = yield* fs.stat(target.absolutePath);
         if (stats.type !== 'File') return target;
 
@@ -394,6 +407,7 @@ export class RunFileService {
     return Effect.gen({ self: this }, function* () {
       if (this.mirroredDependencies.size === 0) return;
 
+      const fs = yield* FileSystem.FileSystem;
       yield* Effect.forEach(
         [...this.mirroredDependencies],
         (relativePath) =>
@@ -427,10 +441,9 @@ export class RunFileService {
             // linking the workspace mirror then could hand an agent write at
             // `r<N>/<rel>` the user's working copy, so this dependency is
             // left unlinked, as the destination guard below does.
-            const snapshot = yield* snapshotExists(snapshotAbsolute).pipe(
-              Effect.map((exists) =>
-                exists ? ('present' as const) : ('absent' as const),
-              ),
+            const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
+              Effect.as('present' as const),
+              Effect.catchIf(isAbsent, () => Effect.succeed('absent' as const)),
               Effect.catch((error) =>
                 Effect.logWarning(
                   `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
