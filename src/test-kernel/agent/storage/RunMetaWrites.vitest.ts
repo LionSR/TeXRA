@@ -12,7 +12,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { storedDraft } from '@agent/runtime/storedTurn';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { freshRunState } from '@shared/session/runStateFold';
+import { freshRunState } from '@shared/session/runState';
 import {
   createTestSession,
   publishTestRunStart,

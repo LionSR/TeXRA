@@ -113,7 +113,7 @@ import {
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import {

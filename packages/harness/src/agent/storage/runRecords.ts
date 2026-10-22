@@ -14,7 +14,7 @@ import {
 import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
-import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import { applyRunRows, type RunState } from '@shared/session/runState';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import {
   qualifyAggregateId,
@@ -284,7 +284,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       // The usage is folded from these same rows: one read, so a resume
       // can never pair the end and the totals across two.
       const folded = Result.flatMap(runHistoryRows(rows), (live) =>
-        foldRunState(null, live),
+        applyRunRows(null, live),
       );
       if (Result.isFailure(folded)) {
         yield* Effect.logWarning(
