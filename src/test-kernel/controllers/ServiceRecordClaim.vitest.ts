@@ -1,18 +1,19 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-
+import { NodeFileSystem } from '@effect/platform-node';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect, FileSystem, Fiber, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { nodeFileServices } from '@texra-ai/harness/node';
+import { globalDatabaseLayer } from '@controllers/session/Database';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { GlobalValues } from '@platform/processRuntime';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { globalValuesOver } from '@test/support/setupPlatform';
 import {
   claimServiceRecord,
-  prepareServiceDirectories,
-  servicePaths,
-  type ServiceRecord,
+  readServiceRecord,
 } from '@texra/controllers/server/discovery';
+import type { ServiceRecord } from '@texra/controllers/server/protocol';
 
 const record = (pid: number): ServiceRecord => ({
   pid,
@@ -22,48 +23,110 @@ const record = (pid: number): ServiceRecord => ({
   startedAt: pid,
 });
 
+/** The program over a real global root in a fresh temp directory. */
+const withGlobalValues = <A, E>(program: Effect.Effect<A, E, GlobalValues>) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const storage = yield* fs.makeTempDirectoryScoped({
+        prefix: 'texra-service-claim-',
+      });
+      return yield* program.pipe(
+        Effect.provide(
+          globalValuesOver(
+            globalDatabaseLayer(storage).pipe(
+              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+              Layer.provide(nodeSpawnerLayer),
+              Layer.orDie,
+            ),
+          ),
+        ),
+      );
+    }),
+  ).pipe(Effect.provide(NodeFileSystem.layer));
+
+/** Leaves `held` as the record a claim finds: it claims the empty root. */
+const seed = (held: ServiceRecord) =>
+  claimServiceRecord(held, () => Effect.succeed(null));
+
 describe('claimServiceRecord', () => {
+  it.live(
+    'keeps the winner findable when a contender that probed the dead record commits late or never',
+    () =>
+      withGlobalValues(
+        Effect.gen(function* () {
+          const dead = record(1);
+          yield* seed(dead);
+          // A contender's probe answers for every record but the dead one.
+          const live = (held: ServiceRecord) =>
+            Effect.succeed(held.pid === dead.pid ? null : held.pid);
+          // Two delayed contenders: each has probed the dead record and
+          // stalls before its commit.
+          const stalled = (gate: Deferred.Deferred<void>) => {
+            const probed = Deferred.makeUnsafe<void>();
+            const probe = (held: ServiceRecord) =>
+              held.pid === dead.pid
+                ? Deferred.succeed(probed, undefined).pipe(
+                    Effect.andThen(Deferred.await(gate)),
+                    Effect.as(null),
+                  )
+                : live(held);
+            return { probed, probe };
+          };
+          const interruptedGate = yield* Deferred.make<void>();
+          const lateGate = yield* Deferred.make<void>();
+          const interrupted = stalled(interruptedGate);
+          const late = stalled(lateGate);
+          const interruptedFiber = yield* Effect.forkChild(
+            claimServiceRecord(record(2), interrupted.probe),
+          );
+          const lateFiber = yield* Effect.forkChild(
+            claimServiceRecord(record(3), late.probe),
+          );
+          yield* Deferred.await(interrupted.probed);
+          yield* Deferred.await(late.probed);
+
+          // The winner claims while both stall.
+          expect(yield* claimServiceRecord(record(4), live)).toBeNull();
+          // One contender dies before its commit; the other commits late.
+          yield* Fiber.interrupt(interruptedFiber);
+          yield* Deferred.succeed(lateGate, undefined);
+          // The late one finds the winner live and does not start.
+          expect(yield* Fiber.join(lateFiber)).toBe(4);
+          // A third client finds the winner.
+          expect(yield* readServiceRecord).toEqual(record(4));
+        }),
+      ),
+  );
+
   it.live(
     'publishes exactly one of the services that start at once over a dead record',
     () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          mkdtemp(path.join(tmpdir(), 'texra-service-claim-')),
-        );
-        yield* Effect.addFinalizer(() =>
-          Effect.promise(() => rm(root, { recursive: true, force: true })),
-        );
-        const paths = servicePaths(root);
-        yield* prepareServiceDirectories(paths);
-        const dead = record(1);
-        yield* Effect.promise(() =>
-          writeFile(paths.record, JSON.stringify(dead)),
-        );
-        // Every contender's record names a live service; the dead one's
-        // socket accepts nothing.
-        const retired = new Set<number>();
-        const holder = {
-          probe: (held: ServiceRecord) =>
-            Effect.succeed(held.pid === dead.pid ? null : held.pid),
-          retire: (held: ServiceRecord) =>
-            Effect.sync(() => void retired.add(held.pid)),
-        };
-        const contenders = [2, 3, 4, 5];
-        const answers = yield* Effect.all(
-          contenders.map((pid) =>
-            claimServiceRecord(paths, record(pid), holder),
-          ),
-          { concurrency: 'unbounded' },
-        );
-        const published: ServiceRecord = JSON.parse(
-          yield* Effect.promise(() => readFile(paths.record, 'utf8')),
-        );
-        // One contender holds the record; any other that claimed was
-        // displaced, and retired.
-        const serving = contenders.filter(
-          (pid, index) => answers[index] === null && !retired.has(pid),
-        );
-        expect(serving).toEqual([published.pid]);
-      }).pipe(Effect.provide(nodeFileServices)),
+      withGlobalValues(
+        Effect.gen(function* () {
+          const dead = record(1);
+          yield* seed(dead);
+          const contenders = [2, 3, 4, 5];
+          const answers = yield* Effect.all(
+            contenders.map((pid) =>
+              claimServiceRecord(record(pid), (held) =>
+                Effect.succeed(held.pid === dead.pid ? null : held.pid),
+              ),
+            ),
+            { concurrency: 'unbounded' },
+          );
+          const published = yield* readServiceRecord;
+          const serving = contenders.filter(
+            (_, index) => answers[index] === null,
+          );
+          expect(serving).toEqual([published?.pid]);
+          // Every other contender was answered by the one serving.
+          expect(
+            answers.filter(
+              (answer) => answer !== null && answer !== published?.pid,
+            ),
+          ).toEqual([]);
+        }),
+      ),
   );
 });

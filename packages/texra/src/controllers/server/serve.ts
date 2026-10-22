@@ -32,16 +32,20 @@ import {
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
 import {
+  GlobalValues,
+  type ProcessServices,
+  type Sessions,
+} from '@texra-ai/harness';
+import {
   probeService,
-  retireService,
   ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from './client';
 import {
   claimServiceRecord,
   prepareServiceDirectories,
+  releaseServiceRecord,
   removeDeadSockets,
-  removeServiceFiles,
   servicePaths,
 } from './discovery';
 import {
@@ -55,8 +59,8 @@ import {
   PROTOCOL_VERSION,
   TexraRpcs,
   type ServiceInfo,
+  type ServiceRecord,
 } from './protocol';
-import type { ProcessServices, Sessions } from '@texra-ai/harness';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Data.TaggedError(
@@ -134,6 +138,14 @@ export const serve = Effect.fn('server.serve')(function* (
     );
 
   const startedAt = yield* Clock.currentTimeMillis;
+  const record: ServiceRecord = {
+    pid: process.pid,
+    protocol: PROTOCOL_VERSION,
+    version: BUILD_VERSION,
+    socket,
+    startedAt,
+  };
+  const values = yield* GlobalValues;
   const ended = yield* Deferred.make<ServeExit>();
   // Whether the service is leaving, and the task admissions under way: one
   // value, so an admission is claimed in the same step that checks for a
@@ -146,8 +158,11 @@ export const serve = Effect.fn('server.serve')(function* (
   const release = Effect.suspend(() => {
     if (released) return Effect.void;
     released = true;
-    return removeServiceFiles(paths, process.pid);
-  }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+    return releaseServiceRecord(paths, record);
+  }).pipe(
+    Effect.provideService(FileSystem.FileSystem, fs),
+    Effect.provideService(GlobalValues, values),
+  );
   // No task starts from here on, and the record goes first: a newer
   // service can start and be found while this one finishes on the
   // connections it already holds.
@@ -208,31 +223,23 @@ export const serve = Effect.fn('server.serve')(function* (
   );
   // Claimed once it listens, so a record always names a socket that
   // accepts: one nobody accepts on is a dead service's.
-  const holder = yield* claimServiceRecord(
-    paths,
-    {
-      pid: process.pid,
-      protocol: PROTOCOL_VERSION,
-      version: BUILD_VERSION,
-      socket,
-      startedAt,
-    },
-    {
-      probe: (record) => probeService(record.socket),
-      retire: (record) =>
-        retireService(record.socket).pipe(
-          Effect.mapError(
-            (error) =>
-              new ServiceUnavailable({
-                reason: `The TeXRA service (pid ${record.pid}) whose record this one displaced could not be retired: ${error.message}`,
-              }),
-          ),
-        ),
-    },
+  const holder = yield* claimServiceRecord(record, (held) =>
+    probeService(held.socket),
   ).pipe(
-    Effect.catchTag('PlatformError', (cause) =>
-      Effect.fail(new ServiceListenFailed({ socket, cause })),
-    ),
+    Effect.catchTags({
+      DatabaseReadFailed: (error) =>
+        Effect.fail(
+          new ServiceUnavailable({
+            reason: `The service record could not be read: ${error.message}`,
+          }),
+        ),
+      DatabaseWriteFailed: (error) =>
+        Effect.fail(
+          new ServiceUnavailable({
+            reason: `The service record could not be written: ${error.message}`,
+          }),
+        ),
+    }),
   );
   if (holder !== null)
     return yield* Effect.fail(new ServiceAlreadyRunning({ info: holder }));
