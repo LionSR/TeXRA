@@ -49,7 +49,6 @@ import {
   executeCliToolUseConfig,
   type CliExecuteOptions,
 } from '../runtime/executeCli';
-import type { ProcessServices } from '@texra-ai/harness';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import {
   runOutcomeExitCode,
@@ -70,6 +69,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { ProcessServices } from '@texra-ai/harness';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =

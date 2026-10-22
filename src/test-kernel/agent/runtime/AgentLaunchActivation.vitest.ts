@@ -10,7 +10,6 @@
  *   without it, or records it after its `run.end`.
  */
 import { writeFileSync } from 'node:fs';
-import { AgentConfigSchema } from '@shared/schemas';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -23,6 +22,7 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { withProcessServices } from '@platform/processRuntime';
+import { AgentConfigSchema } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { fakeHostSecrets } from '@test/support/setupPlatform';
 import {
