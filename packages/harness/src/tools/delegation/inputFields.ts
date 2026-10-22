@@ -116,6 +116,26 @@ export function withToolUseSubagentHandoffInstruction(
   return parts.join('\n\n');
 }
 
+/** An agent an `agent` call defines instead of naming one from the
+ *  catalog, named by its `agentName`. */
+export const personaField = z
+  .strictObject({
+    prompt: z
+      .string()
+      .min(1)
+      .describe('Its system prompt: who it is and how it works.'),
+    tools: z
+      .array(z.string().min(1))
+      .nullish()
+      .describe(
+        'The tools it gets, by name; omitted, none. It gets only those you have.',
+      ),
+  })
+  .nullish()
+  .describe(
+    'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
+  );
+
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the

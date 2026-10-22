@@ -40,10 +40,10 @@ const ROUND_BRIEF = [
 
 /**
  * The goal's script for `objective`, stopping its rounds at `maxCostUsd` of
- * spend (`0`: no cap), checked after each round over the rounds' spend as
- * each ended. It returns `{ status, rounds, report }`, with `status`
- * `'completed'` or `'paused'`; what the goal spent in all is its run's, which
- * its delivery reports. Every value reaches the source as a JSON literal;
+ * spend (`0`: no cap). The cap reads what the goal has spent in all after
+ * each round (`spent`: every round, failed ones too, and work a round left
+ * running), never a sum of its own. It returns `{ status, rounds, report }`,
+ * with `status` `'completed'` or `'paused'`. Every value reaches the source as a JSON literal;
  * `String.raw` keeps the script's own escapes as written.
  */
 export const goalScript = (objective: string, maxCostUsd: number): string =>
@@ -51,7 +51,6 @@ export const goalScript = (objective: string, maxCostUsd: number): string =>
 const maxCostUsd = ${JSON.stringify(maxCostUsd)};
 const brief = ${JSON.stringify(ROUND_BRIEF)};
 const schema = ${JSON.stringify(ROUND_SCHEMA)};
-let cost = 0;
 let report = '';
 for (let round = 1; ; round += 1) {
   phase('Round ' + round);
@@ -64,12 +63,11 @@ for (let round = 1; ; round += 1) {
   } catch (error) {
     return { status: 'paused', rounds: round, report: 'Round ' + round + ' ended without a verdict (' + error.name + '): ' + error.message };
   }
-  cost += reply.cost;
   if (reply.structured == null)
     return { status: 'paused', rounds: round, report: 'Round ' + round + ' ended without a verdict: it did not submit one.\n\n' + reply.response };
   report = reply.structured.report;
   if (reply.structured.status === 'done') return { status: 'completed', rounds: round, report };
   if (reply.structured.status === 'needs_user') return { status: 'paused', rounds: round, report };
-  if (maxCostUsd > 0 && cost >= maxCostUsd)
-    return { status: 'paused', rounds: round, report: 'The rounds spent $' + cost.toFixed(2) + ', reaching the goal cap of $' + maxCostUsd + ' (texra.goal.maxCostUsd).\n\n' + report };
+  if (maxCostUsd > 0 && reply.spent >= maxCostUsd)
+    return { status: 'paused', rounds: round, report: 'The goal has spent $' + reply.spent.toFixed(2) + ', reaching its cap of $' + maxCostUsd + ' (texra.goal.maxCostUsd).\n\n' + report };
 }`;

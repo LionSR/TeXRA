@@ -9,6 +9,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
+import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -137,6 +138,9 @@ function agentProposalApprovalSummary(
     return [
       `Script agent request: ${SCRIPT_REQUEST_COPY.title(script)}`,
       SCRIPT_REQUEST_COPY.grant,
+      ...(proposal.persona
+        ? [DEFINED_AGENT_COPY.heading(proposal.persona)]
+        : []),
       scriptRequestFirstAgentLine(
         proposal.agent,
         getModelLabel(proposal.model),
@@ -151,9 +155,19 @@ function agentProposalApprovalSummary(
       `${SCRIPT_REQUEST_COPY.code(script)}:`,
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
+  const { persona } = proposal;
   return [
     `Agent proposal requested: ${proposal.agent} (${agentProposalLabel(proposal)})`,
     `Model: ${getModelLabel(proposal.model)}`,
+    ...(persona
+      ? [
+          DEFINED_AGENT_COPY.heading(persona),
+          `${DEFINED_AGENT_COPY.promptLabel}:`,
+          ...agentProposalInstructionLines(persona.prompt ?? '').map(
+            (line) => `  ${line}`,
+          ),
+        ]
+      : []),
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...fileGroups,
     'Instruction:',

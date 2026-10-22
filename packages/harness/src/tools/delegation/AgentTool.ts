@@ -5,7 +5,7 @@
  * opened on the plugin's recipe.
  *
  * Called from a script it awaits the child and returns the child's envelope
- * (`{ ...output, outcome, cost }`), unless `background` detaches it; called
+ * (`{ ...output, outcome, cost, spent }`), unless `background` detaches it; called
  * directly it detaches, as a delegation always has, except in a one-shot
  * run, which waits. The script's `agent` calls share one approval request
  * showing its source; a direct call proposes itself. A completed
@@ -42,6 +42,7 @@ import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
+  AGENT_SOURCE,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -71,6 +72,7 @@ import {
 } from './inBandSubagentRun';
 import {
   memoriesField,
+  personaField,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
   withToolUseSubagentHandoffInstruction,
@@ -108,6 +110,7 @@ const LAUNCH_FIELDS = {
     .string()
     .min(1, 'agentName is required')
     .describe('The agent to run. It works with its own tools.'),
+  persona: personaField,
   model: z
     .string()
     .nullish()
@@ -164,6 +167,8 @@ type AgentInput = z.infer<typeof AgentInputSchema>;
 export interface ChildLaunch {
   readonly tool: string;
   readonly agentName: string;
+  /** An agent the call defines, named `agentName`: no catalog entry. */
+  readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
   readonly schema: Record<string, unknown> | null | undefined;
@@ -299,13 +304,13 @@ const reusable = Effect.fn('agent.reusable')(function* (
     Effect.sync(() => new Map<string, string>()),
   );
   const { callId } = call;
+  const duplicate = errorResult(
+    'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
+    { name: 'DuplicateCall' },
+  );
   // Claimed before the read yields, so two calls at once cannot both pass.
   const claimed = siblings.get(key);
-  if (claimed !== undefined && claimed !== callId)
-    return errorResult(
-      'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
-      { name: 'DuplicateCall' },
-    );
+  if (claimed !== undefined && claimed !== callId) return duplicate;
   siblings.set(key, callId);
   const { log } = call.run.session;
   const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
@@ -315,13 +320,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
     row.type === 'tool.result' &&
     row.payload.result.status === 'executed' &&
     row.payload.result.reuseKey === key
-      ? [
-          {
-            responseId: row.payload.responseId,
-            callId: row.payload.callId,
-            result: row.payload.result,
-          },
-        ]
+      ? [{ ...row.payload, result: row.payload.result }]
       : [],
   );
   const mine = `${script.callId}/`;
@@ -334,10 +333,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
         row.callId !== callId,
     )
   )
-    return errorResult(
-      'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
-      { name: 'DuplicateCall' },
-    );
+    return duplicate;
   const origin = found.at(-1);
   if (origin === undefined) return null;
   const from = origin.result.reusedFrom ?? origin.callId;
@@ -371,6 +367,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
   const config = yield* getRunRecords(call.run.session, runId).readConfig();
+  const { runs } = yield* call.run.session.view.read([]);
   const recipe = yield* readRecipeResult(
     config,
     result.output,
@@ -387,12 +384,8 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       ...(recipe !== undefined && { changes: recipe.changes }),
       runId,
       outcome: result.outcome,
-      // What the child and every run under it spent: a goal's cap counts it.
-      cost:
-        (yield* call.run.session.view.read([])).runs.get(runId)?.treeUsage
-          .cost ??
-        result.usage?.totalCost ??
-        0,
+      cost: runs.get(runId)?.treeUsage.cost ?? result.usage?.totalCost ?? 0,
+      spent: runs.get(call.run.runId)?.treeUsage.cost ?? 0,
     }),
     ...(key !== undefined && { reuseKey: key }),
   };
@@ -431,8 +424,11 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { run } = call;
   const script = (yield* IssuingScript) ?? undefined;
   const { session, runId: parentRunId } = run;
-  const agent = yield* requireAgent(call.env.roots, launch.agentName, run);
-  const { task, files } = launch;
+  const { task, files, persona } = launch;
+  const agent =
+    persona == null
+      ? yield* requireAgent(call.env.roots, launch.agentName, run)
+      : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
@@ -495,6 +491,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           tool: launch.tool,
           prompt: launch.prompt,
           agent: agent.name,
+          ...(persona != null && { persona }),
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
@@ -573,6 +570,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const proposal: AgentProposal = AgentProposalSchema.parse({
     agent: agent.name,
     agentSource: agent.source,
+    ...(persona != null && { persona }),
     model: selected.value,
     memories: launch.memories,
     ...(workingDirectory !== undefined && { workingDirectory }),
@@ -638,6 +636,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
+    // An approval that picked a catalog agent drops the one defined here.
+    persona:
+      approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.delegationAgentScope,
     ...taskConfig,
@@ -690,11 +691,11 @@ export const agentTool = () =>
     scriptGlobal: { positional: 'prompt' },
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:
-      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
+      "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
     slow: true,
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
-From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost }\`. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
+From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
@@ -704,6 +705,11 @@ It returns the agent's final reply, or a \`schema\` value. Pick the agent whose 
       launchChildAgent({
         tool: 'agent',
         agentName: input.agentName,
+        persona: input.persona && {
+          name: input.agentName,
+          prompt: input.persona.prompt,
+          tools: input.persona.tools ?? [],
+        },
         prompt: input.prompt,
         model: input.model,
         schema: input.schema,

@@ -175,8 +175,9 @@ script can run the same loop itself with
 On your own API key a goal has no natural end, so it carries a spend cap:
 `texra.goal.maxCostUsd`, on the **Tools** page and in `/config`, defaults to
 $5 and is always a user-wide setting, never read from a project
-`.texra/config.json`. It counts what the goal's rounds spend and is checked
-after each round, so a single long round can overshoot it. When the cap is
+`.texra/config.json`. It counts everything the goal has spent: every round,
+failed ones too, and any agent a round left running. It is checked after
+each round, so a single long round can overshoot it. When the cap is
 reached the goal ends paused and says why; raise the cap and run the goal
 again to continue. `0` removes the cap. A goal has no round limit and stops
 after 24 hours.

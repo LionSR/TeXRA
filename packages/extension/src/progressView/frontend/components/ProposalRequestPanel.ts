@@ -31,6 +31,7 @@ import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { selectStyles } from '@ui/styles';
 import {
+  DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
   RUN_GRANT_LABEL,
 } from '@ui/copy/delegationApproval';
@@ -210,7 +211,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     if (data.script)
       body = html`${pickers} ${this.renderScriptSummary(data, data.script)}`;
     else
-      body = html`${pickers} ${this.renderInstruction(data.instruction)}
+      body = html`${pickers} ${this.renderDefinedAgent(data)}
+      ${this.renderInstruction(data.instruction)}
       ${data.task ? this.renderExtractFlags(data) : nothing}
       ${this.renderProposalFiles(data)}`;
     return this.renderCard(
@@ -244,6 +246,13 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       <div class="proposal-card__lede">
         <span>${SCRIPT_REQUEST_COPY.grant}</span>
       </div>
+      ${
+        data.persona
+          ? html`<div class="workflow-proposal__plan-note">
+              ${DEFINED_AGENT_COPY.heading(data.persona)}
+            </div>`
+          : nothing
+      }
       <div class="workflow-proposal__plan-note">
         ${scriptRequestFirstAgentLine(
           data.agent,
@@ -274,6 +283,26 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         }
       </wa-details>
     `;
+  }
+
+  /** An agent the call defines: its name and tools, and, open, its prompt. */
+  private renderDefinedAgent(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const { persona } = data;
+    if (!persona) return nothing;
+    return html`<div class="workflow-proposal__plan-note">
+        ${DEFINED_AGENT_COPY.heading(persona)}
+      </div>
+      <wa-details
+        class="workflow-proposal__workflow-details"
+        summary=${DEFINED_AGENT_COPY.promptLabel}
+        open
+      >
+        <div class="workflow-proposal__instruction script-proposal__source">
+          <pre><code>${persona.prompt ?? ''}</code></pre>
+        </div>
+      </wa-details>`;
   }
 
   private renderInstruction(instruction: string): TemplateResult {

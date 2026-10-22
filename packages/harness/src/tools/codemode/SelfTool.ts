@@ -195,9 +195,9 @@ export const SelfTool = defineTool({
   // Offered with the script tool: only a script calls it.
   scriptGlobal: { positional: 'prompt', withScript: true },
   scriptReturns:
-    "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number }",
+    "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number }",
   slow: true,
-  description: `Run yourself again on a prompt, as a child of this call, and wait for its result: \`{ response, files, structured?, runId, outcome, cost }\`.
+  description: `Run yourself again on a prompt, as a child of this call, and wait for its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`, as \`agent()\` resolves.
 
 Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts from \`prompt\` alone. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,

@@ -29,7 +29,7 @@
   "packages/harness/src/shared/session/sessionFold.ts": 1229,
   "packages/harness/src/shared/session/sessionView.ts": 459,
   "packages/harness/src/tools/bash.ts": 542,
-  "packages/harness/src/tools/delegation/AgentTool.ts": 723,
+  "packages/harness/src/tools/delegation/AgentTool.ts": 729,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 424,
   "packages/harness/src/tools/ExecutionsTool.ts": 796,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 433,

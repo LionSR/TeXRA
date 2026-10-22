@@ -321,7 +321,7 @@ const SURFACE = [
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
-    '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` from the prompt alone. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
+    '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` from the prompt alone. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
