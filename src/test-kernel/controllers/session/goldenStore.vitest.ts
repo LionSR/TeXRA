@@ -105,26 +105,28 @@ const PARENT = RunIdSchema.parse('a00000000001');
 const CHAT = RunIdSchema.parse('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = RunIdSchema.parse('d3e7a0e161ed4e717c2f7ed0');
-const ROUND = 'bb04016df32e420678302598';
+const GOAL = RunIdSchema.parse('7c752d59004c85f4a0bda51f');
+const ROUND = '82f40cbccf0abfd6ee57cf6f';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = RunIdSchema.parse('a0000000000b');
 const SCRIPTED = RunIdSchema.parse('a0000000000c');
+/** The agent the script defined (`persona`), named by its `agent()` call. */
+const DEFINED = '7636b556c2087511ca08dfde';
 /** A headless run, the fork `texra resume --fork` made of it, and the
  *  handoff that continued the fork. */
-const FORK_SOURCE = RunIdSchema.parse('a0000000000d');
-const FORKED = RunIdSchema.parse('a0000000000e');
+const FORK_SOURCE = RunIdSchema.parse('a0000000000e');
+const FORKED = RunIdSchema.parse('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = RunIdSchema.parse('a0000000000f');
-const TOMBSTONED = RunIdSchema.parse('a00000000010');
+const KILLED = RunIdSchema.parse('a00000000010');
+const TOMBSTONED = RunIdSchema.parse('a00000000011');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
-const SERVICE_TASK = RunIdSchema.parse('a00000000011');
-const BACKGROUND = RunIdSchema.parse('a00000000012');
+const SERVICE_TASK = RunIdSchema.parse('a00000000012');
+const BACKGROUND = RunIdSchema.parse('a00000000013');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = RunIdSchema.parse('a00000000005');
-const REVISIONS = ['8c9efa0618c2c1f19924ad00', '1bc5d202b0e5e88e1f4946ec'];
+const REVISIONS = ['7c94c075941239282f97614c', 'ef9d49598e3ed47c0e6d1015'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -343,8 +345,20 @@ describe('the golden 1.0 store', () => {
         [CHAT, 'validation-plan-1'],
         [GOAL, 'script/0'],
         [CHAT, null],
+        // The agent the script defined is its `agent()` call's child.
+        [SCRIPTED, 'validation-script-1/4'],
         [SERVICE_TASK, null],
       ]);
+      // It asked for `executions`, which its parent was not offered: it
+      // gets the rest.
+      const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
+      expect(
+        events.flatMap((event) =>
+          event.type === 'tools.offered' && event.aggregateId === defined
+            ? [event.payload.tools.map(({ name }) => name)]
+            : [],
+        ),
+      ).toEqual([['read_file', 'memory', 'plan']]);
       // The plan the chat ran as a goal: a run on the goal's program, its
       // agent the chat's, that ends with what its one round verified.
       const goal = qualifyAggregateId('run', GOAL);
@@ -419,7 +433,8 @@ describe('the golden 1.0 store', () => {
         run(GOAL, 'Goal', { parent: CHAT, children: [ROUND] }),
         run(ROUND, 'golden_chat', { parent: GOAL }),
         run(CODEX, 'codex', { status: 'cancelled', outcome: 'cancelled' }),
-        run(SCRIPTED, 'golden_script'),
+        run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
+        run(DEFINED, 'golden_reader', { parent: SCRIPTED }),
         run(FORK_SOURCE, 'golden_fork'),
         // The resumed chat over the fork, exited at its idle prompt.
         run(FORKED, 'golden_fork', {

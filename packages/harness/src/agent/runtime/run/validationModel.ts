@@ -54,8 +54,8 @@ const results = await Promise.allSettled([
 ])
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
-/** The golden store's script: finds the reading tool, then two reads and a
- *  command in one `Promise.all`. */
+/** The golden store's script: finds the reading tool, two reads and a command
+ *  in one `Promise.all`, then an agent it defines (`persona`), narrowed. */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
@@ -63,7 +63,7 @@ const [notes, shell] = await Promise.all([
   tools[found.name]({ path: 'notes.tex' }),
   tools.bash({ command: 'echo gathered', description: 'Say gathered' }),
 ])
-return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output }`;
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, defined: (await agent('Answer from the notes.', { agentName: 'golden_reader', label: 'Defined agent', persona: { prompt: 'GOLDEN-CHILD: answer the task.', tools: ['read_file', 'executions'] } })).response }`;
 
 /** The crash suite's background script: one awaited `agent()` call, whose
  *  child the background script run owns. */

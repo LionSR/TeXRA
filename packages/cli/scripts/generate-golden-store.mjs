@@ -48,7 +48,8 @@
  *   rows commit in one order.
  * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
  *   its read tool with `searchTools` and `describeTool`, then reads and runs
- *   one command in a `Promise.all`.
+ *   one command in a `Promise.all`, then runs an agent it defines
+ *   (`persona`), narrowed to the tools the script's run was offered.
  * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
