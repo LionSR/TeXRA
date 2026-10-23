@@ -7,8 +7,11 @@
  * - a drain (`service.stop` with `drain`, the upgrade path): the record is
  *   released at once, so a newer service can start and be found while this
  *   one finishes the tasks at work, and it exits when they end (a
- *   conversation parked here stops with it, resumable);
- * - idleness: no client connected and no task running for `idleAfter`.
+ *   conversation waiting here for its next message stops with it,
+ *   resumable);
+ * - idleness: no client connected and no task at work for `idleAfter` (a
+ *   conversation waiting for its next message stops with it, resumable, as
+ *   in a drain).
  *
  * Whichever ends it, it leaves as a drain does first: no task starts and
  * the record is released, so no client finds a service that is exiting.
@@ -84,7 +87,7 @@ export class ServiceListenFailed extends Data.TaggedError(
 type ServeExit = 'stopped' | 'drained' | 'idle';
 
 interface ServeOptions {
-  /** Exit after this long with no client and no running task. */
+  /** Exit after this long with no client and no task at work. */
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
   readonly shutdown: Deferred.Deferred<void>;
@@ -267,9 +270,10 @@ export const serve = Effect.fn('server.serve')(function* (
     // Read before the runs: once draining, no admission starts, and one
     // that ended since this read holds its run.
     const { draining, admitting, admitted } = yield* Ref.get(admissions);
-    const running = yield* runningTasks(projects);
-    // A drained service waits for the tasks at work; a conversation parked
-    // here is stopped with the service, resumable.
+    // Only the tasks at work hold the service, draining or idle: a
+    // conversation waiting here for its next message is stopped with
+    // the service, resumable, so one a closed chat left here does not keep
+    // the service up for good.
     const working = yield* runningTasks(projects, false);
     const now = yield* Clock.currentTimeMillis;
     if (draining) {
@@ -277,7 +281,7 @@ export const serve = Effect.fn('server.serve')(function* (
         yield* Deferred.succeed(ended, 'drained');
       return;
     }
-    const busy = running > 0 || admitting > 0 || (yield* control.clients) > 0;
+    const busy = working > 0 || admitting > 0 || (yield* control.clients) > 0;
     idleSince = busy ? null : (idleSince ?? now);
     if (idleSince === null || now - idleSince < idleAfter) return;
     // Idle only if nothing was admitted since the read above: the leave is

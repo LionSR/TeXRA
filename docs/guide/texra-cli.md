@@ -484,7 +484,8 @@ One TeXRA service per user and machine runs tasks for every terminal.
 It starts on its own the first time a chat or a `texra tasks` command needs
 it, keeps running the tasks it started when the terminal that started them
 closes, and exits after ten minutes with no client connected and no task
-running.
+at work. A conversation waiting for your next message does not keep it
+up: it stops with the service, and `texra resume` continues it.
 
 A task in the service asks a window of its own project for what only a
 window has, and the window focused last answers. A chat shows its

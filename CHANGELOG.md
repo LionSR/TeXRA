@@ -1143,6 +1143,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The TeXRA service exits when only waiting conversations are left.** A
+  chat you closed left its conversation waiting in the service, and the
+  service counted it as a running task, so it never reached its ten-minute
+  idle exit and stayed up for good. Now only tasks at work keep it up; a
+  waiting conversation stops with it and `texra resume` continues it.
+- **`texra`'s `/resume` no longer lists the conversation you are in.** It
+  offered the open chat as a task to continue; in a new project it now says
+  "Nothing to resume yet."
 - **VS Code's API-key prompt says where keys are kept.** It claimed keys
   live in VS Code's encrypted secret store and never on disk; it now says
   they stay on this machine in an owner-only folder (`~/.texra/secrets`),

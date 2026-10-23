@@ -1149,7 +1149,10 @@ const SCENARIOS = [
       '↑/↓ navigate',
       'Esc close',
     ],
-    unexpect: ['GLM Coding Plan —', 'Platform not initialized', '/key - error'],
+    unexpect: ['Platform not initialized', '/key - error'],
+    // GLM's API key and its Coding Plan share one row; a row of the plan's
+    // own (`GLM Coding Plan — <status>`) must not come back.
+    unexpectPatterns: [/(?<!API\/)GLM Coding Plan —/],
   },
   {
     name: 'api-form-chatgpt-hotkey',
@@ -2637,8 +2640,15 @@ const SCENARIOS = [
       PAGE_DOWN,
     ],
     frame: 'viewport',
-    expect: ['Work plan', 'Objective', 'PgUp/PgDn page', 'Esc', 'close'],
-    unexpect: ['Unknown command: /plan'],
+    // Paged to the end: the objective's last words, its heading scrolled off.
+    expect: [
+      'Work plan',
+      'Lean-style finite',
+      'PgUp/PgDn page',
+      'Esc',
+      'close',
+    ],
+    unexpect: ['Unknown command: /plan', 'Objective'],
     maxLineColumns: 24,
   },
   {

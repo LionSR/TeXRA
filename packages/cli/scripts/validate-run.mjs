@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -1053,11 +1054,6 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
    FROM event e JOIN event_sequence s ON s.id = e.aggregate
    WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
 
-/**
- * Remove a scratch directory, first stopping any TeXRA service a chat in it
- * started: its record names its pid, and a conversation parked there would
- * otherwise keep it running after its home is gone.
- */
 /** The scratch directories made and not yet removed: what an exit or a
  *  signal before a scenario's own cleanup still has to remove. */
 const liveScratch = new Set();
@@ -1091,37 +1087,75 @@ for (const [signal, code] of [
   process.on(signal, () => process.exit(code));
 }
 
+/**
+ * Remove a scratch directory, first stopping every TeXRA service a chat in
+ * it started: a service outlives its clients, and its home going away does
+ * not stop it.
+ */
 function removeScratch(dir) {
   liveScratch.delete(dir);
-  // Every service home under `dir`: each service, the current one and a
-  // retired one still draining, is named by its own `serve-<pid>.sock`. One
-  // still starting has its run directory before its socket, so a socket is
-  // waited for briefly.
-  const runDirs = spawnSync(
+  // Every service home under `dir`, by the sockets its services name in
+  // `run/serve.log`, where each detached service logs the socket it listens
+  // on: the current one and a retired one still draining each have their
+  // own `serve-<pid>.sock`, which a long home keeps outside `dir`, under
+  // `/tmp`. The client opens the log before it starts the service, so a
+  // service still starting is waited for briefly.
+  const logs = spawnSync(
     'find',
-    [dir, '-type', 'd', '-path', '*/.texra/run'],
+    [dir, '-type', 'f', '-path', '*/.texra/run/serve.log'],
     { encoding: 'utf8' },
   );
-  for (const runDir of runDirs.stdout.split('\n').filter(Boolean)) {
-    const servicePids = () =>
-      readdirSync(runDir).flatMap((name) => {
-        const match = /^serve-(\d+)\.sock$/.exec(name);
-        return match ? [Number(match[1])] : [];
-      });
+  for (const log of logs.stdout.split('\n').filter(Boolean)) {
+    const sockets = () =>
+      [
+        ...readFileSync(log, 'utf8').matchAll(
+          / listening on (\S*serve-(\d+)\.sock)$/gm,
+        ),
+      ].map(([, socket, pid]) => ({ socket, pid: Number(pid) }));
+    const pause = () =>
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     for (
       let waited = 0;
-      servicePids().length === 0 && waited < 3_000;
+      sockets().length === 0 && waited < 3_000;
       waited += 100
     )
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    const pids = new Set(servicePids());
-    for (const pid of pids) {
+      pause();
+    const signal = (pid, name) => {
       try {
-        process.kill(pid, 'SIGTERM');
+        process.kill(pid, name);
+        return true;
       } catch {
         // Gone already: nothing left to stop.
+        return false;
       }
-    }
+    };
+    // A logged pid is signalled only while it is still a running
+    // `texra … serve`: one that exited long ago may have had its pid reused.
+    // A zombie (a service this script spawned, which this blocked loop has
+    // not reaped yet) has exited.
+    const running = (pid) => {
+      const [stat = '', ...command] = spawnSync(
+        'ps',
+        ['-o', 'stat=', '-o', 'command=', '-p', String(pid)],
+        { encoding: 'utf8' },
+      )
+        .stdout.trim()
+        .split(/\s+/);
+      return !stat.startsWith('Z') && command.includes('serve');
+    };
+    const pids = [...new Set(sockets().map(({ pid }) => pid))].filter(
+      (pid) => running(pid) && signal(pid, 'SIGTERM'),
+    );
+    // Gone before the scratch is: one still running past the wait is killed.
+    for (let waited = 0; pids.some(running) && waited < 10_000; waited += 100)
+      pause();
+    for (const pid of pids.filter(running)) signal(pid, 'SIGKILL');
+    // A long home's socket directory is outside `dir`.
+    for (const socketDir of new Set(
+      sockets().map(({ socket }) => path.dirname(socket)),
+    ))
+      if (!socketDir.startsWith(`${dir}${path.sep}`))
+        rmSync(socketDir, { recursive: true, force: true });
   }
   rmSync(dir, { recursive: true, force: true });
 }
@@ -2098,7 +2132,13 @@ async function validateServiceSessionIdle() {
     { cwd: project.work, env: { ...process.env, ...env } },
   );
   let log = '';
-  service.stderr.on('data', (chunk) => (log += chunk));
+  // Also where a detached service logs, so removeScratch finds its socket.
+  const serveLog = path.join(storageRoot, 'run', 'serve.log');
+  service.stderr.on('data', (chunk) => {
+    log += chunk;
+    mkdirSync(path.dirname(serveLog), { recursive: true });
+    appendFileSync(serveLog, chunk);
+  });
   let window;
   try {
     await waitFor('the service to listen', () => log.includes('listening on'));
