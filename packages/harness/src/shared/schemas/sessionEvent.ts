@@ -49,8 +49,13 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
+
+/** Tool-call counters a run updates as it goes. */
+export const ConversationProgressSchema = z.object({
+  /** Cumulative number of individual tool calls executed. */
+  toolCallCount: z.number(),
+});
 
 /** The complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([

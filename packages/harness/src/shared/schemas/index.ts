@@ -61,7 +61,6 @@ export * from './pickerOptions';
 export * from './progressView/data';
 
 // Layer 7: Composite schemas (depend on multiple layers)
-export * from './runState';
 export * from './runFacts';
 export * from './rowValues';
 export * from './runHistoryEvent';
