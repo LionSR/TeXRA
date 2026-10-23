@@ -222,7 +222,7 @@ function bareStart(input: SqlRow): SessionEvent | null {
 }
 
 /**
- * The read-time projection of a tool card's output (§10): a `tool.end` on a
+ * The read-time projection of a tool card's output: a `tool.end` on a
  * run history stores no `result`; its output is the `tool.result` committed
  * just before it in the same batch (bar the card's `tool.start`). The card
  * keeps its `files`; the fold keeps the name and input it opened with.

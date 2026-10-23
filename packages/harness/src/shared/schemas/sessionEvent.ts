@@ -52,7 +52,7 @@ import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
-/** C5's complete process identity, encoded canonically without losing null. */
+/** The complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
   z.string().min(1),
   z.int().positive(),
@@ -101,7 +101,7 @@ export function ownerPid(ownerId: OwnerId): number {
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 const AggregateKindSchema = z.enum(['run', 'plugin']);
-/** C2 separates independent lifecycles even when their logical ids coincide:
+/** The kind separates lifecycles even when their logical ids coincide:
  *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
 export type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
@@ -168,9 +168,9 @@ export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
 /**
- * The envelope every durable arm rides (contract C1). A run-scoped fact's
- * aggregate is its run; a plugin's own aggregate is the plugin's key
- * (PRD 5.1: no sentinel run id exists). `at` is the publish clock,
+ * The envelope every durable arm rides, in the event table's own columns. A
+ * run-scoped fact's aggregate is its run; a plugin's own aggregate is the
+ * plugin's key (no sentinel run id exists). `at` is the publish clock,
  * informational only; ordering is `seq` within an aggregate and `commit`
  * across them.
  */
@@ -180,9 +180,9 @@ const envelope = {
   /** The process that appended the row (not the aggregate's claim holder);
    *  null for the trace viewer's reconstruction, which has no writer. */
   origin: OwnerIdSchema.nullable(),
-  /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
-   *  column of a `STRICT` table, so the vocabulary states that rule here and
-   *  the substrate restates it nowhere. */
+  /** The publish clock in whole milliseconds: the store keeps it in an
+   *  `INTEGER` column of a `STRICT` table, so the vocabulary states that
+   *  rule here and the substrate restates it nowhere. */
   at: z.int(),
 };
 
@@ -264,7 +264,7 @@ const RunStartEventSchema = durable('run.start', {
   approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
 });
 
-/** C9 cleanup targets: the run directories owned by this lifecycle, derived by the database. */
+/** The run directories to remove with this lifecycle, derived by the database. */
 const RunRemovedEventSchema = durable('run.removed', {
   runIds: z.array(RunIdSchema),
 });
@@ -363,7 +363,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
       ])
       .optional(),
   }),
-  /** The follow-up became the message a turn carries (C3), in that
+  /** The follow-up became the message a turn carries, in that
    *  message's batch: never delivered twice. */
   durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
@@ -376,7 +376,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The
-   * decision is the durable recovery fact (R5): a model retry (the `failed`
+   * decision is the durable recovery fact: a model retry (the `failed`
    * row that asks) reads its consent off this row, never off a snapshot
    * alone, and an automatic close names its cause here.
    */

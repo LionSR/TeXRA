@@ -137,7 +137,7 @@ function settling<A, E>(
   };
 }
 
-/** The tail drain (C7): read forward from the caller's position on each
+/** The tail drain: read forward from the caller's position on each
  * wake, never past the committed upper bound captured for that read. A level says "there is more", not "there is one more", so a
  * burst of commits during a read collapses into one further read. A read
  * delivers up to the level it started at whether or not every row in
@@ -205,7 +205,7 @@ const reentered = Effect.die(
  * The publisher and public event readers over the root's database. Each
  * reader supplies its own starting position.
  *
- * Publication is one inbox and one consumer fiber (C6): every job, awaited
+ * Publication is one inbox and one consumer fiber: every job, awaited
  * or detached, runs in the order it was enqueued as one SQLite transaction
  * (`Database.job`), and the table's commit order is that order. A job
  * stays interruptible: one cut before its commit rolls back whole, and
@@ -225,7 +225,8 @@ export const sessionEventsLayer = Layer.effect(
      *  attempt that rolls back (and runs again) leaves nothing behind. */
     const tracked = (rows: readonly SessionEvent[]) =>
       afterCommit(Effect.sync(() => track(rows)));
-    // Both of `appendAll`'s refusals pass through typed (D6 b).
+    // Both of `appendAll`'s rejections (a lost claim, a failed write) pass
+    // through typed, not as defects.
     const append: Append = (events) =>
       Effect.tap(log.appendAll(events), tracked);
     /** One job: one transaction (`Database.job`), or in its place with
@@ -340,7 +341,7 @@ export const sessionEventsLayer = Layer.effect(
           'Session publication dropped: the plane has closed',
         );
     };
-    // THE tail (C7): the drain woken by the log's level.
+    // The one tail: the drain woken by the log's level.
     const all = (
       fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,

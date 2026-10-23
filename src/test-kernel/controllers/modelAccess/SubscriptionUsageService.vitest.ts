@@ -816,7 +816,7 @@ describe('SubscriptionUsageService', () => {
     expect(http).toHaveBeenCalledTimes(2);
   });
 
-  // Pins the D16 return-path choice (define-out-of-existence §1e): the caller
+  // Pins the return path of an invalidated fetch: the caller
   // already waiting on an invalidated fetch accepts one stale read, but the
   // stale result never enters the cache — later callers see new-account usage.
   it('keeps an invalidated in-flight snapshot out of the cache', async () => {

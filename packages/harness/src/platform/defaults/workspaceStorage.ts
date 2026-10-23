@@ -18,8 +18,8 @@ function sanitizeWorkspaceBasename(workspacePath: string): string {
 }
 
 /**
- * The identity a workspace's storage is keyed by, built for storage alone
- * (the storage design's §7): the host's displayed root keeps its spelling.
+ * The identity a workspace's storage is keyed by, built for storage alone:
+ * the host's displayed root keeps its spelling.
  * On macOS and Linux it is the native realpath, which answers the name the
  * filesystem holds; the JS realpath keeps the typed case, so on a
  * case-insensitive volume one folder would key two stores. On Windows the

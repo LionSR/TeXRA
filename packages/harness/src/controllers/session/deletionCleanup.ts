@@ -1,7 +1,7 @@
 /**
- * A run's directory on disk: C9 generated-file cleanup, driven only by
- * committed deletion records, and the `run.files` request that copies a
- * stopped run's directory into the workspace or removes it.
+ * A run's directory on disk: removing the files a run generated, driven
+ * only by committed deletion records, and the `run.files` request that
+ * copies a stopped run's directory into the workspace or removes it.
  */
 import * as path from 'node:path';
 

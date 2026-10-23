@@ -268,7 +268,7 @@ export class SubscriptionUsageService {
    * warm. Callers of one key share a {@link SharedAttempt}, so one caller's
    * cancellation cancels only its own wait.
    *
-   * Return-path choice (D16, define-out-of-existence §1e): when invalidate()
+   * Return path: when invalidate()
    * races an in-flight probe, the identity check below keeps the stale result
    * out of the cache, but the already-waiting caller still receives it — one
    * accepted stale read on a read-only usage display.

@@ -16,23 +16,19 @@ import {
 } from '../support/repoScan';
 
 /**
- * Architecture ratchet for the persistence cutover
- * (`2026-09-03-persistence-substrate-decision.md`, stage 1):
- * the substrate has exactly one writer. The rule is one sentence, and section
- * 9 rules out adding a second mechanism to state it: all app-owned durable
- * state lives in the database, and the database is written in one place.
+ * Architecture ratchet: the session store has exactly one writer. All
+ * app-owned durable state lives in the database, and the database is written
+ * in one place.
  *
  * Two halves, because there are two ways to write these rows. A file may not
  * open a SQLite connection of its own, and a file may not carry SQL that
- * mutates the C1 tables. The second half catches a module that reaches the
- * connection through the `Database` service and then hand-writes an insert:
- * the seq and commit assignment of C6 is the whole point of the service, and
- * a second insert site would assign neither.
+ * mutates the event tables. The second half catches a module that reaches
+ * the connection through the `Database` service and then hand-writes an
+ * insert: assigning each row's seq and commit is the whole point of the
+ * service, and a second insert site would assign neither.
  *
- * The allowlist is a single entry on purpose. Stage 2 onward adds the C7
- * reads to that same module rather than new writers; an entry here would mean
- * a second owner of the ordinals, which is the dual system the cutover
- * exists to remove.
+ * The allowlist is a single entry on purpose: a second entry would mean a
+ * second owner of the ordinals.
  */
 const PRODUCTION_ROOTS = ALL_HOST_PRODUCTION_ROOTS;
 

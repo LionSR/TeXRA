@@ -38,11 +38,13 @@ describe('check-guidance-refs', () => {
     expect(runGate('valid')).toMatchObject({ status: 0 });
   });
 
-  it('fails on a dead path and on a row the vocabulary does not declare', () => {
+  it('fails on a dead path, a row the vocabulary does not declare, and a line citation past its file', () => {
     const { status, output } = runGate('broken');
 
     expect(status).toBe(1);
     expect(output).toContain('run.neverWasARow');
     expect(output).toContain('missing.md');
+    expect(output).toContain('src/README.md:999');
+    expect(output).toContain('no such file packages/harness/src/missing.ts');
   });
 });

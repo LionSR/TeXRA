@@ -213,73 +213,77 @@ const projections = (storage: string) =>
   );
 
 describe('the golden 1.0 store', () => {
-  it.effect('decodes every row to an event, and holds what §11 names', () => {
-    const storage = goldenRoot();
-    const rows = raw(storage, (db) =>
-      db
-        .prepare(
-          `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM} ORDER BY e."commit"`,
-        )
-        .all(),
-    );
-    return Effect.gen(function* () {
-      // The fixture's own connection runs the reader's earlier-build scan.
-      const exec = (statement: string, params: readonly unknown[]) =>
-        Effect.sync(() =>
-          raw(storage, (db) =>
-            db.prepare(statement).all(...(params as (string | number)[])),
-          ),
-        );
-      const events = yield* rowReader(
-        storage,
-        armsOf(texraPlugins()),
-        exec,
-      ).read(rows, true);
-      expect(events).toHaveLength(rows.length);
-      const types = new Set(events.map((event) => event.type));
-      // Every row kind is in the fixture, the decode test of a released store,
-      // but `run.model`, projected at read time. The list only shrinks.
-      const notStored = ['run.model'];
-      expect(
-        Object.keys(ROW_KINDS)
-          .filter((kind) => !types.has(kind as (typeof events)[number]['type']))
-          .toSorted(),
-      ).toEqual(notStored);
-      for (const type of [
-        'tool.result',
-        'request.decided',
-        'followup.queued',
-        'script.call',
-        'context.edit',
-        'run.removed',
-      ] as const)
-        expect(types, type).toContain(type);
-      // The chat's `/model` switch: the configs naming the model before and
-      // after it; and its `/compact`, the one edit.
-      const chat = qualifyAggregateId('run', CHAT);
-      expect(
-        events.flatMap((event) =>
-          event.type === 'context.edit' && event.aggregateId === chat
-            ? [event.payload.trigger]
-            : [],
-        ),
-      ).toEqual(['user']);
-      expect([
-        ...new Set(
-          events.flatMap((event) =>
-            event.type === 'run.config' && event.aggregateId === chat
-              ? [event.config.model]
-              : [],
-          ),
-        ),
-      ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
-      // Each request is a queued control, consumed in the batch that applies
-      // it: the switch's `run.config` (no edit), then the compaction's edit,
-      // right after its consumption.
-      const applied = raw(storage, (db) =>
+  it.effect(
+    'decodes every row to an event, and holds every row kind, a fork, owned children and shared blobs',
+    () => {
+      const storage = goldenRoot();
+      const rows = raw(storage, (db) =>
         db
           .prepare(
-            `SELECT json_extract(q.data, '$.control.kind') AS kind,
+            `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM} ORDER BY e."commit"`,
+          )
+          .all(),
+      );
+      return Effect.gen(function* () {
+        // The fixture's own connection runs the reader's earlier-build scan.
+        const exec = (statement: string, params: readonly unknown[]) =>
+          Effect.sync(() =>
+            raw(storage, (db) =>
+              db.prepare(statement).all(...(params as (string | number)[])),
+            ),
+          );
+        const events = yield* rowReader(
+          storage,
+          armsOf(texraPlugins()),
+          exec,
+        ).read(rows, true);
+        expect(events).toHaveLength(rows.length);
+        const types = new Set(events.map((event) => event.type));
+        // Every row kind is in the fixture, the decode test of a released store,
+        // but `run.model`, projected at read time. The list only shrinks.
+        const notStored = ['run.model'];
+        expect(
+          Object.keys(ROW_KINDS)
+            .filter(
+              (kind) => !types.has(kind as (typeof events)[number]['type']),
+            )
+            .toSorted(),
+        ).toEqual(notStored);
+        for (const type of [
+          'tool.result',
+          'request.decided',
+          'followup.queued',
+          'script.call',
+          'context.edit',
+          'run.removed',
+        ] as const)
+          expect(types, type).toContain(type);
+        // The chat's `/model` switch: the configs naming the model before and
+        // after it; and its `/compact`, the one edit.
+        const chat = qualifyAggregateId('run', CHAT);
+        expect(
+          events.flatMap((event) =>
+            event.type === 'context.edit' && event.aggregateId === chat
+              ? [event.payload.trigger]
+              : [],
+          ),
+        ).toEqual(['user']);
+        expect([
+          ...new Set(
+            events.flatMap((event) =>
+              event.type === 'run.config' && event.aggregateId === chat
+                ? [event.config.model]
+                : [],
+            ),
+          ),
+        ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
+        // Each request is a queued control, consumed in the batch that applies
+        // it: the switch's `run.config` (no edit), then the compaction's edit,
+        // right after its consumption.
+        const applied = raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT json_extract(q.data, '$.control.kind') AS kind,
                (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
                 JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
                   AND x.type = 'context.edit'
@@ -290,96 +294,97 @@ describe('the golden 1.0 store', () => {
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
                AND json_extract(q.data, '$.control') IS NOT NULL
              ORDER BY q."commit"`,
-          )
-          .all(CHAT),
-      );
-      expect(applied).toEqual([
-        { kind: 'model', trigger: null },
-        { kind: 'compact', trigger: 'user' },
-      ]);
-      // The durable harness's row shapes (H2): a fork's start names its
-      // source, and its first history row seeds the source's view; an
-      // awaited child names the call
-      // that owns it, and a Codex child, which nobody awaits, names none.
-      const forked = qualifyAggregateId('run', FORKED);
-      expect(
-        events.flatMap((event) =>
-          event.type === 'run.start' && event.aggregateId === forked
-            ? [event.provenance]
-            : [],
-        ),
-      ).toEqual([
-        {
-          kind: 'fork',
-          from: { id: FORK_SOURCE, uid: expect.any(String) },
-          at: expect.any(Number),
-        },
-      ]);
-      expect(
-        events.flatMap((event) =>
-          event.type === 'context.edit' && event.aggregateId === forked
-            ? [[event.payload.cause, event.payload.messages.length > 0]]
-            : [],
-        ),
-      ).toEqual([['fork', true]]);
-      expect(
-        events.flatMap((event) =>
-          event.type === 'run.start' && event.parent !== null
-            ? [[event.parent.id, event.parent.callId]]
-            : [],
-        ),
-      ).toEqual([
-        [PARENT, 'validation-agent-3'],
-        // Each revision is an `agent` call in the recipe's script.
-        [DOCUMENT_TASK, 'script/1'],
-        [DOCUMENT_TASK, 'script/6'],
-        // The goal is the plan call's child; its round, its program's.
-        [CHAT, 'validation-plan-1'],
-        [GOAL, 'script/0'],
-        [CHAT, null],
-        // The agent the script defined is its `agent()` call's child.
-        [SCRIPTED, 'validation-script-1/4'],
-        [SERVICE_TASK, null],
-      ]);
-      // It asked for `executions`, which its parent was not offered: it
-      // gets the rest.
-      const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
-      expect(
-        events.flatMap((event) =>
-          event.type === 'tools.offered' && event.aggregateId === defined
-            ? [event.payload.tools.map(({ name }) => name)]
-            : [],
-        ),
-      ).toEqual([['read_file', 'memory', 'plan']]);
-      // The plan the chat ran as a goal: a run on the goal's program, its
-      // agent the chat's, that ends with what its one round verified.
-      const goal = qualifyAggregateId('run', GOAL);
-      expect(
-        events.flatMap((event) =>
-          event.type === 'run.end' && event.aggregateId === goal
-            ? [event.output.structured]
-            : [],
-        ),
-      ).toEqual([
-        {
-          status: 'completed',
-          rounds: 1,
-          report: 'The golden chat is answered.',
-        },
-      ]);
-      // Context blobs two runs share: one stored value, referenced by rows of
-      // two aggregates.
-      const shared = raw(storage, (db) =>
-        db
-          .prepare(
-            `SELECT r.digest FROM event_blob r JOIN event e ON e."commit" = r."commit"
+            )
+            .all(CHAT),
+        );
+        expect(applied).toEqual([
+          { kind: 'model', trigger: null },
+          { kind: 'compact', trigger: 'user' },
+        ]);
+        // The durable harness's row shapes: a fork's start names its
+        // source, and its first history row seeds the source's view; an
+        // awaited child names the call
+        // that owns it, and a Codex child, which nobody awaits, names none.
+        const forked = qualifyAggregateId('run', FORKED);
+        expect(
+          events.flatMap((event) =>
+            event.type === 'run.start' && event.aggregateId === forked
+              ? [event.provenance]
+              : [],
+          ),
+        ).toEqual([
+          {
+            kind: 'fork',
+            from: { id: FORK_SOURCE, uid: expect.any(String) },
+            at: expect.any(Number),
+          },
+        ]);
+        expect(
+          events.flatMap((event) =>
+            event.type === 'context.edit' && event.aggregateId === forked
+              ? [[event.payload.cause, event.payload.messages.length > 0]]
+              : [],
+          ),
+        ).toEqual([['fork', true]]);
+        expect(
+          events.flatMap((event) =>
+            event.type === 'run.start' && event.parent !== null
+              ? [[event.parent.id, event.parent.callId]]
+              : [],
+          ),
+        ).toEqual([
+          [PARENT, 'validation-agent-3'],
+          // Each revision is an `agent` call in the recipe's script.
+          [DOCUMENT_TASK, 'script/1'],
+          [DOCUMENT_TASK, 'script/6'],
+          // The goal is the plan call's child; its round, its program's.
+          [CHAT, 'validation-plan-1'],
+          [GOAL, 'script/0'],
+          [CHAT, null],
+          // The agent the script defined is its `agent()` call's child.
+          [SCRIPTED, 'validation-script-1/4'],
+          [SERVICE_TASK, null],
+        ]);
+        // It asked for `executions`, which its parent was not offered: it
+        // gets the rest.
+        const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
+        expect(
+          events.flatMap((event) =>
+            event.type === 'tools.offered' && event.aggregateId === defined
+              ? [event.payload.tools.map(({ name }) => name)]
+              : [],
+          ),
+        ).toEqual([['read_file', 'memory', 'plan']]);
+        // The plan the chat ran as a goal: a run on the goal's program, its
+        // agent the chat's, that ends with what its one round verified.
+        const goal = qualifyAggregateId('run', GOAL);
+        expect(
+          events.flatMap((event) =>
+            event.type === 'run.end' && event.aggregateId === goal
+              ? [event.output.structured]
+              : [],
+          ),
+        ).toEqual([
+          {
+            status: 'completed',
+            rounds: 1,
+            report: 'The golden chat is answered.',
+          },
+        ]);
+        // Context blobs two runs share: one stored value, referenced by rows of
+        // two aggregates.
+        const shared = raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT r.digest FROM event_blob r JOIN event e ON e."commit" = r."commit"
              GROUP BY r.digest HAVING count(DISTINCT e.aggregate) > 1`,
-          )
-          .all(),
-      );
-      expect(shared.length).toBeGreaterThan(0);
-    });
-  });
+            )
+            .all(),
+        );
+        expect(shared.length).toBeGreaterThan(0);
+      });
+    },
+  );
 
   it.effect('folds to the pinned session view and run states', () => {
     const storage = goldenRoot();

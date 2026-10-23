@@ -8,8 +8,8 @@
  * The payloads are the runtime's own Zod wire shapes (the session bridge's
  * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `AgentConfig`). Each
  * crosses the RPC edge through {@link zodWire}, a thin Effect Schema whose
- * decode is the Zod parse, so Zod stays the single source of truth (ruling
- * D3). The procedures:
+ * decode is the Zod parse, so Zod stays the single source of truth. The
+ * procedures:
  *
  * - `service.hello`: the handshake; a client compares `protocol` with its own.
  * - `service.stop`: stop now (`drain: false`), or stop taking new work and

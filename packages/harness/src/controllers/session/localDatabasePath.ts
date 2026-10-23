@@ -98,7 +98,8 @@ function isLocalDirectory(
  * opens the file with SQLite's URI `mode=rw`, which never makes one) and
  * answer the database path inside it.
  *
- * C1: reject remote or unclassified storage before SQLite opens. The native
+ * Reject remote or unclassified storage before SQLite opens: WAL does not
+ * work over a network filesystem. The native
  * Windows realpath uses GetFinalPathNameByHandleW, resolving junctions and
  * mapped shares to their final DOS or UNC path. A UNC result is not local.
  * https://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_realpath

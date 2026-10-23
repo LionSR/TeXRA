@@ -57,7 +57,7 @@ const REGISTRY_READ = /\bROW_KINDS\b|\.upcast(?:ers)?\b/;
 
 /**
  * Every repo module `SessionEventSchema` reaches, and the `@texra-ai/llm`
- * imports among them (§4): a stored shape the package owns makes a provider
+ * imports among them: a stored shape the llm package owns makes a provider
  * SDK or enum change a stored format change.
  */
 function llmImportsOfStoredShapes(): {

@@ -5,8 +5,8 @@
  * beside that one would race it.
  *
  * At open it finds the interrupted roots: runs no process holds that did not
- * end, launched by a user (an owned child is resumed by its parent's call,
- * HQ6). Each one a resume would find blocked gets its reason in the
+ * end, launched by a user (an owned child is resumed by its parent's call).
+ * Each one a resume would find blocked gets its reason in the
  * projection (`RunView.resumeBlocked`). Under `texra.resumeOnOpen: auto` the
  * rest are resumed, and a blocked one is resumed once it is unblocked; under
  * `ask` they are left for the window to list.

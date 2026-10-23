@@ -153,7 +153,7 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 /**
  * Create a root "Run:" stage, logging a user instruction first so it has no
  * group and renders before the run group; a root never inherits a parent
- * run's stage (2026-05-30-progress-grouping-refactor.md, R1).
+ * run's stage.
  */
 function beginRunStage(
   agentLogger: AgentTrace,

@@ -12,9 +12,9 @@ import { Deferred, Effect, PubSub } from 'effect';
  * - `emitAppSignal` publishes and returns. It never runs a subscriber, so a
  *   subscriber can neither block nor fail the code that emitted.
  * - Each subscriber drains its own `PubSub` subscription on its own fiber,
- *   forked at the host's run edge (R1: the fork lives at the host entry, not
- *   in the bus). One subscriber sees the signals it subscribed to in
- *   publication order; there is no order *between* subscribers, and a slow
+ *   forked at the host's run edge (the fork lives at the host entry, not
+ *   in the bus, since only a host runs Effects). One subscriber sees the
+ *   signals it subscribed to in publication order; there is no order *between* subscribers, and a slow
  *   one holds up neither the publisher nor another subscriber.
  * - A subscriber that throws is logged at `warn` by its own delivery fiber
  *   and keeps its subscription: one broken listener never truncates a
@@ -160,7 +160,7 @@ interface AppSignalEvent {
 /**
  * The hub every signal is published to, opened by the first subscriber. A
  * `PubSub` is built inside an Effect and this module holds no execution
- * boundary of its own (R1), so there is nothing to open it before then — and
+ * boundary of its own, so there is nothing to open it before then — and
  * nothing is lost: a subscription only receives what is published after it
  * exists, so a signal emitted before the first subscriber had no reader
  * either way. Unbounded and never shut down: it lives as long as the

@@ -36,7 +36,7 @@ export function localCallsOf(
 }
 
 /**
- * Parse a call's argument bytes on demand (D4). Empty bytes are the empty
+ * Parse a call's argument bytes on demand. Empty bytes are the empty
  * object; bytes that are not JSON stay a string the tool's own schema will
  * refuse with a diagnostic, exactly as the handler path did.
  */
