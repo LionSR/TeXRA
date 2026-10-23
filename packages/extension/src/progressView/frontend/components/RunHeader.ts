@@ -62,9 +62,8 @@ export interface HeaderMenuItem {
 const DELETE_SESSION = 'deleteSession';
 /** The menu value of the rename item, which turns the title into a field. */
 const RENAME_TASK = 'renameTask';
-/** The menu values of Fork and Hand off, and the prefix of a fork's link. */
+/** The menu value of Fork, and the prefix of a fork's link. */
 const FORK_TASK = 'forkTask';
-const HAND_OFF = 'handOff';
 const OPEN_FORK = 'openFork:';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
@@ -148,18 +147,6 @@ export class RunHeader extends LitElement {
       }
       .forked-from:hover {
         color: var(--color-text-link);
-      }
-
-      .handoff {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-xs) 0;
-      }
-      .handoff-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-2xs);
       }
 
       .status-label,
@@ -266,8 +253,6 @@ export class RunHeader extends LitElement {
 
   /** The title is a field while the user renames the run. */
   @state() private renaming = false;
-  /** The handoff's text is being written, under the header row. */
-  @state() private handingOff = false;
 
   private readonly copyDiagnostics = new CopyButtonController(this, {
     successTitle: 'Copied!',
@@ -287,14 +272,12 @@ export class RunHeader extends LitElement {
     }
   }
 
-  /** The rename field and the handoff form belong to the run they were
-   *  opened on: showing another run closes them. */
+  /** The rename field belongs to the run it was opened on: showing another
+   *  run closes it. */
   protected override willUpdate(changed: PropertyValues<this>): void {
     const previous = changed.get('run');
-    if (previous !== undefined && previous?.id !== this.run?.id) {
+    if (previous !== undefined && previous?.id !== this.run?.id)
       this.renaming = false;
-      this.handingOff = false;
-    }
   }
 
   private startRename(): void {
@@ -353,55 +336,6 @@ export class RunHeader extends LitElement {
     >
       ${waIcon('code-branch')} ${label}
     </button>`;
-  }
-
-  /** The handoff's text: the task continues from it alone, or, cleared
-   *  with none, from the user's next message. */
-  private renderHandoff(run: RunView): TemplateResult | typeof nothing {
-    if (!this.handingOff) return nothing;
-    const send = (handoff: string | null) => {
-      this.handingOff = false;
-      this.dispatchEvent(
-        SessionUiEvents.runtime({ kind: 'run.reset', runId: run.id, handoff }),
-      );
-    };
-    const text = () =>
-      (
-        this.renderRoot.querySelector<HTMLTextAreaElement>('.handoff-text')
-          ?.value ?? ''
-      ).trim();
-    return html`<div class="handoff">
-      <wa-textarea
-        class="handoff-text"
-        label="Hand off to a fresh context"
-        hint="The task continues from this text alone: the model no longer sees the conversation before it. It takes effect when the task next waits for you."
-        rows="3"
-        resize="vertical"
-        placeholder="What the task should know to continue…"
-      ></wa-textarea>
-      <div class="handoff-actions">
-        <wa-button
-          variant="brand"
-          size="s"
-          @click=${() => {
-            const handoff = text();
-            if (handoff !== '') send(handoff);
-          }}
-          >Hand off</wa-button
-        >
-        <wa-button appearance="outlined" size="s" @click=${() => send(null)}
-          >Clear without a summary</wa-button
-        >
-        <wa-button
-          appearance="plain"
-          size="s"
-          @click=${() => {
-            this.handingOff = false;
-          }}
-          >Cancel</wa-button
-        >
-      </div>
-    </div>`;
   }
 
   /** Whether a run grant is on, its own or its ancestry's. */
@@ -490,7 +424,6 @@ export class RunHeader extends LitElement {
         <slot name="end"></slot>
         ${this.renderMenu(run, statusLabel, passLabel)}
       </div>
-      ${this.renderHandoff(run)}
     `;
   }
 
@@ -511,7 +444,6 @@ export class RunHeader extends LitElement {
     const canDelete = run.actions.includes('delete');
     const canRename = run.actions.includes('rename');
     const canFork = run.actions.includes('fork');
-    const canHandOff = run.actions.includes('reset');
     const forks = [...(this.view?.runs.values() ?? [])].filter(
       (candidate) => candidate.forkedFrom?.id === run.id,
     );
@@ -528,10 +460,6 @@ export class RunHeader extends LitElement {
             this.dispatchEvent(
               SessionUiEvents.host({ kind: 'fork', runId: run.id }),
             );
-            return;
-          }
-          if (value === HAND_OFF) {
-            this.handingOff = true;
             return;
           }
           const fork = forks.find(
@@ -580,13 +508,6 @@ export class RunHeader extends LitElement {
           canFork
             ? html`<wa-dropdown-item value=${FORK_TASK}
                 >${waIcon('code-branch', { slot: 'icon' })}${TASK_ACTIONS.fork}</wa-dropdown-item
-              >`
-            : nothing
-        }
-        ${
-          canHandOff
-            ? html`<wa-dropdown-item value=${HAND_OFF}
-                >${waIcon('arrow-right', { slot: 'icon' })}${TASK_ACTIONS.handOff}</wa-dropdown-item
               >`
             : nothing
         }

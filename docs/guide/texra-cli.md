@@ -452,25 +452,17 @@ lists recent tasks by title, with an id it continues that task, and
 `/resume all` continues every interrupted one. `/rename <title>` gives the
 focused task your own title. A missing or malformed id exits with code 2.
 
-Fork, reset or hand off a conversation as you continue it:
+Fork a conversation as you continue it:
 
 ```bash
 texra resume <id> --fork               # a new task holding the conversation
-texra resume <id> --fork --at <n>      # the same, cut at the end of an earlier turn
-texra resume <id> --reset              # clear what the model sees, then continue
-texra resume <id> --handoff "<text>"   # clear it and continue from this text
 ```
 
 Inside the chat, `/fork` continues a new task holding the conversation
-(the original stays in `/resume`), `/handoff <text>` continues the task in a
-fresh context that starts from your text, and `/reset` clears that context
-so the model answers your next message alone.
+(the original stays in `/resume`).
 
-A fork leaves the original task unchanged, and it can be cut only at the
-end of a turn: a position inside one is refused. A reset or a handoff takes
-effect when the task is next waiting for you, after any message already
-queued for it, and the handoff's text is the message the model answers
-next.
+A fork holds the conversation as it stood at the end of its last turn and
+leaves the original task unchanged.
 
 When `texra chat` opens without a task to resume, it looks for tasks a
 closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":

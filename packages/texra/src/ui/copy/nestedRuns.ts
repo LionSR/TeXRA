@@ -72,8 +72,6 @@ export const TASK_ACTIONS = {
   /** The same, cut before one of the user's messages, which returns to the
    *  new task's composer. */
   forkFromHere: 'Fork from here',
-  /** The header menu's fresh-context item (the TUI's `/handoff`). */
-  handOff: 'Hand off…',
   /** A forked task's header line and its empty transcript's first line. */
   forkedFrom: (title: string) => `Forked from ${title}`,
   /** The source's header menu item for each of its forks. */

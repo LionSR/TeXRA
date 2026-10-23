@@ -307,15 +307,14 @@ export const ModelMessagePayloadSchema = z
  * causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
  * longer the latest. `usage` is a summary call's priced usage, folded as a
- * response's (`null` when no model was called). Compaction (`run/compaction.ts`),
- * reset and handoff (`FollowUps.ts`) and the fork
- * seed (`forkRun.ts`) write it. Whether the result is preparable is the run
+ * response's (`null` when no model was called). Compaction (`run/compaction.ts`)
+ * and the fork seed (`forkRun.ts`) write it. Whether the result is preparable is the run
  * history's check, at write and cold load: a payload cannot see the
  * history it edits.
  */
 export const ContextEditPayloadSchema = z
   .strictObject({
-    cause: z.enum(['compaction', 'reset', 'handoff', 'fork']),
+    cause: z.enum(['compaction', 'fork']),
     trigger: z.enum(['context-limit', 'user']).nullable(),
     base: z.int().positive().nullable(),
     range: z.strictObject({

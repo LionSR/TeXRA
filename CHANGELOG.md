@@ -370,18 +370,15 @@ history`, a resume and a follow-up say it was "written by an earlier
   marker is gone (Enter on that row still resumes). A request card whose
   task stopped before it was answered carries its own **Resume** button.
   `/resume` lists tasks by title, not id.
-- **Fork and hand off; "Edit as new task" is gone.** A conversation's
+- **Fork; "Edit as new task" is gone.** A conversation's
   ended line and header menu offer **Fork**: a new task holding the
   conversation, opened and waiting for your message, while the original is
   left as it was. Each of your messages after the first offers **Fork from
   here** (on hover): the fork holds the conversation before that message,
   and the message waits in its composer to change. A forked task says
   "Forked from _task_" in its header and at the top of its transcript, and
-  the source's menu lists its forks. **Hand off…** in the header menu
-  continues a running task in a fresh context that starts from text you
-  write, or, with **Clear without a summary**, from your next message. In
-  the CLI: `/fork`, `/handoff <text>` and `/reset` (`/clear` still starts a
-  new task). "Edit as new task" is removed from the ended line (Fork keeps
+  the source's menu lists its forks. In the CLI: `/fork` (`/clear` still
+  starts a new task). "Edit as new task" is removed from the ended line (Fork keeps
   the history it dropped; the composer already starts a new task) and from
   the delegation row (the agent's own task has Fork).
 - **Rename a task.** The header menu's **Rename…** (the CLI's
@@ -771,9 +768,8 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 - **`texra resume` continues a conversation the service is running
   (CLI).** Resuming a chat's task that the background service still holds
-  (left waiting when its terminal closed) continues it there, with
-  `--handoff` and `--reset` applied by the service, instead of refusing it
-  as held by another process. `TEXRA_NO_SERVICE=1` runs a chat in its own
+  (left waiting when its terminal closed) continues it there, instead of
+  refusing it as held by another process. `TEXRA_NO_SERVICE=1` runs a chat in its own
   process, as on Windows.
 
 - **Every chat is a task of the background service (CLI).** `texra chat`
@@ -820,20 +816,13 @@ history`, a resume and a follow-up say it was "written by an earlier
   reaches the compaction threshold, TeXRA summarizes the earlier turns in
   the background while the agent keeps working on the full history, and
   swaps the summary in at its next model call or when its turn ends,
-  keeping everything that happened since. `/compact` still waits for its summary, and a reset or
-  handoff applies a finished summary first or stops one still running.
+  keeping everything that happened since. `/compact` still waits for its
+  summary.
 
-- **Fork, reset and hand off a conversation.** `texra resume <id> --fork`
-  continues a new task that holds the conversation as it stood at the end
-  of its last turn (`--at <position>` picks an earlier turn's end), and
-  leaves the original unchanged. `--reset` clears what the model sees of
-  the conversation before you continue; `--handoff "<text>"` clears it and
-  continues from your text alone. A fork records where it came from, and
-  each reset or handoff is recorded where the model's view was cut. A fork
-  inside a turn is refused. A reset or handoff takes effect when the task
-  next waits for you, after any message already queued for it. The agent
-  SDK can fork, reset and hand off too; the progress view and desktop app
-  get their menus for these in a later release.
+- **Fork a conversation.** `texra resume <id> --fork` continues a new
+  task that holds the conversation as it stood at the end of its last turn,
+  and leaves the original unchanged. A fork records where it came from.
+  The agent SDK can fork too.
 
 - **One Plugins page.** Settings › Plugins (and `/plugins` in the terminal)
   lists everything that adds tools or agents: TeXRA's own plugins, installed

@@ -678,7 +678,6 @@ const driveProcess = <TTurn, R>(
   input: RunInput,
 ): Effect.Effect<TTurn | undefined, Error, R> =>
   Effect.gen(function* () {
-    const { runId } = loop.params;
     let next = () => strategy.launch(loop.signal);
     let result: TTurn | undefined;
     let resumed = false;
@@ -706,11 +705,6 @@ const driveProcess = <TTurn, R>(
             ),
           ).pipe(Effect.interruptible);
       if (!batch || loop.isInterrupted()) break;
-      // A view edit is asked of a root's own loop, never of a child.
-      if (batch.kind === 'edit')
-        return yield* Effect.die(
-          new Error(`${runId}: a child run took a view edit`),
-        );
       // The batch ends the wait: the turn it starts is the current one.
       loop.consumed = batch.kind === 'synthetic' ? [] : batch.followUps;
       resumed = true;

@@ -309,7 +309,7 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
  * request boundary of the turn, or its end at the latest, lands it as the
  * edit of messages `[0, to)` at the `base` it was computed from. A binding
  * that carries one turn at a time waits for it instead. Every other edit of
- * the view (a `/compact`, a model switch, a reset, a handoff) settles this
+ * the view (a `/compact`, a model switch) settles this
  * first ({@link settle}), so no summary meets a view another edit moved. A
  * history past the window waits for the summary; a `/compact` settles, then
  * summarizes the whole history.

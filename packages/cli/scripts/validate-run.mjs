@@ -988,9 +988,8 @@ prompt: |
     },
     /**
      * `texra resume` with `args` under a PTY, then each exchange in turn:
-     * its message typed once the chat idles (none: the resume itself starts
-     * the turn), and its reply awaited. Exits once the last reply shows;
-     * answers the run id the exit hint names.
+     * its message typed once the chat idles, and its reply awaited. Exits
+     * once the last reply shows; answers the run id the exit hint names.
      */
     chat: async (args, exchanges) => {
       let at = 0;
@@ -1011,15 +1010,10 @@ prompt: |
           while (!exiting) {
             const plain = stripVTControlCharacters(pty.output).slice(from);
             const exchange = exchanges[at];
-            if (
-              !typed &&
-              (exchange.message === null || plain.includes('Idle'))
-            ) {
+            if (!typed && plain.includes('Idle')) {
               typed = true;
-              if (exchange.message !== null) {
-                pty.setTimer(() => pty.write(exchange.message), 500);
-                pty.setTimer(() => pty.write('\r'), 900);
-              }
+              pty.setTimer(() => pty.write(exchange.message), 500);
+              pty.setTimer(() => pty.write('\r'), 900);
             }
             if (!typed || !plain.includes(exchange.reply)) return;
             from += plain.indexOf(exchange.reply) + exchange.reply.length;
@@ -1483,65 +1477,24 @@ async function validateSdkResumeApproval() {
 }
 
 /**
- * Fork, handoff and reset end to end (durable harness H5): a headless run
- * answers one message; `texra resume --fork` continues a new task holding
- * that conversation, `--handoff` continues it from a note alone, and
- * `--reset` from nothing. The store's `run.start` and `context.edit` rows
- * are kept as the artifact. It runs in the service, and with the chat as
- * its tasks' writer (`TEXRA_NO_SERVICE`), where the chat resumes the task
- * in process and asks for the reset as soon as the resume is admitted.
+ * Fork end to end (durable harness H5): a headless run answers one message,
+ * and `texra resume --fork` continues a new task holding that conversation.
+ * The store's `run.start` and `context.edit` rows are kept as the artifact.
  */
-async function validateForkResetHandoff({ inProcess }) {
-  const mode = inProcess ? 'in-process' : 'service';
-  const cwd = makeScratch(`texra-cli-fork-${mode}-`);
+async function validateFork() {
+  const cwd = makeScratch('texra-cli-fork-');
   try {
     const project = echoProject(cwd);
-    // Each mode as named, whatever the validator itself was started with.
-    if (inProcess) project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    else delete project.ptyEnv.TEXRA_NO_SERVICE;
     const source = project.firstRun('First message');
-    // The source's `turn.begin`: inside its turn, which a fork refuses.
-    const [inside] = project.readStore(
-      `SELECT e.seq FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = '${source}' AND e.type = 'run.position'
-         AND json_extract(e.data, '$.payload.at') = 'turn.begin'`,
-    );
-    const unsettled = await runTexraPty(
-      ['resume', source, '--fork', '--at', String(inside.seq)],
-      {
-        label: 'texra resume --fork --at <turn.begin>',
-        cwd: project.work,
-        env: project.ptyEnv,
-      },
-    );
-    assert(
-      unsettled.exit.exitCode !== 0 &&
-        stripVTControlCharacters(unsettled.output).includes(
-          'A fork starts at a settled point',
-        ),
-      `a fork inside a turn should be refused\noutput:\n${unsettled.output}`,
-    );
-    const replies = [
-      'First message | Second message',
-      'Model saw: Handoff note',
-      'Model saw: After reset',
-    ];
+    const replies = ['First message | Second message'];
     const fork = await project.chat(
       [source, '--fork'],
       [{ message: 'Second message', reply: replies[0] }],
     );
     assert(fork && fork !== source, 'the fork should continue a new task');
-    await project.chat(
-      [fork, '--handoff', 'Handoff note'],
-      [{ message: null, reply: replies[1] }],
-    );
-    await project.chat(
-      [fork, '--reset'],
-      [{ message: 'After reset', reply: replies[2] }],
-    );
 
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact(`fork-reset-handoff-${mode}.json`, {
+    const artifactPath = writeArtifact('fork.json', {
       source,
       fork,
       replies,
@@ -1559,8 +1512,8 @@ async function validateForkResetHandoff({ inProcess }) {
       `the fork's run.start should name its source (artifact: ${artifactPath})`,
     );
     assert(
-      causes.join() === 'fork,handoff,reset',
-      `the fork should record its seed, the handoff and the reset as context.edit rows, got ${causes.join()} (artifact: ${artifactPath})`,
+      causes.join() === 'fork',
+      `the fork should record its seed as a context.edit row, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -1568,36 +1521,26 @@ async function validateForkResetHandoff({ inProcess }) {
 }
 
 /**
- * The TUI's fork, handoff and reset (GUI lane G5): in a resumed chat,
- * `/fork` continues a new task holding the conversation (its next reply
- * names the first message), `/handoff` continues it from a note alone, and
- * `/reset` from the next message alone. The store's `run.start` and
- * `context.edit` rows and the replies are the artifact.
+ * The TUI's fork (GUI lane G5): in a resumed chat, `/fork` continues a new
+ * task holding the conversation (its next reply names the first message).
+ * The store's `run.start` and `context.edit` rows and the replies are the
+ * artifact.
  */
-async function validateTuiForkHandoffReset() {
+async function validateTuiFork() {
   const cwd = makeScratch('texra-cli-tui-fork-');
   try {
     const project = echoProject(cwd);
     const source = project.firstRun('First message');
-    const replies = [
-      'Forked from',
-      'First message | Second message',
-      'Model saw: Handoff note',
-      'Reset: the model',
-      'Model saw: After reset',
-    ];
+    const replies = ['Forked from', 'First message | Second message'];
     const exitId = await project.chat(
       [source],
       [
         { message: '/fork', reply: replies[0] },
         { message: 'Second message', reply: replies[1] },
-        { message: '/handoff Handoff note', reply: replies[2] },
-        { message: '/reset', reply: replies[3] },
-        { message: 'After reset', reply: replies[4] },
       ],
     );
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact('tui-fork-handoff-reset.json', {
+    const artifactPath = writeArtifact('tui-fork.json', {
       source,
       exitId,
       replies,
@@ -1618,8 +1561,8 @@ async function validateTuiForkHandoffReset() {
       `/fork should continue a new task forked from ${source} (artifact: ${artifactPath})`,
     );
     assert(
-      causes.join() === 'fork,handoff,reset',
-      `the fork should record its seed, the handoff and the reset, got ${causes.join()} (artifact: ${artifactPath})`,
+      causes.join() === 'fork',
+      `the fork should record its seed, got ${causes.join()} (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -3595,9 +3538,8 @@ async function validateCliRunArtifacts(options = {}) {
   validateStopHookBlock();
   validateSdkInlinePersona();
   await validateSdkResumeApproval();
-  await validateForkResetHandoff({ inProcess: false });
-  await validateForkResetHandoff({ inProcess: true });
-  await validateTuiForkHandoffReset();
+  await validateFork();
+  await validateTuiFork();
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
   await validateOpenTimePrompt();
