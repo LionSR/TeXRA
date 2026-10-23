@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@anthropic-ai/claude-agent-sdk':
-      specifier: ^0.3.303
-      version: 0.3.303
+      specifier: ^0.3.304
+      version: 0.3.304
     '@effect/platform-node':
       specifier: 4.0.6
       version: 4.0.6
@@ -61,8 +61,8 @@ catalogs:
       specifier: ^0.1.1
       version: 0.1.1
     ignore:
-      specifier: ^7.0.12
-      version: 7.0.12
+      specifier: ^7.0.13
+      version: 7.0.13
     image-size:
       specifier: ^2.0.4
       version: 2.0.4
@@ -124,8 +124,8 @@ catalogs:
       specifier: npm:@typescript/typescript6@^6.0.2
       version: 6.0.2
     undici:
-      specifier: ^8.12.2
-      version: 8.12.2
+      specifier: ^8.12.3
+      version: 8.12.3
     which:
       specifier: ^5.0.0
       version: 5.0.0
@@ -224,7 +224,7 @@ importers:
         version: 17.13.0
       ignore:
         specifier: 'catalog:'
-        version: 7.0.12
+        version: 7.0.13
       jsdom:
         specifier: ^30.1.3
         version: 30.1.3(@noble/hashes@2.2.0)
@@ -239,7 +239,7 @@ importers:
         version: 3.1.0(zod@4.4.3)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.2)(ws@8.22.0)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.4.3)
       prettier:
         specifier: ^3.9.10
         version: 3.9.10
@@ -260,7 +260,7 @@ importers:
         version: 8.71.2(@typescript/typescript6@6.0.2)(eslint@10.13.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
       undici:
         specifier: 'catalog:'
-        version: 8.12.2
+        version: 8.12.3
       vite:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)
@@ -388,8 +388,8 @@ importers:
   packages/desktop:
     dependencies:
       dockview:
-        specifier: 8.6.0
-        version: 8.6.0
+        specifier: 8.6.1
+        version: 8.6.1
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -540,7 +540,7 @@ importers:
         version: 2.3.0
       ignore:
         specifier: 'catalog:'
-        version: 7.0.12
+        version: 7.0.13
       image-size:
         specifier: 'catalog:'
         version: 2.0.4
@@ -588,7 +588,7 @@ importers:
         version: 1.0.2
       undici:
         specifier: 'catalog:'
-        version: 8.12.2
+        version: 8.12.3
       which:
         specifier: 'catalog:'
         version: 5.0.0
@@ -677,7 +677,7 @@ importers:
         version: 0.28.2
       openai:
         specifier: 7.20.0
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.2)(ws@8.22.0)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.4.3)
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.3(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1))
@@ -689,7 +689,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 'catalog:'
-        version: 0.3.303(@anthropic-ai/sdk@0.135.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.304(@anthropic-ai/sdk@0.135.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.14.0
         version: 3.14.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.3.0)
@@ -770,7 +770,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.2)(ws@8.22.0)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.4.3)
       pretty-bytes:
         specifier: 'catalog:'
         version: 7.2.0
@@ -848,52 +848,52 @@ packages:
     resolution: {integrity: sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA==}
     engines: {node: '>=18'}
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.303':
-    resolution: {integrity: sha512-QAWV9Zd7i7FQDaUSwZNVXJirqCS9CSF4aPwbkGwLvLH83qcfFOmnyxWUg1H7dU6tJFLOCyDLQzc3xzUA4dakoA==}
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.304':
+    resolution: {integrity: sha512-DMKedNHwWt1bFOINlYAebabk1ZH4DLvu59GIg6c/GFZjdpLQKn0IOVQzLGo28XJPMRQNVcZ3Hqbv5WeS63kF6w==}
     cpu: [arm64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.303':
-    resolution: {integrity: sha512-o931musaryuq04fMaEjceCEmgsBrLh39WvwsQWmv070h9jXS8EmWRFpdSILv1xrUFXiukRSq8yUDRVzg+FvTug==}
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.304':
+    resolution: {integrity: sha512-n/OleF2p7HK4NgvJmmDXkbcOzooVJZfj4IGZKTR0Siljodvk9e0M69TTTJfJK5dph9cczOlqdXlgKeeV4TQ0lA==}
     cpu: [x64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.303':
-    resolution: {integrity: sha512-a/OsLTEx9ly9hC26cXidg9mtTMA00SQnEiTN9P4IPNj64uSp/7uBnlWl0VeUoVFbgKYYq6XrGRcD6F1ilQsYxg==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.304':
+    resolution: {integrity: sha512-cV6+7CzCL+m2DdjrQK771vHunGAOz/AKanPUHaEMqQF5riLL3UvK1/TD1VjaseDzQdzeD9F1qJm1aUP1TtyhzA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.303':
-    resolution: {integrity: sha512-c04i9i1BU3j9G3D7XdVzXTdM3/sDpQH+1o8jNcMPnztOTYbNFmH/cacgeX9x3N112r+5VhCEHXGILoe5GxVxeg==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.304':
+    resolution: {integrity: sha512-xZtsRLVql1xtiAHhAX4l5ssMYN4r9hVW407+uazPajiVCKCvobOuQ2NAB7/QmKcRgiF18uWf1wluHT9gKZ0FJA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.303':
-    resolution: {integrity: sha512-yixAa3ZOZd1hiI4mpoukzT9TnuDCzSEHyh7pHcbYTRmdRE2y8bAOmI0eiMFJPivnG4iyGhS2C4XNAe6hAjl30w==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.304':
+    resolution: {integrity: sha512-cNZvVaVw5ly/sduYj+c2ekrqnpzqUBLsQapvpXhVFy6hjdwXhj8gCNmr5Wta5tlTrNEo0C2kxvfFm+GjD7Tcvg==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.303':
-    resolution: {integrity: sha512-lsm1sX2+9Wos8glBbn86M8leFuK60LKB1cJdS0b2HiTSwiDCqpUKYRGJNUlW1JdUTwJB5nDv6S8/FOJExm1/tw==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.304':
+    resolution: {integrity: sha512-72SZA+TYtrDCXM7j8GNaoUpZrtysxw8FiunRv6C59wJRkhpxzlYLGrjser7vX6ivK+LiBkVU/V3wzEyfJqB4sA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.303':
-    resolution: {integrity: sha512-AnEseiw5E1JF3XRaGIZN880V/i2OxCaTOQJF9F1+oELleSdvLnCUxCE6/baGvaZjrgvffO9YbYChBpgUKj9j7A==}
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.304':
+    resolution: {integrity: sha512-qzV7j4KP3QAWY5b1oOINNVoZzEFZy+Dbr4MBGoQpY2gycmyqEswhIP7SE0Q2meq8/WoVusLVNQ8irNwT/GRz9A==}
     cpu: [arm64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.303':
-    resolution: {integrity: sha512-j5kABFEQ6x6T5AB/glmn0r9VwZRbzcH+nSEOWglB69ODNfkZA2btjcz9r794+2BLqJ9QAyswiYWcOX4sDz/RmQ==}
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.304':
+    resolution: {integrity: sha512-3vzbMxaG//37gbuViXx46B5OKpIaPGxESQgELAqtoxLRR/4iy+ANjSQ1HeuCpLkLSJzesoQ2Ss3U5XSeHeCLCA==}
     cpu: [x64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk@0.3.303':
-    resolution: {integrity: sha512-XBql04V40xr+fmGJh8AmIpqRZKFNrs99BzXzzSVlx+uE5NjFCzKmkNKTdMD0DQtDvFJlijOLoh1siaH+au9Psw==}
+  '@anthropic-ai/claude-agent-sdk@0.3.304':
+    resolution: {integrity: sha512-Ivkt7/UAkATibzvqT31eY71lAp7YdPzfbKDpmbHN9+AQWFh/Ac6tYkL2J1sipJ7tU4IK48w0YxuRW9aI//veFA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
@@ -3302,11 +3302,11 @@ packages:
   dmg-builder@26.17.0:
     resolution: {integrity: sha512-EAw1f2iGkICmUvAVBOjm7v5mxJdB7/+OZSycHFhKBimiTkCXtvkCC6wBKzHo7ZQYi58C2MmwIleRbgRnROlK2Q==}
 
-  dockview-core@8.6.0:
-    resolution: {integrity: sha512-BTj0mCIdP5rtshAhVA9bqy14NOKYns+fBJJvFbU2xy2vkK9aiDMf8rQCvfeG+qF1D+TIDc+OLT8h9mlgQ6PHFA==}
+  dockview-core@8.6.1:
+    resolution: {integrity: sha512-DayOT2iM66kwlhxUYgP490UE1moxL8yZD6DVIXcX+LPowE7x537S6gwF/K8iWog+XR+aRvgwI3FJhLn90FJHTQ==}
 
-  dockview@8.6.0:
-    resolution: {integrity: sha512-8vB79viOgyYSes8VzPeHKcnZWFt81hX3ibOYnf2yBbegNm9SgoR8nU3n3xDH3Cnkq5t2xl5X4hlBVRZeI5s8HA==}
+  dockview@8.6.1:
+    resolution: {integrity: sha512-2WZyTw+Wln7ZX7er4XhH6S9i3InfdbdQZZo/tK26GdQudKn913ctbRN2tkZgXCN9mToGSd5aj8ANp1Lid/MMEQ==}
 
   dompurify@3.4.15:
     resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
@@ -3885,8 +3885,8 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
-  ignore@7.0.12:
-    resolution: {integrity: sha512-/8UvqAPU9DGTI9k4mxtf49U37Isfwr8Uts96+SBHIkFxPJnHS0Ew4f00sM4Scd8V8EjM0jUNtVDdv1kPdt35lg==}
+  ignore@7.0.13:
+    resolution: {integrity: sha512-2E8Q6rh+1RRSq/YdaGsNfXsEZy9FVqv6BSSrkmZJP7BnaoPnRfKL+YaofPvP+5rzdk144qSm6i4+hvPgUcbV4Q==}
     engines: {node: '>= 4'}
 
   image-size@2.0.4:
@@ -5367,8 +5367,8 @@ packages:
     resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
 
-  undici@8.12.2:
-    resolution: {integrity: sha512-XtuDWVdqTLr3NAxm2ly9/hU6kUsJOgGh1RASzMBbsw6aWCOaQzHdW+QQDfdERjfJ2V5vL5pRPa4RetO9UfivDg==}
+  undici@8.12.3:
+    resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
     engines: {node: '>=22.19.0'}
 
   universalify@0.1.2:
@@ -5697,44 +5697,44 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.303':
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.304':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.303(@anthropic-ai/sdk@0.135.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.304(@anthropic-ai/sdk@0.135.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.135.0(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@10.2.2)(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
-      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.303
-      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.303
+      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.304
+      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.304
 
   '@anthropic-ai/sdk@0.135.0(zod@4.4.3)':
     dependencies:
@@ -6163,7 +6163,7 @@ snapshots:
       '@effect/platform-node-shared': 4.0.6(effect@4.0.6)
       effect: 4.0.6
       redis: 6.2.1(@opentelemetry/api@1.9.1)
-      undici: 8.12.2
+      undici: 8.12.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -7099,7 +7099,7 @@ snapshots:
       '@typescript-eslint/utils': 8.71.2(@typescript/typescript6@6.0.2)(eslint@10.13.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
       '@typescript-eslint/visitor-keys': 8.71.2
       eslint: 10.13.0(jiti@2.7.0)(supports-color@10.2.2)
-      ignore: 7.0.12
+      ignore: 7.0.13
       natural-compare: 1.4.0
       ts-api-utils: 2.5.0(@typescript/typescript6@6.0.2)
       typescript: '@typescript/typescript6@6.0.2'
@@ -8010,11 +8010,11 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  dockview-core@8.6.0: {}
+  dockview-core@8.6.1: {}
 
-  dockview@8.6.0:
+  dockview@8.6.1:
     dependencies:
-      dockview-core: 8.6.0
+      dockview-core: 8.6.1
 
   dompurify@3.4.15:
     optionalDependencies:
@@ -8746,7 +8746,7 @@ snapshots:
 
   ignore@5.3.2: {}
 
-  ignore@7.0.12: {}
+  ignore@7.0.13: {}
 
   image-size@2.0.4: {}
 
@@ -8901,7 +8901,7 @@ snapshots:
       parse5: 8.0.1
       saxes: 6.0.0
       tough-cookie: 6.0.2
-      undici: 8.12.2
+      undici: 8.12.3
       w3c-xmlserializer: 6.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -9484,9 +9484,9 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.2)(ws@8.22.0)(zod@4.4.3):
+  openai@7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.4.3):
     optionalDependencies:
-      undici: 8.12.2
+      undici: 8.12.3
       ws: 8.22.0
       zod: 4.4.3
 
@@ -10273,7 +10273,7 @@ snapshots:
   undici@7.29.0:
     optional: true
 
-  undici@8.12.2: {}
+  undici@8.12.3: {}
 
   universalify@0.1.2: {}
 
