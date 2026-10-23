@@ -19,8 +19,8 @@ Two later owner rulings narrow it:
 - 2026-10-06: the "Run again / Skip it" outcome card is removed entirely.
   After an interruption the model decides, even under bypass (#13827).
 - 2026-10-22: Hand off and Reset are ruled out in every host, harness
-  `run.reset` included; Fork, compaction and `/clear` cover the need. Not yet
-  done: both are still in the code until #14232 merges.
+  `run.reset` included; Fork, compaction and `/clear` cover the need. #14232
+  removed both.
 
 ## 1. Persona and journeys
 
@@ -136,7 +136,7 @@ the history up to that message, and her message back in the composer to
 change. The ended line and the header menu get "Fork" (the whole
 conversation). A forked task shows "Forked from _Polish abstract_" in its
 header; the source lists its forks. (Hand off was built here; the owner ruled
-it out on 2026-10-22, and it stays until #14232 merges.)
+it out on 2026-10-22, and #14232 removed it.)
 
 **J8, adding a plugin.** One "Plugins" settings page lists everything that
 adds tools or agents: TeXRA's domain plugins (LaTeX, Lean, Zotero, arXiv),

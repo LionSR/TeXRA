@@ -493,7 +493,7 @@ describe('Inbox readers', () => {
         yield* Effect.scoped(
           Effect.andThen(
             followUps.open(id),
-            followUps.send(id, user('before handoff')),
+            followUps.send(id, user('during the first generation')),
           ),
         );
         expect(
@@ -502,10 +502,13 @@ describe('Inbox readers', () => {
           }),
         ).toEqual({ kind: 'queued', read: false, wake: true });
 
-        expect(queued(id)).toEqual(['before handoff', 'between generations']);
+        expect(queued(id)).toEqual([
+          'during the first generation',
+          'between generations',
+        ]);
         const input = yield* followUps.open(id);
         expect(yield* taken(input)).toEqual([
-          'before handoff',
+          'during the first generation',
           'between generations',
         ]);
       }),

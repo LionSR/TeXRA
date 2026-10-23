@@ -316,7 +316,7 @@ under both the harness built-ins and a full app's plugins:
 - **I6** A child's result delivery settles with the turn that produced it.
   Recovery queues and consumes that delivery once, including results from
   detached agents, scripts, and commands.
-- **I7** Handoff, compaction, and fork preserve the context they committed.
+- **I7** Compaction and fork preserve the context they committed.
   A fork is recovered with the history it was registered with.
 - **I8** A stopped run's halt and terminal outcome commit together.
   Recovery cannot treat an acknowledged stop as an interrupted run to continue.

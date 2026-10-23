@@ -34,12 +34,6 @@ export interface RunControls {
   readonly oneShot: boolean;
   /** Queue a `/compact` on the run's input; settles once its row commits. */
   requestImmediateCompaction(): Effect.Effect<void, Error>;
-  /**
-   * Reset the run's view at its next park (`handoff` null), or hand off:
-   * the reset with `handoff` as the message its next turn answers. Settles
-   * once the edit's rows commit.
-   */
-  editView(handoff: string | null): Effect.Effect<void, Error>;
   modelSwitchDisabledReason(
     model: string,
   ): Effect.Effect<string | undefined, Error>;

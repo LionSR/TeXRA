@@ -19,24 +19,14 @@
  * parent's tool call runs in that call's fiber, so a context service would
  * hand the child its parent's input.
  */
-import { randomUUID } from 'node:crypto';
-
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  type FileSystem,
-  type Scope,
-  SynchronizedRef,
-} from 'effect';
+import { Effect, type FileSystem, type Scope, SynchronizedRef } from 'effect';
 
 import {
   followUpDisplay,
   isInstruction,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
-import type { FollowUpBatch, ViewEdit } from '@agent/followUp/RunInput';
+import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import {
   ACTIVATED_SKILLS_MAX,
@@ -51,7 +41,6 @@ import type { Alongside } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
-import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
 import {
@@ -95,9 +84,6 @@ export interface FollowUps {
   readonly controls: Effect.Effect<readonly QueuedFollowUp[]>;
   /** The queued messages a take would read now, without taking them. */
   readonly takeQueued: Effect.Effect<FollowUpBatch | null>;
-  /** Queue a view edit, taken at the loop's next park before any input:
-   *  false while another is queued or once the input has ended. */
-  readonly editView: (edit: ViewEdit) => Effect.Effect<boolean>;
   /** Block for the next batch; null when the queue was taken away. */
   readonly wait: Effect.Effect<FollowUpBatch | null>;
   /**
@@ -119,16 +105,11 @@ export interface FollowUps {
    * Commit a batch through the run's cell: its `followup.consumed` rows, its
    * user message, and `run.position turn.ready` in one batch, answering the
    * state it folds to. On failure nothing is consumed and the run's rows
-   * still queue the batch. A view edit commits its `context.edit`, and a
-   * handoff's note as the message, the same way, and settles the edit's
-   * `done` with the commit.
+   * still queue the batch.
    */
   readonly consume: (
     cell: RunCell,
     batch: FollowUpBatch,
-    /** A step that must commit before the batch, on the same cell (a
-     *  background compaction a reset settles). */
-    prepare?: (cell: RunCell) => Effect.Effect<RunState, Error>,
     /** The turn boundary this batch commits with (input already queued
      *  when the turn ended). */
     boundary?: Boundary,
@@ -214,22 +195,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const all = batch.kind === 'followUps' ? batch.followUps : [];
-    const edit = batch.kind === 'edit' ? batch.edit : null;
-    // A handoff's note is what its user typed, delivered as their follow-up
-    // is, in the batch that resets the view: no row ever queued it.
-    const handedOff: QueuedFollowUp[] =
-      edit?.handoff == null
-        ? []
-        : [
-            {
-              followUpId: randomUUID(),
-              content: { text: edit.handoff, from: { kind: 'user' } },
-            },
-          ];
-    const followUps = [
-      ...handedOff,
-      ...all.filter((followUp) => !endedChildProgress(followUp)),
-    ];
+    const followUps = all.filter((followUp) => !endedChildProgress(followUp));
     const turn = batch.kind === 'synthetic' || followUps.length > 0;
     const built = yield* (
       batch.kind === 'synthetic'
@@ -303,27 +269,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     return {
       turn,
       rows: [
-        // A reset replaces the whole view, the context updates in it too:
-        // the next step renders them anew.
-        ...(edit === null
-          ? []
-          : [
-              {
-                type: 'context.edit' as const,
-                aggregateId: rowAggregate(runId),
-                payload: {
-                  cause:
-                    edit.handoff === null
-                      ? ('reset' as const)
-                      : ('handoff' as const),
-                  trigger: null,
-                  base: state.lastEdit,
-                  range: { from: 0, to: state.messages.length },
-                  messages: [],
-                  usage: null,
-                },
-              },
-            ]),
         ...blobRows(runId, state, [
           ...(instruction === undefined ? [] : [instruction]),
         ]),
@@ -340,55 +285,31 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     };
   });
 
-  /** Commit one batch; a view edit's waiter settles on every exit: its
-   *  commit, a refusal, or a stop before either. */
-  const consume = Effect.fn('FollowUps.consume')(
-    function* (
-      cell: RunCell,
-      batch: FollowUpBatch,
-      prepare?: (cell: RunCell) => Effect.Effect<RunState, Error>,
-      boundary?: Boundary,
-    ): Effect.fn.Return<
-      ConsumedFollowUps,
-      Error,
-      FileSystem.FileSystem | ChildProcessSpawner
-    > {
-      const state = yield* prepare?.(cell) ?? cell.current;
-      const joined = yield* batchRows(state, batch);
-      const rows = [...(boundary?.rows ?? []), ...joined.rows];
-      const committed = yield* cell.append(
-        joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
-        boundary?.alongside,
-      );
-      joined.delivered();
-      return { state: committed, turn: joined.turn };
-    },
-    (effect, _cell, batch) =>
-      batch.kind !== 'edit'
-        ? effect
-        : effect.pipe(
-            Effect.onExit((exit) =>
-              Deferred.done(
-                batch.edit.done,
-                Exit.isSuccess(exit)
-                  ? Exit.void
-                  : Exit.fail(
-                      Cause.hasInterruptsOnly(exit.cause)
-                        ? new Error(
-                            'The task stopped before its view was edited.',
-                          )
-                        : ensureError(Cause.squash(exit.cause)),
-                    ),
-              ),
-            ),
-          ),
-  );
+  /** Commit one batch. */
+  const consume = Effect.fn('FollowUps.consume')(function* (
+    cell: RunCell,
+    batch: FollowUpBatch,
+    boundary?: Boundary,
+  ): Effect.fn.Return<
+    ConsumedFollowUps,
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
+    const state = yield* cell.current;
+    const joined = yield* batchRows(state, batch);
+    const rows = [...(boundary?.rows ?? []), ...joined.rows];
+    const committed = yield* cell.append(
+      joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
+      boundary?.alongside,
+    );
+    joined.delivered();
+    return { state: committed, turn: joined.turn };
+  });
 
   return {
     hasQueued: input.hasQueued,
     controls: input.controls,
     takeQueued: input.takeQueued,
-    editView: (edit) => input.editView(edit),
     wait: input.take,
     // Only a user stop joins: that halt carries no error fact to clear and
     // no turn.ready row to write, which is why the join skips `consume`'s.
@@ -401,19 +322,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             // declined batch, or a `/compact`'s wake, is left for the
             // ordinary wait.
             const batch = yield* input.take;
-            if (batch?.kind === 'synthetic') return null;
-            // A view edit waits for the park this stopped turn ends at.
-            if (batch?.kind === 'edit') {
-              if (!(yield* input.editView(batch.edit)))
-                Deferred.doneUnsafe(
-                  batch.edit.done,
-                  Effect.fail(
-                    new Error('The task stopped before its view was edited.'),
-                  ),
-                );
-              return null;
-            }
             return batch === null ||
+              batch.kind === 'synthetic' ||
               !batch.followUps.some((f) => isInstruction(f.content))
               ? null
               : yield* batchRows(state, batch);

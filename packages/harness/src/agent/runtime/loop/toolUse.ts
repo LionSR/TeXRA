@@ -27,7 +27,7 @@
  * ends the turn.
  */
 
-import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
@@ -137,23 +137,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
-    // Applied at the loop's next park, before any input it takes there: a
-    // park is a settled position, so the edit never cuts a turn.
-    editView: (handoff) =>
-      Effect.gen(function* () {
-        if (isChild() || run.toolPolicy.stopAfterCycle)
-          return yield* Effect.fail(
-            new Error(
-              'Only a conversation that waits for its user can be reset.',
-            ),
-          );
-        const done = yield* Deferred.make<void, Error>();
-        if (!(yield* followUps.editView({ handoff, done })))
-          return yield* Effect.fail(
-            new Error('This task is already being reset.'),
-          );
-        yield* Deferred.await(done);
-      }),
     ...modelSwitchPort(run, access),
   };
   const attach = (): void => {
@@ -487,14 +470,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
             );
           }
-          // A reset or handoff replaces the view a background summary
-          // was computed from: that summary lands, or stops, first.
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             cell,
             batch,
-            batch.kind === 'edit'
-              ? (at) => compaction.settle(at, 'the task is being reset')
-              : undefined,
           );
           if (!consumed.turn) continue;
         }
@@ -533,7 +511,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state =
           next === null
             ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
-            : (yield* followUps.consume(cell, next, undefined, {
+            : (yield* followUps.consume(cell, next, {
                 rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
                 alongside: childTurn?.alongside,
               })).state;

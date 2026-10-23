@@ -9,7 +9,7 @@
  * in-process over a persistent store: a response with two calls (a read and
  * a command), a script whose nested calls run a read, a command and an
  * awaited `agent()` call that owns its child, the echo's answer, then a
- * handoff and a compaction (`context.edit`) and a fork, and the bash
+ * compaction (`context.edit`) and a fork, and the bash
  * bypass turned on and off again. The pass records the commit each write
  * transaction ended at, from the store's own `observedCommit`: a batch
  * commits whole, so those are the crash points. For each point N the suite
@@ -20,7 +20,7 @@
  * workspace's command effects are put back as the clean pass had them at
  * that commit. A truncation cannot place the cut between an external
  * effect and its result, which is the consequential crash; the golden
- * suite's `golden_effect` is a real kill there. The handoff, the
+ * suite's `golden_effect` is a real kill there. The model switch, the
  * compaction, the fork and the bypass changes are a user's requests, which
  * a crash loses: they are issued again when their rows are not in the
  * prefix. Every request is approved, and an unfinished call whose outcome
@@ -103,8 +103,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 import { generateRunId } from '@utils/core';
-
-const HANDOFF = 'CRASH-HANDOFF: carry on from here.';
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
@@ -327,31 +325,22 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
 
 /**
  * The user's part, each step issued only if its rows are not committed: a
- * handoff once the run parks, a model switch and a compaction once it has
- * answered the handoff, then, once it has answered from the summary, a fork of the
- * conversation.
+ * model switch and a compaction once the run parks, then, once it has
+ * answered from the summary, a fork of the conversation.
  */
 const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
   Effect.gen(function* () {
-    if (!editsOf(rowsOf(storage), root).includes('handoff')) {
-      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
-      yield* session.requests.request({
-        kind: 'run.reset',
-        runId: root,
-        handoff: HANDOFF,
-      });
-    }
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
     if (!requested(rowsOf(storage), root, 'model')) {
-      yield* until(storage, (rows) => parkedAfter(rows, root, 2));
+      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
       const controls = session.runs.get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
     if (!requested(rowsOf(storage), root, 'compact')) {
-      yield* until(storage, (rows) => parkedAfter(rows, root, 2));
+      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
       yield* session.requests.request({ kind: 'run.compact', runId: root });
     }
     if (!rowsOf(storage).some(isFork)) {
@@ -359,7 +348,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
         storage,
         (rows) =>
           editsOf(rows, root).includes('compaction') &&
-          parkedAfter(rows, root, 3),
+          parkedAfter(rows, root, 2),
       );
       yield* session.requests.request({
         kind: 'run.fork',
@@ -791,10 +780,9 @@ export function crashConformanceSuite(plugins: string): void {
           expect(expected).toMatchObject({
             answers: [
               'Model saw: Work through the crash task. (+0)',
-              `Model saw: ${HANDOFF} (+0)`,
               'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff', 'compaction'],
+            edits: ['compaction'],
             requests: ['model consumed 1', 'compact consumed 1'],
             model: SWITCH_TO,
             children: 1,

@@ -35,12 +35,6 @@ import {
 } from '../runtime/terminalRequirements';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-/** What `texra resume` does to the conversation besides continuing it:
- *  continue a fork of it, or reset its view first (with a handoff's text). */
-export type ResumeAction =
-  | { readonly kind: 'fork'; readonly at: number | null }
-  | { readonly kind: 'edit'; readonly handoff: string | null };
-
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
 }
@@ -94,7 +88,9 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
 export function runResumeCommand(
   context: CliContext,
   id: RunId,
-  action?: ResumeAction,
+  /** `--fork`: continue a new task holding the conversation as it stood at
+   *  its latest settled point. */
+  fork = false,
 ) {
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
@@ -111,15 +107,15 @@ export function runResumeCommand(
       return CliExitCode.Usage;
     }
     const documentTask = isTaskConfig(config);
-    if (action !== undefined && documentTask) {
+    if (fork && documentTask) {
       writeTextStderr(
-        `Task ${id} is a document task: only a conversation can be forked, reset or handed off.`,
+        `Task ${id} is a document task: only a conversation can be forked.`,
       );
       return CliExitCode.Usage;
     }
     // A fork reads the source's committed rows, whoever holds it, and the
     // chat continues the new task.
-    if (action?.kind === 'fork') {
+    if (fork) {
       const terminalFailure = interactiveTerminalFailure(context);
       if (terminalFailure) {
         writeTextStderr(
@@ -132,11 +128,7 @@ export function runResumeCommand(
         return CliExitCode.Usage;
       }
       const forked = yield* Effect.result(
-        session.request({
-          kind: 'run.fork',
-          runId: id,
-          at: action.at,
-        }),
+        session.request({ kind: 'run.fork', runId: id }),
       );
       if (Result.isFailure(forked)) {
         writeTextStderr(requestErrorText(forked.failure));
@@ -219,15 +211,7 @@ export function runResumeCommand(
         return CliExitCode.Usage;
       }
       return {
-        chat: {
-          initialResume: {
-            id,
-            config,
-            ...(action?.kind === 'edit' && {
-              edit: { handoff: action.handoff },
-            }),
-          },
-        },
+        chat: { initialResume: { id, config } },
       };
     }
 

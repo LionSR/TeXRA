@@ -52,8 +52,7 @@
  *   (`persona`), narrowed to the tools the script's run was offered.
  * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
  *   fork, whose `run.start.provenance` names its source and whose first
- *   history row is a `context.edit` (cause `fork`); then `texra resume
- *   --handoff` on the fork: a `context.edit` (cause `handoff`).
+ *   history row is a `context.edit` (cause `fork`).
  * - `golden_effect` (headless, `yolo`): its command
  *   appends to `approved.txt`, then a plugin's `PostToolUse` hook on `bash`
  *   holds the call, and the process is killed (`SIGKILL`) there. A call's
@@ -730,11 +729,10 @@ async function generate(root) {
     '--print',
   ]);
 
-  // The fork and its handoff (durable harness, H5): a headless run answers
-  // once; `texra resume --fork` continues a new task holding that
-  // conversation, whose `run.start` names its source; `texra resume
-  // --handoff` then continues the fork from a note alone. Each reply names
-  // the user messages its view held.
+  // The fork (durable harness, H5): a headless run answers once; `texra
+  // resume --fork` continues a new task holding that conversation, whose
+  // `run.start` names its source. The reply names the user messages its
+  // view held.
   cli.run([
     'run',
     'golden_fork',
@@ -750,58 +748,41 @@ async function generate(root) {
   ]);
   const forkSource = query(cli.store(), RUN_OF_AGENT, ['golden_fork'])[0]?.id;
   if (forkSource === undefined) fail('no golden_fork run to fork');
-  /** Resume under a PTY with `flags`, type `message` once the chat idles
-   *  (null: the flags start the turn), and exit once `reply` shows. */
-  const resumeChat = async (flags, message, reply) => {
-    const starts = () =>
-      query(cli.store(), `SELECT 1 FROM event WHERE type = 'run.start'`).length;
-    const before = starts();
-    const tty = await cli.chat(['resume', ...flags]);
-    const shows = (label, text) =>
-      until(label, () => tty.screen().includes(text), tty);
-    if (message !== null) {
-      // Typed once the new run has offered its tools, so the message
-      // commits after its activation, not among its rows.
-      await until(
-        'the new run offering its tools',
-        () =>
-          starts() > before &&
-          query(
-            cli.store(),
-            `SELECT 1 FROM event e WHERE e.type = 'tools.offered'
-             AND e.aggregate = (SELECT aggregate FROM event
-               WHERE type = 'run.start' ORDER BY "commit" DESC LIMIT 1)`,
-          ).length > 0,
-        tty,
-      );
-      await shows('the idle resumed chat', 'Ctrl-C exit');
-      tty.write(message);
-      await shows(`the typed ${JSON.stringify(message)}`, `› ${message}`);
-      tty.write('\r');
-    }
-    await shows(`the reply ${JSON.stringify(reply)}`, reply);
-    await shows('the idle prompt', 'Ctrl-C exit');
-    tty.write('\x03');
-    const exit = await tty.exited;
-    if (exit.exitCode !== 0)
-      fail(
-        `texra resume ${flags.join(' ')} exited ${exit.exitCode}\n${tty.screen()}`,
-      );
-  };
-  await resumeChat(
-    [forkSource, '--fork'],
-    'After the fork.',
+  const starts = () =>
+    query(cli.store(), `SELECT 1 FROM event WHERE type = 'run.start'`).length;
+  const startsBefore = starts();
+  const forking = await cli.chat(['resume', forkSource, '--fork']);
+  const forkShows = (label, text) =>
+    until(label, () => forking.screen().includes(text), forking);
+  // Typed once the new run has offered its tools, so the message commits
+  // after its activation, not among its rows.
+  await until(
+    'the new run offering its tools',
+    () =>
+      starts() > startsBefore &&
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e WHERE e.type = 'tools.offered'
+         AND e.aggregate = (SELECT aggregate FROM event
+           WHERE type = 'run.start' ORDER BY "commit" DESC LIMIT 1)`,
+      ).length > 0,
+    forking,
+  );
+  await forkShows('the idle resumed chat', 'Ctrl-C exit');
+  forking.write('After the fork.');
+  await forkShows('the typed message', '› After the fork.');
+  forking.write('\r');
+  await forkShows(
+    "the fork's reply",
     'Saw: Before the fork. | After the fork.',
   );
-  const forked = query(cli.store(), RUN_OF_AGENT, ['golden_fork']).find(
-    (row) => row.id !== forkSource,
-  )?.id;
-  if (forked === undefined) fail('the fork started no run');
-  await resumeChat(
-    [forked, '--handoff', 'The handoff note.'],
-    null,
-    'Saw: The handoff note.',
-  );
+  await forkShows('the idle prompt', 'Ctrl-C exit');
+  forking.write('\x03');
+  const forkExit = await forking.exited;
+  if (forkExit.exitCode !== 0)
+    fail(
+      `texra resume ${forkSource} --fork exited ${forkExit.exitCode}\n${forking.screen()}`,
+    );
 
   // The consequential crash: the command's effect lands, then its
   // PostToolUse hook holds the call until the process is killed, before

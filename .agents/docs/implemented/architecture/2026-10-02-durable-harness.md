@@ -49,7 +49,8 @@ through the one launch door, and the parent is data.
 
 Every edit of the model's view other than an append is one row kind,
 `context.edit` (`shared/schemas/runHistoryEvent.ts`), with
-`cause: 'compaction' | 'reset' | 'handoff' | 'fork'`. It replaces the messages
+`cause: 'compaction' | 'fork'` (Removed 2026-10-22: the `reset` and `handoff`
+causes). It replaces the messages
 in `range` (`[from, to)`) with `messages`. `trigger` is set only for a
 compaction (`context-limit`, or `user` for `/compact`). `base` is the edit the
 view stood at when this one was computed, and the fold refuses an edit whose
@@ -59,8 +60,9 @@ base is no longer the latest.
   runs in the background, in the run's scope, and lands at a step boundary only
   if no view edit committed since its `base`; a stale result is dropped and its
   usage still recorded. The blocking path stays for overflow.
-- **Reset and handoff** (`run.reset`, with `handoff` text) clear the view at the
-  run's next park; a handoff adds its text as a user follow-up.
+- **Reset and handoff** (`run.reset`, with `handoff` text) cleared the view at
+  the run's next park; a handoff added its text as a user follow-up. Removed
+  2026-10-22: Fork, compaction and `/clear` cover the need.
 - **Fork** (`run.fork`, `agent/runtime/forkRun.ts`) starts a new run whose
   `run.start.provenance` is `{ kind: 'fork', from, at }` and whose first row is
   a view edit seeded with the source's view at `at`. The cut must be a settled
@@ -161,14 +163,14 @@ the same rule as npm publication.
 
 ## Row decisions
 
-| #   | Decision                               | Ruled                                                                                                                                                                                    |
-| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Effect class replacing `replay`        | Keep `replay` + `parallelSafe`                                                                                                                                                           |
-| D2  | View edits                             | One kind, `context.edit`, replacing `model.compaction`; `range` replaces `keepPrefix`, and `base` is the stale check. Reset, handoff, fork, and a later undo need no further kind        |
-| D3  | `run.start.provenance`                 | A tagged union, `{ kind: 'fork', from: { id, uid }, at: seq } \| null`. Not `origin`: the row envelope's `origin` is the writing process. Resume is not a provenance; it is the same run |
-| D4  | Ownership of an awaited child          | `run.start.parent.callId`, nullable, so the session view routes Resume without reading another aggregate's run history                                                                   |
-| D5  | Blocked reason                         | In the projection, not a row: it is a fact about this build and its catalog, not about the run                                                                                           |
-| D6  | `run.start.checkpointId`, `workflow.*` | Deleted with the workflow-script runner (codemode lane 7)                                                                                                                                |
+| #   | Decision                               | Ruled                                                                                                                                                                                                  |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Effect class replacing `replay`        | Keep `replay` + `parallelSafe`                                                                                                                                                                         |
+| D2  | View edits                             | One kind, `context.edit`, replacing `model.compaction`; `range` replaces `keepPrefix`, and `base` is the stale check. Reset, handoff (removed 2026-10-22), fork, and a later undo need no further kind |
+| D3  | `run.start.provenance`                 | A tagged union, `{ kind: 'fork', from: { id, uid }, at: seq } \| null`. Not `origin`: the row envelope's `origin` is the writing process. Resume is not a provenance; it is the same run               |
+| D4  | Ownership of an awaited child          | `run.start.parent.callId`, nullable, so the session view routes Resume without reading another aggregate's run history                                                                                 |
+| D5  | Blocked reason                         | In the projection, not a row: it is a fact about this build and its catalog, not about the run                                                                                                         |
+| D6  | `run.start.checkpointId`, `workflow.*` | Deleted with the workflow-script runner (codemode lane 7)                                                                                                                                              |
 
 ## Owner rulings
 
@@ -183,6 +185,7 @@ Ruled by the owner on 2026-10-02 (PR #13612).
    runs; `auto` available as a setting.
 3. **One `context.edit` kind replaces `model.compaction` (D2): yes.** It covers
    compaction, reset, handoff and the fork seed, and leaves room for undo.
+   (Removed 2026-10-22: reset and handoff.)
 4. **Fork only at a settled position: yes.** A cut anywhere else is refused, so
    a fork never contains a result nobody produced.
 5. **Package names.** Settled later: `@texra-ai/harness`, `@texra-ai/llm`, and

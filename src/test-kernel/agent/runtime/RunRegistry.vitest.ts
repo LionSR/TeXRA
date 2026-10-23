@@ -253,7 +253,6 @@ function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
   return {
     oneShot: false,
     requestImmediateCompaction: vi.fn(() => Effect.void),
-    editView: vi.fn(() => Effect.void),
     modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
     switchModel: vi.fn(() => Effect.void),
     ...overrides,
