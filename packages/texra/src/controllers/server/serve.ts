@@ -7,9 +7,11 @@
  * - a drain (`service.stop` with `drain`, the upgrade path): the record is
  *   released at once, so a newer service can start and be found while this
  *   one finishes the tasks at work, and it exits when they end (a
- *   conversation parked here stops with it, resumable);
+ *   conversation waiting here for its next message stops with it,
+ *   resumable);
  * - idleness: no client connected and no task at work for `idleAfter` (a
- *   conversation parked here stops with it, resumable, as in a drain).
+ *   conversation waiting for its next message stops with it, resumable, as
+ *   in a drain).
  *
  * Whichever ends it, it leaves as a drain does first: no task starts and
  * the record is released, so no client finds a service that is exiting.
@@ -269,7 +271,7 @@ export const serve = Effect.fn('server.serve')(function* (
     // that ended since this read holds its run.
     const { draining, admitting, admitted } = yield* Ref.get(admissions);
     // Only the tasks at work hold the service, draining or idle: a
-    // conversation parked here waiting for its next message is stopped with
+    // conversation waiting here for its next message is stopped with
     // the service, resumable, so one a closed chat left here does not keep
     // the service up for good.
     const working = yield* runningTasks(projects, false);
