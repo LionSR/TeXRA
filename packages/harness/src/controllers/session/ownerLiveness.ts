@@ -46,7 +46,7 @@ export const deadOwners = (
   });
 
 /**
- * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
+ * The liveness prober: every owner the view names on a
  * non-terminal run other than this process, proved by `kill(pid, 0)` plus the
  * start-identity check per distinct owner, never per run. Probed whenever that
  * owner set changes and, while it is not empty, on an interval: a holder

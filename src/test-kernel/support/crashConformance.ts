@@ -1,5 +1,5 @@
 /**
- * The crash-point conformance suite (durable harness, H6): the durability
+ * The crash-point conformance suite: the durability
  * contract checked at every commit point of one run, under the plugin list
  * the importing file installed its process runtime with
  * (`sessionGraphTestSetup` for TeXRA's, `builtinSessionGraphTestSetup` for

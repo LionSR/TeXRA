@@ -1,6 +1,6 @@
 /**
- * What a resume of a run waits for in this process (durable harness, gap 2
- * and D5): its agent is missing from the catalog, or its agent comes from an
+ * What a resume of a run waits for in this process: its agent is missing
+ * from the catalog, or its agent comes from an
  * installed plugin that is off or not trusted as it is now. An inline
  * persona travels with its record, so nothing blocks it. A resume that
  * meets one does not fail the run: the run stays interrupted, the reason

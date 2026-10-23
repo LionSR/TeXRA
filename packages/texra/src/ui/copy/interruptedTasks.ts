@@ -1,5 +1,5 @@
 /**
- * The open-time prompt (GUI design 2026-10-02, J5; ruling GQ5): the tasks a
+ * The open-time prompt: the tasks a
  * closed or crashed TeXRA left interrupted, read from the view, and the copy
  * every host prints for them. The progress view paints it as a notice above
  * the composer, the TUI above its input; neither blocks typing.

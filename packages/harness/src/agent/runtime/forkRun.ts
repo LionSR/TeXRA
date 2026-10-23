@@ -1,12 +1,12 @@
 /**
- * Fork (durable harness, gap 3): a new root run whose history is another
- * run's model view at a settled position. The new run's `run.start` names
- * where its history came from (`provenance: { kind: 'fork', from, at }`,
- * HQ4), and its first run history row is the `context.edit` that seeds that
- * view, followed by the loop state a resume restores and a `waiting`
- * position: the fork is a conversation waiting for its user's next
- * message, which any host's Resume or follow-up continues. The doc's
- * "offered system and tools" are not copied: a run's offered set is
+ * Fork: a new root run whose history is another run's model view at a
+ * settled position. The new run's `run.start` names where its history came
+ * from (`provenance: { kind: 'fork', from, at }`), and its first run history
+ * row is the `context.edit` that seeds that view, followed by the loop state
+ * a resume restores and a `waiting` position: the fork is a conversation
+ * waiting for its user's next message, which any host's Resume or follow-up
+ * continues. The source's offered system text and tools are not copied: a
+ * run's offered set is
  * recorded only where a step opens, so the fork's first step records its
  * own. Nothing pending is copied (no follow-up, request or retry permit),
  * its usage starts at zero, and the source's plugin facts stay with the
@@ -44,7 +44,7 @@ const isQuiet = (state: RunState): boolean =>
   );
 
 /**
- * Whether the run stands at a settled position (HQ4): at a turn boundary,
+ * Whether the run stands at a settled position: at a turn boundary,
  * with no invocation (nor its retry), response (nor its calls) or undecided
  * request. A cut anywhere else would carry a result nobody produced.
  */
@@ -56,7 +56,8 @@ const isSettled = (state: RunState): boolean =>
 
 const refused = (reason: string) => new Rejected({ reason });
 
-/** A run's noun in a refusal (GQ4): an agent is a run another run started. */
+/** A run's noun in a refusal, one of the two the product uses: an agent is a
+ *  run another run started, any other run is a task. */
 export const runNoun = (
   session: SessionHandle,
   runId: RunId,

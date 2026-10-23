@@ -14,7 +14,7 @@ import {
 } from '../support/repoScan';
 
 /**
- * Rule R2 of the core concepts: every run starts through one door,
+ * Every run starts through one door,
  * `Runs.launch`, forked from the session's context. Every Effect fork starts
  * with its caller's context, so a run forked from a tool call reads that
  * call's run-scoped services as its own (#13348). In the run and tool trees a

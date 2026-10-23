@@ -13,7 +13,7 @@ const FIRST_AGENT_PREVIEW_CHARS = 80;
 type ScriptRequestScript = NonNullable<AgentProposalPermission['script']>;
 
 /**
- * Copy for the request a script's first `agent` call opens (Q5), shared by
+ * Copy for the request a script's first `agent` call opens, shared by
  * every host. It leads with what approving allows and the first agent; the
  * code is evidence, folded under "Show code", never the first thing shown.
  */

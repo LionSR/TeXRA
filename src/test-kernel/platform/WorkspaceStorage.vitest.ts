@@ -110,7 +110,7 @@ describe('workspace storage defaults', () => {
       }),
   );
 
-  // Regression pin (#C4): a malformed project config used to fail CLI startup
+  // Regression pin: a malformed project config used to fail CLI startup
   // outright. Every host now opens it as an empty view, loudly, and never
   // moves the workspace config to a second home.
   it.effect(

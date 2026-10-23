@@ -26,7 +26,7 @@ import {
 import type { SessionView } from '@shared/session/sessionView';
 import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 
-/** A process identity, never a lease token (contract C5). */
+/** A process identity, never a lease token. */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
 export const ROOT = RunIdSchema.parse('aaaaaaaaaaaa');
@@ -82,7 +82,7 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
   : never;
 
 /** Seq numbered per aggregate and committed in one session order, the way
- *  the event table keys them (contract C1). */
+ *  the event table keys them. */
 export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();

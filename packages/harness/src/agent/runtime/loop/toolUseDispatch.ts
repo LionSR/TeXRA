@@ -539,7 +539,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const stageId = scriptOf(fact)?.stageId;
     // A slow tool's card opens as its body starts. What the tool prints
     // while it runs streams to that card as transient text, the way a
-    // response's chunks reach a streaming row (C3): never a row of its own,
+    // response's chunks reach a streaming row: never a row of its own,
     // capped, and refused once the call has returned, so no chunk can be
     // enqueued after the result that closes the card.
     let accepting = false;

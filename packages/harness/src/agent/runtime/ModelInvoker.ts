@@ -2,7 +2,7 @@
  * The one service that touches the llm `Model`; every call carries a purpose
  * (`run/invocation.ts`). One `invoke` is one turn with its billed attempts: the
  * `TurnRequest` assembled from the folded `RunState`, `prepareTurn`, the
- * `attempt` row committed before the request leaves the process (F1),
+ * `attempt` row committed before the request leaves the process,
  * `identified` when the provider names the response, the stream bridged into
  * the trace, and the `response` row with its dispatch facts and priced usage
  * committed before any tool runs. `call` is a compaction summary on the same
@@ -92,7 +92,7 @@ const PERSONAL_RETRY = {
 } as const;
 
 /**
- * The output-budget preflight's constants (R4), as the retired handler
+ * The output-budget preflight's constants, as the retired handler
  * preflight used them: the buffer covers tokenization differences and API
  * framing, and a reduction below the floor is not worth taking.
  */
@@ -436,7 +436,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
         let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(state.messages, 'messages', invocation, bound);
-        // R4: the run's context size (`contextTokens`: the last response's
+        // The run's context size (`contextTokens`: the last response's
         // provider-counted usage plus an estimate of what was added since).
         // An input that alone exceeds the window is refused before it is
         // billed; one leaving too little room for the requested output
@@ -486,7 +486,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             });
           }
         }
-        // The durable fact before the billed request (F1), with the prepared
+        // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>
           attemptRows(run, state, invocation, 'turn', bound.origin, resolved),
@@ -721,7 +721,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             await: (requestId) =>
               Effect.gen(function* () {
                 logger.debug('Waiting for manual retry');
-                // The answer is the `request.decided` row (R5) the decide
+                // The answer is the `request.decided` row the decide
                 // command lands; a closing plane cancels.
                 const row = yield* session.requests
                   .decision(runId, requestId, (yield* cell.current).commit)

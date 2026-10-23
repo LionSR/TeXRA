@@ -169,7 +169,8 @@ function mockToolCallConversation(
 
 /**
  * Publish the run's listing facts into the process session, which is where
- * `history` reads them from (the fold's `RunView`, one run model R3). Returns
+ * `history` reads them from (the session's `RunView`, the same one every
+ * surface reads). Returns
  * the session so a caller can read back a fact the publisher stamps, such as
  * `launchedAt`.
  */

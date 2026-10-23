@@ -70,7 +70,8 @@ function recordRows(
 
 /**
  * The runs a user started, newest first, each with its private record: the
- * view folded cold from the log (one run model, R1) beside the same
+ * view rebuilt cold from the log (the same `RunView` a live session holds)
+ * beside the same
  * listing's `run.config` rows, already decoded by the database read.
  */
 export const listRuns = Effect.fn('listRuns')(function* (

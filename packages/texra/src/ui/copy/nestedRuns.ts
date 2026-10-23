@@ -1,6 +1,6 @@
 /**
  * Canonical user-facing vocabulary for a task and the work nested under it
- * (GUI design 2026-10-02, ruling GQ4: "task" and "agent" are the only nouns).
+ * ("task" and "agent" are the only nouns).
  *
  * | Concept | Term | Never say |
  * | --- | --- | --- |

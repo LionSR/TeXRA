@@ -94,7 +94,7 @@ describe('run-tabs over the fold', () => {
     expect(rowOf(element, CHILD)).toBeTruthy();
     expect(rowOf(element, GRANDCHILD)).toBeTruthy();
 
-    // The rail carries the rollup alone (W2): no tree at all.
+    // The rail carries the rollup alone: no tree at all.
     const { element: rail } = await mountTabs(view, emptySurface(view.key), {
       topLevelOnly: true,
     });

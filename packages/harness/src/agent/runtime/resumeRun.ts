@@ -98,7 +98,7 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 /**
  * Resume a stream through the single host entry path. A run live here is
  * refused before anything is read; one being resumed already is joined. An
- * owned child is resumed through its parent (HQ6): the parent's open call
+ * owned child is resumed through its parent: the parent's open call
  * reattaches it, so it never runs alone or twice.
  */
 export const resumeRun = Effect.fn('resumeRun')(function* (
@@ -205,7 +205,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   // Nothing to continue from.
   if (!resumable) return { failed: 'finished' };
   // An agent or plugin this process cannot run now leaves the run
-  // interrupted with the reason (D5), for the session's follower to
+  // interrupted with the reason, never failed, for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
   // is refused as such above, whatever this process lacks.
   const blocker = yield* resumeBlocker(session, config);

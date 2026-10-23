@@ -612,7 +612,7 @@ describe('session view update', () => {
       const [row] = runView(view, CHILD).transcript.rows;
       return row.kind === 'tool' ? row.toolUse.outputText : null;
     };
-    // What the tool prints streams to the open card as transient text (C3),
+    // What the tool prints streams to the open card as transient text,
     // never as a row; a later chunk extends it.
     const updater = paper();
     const running = viewOf(
@@ -1743,7 +1743,7 @@ describe('applyRunRows', () => {
             usage: null,
           },
         };
-        // C6: the response row is the production source of the anchor, so the
+        // The response row is the production source of the anchor, so the
         // cold fold a resume reads must restore it.
         const restored = stateOf(
           applyRunRows(null, [
@@ -2049,7 +2049,7 @@ describe('applyRunRows', () => {
         row.type === 'run.position',
       );
     }
-    // D7: the day a codec version 2 exists, persisted origins must accept a
+    // The day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
     expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);
     expect(

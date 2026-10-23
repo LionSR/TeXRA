@@ -148,7 +148,7 @@ const openCallChildren = (
   return open;
 };
 
-/** The open call that owns `runId` (HQ6): the undetached parent call that
+/** The open call that owns `runId`: the undetached parent call that
  *  launched it, unsettled in the parent's history; else null. */
 export const owningCall = Effect.fn('owningCall')(function* (
   session: SessionHandle,

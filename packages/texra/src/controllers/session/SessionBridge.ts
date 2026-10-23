@@ -25,7 +25,7 @@
  * `Invalid` when it names a request id, and reported otherwise: a silent
  * drop would leave the sender's latch pending forever. A handler that dies
  * is answered `Internal` under the request id the host log carries the
- * cause under (7.6): the surface hears that it failed, never the text (C3).
+ * cause under: the surface hears that it failed, never the text.
  */
 import {
   Cause,

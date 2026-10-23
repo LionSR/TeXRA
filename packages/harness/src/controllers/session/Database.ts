@@ -9,7 +9,7 @@
  * sequence; `rowCodec.ts` every stored shape, by the arms the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
- * module owns the envelope: the writer (C5, `ProcessIdentity`), the publish
+ * module owns the envelope: the writer (`ProcessIdentity`), the publish
  * clock, and the `seq` and `commit` ordinals, none of which a caller
  * supplies.
  */
@@ -768,8 +768,8 @@ export const databaseLayer = (
             );
           }
           if (edges.closes) {
-            // C5/C9: admission must hold every open dependent claim, in the
-            // tombstone's transaction, so no claimant can change between.
+            // Closing an aggregate requires every open dependent claim, held
+            // in the tombstone's transaction, so no claimant can change between.
             const unowned = yield* execOne(unownedDependent, [
               ...columns,
               identity.ownerId,

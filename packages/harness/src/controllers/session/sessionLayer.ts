@@ -132,7 +132,7 @@ const logFailure =
  * Which session an entry is: its storage root (`SessionView.key`), with what
  * the opener supplied for building it. Equal and hashed by the root alone:
  * two opens of one root resolve one session, over what the first supplied,
- * and nothing store-bound is injected past that (PR #11893, section 3).
+ * and nothing store-bound is injected past that.
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionHandleInit) {}
@@ -343,8 +343,8 @@ const sessionGraphLayer = (key: SessionKey) => {
 /**
  * One session per root, held by the map until `close` releases it or the
  * runtime goes. Opens borrow (released at once) and the idle lifetime is
- * infinite, so the application, never a reader's detachment, ends a session
- * (PR #11893, §3). Entries are `Layer.fresh`, else roots share one fold.
+ * infinite, so the application, never a reader's detachment, ends a session.
+ * Entries are `Layer.fresh`, else roots share one fold.
  */
 class SessionMap extends Context.Service<
   SessionMap,

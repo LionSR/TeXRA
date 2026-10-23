@@ -74,8 +74,8 @@ const FailedNextSchema = z.discriminatedUnion('kind', [
 /** The move a `failed` row records after its attempt. */
 export type FailedNext = z.infer<typeof FailedNextSchema>;
 
-/** The canonical call key: `providerCallId`, non-nullable since L5, so a
- *  completed turn cannot carry a call without an identity. */
+/** The canonical call key: `providerCallId`, never null, so a completed
+ *  turn cannot carry a call without an identity. */
 const CallIdSchema = z.string().min(1);
 
 /* ---------------------------------------------------------- run.position */
@@ -151,7 +151,7 @@ export const ModelMessagePayloadSchema = z
       providerResponseId: z.string().min(1),
     }),
     /** The attempt failed: what went wrong, in the runtime's own failure
-     *  vocabulary (deliberately not the package's `ModelError`, D3), and what
+     *  vocabulary (deliberately not the llm package's `ModelError`), and what
      *  the invoker does next, decided once here so a resume replays it. */
     z.strictObject({
       kind: z.literal('failed'),
