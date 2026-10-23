@@ -1502,7 +1502,7 @@ describe('Sessions owner', () => {
  * these assertions are the whole acceptance for the schema and the
  * publisher.
  */
-describe('the C1 event table and the C6 publisher', () => {
+describe('the session event table and its one publisher', () => {
   const roots: string[] = [];
   const workspace = (): string => {
     const root = mkdtempSync(join(tmpdir(), 'texra-substrate-'));
