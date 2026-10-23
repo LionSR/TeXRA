@@ -161,7 +161,7 @@ const roster = (plugins: readonly Plugin[]) =>
   plugins.map(({ id, tools }) => [id, Object.keys(tools ?? {})]);
 
 /**
- * Split design §4: one case pins each list a host or embedder composes the
+ * One case pins each list a host or embedder composes the
  * process from. Every TeXRA host passes `texraPlugins` (the extension adds
  * only Copilot's host layer to the `copilot` entry), and the SDK's examples
  * pass the harness's own lists. A plugin or tool that joins or leaves a list

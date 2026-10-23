@@ -87,10 +87,10 @@ export const EventsFrameSchema = z.object({
 });
 export type EventsFrame = z.infer<typeof EventsFrameSchema>;
 
-/** The request errors of 7.6 on the wire, plus the bridge's own `Invalid`
- *  for a message it could not parse. `Internal` is a handler defect: the
- *  message stays in the host log under `ref`, the request id, and never
- *  crosses to a renderer (C3). */
+/** The request errors `SessionRequests` answers, on the wire, plus the
+ *  bridge's own `Invalid` for a message it could not parse. `Internal` is a
+ *  handler defect: the message stays in the host log under `ref`, the
+ *  request id, and never crosses to a renderer. */
 export const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   z.object({ _tag: z.literal('NotOwner'), runId: RunIdSchema }),
   z.object({

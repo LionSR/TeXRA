@@ -136,7 +136,7 @@ describe('run registration and finalization', () => {
         vi.spyOn(session.log, 'transact').mockReturnValueOnce(
           Effect.die(failure),
         );
-        // The run's rows live until explicit deletion (C9): finalization writes
+        // The run's rows live until explicit deletion: finalization writes
         // the terminal row and removes nothing beside it, so a failed write is
         // the whole failure and comes back unwrapped.
         expect(

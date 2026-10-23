@@ -3,7 +3,7 @@
  * `followup.consumed` (the session publisher's pending set), the blocking
  * wait and the non-blocking probe, and `consume`, which commits one batch's
  * `followup.consumed` rows with the user message they become and
- * `run.position turn.ready`, in one batch of the run's cell (C3). A crash before
+ * `run.position turn.ready`, in one batch of the run's cell. A crash before
  * that commit leaves the rows queued, so the next consumer delivers them
  * again; after it, nothing re-delivers them.
  *

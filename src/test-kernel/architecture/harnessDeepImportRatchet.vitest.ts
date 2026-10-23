@@ -1,4 +1,4 @@
-// The harness deep-import ratchet (split design §4, ruling SQ2). The app
+// The harness deep-import ratchet. The app
 // (packages/texra), the hosts (cli, desktop, extension) and the trace viewer
 // should reach the harness only through its package name and subpaths
 // (`@texra-ai/harness`, `/node`, `/plugins`, `/schemas`). Each `@agent/*`,

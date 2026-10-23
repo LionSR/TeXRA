@@ -105,8 +105,8 @@ const TABLES = [
 /**
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), and the indexes, each serving a
- * named read (the design note's §2 table).
+ * `projection_state` (`projections.ts`), and the indexes, each serving one
+ * lookup the reads make, named for the columns it keys.
  */
 const ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS projection_state (
@@ -217,8 +217,8 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
 });
 
 /**
- * Bring an open connection to the store this build writes (§3's open
- * sequence, steps 2 to 6), answering what it moved aside.
+ * Bring an open connection to the store this build writes: pragmas, a pre-1.0
+ * store moved aside, the schema stamped; answering what it moved aside.
  *
  * The driver sets `busy_timeout` before enabling WAL, and that order is
  * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero a
@@ -299,8 +299,8 @@ const prepareStore = Effect.fnUntraced(function* (
 const RECLAIM_PAGES = 256;
 
 /**
- * Give the pages a collection freed back to the filesystem (the design's
- * §7), once it commits, in autocommit steps of `incremental_vacuum(N)`, so
+ * Give the pages a collection freed back to the filesystem, once it
+ * commits, in autocommit steps of `incremental_vacuum(N)`, so
  * another writer waits on one step, never the whole reclaim. A driver that
  * steps a statement to its end frees N pages a step, one that steps it once
  * frees one; either way the steps run until the freelist is empty or stops

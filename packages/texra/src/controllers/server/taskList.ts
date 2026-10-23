@@ -1,7 +1,7 @@
 /**
  * `tasks.list`: the top-level tasks of every project under the storage
  * root. The projects are the `workspace-store` records each host writes when
- * it opens a project (the storage design's §7), so the scan adds no table. A
+ * it opens a project, so the scan adds no table. A
  * project the service has open answers from its live view; any other is
  * read cold from its store (`readSessionView`).
  */

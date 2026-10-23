@@ -28,7 +28,7 @@ import type {
 } from './leanTypes';
 
 /**
- * The Effect-typed port (Effect 4 runtime PRD, R1): adapters compose their
+ * The Effect-typed port: adapters compose their
  * host or LSP primitives into these programs, and the one run of each program
  * is composed directly by the native tool dispatcher. Run ownership is passed
  * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure

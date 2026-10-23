@@ -51,7 +51,34 @@ const GUIDANCE_FILES = [
   'packages/texra/src/replacement/README.md',
   'packages/texra/src/latex/README.md',
   'docs/README.md',
+  'packages/harness/docs/spec.md',
 ];
+
+// Files whose `path:line` citations are checked against the tree as well,
+// each with the directory its bare paths are relative to. A bare `:line`
+// continues the file cited last. Code moving under a citation leaves its
+// range past the end of the file or on the wrong lines; this catches the
+// first, not the second.
+const LINE_CITING_FILES = new Map([
+  ['packages/harness/docs/spec.md', 'packages/harness/src/'],
+]);
+const LINE_CITE = /^([\w./@-]+\.\w+)?:(\d+)(?:-(\d+))?$/u;
+const lineCounts = new Map();
+
+/** Lines in a repo file, or null when it does not exist. */
+function lineCount(path) {
+  if (!lineCounts.has(path)) {
+    const absolute = join(repoRoot, path);
+    lineCounts.set(
+      path,
+      existsSync(absolute)
+        ? readFileSync(absolute, 'utf8').replace(/\n$/u, '').split('\n').length
+        : null,
+    );
+  }
+  return lineCounts.get(path);
+}
+
 // Standing docs: architecture notes and the published guide. Dated proposals
 // and PRDs stay out — they are historical by design (see issue #9730).
 // Implemented notes under `.agents/docs/implemented/` are current authority
@@ -134,10 +161,25 @@ const EVENT_VOCABULARY_SOURCES = [
   'packages/harness/src/agent/trace/events.ts',
 ];
 
+// A `run.position` row's `at` and the loop phase the fold maps it to share
+// the rows' dotted shape (`response.ready`, `model.submitted`), and guidance
+// naming where a run stands cites them beside the rows.
+const POSITION_VOCABULARY_SOURCES = [
+  [
+    'packages/harness/src/shared/schemas/runHistoryEvent.ts',
+    /const PositionAtSchema = z\.enum\(\[([^\]]*)\]\)/u,
+  ],
+  [
+    'packages/harness/src/shared/session/runRows.ts',
+    /type RunLoopPhase =([^;]*);/u,
+  ],
+];
+
 /**
  * Every event-type literal the vocabulary declares: the first argument of the
  * `durable(...)` / `trace(...)` arm builders, plus the `type: '...'` literals
- * of the hand-written trace arms.
+ * of the hand-written trace arms, plus the positions and phases a run stands
+ * at.
  */
 function readEventTypes() {
   const types = new Set();
@@ -159,6 +201,17 @@ function readEventTypes() {
     for (const [, name] of text.matchAll(/\btype:\s*'([^']+)'/g)) {
       types.add(name);
     }
+  }
+  for (const [source, declaration] of POSITION_VOCABULARY_SOURCES) {
+    const absolute = join(sourceRoot, source);
+    const members = existsSync(absolute)
+      ? declaration.exec(readFileSync(absolute, 'utf8'))
+      : null;
+    // Thrown for the same reason as a missing source above.
+    if (members === null) {
+      throw new Error(`position vocabulary not found in ${source}`);
+    }
+    for (const [, name] of members[1].matchAll(/'([^']+)'/g)) types.add(name);
   }
   return types;
 }
@@ -355,12 +408,15 @@ const targets = [
 
 const failures = [];
 const eventFailures = [];
+const lineFailures = [];
 
 for (const file of targets) {
   const body = stripFencedBlocks(readFileSync(join(repoRoot, file), 'utf8'));
   const lines = body.split('\n');
   const ignored = ignoredLines(lines);
   const definitions = referenceDefinitions(lines);
+  const lineCiteBase = LINE_CITING_FILES.get(file);
+  let citedFile = null;
 
   for (const [index, line] of lines.entries()) {
     if (ignored[index]) continue;
@@ -399,9 +455,37 @@ for (const file of targets) {
     }
 
     for (const [, token] of line.matchAll(/`([^`\n]+)`/g)) {
+      const cite = lineCiteBase === undefined ? null : LINE_CITE.exec(token);
+      if (cite !== null) {
+        const [, path, first, last = first] = cite;
+        if (path !== undefined) {
+          citedFile = PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+            ? path
+            : lineCiteBase + path;
+        }
+        const count = citedFile === null ? null : lineCount(citedFile);
+        const problem =
+          count === null
+            ? `no such file ${citedFile ?? '(no file cited before it)'}`
+            : Number(first) < 1 ||
+                Number(first) > Number(last) ||
+                Number(last) > count
+              ? `${citedFile} has ${count} lines`
+              : null;
+        if (problem !== null) {
+          lineFailures.push({
+            file,
+            line: index + 1,
+            candidate: token,
+            problem,
+          });
+        }
+        continue;
+      }
       // Trim trailing line cites (`:12`, `:73-80`, `:25-29,59-65`, `:18,27,28`),
       // then trailing sentence punctuation that fell inside the backticks.
-      // Line numbers are not validated — only path existence (issue #9730).
+      // Line numbers are not validated here — only path existence (issue
+      // #9730); LINE_CITING_FILES above are the exception.
       const candidate = token
         .trim()
         .replace(/:(?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*$/, '')
@@ -464,7 +548,21 @@ if (failures.length > 0) {
   );
 }
 
-if (failures.length > 0 || eventFailures.length > 0) {
+if (lineFailures.length > 0) {
+  console.error('Line citations point past their file or at no file:\n');
+  for (const { file, line, candidate, problem } of lineFailures) {
+    console.error(`  ${file}:${line}  ${candidate}  (${problem})`);
+  }
+  console.error(
+    `\n${lineFailures.length} bad line citation(s). Find the code the citation meant on the current tree and update its range.`,
+  );
+}
+
+if (
+  failures.length > 0 ||
+  eventFailures.length > 0 ||
+  lineFailures.length > 0
+) {
   process.exit(1);
 }
 

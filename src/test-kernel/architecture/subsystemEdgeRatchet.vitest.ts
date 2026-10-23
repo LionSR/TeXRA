@@ -43,7 +43,7 @@ const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
 
 /**
  * The roots a subsystem directory sits under: `src/` before the package
- * split, and the harness and app packages after it (split design §7). A
+ * split, and the harness and app packages after it. A
  * subsystem keeps its name across the move (`packages/harness/src/tools/x` and
  * `packages/texra/src/tools/y` are both `tools`), so the baseline is keyed
  * the same on either side of it.

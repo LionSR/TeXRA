@@ -1497,10 +1497,9 @@ describe('Sessions owner', () => {
 });
 
 /**
- * The cutover substrate (persistence-substrate-decision 6.1, stage 1): the
- * C1 tables and the C6 write path. Nothing production reads them yet, so
- * these assertions are the whole acceptance for the schema and the
- * publisher.
+ * The store itself: the event tables and the one write path that assigns
+ * seq and commit. These assertions are the acceptance for the schema and
+ * the publisher.
  */
 describe('the C1 event table and the C6 publisher', () => {
   const roots: string[] = [];
@@ -2198,7 +2197,7 @@ describe('the C1 event table and the C6 publisher', () => {
           [qualifyAggregateId('run', RUN), 2, 3],
           [qualifyAggregateId('run', RUN), 3, 4],
         ]);
-        // The writer is the process, stamped by the layer (C5), and `at` is
+        // The writer is the process, stamped by the layer, and `at` is
         // the layer's own clock: no caller passes either.
         expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
           true,
@@ -2338,8 +2337,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(observed.journal).toBe('wal');
         expect(observed.foreignKeys).toBe(1);
         expect(observed.integrity).toBe('ok');
-        // The envelope C1 gives its own columns is in those columns, and the
-        // payload holds the arm and nothing the envelope already carries.
+        // The envelope the event table gives its own columns is in those
+        // columns, and the payload holds the arm and nothing the envelope
+        // already carries.
         expect(observed.events).toEqual([
           {
             commit: 1,
@@ -2501,8 +2501,8 @@ describe('the C1 event table and the C6 publisher', () => {
     }).pipe(Effect.provide(substrate(storage)));
     return Effect.gen(function* () {
       yield* append;
-      // A second host process deletes the whole aggregate: the C1 cascade
-      // takes its events with it, and the AUTOINCREMENT high-water mark
+      // A second host process deletes the whole aggregate: the foreign-key
+      // cascade takes its events with it, and the AUTOINCREMENT high-water mark
       // stays where it was, so no cursor already handed out is invalidated.
       yield* Effect.sync(() => {
         const raw = reader(storage);
@@ -2535,7 +2535,8 @@ describe('the C1 event table and the C6 publisher', () => {
   });
 
   /**
-   * Outlined strings (the design's §2). Failure modes: a string of 4 KB or
+   * Outlined strings: a long string is stored once in `event_blob` and the
+   * row holds a reference. Failure modes: a string of 4 KB or
    * more reads back changed (a lone surrogate among them), or its object's
    * key order does; a payload's own `$b` or `$$b` key reads as a reference or
    * loses a `$`; the same string is stored once per row, not once per store;
@@ -2704,7 +2705,7 @@ describe('the C1 event table and the C6 publisher', () => {
             startCommit: 2,
           },
         ]);
-        // A closed target is the typed ownership refusal (D6 b); a seq-1
+        // A closed target is the typed ownership rejection; a seq-1
         // violation on an open or absent one is a plain write failure.
         for (const [draft, tag] of [
           [{ ...waiting, aggregateId: other }, 'DatabaseNotOwner'],
@@ -2942,7 +2943,7 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   /**
-   * Two OS processes on one file (the storage design's §8 and §11): a child
+   * Two OS processes on one file: a child
    * Node process appends to its run while this one appends to its own and
    * reads. Failure modes: an append lost to `SQLITE_BUSY`; a seq or commit
    * skipped or reused; a commit this connection observed going backwards;
@@ -3060,7 +3061,7 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   /**
-   * C14: the lease file is gone, so the only thing that frees a crashed
+   * There is no lease file, so the only thing that frees a crashed
    * process's claim is proving its recorded owner dead. A restart that meets
    * a stale claim it cannot disprove never resumes the run, for the life of
    * the store, so this is the one window whose regression costs every run
@@ -3155,7 +3156,7 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.appendAll([runStart, olderStart]);
         yield* Effect.gen(function* () {
           const second = yield* Database;
-          // The lost single-owner race is typed and names the holder (D6 b).
+          // The lost single-owner race is typed and names the holder.
           const fenced = yield* Effect.flip(second.appendAll([waiting]));
           expect(fenced).toMatchObject({
             _tag: 'DatabaseNotOwner',

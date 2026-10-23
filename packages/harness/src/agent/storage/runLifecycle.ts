@@ -289,7 +289,7 @@ export const endIn = Effect.fn('endIn')(function* (
   return result;
 });
 
-/** HQ6: no run ends while its open call owns a child that has not ended. A
+/** No run ends while its open call owns a child that has not ended. A
  *  stop or backstop (`cascade`) retires such a child first; the run's own
  *  terminal, or a stop whose child is live here, is refused. */
 const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (

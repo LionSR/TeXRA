@@ -378,9 +378,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // A task, a structured call and a trusted script's call reach the child
   // verbatim; any other is handed off with the parent's instruction.
   const handsOff = task === null && outputSchema === undefined && !trusted;
-  // Q2: a completed call with the same prompt, options and file bytes. The
-  // requested model, not the one availability resolves to, so a reuse does
-  // not depend on which credentials are configured now.
+  // A completed call with the same prompt, options and file bytes is reused.
+  // The requested model, not the one availability resolves to, so a reuse
+  // does not depend on which credentials are configured now.
   const fileBytes =
     awaited && script !== undefined
       ? yield* fingerprint(
@@ -459,7 +459,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       return yield* childResult(call, agent.name, settled, key);
   }
 
-  // An unavailable model fails this call, which a script may catch (Q6).
+  // An unavailable model fails this call, which a script may catch.
   const selected = yield* Effect.exit(
     selectAvailableDelegationModel({
       requestedModel: launch.model,
