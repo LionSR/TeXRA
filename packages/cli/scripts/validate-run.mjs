@@ -11,6 +11,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1059,11 +1060,6 @@ const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
    FROM event e JOIN event_sequence s ON s.id = e.aggregate
    WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
 
-/**
- * Remove a scratch directory, first stopping any TeXRA service a chat in it
- * started: its record names its pid, and a conversation parked there would
- * otherwise keep it running after its home is gone.
- */
 /** The scratch directories made and not yet removed: what an exit or a
  *  signal before a scenario's own cleanup still has to remove. */
 const liveScratch = new Set();
@@ -1097,6 +1093,28 @@ for (const [signal, code] of [
   process.on(signal, () => process.exit(code));
 }
 
+/**
+ * The directory the service of `storageRoot` keeps its sockets in, by the
+ * service's own rule (`servicePaths`): its `run` directory, or, when a
+ * socket path there would pass the Unix limit, as one under the macOS temp
+ * folder does, `/tmp/texra-<uid>-<hash of the root>`.
+ */
+function serviceSocketDirectory(storageRoot) {
+  const runDir = path.join(storageRoot, 'run');
+  if (Buffer.byteLength(path.join(runDir, 'serve-4294967295.sock')) <= 100)
+    return runDir;
+  const tag = createHash('sha256')
+    .update(path.resolve(storageRoot))
+    .digest('hex')
+    .slice(0, 16);
+  return path.join('/tmp', `texra-${process.getuid?.() ?? 0}-${tag}`);
+}
+
+/**
+ * Remove a scratch directory, first stopping every TeXRA service a chat in
+ * it started: a service outlives its clients, and its home going away does
+ * not stop it.
+ */
 function removeScratch(dir) {
   liveScratch.delete(dir);
   // Every service home under `dir`: each service, the current one and a
@@ -1109,25 +1127,47 @@ function removeScratch(dir) {
     { encoding: 'utf8' },
   );
   for (const runDir of runDirs.stdout.split('\n').filter(Boolean)) {
+    const socketDir = serviceSocketDirectory(path.dirname(runDir));
     const servicePids = () =>
-      readdirSync(runDir).flatMap((name) => {
+      (existsSync(socketDir) ? readdirSync(socketDir) : []).flatMap((name) => {
         const match = /^serve-(\d+)\.sock$/.exec(name);
         return match ? [Number(match[1])] : [];
       });
+    const pause = () =>
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     for (
       let waited = 0;
       servicePids().length === 0 && waited < 3_000;
       waited += 100
     )
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    const pids = new Set(servicePids());
-    for (const pid of pids) {
+      pause();
+    const signal = (pid, name) => {
       try {
-        process.kill(pid, 'SIGTERM');
+        process.kill(pid, name);
+        return true;
       } catch {
         // Gone already: nothing left to stop.
+        return false;
       }
-    }
+    };
+    const pids = [...new Set(servicePids())].filter((pid) =>
+      signal(pid, 'SIGTERM'),
+    );
+    // Gone before the scratch is: one still running past the wait is killed.
+    // A zombie (a service this script spawned, which this blocked loop has
+    // not reaped yet) has exited.
+    const running = (pid) =>
+      /^[^Z]/.test(
+        spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], {
+          encoding: 'utf8',
+        }).stdout.trim(),
+      );
+    for (let waited = 0; pids.some(running) && waited < 10_000; waited += 100)
+      pause();
+    for (const pid of pids.filter(running)) signal(pid, 'SIGKILL');
+    // A long root's socket directory is outside `dir`.
+    if (socketDir !== runDir)
+      rmSync(socketDir, { recursive: true, force: true });
   }
   rmSync(dir, { recursive: true, force: true });
 }

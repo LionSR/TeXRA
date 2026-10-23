@@ -31,7 +31,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
-/** How long a service with no client and no running task stays up. */
+/** How long a service with no client and no task at work stays up. */
 const DEFAULT_IDLE_SECONDS = 600;
 /** How long `stop` waits for the service to go. */
 const STOP_TIMEOUT = '30 seconds';
@@ -146,7 +146,7 @@ export const serveCommand = defineCliCommand({
     'idle-timeout': {
       type: 'string',
       valueHint: 'seconds',
-      description: `Exit after this long with no client and no running task, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
+      description: `Exit after this long with no client and no task at work, and close a project's session after this long with no client and no task of its own (default ${DEFAULT_IDLE_SECONDS})`,
     },
   },
   catchExitCode: CliExitCode.AgentError,

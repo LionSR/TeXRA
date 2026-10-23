@@ -1,5 +1,5 @@
 // `/resume` form. It lists recent executions that can be continued from the
-// current chat TUI.
+// current chat TUI: every one but the conversation this chat is on.
 
 import { Text } from 'ink';
 
@@ -14,6 +14,7 @@ import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from '@cli/runtime/historyLabels';
+import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 import type { LocalSession, ProcessRuntime } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -55,7 +56,13 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       load={() =>
         Effect.map(
           listCliHistoryEntries(Effect.succeed(props.session)),
-          listResumableCliHistoryEntries,
+          (entries) => {
+            // The conversation this chat is on is already open here.
+            const current = rootRunId.get();
+            return listResumableCliHistoryEntries(
+              entries.filter((entry) => entry.id !== current),
+            );
+          },
         )
       }
       runtime={props.runtime}
