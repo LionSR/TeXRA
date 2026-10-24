@@ -55,14 +55,14 @@ Above that layer, the facts have several owners.
 
 ### Which pending rows are messages, and readable now
 
-| Site | Rule |
-|---|---|
-| `RunInput.pending` (`RunInput.ts:60`) | `control === undefined`, `holdUntil`, an instruction present |
-| `Inbox.queued` (`Inbox.ts:399`) | `control === undefined` |
-| `wakeAfterGeneration` (`ToolUseFollowUp.ts:235`) | `control === undefined` |
-| `projectFollowUps` (`sessionViewUpdate.ts:911`) | `control === undefined` |
-| `endedChildProgress` (`FollowUps.ts:164`) | a subagent notice whose child has ended, checked only at delivery, by parsing the child id out of the notice text |
-| `acceptsFollowUp` (`sessionView.ts:267`) | the composer's rule, on the view, with a `FollowUpHost` constant each host passes (the extension passes both values) |
+| Site                                             | Rule                                                                                                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `RunInput.pending` (`RunInput.ts:60`)            | `control === undefined`, `holdUntil`, an instruction present                                                         |
+| `Inbox.queued` (`Inbox.ts:399`)                  | `control === undefined`                                                                                              |
+| `wakeAfterGeneration` (`ToolUseFollowUp.ts:235`) | `control === undefined`                                                                                              |
+| `projectFollowUps` (`sessionViewUpdate.ts:911`)  | `control === undefined`                                                                                              |
+| `endedChildProgress` (`FollowUps.ts:164`)        | a subagent notice whose child has ended, checked only at delivery, by parsing the child id out of the notice text    |
+| `acceptsFollowUp` (`sessionView.ts:267`)         | the composer's rule, on the view, with a `FollowUpHost` constant each host passes (the extension passes both values) |
 
 Consequence: the queued panel counts a subagent notice the loop will discard,
 and `Inbox.release` withholds its "takes no more input" notice while one sits.
@@ -164,12 +164,12 @@ owner, the inbox.
 
 The row already has `holdUntil: 'instruction'`. Two more members:
 
-| Value | Read | Wakes a run with no live generation |
-|---|---|---|
-| (absent) | at the next request, the turn's end, or idle | yes, by sender (below) |
-| `'instruction'` | only beside an instruction (pause and stop notices) | no |
-| `'turn'` | at the turn's end or idle, not before a request inside the turn | yes, by sender |
-| `'generation'` | at the turn's end or idle, only by a generation already running (progress notices, host notifications) | never |
+| Value           | Read                                                                                                   | Wakes a run with no live generation |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| (absent)        | at the next request, the turn's end, or idle                                                           | yes, by sender (below)              |
+| `'instruction'` | only beside an instruction (pause and stop notices)                                                    | no                                  |
+| `'turn'`        | at the turn's end or idle, not before a request inside the turn                                        | yes, by sender                      |
+| `'generation'`  | at the turn's end or idle, only by a generation already running (progress notices, host notifications) | never                               |
 
 `'generation'` replaces `mode: 'live_notification'`, the no-`wake` path a
 progress notice takes today, and the `'quiet'` arm of `admitQueued`.
@@ -192,14 +192,14 @@ export function readableMessages(
   at: InputPoint,
   /** Whether the run a notice came from has ended: its notice is stale. */
   childEnded: (runId: RunId) => boolean,
-): QueuedFollowUp[]
+): QueuedFollowUp[];
 // control rows: never (they are the run's own requests, read as `controls`)
 // holdUntil 'instruction': only beside an instruction in the same read
 // holdUntil 'turn' | 'generation': not at 'request'
 // holdUntil 'generation' from a child run that ended: stale, consumed unread
 
 /** Whether pending input obliges a resume of a run no generation holds. */
-export function needsWake(input: InputRows): boolean
+export function needsWake(input: InputRows): boolean;
 // over readableMessages(rows, 'idle'), excluding holdUntil 'generation':
 // - the run never ended, or ended other than by a user's Stop: a user's
 //   message or a child's delivery wakes it; another run's message or a
@@ -298,9 +298,9 @@ In `runTurn` (`toolUse.ts:363`), before each new request
 (`state.invocation === null`) and after `compaction.atBoundary`:
 
 ```ts
-const batch = yield* followUps.pending('request');
+const batch = yield * followUps.pending('request');
 if (batch !== null)
-  state = (yield* followUps.consume(cell, batch, { position: false })).state;
+  state = (yield * followUps.consume(cell, batch, { position: false })).state;
 ```
 
 The user message lands after the tool results and before the step's rows;
@@ -328,47 +328,47 @@ combines into one turn with the tool results first. No codec change.
 
 ## Ownership after the change
 
-| Fact | Owner |
-|---|---|
-| Pending input | `applyRunRow` |
-| When a row may be read; whether it wakes | `holdUntil` on the row; `readableMessages`, `needsWake` in `runRows.ts` |
-| A notice is stale | `readableMessages`, from the row's `from.runId` and the view's run status |
-| Reader presence; resume dedup; the wake | `Inbox` |
-| Can this run take a message | `submitFollowUp` |
-| Batch → message → rows | `FollowUps.consume` |
-| Next-request vs end-of-turn | the loop, by `at` |
-| Stop fence | the cancelled `run.end`; the admission waits for it |
+| Fact                                     | Owner                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| Pending input                            | `applyRunRow`                                                             |
+| When a row may be read; whether it wakes | `holdUntil` on the row; `readableMessages`, `needsWake` in `runRows.ts`   |
+| A notice is stale                        | `readableMessages`, from the row's `from.runId` and the view's run status |
+| Reader presence; resume dedup; the wake  | `Inbox`                                                                   |
+| Can this run take a message              | `submitFollowUp`                                                          |
+| Batch → message → rows                   | `FollowUps.consume`                                                       |
+| Next-request vs end-of-turn              | the loop, by `at`                                                         |
+| Stop fence                               | the cancelled `run.end`; the admission waits for it                       |
 
 ## Races and what closes each
 
-| Race | Closed by |
-|---|---|
+| Race                                                             | Closed by                                                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | A message lands while the loop unwinds (reader gone, fiber live) | `Inbox.wake` at generation-leave, after `log.settled`; the resume waits on the run's lane |
-| A message lands during a registry hold (no reader) | `Inbox.wake` at hold-release |
-| Two senders both resume | `resumeOnce` |
-| Delivered twice after a crash | `followup.consumed` commits with the message |
-| "Stop, then retype" | the admission waits for the drain; the row lands after the cancelled `run.end` |
-| A notice resumes an idle or finished run | `holdUntil: 'generation'` never wakes |
-| A lingering pause notice resumes the run at every leave | `needsWake` is over readable rows, which exclude a held row with no instruction |
-| A next-request message summarized by compaction | consumed after `atBoundary`, before the request |
-| A stale notice counted or keeping the input open | `readableMessages` drops it everywhere |
-| A one-shot run acknowledges a message it never reads | the admission refuses it |
+| A message lands during a registry hold (no reader)               | `Inbox.wake` at hold-release                                                              |
+| Two senders both resume                                          | `resumeOnce`                                                                              |
+| Delivered twice after a crash                                    | `followup.consumed` commits with the message                                              |
+| "Stop, then retype"                                              | the admission waits for the drain; the row lands after the cancelled `run.end`            |
+| A notice resumes an idle or finished run                         | `holdUntil: 'generation'` never wakes                                                     |
+| A lingering pause notice resumes the run at every leave          | `needsWake` is over readable rows, which exclude a held row with no instruction           |
+| A next-request message summarized by compaction                  | consumed after `atBoundary`, before the request                                           |
+| A stale notice counted or keeping the input open                 | `readableMessages` drops it everywhere                                                    |
+| A one-shot run acknowledges a message it never reads             | the admission refuses it                                                                  |
 
 ## Deleted
 
-| Element | Where | Lines |
-|---|---|---|
-| `wakeAfterGeneration` and `since` | `ToolUseFollowUp.ts:205-255`, `runRegistry.ts:470, 480, 555, 649, 776`, `sessionLayer.ts:206` | ~70 |
-| `wakeParent`'s row re-read, `lostResultId` prefix match | `childTurnResult.ts:362-390` (body becomes `Inbox.wake`) | ~20 |
-| `getToolUseFollowUpTarget`, `ToolUseFollowUpTarget`, `retainsTerminalParent` | `runRegistry.ts:85-110, 326-350`, `childRunLoop.ts:422, 935`, comment `sessionEvent.ts:329` | ~45 |
-| `admitQueued` modes, `mode: 'live_notification'`, `SendOptions.wake`, `Sent.wake` | `ToolUseFollowUp.ts:60-69, 262-345`, `Inbox.ts`, `RunSubscriptionRegistry.ts:135` | ~40 |
-| `joinStopped` | `FollowUps.ts:95-101, 316-330` | ~25 |
-| `endedChildProgress`, `subagentProgressRunId` use in the loop | `FollowUps.ts:160-175` | ~15 |
-| Four `followup.consumed` literals | five sites | ~20 |
-| `isInstruction` duplicate home | `followUpMessages.ts:52` (moves) | 0 |
-| Direct inbox read | `toolUseDispatch.ts:1106` | ~5 |
-| Native child `AbortSignal` race | `childRunLoop.ts:698-705` | ~5 |
-| Two rebuilt wordings of the send result | `executions/send.ts:114-120`, `TasksForm.tsx:381` (use `presentFollowUpResult`) | ~10 |
+| Element                                                                           | Where                                                                                         | Lines |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----- |
+| `wakeAfterGeneration` and `since`                                                 | `ToolUseFollowUp.ts:205-255`, `runRegistry.ts:470, 480, 555, 649, 776`, `sessionLayer.ts:206` | ~70   |
+| `wakeParent`'s row re-read, `lostResultId` prefix match                           | `childTurnResult.ts:362-390` (body becomes `Inbox.wake`)                                      | ~20   |
+| `getToolUseFollowUpTarget`, `ToolUseFollowUpTarget`, `retainsTerminalParent`      | `runRegistry.ts:85-110, 326-350`, `childRunLoop.ts:422, 935`, comment `sessionEvent.ts:329`   | ~45   |
+| `admitQueued` modes, `mode: 'live_notification'`, `SendOptions.wake`, `Sent.wake` | `ToolUseFollowUp.ts:60-69, 262-345`, `Inbox.ts`, `RunSubscriptionRegistry.ts:135`             | ~40   |
+| `joinStopped`                                                                     | `FollowUps.ts:95-101, 316-330`                                                                | ~25   |
+| `endedChildProgress`, `subagentProgressRunId` use in the loop                     | `FollowUps.ts:160-175`                                                                        | ~15   |
+| Four `followup.consumed` literals                                                 | five sites                                                                                    | ~20   |
+| `isInstruction` duplicate home                                                    | `followUpMessages.ts:52` (moves)                                                              | 0     |
+| Direct inbox read                                                                 | `toolUseDispatch.ts:1106`                                                                     | ~5    |
+| Native child `AbortSignal` race                                                   | `childRunLoop.ts:698-705`                                                                     | ~5    |
+| Two rebuilt wordings of the send result                                           | `executions/send.ts:114-120`, `TasksForm.tsx:381` (use `presentFollowUpResult`)               | ~10   |
 
 About 255 lines out; added: `readableMessages`, `needsWake`, `consumedRow`,
 `Inbox.wake`, the drain wait in the admission, the consume at the next

@@ -38,6 +38,7 @@ import {
   type ResumeRunOptions,
 } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { withProcessServices } from '@platform/processRuntime';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
@@ -61,13 +62,9 @@ import { generateRunId } from '@utils/core';
 const resume = (runId: RunId, options: ResumeRunOptions) =>
   withProcessServices(testRuntime(), resumeRun(runId, options));
 
-/** Send `text` to the run as its user, owing it a wake. */
+/** Send `text` to the run as its user. */
 const send = (session: SessionHandle, runId: RunId, text: string) =>
-  session.followUps.send(
-    runId,
-    { from: { kind: 'user' }, text },
-    { wake: true },
-  );
+  session.followUps.send(runId, { from: { kind: 'user' }, text });
 
 /** The texts the run's rows still queue. */
 const queuedTexts = (session: SessionHandle, runId: RunId) =>
@@ -152,7 +149,6 @@ describe(
           expect(yield* send(session, runId, 'raced')).toEqual({
             kind: 'queued',
             read: false,
-            wake: false,
           });
           yield* config.release;
           const result = yield* Fiber.join(resumed);
@@ -181,7 +177,6 @@ describe(
                 expect(yield* send(session, runId, 'second')).toEqual({
                   kind: 'queued',
                   read: false,
-                  wake: false,
                 });
               }),
           });
@@ -331,14 +326,10 @@ describe(
           const resuming = yield* Effect.forkChild(resume(runId, { session }));
           yield* activation.reached;
           const delivered = yield* Effect.forkChild(
-            session.followUps.send(
-              runId,
-              {
-                text: 'completed child',
-                from: { kind: 'run', runId: 'c41dc41dc41d' as RunId },
-              },
-              { wake: true },
-            ),
+            session.followUps.send(runId, {
+              text: 'completed child',
+              from: { kind: 'run', runId: 'c41dc41dc41d' as RunId },
+            }),
           );
           yield* activation.fail;
 
@@ -426,7 +417,7 @@ describe(
             );
           });
           expect(yield* send(session, runId, 'Typed behind.')).toMatchObject({
-            wake: false,
+            kind: 'queued',
           });
           const stop = session.runs.stop(runId, {
             reason: 'user',
@@ -434,7 +425,14 @@ describe(
           });
           const settled = yield* Effect.forkChild(stop.settlement);
           if (afterStop !== 'detaching') yield* Fiber.join(settled);
-          if (afterStop) yield* send(session, runId, 'After the stop.');
+          // A host's send: it waits for the stop to drain, so the row lands
+          // after the run's end and wakes it.
+          if (afterStop)
+            yield* submitFollowUp(
+              runId,
+              { text: 'After the stop.', from: { kind: 'user' } },
+              { session },
+            );
           yield* Fiber.join(settled);
           yield* Fiber.await(resumed);
           // A wake owed as the stopped generation leaves starts at once: give
@@ -511,8 +509,9 @@ describe(
           expect(yield* send(session, runId, 'again')).toEqual({
             kind: 'queued',
             read: false,
-            wake: true,
           });
+          // The run ended: the wake its sender owes is refused.
+          expect(yield* session.followUps.wake(runId)).toBe(false);
 
           expect(yield* resume(runId, { session })).toEqual({
             failed: 'finished',

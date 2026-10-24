@@ -15,6 +15,7 @@ import {
   qualifyAggregateId,
   type RunId,
   type RunInput,
+  type SessionEvent,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
 } from '@shared/schemas';
@@ -24,6 +25,7 @@ import {
   isStaleNotice,
   type QueuedFollowUp,
   type RunLookup,
+  runRowsFrom,
 } from './runRows';
 import type { PendingResponse } from './inFlight';
 
@@ -186,3 +188,35 @@ export const consumedRow = (
   aggregateId: qualifyAggregateId('run', runId),
   followUpId,
 });
+
+/**
+ * Whether a run's pending input obliges a resume of it when no generation
+ * holds it, from its input rows (`followup.queued`, `followup.consumed`,
+ * `run.end`): a message readable at idle, from its user or a child of its,
+ * while the run never ended or ended other than by a user's Stop; after a
+ * Stop (its last `run.end` is cancelled), only the user's message committed
+ * after that end. A row for a running generation only, another run's
+ * message and a host notification wake nothing; a message a run never ended
+ * for takes the next explicit Resume.
+ */
+export function needsWake(
+  rows: readonly SessionEvent[],
+  run: RunLookup,
+): boolean {
+  const end = rows.findLast((row) => row.type === 'run.end');
+  const stopped = end?.type === 'run.end' && end.outcome === 'cancelled';
+  const committed = new Map(
+    rows.flatMap((row) =>
+      row.type === 'followup.queued' ? [[row.followUpId, row.commit]] : [],
+    ),
+  );
+  return readableMessages(runRowsFrom(rows).followUps, 'idle', run).some(
+    ({ followUpId, holdUntil, content: { from } }) => {
+      if (holdUntil === 'generation') return false;
+      if (from.kind === 'user')
+        return !stopped || (committed.get(followUpId) ?? 0) > end.commit;
+      if (from.kind === 'run' && from.relation === 'child') return !stopped;
+      return end === undefined;
+    },
+  );
+}

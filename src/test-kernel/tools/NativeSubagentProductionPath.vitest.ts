@@ -635,20 +635,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.log.settled);
     childId = undefined;
-    // Every wake: a send that owed the run a resume.
+    // Every resume a send started: the run owed one.
     resumedRuns = [];
-    const followUps = session.followUps;
-    const send = followUps.send.bind(followUps);
-    vi.spyOn(followUps, 'send').mockImplementation((runId, ...rest) =>
-      send(runId, ...rest).pipe(
-        Effect.tap((submitted) =>
-          Effect.sync(() => {
-            if (submitted.kind === 'queued' && submitted.wake)
-              resumedRuns.push(runId);
-          }),
-        ),
-      ),
-    );
+    const runs = session.runs;
+    const resume = runs.resume.bind(runs);
+    vi.spyOn(runs, 'resume').mockImplementation((runId, ...rest) => {
+      resumedRuns.push(runId);
+      return resume(runId, ...rest);
+    });
     parentFiber = undefined;
     // A document task's revisions delegate on a model a key makes available.
     await Effect.runPromise(
