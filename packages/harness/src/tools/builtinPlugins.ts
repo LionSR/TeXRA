@@ -114,12 +114,14 @@ export const multiAgent: Plugin = builtin({
 /**
  * Code mode: the `script` tool, a program that calls the run's other tools,
  * and `self()`, the function a script runs this agent again with. An agent
- * gets them only if its configuration names `script`; its session layer is
- * the code sandbox the scripts run in.
+ * gets them if its configuration names `script`, or, while script-only
+ * tools are on, as every chat run does; its session layer is the code
+ * sandbox the scripts run in.
  */
 export const codemode = builtin<CodeSandbox>({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
+  injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },
   sessionLayer: codeSandboxLayer,
 });
 

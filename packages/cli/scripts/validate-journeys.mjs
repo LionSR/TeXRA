@@ -12,7 +12,12 @@
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
- *     [--no-build] [--out dir]
+ *     [--no-build] [--out dir] [--script-only] [--repeat n]
+ *
+ * `--script-only` runs every journey with the `texra.codeMode.scriptOnly`
+ * setting on in the run's home (the model sees the `script` tool alone), the
+ * "only" arm of the code mode comparison; `--repeat` runs each journey that
+ * many times. Every run appends one JSON line to `<out>/results.jsonl`.
  *
  * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
  * list of models the journeys run.
@@ -20,6 +25,7 @@
 
 import { spawnSync } from 'node:child_process';
 import {
+  appendFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -31,6 +37,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { parseArgs } from 'node:util';
 
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
@@ -174,8 +181,8 @@ const JOURNEYS = {
   },
 };
 
-/** Run one journey through the real CLI; returns `{ tokens, cost }` or throws. */
-function runJourney(name, model, outDir) {
+/** Run one journey through the real CLI; returns its usage or throws. */
+function runJourney(name, model, outDir, { scriptOnly, attempt }) {
   const journey = JOURNEYS[name];
   const dir = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-`));
   const home = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-home-`));
@@ -206,6 +213,18 @@ function runJourney(name, model, outDir) {
     // enabled ones only.
     const enable = texra(['models', 'enable', model], 60_000);
     assert(enable.status === 0, `texra models enable ${model} failed`);
+    if (scriptOnly) {
+      // The global state the `enable` above created: the "only" arm's one
+      // setting, written as the app-state store writes it.
+      const db = new DatabaseSync(
+        path.join(home, '.texra', 'v1', 'global-storage', 'texra.db'),
+      );
+      db.prepare(
+        "INSERT OR REPLACE INTO current_value (family, key, version, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 1, 'true', ?)",
+      ).run(Date.now());
+      db.close();
+    }
+    const startedAt = Date.now();
     const result = texra(
       [
         'run',
@@ -221,9 +240,10 @@ function runJourney(name, model, outDir) {
       ],
       300_000,
     );
+    const wallMs = Date.now() - startedAt;
     const stem = path.join(
       outDir,
-      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}`,
+      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${scriptOnly ? 'only' : 'direct'}.${attempt}`,
     );
     writeFileSync(`${stem}.ndjson`, result.stdout ?? '');
     writeFileSync(`${stem}.stderr`, result.stderr ?? '');
@@ -263,9 +283,24 @@ function runJourney(name, model, outDir) {
       writeFileSync(`${stem}.diff`, diff.stdout ?? '');
     }
     journey.check(dir);
-    const { totalInputTokens, totalOutputTokens, totalCost } =
-      final.result.usage;
-    return { tokens: totalInputTokens + totalOutputTokens, cost: totalCost };
+    const usage = final.result.usage;
+    // The run's tool calls, by name, from the `tool.start` rows the progress
+    // records carry: `script` counts the scripts, the rest their nested calls.
+    const calls = {};
+    for (const r of records)
+      if (r.kind === 'progress' && r.event === 'tool.start')
+        calls[r.payload.toolName] = (calls[r.payload.toolName] ?? 0) + 1;
+    const scripts = calls.script ?? 0;
+    return {
+      tokens: usage.totalInputTokens + usage.totalOutputTokens,
+      inputTokens: usage.totalInputTokens,
+      outputTokens: usage.totalOutputTokens,
+      cacheReadTokens: usage.totalCacheReadInputTokens,
+      cost: usage.totalCost,
+      wallMs,
+      scripts,
+      calls,
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
@@ -277,6 +312,8 @@ const { values } = parseArgs({
     model: { type: 'string', multiple: true },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
+    'script-only': { type: 'boolean', default: false },
+    repeat: { type: 'string', default: '1' },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },
   },
 });
@@ -313,24 +350,40 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
+const scriptOnly = values['script-only'];
+const arm = scriptOnly ? 'only' : 'direct';
+const repeat = Number(values.repeat);
+const resultsFile = path.join(values.out, 'results.jsonl');
 let failed = false;
 for (const model of funded) {
-  const rows = names.map((name) => {
-    try {
-      return { name, ...runJourney(name, model, values.out) };
-    } catch (error) {
-      return {
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-  const lines = rows.map((row) =>
-    row.error
-      ? `FAIL ${row.name} (${model}): ${row.error}`
-      : `PASS ${row.name} (${model}): ${row.tokens} tokens, $${row.cost.toFixed(5)}`,
-  );
-  console.log(lines.join('\n'));
-  failed ||= rows.some((row) => row.error);
+  for (let attempt = 1; attempt <= repeat; attempt += 1) {
+    const rows = names.map((name) => {
+      const startedAt = Date.now();
+      try {
+        return {
+          name,
+          ...runJourney(name, model, values.out, { scriptOnly, attempt }),
+        };
+      } catch (error) {
+        return {
+          name,
+          wallMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+    for (const row of rows)
+      appendFileSync(
+        resultsFile,
+        `${JSON.stringify({ model, arm, attempt, ...row, pass: !row.error })}\n`,
+      );
+    const lines = rows.map((row) =>
+      row.error
+        ? `FAIL ${row.name} (${model}, ${arm} #${attempt}): ${row.error}`
+        : `PASS ${row.name} (${model}, ${arm} #${attempt}): ${row.tokens} tokens, $${row.cost.toFixed(5)}, ${(row.wallMs / 1000).toFixed(0)}s, ${row.scripts} script call(s)`,
+    );
+    console.log(lines.join('\n'));
+    failed ||= rows.some((row) => row.error);
+  }
 }
 process.exit(failed ? 1 : 0);

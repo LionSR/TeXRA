@@ -671,6 +671,11 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
+  default; CLI `/config`) offers chat agents the `script` tool alone, with
+  every other tool called from inside a script. `validate-journeys.mjs`
+  runs the comparison against direct tool calls (`--script-only`,
+  `--repeat`); the first round is in the codemode design doc.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt

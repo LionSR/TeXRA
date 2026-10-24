@@ -50,6 +50,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   sameIdentity,
@@ -58,6 +59,7 @@ import {
 } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import {
+  toolDefinitionsFor,
   toolDigests,
   type HeldPlugins,
   type ToolEntry,
@@ -391,4 +393,36 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     warnings,
     withheldForApproval,
   };
+});
+
+/**
+ * The tool definitions a request sends, in wire form: every tool the step
+ * offers, or, while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`)
+ * and the step offers `script`, the script tool and the run's own tools
+ * alone (its structured-output terminal, which a forced tool choice names).
+ * Every other offered tool stays offered, called from inside a script.
+ */
+export const sentDefinitions = Effect.fn('sentDefinitions')(function* (
+  tools: {
+    readonly definitions: readonly ToolDefinition[];
+    readonly registry: ReadonlyMap<string, ITool>;
+    readonly offered: readonly OfferedTool[];
+  },
+  stores: ModelOptionStores,
+) {
+  const script = (name: string) =>
+    tools.registry.get(name)?.describe !== undefined;
+  const scriptOnly =
+    (yield* Settings.get<boolean>(stores, GlobalStateKey.SCRIPT_ONLY)) &&
+    tools.definitions.some(({ name }) => script(name));
+  const own = new Set(
+    tools.offered.flatMap(({ name, plugin }) =>
+      plugin === 'run' ? [name] : [],
+    ),
+  );
+  return toolDefinitionsFor(
+    scriptOnly
+      ? tools.definitions.filter(({ name }) => own.has(name) || script(name))
+      : tools.definitions,
+  );
 });
