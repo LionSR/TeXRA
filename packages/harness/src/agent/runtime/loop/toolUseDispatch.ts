@@ -101,8 +101,10 @@ import {
   localCallsOf,
   parseCallArguments,
   replayable,
+  SKIPPED_AFTER_END_TURN,
   SKIPPED_NOT_STARTED,
   SKIPPED_OUTCOME_UNKNOWN,
+  SKIPPED_SCRIPT_ENDED,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -128,9 +130,6 @@ const MAX_PARALLEL_TOOL_CALLS = 4;
 /** How much of a running tool's output streams to its card as transient
  *  text; the result carries the bounded capture whatever streamed. */
 const STREAMED_OUTPUT_MAX = 50_000;
-
-const SKIPPED_AFTER_END_TURN =
-  'Tool call skipped: an earlier tool call ended the turn.';
 
 /** What the per-call program needs of a call, whichever origin issued it:
  *  a response's dispatch fact, or a script's `script.call`, which commits
@@ -237,13 +236,10 @@ const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
   return fact.lane === 'parallel' ? 'parallel' : 'barrier';
 };
 
-/**
- * The one scheduler, for a response's calls and a script's guest's alike.
- * Calls take their places in issue order (`seq`), whatever order their
- * fibers reach it in. Each call answers whether it ended the turn, and its
- * body learns whether any call it waited for did, so a call after a
- * partition that ended the turn sees it and its own partition does not.
- */
+/** The one scheduler, for a response's calls and a script's guest's alike:
+ *  calls take their places in issue order (`seq`), whatever order their
+ *  fibers arrive in, and a call after a partition that ended the turn sees
+ *  that it did while its own partition does not. */
 const makeScheduler = Effect.gen(function* () {
   const taken = new Map<number, Deferred.Deferred<void>>();
   const finished = new Map<number, Deferred.Deferred<boolean>>();
@@ -475,11 +471,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     attachments: [],
   });
 
-  /** Execute one call at `attempt` and commit its result, re-entering
-   *  the request a resumed attempt left standing (`own`). Never fails: a
-   *  throwing tool is an error result. Interruption leaves no result.
-   *  `place`: the script that issued the call, or the door a `script` call
-   *  issues its own through. */
+  /** Execute one call at `attempt` and commit its result, re-entering the
+   *  request a resumed attempt left standing (`own`); `place` is the script
+   *  that issued it, or the door a `script` call issues its own through. A
+   *  throwing tool is an error result; interruption leaves no result. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
     fact: CallFacts,
     parsedInput: unknown,
@@ -547,8 +542,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         accepting = tool.slow === true;
         yield* pre.bodyStarts;
       });
-      // The call's place in its run, from this call's facts alone, and the
-      // child door over exactly it: a nested call launches under its own id.
+      // This call's place in its run, and the child door over exactly it.
       const runCall: RunCallShape = {
         run,
         responseId,
@@ -683,11 +677,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   });
 
-  /** A call with no result yet, continued at its `resumedAttempt`; a call
-   *  untouched in a recovered response is reported not started. Otherwise
-   *  the body may have run: the replay rule re-runs it, or its result is
-   *  "outcome unknown", closing the card the interrupted attempt opened, and
-   *  the model decides what to do (verify, ask, or call again). */
+  /** A call with no result yet, continued at its `resumedAttempt`: untouched
+   *  in a recovered response it is reported not started; else it re-runs if
+   *  its replay rule allows, or settles "outcome unknown", closing its card. */
   const resumeCall = Effect.fn('toolUse.resumeCall')(function* (
     fact: CallFacts,
     input: unknown,
@@ -718,16 +710,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       );
   });
 
-  /**
-   * The calls a response's call may issue as a script, each through this
-   * same per-call program and the same scheduler, under the script's stage,
-   * its settlement handed back at its `tool.result` commit. A resumed script
-   * is handed back what its rows settled, in the order those settlements
-   * committed, before any call runs again; an unsettled call continues as
-   * its rows say; and a call at a recorded `seq` that is not the recorded
-   * one is a divergence. A parallel call takes the window, a tool that
-   * bounds its own calls runs beside the others, any other is a barrier.
-   */
+  /** The door a `script` call's guest issues calls through: the same per-call
+   *  program and scheduler, under the script's stage. A resumed script is
+   *  handed back what its rows settled, in commit order, before any call
+   *  runs again; a call at a recorded `seq` that differs is a divergence. */
   const scriptCallsOf = Effect.fn('toolUse.scriptCalls')(function* (
     script: DispatchFacts,
   ) {
@@ -739,8 +725,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       | FileSystem.FileSystem
       | Scope.Scope
     >();
-    // Built when the call's tool first asks for it, so a call that issues
-    // none allocates nothing; the dispatch's scope still owns the stage.
+    // Built on first use: a call that issues none allocates nothing.
     const door = yield* Effect.cached(
       Effect.gen(function* () {
         const stageId = `script-${script.logId}`;
@@ -892,7 +877,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               // settled.
               yield* handedBack(replayOrder.at(-1));
               const status = recordOf(yield* cell.current, callId)?.status;
-              // The call knows the script that issued it, and issues none.
               if (status?.kind !== 'settled')
                 yield* resumeCall(fact, input, status ?? { kind: 'issued' }, {
                   script: scopeOf(source),
@@ -947,6 +931,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ? Effect.void
               : Deferred.succeed(done, undefined).pipe(Effect.asVoid);
           },
+          // A call the guest never awaited to its end: skipped, card closed.
+          settleAbandoned: Effect.flatMap(cell.current, (state) =>
+            Effect.forEach(
+              issued(state).filter(({ status }) => status.kind !== 'settled'),
+              ({ call: fact, status }) => {
+                const reached = attemptOf(status);
+                return commitResult(
+                  fact,
+                  Math.max(1, reached),
+                  skippedResult(SKIPPED_SCRIPT_ENDED),
+                  reached === 0
+                    ? undefined
+                    : resultCards(fact, fact.input, 'failed', reached),
+                );
+              },
+              { discard: true },
+            ),
+          ).pipe(Effect.provideContext(services)),
         } satisfies ScriptDoor;
       }).pipe(Effect.provideContext(services)),
     );
@@ -995,8 +997,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* commitResult(fact, attempt, skippedResult(SKIPPED_AFTER_END_TURN));
     } else {
       const input = parseCallArguments(call, logger);
-      // A response's call was issued by no script; as a `script` call it
-      // issues its own through the door.
       yield* Effect.scoped(
         Effect.flatMap(scriptCallsOf(fact), (door) =>
           resumeCall(fact, input, status, { script: null, scriptCalls: door }),

@@ -104,6 +104,13 @@ export const SKIPPED_OUTCOME_UNKNOWN =
 /** What the model reads for a call of a recovered response that never ran. */
 export const SKIPPED_NOT_STARTED =
   'The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.';
+/** What the model reads for a call issued after a sibling ended the turn. */
+export const SKIPPED_AFTER_END_TURN =
+  'Tool call skipped: an earlier tool call ended the turn.';
+/** What the model reads for a call its script issued and never awaited to
+ *  its end: the script ended first. */
+export const SKIPPED_SCRIPT_ENDED =
+  "The script ended before this call settled, so the call was stopped where it stood and nothing of it is recorded as done. If the script's result does not cover it, call it again.";
 
 /**
  * Whether an unfinished call re-runs unasked: the replay word its response
