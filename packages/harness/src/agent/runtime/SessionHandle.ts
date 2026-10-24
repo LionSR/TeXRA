@@ -84,12 +84,10 @@ export interface SessionTransaction {
  * {@link publish}.
  */
 export interface SessionLog {
-  /**
-   * One transaction, run as the next job of the session's publisher and
-   * returned once the view has applied what it committed: a batch of rows, or
-   * a job that reads committed rows and appends what depends on them with no
-   * other write between. A refusal wrote nothing, comes back typed, never retried.
-   */
+  /** One transaction, run as the next job of the session's publisher and
+   *  returned once the view applied it: a batch of rows, or a job that reads
+   *  committed rows and appends what depends on them with no other write
+   *  between. A refusal wrote nothing, comes back typed, never retried. */
   transact(
     events: readonly UnfoldedDraft[],
   ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
@@ -97,29 +95,25 @@ export interface SessionLog {
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
   ): Effect.Effect<A, E | LogWriteError>;
   /** Publish one trace event (display rows only: no {@link AgentEvent} is
-   *  part of the run's state) as its row, a chunk as transient text; its
-   *  order is this call, a refusal the run's own ({@link RunTrace.lost}). */
+   *  part of the run's state) as its row, a chunk as transient text; its order
+   *  is this call, a refusal the run's own ({@link RunTrace.lost}). */
   publish(runId: RunId, event: AgentEvent): void;
-  /** A barrier: every job enqueued before it has run, the view applied it,
-   *  and the session's reader of the view's tail (the terminal-result
-   *  presenter) ran over it. A refused detached row is heard by its writer. */
+  /** A barrier: every job enqueued before it has run, the view applied it, and
+   *  the terminal-result presenter read the view's tail past it. A refused
+   *  detached row is heard by its writer. */
   readonly settled: Effect.Effect<void>;
   /** Run `action` once the job this fiber runs (inside {@link transact})
-   *  commits, and never if it rolls back; outside a job, now. For what a
-   *  job changes in memory or logs, so nothing acts on rows never written. */
+   *  commits, never if it rolls back; outside a job, now. For what a job
+   *  changes in memory or logs, so nothing acts on rows never written. */
   afterCommit(action: Effect.Effect<void>): Effect.Effect<void>;
-  /** The current commit ordinal: where a reader attaching now starts its
-   *  {@link tail}, so it sees what is published from here on. */
+  /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
-  /** Every committed row of one aggregate, private rows included; with
-   *  `types`, only rows of those types, through the type index. */
+  /** Every committed row of one aggregate (with `types`, only those kinds). */
   rows(
     id: AggregateId,
     types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  /** The strings stored under `digests`: the bytes a history's media parts
-   *  and captured attachments name. Read by the invocation alone, right
-   *  before the provider call (`run/mediaBytes.ts`). */
+  /** The strings under `digests`: media bytes the history names by address. */
   blobs(
     digests: readonly string[],
   ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;

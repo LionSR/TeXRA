@@ -24,16 +24,15 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { HistoryMessageDraft } from '@shared/session/historyTurns';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
+import { addressedMessages, type AppendedMessage } from '../storedTurn';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** A message the loop appends: the history's, a media part with its bytes
- *  in hand included (the row codec stores them under their address). */
-export type Message = HistoryMessageDraft;
+/** A message the loop appends (`addressedMessages`). */
+export type Message = AppendedMessage;
 
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
@@ -92,16 +91,19 @@ export function appendRow(
   } = {},
 ): RunHistoryDraft {
   const { sourceResponse = null, input, reason } = options;
+  // Media bytes go to the blob table with the row; the row keeps addresses.
+  const addressed = addressedMessages(messages);
   return {
     type: 'model.message',
     aggregateId: rowAggregate(runId),
     payload: {
       kind: 'append',
-      messages,
+      messages: addressed.messages,
       sourceResponse,
       ...(input !== undefined && Object.keys(input).length > 0 && { input }),
       ...(reason !== undefined && { reason }),
     },
+    ...(addressed.blobs.length > 0 && { blobs: addressed.blobs }),
   };
 }
 

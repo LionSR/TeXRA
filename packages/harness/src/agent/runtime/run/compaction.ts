@@ -29,7 +29,7 @@ import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { rowAggregate, type Message } from '../loop/rows';
+import { rowAggregate } from '../loop/rows';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
@@ -124,7 +124,7 @@ type Reason = keyof typeof COMPACTION_REASON;
 
 /** A summary the bound model produced of messages `[0, to)`. */
 interface Summary {
-  readonly replacement: Message;
+  readonly replacement: RunState['messages'][number];
   readonly usage: CallResult['usage'];
   readonly to: number;
   readonly tokensBefore: number;

@@ -1,8 +1,7 @@
 /**
- * The persistence substrate (`2026-09-03-persistence-substrate-decision.md`,
- * reshaped by `2026-09-28-storage-v1-design.md`): the connection, its
- * transactions and busy retry, the run history's one write path, claims, the
- * aggregate lifecycle, deletion and collection, and the reads. One database
+ * The persistence substrate: the connection, its transactions and busy
+ * retry, the run history's one write path, claims, the aggregate lifecycle,
+ * deletion and collection, and the reads. One database
  * per session root (`WorkspaceRoots`), never a process singleton; an ephemeral
  * session runs the same schema in SQLite memory, and a failed file open is an
  * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
@@ -28,7 +27,6 @@ import {
   FileSystem,
   Layer,
   Option,
-  Result,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -71,29 +69,30 @@ import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
 import { LISTED_TYPES, projectionUpkeep } from './projections';
 import {
-  AGGREGATE,
-  DISPLAY_READ_TYPES,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
-  PROJECTED_COLUMNS,
-  PROJECTED_FROM,
   aggregateColumns,
   aggregateLists,
   aggregateOf,
-  BlobRowSchema,
   CURRENT_VALUE_KIND,
-  decodeRow,
   encodeDraft,
-  inflateBlob,
-  READ_BLOBS,
   pluginKind,
   prepareEventDraft,
   storeGate,
   type EncodedRow,
   type SqlRow,
 } from './rowCodec';
-import { rowReader, settleCards } from './rowReader';
+import {
+  AGGREGATE,
+  DISPLAY_READ_TYPES,
+  PROJECTED_COLUMNS,
+  PROJECTED_FROM,
+  READ_LISTING,
+  READ_RUN_RECORDS,
+  rowReader,
+  settleCards,
+} from './rowReader';
 import {
   isBusy,
   isDamaged,
@@ -122,7 +121,7 @@ VALUES (?, ?, ?, 1, ?)
 ON CONFLICT(kind, logical_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id
   AND event_sequence.closed_by IS NULL
-RETURNING id, seq, uid
+RETURNING id, seq
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
@@ -137,34 +136,6 @@ const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
-/** The listing (each aggregate's `listing_entry` rows, each run's spend on
- *  its newest priced row's envelope and its latest model switch, in commit
- *  order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
- *  store is never `ANALYZE`d), each by its event's primary key. */
-const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
-  ${EVENT_JOINS}`;
-
-const READ_LISTING = `SELECT * FROM (
-  SELECT ${EVENT_COLUMNS} FROM ${LISTED}
-  UNION ALL
-  SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
-    s.uid AS uid,
-    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data
-  FROM run_usage u
-    JOIN event e ON e."commit" = u."commit"
-    JOIN event_sequence s ON s.id = u.aggregate
-  UNION ALL
-  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
-    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
-) ORDER BY "commit"`;
-
-/** One open run's listing rows, its pending sets left out. */
-const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
-  WHERE l.aggregate = (SELECT id FROM event_sequence
-      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL)
-    AND e.type NOT IN ('request.opened', 'followup.queued')
-  ORDER BY e."commit"`;
 
 /** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`),
  *  joined in this order: a free planner scans both arrays per aggregate. */
@@ -282,14 +253,14 @@ export const databaseLayer = (
       /** The store gate (`storeGate`), in the caller's transaction. */
       const arms = armsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, arms);
-      const { read: decoded, damaged } = rowReader(path, arms, exec);
+      const reader = rowReader(path, arms, exec);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
         whole = false,
       ) =>
         exec(statement, params).pipe(
-          Effect.flatMap((rows) => decoded(rows, whole)),
+          Effect.flatMap((rows) => reader.read(rows, whole)),
           Effect.map(settleCards),
         );
       const currentCommit = exec(highWater, []).pipe(
@@ -561,7 +532,7 @@ export const databaseLayer = (
             ],
           );
         });
-      const upkeep = projectionUpkeep(exec, decoded, path);
+      const upkeep = projectionUpkeep(exec, reader.read, path);
       /** A read of the projections, in the same read transaction as the
        *  check that they are current, so another build's rebuild never hands
        *  it a half-built one; a stale one catches up, a transaction a step,
@@ -648,12 +619,7 @@ export const databaseLayer = (
           ]);
           const seq = next?.seq;
           const aggregate = next?.id;
-          const uid = next?.uid;
-          if (
-            typeof seq !== 'number' ||
-            typeof aggregate !== 'number' ||
-            typeof uid !== 'string'
-          ) {
+          if (typeof seq !== 'number' || typeof aggregate !== 'number') {
             return yield* refuseWriter(
               draft.aggregateId,
               'Sequence refused for an absent aggregate',
@@ -662,7 +628,7 @@ export const databaseLayer = (
           if (draft.type === 'plugin.fact') {
             const name = `${draft.plugin}/${draft.kind}`;
             // Never over a corrupt row of the aggregate: it fails whole.
-            const last = (yield* decoded(
+            const last = (yield* reader.read(
               yield* exec(pluginRows, [aggregate]),
               true,
             )).findLast(
@@ -752,6 +718,9 @@ export const databaseLayer = (
             yield* exec(INSERT_BLOB, [digest, value]);
             yield* exec(INSERT_REF, [commit, digest]);
           }
+          // Linked, not written: the foreign key refuses a blob that is gone.
+          for (const digest of encoded.references)
+            yield* exec(INSERT_REF, [commit, digest]);
           if (seq === 1) {
             yield* exec(
               'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
@@ -790,34 +759,13 @@ export const databaseLayer = (
               );
             yield* exec(closeDependents, [...columns, commit]);
           }
-          // The committed row as a read returns it, decoded from what was
-          // written: a draft's media bytes are in the blob table now, and
-          // the row names them by address.
-          const written = decodeRow(
-            {
-              commit,
-              kind: columns[0],
-              logicalId: columns[1],
-              uid,
-              seq,
-              type: encoded.type,
-              version: encoded.version,
-              origin: identity.ownerId,
-              at,
-              data: encoded.data,
-            },
-            arms,
-            new Map(encoded.blobs.map(({ digest, value }) => [digest, value])),
-          );
-          if (Result.isFailure(written))
-            return yield* invariant(
-              `The row just written at commit ${commit} does not read back: ${written.failure.message}`,
-            );
-          if ('_tag' in written.success)
-            return yield* invariant(
-              `The row just written at commit ${commit} is of a plugin kind this build lacks`,
-            );
-          return written.success;
+          return {
+            ...committedDraft,
+            seq,
+            commit,
+            origin: identity.ownerId,
+            at,
+          };
         });
       return {
         observedCommit,
@@ -859,28 +807,7 @@ export const databaseLayer = (
           );
         },
         readListing: () => projected(decodedRows(READ_LISTING, [])),
-        // A corrupt or missing blob throws, and `query` reads the throw as
-        // a `DatabaseReadFailed`, as every read does.
-        readBlobs: (digests) =>
-          query(
-            Effect.map(
-              exec(READ_BLOBS, [JSON.stringify([...new Set(digests)])]),
-              (rows) => {
-                const texts = new Map<string, string>();
-                for (const row of rows) {
-                  const { digest, value } = BlobRowSchema.parse(row);
-                  texts.set(digest, inflateBlob(value, digest));
-                }
-                const missing = digests.filter((d) => !texts.has(d));
-                if (missing.length > 0)
-                  throw new Error(
-                    `${path} holds no blob ${missing.join(', ')}; the row that names it is damaged`,
-                  );
-                return texts;
-              },
-            ),
-          ),
-        readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
+        readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecords: (id) =>
           projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
         ...currentValues({
@@ -948,7 +875,7 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
-                damaged: yield* damaged,
+                damaged: yield* reader.damaged,
               };
             }),
           ),
@@ -1007,33 +934,36 @@ export const databaseLayer = (
               ),
             );
           }),
-        collectDeletion: (tombstone, cleanup) =>
-          Effect.gen(function* () {
-            const columns = aggregateColumns(tombstone.aggregateId);
-            // Already collected (by this pass before, or another process).
-            if (
-              (yield* query(
-                execOne(closedBy, [...columns, tombstone.commit]),
-              )) === undefined
-            )
-              return;
-            // A store a newer build wrote takes no deletion from this one,
-            // and the files go only once the store would take the collection.
-            yield* query(gate);
-            // Filesystem promises cannot be undone by fiber interruption.
-            yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
-            yield* transact(
-              Effect.gen(function* () {
-                const digests = (yield* exec(dependentBlobs, columns)).map(
-                  (row) => row.digest,
-                );
-                yield* exec(collectClosed, [...columns, tombstone.commit]);
-                if (digests.length > 0)
-                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
-              }),
-            );
-            yield* reclaimFreePages(sql, path);
-          }),
+        deletions: {
+          pending: () => query(decodedRows(pendingDeletions, [])),
+          collect: (tombstone, cleanup) =>
+            Effect.gen(function* () {
+              const columns = aggregateColumns(tombstone.aggregateId);
+              // Already collected (by this pass before, or another process).
+              if (
+                (yield* query(
+                  execOne(closedBy, [...columns, tombstone.commit]),
+                )) === undefined
+              )
+                return;
+              // A store a newer build wrote takes no deletion from this one,
+              // and the files go only once the store would take the collection.
+              yield* query(gate);
+              // Filesystem promises cannot be undone by fiber interruption.
+              yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
+              yield* transact(
+                Effect.gen(function* () {
+                  const digests = (yield* exec(dependentBlobs, columns)).map(
+                    (row) => row.digest,
+                  );
+                  yield* exec(collectClosed, [...columns, tombstone.commit]);
+                  if (digests.length > 0)
+                    yield* exec(collectBlobs, [JSON.stringify(digests)]);
+                }),
+              );
+              yield* reclaimFreePages(sql, path);
+            }),
+        },
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void

@@ -25,6 +25,7 @@ import {
   sameModelOrigin,
   type ModelOrigin,
   type ResolvedTurn,
+  type TurnRequest,
 } from '@texra-ai/llm';
 
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
@@ -37,6 +38,7 @@ import {
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { delegationSection } from '@tools/delegation/delegationAvailability';
 import { sha256 } from '@utils/core/idHash';
@@ -44,7 +46,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
 
 import { rowAggregate } from '../loop/rows';
-import { withMediaAddresses } from './mediaBytes';
+import { addressedMessages, providerMessages } from '../storedTurn';
+import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { AgentRunShape } from './AgentRun';
 
 /**
@@ -249,31 +252,76 @@ function recordedTurn(state: RunState) {
   };
 }
 
+/** The session log's blob read: how a request's media addresses resolve. */
+type ReadBlobs = (
+  digests: readonly string[],
+) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
+
+/** What an invocation sends besides the history. */
+export interface InvokeRequest {
+  readonly system: string | undefined;
+  /** The tools this turn advertises; a text-only persona advertises none. */
+  readonly tools: TurnRequest['tools'];
+  readonly toolChoice: TurnRequest['toolChoice'];
+}
+
+/**
+ * The semantic request an attempt admits: the folded history with its media
+ * resolved (the one read of media bytes), the caller's system and tools, the
+ * run as its cache key, and the last response's continuation while the
+ * binding matches its whole origin. A resume rebuilds it from the same
+ * inputs; no row copies history.
+ */
+export const turnRequestFor = (
+  run: Pick<AgentRunShape, 'runId' | 'session'>,
+  state: RunState,
+  request: InvokeRequest,
+  bound: BoundModel,
+  mode: TurnRequest['mode'],
+): Effect.Effect<TurnRequest, DatabaseReadFailed> =>
+  Effect.map(
+    providerMessages(state.messages, run.session.log.blobs),
+    (messages) => ({
+      mode,
+      ...(request.system !== undefined ? { system: request.system } : {}),
+      messages,
+      ...(request.tools !== undefined ? { tools: request.tools } : {}),
+      ...(request.toolChoice !== undefined
+        ? { toolChoice: request.toolChoice }
+        : {}),
+      ...chainedContinuation(state, bound.origin),
+      cacheKey: run.runId,
+    }),
+  );
+
 /**
  * The background turn the open attempt admitted, rebuilt from its rows on
  * the binding origin it recorded, never prepared again: what current code or
  * settings would render plays no part, so the observed completion anchors
- * the next round exactly as a live submission does. Throws on a record that
+ * the next round exactly as a live submission does. Dies on a record that
  * cannot rebuild one.
  */
-export function admittedTurn(
+export const admittedTurn = (
   state: RunState,
-  /** The history's messages with their media resolved ({@link providerMessages}). */
-  messages: ResolvedTurn['messages'],
-): Extract<ResolvedTurn, { mode: 'background' }> {
-  const { origin, turn } = recordedTurn(state);
-  const admitted = ResolvedTurnSchema.parse({
-    ...origin,
-    ...turn,
-    messages,
-    ...(origin.protocol === 'openai-responses'
-      ? { transport: { kind: 'http' } }
-      : {}),
+  blobs: ReadBlobs,
+): Effect.Effect<
+  Extract<ResolvedTurn, { mode: 'background' }>,
+  DatabaseReadFailed
+> =>
+  Effect.map(providerMessages(state.messages, blobs), (messages) => {
+    const { origin, turn } = recordedTurn(state);
+    const admitted = ResolvedTurnSchema.parse({
+      ...origin,
+      ...turn,
+      messages,
+      ...(origin.protocol === 'openai-responses'
+        ? { transport: { kind: 'http' } }
+        : {}),
+    });
+    if (admitted.mode !== 'background')
+      throw new Error('the open attempt admitted no background turn');
+    return admitted;
   });
-  if (admitted.mode !== 'background')
-    throw new Error('the open attempt admitted no background turn');
-  return admitted;
-}
 
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */
 function mismatch(state: RunState, sent: ResolvedTurn): string | null {
@@ -292,7 +340,10 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
     'continuation' in t ? t.continuation : undefined;
   // The rows hold media by address; the sent turn holds the bytes those
   // addresses resolved to, so they are compared as addresses again.
-  const sentTurn = { ...sent, messages: withMediaAddresses(sent.messages) };
+  const sentTurn = {
+    ...sent,
+    messages: addressedMessages(sent.messages).messages,
+  };
   const differ: string[] = (
     ['mode', 'system', 'messages', 'tools', 'controls'] as const
   ).filter(

@@ -35,6 +35,7 @@ import type {
   LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { WithBlobs } from './historyTurns';
 import type { ValueFamily } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
@@ -255,6 +256,12 @@ export class SessionOptionsConflict extends Data.TaggedError(
 export type SessionOpenError =
   DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
 
+/** A read of committed events. */
+export type EventsRead = Effect.Effect<
+  readonly SessionEvent[],
+  DatabaseReadFailed
+>;
+
 export class Database extends Context.Service<
   Database,
   {
@@ -268,7 +275,7 @@ export class Database extends Context.Service<
      * any other rollback is `DatabaseWriteFailed`.
      */
     readonly appendAll: (
-      drafts: readonly SessionEventDraft[],
+      drafts: readonly WithBlobs<SessionEventDraft>[],
     ) => Effect.Effect<
       readonly SessionEvent[],
       DatabaseNotOwner | DatabaseWriteFailed
@@ -287,30 +294,20 @@ export class Database extends Context.Service<
     readonly currentCommit: Effect.Effect<CommitOrdinal, DatabaseReadFailed>;
     /** Last committed ordinal observed by this connection, for synchronous drain anchors. */
     readonly observedCommit: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
-    /** The display rows from `fromCommit`, filtered in SQL: a tail never
-     *  decodes a run's private records only to drop them. Read a page at a
-     *  time, so a long history is never held whole; each page is its own
-     *  snapshot, so a tombstone one page saw is still delivered when its run
-     *  is collected before the page that holds it. */
+    /** The display rows from `fromCommit`, filtered in SQL (a tail never
+     *  decodes private records to drop them), a page at a time; each page is
+     *  its own snapshot, so a tombstone a page saw is delivered regardless. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-    readonly readListing: () => Effect.Effect<
-      readonly SessionEvent[],
-      DatabaseReadFailed
-    >;
-    /** The strings stored under `digests`: what a media part or a captured
-     *  attachment names (`storedTurn.ts`, `toolResult.ts`). The one read of
-     *  media bytes, made by the invocation right before the provider call;
-     *  a digest the store lacks fails the read. */
+    readonly readListing: () => EventsRead;
+    /** The strings under `digests`: media bytes a history names by address. */
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
     /** The latest listing row of each type on one open run: its private
      *  records beside its creation, status and tombstone. */
-    readonly readRunRecords: (
-      id: AggregateId,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    readonly readRunRecords: (id: AggregateId) => EventsRead;
     /** The bounded CLI input rows, oldest first, and a new last one. */
     readonly inputHistory: {
       readonly read: Effect.Effect<
@@ -336,11 +333,11 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
-    /** Who holds one aggregate right now, with its owner's liveness
-     *  proved in this call. The one ownership read that is fresh by
-     *  construction, so a cold run's long-dead owner is never reported held.
-     *  An absent or tombstoned aggregate is unclaimed: a closed row keeps the
-     *  owner that closed it, and there is nothing left for it to hold. */
+    /** Who holds one aggregate right now, its owner's liveness proved in
+     *  this call: the one ownership read fresh by construction, so a cold
+     *  run's long-dead owner is never reported held. An absent or tombstoned
+     *  aggregate is unclaimed: a closed row keeps who closed it, with nothing
+     *  left to hold. */
     readonly claimOwner: (
       id: AggregateId,
     ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
@@ -363,18 +360,16 @@ export class Database extends Context.Service<
       Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
       DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** The `run.removed` tombstones cleanup has not collected. */
-    readonly readPendingDeletions: () => Effect.Effect<
-      readonly SessionEvent[],
-      DatabaseReadFailed
-    >;
-    /** `cleanup` removes a tombstone's run directories, then its closed
-     *  aggregate, dependents, rows and orphaned blobs go. Every step may run
-     *  twice; a failed cleanup keeps the tombstone for the next pass. */
-    readonly collectDeletion: (
-      tombstone: Extract<SessionEvent, { type: 'run.removed' }>,
-      cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
-    ) => Effect.Effect<void, Error>;
+    /** The tombstones not collected yet, and one's collection: `cleanup`
+     *  removes its run directories, then its closed aggregate, dependents, rows
+     *  and orphaned blobs go; a failed cleanup keeps it for the next pass. */
+    readonly deletions: {
+      readonly pending: () => EventsRead;
+      readonly collect: (
+        tombstone: Extract<SessionEvent, { type: 'run.removed' }>,
+        cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
+      ) => Effect.Effect<void, Error>;
+    };
     /** Clear only this process's claims, in one transaction. */
     readonly releaseClaims: (
       ids: readonly AggregateId[],
@@ -400,13 +395,11 @@ export class Database extends Context.Service<
   }
 >()('@texra-ai/harness/session/Database') {}
 
-/**
- * The process's one handle on the global storage root, held for the process
- * runtime's life: every application record of that root (settings, inquiry
- * threads, the update check, input history, remembered projects) goes through
- * it, so its `data_version` poll is forked once per process and no single-row
- * read opens a connection. Current values and input history only: the global
- * root holds no session and no event rows. */
+/** The process's one handle on the global storage root, held for the process
+ *  runtime's life: every application record of that root (settings, inquiry
+ *  threads, the update check, input history, remembered projects) goes through
+ *  it, so its `data_version` poll is forked once and no single-row read opens
+ *  a connection. Current values and input history only: no event rows. */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>

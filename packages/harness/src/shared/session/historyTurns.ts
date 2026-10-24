@@ -11,7 +11,6 @@ import type {
   ModelMessagePayloadSchema,
   SessionEvent,
   StoredMessage,
-  StoredMessageDraft,
 } from '@shared/schemas';
 import type {
   AssistantMessage,
@@ -22,19 +21,28 @@ import type {
 import type { z } from 'zod';
 
 /**
- * One entry of the history the fold holds: the stored user and tool
+ * One entry of the history the fold holds: the stored user, tool and system
  * messages, whose media parts are blob addresses, and the assistant message
  * in the package's terms. The invocation resolves the addresses into the
- * package's input parts right before the provider call (`run/mediaBytes.ts`).
+ * package's input parts right before the provider call
+ * (`agent/runtime/storedTurn.ts`).
  */
 export type HistoryMessage =
   Exclude<StoredMessage, { readonly role: 'assistant' }> | AssistantMessage;
-/** The same entry as the loop drafts it: a media part may carry its bytes,
- *  which the row codec stores under their address at write. The package's
- *  own `Message` is one, so what `mediaInput` reads appends as it is. */
-export type HistoryMessageDraft =
-  | Exclude<StoredMessageDraft, { readonly role: 'assistant' }>
-  | AssistantMessage;
+
+/** A string a draft stores with its row under its address (`blobAddress`):
+ *  a media part's or a captured attachment's base64, which the row names by
+ *  `digest`. One without `text` is already in the store and is linked to the
+ *  row, so collection keeps it while the row lives. Never part of a
+ *  committed row. */
+export interface DraftBlob {
+  readonly digest: string;
+  readonly text?: string;
+}
+/** A draft with the blobs it stores or links. */
+export type WithBlobs<Draft> = Draft & {
+  readonly blobs?: readonly DraftBlob[];
+};
 
 type Replace<T, R> = Omit<T, keyof R> & R;
 type StoredPayload<K> = Extract<
@@ -42,7 +50,7 @@ type StoredPayload<K> = Extract<
   { kind: K }
 >;
 
-type ModelMessagePayloadOf<M> =
+export type ModelMessagePayload =
   | StoredPayload<'identified'>
   | StoredPayload<'failed'>
   | Replace<StoredPayload<'attempt'>, { readonly origin: ModelOrigin }>
@@ -50,26 +58,25 @@ type ModelMessagePayloadOf<M> =
   | StoredPayload<'cancelled'>
   | Replace<StoredPayload<'response'>, { readonly turn: TurnResult }>
   | StoredPayload<'handed-down'>
-  | Replace<StoredPayload<'append'>, { readonly messages: readonly M[] }>;
-export type ModelMessagePayload = ModelMessagePayloadOf<HistoryMessage>;
+  | Replace<
+      StoredPayload<'append'>,
+      { readonly messages: readonly HistoryMessage[] }
+    >;
 
-type ContextEditPayloadOf<M> = Replace<
+type ContextEditPayload = Replace<
   z.output<typeof ContextEditPayloadSchema>,
-  { readonly messages: readonly M[] }
+  { readonly messages: readonly HistoryMessage[] }
 >;
 
-/** The history message a row of `Row`'s kind carries: a committed row (one
- *  with its envelope) holds media by address; a draft may hold its bytes. */
-type MessageOf<Row> = Row extends { readonly commit: number }
-  ? HistoryMessage
-  : HistoryMessageDraft;
-
 /** A row with its model payload in the package's terms; any other row as
- *  stored. */
-export type Live<Row> = Row extends { readonly type: 'model.message' }
-  ? Replace<Row, { readonly payload: ModelMessagePayloadOf<MessageOf<Row>> }>
+ *  stored. A draft (no `commit` yet) may carry the blobs it stores. */
+export type Live<Row> = Row extends { readonly commit: number }
+  ? LiveRow<Row>
+  : WithBlobs<LiveRow<Row>>;
+type LiveRow<Row> = Row extends { readonly type: 'model.message' }
+  ? Replace<Row, { readonly payload: ModelMessagePayload }>
   : Row extends { readonly type: 'context.edit' }
-    ? Replace<Row, { readonly payload: ContextEditPayloadOf<MessageOf<Row>> }>
+    ? Replace<Row, { readonly payload: ContextEditPayload }>
     : Row;
 
 /** A committed row as the run fold reads it. */

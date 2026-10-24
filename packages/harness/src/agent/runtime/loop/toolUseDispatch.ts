@@ -67,12 +67,11 @@ import {
   type FileListEntry,
   type ScriptCallPayload,
   type ToolCallStatus,
-  type ToolFileAttachment,
   type StoredMediaPart,
   type ToolResult,
-  type ToolResultDraftPayload,
   type ToolResultPayload,
 } from '@shared/schemas';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
@@ -90,10 +89,13 @@ import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 
 import { AgentRun } from '../run/AgentRun';
-import { storedMediaPart, type InputPart } from '../run/mediaInput';
+import {
+  captureAttachments,
+  storedMediaPart,
+  type InputPart,
+} from '../run/mediaInput';
 import { stored } from '../run/requestContext';
 import {
   localCallsOf,
@@ -141,8 +143,6 @@ type CallFacts =
 const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
-type ResultAttachment = ToolResultDraftPayload['attachments'][number];
-
 interface DispatchOutcome {
   readonly state: RunState;
   /** A call's result asked to end the turn. */
@@ -171,58 +171,6 @@ const withoutEffects = (result: CallResult['result']): CallResult['result'] => {
 
 const endsTurn = (recorded: Pick<CallResult, 'result'> | null): boolean =>
   recorded?.result.status === 'executed' && recorded.result.endTurn === true;
-
-/**
- * Attachment bytes captured as immutable content before the result
- * commits: from the tool's own payload when it carried one, from the path
- * otherwise; a capture failure records the omission and its reason.
- */
-const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
-  attachments: readonly ToolFileAttachment[],
-  workspaceRoot: string | undefined,
-): Effect.fn.Return<readonly ResultAttachment[], never, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  const captured: ResultAttachment[] = [];
-  for (const attachment of attachments) {
-    const base = {
-      path: attachment.path,
-      mimeType: attachment.mimeType,
-      ...(attachment.description !== undefined
-        ? { description: attachment.description }
-        : {}),
-    };
-    if (attachment.digest !== undefined) {
-      captured.push({
-        ...base,
-        content: { kind: 'stored', digest: attachment.digest },
-      });
-      continue;
-    }
-    const inline =
-      attachment.base64Data ||
-      Buffer.from(attachment.bytes ?? []).toString('base64');
-    const read =
-      inline !== ''
-        ? Exit.succeed(inline)
-        : yield* Effect.exit(
-            fs
-              .readFile(
-                pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
-              )
-              .pipe(Effect.map((b) => Buffer.from(b).toString('base64'))),
-          );
-    captured.push({
-      ...base,
-      content: Exit.isSuccess(read)
-        ? { kind: 'base64', data: read.value }
-        : {
-            kind: 'metadata-only',
-            reason: toErrorMessage(Cause.squash(read.cause)),
-          },
-    });
-  }
-  return captured;
-});
 
 /**
  * How long delivery waits on the provider to take one upload. Uploading is
@@ -431,11 +379,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const commitResult = (
     fact: CallFacts,
     attempt: number,
-    result: Omit<CallResult, 'attempt' | 'attachments'> & {
-      readonly attachments: readonly ResultAttachment[];
-    },
+    result: Omit<CallResult, 'attempt'>,
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
     alongside?: ReturnType<typeof factRows>['alongside'],
+    /** The attachment bytes the result's row stores or links. */
+    blobs: readonly DraftBlob[] = [],
   ) =>
     commit(
       fact,
@@ -449,6 +397,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             attempt,
             ...result,
           },
+          ...(blobs.length > 0 && { blobs }),
         },
         ...cards(state),
       ],
@@ -688,7 +637,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       source: 'tool',
       sourceDisplay: 'Tool use',
     }));
-    const attachments = yield* captureAttachments(
+    const { attachments, blobs } = yield* captureAttachments(
       extracted.attachments,
       run.session.roots.workspace,
     );
@@ -730,6 +679,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...facts.run,
       ],
       facts.alongside,
+      blobs,
     );
   });
 

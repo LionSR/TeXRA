@@ -61,9 +61,9 @@ import {
   type RetryErrorInfo,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
-import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import type { CellError, RunCell } from '@shared/session/runHistory';
@@ -75,7 +75,6 @@ import { runInvocation, type RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens } from './run/contextTokens';
-import { providerMessages } from './run/mediaBytes';
 import { priceTurnUsage, reportUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
@@ -84,7 +83,10 @@ import {
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
+  turnRequestFor,
+  type InvokeRequest,
 } from './run/requestContext';
+import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { rowAggregate, positionRow } from './loop/rows';
 
@@ -124,12 +126,7 @@ const INTERRUPTED_RETRY_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
-export interface InvokeRequest {
-  readonly system: string | undefined;
-  /** The tools this turn advertises; a text-only persona advertises none. */
-  readonly tools: TurnRequest['tools'];
-  readonly toolChoice: TurnRequest['toolChoice'];
-}
+export type { InvokeRequest } from './run/requestContext';
 
 interface InvocationResponse {
   readonly kind: 'response';
@@ -151,12 +148,6 @@ type InvocationOutcome =
  */
 export type InvokeError = CellError | StateReadFailed | DatabaseReadFailed;
 
-/** A summary call's request: the history's messages, media by address,
- *  which the call resolves before the turn is prepared. */
-type CallRequest = Omit<TurnRequest, 'messages'> & {
-  readonly messages: readonly HistoryMessage[];
-};
-
 /** What an invocation reads from its run's context. */
 type InvokeServices = FileSystem.FileSystem | RouteRetries;
 
@@ -172,7 +163,9 @@ export class ModelInvoker extends Context.Service<
      *  history's, media by address; the call resolves them. */
     readonly call: (
       cell: RunCell,
-      request: CallRequest,
+      request: Omit<TurnRequest, 'messages'> & {
+        readonly messages: readonly HistoryMessage[];
+      },
     ) => Effect.Effect<CallResult, Error>;
   }
 >()('@texra-ai/harness/agent/ModelInvoker') {}
@@ -215,32 +208,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           runId,
           roots: session.roots,
         });
-
-      /** The semantic request an attempt admits: the folded history, the
-       *  caller's system and tools, the run as its cache key, and the last
-       *  response's continuation while the binding matches its whole origin.
-       *  A resume rebuilds it from the same inputs; no row copies history. */
-      const turnRequestFor = (
-        state: RunState,
-        request: InvokeRequest,
-        bound: BoundModel,
-        mode: TurnRequest['mode'],
-      ): Effect.Effect<TurnRequest, InvokeError> =>
-        Effect.map(
-          // The one read of media bytes: the history names them by address.
-          providerMessages(state.messages, session.log.blobs),
-          (messages) => ({
-            mode,
-            ...(request.system !== undefined ? { system: request.system } : {}),
-            messages,
-            ...(request.tools !== undefined ? { tools: request.tools } : {}),
-            ...(request.toolChoice !== undefined
-              ? { toolChoice: request.toolChoice }
-              : {}),
-            ...chainedContinuation(state, bound.origin),
-            cacheKey: run.runId,
-          }),
-        );
 
       /**
        * The tail of the text the failing attempt had streamed, which its
@@ -444,6 +411,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       > {
         const state = yield* cell.current;
         const turnRequest = yield* turnRequestFor(
+          run,
           state,
           request,
           bound,
@@ -563,10 +531,9 @@ export const modelInvokerLayer = (): Layer.Layer<
               }),
             );
           }
-          const admitted = yield* cell.current;
-          const resolved = admittedTurn(
-            admitted,
-            yield* providerMessages(admitted.messages, session.log.blobs),
+          const resolved = yield* admittedTurn(
+            yield* cell.current,
+            session.log.blobs,
           );
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
@@ -794,7 +761,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /** A compaction summary on the run's binding; its caller lands it. */
-      const call = (cell: RunCell, request: CallRequest) =>
+      const call: ModelInvoker['Service']['call'] = (cell, request) =>
         Effect.flatMap(
           providerMessages(request.messages, session.log.blobs),
           (messages) =>

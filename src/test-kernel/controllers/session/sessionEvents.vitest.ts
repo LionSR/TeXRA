@@ -84,7 +84,6 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { blobAddress } from '@utils/core/idHash';
 import {
   StateStores,
   type GlobalValues,
@@ -93,6 +92,7 @@ import {
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import type { WithBlobs } from '@shared/session/historyTurns';
 import {
   qualifyAggregateId,
   AgentConfigSchema,
@@ -154,6 +154,7 @@ import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { armsOf, announceRunFacts } from '@tools/plugins';
 import { toolTable } from '@tools/toolTable';
+import { blobAddress } from '@utils/core/idHash';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The `documents/accepted` row a call's result commits for `runId`. */
@@ -2647,40 +2648,45 @@ describe('the session event table and its one publisher', () => {
    * table and the row names it by digest, so no read of the history carries
    * the bytes. Failure modes: the row's data holds the base64; the committed
    * event or an aggregate read inflates it; two messages with the same bytes
-   * store them twice; the digest does not resolve to the bytes.
+   * store them twice; the digest does not resolve to the bytes; a fork that
+   * copies the message by address loses the blob when the source is deleted.
    */
   it.effect(
     'stores a media part by address and reads the row without its bytes',
     () => {
       const storage = workspace();
       const base64 = Buffer.alloc(300_000, 7).toString('base64');
-      const message = (text: string): SessionEventDraft => ({
+      const digest = blobAddress(base64);
+      const part = { kind: 'audio' as const, mimeType: 'audio/mp4', digest };
+      const message = (text: string): WithBlobs<SessionEventDraft> => ({
         type: 'model.message',
         aggregateId: qualifyAggregateId('run', RUN),
         payload: {
           kind: 'append',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { kind: 'text', text },
-                { kind: 'audio', mimeType: 'audio/mp4', base64 },
-              ],
-            },
-          ],
+          messages: [{ role: 'user', content: [{ kind: 'text', text }, part] }],
           sourceResponse: null,
         },
+        blobs: [{ digest, text: base64 }],
       });
       const mediaParts = (rows: readonly SessionEvent[]) =>
         rows.flatMap((row) =>
           row.type === 'model.message' && row.payload.kind === 'append'
             ? row.payload.messages.flatMap((entry) =>
                 entry.role === 'user'
-                  ? entry.content.filter((part) => part.kind !== 'text')
+                  ? entry.content.filter((item) => item.kind !== 'text')
                   : [],
               )
             : [],
         );
+      const blobCount = () =>
+        Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            return raw.prepare('SELECT COUNT(*) AS n FROM blob').get()?.n;
+          } finally {
+            raw.close();
+          }
+        });
       return Effect.gen(function* () {
         const db = yield* Database;
         const committed = yield* db.appendAll([
@@ -2688,8 +2694,6 @@ describe('the session event table and its one publisher', () => {
           message('first'),
           message('second'),
         ]);
-        const digest = blobAddress(base64);
-        const part = { kind: 'audio', mimeType: 'audio/mp4', digest };
         expect(mediaParts(committed)).toStrictEqual([part, part]);
         expect(
           mediaParts(yield* rowsOf(db, runStart.aggregateId)),
@@ -2701,17 +2705,50 @@ describe('the session event table and its one publisher', () => {
             .all()
             .map((row) => String(row.data));
           expect(data).toHaveLength(2);
-          expect(
-            data.every((text) => !text.includes(base64.slice(0, 64))),
-          ).toBe(true);
-          expect(raw.prepare('SELECT COUNT(*) AS n FROM blob').get()?.n).toBe(
-            1,
+          expect(data.some((text) => text.includes(base64.slice(0, 64)))).toBe(
+            false,
           );
         } finally {
           raw.close();
         }
+        expect(yield* blobCount()).toBe(1);
         expect((yield* db.readBlobs([digest])).get(digest)).toBe(base64);
-      }).pipe(Effect.provide(substrate(storage)));
+        // A fork copies the message by address: its row links the blob, so
+        // deleting the source keeps the bytes until the fork goes too.
+        yield* db.appendAll([
+          olderStart,
+          {
+            type: 'context.edit',
+            aggregateId: qualifyAggregateId('run', OLDER),
+            payload: {
+              cause: 'fork',
+              trigger: null,
+              base: null,
+              range: { from: 0, to: 0 },
+              messages: [{ role: 'user', content: [part] }],
+              usage: null,
+            },
+            blobs: [{ digest }],
+          },
+        ]);
+        const remove = (run: RunId) =>
+          Effect.gen(function* () {
+            yield* db.appendAll([
+              {
+                type: 'run.removed',
+                aggregateId: qualifyAggregateId('run', run),
+              },
+            ]);
+            yield* Fiber.join(yield* yield* deletionCollector(db, storage));
+          });
+        yield* remove(RUN);
+        expect(yield* blobCount()).toBe(1);
+        expect((yield* db.readBlobs([digest])).get(digest)).toBe(base64);
+        yield* remove(OLDER);
+        expect(yield* blobCount()).toBe(0);
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
     },
   );
 
@@ -2936,7 +2973,7 @@ describe('the session event table and its one publisher', () => {
         // A failed cleanup keeps the tombstone for the next pass.
         expect(
           yield* Effect.flip(
-            first.collectDeletion(tombstone, () => Effect.fail(cleanupError)),
+            first.deletions.collect(tombstone, () => Effect.fail(cleanupError)),
           ),
         ).toBe(cleanupError);
         expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
@@ -2944,7 +2981,7 @@ describe('the session event table and its one publisher', () => {
           ...runStart,
           aggregateId: qualifyAggregateId('run', NEWER),
         };
-        yield* first.collectDeletion(tombstone, (ids) =>
+        yield* first.deletions.collect(tombstone, (ids) =>
           Effect.gen(function* () {
             expect(ids).toEqual([RUN]);
             // Cleanup runs outside the database write permit: unrelated
@@ -2955,7 +2992,7 @@ describe('the session event table and its one publisher', () => {
         expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
         // Collecting it again, as a second process would, is a no-op.
         const again = vi.fn(() => Effect.void);
-        yield* first.collectDeletion(tombstone, again);
+        yield* first.deletions.collect(tombstone, again);
         expect(again).not.toHaveBeenCalled();
         expect((yield* stored).map((event) => event.aggregateId)).toEqual([
           olderStart.aggregateId,
