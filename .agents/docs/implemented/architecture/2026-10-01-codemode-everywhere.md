@@ -372,24 +372,29 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   model round trip each); median wall time is 0.8× `direct` on Gemini and
   1.25× on DeepSeek, past the 1.2× line at n = 9 under load.
 
-  **Round 2 (DeepSeek, idle machine).** Rerun the same evening with no test
-  suite or other arm beside it, the two arms one after the other
-  (`--repeat 3`, same three journeys; rows in
-  [`../../evidence/2026-10-24-codemode-script-only-round-2-deepseek-idle/`](../../evidence/2026-10-24-codemode-script-only-round-2-deepseek-idle/),
-  summarized with round 1's `summarize.mjs`). Every run took a fifth of its
-  round 1 wall time, so round 1's wall column measured the laptop's load,
-  not the arms. Rested, `only` is 0.88× `direct` on DeepSeek, inside the
-  bar; cost and tokens repeat round 1.
+  **Round 2 (idle machine).** Rerun the same evening with no test suite or
+  other arm beside it, one model at a time and the two arms one after the
+  other (`--repeat 3`, same three journeys; rows in
+  [`../../evidence/2026-10-24-codemode-script-only-round-2-idle/`](../../evidence/2026-10-24-codemode-script-only-round-2-idle/),
+  summarized with round 1's `summarize.mjs`). Every run took a fifth to a
+  third of its round 1 wall time, so round 1's wall column measured the
+  laptop's load, not the arms. Rested, `only` is 0.88× `direct` on
+  DeepSeek and 0.91× on Gemini, both inside the bar; cost and tokens repeat
+  round 1 (15% and 64% cheaper per pass). The Gemini `direct` arm passed
+  9/9 this time: whether a `bash` result carries the compiled PDF depends
+  on the model's call, so the provider defect below is intermittent.
 
-  | model, arm            | pass | $ per pass | tokens | median wall | scripts per run |
-  | --------------------- | ---- | ---------- | ------ | ----------- | --------------- |
-  | deepseek-flash direct | 9/9  | 0.0020     | 61,344 | 17 s        | 0               |
-  | deepseek-flash only   | 9/9  | 0.0017     | 36,578 | 15 s        | 6.1             |
+  | model, arm              | pass | $ per pass | tokens | median wall | scripts per run |
+  | ----------------------- | ---- | ---------- | ------ | ----------- | --------------- |
+  | deepseek-flash direct   | 9/9  | 0.0020     | 61,344 | 17 s        | 0               |
+  | deepseek-flash only     | 9/9  | 0.0017     | 36,578 | 15 s        | 6.1             |
+  | gemini-3.8-flash direct | 9/9  | 0.0463     | 60,282 | 33 s        | 0               |
+  | gemini-3.8-flash only   | 9/9  | 0.0166     | 20,501 | 30 s        | 3.6             |
 
-  Still to do before the default flips: rerun Gemini rested the same way,
-  fund glm53flash (an OpenRouter key) or route it direct, and add the
-  fan-out journey that exercises `agent()`. The ruling was written for
-  nightlies; live journeys run on demand only (#13614).
+  Still to do before the default flips: fund glm53flash (an OpenRouter key)
+  or route it direct, and add the fan-out journey that exercises `agent()`.
+  The ruling was written for nightlies; live journeys run on demand only
+  (#13614).
 
 - **Google tool results reject a PDF attachment.** The one `direct` failure
   (gemini-3.8-flash, latexdiff): a `bash` result carried the compiled PDF
