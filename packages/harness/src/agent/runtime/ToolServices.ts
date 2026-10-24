@@ -71,15 +71,16 @@ const noRun = Effect.fail(
   new Error('This call is under no run, so it launches and reads none.'),
 );
 
-/** The door outside a run (a host's standalone call): every door refuses. */
-const noRunChildRuns: ChildRunsShape = {
+/** The door outside a run (a host's standalone call): every door refuses.
+ *  One frozen value, handed to every standalone caller. */
+const noRunChildRuns: ChildRunsShape = Object.freeze({
   launch: () => noRun,
   launchProcess: () => noRun,
   inbox: () => noRun,
   parent: () => noRun,
   records: () => ({ exists: noRun, end: noRun }),
   rows: () => noRun,
-};
+});
 
 /** The door, as the run loop provides it beside each call ({@link childRuns});
  *  outside a run it is the refusal, which is the reference's default. */

@@ -32,18 +32,24 @@ export function causeChain(err: unknown): unknown[] {
 export function toErrorMessage(err: unknown): string {
   const nodes = causeChain(err);
   if (nodes.length === 0) return String(err);
-  const parts: string[] = [];
-  for (const node of nodes) {
-    const message = node instanceof Error ? node.message : String(node);
-    if (message.trim() === '') continue;
-    const index = parts.findIndex((part) => message.includes(part));
-    if (parts.some((part) => part.includes(message))) continue;
-    if (index === -1) parts.push(message);
-    else parts[index] = message;
-  }
-  // A sentence ends where the next part explains it, not with its own stop.
+  const messages = nodes
+    .map((node) => (node instanceof Error ? node.message : String(node)))
+    .filter((message) => message.trim() !== '');
+  // A message another one embeds adds nothing; of two equal ones the first
+  // stays. Judged against the whole chain, so what is kept is final.
+  const parts = messages.filter(
+    (message, i) =>
+      !messages.some(
+        (other, j) =>
+          j !== i && other.includes(message) && (other !== message || j < i),
+      ),
+  );
+  // A sentence ends where the next part explains it, not with its own stop
+  // (one stop: an ellipsis stays).
   return parts
-    .map((part, i) => (i < parts.length - 1 ? part.replace(/[.:]$/, '') : part))
+    .map((part, i) =>
+      i < parts.length - 1 ? part.replace(/(?<![.:])[.:]$/, '') : part,
+    )
     .join(': ');
 }
 

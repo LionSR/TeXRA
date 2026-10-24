@@ -2,9 +2,10 @@
  * The `script` tool: one JavaScript program that calls the run's tools as
  * `await tools.<name>(args)`. The program runs in the code sandbox
  * (`@agent/codeSandbox/codeSandbox`); every call it issues goes through the
- * run loop's per-call program (`ScriptCalls`), which commits its
- * rows and, on a resume, hands back what they already settled. This tool
- * names no other tool and writes no row.
+ * run loop's per-call program, reached through the door on the call's
+ * `RunCall` (`scriptCalls`), which commits its rows and, on a resume, hands
+ * back what they already settled. This tool names no other tool and writes
+ * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
 import { Data, Duration, Effect, Layer } from 'effect';
