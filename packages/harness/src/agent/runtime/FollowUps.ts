@@ -23,7 +23,6 @@ import { Effect, type FileSystem, type Scope, SynchronizedRef } from 'effect';
 
 import {
   followUpDisplay,
-  isInstruction,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
@@ -31,10 +30,12 @@ import { logUserMessage } from '@agent/trace';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
-  type RunId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { subagentProgressRunId } from '@shared/subagentFollowup';
+import {
+  consumedRow,
+  type InputPoint,
+  isInstruction,
+} from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
@@ -43,12 +44,7 @@ import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
-import {
-  appendRow,
-  rowAggregate,
-  positionRow,
-  type Message,
-} from './loop/rows';
+import { appendRow, positionRow, type Message } from './loop/rows';
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
@@ -79,13 +75,16 @@ export interface ConsumedFollowUps {
 }
 
 export interface FollowUps {
-  readonly hasQueued: Effect.Effect<boolean>;
+  /** Whether `next` would return now: a message readable at `at`, or a
+   *  `/compact`. */
+  readonly hasPending: (at: InputPoint) => Effect.Effect<boolean>;
   /** The run's own pending requests (`/compact`, a model switch). */
   readonly controls: Effect.Effect<readonly QueuedFollowUp[]>;
-  /** The queued messages a take would read now, without taking them. */
-  readonly takeQueued: Effect.Effect<FollowUpBatch | null>;
-  /** Block for the next batch; null when the queue was taken away. */
-  readonly wait: Effect.Effect<FollowUpBatch | null>;
+  /** The messages readable at `at`, when there are any; nothing is taken. */
+  readonly read: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
+  /** Block for the next batch readable at `at`; null once the generation
+   *  ended. */
+  readonly next: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
   /**
    * A run the user stopped (its last step a cancelled halt): the follow-up
    * batch queued for it, as rows the caller commits in its own transaction
@@ -156,20 +155,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     return { message: { role: 'user', content: parts }, kinds };
   });
 
-  /** A progress notice whose child run has ended: stale once its child is
-   *  terminal, so it is consumed without becoming a message. Results and
-   *  errors always deliver. */
-  const endedChildProgress = ({ content }: QueuedFollowUp): boolean => {
-    const child =
-      content.from.kind === 'run' && content.from.relation === 'child'
-        ? subagentProgressRunId(content.text)
-        : undefined;
-    return (
-      child !== undefined &&
-      isTerminalOutcomePhase(session.view.run(child as RunId)?.status)
-    );
-  };
-
   const logFollowUps = (
     followUps: readonly QueuedFollowUp[],
     kinds: readonly (readonly MediaAttachmentKind[])[] = [],
@@ -194,8 +179,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const all = batch.kind === 'followUps' ? batch.followUps : [];
-    const followUps = all.filter((followUp) => !endedChildProgress(followUp));
+    const followUps = batch.kind === 'followUps' ? batch.followUps : [];
+    const stale = batch.kind === 'followUps' ? batch.stale : [];
     const turn = batch.kind === 'synthetic' || followUps.length > 0;
     const built = yield* (
       batch.kind === 'synthetic'
@@ -208,9 +193,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           })
         : batchMessage(followUps)
     ).pipe(Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps))));
-    if (all.length > followUps.length) {
+    if (stale.length > 0) {
       logger.debug(
-        `Consumed ${all.length - followUps.length} progress notice(s) of ended subagents without delivering them.`,
+        `Consumed ${stale.length} progress notice(s) of ended subagents without delivering them.`,
       );
     }
     const instruction = userFollowUpInstruction(
@@ -272,11 +257,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         ...blobRows(runId, state, [
           ...(instruction === undefined ? [] : [instruction]),
         ]),
-        ...all.map((followUp) => ({
-          type: 'followup.consumed' as const,
-          aggregateId: rowAggregate(runId),
-          followUpId: followUp.followUpId,
-        })),
+        ...[...followUps, ...stale].map((followUp) =>
+          consumedRow(runId, followUp.followUpId),
+        ),
         ...hooked.rows,
         ...(turn ? [appendRow(runId, [message], { input })] : []),
       ],
@@ -307,23 +290,20 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   return {
-    hasQueued: input.hasQueued,
+    hasPending: input.hasPending,
     controls: input.controls,
-    takeQueued: input.takeQueued,
-    wait: input.take,
+    read: input.read,
+    next: input.next,
     // Only a user stop joins: that halt carries no error fact to clear and
     // no turn.ready row to write, which is why the join skips `consume`'s.
     joinStopped: (state) =>
       state.at !== 'halted' || state.outcome !== 'cancelled'
         ? Effect.succeed(null)
         : Effect.gen(function* () {
-            if (!(yield* input.hasQueued)) return null;
-            // A take reads what the rows queue and consumes nothing, so a
-            // declined batch, or a `/compact`'s wake, is left for the
+            // A read consumes nothing, so a declined batch is left for the
             // ordinary wait.
-            const batch = yield* input.take;
+            const batch = yield* input.read('idle');
             return batch === null ||
-              batch.kind === 'synthetic' ||
               !batch.followUps.some((f) => isInstruction(f.content))
               ? null
               : yield* batchRows(state, batch);

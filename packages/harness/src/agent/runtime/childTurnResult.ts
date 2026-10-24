@@ -25,6 +25,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
+import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runState';
 import type { SessionHandle } from './SessionHandle';
@@ -150,11 +151,9 @@ export function childTurnResult(params: {
               result: params.resultMeta,
             },
           ]),
-      ...params.consumed.map((followUp) => ({
-        type: 'followup.consumed' as const,
-        aggregateId: target,
-        followUpId: followUp.followUpId,
-      })),
+      ...params.consumed.map((followUp) =>
+        consumedRow(runId, followUp.followUpId),
+      ),
       {
         type: 'child.turn',
         aggregateId: target,

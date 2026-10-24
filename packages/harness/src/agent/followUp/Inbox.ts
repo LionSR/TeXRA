@@ -4,9 +4,8 @@
  * one reader per run (its generation here); the run's claim is the only
  * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
  */
-import { Deferred, Effect, Result, type Scope } from 'effect';
+import { Effect, Result, type Scope } from 'effect';
 
-import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
@@ -16,22 +15,26 @@ import {
 } from '@shared/session/database';
 import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
 import type { RunInputDraft } from '@shared/session/runState';
+import { consumedRow } from '@shared/session/runFacts';
 import {
   FOLLOW_UP_TYPES,
   isSharedRunRow,
+  pendingMessages,
   runRowsFrom,
   type QueuedFollowUp,
   type RunRows,
 } from '@shared/session/runRows';
+import type { RunView } from '@shared/session/sessionView';
 import {
   afterCommit,
   type Append,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
+import { Resumes } from './Resumes';
 import { RunInput } from './RunInput';
 import { queuedRow } from './followUpMessages';
-import type { FollowUpSenderInput } from './followUpSender';
+import type { FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -48,8 +51,11 @@ export interface InboxPort {
   readonly log: Pick<SessionLog, 'transact' | 'rows' | 'records' | 'hold'>;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
-  /** The run's parent as the session view folds it; `null` at top level. */
-  readonly parentOf: (runId: RunId) => RunId | null | undefined;
+  /** The run as the session view holds it: its parent (`null` at top
+   *  level) and its status (a notice of an ended child is stale). */
+  readonly run: (
+    runId: RunId,
+  ) => Pick<RunView, 'parentId' | 'status'> | undefined;
   /** Whether a generation of the run is live in this process. */
   readonly live: (runId: RunId) => boolean;
 }
@@ -89,9 +95,6 @@ export interface SendOptions {
   readonly fromParent?: boolean;
 }
 
-/** A resume's result, and whether this caller joined one in flight. */
-type Resumed = { readonly result: ResumeAttempt; readonly joined: boolean };
-
 /** A send decided inside a job: its rows, and how it landed. */
 type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
 
@@ -103,14 +106,14 @@ export type InboxClosed =
 /** The session's follow-up inbox; see the module comment. */
 export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
-  private readonly resumes = new Map<
-    RunId,
-    { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
-  >();
+  /** The resumes in flight here: a sender that finds one joins it. */
+  readonly resumes = new Resumes();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
 
   private readonly port: InboxPort;
+  private readonly parentOf = (runId: RunId): RunId | null | undefined =>
+    this.port.run(runId)?.parentId;
 
   constructor(port: InboxPort) {
     this.port = port;
@@ -130,15 +133,17 @@ export class Inbox {
     );
   }
 
-  /** {@link send} for a producer with no fiber (a child's progress notice):
-   *  enqueued on the publisher now, so it commits in call order ahead of
-   *  the turn's result; `to` is read in that job (none: nothing queued). A
-   *  failure is logged. */
-  sendDetached(to: Effect.Effect<RunId | null, Error>, item: InboxItem): void {
+  /** A notice for a generation already running (`holdUntil: 'generation'`:
+   *  read at a turn's end, never waking a run, stale once its sender ended),
+   *  from a producer with no fiber (a child's progress): enqueued on the
+   *  publisher now, so it commits in call order ahead of the turn's result;
+   *  `to` is read in that job (none: nothing queued). A failure is logged. */
+  sendNotice(to: Effect.Effect<RunId | null, Error>, item: InboxItem): void {
     if (this.disposed) return;
+    const hold = { hold: 'generation' } as const;
     this.port.detach((append) =>
       Effect.flatMap(to, (runId) =>
-        runId === null ? Effect.void : this.admit(runId, item, {}, append),
+        runId === null ? Effect.void : this.admit(runId, item, hold, append),
       ).pipe(Effect.catch(warnWith('A follow-up was not queued'))),
     );
   }
@@ -155,6 +160,7 @@ export class Inbox {
             Effect.map(({ followUps }) => followUps),
             Effect.orDie,
           ),
+          this.port.run,
         );
         if (this.disposed) input.end();
         else this.readers.set(runId, input);
@@ -174,7 +180,11 @@ export class Inbox {
     if (!terminal) return;
     this.port.detach(() =>
       Effect.gen({ self: this }, function* () {
-        if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
+        if (
+          this.readers.has(runId) ||
+          queued(yield* this.read(runId), this.port.run)
+        )
+          return;
         yield* afterCommit(
           Effect.sync(() => this.notify({ kind: 'run', runId })),
         );
@@ -192,14 +202,12 @@ export class Inbox {
         Effect.gen({ self: this }, function* () {
           yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
-          if (queued(input)) return;
+          if (queued(input, this.port.run)) return;
           // A request the run never applied closes with its input.
           yield* tx.append([
-            ...input.followUps.map(({ followUpId }) => ({
-              type: 'followup.consumed' as const,
-              aggregateId: run,
-              followUpId,
-            })),
+            ...input.followUps.map(({ followUpId }) =>
+              consumedRow(runId, followUpId),
+            ),
             { type: 'followup.closed', aggregateId: run },
           ]);
           // Only a closed input that committed ends the reader.
@@ -216,49 +224,6 @@ export class Inbox {
     this.readers.get(runId)?.end();
     this.readers.delete(runId);
     this.notify({ kind: 'run', runId });
-  }
-
-  /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
-  resumeOnce<R>(
-    runId: RunId,
-    resume: Effect.Effect<ResumeAttempt, Error, R>,
-    onJoined?: () => void,
-  ): Effect.Effect<Resumed, Error, R> {
-    return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
-      const running = this.resumes.get(runId);
-      if (running !== undefined) {
-        running.joiners += 1;
-        onJoined?.();
-        return Effect.map(Deferred.await(running.done), (result) => ({
-          result,
-          joined: true,
-        })).pipe(Effect.ensuring(Effect.sync(() => (running.joiners -= 1))));
-      }
-      const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
-      this.resumes.set(runId, { done, joiners: 0 });
-      return resume.pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            this.resumes.delete(runId);
-            Deferred.doneUnsafe(done, exit);
-          }),
-        ),
-        Effect.map((result) => ({ result, joined: false })),
-      );
-    });
-  }
-
-  /** Settles when `runId`'s resume in flight here ends; at once if none. */
-  resumeSettled(runId: RunId): Effect.Effect<void> {
-    const done = this.resumes.get(runId)?.done;
-    return done
-      ? Effect.asVoid(Effect.exit(Deferred.await(done)))
-      : Effect.void;
-  }
-
-  /** Whether a caller is joined to `runId`'s resume in flight. */
-  joined(runId: RunId): boolean {
-    return (this.resumes.get(runId)?.joiners ?? 0) > 0;
   }
 
   /** Hear each run that takes no more input, and the inbox's own close. */
@@ -310,7 +275,7 @@ export class Inbox {
           options.hold !== 'instruction' &&
           reader === undefined &&
           !this.port.live(runId) &&
-          !this.resumes.has(runId);
+          !this.resumes.inFlight.has(runId);
         const sent: Sent =
           replay && !wake
             ? { kind: 'duplicate' }
@@ -332,7 +297,7 @@ export class Inbox {
       }
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
-        runRelation(sender, runId, this.port.parentOf),
+        runRelation(sender, runId, this.parentOf),
       );
       if (!input.followUpIds.has(row.followUpId)) {
         const aggregate = qualifyAggregateId('run', runId);
@@ -394,6 +359,7 @@ const warnWith =
       withLogChannel(CHANNEL),
     );
 
-/** Whether a message is queued: a request (`control`) resumes no run. */
-const queued = (input: InputRows): boolean =>
-  input.followUps.some((f) => f.control === undefined);
+/** Whether a message is queued: a request (`control`) and a notice of an
+ *  ended child resume no run and keep no input open. */
+const queued = (input: InputRows, run: InboxPort['run']): boolean =>
+  pendingMessages(input.followUps, run).length > 0;

@@ -214,7 +214,7 @@ export function startFollowUpWake(
  * its open input since then, is resumed. A message queued before `since`
  * needs nothing: the runner was started for it (a failed resume leaves it to
  * the next explicit Resume), or its sender saw nothing running and resumed
- * the run itself; the one resume per run (`Inbox.resumeOnce`) joins the two.
+ * the run itself; the one resume per run (`Resumes.once`) joins the two.
  * When the run was stopped, `since` is the commit the stop was asked at
  * (`RunRegistry.stop()`, which stamps it before any detach batch): a message
  * queued before the stop belonged to the stopped turn and stays queued, and

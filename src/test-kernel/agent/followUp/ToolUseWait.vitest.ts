@@ -11,7 +11,7 @@ import { Deferred, Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { InboxItem } from '@agent/followUp/Inbox';
+import type { InboxItem, SendOptions } from '@agent/followUp/Inbox';
 import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -202,11 +202,11 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
 const enqueue = Effect.fn('test.enqueue')(function* (
   session: SessionHandle,
   runId: RunId,
-  items: readonly InboxItem[],
+  items: readonly (InboxItem & { readonly hold?: SendOptions['hold'] })[],
 ) {
   yield* session.log.settled;
-  for (const item of items) {
-    yield* session.followUps.send(runId, item);
+  for (const { hold, ...item } of items) {
+    yield* session.followUps.send(runId, item, { hold });
   }
 });
 
@@ -481,6 +481,7 @@ describe('a parked root run', () => {
         {
           text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
           from: { kind: 'run' as const, runId: child },
+          hold: 'generation' as const,
         },
       ]);
       const recorded = recordSessionEvents(session);
@@ -601,6 +602,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
             from: { kind: 'run' as const, runId: child },
+            hold: 'generation' as const,
           },
           {
             text: '<subagent-result>done</subagent-result>',
