@@ -46,7 +46,10 @@ const CHANNEL = 'Inbox';
 const LIFECYCLE = ['run.activate', 'followup.closed', 'run.removed'] as const;
 const LIFECYCLE_TYPES: ReadonlySet<string> = new Set(LIFECYCLE);
 const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...LIFECYCLE, 'run.end'] as const;
-const CLOSED = { kind: 'refused', reason: 'not_resumable' } as const;
+const CLOSED = Object.freeze({
+  kind: 'refused',
+  reason: 'not_resumable',
+} as const);
 /** A run's input: what is queued, every follow-up id named, if closed, and
  *  the rows it was read from (`needsWake` reads them). */
 type InputRows = RunRows & {
@@ -203,14 +206,11 @@ export class Inbox {
     );
   }
 
-  /**
-   * Resume the run if its pending input obliges one (`needsWake`) and
-   * nothing here will read it: no reader open, no resume in flight (which
-   * reads it when it lands; a live generation answers the resume). Waits for
-   * the publisher first, so a row still committing is seen. True when
-   * nothing was owed or a generation here now reads the input; false when a
-   * resume was owed and refused, which the next explicit Resume delivers.
-   */
+  /** Resume the run if its pending input obliges one (`needsWake`) and
+   *  nothing here will read it: no reader open, no resume in flight. Waits
+   *  for the publisher first, so a row still committing is seen. True when
+   *  nothing was owed or a generation here now reads the input; false when
+   *  a resume was owed and refused (the next explicit Resume delivers). */
   wake(runId: RunId): Effect.Effect<boolean> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;

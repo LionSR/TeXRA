@@ -357,8 +357,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         let tools = sentDefinitions(step.tools);
         // One round: the compaction the history may need, the `/compact`s
-        // it answers, then the invocation. An open attempt's history
-        // is fixed; it is neither compacted nor re-admitted.
+        // it answers, the invocation. An open attempt's history is fixed.
         if (state.invocation === null) {
           // The queued `/compact`s are consumed by the edit that answers
           // them, or, with nothing to summarize, by this round's admission.
@@ -378,8 +377,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const admitted = consumedRows(runId, unanswered, 'compact');
           if (admitted.length > 0) state = yield* cell.append(admitted);
           // A message typed while the turn ran joins the request after the
-          // tool results, never one after a user message; a held row waits.
-          if (state.messages.at(-1)?.role === 'tool') {
+          // tool results (past a step's context update), never a user message.
+          const last = state.messages.findLast((m) => m.role !== 'system');
+          if (last?.role === 'tool') {
             const queued = yield* followUps.read('request');
             if (queued !== null)
               state = (yield* followUps.consume(cell, queued, {
