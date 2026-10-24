@@ -60,6 +60,8 @@ import {
   type InvocationRef,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
@@ -81,7 +83,9 @@ import {
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
+  type InvokeRequest,
 } from './run/requestContext';
+import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { rowAggregate, positionRow } from './loop/rows';
 
@@ -121,12 +125,7 @@ const INTERRUPTED_RETRY_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
-export interface InvokeRequest {
-  readonly system: string | undefined;
-  /** The tools this turn advertises; a text-only persona advertises none. */
-  readonly tools: TurnRequest['tools'];
-  readonly toolChoice: TurnRequest['toolChoice'];
-}
+export type { InvokeRequest } from './run/requestContext';
 
 interface InvocationResponse {
   readonly kind: 'response';
@@ -146,7 +145,7 @@ type InvocationOutcome =
  * path in `loop/toolUseDispatch` branches on the same union, so it imports
  * this rather than re-declaring the alias.
  */
-export type InvokeError = CellError | StateReadFailed;
+export type InvokeError = CellError | StateReadFailed | DatabaseReadFailed;
 
 /** What an invocation reads from its run's context. */
 type InvokeServices = FileSystem.FileSystem | RouteRetries;
@@ -159,10 +158,13 @@ export class ModelInvoker extends Context.Service<
       request: InvokeRequest,
     ) => Effect.Effect<InvocationOutcome, InvokeError, InvokeServices>;
     /** A compaction summary: one call outside a turn, on the run's binding,
-     *  its attempts recorded on the run's history. */
+     *  its attempts recorded on the run's history. Its messages are the
+     *  history's, media by address; the call resolves them. */
     readonly call: (
       cell: RunCell,
-      request: TurnRequest,
+      request: Omit<TurnRequest, 'messages'> & {
+        readonly messages: readonly HistoryMessage[];
+      },
     ) => Effect.Effect<CallResult, Error>;
   }
 >()('@texra-ai/harness/agent/ModelInvoker') {}
@@ -205,27 +207,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           runId,
           roots: session.roots,
         });
-
-      /** The semantic request an attempt admits: the folded history, the
-       *  caller's system and tools, the run as its cache key, and the last
-       *  response's continuation while the binding matches its whole origin.
-       *  A resume rebuilds it from the same inputs; no row copies history. */
-      const turnRequestFor = (
-        state: RunState,
-        request: InvokeRequest,
-        bound: BoundModel,
-        mode: TurnRequest['mode'],
-      ): TurnRequest => ({
-        mode,
-        ...(request.system !== undefined ? { system: request.system } : {}),
-        messages: state.messages,
-        ...(request.tools !== undefined ? { tools: request.tools } : {}),
-        ...(request.toolChoice !== undefined
-          ? { toolChoice: request.toolChoice }
-          : {}),
-        ...chainedContinuation(state, bound.origin),
-        cacheKey: run.runId,
-      });
 
       /**
        * The tail of the text the failing attempt had streamed, which its
@@ -428,12 +409,22 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
-        const turnRequest = turnRequestFor(
-          state,
-          request,
-          bound,
-          yield* bound.delivery,
-        );
+        // The request an attempt admits: the folded history with its media
+        // resolved (the one read of media bytes), the caller's system and
+        // tools, the run as its cache key, and the last response's
+        // continuation while the binding matches its whole origin. A resume
+        // rebuilds it from the same inputs; no row copies history.
+        const turnRequest: TurnRequest = {
+          mode: yield* bound.delivery,
+          ...(request.system !== undefined ? { system: request.system } : {}),
+          messages: yield* providerMessages(state.messages, session.log.blobs),
+          ...(request.tools !== undefined ? { tools: request.tools } : {}),
+          ...(request.toolChoice !== undefined
+            ? { toolChoice: request.toolChoice }
+            : {}),
+          ...chainedContinuation(state, bound.origin),
+          cacheKey: run.runId,
+        };
         let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(state.messages, 'messages', invocation, bound);
         // The run's context size (`contextTokens`: the last response's
@@ -548,7 +539,10 @@ export const modelInvokerLayer = (): Layer.Layer<
               }),
             );
           }
-          const resolved = admittedTurn(yield* cell.current);
+          const resolved = yield* admittedTurn(
+            yield* cell.current,
+            session.log.blobs,
+          );
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
@@ -775,50 +769,54 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /** A compaction summary on the run's binding; its caller lands it. */
-      const call = (cell: RunCell, request: TurnRequest) =>
-        callModel({
-          purpose: 'compaction',
-          binding: SynchronizedRef.get(run.model),
-          reacquire: (failed, renew) =>
-            rebind(cell)(renew ? 'renewed' : 'configured', failed),
-          request,
-          settings: session.roots,
-          attribution,
-          logger,
-          record: {
-            attempt: (ref, bound, resolved) =>
-              cell
-                .append((state) =>
-                  attemptRows(
-                    run,
-                    state,
-                    ref,
-                    'summary',
-                    bound.origin,
-                    resolved,
+      const call: ModelInvoker['Service']['call'] = (cell, request) =>
+        Effect.flatMap(
+          providerMessages(request.messages, session.log.blobs),
+          (messages) =>
+            callModel({
+              purpose: 'compaction',
+              binding: SynchronizedRef.get(run.model),
+              reacquire: (failed, renew) =>
+                rebind(cell)(renew ? 'renewed' : 'configured', failed),
+              request: { ...request, messages },
+              settings: session.roots,
+              attribution,
+              logger,
+              record: {
+                attempt: (ref, bound, resolved) =>
+                  cell
+                    .append((state) =>
+                      attemptRows(
+                        run,
+                        state,
+                        ref,
+                        'summary',
+                        bound.origin,
+                        resolved,
+                      ),
+                    )
+                    .pipe(Effect.as(attemptRequest(run, resolved))),
+                failed: (ref, error, next) =>
+                  Effect.asVoid(
+                    cell.append([
+                      {
+                        type: 'model.message',
+                        aggregateId,
+                        payload: {
+                          kind: 'failed',
+                          invocation: ref,
+                          purpose: 'summary',
+                          error,
+                          next,
+                        },
+                      },
+                    ]),
                   ),
-                )
-                .pipe(Effect.as(attemptRequest(run, resolved))),
-            failed: (ref, error, next) =>
-              Effect.asVoid(
-                cell.append([
-                  {
-                    type: 'model.message',
-                    aggregateId,
-                    payload: {
-                      kind: 'failed',
-                      invocation: ref,
-                      purpose: 'summary',
-                      error,
-                      next,
-                    },
-                  },
-                ]),
-              ),
-          },
-        }).pipe(
-          Effect.provideService(UsageLog, usageLog),
-          Effect.provideContext(gate),
+              },
+            }).pipe(
+              Effect.provideService(UsageLog, usageLog),
+              Effect.provideContext(gate),
+            ),
         );
 
       return { invoke, call };

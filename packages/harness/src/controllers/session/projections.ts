@@ -36,10 +36,10 @@ import {
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
-  AGGREGATE,
   aggregateColumns,
   type SqlRow,
 } from './rowCodec';
+import { AGGREGATE } from './rowReader';
 import type { RowReader } from './rowReader';
 
 /** One write a projector asks its upkeep to make. */

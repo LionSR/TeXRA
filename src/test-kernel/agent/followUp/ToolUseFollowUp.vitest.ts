@@ -118,6 +118,7 @@ function recordedFollowUps(
             (types === undefined || types.includes(row.type)),
         ),
       ),
+    blobs: () => Effect.succeed(new Map<string, string>()),
     // A run's record rows: what a parent-only send reads its edge from.
     records: (runId: RunId) =>
       Effect.sync(() =>

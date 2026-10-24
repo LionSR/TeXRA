@@ -28,6 +28,7 @@ import type {
   DeletionMode,
 } from './database';
 import type { RunStateRowType } from './runState';
+import type { WithBlobs } from './historyTurns';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -92,10 +93,10 @@ export interface JobOptions {
   readonly failed?: (error: unknown) => void;
 }
 
-/** A row that is not part of any run's state: any job may append it as is. */
-export type UnfoldedDraft = Exclude<
-  SessionEventDraft,
-  { type: RunStateRowType }
+/** A row that is not part of any run's state: any job may append it as is,
+ *  with the blobs it stores. */
+export type UnfoldedDraft = WithBlobs<
+  Exclude<SessionEventDraft, { type: RunStateRowType }>
 >;
 
 /** Rows another owner decides inside a job, appended with the job's own

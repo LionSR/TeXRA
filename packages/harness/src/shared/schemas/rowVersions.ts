@@ -129,14 +129,19 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // no `stageId` (no upcaster, as v2).
   // v4: stateless Google responses may have a null provider ID. Older builds
   // must refuse the newer store rather than parse those rows as corrupt.
-  'model.message': { version: 4, upcast: [] },
+  // v5: a media part holds its bytes by blob address, never inline (no
+  // upcaster: an earlier build's inline bytes would read as the newer
+  // shape's missing address).
+  'model.message': { version: 5, upcast: [] },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).
-  'context.edit': { version: 2, upcast: [] },
+  // v3: media parts by address, as `model.message` v5.
+  'context.edit': { version: 3, upcast: [] },
   'tool.intent': V1,
   'script.call': V1,
-  'tool.result': V1,
+  // v2: a captured attachment holds its bytes by blob address, never inline.
+  'tool.result': { version: 2, upcast: [] },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (no upcaster: an earlier build's row names a plugin
   // continuation this build has none of).

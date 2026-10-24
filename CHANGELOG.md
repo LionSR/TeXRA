@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Attachments no longer freeze TeXRA.** A workspace whose conversations
+  carried large attachments (recordings, PDFs, images) made every TeXRA
+  window and terminal flip between "The TeXRA service is offline" and
+  "Reconnected to the TeXRA service" every ten seconds, and a message sent
+  during the drop came back as "The conversation ended before the message
+  could be sent": each window that opened re-read every attachment, and
+  the service stalled for seconds. Attachments are now kept apart from the
+  conversation and loaded only when a model request needs them. Conversations
+  with attachments that an earlier build saved show as written by that
+  build and cannot be resumed by this one; their files and transcripts are
+  unaffected.
+
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now

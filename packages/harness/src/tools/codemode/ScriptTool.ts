@@ -197,14 +197,14 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const issue = (op: ScriptOp) =>
     Effect.flatMap(scriptCalls.call(op, script), (settled) => {
       for (const attached of settled.attachments)
-        if (attached.content.kind === 'base64')
+        if (attached.content.kind === 'stored')
           files.push({
             path: attached.path,
             mimeType: attached.mimeType,
             ...(attached.description !== undefined && {
               description: attached.description,
             }),
-            base64Data: attached.content.data,
+            digest: attached.content.digest,
           });
       return settlementOf(settled.result);
     });

@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import { JsonValueSchema } from './jsonValue';
+import { Sha256Schema } from './offeredTools';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = z.strictObject({
@@ -50,19 +51,30 @@ const TextPartSchema = z.strictObject({
   kind: z.literal('text'),
   text: z.string(),
 });
-const MediaFields = { mimeType: z.string().min(1), base64: z.string() };
+/**
+ * A media part as history holds it: its bytes by address, never inline.
+ * `digest` is the session store's blob address of the part's base64 text
+ * (`blobAddress` in `@utils/core/idHash`): every reader of the history sees
+ * the address, and only the invocation resolves it, right before the
+ * provider call (`agent/runtime/storedTurn.ts`).
+ */
+const MediaAddress = { mimeType: z.string().min(1), digest: Sha256Schema };
 const StoredInputPartSchema = z.discriminatedUnion('kind', [
   TextPartSchema,
   z.strictObject({
     kind: z.literal('image'),
-    ...MediaFields,
+    ...MediaAddress,
     detail: z.string().min(1).optional(),
   }),
   z.strictObject({
     kind: z.enum(['audio', 'video', 'document']),
-    ...MediaFields,
+    ...MediaAddress,
   }),
 ]);
+/** One part of a stored user or tool-result message. */
+export type StoredInputPart = z.infer<typeof StoredInputPartSchema>;
+/** A media part: its bytes by address. */
+export type StoredMediaPart = Exclude<StoredInputPart, { kind: 'text' }>;
 
 const StoredContentSchema = z
   .array(
@@ -172,6 +184,8 @@ export const StoredMessageSchema = z.discriminatedUnion('role', [
   /** A context update the run appended mid-conversation. */
   z.strictObject({ role: z.literal('system'), text: z.string().min(1) }),
 ]);
+/** One entry of canonical history, as a committed row holds it. */
+export type StoredMessage = z.infer<typeof StoredMessageSchema>;
 
 /** Accepted remote work: its identity, and the cursor the adapter observes
  *  it by. */

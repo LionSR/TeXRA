@@ -34,14 +34,16 @@ export type {
   VscodeLanguageModelConfiguration,
 } from './turn.js';
 export {
+  checkPreparedHistory,
   JsonObjectSchema,
   ModelOriginSchema,
   originOf,
   sameModelOrigin,
   TurnProtocolSchema,
 } from './protocol.js';
-export type { ModelOrigin } from './protocol.js';
+export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
 export {
+  AssistantMessageSchema,
   MessageSchema,
   PreparedHistorySchema,
   systemUpdateText,

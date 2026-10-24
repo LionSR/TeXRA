@@ -29,6 +29,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@utils/core';
 
 import { configRow, positionRow, rowAggregate } from './loop/rows';
+import { addressedMessages } from './storedTurn';
 import type { SessionHandle } from './SessionHandle';
 
 /** Whether nothing is in flight: no invocation, response or undecided
@@ -149,6 +150,9 @@ const viewRows = (
   const named = [input.system, input.instruction].flatMap((digest) =>
     digest === undefined ? [] : [digest],
   );
+  // The copied messages name their media by address: the fork's row links
+  // the blobs, so deleting the source keeps them.
+  const copied = addressedMessages(messages);
   return [
     {
       type: 'context.edit',
@@ -158,10 +162,11 @@ const viewRows = (
         trigger: null,
         base: null,
         range: { from: 0, to: 0 },
-        messages,
+        messages: copied.messages,
         usage: null,
         input,
       },
+      ...(copied.blobs.length > 0 && { blobs: copied.blobs }),
     },
     ...named.map((digest): RunHistoryDraft => ({
       type: 'context.blob',

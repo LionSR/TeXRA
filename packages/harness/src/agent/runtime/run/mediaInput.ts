@@ -10,7 +10,7 @@
  * and a follow-up batch is restored to its queue with the failure
  * reported. Nothing drops an attachment silently.
  */
-import { Effect, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -18,7 +18,14 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
   type MediaAttachmentKind,
+  type StoredMediaPart,
+  type ToolFileAttachment,
+  type ToolResultPayload,
 } from '@shared/schemas';
+import type { DraftBlob } from '@shared/session/historyTurns';
+import { blobAddress } from '@utils/core/idHash';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
@@ -152,31 +159,99 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
 });
 
 /**
- * A base64 payload already in hand, as the part the package lowers, or null
- * when the binding carries no such attachment inline. Null is a degradation
- * the model can't see, so the caller names it in the transcript. An upload
- * is no way around it: a file id only ever stands in for bytes the binding
- * already takes.
+ * Bytes the store holds under `digest` (a captured attachment), as the
+ * history's part naming them, or null when the binding carries no such
+ * attachment inline. Null is a degradation the model can't see, so the
+ * caller names it in the transcript. An upload is no way around it: a file
+ * id only ever stands in for bytes the binding already takes.
  */
-export function inlineMediaPart(
+export function storedMediaPart(
   mimeType: string,
-  base64: string,
+  digest: string,
   capabilities: MediaCapabilities,
-): InputPart | null {
+): StoredMediaPart | null {
   if (mimeType === 'application/pdf') {
     return capabilities.supportsVision && capabilities.supportsNativePdf
-      ? { kind: 'document', mimeType, base64 }
+      ? { kind: 'document', mimeType, digest }
       : null;
   }
   if (isImageMimeType(mimeType)) {
     return capabilities.supportsVision
-      ? { kind: 'image', mimeType, base64 }
+      ? { kind: 'image', mimeType, digest }
       : null;
   }
   if (mimeType.startsWith('audio/')) {
     return capabilities.supportsNativeAudio
-      ? { kind: 'audio', mimeType, base64 }
+      ? { kind: 'audio', mimeType, digest }
       : null;
   }
   return null;
 }
+
+/**
+ * Attachment bytes captured as immutable content before the result commits:
+ * from the tool's own payload when it carried one, from the path otherwise,
+ * each stored under its address with the result's row; one a script relays
+ * by address is linked. A capture failure records the omission and its
+ * reason.
+ */
+export const captureAttachments = Effect.fn('toolUse.captureAttachments')(
+  function* (
+    attachments: readonly ToolFileAttachment[],
+    workspaceRoot: string | undefined,
+  ): Effect.fn.Return<
+    {
+      readonly attachments: ToolResultPayload['attachments'];
+      readonly blobs: readonly DraftBlob[];
+    },
+    never,
+    FileSystem.FileSystem
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    const captured: ToolResultPayload['attachments'][number][] = [];
+    const blobs: DraftBlob[] = [];
+    for (const attachment of attachments) {
+      const base = {
+        path: attachment.path,
+        mimeType: attachment.mimeType,
+        ...(attachment.description !== undefined
+          ? { description: attachment.description }
+          : {}),
+      };
+      if (attachment.digest !== undefined) {
+        blobs.push({ digest: attachment.digest });
+        captured.push({
+          ...base,
+          content: { kind: 'stored', digest: attachment.digest },
+        });
+        continue;
+      }
+      const inline =
+        attachment.base64Data ||
+        Buffer.from(attachment.bytes ?? []).toString('base64');
+      const read =
+        inline !== ''
+          ? Exit.succeed(inline)
+          : yield* Effect.exit(
+              fs
+                .readFile(
+                  pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
+                )
+                .pipe(Effect.map((b) => Buffer.from(b).toString('base64'))),
+            );
+      if (Exit.isSuccess(read)) {
+        const digest = blobAddress(read.value);
+        blobs.push({ digest, text: read.value });
+        captured.push({ ...base, content: { kind: 'stored', digest } });
+      } else
+        captured.push({
+          ...base,
+          content: {
+            kind: 'metadata-only',
+            reason: toErrorMessage(Cause.squash(read.cause)),
+          },
+        });
+    }
+    return { attachments: captured, blobs };
+  },
+);

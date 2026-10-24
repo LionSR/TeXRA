@@ -329,6 +329,7 @@ export const makeSessionStore = (
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
+      blobs: database.readBlobs,
       records: (runId) =>
         database.readRunRecords(qualifyAggregateId('run', runId)),
       display: (runId) =>
