@@ -671,6 +671,11 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
+  default; CLI `/config`) gives chat agents the `script` tool and their own
+  tools alone, with every other tool called from inside a script. A run
+  keeps the tool set it started with when it resumes, even if the setting
+  changed in between.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt

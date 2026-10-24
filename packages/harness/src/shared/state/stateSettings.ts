@@ -616,6 +616,21 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: { settingsView: 'memory' },
   } satisfies SurfacedSettingEntry,
 
+  // --- Code mode -------------------------------------------------------------
+  // The codemode plugin's `injectedWhen` reads the key to inject `script`;
+  // the step reads it to send the model `script` and the run's own tools
+  // alone, recorded per tool on its `tools.offered` row.
+  {
+    key: GlobalStateKey.SCRIPT_ONLY,
+    schema: z.boolean().prefault(false),
+    title: 'Script-only tools',
+    description:
+      'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
+    category: 'agents',
+    slot: 'globalState',
+    surfaces: { cliConfig: true },
+  } satisfies SurfacedSettingEntry,
+
   // --- OpenAI WebSocket transport (experimental) -----------------------------
   {
     key: GlobalStateKey.WEBSOCKET_OPENAI,

@@ -145,7 +145,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (no upcaster: an earlier build's row names a plugin
   // continuation this build has none of).
-  'tools.offered': { version: 2, upcast: [] },
+  // v3: each tool records whether the step's requests send its declaration
+  // (`sent`); an earlier build's row would send every tool directly.
+  'tools.offered': { version: 3, upcast: [] },
   'context.blob': V1,
   'hook.outcome': V1,
   'child.turn': V1,

@@ -37,7 +37,7 @@ import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
-import { toolDefinitionsFor } from '@tools/catalogEntries';
+import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
@@ -359,7 +359,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // The step this request opens, its offered set recorded when changed.
         let step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
-        let tools = toolDefinitionsFor(step.tools.definitions);
+        let tools = sentDefinitions(step.tools);
         // One round: the compaction the history may need, the `/compact`s
         // it answers, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
@@ -374,7 +374,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (state.offeredContext === null) {
             step = yield* openStep(state, 'request');
             state = yield* cell.append(step.rows);
-            tools = toolDefinitionsFor(step.tools.definitions);
+            tools = sentDefinitions(step.tools);
           }
           const unanswered = (yield* followUps.controls).filter((f) =>
             requests.some(({ followUpId }) => followUpId === f.followUpId),
