@@ -790,7 +790,9 @@ function isDeclarative(node, schemas) {
       ) &&
       (node.heritageClauses ?? []).every((clause) =>
         clause.types.every((type) =>
-          /^Data\.Tagged(?:Error|Class)\b/.test(type.expression.getText()),
+          /^(?:Data\.Tagged(?:Error|Class)|Schema\.(?:TaggedError|TaggedClass|Class|Error|Opaque))\b/.test(
+            type.expression.getText(),
+          ),
         ),
       )
     );
@@ -815,6 +817,7 @@ function isDeclarationModule(sourceFile) {
       const clause = statement.importClause;
       if (clause == null) continue;
       const fromZod = statement.moduleSpecifier.text === 'zod';
+      const fromEffect = statement.moduleSpecifier.text === 'effect';
       if (clause.name != null) {
         if (clause.isTypeOnly) types.add(clause.name.text);
         else if (fromZod) schemas.add(clause.name.text);
@@ -826,9 +829,11 @@ function isDeclarationModule(sourceFile) {
             types.add(element.name.text);
             continue;
           }
+          const imported = (element.propertyName ?? element.name).text;
           if (
             fromZod ||
-            (element.propertyName ?? element.name).text.endsWith('Schema')
+            (fromEffect && imported === 'Schema') ||
+            imported.endsWith('Schema')
           )
             schemas.add(element.name.text);
         }
