@@ -84,6 +84,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
+import { blobAddress } from '@utils/core/idHash';
 import {
   StateStores,
   type GlobalValues,
@@ -2638,6 +2639,79 @@ describe('the session event table and its one publisher', () => {
       }).pipe(
         Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
       );
+    },
+  );
+
+  /**
+   * Media by address: a message's media part is stored once in the blob
+   * table and the row names it by digest, so no read of the history carries
+   * the bytes. Failure modes: the row's data holds the base64; the committed
+   * event or an aggregate read inflates it; two messages with the same bytes
+   * store them twice; the digest does not resolve to the bytes.
+   */
+  it.effect(
+    'stores a media part by address and reads the row without its bytes',
+    () => {
+      const storage = workspace();
+      const base64 = Buffer.alloc(300_000, 7).toString('base64');
+      const message = (text: string): SessionEventDraft => ({
+        type: 'model.message',
+        aggregateId: qualifyAggregateId('run', RUN),
+        payload: {
+          kind: 'append',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { kind: 'text', text },
+                { kind: 'audio', mimeType: 'audio/mp4', base64 },
+              ],
+            },
+          ],
+          sourceResponse: null,
+        },
+      });
+      const mediaParts = (rows: readonly SessionEvent[]) =>
+        rows.flatMap((row) =>
+          row.type === 'model.message' && row.payload.kind === 'append'
+            ? row.payload.messages.flatMap((entry) =>
+                entry.role === 'user'
+                  ? entry.content.filter((part) => part.kind !== 'text')
+                  : [],
+              )
+            : [],
+        );
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const committed = yield* db.appendAll([
+          runStart,
+          message('first'),
+          message('second'),
+        ]);
+        const digest = blobAddress(base64);
+        const part = { kind: 'audio', mimeType: 'audio/mp4', digest };
+        expect(mediaParts(committed)).toStrictEqual([part, part]);
+        expect(
+          mediaParts(yield* rowsOf(db, runStart.aggregateId)),
+        ).toStrictEqual([part, part]);
+        const raw = reader(storage);
+        try {
+          const data = raw
+            .prepare("SELECT data FROM event WHERE type = 'model.message'")
+            .all()
+            .map((row) => String(row.data));
+          expect(data).toHaveLength(2);
+          expect(
+            data.every((text) => !text.includes(base64.slice(0, 64))),
+          ).toBe(true);
+          expect(raw.prepare('SELECT COUNT(*) AS n FROM blob').get()?.n).toBe(
+            1,
+          );
+        } finally {
+          raw.close();
+        }
+        expect((yield* db.readBlobs([digest])).get(digest)).toBe(base64);
+      }).pipe(Effect.provide(substrate(storage)));
     },
   );
 

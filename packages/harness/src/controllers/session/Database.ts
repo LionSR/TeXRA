@@ -28,6 +28,7 @@ import {
   FileSystem,
   Layer,
   Option,
+  Result,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -80,8 +81,12 @@ import {
   aggregateColumns,
   aggregateLists,
   aggregateOf,
+  BlobRowSchema,
   CURRENT_VALUE_KIND,
+  decodeRow,
   encodeDraft,
+  inflateBlob,
+  READ_BLOBS,
   pluginKind,
   prepareEventDraft,
   storeGate,
@@ -117,7 +122,7 @@ VALUES (?, ?, ?, 1, ?)
 ON CONFLICT(kind, logical_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id
   AND event_sequence.closed_by IS NULL
-RETURNING id, seq
+RETURNING id, seq, uid
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
@@ -145,7 +150,7 @@ const READ_LISTING = `SELECT * FROM (
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
     s.uid AS uid,
     e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data, NULL AS blobs
+    e.at AS at, u.usage AS data
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
@@ -643,7 +648,12 @@ export const databaseLayer = (
           ]);
           const seq = next?.seq;
           const aggregate = next?.id;
-          if (typeof seq !== 'number' || typeof aggregate !== 'number') {
+          const uid = next?.uid;
+          if (
+            typeof seq !== 'number' ||
+            typeof aggregate !== 'number' ||
+            typeof uid !== 'string'
+          ) {
             return yield* refuseWriter(
               draft.aggregateId,
               'Sequence refused for an absent aggregate',
@@ -780,13 +790,34 @@ export const databaseLayer = (
               );
             yield* exec(closeDependents, [...columns, commit]);
           }
-          return {
-            ...committedDraft,
-            seq,
-            commit,
-            origin: identity.ownerId,
-            at,
-          };
+          // The committed row as a read returns it, decoded from what was
+          // written: a draft's media bytes are in the blob table now, and
+          // the row names them by address.
+          const written = decodeRow(
+            {
+              commit,
+              kind: columns[0],
+              logicalId: columns[1],
+              uid,
+              seq,
+              type: encoded.type,
+              version: encoded.version,
+              origin: identity.ownerId,
+              at,
+              data: encoded.data,
+            },
+            arms,
+            new Map(encoded.blobs.map(({ digest, value }) => [digest, value])),
+          );
+          if (Result.isFailure(written))
+            return yield* invariant(
+              `The row just written at commit ${commit} does not read back: ${written.failure.message}`,
+            );
+          if ('_tag' in written.success)
+            return yield* invariant(
+              `The row just written at commit ${commit} is of a plugin kind this build lacks`,
+            );
+          return written.success;
         });
       return {
         observedCommit,
@@ -828,6 +859,27 @@ export const databaseLayer = (
           );
         },
         readListing: () => projected(decodedRows(READ_LISTING, [])),
+        // A corrupt or missing blob throws, and `query` reads the throw as
+        // a `DatabaseReadFailed`, as every read does.
+        readBlobs: (digests) =>
+          query(
+            Effect.map(
+              exec(READ_BLOBS, [JSON.stringify([...new Set(digests)])]),
+              (rows) => {
+                const texts = new Map<string, string>();
+                for (const row of rows) {
+                  const { digest, value } = BlobRowSchema.parse(row);
+                  texts.set(digest, inflateBlob(value, digest));
+                }
+                const missing = digests.filter((d) => !texts.has(d));
+                if (missing.length > 0)
+                  throw new Error(
+                    `${path} holds no blob ${missing.join(', ')}; the row that names it is damaged`,
+                  );
+                return texts;
+              },
+            ),
+          ),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
           projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),

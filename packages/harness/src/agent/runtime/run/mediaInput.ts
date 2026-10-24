@@ -18,6 +18,7 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
   type MediaAttachmentKind,
+  type StoredMediaPart,
 } from '@shared/schemas';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
@@ -152,30 +153,30 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
 });
 
 /**
- * A base64 payload already in hand, as the part the package lowers, or null
- * when the binding carries no such attachment inline. Null is a degradation
- * the model can't see, so the caller names it in the transcript. An upload
- * is no way around it: a file id only ever stands in for bytes the binding
- * already takes.
+ * Bytes the store already holds under `digest` (a captured attachment), as
+ * the history's part naming them, or null when the binding carries no such
+ * attachment inline. Null is a degradation the model can't see, so the
+ * caller names it in the transcript. An upload is no way around it: a file
+ * id only ever stands in for bytes the binding already takes.
  */
-export function inlineMediaPart(
+export function storedMediaPart(
   mimeType: string,
-  base64: string,
+  digest: string,
   capabilities: MediaCapabilities,
-): InputPart | null {
+): StoredMediaPart | null {
   if (mimeType === 'application/pdf') {
     return capabilities.supportsVision && capabilities.supportsNativePdf
-      ? { kind: 'document', mimeType, base64 }
+      ? { kind: 'document', mimeType, digest }
       : null;
   }
   if (isImageMimeType(mimeType)) {
     return capabilities.supportsVision
-      ? { kind: 'image', mimeType, base64 }
+      ? { kind: 'image', mimeType, digest }
       : null;
   }
   if (mimeType.startsWith('audio/')) {
     return capabilities.supportsNativeAudio
-      ? { kind: 'audio', mimeType, base64 }
+      ? { kind: 'audio', mimeType, digest }
       : null;
   }
   return null;

@@ -44,6 +44,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
 
 import { rowAggregate } from '../loop/rows';
+import { withMediaAddresses } from './mediaBytes';
 import type { AgentRunShape } from './AgentRun';
 
 /**
@@ -257,11 +258,14 @@ function recordedTurn(state: RunState) {
  */
 export function admittedTurn(
   state: RunState,
+  /** The history's messages with their media resolved ({@link providerMessages}). */
+  messages: ResolvedTurn['messages'],
 ): Extract<ResolvedTurn, { mode: 'background' }> {
   const { origin, turn } = recordedTurn(state);
   const admitted = ResolvedTurnSchema.parse({
     ...origin,
     ...turn,
+    messages,
     ...(origin.protocol === 'openai-responses'
       ? { transport: { kind: 'http' } }
       : {}),
@@ -286,9 +290,14 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
   // time; `continuation` exists on the Responses and Google variants only.
   const continuationOf = (t: object) =>
     'continuation' in t ? t.continuation : undefined;
+  // The rows hold media by address; the sent turn holds the bytes those
+  // addresses resolved to, so they are compared as addresses again.
+  const sentTurn = { ...sent, messages: withMediaAddresses(sent.messages) };
   const differ: string[] = (
     ['mode', 'system', 'messages', 'tools', 'controls'] as const
-  ).filter((key) => stableStringify(turn[key]) !== stableStringify(sent[key]));
+  ).filter(
+    (key) => stableStringify(turn[key]) !== stableStringify(sentTurn[key]),
+  );
   if (
     stableStringify(continuationOf(turn)) !==
     stableStringify(continuationOf(sent))

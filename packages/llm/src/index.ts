@@ -42,11 +42,17 @@ export {
 } from './protocol.js';
 export type { ModelOrigin } from './protocol.js';
 export {
+  AssistantMessageSchema,
+  checkPreparedHistory,
   MessageSchema,
   PreparedHistorySchema,
   systemUpdateText,
 } from './message.js';
-export type { AssistantMessage, Continuation } from './message.js';
+export type {
+  AssistantMessage,
+  Continuation,
+  PreparedHistoryEntry,
+} from './message.js';
 export {
   ModelError,
   ModelErrorFieldsSchema,

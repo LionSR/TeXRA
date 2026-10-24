@@ -11,20 +11,25 @@
 import { Predicate, Result } from 'effect';
 
 import {
-  MessageSchema,
+  AssistantMessageSchema,
+  checkPreparedHistory,
   ModelOriginSchema,
   RemoteOperationSchema,
   TurnResultSchema,
   type RemoteOperation,
 } from '@texra-ai/llm';
+import { z } from 'zod';
 import {
-  ContextEditPayloadSchema,
+  ContextEditDraftPayloadSchema,
+  ModelMessageDraftPayloadSchema,
   ModelMessagePayloadSchema,
+  StoredMessageSchema,
   toJsonValue,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import type {
+  HistoryMessage,
   ModelMessagePayload,
   RunHistoryRow,
 } from '@shared/session/historyTurns';
@@ -33,7 +38,6 @@ import {
   type RunHistoryDraft,
 } from '@shared/session/runState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { z } from 'zod';
 
 /** The keys whose value is provider evidence, wherever a turn or a history
  *  entry holds one. */
@@ -95,13 +99,13 @@ export function storedDraft(row: RunHistoryDraft): SessionEventDraft {
   if (row.type === 'context.edit')
     return {
       ...row,
-      payload: ContextEditPayloadSchema.parse(stored(row.payload)),
+      payload: ContextEditDraftPayloadSchema.parse(stored(row.payload)),
     };
   if (row.type !== 'model.message') return row;
   const { payload } = row;
   return {
     ...row,
-    payload: ModelMessagePayloadSchema.parse(
+    payload: ModelMessageDraftPayloadSchema.parse(
       stored(
         payload.kind === 'accepted'
           ? { ...payload, operation: storedOperation(payload.operation) }
@@ -111,8 +115,28 @@ export function storedDraft(row: RunHistoryDraft): SessionEventDraft {
   };
 }
 
-const liveMessages = (messages: readonly unknown[]) =>
-  messages.map((message) => MessageSchema.parse(live(message)));
+/** A history entry as the fold holds it: the stored user, tool and system
+ *  messages (media by address), the assistant message in the package's
+ *  terms. */
+const HistoryMessageSchema = z.discriminatedUnion('role', [
+  AssistantMessageSchema,
+  ...StoredMessageSchema.options.filter(
+    (
+      option,
+    ): option is Exclude<
+      (typeof StoredMessageSchema.options)[number],
+      { shape: { role: z.ZodLiteral<'assistant'> } }
+    > => option.shape.role.value !== 'assistant',
+  ),
+]);
+const liveMessages = (messages: readonly unknown[]): HistoryMessage[] =>
+  messages.map((message) => HistoryMessageSchema.parse(live(message)));
+/** The fold's history under the package's prepared-history rules. */
+export const PreparedRunHistorySchema = z
+  .array(HistoryMessageSchema)
+  .min(1)
+  .superRefine(checkPreparedHistory)
+  .readonly();
 
 function livePayload(
   p: z.output<typeof ModelMessagePayloadSchema>,

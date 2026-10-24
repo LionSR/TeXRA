@@ -117,6 +117,12 @@ export interface SessionLog {
     id: AggregateId,
     types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** The strings stored under `digests`: the bytes a history's media parts
+   *  and captured attachments name. Read by the invocation alone, right
+   *  before the provider call (`run/mediaBytes.ts`). */
+  blobs(
+    digests: readonly string[],
+  ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
   /** A run's record rows: the latest row of each record type. */
   records(
     runId: RunId,

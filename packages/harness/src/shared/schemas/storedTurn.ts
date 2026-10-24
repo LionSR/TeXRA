@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import { JsonValueSchema } from './jsonValue';
+import { Sha256Schema } from './offeredTools';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = z.strictObject({
@@ -50,18 +51,54 @@ const TextPartSchema = z.strictObject({
   kind: z.literal('text'),
   text: z.string(),
 });
-const MediaFields = { mimeType: z.string().min(1), base64: z.string() };
+/** The part kinds that carry media bytes. */
+export const MEDIA_PART_KINDS = [
+  'image',
+  'audio',
+  'video',
+  'document',
+] as const;
+/**
+ * A media part as history holds it: its bytes by address, never inline.
+ * `digest` is the session store's blob address of the part's base64 text
+ * (`blobAddress` in `@utils/core/idHash`, the address the row codec stores
+ * a string under); every reader of the history sees the address, and only
+ * the invocation resolves it, right before the provider call.
+ */
+const MediaAddress = { mimeType: z.string().min(1), digest: Sha256Schema };
 const StoredInputPartSchema = z.discriminatedUnion('kind', [
   TextPartSchema,
   z.strictObject({
     kind: z.literal('image'),
-    ...MediaFields,
+    ...MediaAddress,
     detail: z.string().min(1).optional(),
   }),
   z.strictObject({
     kind: z.enum(['audio', 'video', 'document']),
-    ...MediaFields,
+    ...MediaAddress,
   }),
+]);
+export type StoredInputPart = z.infer<typeof StoredInputPartSchema>;
+/** A media part with its bytes by address. */
+export type StoredMediaPart = Exclude<StoredInputPart, { kind: 'text' }>;
+/** The same part as a draft may carry it: with its base64 in hand, which the
+ *  row codec stores under its address at write, so no committed row holds
+ *  media bytes. */
+const MediaBytes = { mimeType: z.string().min(1), base64: z.string() };
+const MediaBytesPartSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('image'),
+    ...MediaBytes,
+    detail: z.string().min(1).optional(),
+  }),
+  z.strictObject({
+    kind: z.enum(['audio', 'video', 'document']),
+    ...MediaBytes,
+  }),
+]);
+const StoredInputPartDraftSchema = z.union([
+  StoredInputPartSchema,
+  MediaBytesPartSchema,
 ]);
 
 const StoredContentSchema = z
@@ -144,34 +181,43 @@ export const StoredTurnSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-/** One entry of canonical history. */
-export const StoredMessageSchema = z.discriminatedUnion('role', [
-  z.strictObject({
-    role: z.literal('user'),
-    content: z.array(StoredInputPartSchema).min(1).readonly(),
-  }),
-  z.strictObject({
-    role: z.literal('assistant'),
-    /** `null`: no model produced it (a call the application handed down). */
-    origin: StoredOriginSchema.nullable(),
-    content: StoredContentSchema,
-  }),
-  z.strictObject({
-    role: z.literal('tool'),
-    results: z
-      .array(
-        z.strictObject({
-          callOrdinal: z.int().nonnegative(),
-          status: z.enum(['success', 'error']),
-          content: z.array(StoredInputPartSchema).readonly(),
-        }),
-      )
-      .min(1)
-      .readonly(),
-  }),
-  /** A context update the run appended mid-conversation. */
-  z.strictObject({ role: z.literal('system'), text: z.string().min(1) }),
-]);
+/** One entry of canonical history, its input parts of `part`. */
+const storedMessageSchema = <P extends z.ZodType>(part: P) =>
+  z.discriminatedUnion('role', [
+    z.strictObject({
+      role: z.literal('user'),
+      content: z.array(part).min(1).readonly(),
+    }),
+    z.strictObject({
+      role: z.literal('assistant'),
+      /** `null`: no model produced it (a call the application handed down). */
+      origin: StoredOriginSchema.nullable(),
+      content: StoredContentSchema,
+    }),
+    z.strictObject({
+      role: z.literal('tool'),
+      results: z
+        .array(
+          z.strictObject({
+            callOrdinal: z.int().nonnegative(),
+            status: z.enum(['success', 'error']),
+            content: z.array(part).readonly(),
+          }),
+        )
+        .min(1)
+        .readonly(),
+    }),
+    /** A context update the run appended mid-conversation. */
+    z.strictObject({ role: z.literal('system'), text: z.string().min(1) }),
+  ]);
+/** One entry of canonical history as a committed row holds it. */
+export const StoredMessageSchema = storedMessageSchema(StoredInputPartSchema);
+export type StoredMessage = z.infer<typeof StoredMessageSchema>;
+/** One entry as a draft carries it: a media part may still hold its bytes. */
+export const StoredMessageDraftSchema = storedMessageSchema(
+  StoredInputPartDraftSchema,
+);
+export type StoredMessageDraft = z.infer<typeof StoredMessageDraftSchema>;
 
 /** Accepted remote work: its identity, and the cursor the adapter observes
  *  it by. */

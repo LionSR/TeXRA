@@ -29,11 +29,15 @@ import type { PluginArms } from '@tools/plugins';
 
 import {
   aggregateOf,
+  blobDigests,
+  BlobRowSchema,
   decodeRow,
   EARLIER_RUNS,
   pluginFactArm,
   EVENT_FROM,
+  READ_BLOBS,
   RowSchema,
+  type Blobs,
   type SqlRow,
 } from './rowCodec';
 
@@ -166,9 +170,20 @@ export function rowReader<E>(
         });
         if (refusal !== undefined) return yield* Effect.fail(refusal);
       }
+      // The batch's blobs in one statement, by digest: the rows carry
+      // addresses, never bytes, so a media part costs a read nothing.
+      const digests = blobDigests(rows);
+      const blobs: Blobs = new Map(
+        digests.length === 0
+          ? []
+          : (yield* exec(READ_BLOBS, [JSON.stringify(digests)])).map((row) => {
+              const { digest, value } = BlobRowSchema.parse(row);
+              return [digest, value] as const;
+            }),
+      );
       const events: SessionEvent[] = [];
       for (const row of rows) {
-        const decoded = decodeRow(row, arms);
+        const decoded = decodeRow(row, arms, blobs);
         if (Result.isSuccess(decoded)) {
           if (!('_tag' in decoded.success)) events.push(decoded.success);
           else

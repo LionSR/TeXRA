@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Media bytes leave the run history.** A message's image, audio, video or
+  document part and a tool result's captured attachment are stored once in
+  the session store's blob table and named by address (`digest`) from the
+  row; only the model request resolves them, right before the provider
+  call. Every other reader of a run, a window's replay, a resume, a child's
+  history query, carries addresses alone, so a workspace holding large
+  recordings no longer freezes the service for seconds on each attach (the
+  freeze made every window's ping time out, shown as "The TeXRA service is
+  offline" and "Reconnected" every ten seconds). The session store's
+  `model.message`, `context.edit` and `tool.result` rows move to a new
+  version with no upcaster: a run an earlier build wrote with inline media
+  reads as that build's, as every pre-1.0 format change does. Event reads
+  also fetch a batch's blobs by digest in one statement instead of
+  hex-inlining them in the row query.
+
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now

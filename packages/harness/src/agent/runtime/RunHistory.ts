@@ -7,7 +7,6 @@
  */
 import { Effect, Result, SynchronizedRef } from 'effect';
 
-import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   qualifyAggregateId,
   type RunId,
@@ -39,7 +38,15 @@ import type {
   RunHistoryRow,
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
-import { runHistoryRows, storedDraft } from './storedTurn';
+import { blobAddress } from '@utils/core/idHash';
+
+import { withMediaAddresses } from './run/mediaBytes';
+import {
+  PreparedRunHistorySchema,
+  runHistoryRows,
+  storedDraft,
+} from './storedTurn';
+import type { ModelOrigin } from '@texra-ai/llm';
 import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
@@ -140,13 +147,64 @@ const candidates = (
   state: RunState,
   rows: readonly RunHistoryDraft[],
 ): readonly RunHistoryRow[] =>
-  rows.map((row, i) => ({
-    ...row,
-    ...{ seq: i + 1, commit: state.commit + i + 1, origin: null, at: 0 },
-  }));
+  rows.map((row, i) => {
+    const envelope = {
+      seq: i + 1,
+      commit: state.commit + i + 1,
+      origin: null,
+      at: 0,
+    };
+    // A draft may carry media bytes; the committed row holds their address.
+    switch (row.type) {
+      case 'model.message': {
+        const { payload } = row;
+        return {
+          ...row,
+          ...envelope,
+          payload:
+            payload.kind === 'append'
+              ? {
+                  ...payload,
+                  messages: withMediaAddresses(payload.messages),
+                }
+              : payload,
+        };
+      }
+      case 'context.edit':
+        return {
+          ...row,
+          ...envelope,
+          payload: {
+            ...row.payload,
+            messages: withMediaAddresses(row.payload.messages),
+          },
+        };
+      case 'tool.result':
+        return {
+          ...row,
+          ...envelope,
+          payload: {
+            ...row.payload,
+            attachments: row.payload.attachments.map((attachment) =>
+              attachment.content.kind === 'base64'
+                ? {
+                    ...attachment,
+                    content: {
+                      kind: 'stored' as const,
+                      digest: blobAddress(attachment.content.data),
+                    },
+                  }
+                : { ...attachment, content: attachment.content },
+            ),
+          },
+        };
+      default:
+        return { ...row, ...envelope };
+    }
+  });
 
 /**
- * `PreparedHistorySchema` over `history` from message `from` on: its rules
+ * The prepared-history rules over `history` from message `from` on: they
  * are between neighbours, so a suffix starting on a checked message, never
  * on a tool group, re-checks every pair past it; a refusal's detail is still
  * the whole parse's, whose indices name the whole history.
@@ -158,13 +216,13 @@ const unprepared = (
 ): RunHistoryRefused | null => {
   let start = Math.max(0, from - 1);
   if (start > 0 && history[start]?.role === 'tool') start -= 1;
-  if (PreparedHistorySchema.safeParse(history.slice(start)).success)
+  if (PreparedRunHistorySchema.safeParse(history.slice(start)).success)
     return null;
   return new RunHistoryRefused({
     reason: 'unprepared-history',
     runId,
     detail:
-      PreparedHistorySchema.safeParse(history).error?.message ??
+      PreparedRunHistorySchema.safeParse(history).error?.message ??
       `history from message ${start}`,
   });
 };

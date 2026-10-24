@@ -251,7 +251,7 @@ export function validateAssistantContent(
   }
 }
 
-const AssistantMessageSchema = z
+export const AssistantMessageSchema = z
   .strictObject({
     role: z.literal('assistant'),
     /** `null` when no model produced the content (a handed-down call). */
@@ -310,49 +310,66 @@ export const MessageSchema = z.discriminatedUnion('role', [
 export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
 
+/** What the prepared-history rules read of an entry: its role, an
+ *  assistant's local calls and a tool group's ordinals. Over any input-part
+ *  shape, so a store that holds media by address checks the same rules. */
+export type PreparedHistoryEntry =
+  | { readonly role: 'user' | 'system' }
+  | {
+      readonly role: 'assistant';
+      readonly content: readonly { readonly kind: string }[];
+    }
+  | {
+      readonly role: 'tool';
+      readonly results: readonly { readonly callOrdinal: number }[];
+    };
 /** The history a turn sends: each assistant's local calls answered by the
  *  next message, in call order. Only the next request needs them settled. */
+export function checkPreparedHistory(
+  messages: readonly PreparedHistoryEntry[],
+  ctx: z.RefinementCtx,
+): void {
+  for (const [index, message] of messages.entries()) {
+    if (message.role === 'assistant') {
+      const calls = message.content.filter(
+        (part) => part.kind === 'local-call',
+      );
+      if (calls.length === 0) continue;
+      const results = messages[index + 1];
+      if (
+        results?.role !== 'tool' ||
+        results.results.length !== calls.length ||
+        !results.results.every(
+          (result, ordinal) => result.callOrdinal === ordinal,
+        )
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message:
+            'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
+        });
+      }
+    } else if (message.role === 'tool') {
+      const previous = messages[index - 1];
+      if (
+        previous?.role !== 'assistant' ||
+        !previous.content.some((part) => part.kind === 'local-call')
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message:
+            'Tool results require an immediately preceding calling assistant.',
+        });
+      }
+    }
+  }
+}
 export const PreparedHistorySchema = z
   .array(MessageSchema)
   .min(1)
-  .superRefine((messages, ctx) => {
-    for (const [index, message] of messages.entries()) {
-      if (message.role === 'assistant') {
-        const calls = message.content.filter(
-          (part) => part.kind === 'local-call',
-        );
-        if (calls.length === 0) continue;
-        const results = messages[index + 1];
-        if (
-          results?.role !== 'tool' ||
-          results.results.length !== calls.length ||
-          !results.results.every(
-            (result, ordinal) => result.callOrdinal === ordinal,
-          )
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [index],
-            message:
-              'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
-          });
-        }
-      } else if (message.role === 'tool') {
-        const previous = messages[index - 1];
-        if (
-          previous?.role !== 'assistant' ||
-          !previous.content.some((part) => part.kind === 'local-call')
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [index],
-            message:
-              'Tool results require an immediately preceding calling assistant.',
-          });
-        }
-      }
-    }
-  })
+  .superRefine(checkPreparedHistory)
   .readonly();
 type HistoryMessage = z.infer<typeof MessageSchema>;
 

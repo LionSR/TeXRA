@@ -76,6 +76,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { blobAddress } from '@utils/core/idHash';
 
 import { recordSessionEvents } from './progressTestUtils';
 
@@ -1018,10 +1019,12 @@ describe('tool-use dispatch', () => {
         if (group?.role !== 'tool') {
           throw new Error('The dispatch delivered no tool group.');
         }
-        // The run history holds the bytes; a file id only ever lives in memory.
+        // The run history holds the bytes by address; a file id only ever
+        // lives in memory.
+        const digest = blobAddress(pdf);
         expect(group.results[0]?.content.slice(1)).toStrictEqual([
-          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
-          { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+          { kind: 'document', mimeType: 'application/pdf', digest },
+          { kind: 'document', mimeType: 'application/pdf', digest },
         ]);
         yield* closeSessionOf(kit.session);
       }),
@@ -1126,7 +1129,11 @@ describe('tool-use dispatch', () => {
         throw new Error('The dispatch delivered no tool group.');
       }
       expect(group.results[0]?.content.slice(1)).toStrictEqual([
-        { kind: 'document', mimeType: 'application/pdf', base64: pdf },
+        {
+          kind: 'document',
+          mimeType: 'application/pdf',
+          digest: blobAddress(pdf),
+        },
       ]);
       yield* closeSessionOf(kit.session);
     }),

@@ -299,6 +299,13 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
+    /** The strings stored under `digests`: what a media part or a captured
+     *  attachment names (`storedTurn.ts`, `toolResult.ts`). The one read of
+     *  media bytes, made by the invocation right before the provider call;
+     *  a digest the store lacks fails the read. */
+    readonly readBlobs: (
+      digests: readonly string[],
+    ) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
     /** The latest listing row of each type on one open run: its private
      *  records beside its creation, status and tombstone. */
     readonly readRunRecords: (

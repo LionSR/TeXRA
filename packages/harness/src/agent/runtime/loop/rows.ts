@@ -24,15 +24,16 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { QueuedFollowUp } from '@shared/session/runRows';
+import type { HistoryMessageDraft } from '@shared/session/historyTurns';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
-import type { MessageSchema } from '@texra-ai/llm';
-import type { z } from 'zod';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-export type Message = z.infer<typeof MessageSchema>;
+/** A message the loop appends: the history's, a media part with its bytes
+ *  in hand included (the row codec stores them under their address). */
+export type Message = HistoryMessageDraft;
 
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);

@@ -68,7 +68,9 @@ import {
   type ScriptCallPayload,
   type ToolCallStatus,
   type ToolFileAttachment,
+  type StoredMediaPart,
   type ToolResult,
+  type ToolResultDraftPayload,
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
@@ -91,7 +93,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 
 import { AgentRun } from '../run/AgentRun';
-import { inlineMediaPart, type InputPart } from '../run/mediaInput';
+import { storedMediaPart, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
 import {
   localCallsOf,
@@ -139,7 +141,7 @@ type CallFacts =
 const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
-type ResultAttachment = ToolResultPayload['attachments'][number];
+type ResultAttachment = ToolResultDraftPayload['attachments'][number];
 
 interface DispatchOutcome {
   readonly state: RunState;
@@ -189,6 +191,13 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
         ? { description: attachment.description }
         : {}),
     };
+    if (attachment.digest !== undefined) {
+      captured.push({
+        ...base,
+        content: { kind: 'stored', digest: attachment.digest },
+      });
+      continue;
+    }
     const inline =
       attachment.base64Data ||
       Buffer.from(attachment.bytes ?? []).toString('base64');
@@ -235,13 +244,13 @@ const UPLOAD_DEADLINE = '5 seconds';
  */
 function resultContent(
   recorded: Pick<CallResult, 'result' | 'attachments'>,
-  capabilities: Parameters<typeof inlineMediaPart>[2],
+  capabilities: Parameters<typeof storedMediaPart>[2],
   logger: AgentTrace,
 ): {
   readonly text: InputPart;
   readonly media: readonly {
     readonly path: string;
-    readonly part: InputPart;
+    readonly part: StoredMediaPart;
   }[];
 } {
   const text = formatToolResultAsText(
@@ -251,15 +260,15 @@ function resultContent(
       : undefined,
   );
   const media = recorded.attachments.flatMap((attachment) => {
-    if (attachment.content.kind !== 'base64') {
+    if (attachment.content.kind !== 'stored') {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
       );
       return [];
     }
-    const part = inlineMediaPart(
+    const part = storedMediaPart(
       attachment.mimeType,
-      attachment.content.data,
+      attachment.content.digest,
       capabilities,
     );
     if (part === null) {
@@ -422,7 +431,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const commitResult = (
     fact: CallFacts,
     attempt: number,
-    result: Omit<CallResult, 'attempt'>,
+    result: Omit<CallResult, 'attempt' | 'attachments'> & {
+      readonly attachments: readonly ResultAttachment[];
+    },
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
     alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
@@ -1070,7 +1081,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       endsTurn(callSettlementOf(settledPending, callId)),
     );
   const bound = yield* SynchronizedRef.get(run.model);
-  const media: { readonly path: string; readonly part: InputPart }[] = [];
+  const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
   const results = settledPending.calls.map((fact, ordinal) => {
     const recorded = callSettlementOf(settledPending, fact.callId);
     if (recorded === null) {
@@ -1110,6 +1121,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;
   if (uploadFile !== undefined) {
+    // The documents' bytes, held by address: read once for the uploads.
+    const bytes = yield* run.session.log.blobs(
+      documents.map(({ part }) => part.digest),
+    );
     // Settled uploads leave the set; the aggregate deadline names the rest.
     const pendingUploads = new Set(documents.map(({ path }) => path));
     yield* Effect.forEach(
@@ -1118,7 +1133,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         uploadFile({
           mimeType: part.mimeType,
           filename: getBasename(path) || 'attachment',
-          base64: part.base64,
+          base64: bytes.get(part.digest) ?? '',
         }).pipe(
           Effect.catchTag('ModelError', (error) =>
             Effect.sync(() =>

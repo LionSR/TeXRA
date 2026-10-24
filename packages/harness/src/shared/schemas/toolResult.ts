@@ -2,6 +2,7 @@ import { z, type ZodIssue } from 'zod';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
+import { Sha256Schema } from './offeredTools';
 
 /**
  * Base schema for file references (metadata only, no binary data).
@@ -26,6 +27,12 @@ const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
   bytes: z.instanceof(Uint8Array).optional(),
+  /** Bytes the session store already holds under this address: a file a
+   *  script relays from one of its calls' settled attachments. */
+  digest: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional(),
 });
 export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
 
@@ -205,22 +212,38 @@ export class ToolError extends Error {
   }
 }
 
-/** `ToolFileAttachment.bytes` is a `Uint8Array`, which JSON does not
- *  reconstruct; a path alone is not recoverable content; a capture failure
- *  records the omission and its reason rather than a claim that bytes were
- *  included. */
-export const SettledAttachmentSchema = z.strictObject({
-  path: z.string().min(1),
-  mimeType: z.string().min(1),
-  description: z.string().optional(),
-  content: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('base64'), data: z.base64() }),
-    z.strictObject({
-      kind: z.literal('metadata-only'),
-      reason: z.string().min(1),
-    }),
-  ]),
+/** A capture failure records the omission and its reason rather than a
+ *  claim that bytes were included; a path alone is not recoverable content. */
+const AttachmentOmittedSchema = z.strictObject({
+  kind: z.literal('metadata-only'),
+  reason: z.string().min(1),
 });
+const settledAttachmentSchema = <C extends z.ZodType>(content: C) =>
+  z.strictObject({
+    path: z.string().min(1),
+    mimeType: z.string().min(1),
+    description: z.string().optional(),
+    content,
+  });
+/** An attachment as a committed `tool.result` row holds it: its captured
+ *  bytes by their session-store blob address (`rowCodec.ts`), never inline,
+ *  so the history a window or a resume reads carries no attachment bytes. */
+export const SettledAttachmentSchema = settledAttachmentSchema(
+  z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('stored'), digest: Sha256Schema }),
+    AttachmentOmittedSchema,
+  ]),
+);
+/** The same attachment as the dispatch drafts it: `ToolFileAttachment.bytes`
+ *  is a `Uint8Array`, which JSON does not reconstruct, so the capture carries
+ *  the base64 the row codec stores under its address at write. */
+export const SettledAttachmentDraftSchema = settledAttachmentSchema(
+  z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('base64'), data: z.base64() }),
+    z.strictObject({ kind: z.literal('stored'), digest: Sha256Schema }),
+    AttachmentOmittedSchema,
+  ]),
+);
 
 /**
  * The follow-up builder's input. Derived from the exported members, never

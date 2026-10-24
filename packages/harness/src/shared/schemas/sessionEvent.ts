@@ -40,10 +40,13 @@ import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
 import {
   RunPositionPayloadSchema,
+  ContextEditDraftPayloadSchema,
   ContextEditPayloadSchema,
+  ModelMessageDraftPayloadSchema,
   ModelMessagePayloadSchema,
   ScriptCallPayloadSchema,
   ToolIntentPayloadSchema,
+  ToolResultDraftPayloadSchema,
   ToolResultPayloadSchema,
 } from './runHistoryEvent';
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
@@ -414,29 +417,58 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
  * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */
-const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
-  durable('model.message', { payload: ModelMessagePayloadSchema }),
-  durable('context.edit', { payload: ContextEditPayloadSchema }),
-  durable('tool.intent', { payload: ToolIntentPayloadSchema }),
-  /** A call a script issued, with its arguments: committed with its intent. */
-  durable('script.call', { payload: ScriptCallPayloadSchema }),
-  durable('tool.result', { payload: ToolResultPayloadSchema }),
-  durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
-  durable('context.blob', { payload: ContextBlobSchema }),
-  durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
-  /**
-   * One child turn's identity and fate, the child loop's own bookkeeping.
-   * The key is structural, (run, attempt, turn index), so an accepted turn
-   * always folds to one identity and a later attempt reusing the run id
-   * never collides with it. `accepted` without `settled` is the active
-   * turn; the latest `settled` is the last turn whose delivery ran: its
-   * parent's `followup.queued` commits in the same transaction.
-   */
-  durable('child.turn', {
-    attemptId: z.string().min(1),
-    turnIndex: z.int().positive(),
-    phase: z.enum(['accepted', 'settled']),
+const runHistoryEventSchemas = <
+  M extends z.ZodType,
+  C extends z.ZodType,
+  T extends z.ZodType,
+>(payloads: {
+  readonly modelMessage: M;
+  readonly contextEdit: C;
+  readonly toolResult: T;
+}) =>
+  [
+    durable('model.message', { payload: payloads.modelMessage }),
+    durable('context.edit', { payload: payloads.contextEdit }),
+    durable('tool.intent', { payload: ToolIntentPayloadSchema }),
+    /** A call a script issued, with its arguments: committed with its intent. */
+    durable('script.call', { payload: ScriptCallPayloadSchema }),
+    durable('tool.result', { payload: payloads.toolResult }),
+    durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
+    durable('context.blob', { payload: ContextBlobSchema }),
+    durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
+    /**
+     * One child turn's identity and fate, the child loop's own bookkeeping.
+     * The key is structural, (run, attempt, turn index), so an accepted turn
+     * always folds to one identity and a later attempt reusing the run id
+     * never collides with it. `accepted` without `settled` is the active
+     * turn; the latest `settled` is the last turn whose delivery ran: its
+     * parent's `followup.queued` commits in the same transaction.
+     */
+    durable('child.turn', {
+      attemptId: z.string().min(1),
+      turnIndex: z.int().positive(),
+      phase: z.enum(['accepted', 'settled']),
+    }),
+  ] as const;
+/** The drafts: a media part or captured attachment may carry its bytes,
+ *  which the row codec stores under their address at write. */
+const RunHistoryEventDraftSchema = z.discriminatedUnion(
+  'type',
+  runHistoryEventSchemas({
+    modelMessage: ModelMessageDraftPayloadSchema,
+    contextEdit: ContextEditDraftPayloadSchema,
+    toolResult: ToolResultDraftPayloadSchema,
   }),
+);
+/** The committed rows: media and attachment bytes by address only. */
+const [firstRunHistoryRow, ...otherRunHistoryRows] = runHistoryEventSchemas({
+  modelMessage: ModelMessagePayloadSchema,
+  contextEdit: ContextEditPayloadSchema,
+  toolResult: ToolResultPayloadSchema,
+});
+const RunHistoryEventSchema = z.discriminatedUnion('type', [
+  firstRunHistoryRow.extend(envelope),
+  ...otherRunHistoryRows.map((schema) => schema.extend(envelope)),
 ]);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
@@ -463,9 +495,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
-  ...RunHistoryEventDraftSchema.options.map((schema) =>
-    schema.extend(envelope),
-  ),
+  ...RunHistoryEventSchema.options,
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
