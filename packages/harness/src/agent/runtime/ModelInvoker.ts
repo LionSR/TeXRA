@@ -83,7 +83,6 @@ import {
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
-  turnRequestFor,
   type InvokeRequest,
 } from './run/requestContext';
 import { providerMessages } from './storedTurn';
@@ -410,13 +409,22 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
-        const turnRequest = yield* turnRequestFor(
-          run,
-          state,
-          request,
-          bound,
-          yield* bound.delivery,
-        );
+        // The request an attempt admits: the folded history with its media
+        // resolved (the one read of media bytes), the caller's system and
+        // tools, the run as its cache key, and the last response's
+        // continuation while the binding matches its whole origin. A resume
+        // rebuilds it from the same inputs; no row copies history.
+        const turnRequest: TurnRequest = {
+          mode: yield* bound.delivery,
+          ...(request.system !== undefined ? { system: request.system } : {}),
+          messages: yield* providerMessages(state.messages, session.log.blobs),
+          ...(request.tools !== undefined ? { tools: request.tools } : {}),
+          ...(request.toolChoice !== undefined
+            ? { toolChoice: request.toolChoice }
+            : {}),
+          ...chainedContinuation(state, bound.origin),
+          cacheKey: run.runId,
+        };
         let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(state.messages, 'messages', invocation, bound);
         // The run's context size (`contextTokens`: the last response's

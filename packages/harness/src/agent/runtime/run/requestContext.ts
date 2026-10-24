@@ -47,7 +47,6 @@ import { envFlag } from '@utils/system/envFlags';
 
 import { rowAggregate } from '../loop/rows';
 import { addressedMessages, providerMessages } from '../storedTurn';
-import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { AgentRunShape } from './AgentRun';
 
 /**
@@ -264,35 +263,6 @@ export interface InvokeRequest {
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
 }
-
-/**
- * The semantic request an attempt admits: the folded history with its media
- * resolved (the one read of media bytes), the caller's system and tools, the
- * run as its cache key, and the last response's continuation while the
- * binding matches its whole origin. A resume rebuilds it from the same
- * inputs; no row copies history.
- */
-export const turnRequestFor = (
-  run: Pick<AgentRunShape, 'runId' | 'session'>,
-  state: RunState,
-  request: InvokeRequest,
-  bound: BoundModel,
-  mode: TurnRequest['mode'],
-): Effect.Effect<TurnRequest, DatabaseReadFailed> =>
-  Effect.map(
-    providerMessages(state.messages, run.session.log.blobs),
-    (messages) => ({
-      mode,
-      ...(request.system !== undefined ? { system: request.system } : {}),
-      messages,
-      ...(request.tools !== undefined ? { tools: request.tools } : {}),
-      ...(request.toolChoice !== undefined
-        ? { toolChoice: request.toolChoice }
-        : {}),
-      ...chainedContinuation(state, bound.origin),
-      cacheKey: run.runId,
-    }),
-  );
 
 /**
  * The background turn the open attempt admitted, rebuilt from its rows on

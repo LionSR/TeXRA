@@ -6,20 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Media bytes leave the run history.** A message's image, audio, video or
-  document part and a tool result's captured attachment are stored once in
-  the session store's blob table and named by address (`digest`) from the
-  row; only the model request resolves them, right before the provider
-  call. Every other reader of a run, a window's replay, a resume, a child's
-  history query, carries addresses alone, so a workspace holding large
-  recordings no longer freezes the service for seconds on each attach (the
-  freeze made every window's ping time out, shown as "The TeXRA service is
-  offline" and "Reconnected" every ten seconds). The session store's
-  `model.message`, `context.edit` and `tool.result` rows move to a new
-  version with no upcaster: a run an earlier build wrote with inline media
-  reads as that build's, as every pre-1.0 format change does. Event reads
-  also fetch a batch's blobs by digest in one statement instead of
-  hex-inlining them in the row query.
+- **Attachments no longer freeze TeXRA.** A workspace whose conversations
+  carried large attachments (recordings, PDFs, images) made every TeXRA
+  window and terminal flip between "The TeXRA service is offline" and
+  "Reconnected to the TeXRA service" every ten seconds, and a message sent
+  during the drop came back as "The conversation ended before the message
+  could be sent": each window that opened re-read every attachment, and
+  the service stalled for seconds. Attachments are now kept apart from the
+  conversation and loaded only when a model request needs them. Conversations
+  with attachments that an earlier build saved show as written by that
+  build and cannot be resumed by this one; their files and transcripts are
+  unaffected.
 
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus
