@@ -314,8 +314,8 @@ export {
   type AgentErrorKind,
   type AgentErrorPresentation,
 } from '@common/errors/agentErrorClassification';
+export { causeChain } from '@utils/errors/errorMessage';
 export {
-  causeChain,
   isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,

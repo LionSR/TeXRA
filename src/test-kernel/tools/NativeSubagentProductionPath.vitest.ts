@@ -582,6 +582,8 @@ async function launchWaitingChild(options: {
     instruction: undefined,
     attempt: 1,
     logId: 'parent-card',
+    script: null,
+    scriptCalls: null,
     requests: fixtureRequests,
     run: {
       runId: PARENT_RUN_ID,
@@ -1243,12 +1245,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
           },
         ];
+        // The recipe's revision child binds the first model the host makes
+        // available, not the recipe run's: every model but the parent's
+        // answers with the revised documents.
         bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(
                 input.config,
-                input.config.ref === CHILD_MODEL ? childTurns : parentTurns,
+                input.config.ref === PARENT_MODEL ? parentTurns : childTurns,
                 observedRequests,
               ),
             ),

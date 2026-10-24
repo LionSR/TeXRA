@@ -49,7 +49,6 @@ import {
 import {
   ToolError,
   type ProcessChildStrategy,
-  type ChildRuns,
 } from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
@@ -513,7 +512,6 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   ToolError,
   | Secrets
   | ToolContext
-  | ChildRuns
   | ClaudeAgentSessions
   | ChildProcessSpawner
   | FileSystem.FileSystem
@@ -576,11 +574,7 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  | Secrets
-  | ToolContext
-  | ChildRuns
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
+  Secrets | ToolContext | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = (yield* ToolContext).env;

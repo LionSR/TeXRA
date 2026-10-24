@@ -437,3 +437,19 @@ package sources and types in `node_modules/effect`. Effect is v4; v3 material
 may differ from the installed version.
 
 <!-- effect-solutions:end -->
+
+Two rules the guides do not spell out, each learned from a defect here:
+
+- **A captured context is forwarded only through `Context.pick`.**
+  `Effect.context<T>()` returns the whole fiber context at runtime; the type
+  parameter narrows the type, not the value. `Effect.provide(ctx)` merges
+  with the provided side winning, so re-providing an unpicked capture
+  shadows every more specific provision inside the wrapped effect (a
+  script's nested calls once all launched under the script's own call id
+  this way). Prefer `yield*`-ing the services you need and providing exactly
+  those; when a context must travel, `Context.pick(A, B)(ctx)`
+  (`tools/liveTools.ts`).
+- **A service with a sensible default is a `Context.Reference`**, never a
+  hand-provided null: `null` outside a run (`RunCall`), a refusal outside a
+  session (`ChildRuns`). A reference is never a requirement, so the fence
+  that keeps it from a plugin's tool is the export surface, not `R`.

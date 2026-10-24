@@ -7,15 +7,14 @@ import {
   type ToolContextShape,
   type ToolEnv,
 } from '@agent/core/tools/ToolTypes';
-import {
-  IssuingScript,
-  ScriptCalls,
-  RunCall,
-  type RunCallShape,
-} from '@agent/runtime/RunCall';
+import { RunCall, type RunCallShape } from '@agent/runtime/RunCall';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { OpenStep } from '@agent/runtime/loop/step';
-import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
+import {
+  ChildRuns,
+  childRuns,
+  type RuntimeTool,
+} from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -103,6 +102,29 @@ export function nativeToolTestLayer(
   };
   // One layer value, so the child door and the plugin services share it.
   const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
+  // A test call is no script's and issues none; under a run it launches
+  // children through the door over its own place in the run, and outside
+  // one the place and the door keep their defaults (null, a refusal).
+  const runCall: RunCallShape | null =
+    toolRun === undefined
+      ? null
+      : {
+          run: toolRun,
+          responseId: 'test-response',
+          instruction: undefined,
+          attempt: 1,
+          logId: `log-${callId}`,
+          script: null,
+          scriptCalls: null,
+          ...origin,
+        };
+  const childDoor =
+    runCall === null
+      ? Layer.effectDiscard(Effect.void)
+      : Layer.effect(
+          ChildRuns,
+          Effect.map(Runs, (registry) => childRuns(runCall, registry)),
+        ).pipe(Layer.provide(runs));
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
@@ -146,26 +168,9 @@ export function nativeToolTestLayer(
         },
       }),
     })),
-    // A test call is no script's and issues none; it launches children
-    // through the harness's capability over its own place in the run.
-    Layer.succeed(ScriptCalls)(null),
-    Layer.provideMerge(
-      childRunsLayer,
-      Layer.mergeAll(
-        runs,
-        Layer.succeed(IssuingScript)(null),
-        toolRun === undefined
-          ? Layer.succeed(RunCall)(null)
-          : Layer.succeed(RunCall)({
-              run: toolRun,
-              responseId: 'test-response',
-              instruction: undefined,
-              attempt: 1,
-              logId: `log-${callId}`,
-              ...origin,
-            }),
-      ),
-    ),
+    runs,
+    Layer.succeed(RunCall)(runCall),
+    childDoor,
     // The session's plugin services, over the same `Runs`, as a step pins
     // them for the call.
     testCallPluginServices.pipe(Layer.provideMerge(runs)),

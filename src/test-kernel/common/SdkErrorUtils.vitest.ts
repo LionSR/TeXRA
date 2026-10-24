@@ -143,7 +143,11 @@ describe('attachProviderError end-to-end', () => {
     expect(logData.statusCode).toBe(503);
     expect(logData.provider).toBe('anthropic');
     expect(logData.requestId).toBe('req_wrapped_503');
-    expect(logData.rawMessage).toBe('Tool-use flow failed');
+    // The raw message keeps the cause chain: a wrapper's sentence alone is
+    // not a record of what failed.
+    expect(logData.rawMessage).toBe(
+      'Tool-use flow failed: HTTP 503 Service Unavailable – server overloaded',
+    );
     expect(logData.operation).toBe('execute orchestrator');
     expect(normalizeProviderError(wrapper)).toBe(retryInfo);
   });

@@ -64,7 +64,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, ToolError, ChildRuns> {
+  ): Effect.fn.Return<ToolResult, ToolError> {
     const { id, prompt, callerRunId, labels } = params;
     // A detached or re-parented child must not accept follow-ups from its
     // former orchestrator: the child's rows decide, in the job queuing it.
@@ -120,7 +120,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | ChildRuns> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -178,7 +178,7 @@ export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* <TTurn>(
   params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, ToolError, ChildRuns> {
+): Effect.fn.Return<ToolResult, ToolError> {
   // An external CLI drives this agent: the CLI is both the agent name and the
   // driving tool, and `identity.tool` is what gates native-only affordances
   // (resume/rerun) off for this cohort.
@@ -278,7 +278,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext | ChildRuns> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return Effect.gen(function* () {

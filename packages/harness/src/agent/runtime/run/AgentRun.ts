@@ -215,7 +215,20 @@ export const agentRunLayer = (
       // tools stay out, and its turns get the model's whole output budget.
       const textOnly =
         script === null && !inherits && persona.tools.length === 0;
-      const parentOffered = ctx.toolPolicy.parentOffered;
+      const root = (session.runs.get(runId)?.parent ?? null) === null;
+      // A resumed run rebinds what its rows fold to (its model is its
+      // newest config's); a fresh run binds the launch model under today's
+      // default route.
+      const folded = yield* runHistory.load(runId);
+      // What a child persona is narrowed to: its parent's step while the
+      // parent is live, else (a child resumed on its own, whose parent's
+      // step is gone) what the child's own record last offered. A script
+      // run is not narrowed: it offers exactly what its launch named.
+      const parentOffered =
+        script !== null
+          ? undefined
+          : (ctx.toolPolicy.parentOffered ??
+            (root ? undefined : (folded?.offeredTools ?? undefined)));
       // A script run offers its script; an inheriting plugin agent what its
       // parent was offered, or at top level, beside the installed plugins'
       // tools, the file, shell and web tools; anyone else its persona's.
@@ -232,7 +245,6 @@ export const agentRunLayer = (
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const root = (session.runs.get(runId)?.parent ?? null) === null;
       const held = yield* session.tools
         .hold(declared, root)
         .pipe(Scope.provide(scope));
@@ -251,22 +263,18 @@ export const agentRunLayer = (
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run of any agent but
         // a plugin agent that names its tools, and a `self()` child, which
-        // runs as its caller; any other child gets what it declares. A child
-        // is narrowed to its parent's either way.
+        // runs as its caller; any other child gets what it declares, narrowed
+        // to its parent's.
         injectInstalled:
           script === null &&
           !textOnly &&
-          (parentOffered === undefined || config.asCaller === true) &&
+          (root || config.asCaller === true) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         parentOffered,
         held,
       };
-      // A resumed run rebinds what its rows fold to (its model is its
-      // newest config's); a fresh run binds the launch model under today's
-      // default route.
-      const folded = yield* runHistory.load(runId);
       // A fork binds as its source was bound at the cut (its seed's row).
       const seeded = ctx.entry.seed?.findLast(
         (row) => row.type === 'run.config',

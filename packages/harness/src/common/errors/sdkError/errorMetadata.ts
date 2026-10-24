@@ -1,7 +1,7 @@
 import { Predicate } from 'effect';
 import { ProviderErrorSchema, type ProviderError } from '@shared/schemas';
 
-import { causeChain } from '../errorPredicates';
+import { causeChain } from '@utils/errors/errorMessage';
 
 // `Symbol.for` keys, so every bundle that carries this module reads one mark.
 const PRESENTATION_CLAIMED = Symbol.for('texra.errorPresentationClaimed');
