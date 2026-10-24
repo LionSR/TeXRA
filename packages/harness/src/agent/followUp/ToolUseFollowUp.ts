@@ -26,6 +26,9 @@ import type { InboxItem } from './Inbox';
  * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, or a message that
  *   is not the user's own).
+ * - `one_shot`: the run's live loop ends after its current turn and reads
+ *   no message (headless, or an in-band child), or the run has no loop of
+ *   its own and its launch takes none (a background command).
  * - `blocked`: the run's agent, or its agent's plugin, is missing, off or
  *   not trusted here (`RunView.resumeBlocked` says which).
  */
@@ -36,6 +39,7 @@ export type FollowUpFailureReason =
   | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
+  | 'one_shot'
   | 'not_parent'
   | 'blocked';
 
@@ -76,6 +80,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another process. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  one_shot:
+    'This run ends after its current turn and reads no messages. Start a new agent task to continue.',
   not_parent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
@@ -257,11 +263,18 @@ export function startFollowUpWake(
 }
 
 /**
- * Queue a submission on the run, routed from the registry snapshot: a run no
- * generation holds continues only on the user's own message, if its rows
- * allow a resume. The send is durable before anything is acknowledged or
- * woken; when no reader here takes the row, this asks the inbox whether the
- * run owes a resume (`Inbox.wake`) and relays its answer.
+ * The one admission of a message to a run: every host and tool sends
+ * through here, and only here is a message refused. The send is durable
+ * before anything is acknowledged or woken; when no reader here takes the
+ * row, this asks the inbox whether the run owes a resume (`Inbox.wake`) and
+ * relays its answer.
+ *
+ * A generation live here decides for itself (`LiveRun.readsMessages`): a
+ * one-shot loop ends after its turn and reads none. With no generation here,
+ * the persisted facts decide, and only the user's own message continues a
+ * run that stopped with a checkpoint: a run's message or a notification
+ * never restarts work the user stopped. A state that cannot be read cannot
+ * be continued.
  */
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
@@ -269,15 +282,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const { session, hold, fromParent } = options;
-  const target = registryOf(session.runs).getToolUseFollowUpTarget(runId);
-  if (target.kind === 'no_session') {
-    yield* Effect.logWarning(
-      `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
-    ).pipe(withLogChannel(CHANNEL));
-    // No running loop here: the persisted facts decide. Only the user's own
-    // message continues a run that stopped with a checkpoint: a run's
-    // message or a notification never restarts work the user stopped. A
-    // state that cannot be read cannot be continued.
+  const live = session.runs.get(runId);
+  if (live?.live === true) {
+    if (!live.readsMessages) return { status: 'failed', reason: 'one_shot' };
+  } else {
     const rejection = yield* runRejection(runId, session).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
@@ -293,15 +301,13 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   }
   // A user's message to a run that is stopping continues it after the stop:
   // its row lands after the run's end, which the wake reads.
-  const live = session.runs.get(runId);
   if (item.from.kind === 'user' && live?.stopReason !== undefined)
     yield* live.drained;
   const sent = yield* session.followUps.send(runId, item, { hold, fromParent });
   // Another process holds the run, the sender is not its parent, its input
   // is closed (deleted, or torn down with nothing queued), or the session
   // is disposed.
-  if (sent.kind === 'refused')
-    return { status: 'failed', reason: sent.reason ?? 'not_resumable' };
+  if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
   if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
   const woken = yield* session.followUps.wake(runId);
   if (!woken) return { status: 'queued', wake: 'failed' };

@@ -34,11 +34,9 @@ import {
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   type RunId,
-  type RunPhase,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { RunHandle } from './RunHandle';
@@ -82,27 +80,7 @@ export interface ChildRunActivation {
   /** The run that launched this child; its edge is {@link RunRegistry.parentOf}. */
   readonly launchParent: RunId | null;
   readonly interrupt: () => void;
-  /**
-   * A native child (true) counts as its parent's active child until the last
-   * delivery landed, so a terminal parent's continuation stays recoverable
-   * ({@link RunRegistry.getToolUseFollowUpTarget} queues a follow-up into
-   * it). A process child (false) must not: its reservation would make a
-   * terminal parent look recoverable after it can no longer accept either
-   * user input or the child's result.
-   */
-  readonly retainsTerminalParent: boolean;
 }
-
-/** Where a follow-up for a run goes: its running loop, the run's retained
- *  queue (a WAITING or resuming cursor, or a parent whose children are still
- *  active), or nowhere in this process. */
-export type ToolUseFollowUpTarget =
-  | { readonly kind: 'active' }
-  | { readonly kind: 'queue' }
-  | {
-      readonly kind: 'no_session';
-      readonly runStatus: RunPhase | undefined;
-    };
 
 /**
  * What the session hands its runs. They read a run's phase from the
@@ -261,7 +239,21 @@ export class RunRegistry implements RunsShape {
     const [live, parent] = [this.isLive(runId), this.parentOf(runId)];
     const drained = this.awaitDrained(runId);
     const controls = handle?.controls;
-    return { runId, handle, controls, live, parent, stopReason, drained };
+    const readsMessages =
+      controls !== undefined
+        ? !controls.oneShot
+        : this.init.session().view.run(runId)?.followUpSupport !==
+          USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+    return {
+      runId,
+      handle,
+      controls,
+      live,
+      readsMessages,
+      parent,
+      stopReason,
+      drained,
+    };
   }
 
   /** Whether this process holds a live generation of the run: its fiber, a
@@ -320,34 +312,6 @@ export class RunRegistry implements RunsShape {
 
   hasActiveChildren = (parentRunId: RunId): boolean =>
     this.childRunIds(parentRunId).length > 0;
-
-  /** Decide how a tool-use follow-up is admitted, from one registry-owned
-   *  snapshot of run status, running loop, and child runs. */
-  getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
-    const run = this.init.session().view.run(runId);
-    const status: RunPhase | undefined =
-      run === undefined || run.status === 'ready' ? undefined : run.status;
-
-    if (status !== undefined && !isInFlightPhase(status)) {
-      // Only a native child's explicit delivery reservation can retain a
-      // terminal parent's continuation. A child-run handle is lifecycle
-      // ownership, not authority to revive a parent that already finished.
-      return this.activations(runId).some((a) => a.retainsTerminalParent)
-        ? { kind: 'queue' }
-        : { kind: 'no_session', runStatus: status };
-    }
-
-    if (this.entries.get(runId)?.handle?.controls) return { kind: 'active' };
-
-    if (
-      run?.substate === RUN_SUBSTATE.RESUMING ||
-      status === RUN_PHASE.WAITING ||
-      this.hasActiveChildren(runId)
-    ) {
-      return { kind: 'queue' };
-    }
-    return { kind: 'no_session', runStatus: status };
-  }
 
   // -------------------------------------------------------------- admission
 

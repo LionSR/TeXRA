@@ -570,7 +570,6 @@ describe('childRunLoop E2E fixtures', () => {
           ).reserveChildActivation({
             runId: 'da7a01' as RunId,
             launchParent: PARENT_RUN_ID,
-            retainsTerminalParent: true,
             interrupt: vi.fn(),
           });
           try {
@@ -818,11 +817,7 @@ describe('childRunLoop E2E fixtures', () => {
             expect(session.view.run(runId)?.status).toBe(RUN_PHASE.WAITING),
           ),
         );
-        expect(
-          registryOf(session.runs).getToolUseFollowUpTarget(runId),
-        ).toEqual({
-          kind: 'queue',
-        });
+        expect(session.runs.get(runId)?.live).toBe(true);
 
         yield* session.followUps.send(runId, {
           text: 'keep going',

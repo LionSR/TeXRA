@@ -46,6 +46,7 @@ const CHANNEL = 'Inbox';
 const LIFECYCLE = ['run.activate', 'followup.closed', 'run.removed'] as const;
 const LIFECYCLE_TYPES: ReadonlySet<string> = new Set(LIFECYCLE);
 const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...LIFECYCLE, 'run.end'] as const;
+const CLOSED = { kind: 'refused', reason: 'not_resumable' } as const;
 /** A run's input: what is queued, every follow-up id named, if closed, and
  *  the rows it was read from (`needsWake` reads them). */
 type InputRows = RunRows & {
@@ -91,9 +92,10 @@ export interface InboxItem {
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean }
-  | { readonly kind: 'refused'; readonly reason?: Refusal };
-/** Why a send wrote nothing beyond a closed input. */
-type Refusal = 'owned_elsewhere' | 'not_parent';
+  | { readonly kind: 'refused'; readonly reason: Refusal };
+/** Why a send wrote nothing: a closed input (or a disposed inbox), a run
+ *  another live process holds, or a sender that is not the parent. */
+type Refusal = 'not_resumable' | 'owned_elsewhere' | 'not_parent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
@@ -136,7 +138,7 @@ export class Inbox {
     item: InboxItem,
     options: SendOptions = {},
   ): Effect.Effect<Sent, Error> {
-    if (this.disposed) return Effect.succeed({ kind: 'refused' });
+    if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
       this.admit(runId, item, options, tx.append),
     );
@@ -317,10 +319,10 @@ export class Inbox {
         );
       });
     return Effect.gen({ self: this }, function* () {
-      if (closed(yield* this.read(runId))) return only({ kind: 'refused' });
+      if (closed(yield* this.read(runId))) return only(CLOSED);
       yield* this.port.log.hold(runId);
       const input = yield* this.read(runId);
-      if (closed(input)) return only({ kind: 'refused' });
+      if (closed(input)) return only(CLOSED);
       if (options.fromParent === true) {
         const edge = parentEdgeOf(yield* this.port.log.records(runId));
         if (edge?.id !== (item.from.kind === 'run' ? item.from.runId : null))

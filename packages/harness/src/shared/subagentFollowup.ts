@@ -224,14 +224,6 @@ export function scriptSummaryElement(summary: ScriptDeliverySummary): string {
   return `<script-summary>${escapeText(JSON.stringify(summary))}</script-summary>`;
 }
 
-/** The child run a progress envelope reports on, or undefined for any
- *  other text. */
-export function subagentProgressRunId(text: string): string | undefined {
-  return deliveryTagOf(text) === DELIVERY_TAG.subagentProgress
-    ? attr(text.trim(), 'id')
-    : undefined;
-}
-
 /** Format a typed progress update as XML for injection into orchestrator context. */
 export function formatSubagentProgress(
   runId: string,

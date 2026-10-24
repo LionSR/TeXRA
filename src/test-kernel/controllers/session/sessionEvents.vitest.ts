@@ -1271,7 +1271,6 @@ describe('Sessions owner', () => {
         releaseChild = registryOf(session.runs).reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           launchParent: null,
-          retainsTerminalParent: true,
           interrupt,
         });
 
@@ -1318,7 +1317,6 @@ describe('Sessions owner', () => {
         registryOf(session.runs).reserveChildActivation({
           runId: slow,
           launchParent: null,
-          retainsTerminalParent: false,
           interrupt: () => {},
         });
         const closing = yield* Effect.forkChild(

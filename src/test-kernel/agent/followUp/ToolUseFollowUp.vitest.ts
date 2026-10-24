@@ -10,7 +10,6 @@ import {
   startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionTransaction,
@@ -189,7 +188,18 @@ const taken = (input: RunInput) =>
 
 let recorded = recordedFollowUps();
 
-function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
+/**
+ * The run the admission meets: a generation `live` here (no resume is owed
+ * and nothing is read from disk), one `idle` with no generation here whose
+ * rows allow a resume, or one whose claim is `unreadable`.
+ */
+type RunState = 'live' | 'idle' | 'unreadable';
+
+function fakeSession(state: RunState): SessionHandle {
+  if (state === 'idle')
+    vi.spyOn(resumability, 'deriveResumability').mockReturnValue(
+      Effect.succeed({ kind: 'checkpoint' }),
+    );
   // The port's resume is the session's own wake, as the session layer wires it.
   recorded = recordedFollowUps({
     resume: (runId) => startFollowUpWake(runId, session),
@@ -211,9 +221,10 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   const session = {
     runs: {
       resume,
-      getToolUseFollowUpTarget: () => target,
       get: (runId: RunId) =>
-        live.has(runId) ? { runId, live: true } : undefined,
+        state === 'live' || live.has(runId)
+          ? { runId, live: true, readsMessages: true }
+          : undefined,
       // The session's fork: the attempt outlives the fiber that asked.
       fork: (program: Effect.Effect<unknown, unknown>) =>
         Effect.forkDetach(program, { startImmediately: true }),
@@ -222,9 +233,12 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     interactions: { emit: () => Effect.void },
     log: {
       records: () => Effect.succeed([]),
-      // No database behind this fixture: a claim read fails, a transient
+      // No database behind this fixture: an unreadable claim is a transient
       // refusal that says nothing about the run.
-      owner: () => Effect.fail(new Error('claim store unavailable')),
+      owner: () =>
+        state === 'unreadable'
+          ? Effect.fail(new Error('claim store unavailable'))
+          : Effect.succeed({ ownerId: null, liveness: null }),
     },
     followUps,
   } as unknown as SessionHandle;
@@ -249,7 +263,7 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('live');
         const input = yield* session.followUps.open(runId);
         const tryResumeRun = mockTryResume();
 
@@ -273,7 +287,7 @@ describe('submitFollowUp', () => {
   it.effect('reports input admitted by a running loop as sent', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'active' });
+      const session = fakeSession('live');
       const input = yield* session.followUps.open(runId);
       const tryResumeRun = mockTryResume();
 
@@ -293,7 +307,7 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'active' });
+        const session = fakeSession('live');
         const input = yield* session.followUps.open(runId);
 
         expect(
@@ -311,7 +325,7 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('live');
         const tryResumeRun = mockTryResume();
 
         expect(
@@ -328,7 +342,7 @@ describe('submitFollowUp', () => {
   it.effect('wakes a run once and orders concurrent submissions', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       const barrier = createDeferred<boolean>();
       const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
 
@@ -359,7 +373,7 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('idle');
         const resumed = createDeferred<boolean>();
         const started = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
@@ -387,7 +401,7 @@ describe('submitFollowUp', () => {
   it.effect('answers a faulted resume as a failed wake', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       expect(
         yield* submitFollowUp(runId, user('keep this input'), {
           session,
@@ -402,7 +416,7 @@ describe('submitFollowUp', () => {
   it.effect('wakes a run whose generation has ended', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       yield* Effect.scoped(session.followUps.open(runId));
       const tryResumeRun = mockTryResume();
 
@@ -416,36 +430,33 @@ describe('submitFollowUp', () => {
   );
 
   it.effect(
-    'admits a child delivery to the retained queue after the parent completes',
+    "refuses a run's message to a run with no generation here, resumable or not",
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
-        const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
+        const session = fakeSession('idle');
+        const tryResumeRun = mockTryResume();
 
         expect(
           yield* submitFollowUp(
             runId,
             {
-              text: 'retained child result',
+              text: 'late child result',
               from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             },
             { session },
-          ).pipe(withResumePort(mockTryResume())),
-        ).toEqual({ status: 'queued' });
+          ).pipe(withResumePort(tryResumeRun)),
+        ).toEqual({ status: 'failed', reason: 'not_resumable' });
 
-        expect(deriveSpy).not.toHaveBeenCalled();
-        expect(recorded.queued(runId)).toEqual(['retained child result']);
+        expect(tryResumeRun).not.toHaveBeenCalled();
+        expect(recorded.queued(runId)).toEqual([]);
       }),
   );
 
   it.effect('refuses child delivery to a parent with no session', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({
-        kind: 'no_session',
-        runStatus: 'completed',
-      });
+      const session = fakeSession('unreadable');
       const tryResumeRun = mockTryResume();
 
       expect(
@@ -457,39 +468,36 @@ describe('submitFollowUp', () => {
     }),
   );
 
-  it.effect(
-    'admits a replayed child delivery at most once and wakes at most once',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
-        const tryResumeRun = mockTryResume();
-        const delivery = childResult('exec-1:turn:1:delivery');
+  it.effect('admits a replayed child delivery at most once', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession('live');
+      const tryResumeRun = mockTryResume();
+      const delivery = childResult('exec-1:turn:1:delivery');
 
+      expect(
+        yield* submitFollowUp(runId, delivery, { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
+      ).toEqual({ status: 'queued' });
+
+      // A producer repeating the same logical result must not append
+      // another parent message; the live generation reads the one row.
+      for (let replay = 0; replay < 100; replay++) {
         expect(
           yield* submitFollowUp(runId, delivery, { session }).pipe(
             withResumePort(tryResumeRun),
           ),
-        ).toEqual({ status: 'queued' });
-        expect(tryResumeRun).toHaveBeenCalledTimes(1);
-
-        // A producer repeating the same logical result must not append
-        // another parent message nor trigger another parent wake.
-        for (let replay = 0; replay < 100; replay++) {
-          expect(
-            yield* submitFollowUp(runId, delivery, { session }).pipe(
-              withResumePort(tryResumeRun),
-            ),
-          ).toEqual({ status: 'sent' });
-        }
-        expect(tryResumeRun).toHaveBeenCalledTimes(1);
-        expect(recorded.queuedRows(runId)).toMatchObject([
-          {
-            followUpId: delivery.deliveryId,
-            content: { text: 'child result' },
-          },
-        ]);
-      }),
+        ).toEqual({ status: 'sent' });
+      }
+      expect(tryResumeRun).not.toHaveBeenCalled();
+      expect(recorded.queuedRows(runId)).toMatchObject([
+        {
+          followUpId: delivery.deliveryId,
+          content: { text: 'child result' },
+        },
+      ]);
+    }),
   );
 });
 
@@ -634,6 +642,7 @@ describe('Inbox readers', () => {
       expect(yield* input.next('idle')).toBeNull();
       expect(yield* followUps.send(id, user('late'))).toEqual({
         kind: 'refused',
+        reason: 'not_resumable',
       });
       const reopened = yield* followUps.open(generateRunId());
       expect(yield* reopened.next('idle')).toBeNull();
@@ -808,6 +817,7 @@ describe('Inbox closed input', () => {
 
         expect(yield* followUps.send(closed, user('still closed'))).toEqual({
           kind: 'refused',
+          reason: 'not_resumable',
         });
         expect(queued(closed)).toEqual([]);
         expect(yield* followUps.send(open, user('never closed'))).toMatchObject(

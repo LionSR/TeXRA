@@ -202,7 +202,10 @@ export const parentAdmission = (
             `Parent run ${to} is closed or cannot be read.`,
             { parentRunId: to, error },
           ),
-          { rows: [], sent: { kind: 'refused' } satisfies Sent },
+          {
+            rows: [],
+            sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
+          },
         ),
     ),
   );
@@ -256,7 +259,7 @@ export const deliverIn = (
       yield* warnOnCommit(
         session,
         trace,
-        `Turn result not delivered: parent run is unavailable (${sent.reason ?? 'not_resumable'}). The result remains in the run report.`,
+        `Turn result not delivered: parent run is unavailable (${sent.reason}). The result remains in the run report.`,
         { parentRunId: to, reason: sent.reason },
       );
     return { rows };

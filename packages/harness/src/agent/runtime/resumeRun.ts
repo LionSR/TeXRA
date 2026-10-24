@@ -55,11 +55,12 @@ export type ResumeRunResult =
        *  result; children have none. */
       readonly completion?: ResumeRunCompletion;
     }
-  /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
+  /** `read_failed`, `not_parent` and `one_shot` are a follow-up's alone: a
+   *  resume reads under its claim, and only a message meets a loop. */
   | {
       readonly failed: Exclude<
         FollowUpFailureReason,
-        'read_failed' | 'not_parent'
+        'read_failed' | 'not_parent' | 'one_shot'
       >;
     };
 

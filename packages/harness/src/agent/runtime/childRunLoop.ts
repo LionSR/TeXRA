@@ -415,11 +415,8 @@ const progressNotify =
   (update: SubagentProgressUpdate): void => {
     const { notify, session, runId, agentName } = loop.params;
     if (notify) return notify(update);
-    const target = loop.runs.parentOf(runId);
-    if (strategy.deliveryMode === 'persistOnly' || target === null) return;
-    // Nothing is queued when no session holds the run.
-    if (loop.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
-      return;
+    if (strategy.deliveryMode === 'persistOnly') return;
+    if (loop.runs.parentOf(runId) === null) return;
     session.followUps.sendNotice(parentEdgeIn(session, runId), {
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
@@ -926,12 +923,10 @@ const launchChildLoop = <TTurn, R extends AgentRunServices>(
       setup,
       Effect.sync(() => loop.releaseOwnership()),
     );
-    // Every child loop reserves its stop target for its whole life; only a
-    // native one retains a terminal parent's continuation.
+    // Every child loop reserves its stop target for its whole life.
     const releaseActivation = loop.runs.reserveChildActivation({
       runId,
       launchParent: params.parentRunId,
-      retainsTerminalParent: childRun === undefined,
       interrupt: () => loop.interrupt(),
     });
     yield* Scope.addFinalizer(setup, Effect.sync(releaseActivation));

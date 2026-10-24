@@ -192,18 +192,24 @@ export const consumedRow = (
 /**
  * Whether a run's pending input obliges a resume of it when no generation
  * holds it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.end`): a message readable at idle, from its user or a child of its,
- * while the run never ended or ended other than by a user's Stop; after a
- * Stop (its last `run.end` is cancelled), only the user's message committed
- * after that end. A row for a running generation only, another run's
- * message and a host notification wake nothing; a message a run never ended
- * for takes the next explicit Resume.
+ * `run.activate`, `run.end`): a message readable at idle, from its user or a
+ * child of its, while the run's current lifecycle never ended or ended other
+ * than by a user's Stop; after a Stop (that lifecycle's `run.end` is
+ * cancelled), only the user's message committed after that end. A row for a
+ * running generation only, another run's message and a host notification
+ * wake nothing; a message a run never ended for takes the next explicit
+ * Resume.
  */
 export function needsWake(
   rows: readonly SessionEvent[],
   run: RunLookup,
 ): boolean {
-  const end = rows.findLast((row) => row.type === 'run.end');
+  // The run's current lifecycle: a `run.activate` after the last `run.end`
+  // starts one (`runEndFromEvents`), so a resumed run that crashed carries
+  // no end, and no earlier Stop of it holds a message back.
+  const end = rows.findLast(
+    (row) => row.type === 'run.end' || row.type === 'run.activate',
+  );
   const stopped = end?.type === 'run.end' && end.outcome === 'cancelled';
   const committed = new Map(
     rows.flatMap((row) =>
@@ -216,7 +222,7 @@ export function needsWake(
       if (from.kind === 'user')
         return !stopped || (committed.get(followUpId) ?? 0) > end.commit;
       if (from.kind === 'run' && from.relation === 'child') return !stopped;
-      return end === undefined;
+      return end?.type !== 'run.end';
     },
   );
 }

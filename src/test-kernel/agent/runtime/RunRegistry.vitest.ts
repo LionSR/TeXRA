@@ -4,7 +4,7 @@ import { Deferred, Effect, Fiber, type Scope, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type {
@@ -22,7 +22,6 @@ import {
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   type RunId,
   type RunPhase,
   type RunSubstate,
@@ -248,17 +247,6 @@ function trackInterruptibleHandle(
   return handle;
 }
 
-/** The `RunControls` fixture shared by the tool-use-admission tests. */
-function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
-  return {
-    oneShot: false,
-    requestImmediateCompaction: vi.fn(() => Effect.void),
-    modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
-    switchModel: vi.fn(() => Effect.void),
-    ...overrides,
-  };
-}
-
 /** Run a stop's native settlement at the test boundary and report whether a
  * live target took it. */
 function killRegistry(
@@ -283,7 +271,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId,
           launchParent: parentRunId,
-          retainsTerminalParent: true,
           interrupt: vi.fn(),
         });
 
@@ -425,7 +412,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId: generateRunId(),
           launchParent: rootRunId,
-          retainsTerminalParent: true,
           interrupt: queuedChildInterrupt,
         });
         trackInterruptibleHandle(
@@ -546,7 +532,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId,
           launchParent: null,
-          retainsTerminalParent: false,
           interrupt: loopInterrupt,
         });
         trackInterruptibleHandle(registry, { runId }, fiberInterrupt);
@@ -783,7 +768,6 @@ describe('runRegistry', () => {
         ).toThrow(/while that run is stopping/);
         expect(() =>
           registry.reserveChildActivation({
-            retainsTerminalParent: true,
             runId: lateChildRunId,
             launchParent: rootRunId,
             interrupt: vi.fn(),
@@ -855,7 +839,6 @@ describe('runRegistry', () => {
           ).toThrow(/stop has already folded/);
           expect(() =>
             registry.reserveChildActivation({
-              retainsTerminalParent: true,
               runId: postFoldChildRunId,
               launchParent: rootRunId,
               interrupt: vi.fn(),
@@ -934,7 +917,6 @@ describe('runRegistry', () => {
         // A started run, so an end the stop wrote would show as its row.
         publishTestRunStart(testDefaultSession(), runId);
         registry.reserveChildActivation({
-          retainsTerminalParent: true,
           runId,
           launchParent: generateRunId(),
           interrupt,
@@ -1022,48 +1004,6 @@ describe('runRegistry', () => {
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('owns tool-use follow-up admission from status, context, and children', () => {
-    const { phases, registry } = createRegistry();
-    const activeRunId = generateRunId();
-    const resumingRunId = generateRunId();
-    const waitingRunId = generateRunId();
-    const stoppedRunId = generateRunId();
-    const controls = createRunControls();
-
-    try {
-      const activeHandle = createHandle(activeRunId, null, {
-        agentName: 'test-tool-use',
-      });
-      activeHandle.attachControls(controls);
-      registry.track(activeHandle);
-      phases.set(activeRunId, RUN_PHASE.RUNNING);
-
-      expect(registry.getToolUseFollowUpTarget(activeRunId)).toEqual({
-        kind: 'active',
-      });
-
-      phases.set(resumingRunId, RUN_PHASE.RUNNING, {
-        substate: RUN_SUBSTATE.RESUMING,
-      });
-      expect(registry.getToolUseFollowUpTarget(resumingRunId)).toEqual({
-        kind: 'queue',
-      });
-
-      phases.set(waitingRunId, RUN_PHASE.WAITING);
-      expect(registry.getToolUseFollowUpTarget(waitingRunId)).toEqual({
-        kind: 'queue',
-      });
-
-      phases.set(stoppedRunId, RUN_PHASE.CANCELLED);
-      expect(registry.getToolUseFollowUpTarget(stoppedRunId)).toEqual({
-        kind: 'no_session',
-        runStatus: RUN_PHASE.CANCELLED,
-      });
     } finally {
       registry.dispose();
     }
