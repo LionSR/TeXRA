@@ -377,9 +377,10 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   other (`--repeat 3`, same three journeys; rows in
   [`../../evidence/2026-10-24-codemode-script-only-round-2-idle/`](../../evidence/2026-10-24-codemode-script-only-round-2-idle/),
   summarized with round 1's `summarize.mjs`). The median wall time fell
-  4.3× (DeepSeek `direct`), 6.3× (DeepSeek `only`), 3.4× and 3.1×
-  (Gemini), so round 1's wall column measured the laptop's load, not the
-  arms. Ratios below are computed from the rows, not the rounded cells.
+  4.3× (DeepSeek `direct`), 6.3× (DeepSeek `only`), 3.4× (Gemini
+  `direct`) and 4.2× (Gemini `only`, clean runs of both rounds), so round
+  1's wall column measured the laptop's load, not the arms. Ratios below are
+  computed from the rows, not the rounded cells.
 
   Four Gemini `only` runs across the two rounds (round 1 latexdiff #1 and
   latexFixer #2, round 2 latexdiff #2 and #3) record zero `script` calls:
