@@ -358,9 +358,25 @@ if (!Number.isInteger(repeat) || repeat < 1) {
   process.exit(2);
 }
 const resultsFile = path.join(values.out, 'results.jsonl');
+// Attempts continue the numbering an earlier invocation left in this
+// directory, so a rerun appends new artifacts instead of overwriting them.
+const recorded = existsSync(resultsFile)
+  ? readFileSync(resultsFile, 'utf8')
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map((line) => JSON.parse(line))
+  : [];
+const lastAttempt = (model) =>
+  Math.max(
+    0,
+    ...recorded
+      .filter((row) => row.model === model && row.arm === arm)
+      .map((row) => row.attempt),
+  );
 let failed = false;
 for (const model of funded) {
-  for (let attempt = 1; attempt <= repeat; attempt += 1) {
+  const first = lastAttempt(model) + 1;
+  for (let attempt = first; attempt < first + repeat; attempt += 1) {
     const rows = names.map((name) => {
       const startedAt = Date.now();
       try {

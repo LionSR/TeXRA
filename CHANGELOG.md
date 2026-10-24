@@ -672,12 +672,10 @@ history`, a resume and a follow-up say it was "written by an earlier
 ### Features
 
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
-  default; CLI `/config`) sends chat agents the `script` tool and their
-  own tools alone, with every other tool called from inside a script; the
-  `tools.offered` row records which tools a step sent (version 3), so a
-  resumed run sends what it recorded. `validate-journeys.mjs` runs the
-  comparison against direct tool calls (`--script-only`, `--repeat`); the
-  first round and its data are in the codemode design doc.
+  default; CLI `/config`) gives chat agents the `script` tool and their own
+  tools alone, with every other tool called from inside a script. A run
+  keeps the tool set it started with when it resumes, even if the setting
+  changed in between.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt
