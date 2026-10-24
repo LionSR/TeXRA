@@ -11,7 +11,6 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { modelRefOf } from '@texra-ai/llm';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
@@ -107,13 +106,6 @@ export function formHost(
   };
 }
 
-/** The proposal's model as a model option names it: options carry a model
- *  without its effort or mode, which the proposal may (`ref@high`). */
-function proposedModel(model: string, host: HostSnapshot): string {
-  const ref = modelRefOf(model) ?? model;
-  return host.modelOptions.some((option) => option.value === ref) ? ref : model;
-}
-
 /** The launch form filled with what the proposal would launch. */
 export function proposalLaunchPatch(
   data: AgentProposalPermission,
@@ -131,7 +123,9 @@ export function proposalLaunchPatch(
   return {
     ...options,
     agent,
-    model: proposedModel(data.model, host),
+    // As proposed, effort and mode included: the model menu offers a
+    // model it does not list as itself.
+    model: data.model,
     instruction: data.instruction,
     inputFiles: [...data.inputFiles],
     contextFiles: [...data.contextFiles],
@@ -146,12 +140,10 @@ export function proposalApproval(
   data: AgentProposalPermission,
   launch: Launch,
 ): Extract<RequestDecision, { action: 'approve' }> {
-  const sameModel =
-    launch.model === data.model || launch.model === modelRefOf(data.model);
   return {
     action: 'approve',
     agent: isProposedAgent(launch.agent, data) ? null : launch.agent,
-    model: sameModel ? null : launch.model,
+    model: launch.model === data.model ? null : launch.model,
     instruction: launch.instruction,
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],

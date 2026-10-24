@@ -463,9 +463,14 @@ export class ProgressApp extends LitElement {
     const { launch } = surface;
     // Only a document task reads Input and Context, so only an agent with
     // one gets the file section; a chat attaches through the composer alone.
+    // Open on a proposal, the proposal says which it is: the form offers
+    // only agents of its kind, and a team's hidden member has no option.
+    const edited = editedProposal(surface, view);
     const documentPass =
-      launch.launchTarget === 'agent' &&
-      launchAgentOption(launch, host)?.rounds !== undefined;
+      edited !== null
+        ? edited.data.task
+        : launch.launchTarget === 'agent' &&
+          launchAgentOption(launch, host)?.rounds !== undefined;
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );

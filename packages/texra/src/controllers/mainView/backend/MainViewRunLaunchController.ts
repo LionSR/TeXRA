@@ -11,9 +11,9 @@ import {
 import {
   AGENT_SOURCE,
   agentKey,
+  agentName,
   type AgentConfig,
 } from '@texra-ai/harness/schemas';
-import { modelRefOf } from '@texra-ai/llm';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -217,10 +217,9 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
 
 /**
  * The launcher's selections that would launch `config` again, the reverse
- * of {@link buildLaunchRequest}: Run again… opens the form on them. The
- * model is named as its option names it (`ref`, without an effort the
- * picker cannot hold). An agent its caller defined (inline) is in no
- * catalog, so the form cannot hold it and Run again… refuses.
+ * of {@link buildLaunchRequest}: Run again… opens the form on them. An
+ * agent its caller defined (inline) is in no catalog, so the form cannot
+ * hold it and Run again… refuses.
  */
 export function launchFormOf(
   config: AgentConfig,
@@ -238,12 +237,14 @@ export function launchFormOf(
       ? { launchTarget: 'team' as const, selectedTeamId: teamId }
       : {
           launchTarget: 'agent' as const,
+          // A form launch already names its agent by key.
           agent:
             config.agentSource == null
               ? config.agent
-              : agentKey(config.agentSource, config.agent),
+              : agentKey(config.agentSource, agentName(config.agent)),
         }),
-    model: modelRefOf(config.model) ?? config.model,
+    // Effort and mode included: the model menu offers it as itself.
+    model: config.model,
     instruction: config.instruction,
     workingDirectory: config.workingDirectory ?? '',
     inputFiles: [...config.inputFiles],
