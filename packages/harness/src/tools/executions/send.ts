@@ -16,7 +16,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { senderOf } from '@agent/followUp/followUpSender';
+import { senderOf } from '@agent/followUp/followUpMessages';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolError, USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';

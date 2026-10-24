@@ -294,7 +294,7 @@ export function handOver(
               // other caller joined it; a joiner ends only its own wait.
               if (!Cause.hasInterrupts(exit.cause) || joined)
                 return Fiber.interruptAll(spawned);
-              if (session.followUps.joined(runId)) return Effect.void;
+              if (session.followUps.resumes.joined(runId)) return Effect.void;
               interruptLaunch();
               return Fiber.interruptAll(spawned);
             }),

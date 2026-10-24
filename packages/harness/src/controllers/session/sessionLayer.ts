@@ -232,7 +232,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         followUps: new Inbox({
           log: store.log,
           detach: store.detach,
-          parentOf: (runId) => view.run(runId)?.parentId,
+          run: view.run,
           live: (runId) => runs.get(runId)?.live === true,
         }),
         trace: store.trace,

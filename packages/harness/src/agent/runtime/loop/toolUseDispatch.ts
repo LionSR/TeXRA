@@ -67,6 +67,7 @@ import {
 import type { DraftBlob } from '@shared/session/historyTurns';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
+import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
@@ -667,11 +668,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       (state) => [
         ...cards(state),
         ...post,
-        ...answered.map((followUpId) => ({
-          type: 'followup.consumed' as const,
-          aggregateId,
-          followUpId,
-        })),
+        ...answered.map((followUpId) => consumedRow(runId, followUpId)),
         ...facts.run,
       ],
       facts.alongside,

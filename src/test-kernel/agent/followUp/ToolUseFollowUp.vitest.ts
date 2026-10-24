@@ -144,7 +144,7 @@ function recordedFollowUps(
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
-    parentOf: () => undefined,
+    run: () => undefined,
     live: (runId) => live.has(runId),
   });
   const queuedRows = (runId: RunId) =>
@@ -166,7 +166,9 @@ function recordedFollowUps(
 /** What `input` takes now without blocking (nothing is consumed). */
 const taken = (input: RunInput) =>
   Effect.gen(function* () {
-    const batch = (yield* input.hasQueued) ? yield* input.take : null;
+    const batch = (yield* input.hasPending('idle'))
+      ? yield* input.next('idle')
+      : null;
     return batch?.kind !== 'followUps'
       ? []
       : batch.followUps.map((followUp) => followUp.content.text);
@@ -180,8 +182,8 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   /** The session's resume, as `resumeRun` runs it: one in flight per run,
    *  and a run that took it is live here from then on. */
   const resume = (runId: RunId) =>
-    followUps
-      .resumeOnce(
+    followUps.resumes
+      .once(
         runId,
         Effect.map(tryResume(runId), (resumed) => {
           if (!resumed) return { failed: 'not_resumable' as const };
@@ -576,7 +578,7 @@ describe('Inbox readers', () => {
       const input = yield* followUps.open(id);
 
       followUps.forget(id);
-      expect(yield* input.take).toBeNull();
+      expect(yield* input.next('idle')).toBeNull();
       expect(closed).toEqual([{ kind: 'run', runId: id }]);
     }),
   );
@@ -608,12 +610,12 @@ describe('Inbox readers', () => {
 
       // Per-session observers (subscription pollers) let the session go.
       expect(closed).toEqual([{ kind: 'session' }]);
-      expect(yield* input.take).toBeNull();
+      expect(yield* input.next('idle')).toBeNull();
       expect(yield* followUps.send(id, user('late'), { wake: true })).toEqual({
         kind: 'refused',
       });
       const reopened = yield* followUps.open(generateRunId());
-      expect(yield* reopened.take).toBeNull();
+      expect(yield* reopened.next('idle')).toBeNull();
     }),
   );
 
@@ -626,22 +628,26 @@ describe('Inbox readers', () => {
       const pending: QueuedFollowUp[] = [
         { ...followUp('/compact'), control: { kind: 'compact' } },
       ];
-      const input = new RunInput(Effect.sync(() => pending));
+      const input = new RunInput(
+        Effect.sync(() => pending),
+        () => undefined,
+      );
 
-      expect(yield* input.take).toMatchObject({
+      expect(yield* input.next('idle')).toMatchObject({
         kind: 'synthetic',
         text: expect.stringContaining('immediate context compaction'),
       });
       pending.push(followUp('first'), followUp('second'));
       input.notify();
       // Messages first; the request stays queued for the boundary.
-      expect(yield* input.take).toEqual({
+      expect(yield* input.next('idle')).toEqual({
         kind: 'followUps',
         followUps: [followUp('first'), followUp('second')],
+        stale: [],
       });
       expect(yield* input.controls).toHaveLength(1);
       input.end();
-      expect(yield* input.take).toBeNull();
+      expect(yield* input.next('idle')).toBeNull();
     }),
   );
 });
@@ -762,7 +768,7 @@ describe('Inbox visibility held on the row', () => {
           }),
         ).toEqual({ kind: 'queued', read: false, wake: false });
         const input = yield* followUps.open(id);
-        expect(yield* input.hasQueued).toBe(false);
+        expect(yield* input.hasPending('idle')).toBe(false);
 
         yield* followUps.send(id, user('go on'));
         expect(yield* taken(input)).toEqual(['child paused', 'go on']);

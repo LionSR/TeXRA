@@ -279,7 +279,7 @@ const viaControls = (
   Effect.gen(function* () {
     const { runId } = req;
     const unavailable = (reason: string) => new Unavailable({ runId, reason });
-    yield* deps.session().followUps.resumeSettled(runId);
+    yield* deps.session().followUps.resumes.settled(runId);
     const controls = deps.session().runs.get(runId)?.controls;
     const noun = runNoun(deps.session(), runId);
     if (controls === undefined)

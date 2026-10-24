@@ -440,7 +440,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (state.handedDown !== null) return completeTurn(state);
           // A native child waits in this same run scope, just like its root:
           // its loop has already delivered the turn offered at the boundary.
-          const queued = yield* followUps.hasQueued;
+          const queued = yield* followUps.hasPending('idle');
           if (isChild() && afterError && !queued)
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step: restore an idle cursor's park.
@@ -462,7 +462,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             );
           }
           // The host port stays attached: `/model`, `/compact` land here.
-          const batch = yield* followUps.wait;
+          const batch = yield* followUps.next('idle');
           if (batch === null) {
             // The input ended under the waiting loop: a cancellation.
             return finish(
@@ -505,7 +505,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           positionRow(runId, state, 'waiting'),
           ...(childTurn?.rows ?? []),
         ];
-        const next = block ?? (goesOn ? yield* followUps.takeQueued : null);
+        const next = block ?? (goesOn ? yield* followUps.read('turn') : null);
         const pin =
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =

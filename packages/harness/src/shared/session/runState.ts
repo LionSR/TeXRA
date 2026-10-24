@@ -27,6 +27,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { phaseAfter, type RunLoopPhase } from '@shared/runs/runStatus';
 import { NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
@@ -34,8 +35,6 @@ import {
   freshRunPosition,
   type FOLLOW_UP_TYPES,
   ownCopy,
-  phaseAfter,
-  type RunLoopPhase,
   type RunPosition,
   type SharedRunRow,
 } from './runRows';

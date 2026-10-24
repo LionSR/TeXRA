@@ -3,7 +3,7 @@ import { Clock, Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
 /**
  * The one resume entry point. Every host continues a persisted run through
  * it, including implicit follow-up wakes, and a second resume of the same
- * run joins the one in flight (`Inbox.resumeOnce`). It launches on the run
+ * run joins the one in flight (`Resumes.once`). It launches on the run
  * lane; the launched run opens its own reader. Recovered children use the
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
@@ -127,7 +127,7 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
   if (cancelled()) return REFUSED;
   // The owner's resume is uninterruptible; a joiner is an observer whose
   // wait its own interruption ends, never the resume it joined.
-  const { result, joined } = yield* session.followUps.resumeOnce(
+  const { result, joined } = yield* session.followUps.resumes.once(
     runId,
     resumeHere(runId, options).pipe(
       Effect.provideService(Runs, session.runs),
