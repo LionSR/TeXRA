@@ -192,13 +192,14 @@ export const consumedRow = (
 /**
  * Whether a run's pending input obliges a resume of it when no generation
  * holds it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`): a message readable at idle, from its user or a
- * child of its, while the run's current lifecycle never ended or ended other
- * than by a user's Stop; after a Stop (that lifecycle's `run.end` is
- * cancelled), only the user's message committed after that end. A row for a
- * running generation only, another run's message and a host notification
- * wake nothing; a message a run never ended for takes the next explicit
- * Resume.
+ * `run.activate`, `run.end`), over the messages readable at idle. While the
+ * run's current lifecycle has not ended (it waits on a child, or its
+ * generation left without an end), any run's message wakes it, as the
+ * user's does. Once it ended, only the user's message or a child's delivery
+ * does, and after a user's Stop (that lifecycle's `run.end` is cancelled)
+ * only the user's message committed after that end: a run's message never
+ * revives a run that ended. A row for a running generation only (a progress
+ * notice, a host notification) wakes nothing.
  */
 export function needsWake(
   rows: readonly SessionEvent[],

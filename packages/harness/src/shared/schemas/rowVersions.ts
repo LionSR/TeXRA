@@ -32,9 +32,6 @@ interface RowKind {
 }
 
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
-/** The step for a version whose change only widened a field: the older row
- *  is already valid. */
-const unchanged = (data: RowData): RowData => data;
 
 /**
  * The row kinds this build deleted from `ROW_KINDS`. A store that holds one
@@ -94,10 +91,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.removed': V1,
   'run.description': V1,
   'plugin.fact': V1,
-  // v2: `holdUntil` gained `turn` and `generation`. A v1 row is a valid v2
-  // row (the enum only widened), so the step is the identity; the bump keeps
-  // an older build from reading a row it cannot.
-  'followup.queued': { version: 2, upcast: [unchanged] },
+  // v2: `holdUntil` gained `turn` and `generation`, and a child's progress
+  // notice is known by `holdUntil: 'generation'`, no longer by its text: a
+  // v1 notice would read as an ordinary message (no upcaster, as
+  // `run.config`).
+  'followup.queued': { version: 2, upcast: [] },
   'followup.consumed': V1,
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).

@@ -201,10 +201,13 @@ export function readableMessages(
 
 /** Whether pending input obliges a resume of a run no generation holds. */
 export function needsWake(input: InputRows): boolean;
-// over readableMessages(rows, 'idle'), excluding holdUntil 'generation':
-// - the run never ended, or ended other than by a user's Stop: a user's
-//   message or a child's delivery wakes it; another run's message or a
-//   host notification does not
+// over readableMessages(rows, 'idle'), excluding holdUntil 'generation'
+// (a progress notice, a host notification: never a wake):
+// - the run's current lifecycle has not ended (it waits on a child, or its
+//   generation left without an end): any run's message wakes it, as the
+//   user's does (today's rule for a message to a parked or waiting run)
+// - the run ended other than by a user's Stop: a user's message or a child's
+//   delivery wakes it; another run's message does not revive it
 // - the run ended by a user's Stop (its last run.end is cancelled): only a
 //   user's message committed after that run.end wakes it
 ```
