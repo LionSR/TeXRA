@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:535-548`).
+  `RunState` the loop continues from (`shared/session/runState.ts:534-547`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-371`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -374,7 +374,7 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:119-129`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:382-408`,
-  `:660-684`, `:1116-1121`).
+  `:660-684`, `:1112-1116`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:250`, `:279-281`, `:448`, `:502-513`;
@@ -428,7 +428,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:713-718`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1116-1121`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1112-1116`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:260-262`).
 
@@ -466,7 +466,7 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:535-548`). It MUST refuse a row whose commit is not
+(`shared/session/runState.ts:534-547`). It MUST refuse a row whose commit is not
 above the last folded one (`shared/session/runState.ts:491-495`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move

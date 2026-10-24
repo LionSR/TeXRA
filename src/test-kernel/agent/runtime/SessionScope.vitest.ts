@@ -107,7 +107,6 @@ describe('session-owned transcripts and follow-up queues', () => {
       expect(yield* b.followUps.send(runId, late)).toEqual({
         kind: 'queued',
         read: true,
-        wake: false,
       });
     }),
   );

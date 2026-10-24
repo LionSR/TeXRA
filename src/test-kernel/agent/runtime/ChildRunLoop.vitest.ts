@@ -539,6 +539,9 @@ describe('childRunLoop E2E fixtures', () => {
 
         try {
           yield* foldParentPhase(true);
+          // The fixture's parent has no run to resume: the wake a user's
+          // message owes it is refused.
+          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(false));
           expect(
             yield* submitFollowUp(
               PARENT_RUN_ID,
@@ -586,6 +589,8 @@ describe('childRunLoop E2E fixtures', () => {
           } finally {
             releaseNativeChild();
           }
+          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
+          mocks.startFollowUpWake.mockClear();
 
           const queuedBefore = yield* queuedTexts(PARENT_RUN_ID);
           yield* foldParentPhase(true);
@@ -601,8 +606,9 @@ describe('childRunLoop E2E fixtures', () => {
           yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
 
+          // The detached child's result is not queued for its former parent;
+          // the parent's own pending message still owes it a wake.
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(queuedBefore);
-          expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
         } finally {
           yield* session.followUps.closeInput(PARENT_RUN_ID);
           yield* registryOf(session.runs)['detachActiveChildren'](

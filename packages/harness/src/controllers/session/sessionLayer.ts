@@ -25,7 +25,7 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
-import { wakeAfterGeneration } from '@agent/followUp/ToolUseFollowUp';
+import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -203,7 +203,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           resumeTurn: resumeToolUseFromResumeData,
           resume: resumeRun,
         },
-        wake: (id, since) => void fork(wakeAfterGeneration(id, session, since)),
+        wake: (id) => void fork(session.followUps.wake(id)),
       });
       const session: SessionHandle = {
         roots: key.open.roots,
@@ -233,7 +233,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           log: store.log,
           detach: store.detach,
           run: view.run,
-          live: (runId) => runs.get(runId)?.live === true,
+          resume: (runId) => startFollowUpWake(runId, session),
         }),
         trace: store.trace,
         runHistory: makeRunHistory(store.log),
