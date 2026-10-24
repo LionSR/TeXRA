@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: TeXRA-aware code review. Use for /review, PR audits, or any code review of this repo. Catches platform-coupling, Zod v4, run-loop, factory, modern-TypeScript, and webview-render rules that generic passes miss.
+description: TeXRA-aware code review. Use for /review, PR audits, or any code review of this repo. Catches platform-coupling, Effect Schema, run-loop, factory, modern-TypeScript, and webview-render rules that generic passes miss.
 ---
 
 # TeXRA Code Review
@@ -18,7 +18,7 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 1. **Read [references/review-checklist.md](references/review-checklist.md).** Pick the categories that match the diff — don't grind through all of them.
 2. **Identify the change surface.** Run `git diff` (or `git diff main...HEAD`) and group changed files by zone: VS Code-free zones (`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`) vs. VS Code-allowed zones (`extension.ts`, `commands/`, `frontend/`, `common/webview/`, `auth/`, `platform/`).
 3. **Check the event-channel rule.** New run-scoped facts extend `AgentEvent` (trace); facts the session authors extend the `SessionEvent` schema (`packages/harness/src/shared/schemas/sessionEvent.ts`). Flag any new `bus.emit` from a VS Code-free zone and any new subscribe surface. The `packages/harness/src/tools` emit sites this rule once grandfathered have migrated to session-owned emission (the session log's `transact`, and `publish` for trace events: `SessionLog` in `packages/harness/src/agent/runtime/SessionHandle.ts`), so a new direct `bus.emit` is a violation, not a grandfathered pattern. This does not restrict `emitAppSignal(...)` on the separate `AppSignals` bus (`packages/harness/src/eventBus/AppSignals.ts`) within its documented scope. Background: `.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`.
-4. **Flag silent degradation.** A fallback that masks a failure is a defect unless it is loud (warn with the cause, and surface it). Grep the diff for `catch {`, `catch (_`, `.catch(() =>`, a Zod `.catch(` on persisted data, `??`/`||` over a failed read, and `default: return` in an event switch. Taxonomy and the accepted best-effort exceptions: checklist §15.
+4. **Flag silent degradation.** A fallback that masks a failure is a defect unless it is loud (warn with the cause, and surface it). Grep the diff for `catch {`, `catch (_`, `.catch(() =>`, a `catchDecoding` default on persisted data, `??`/`||` over a failed read, and `default: return` in an event switch. Taxonomy and the accepted best-effort exceptions: checklist §15.
 5. **Verify, don't speculate.** Open every file before flagging. If you can't verify, mark it as a question, not a finding.
 6. **Order by severity.** Correctness/security → platform-decoupling → API-contract → maintainability. Cite `path:line` for every finding.
 7. **Skip the noise.** Don't comment on whitespace, missing JSDoc on private helpers, or anything CLAUDE.md says not to comment on.

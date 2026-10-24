@@ -239,7 +239,7 @@ cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 
 ## 3. Row kinds
 
-The vocabulary is one Zod discriminated union, `SessionEventDraftSchema`, built
+The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:441-445`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts:343-472`,

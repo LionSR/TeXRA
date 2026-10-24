@@ -12,7 +12,7 @@ zones described in the review skill. For PRD or documentation-only diffs, review
 the document as the product: check claims against the current tree and avoid
 irrelevant TypeScript findings.
 
-Prioritize correctness, security, platform decoupling, type safety, Zod v4
+Prioritize correctness, security, platform decoupling, type safety, Effect Schema
 schema correctness, run-loop and event-channel invariants, webview lifecycle
 issues, configuration and storage correctness, and CI/toolchain hygiene. Do not run
 `npm test`, and do not ask the author to add speculative abstractions. Do not
