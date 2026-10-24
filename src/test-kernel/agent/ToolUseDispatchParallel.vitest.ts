@@ -58,7 +58,9 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
+  qualifyAggregateId,
   type RunId,
+  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import {
@@ -76,6 +78,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { blobAddress } from '@utils/core/idHash';
 
 import { recordSessionEvents } from './progressTestUtils';
@@ -350,10 +353,11 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   } satisfies DispatchKit;
 });
 
-/** Dispatch the pending response of an opened run. */
-const dispatch = (kit: DispatchKit) =>
+/** Dispatch the pending response of an opened run; `definitions` are the
+ *  tools a script run in it may call. */
+const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
   dispatchPendingResponse(kit.cell, {
-    definitions: [],
+    definitions,
     registry: kit.tools,
     offered: [],
     services: Context.empty() as PluginContext,
@@ -559,6 +563,71 @@ describe('tool-use dispatch', () => {
       expect(observedTrace).toBe(noopTrace);
       yield* closeSessionOf(kit.session);
     }),
+  );
+
+  // Failure mode: the guest ends (here it throws) while a call it issued is
+  // still running. The sandbox interrupts that call, and nothing wrote its
+  // result, so its intent and card stayed open forever and a resumed parent
+  // counted the child it had launched as still owned.
+  it.live(
+    'settles a call its script issued and never awaited, before the script result',
+    () =>
+      Effect.gen(function* () {
+        // `slow` never settles on its own; `fast` settles once `slow` has
+        // started, so the guest ends while `slow` has its rows and no result.
+        const never = yield* Deferred.make<void>();
+        const slowStarted = yield* Deferred.make<void>();
+        const probe = newProbe();
+        const kit = yield* openDispatch({
+          tools: {
+            // cast: the built-in's services are the dispatch's.
+            script: ScriptTool as unknown as ITool,
+            slow: probeTool(
+              probe,
+              'slow',
+              Deferred.succeed(slowStarted, undefined).pipe(
+                Effect.andThen(Deferred.await(never)),
+              ),
+              { lane: 'parallel' },
+            ),
+            fast: probeTool(probe, 'fast', Deferred.await(slowStarted), {
+              lane: 'parallel',
+            }),
+          },
+          calls: [
+            makeCall('c1', 'script', {
+              code: 'const pending = tools.slow({}); await tools.fast({}); throw new Error("the guest gave up");',
+            }),
+          ],
+        });
+
+        yield* dispatch(kit, [
+          { name: 'slow', description: 'slow', parameters: {} },
+          { name: 'fast', description: 'fast', parameters: {} },
+        ]);
+
+        // The results as the run history committed them, in commit order.
+        yield* kit.session.log.settled;
+        const results = (yield* kit.session.log.rows(
+          qualifyAggregateId('run', kit.runId),
+          ['tool.result'],
+        )).flatMap((row) => (row.type === 'tool.result' ? [row.payload] : []));
+        const nested = results.findIndex((r) => r.callId === 'c1/0');
+        const own = results.findIndex((r) => r.callId === 'c1');
+        expect(nested).toBeGreaterThanOrEqual(0);
+        expect(own).toBeGreaterThanOrEqual(0);
+        expect(results[nested]?.disposition).toBe('skipped');
+        const skipped = results[nested]?.result;
+        const reason = skipped?.status === 'error' ? skipped.error : '';
+        // It had started, so the reason carries the unknown-outcome warning.
+        expect(reason).toContain(
+          'The script ended while this call was running',
+        );
+        expect(reason).toContain('Its outcome is unknown');
+        // Committed before the script's own result.
+        expect(nested).toBeLessThan(own);
+        yield* closeSessionOf(kit.session);
+      }),
   );
 
   it.live('runs contiguous parallel-safe calls concurrently, in order', () =>

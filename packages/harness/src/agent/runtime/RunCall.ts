@@ -106,6 +106,13 @@ export interface ScriptDoor {
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;
+  /**
+   * Settles, as skipped, every call the script issued that has no result
+   * yet. Run once the guest has ended and no issued call runs any more, and
+   * before the script's own result commits, so no row of the script's stays
+   * open behind it: a resume then finds nothing to replay or re-adopt.
+   */
+  readonly settleAbandoned: Effect.Effect<void, InvokeError>;
 }
 
 /**

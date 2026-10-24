@@ -1155,6 +1155,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A call a script issued and never awaited to its end is settled.** When
+  a script ended while a call it had issued was still running (a rejected
+  `Promise.all`, a thrown error), the sandbox stopped the call but nothing
+  recorded its result: its card stayed open forever and, on a resume, the
+  parent counted a child it had launched as still owned. The script's door
+  now settles every such call as skipped, naming the reason, and withdraws
+  the approval it was waiting on, before the script's own result commits.
 - **A script's `document_task` calls each get their own child run.** Every
   `document_task` a script issued, in parallel or one after another, derived
   the same child run id, so only the first could start and the rest failed

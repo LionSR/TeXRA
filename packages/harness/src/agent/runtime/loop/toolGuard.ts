@@ -146,6 +146,7 @@ export const callRequests = (
   at: Parameters<typeof callRequestId>[0],
   raised: number,
   standing: AttemptRequests['own'],
+  retireCause: string,
 ): {
   readonly requests: CallRequests;
   readonly retireStanding: Effect.Effect<void>;
@@ -154,21 +155,20 @@ export const callRequests = (
   let reentering = standing;
   let opened = raised;
   // Through the decision authority's own check, so an answer a surface
-  // landed meanwhile stands and the retirement writes nothing.
+  // landed meanwhile stands and the retirement writes nothing. `retireCause`
+  // is why the call no longer asks: a resume that re-entered without it, or
+  // a script that ended before the call settled.
   const retireStanding = Effect.suspend(() => {
     const open = reentering?.request.decision === null ? reentering : null;
     reentering = null;
     if (open === null) return Effect.void;
     return session.requests
-      .decide(runId, open.requestId, {
-        action: 'cancel',
-        cause: 'The resumed call no longer asks it.',
-      })
+      .decide(runId, open.requestId, { action: 'cancel', cause: retireCause })
       .pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
             logger.warn(
-              `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
+              `Request ${open.requestId}, which its call no longer asks, stays open: its retirement failed.`,
               { data: error },
             ),
           ),

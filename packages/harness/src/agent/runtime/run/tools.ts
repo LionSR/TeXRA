@@ -104,6 +104,16 @@ export const SKIPPED_OUTCOME_UNKNOWN =
 /** What the model reads for a call of a recovered response that never ran. */
 export const SKIPPED_NOT_STARTED =
   'The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.';
+/** What the model reads for a call issued after a sibling ended the turn. */
+export const SKIPPED_AFTER_END_TURN =
+  'Tool call skipped: an earlier tool call ended the turn.';
+/** What the model reads for a call its script issued and never awaited to
+ *  its end: the script ended first. One that had started may have acted,
+ *  so it carries the unknown-outcome warning; one that had not never ran. */
+export const skippedByScriptEnd = (started: boolean): string =>
+  started
+    ? `The script ended while this call was running, so the call was stopped where it stood. ${SKIPPED_OUTCOME_UNKNOWN}`
+    : "The script ended before this call started, so it never ran. Call it again if the script's result does not cover it.";
 
 /**
  * Whether an unfinished call re-runs unasked: the replay word its response
