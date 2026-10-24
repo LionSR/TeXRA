@@ -148,8 +148,9 @@ primitives make that one mechanism instead of one per pluggable kind.
    activations are separate contracts.**
    - Each step pins a generation and records the difference from the previous
      step before its model request. Nothing changes mid-call.
-   - A child may only narrow what its parent's step offered, and records its own
-     offered set.
+   - A child resolves its own declared tools under the session's gates, not
+     its parent's step, and records its own offered set (ruled 2026-10-24,
+     [peer runs](./2026-10-24-peer-runs.md)).
    - A run can have several activations. The recorded facts belong to the
      durable run; the resources belong to the activation.
    - **Resume offers the recorded tools that are still available and still the

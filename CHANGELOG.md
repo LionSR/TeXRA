@@ -555,13 +555,13 @@ history`, a resume and a follow-up say it was "written by an earlier
   Code Output channel's own level filter, and the desktop log file, which
   keeps debug entries. The CLI gains a `--verbose` flag for additional debug
   diagnostics; `--quiet` suppresses diagnostics.
-- **A subagent can only narrow its parent's tools** — a delegated agent that
-  declares an MCP server its parent's run did not load is no longer launched
-  with that server's tools quietly missing: the delegation call fails with a
-  message naming the tools and the server, before the subagent starts.
-  Declare the server on the parent agent to hand it down. A subagent also
-  never gets a tool its parent was withheld because approval prompts were
-  unavailable or the host cannot run it.
+- **A subagent gets the tools it declares** — a delegated agent is offered
+  its own declared tools and MCP servers, whatever its parent was offered,
+  under the same switches, host and approval-prompt gates as any run; its
+  parent no longer bounds it. What it may do with them is still decided by
+  the approvals it inherits from the call that launched it. A plugin agent
+  that names no tools gets the standard file, shell and web tools and the
+  installed plugins' tools, as it does at top level.
 - **Switching off a tool plugin hides all of it** — a plugin listed in
   `texra.tools.disabled` (the Tools dashboard switch, `texra tools disable`)
   now withholds its bundled skills and bundled agents as well as its tools.
@@ -685,8 +685,8 @@ history`, a resume and a follow-up say it was "written by an earlier
 - **A script can define an agent on the spot.** An `agent()` call with a
   `persona` (`{ prompt, tools }`) runs an agent the call defines, named by
   its `agentName`, instead of one from the catalog, for that call alone.
-  It gets only the tools its caller has, and the approval card shows its
-  prompt and the tools it asks for. `agent()` and `self()` results also
+  It gets the tools it asks for, and the approval card shows its prompt
+  and those tools. `agent()` and `self()` results also
   carry `spent`: what the calling run has spent in all so far, beside the
   child's own `cost`.
 - **GPT-6.1 Sol on a ChatGPT subscription gets its 500K-token window.**
@@ -1177,13 +1177,12 @@ show` print the same notice, and the new `texra agents customize`,
   recipe's tools (`document_context`, `document_extract`, …) were silently
   withheld because the launching conversation had not been offered them, and
   the recipe failed on its first line with "not a function". A script run now
-  offers exactly the tools its launch names; a child persona is still
-  narrowed to its parent's, and any declared tool that narrowing (or a host
-  gate) withholds is reported in the run's log instead of vanishing.
-- **A child conversation resumed after a restart keeps its tool limits.** It
+  offers exactly the tools its launch names, and any declared tool a host
+  gate withholds is reported in the run's log instead of vanishing.
+- **A child conversation resumed after a restart keeps its tools.** It
   used to be treated as a top-level run once its parent's step was gone,
   gaining every installed plugin's tools from its second step on; it now
-  narrows to what its own record last offered.
+  resolves the tools it declares, as it did when it launched.
 - **Error messages keep their cause.** A message that wrapped another error
   (a child run's failure, a tool's refusal, a launch that could not be
   persisted) showed only the outer sentence; the cause chain, and the

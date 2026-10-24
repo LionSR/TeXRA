@@ -334,7 +334,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           runId,
           parentRunId,
           agentName: resume.agentConfig.agent,
-          budgeted: true,
           strategy:
             script?.kind === 'background'
               ? createScriptRunStrategy({ ...native, title: script.title })

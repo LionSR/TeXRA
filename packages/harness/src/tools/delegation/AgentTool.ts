@@ -23,7 +23,6 @@ import { z } from 'zod';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
-import { offeredBy } from '@agent/runtime/loop/step';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -530,13 +529,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     delegationAgentScope: run.delegationAgentScope,
     ...taskConfig,
   };
-  const parentOffered = yield* offeredBy(run);
-
   if (!awaited) {
     const runId = agentChildRunId(call);
     const receipt = yield* launchDetachedSubagent(call, configPayload, {
       runId,
-      parentOffered,
       grants,
       approvalMeta: decided.approvalMeta,
     });
@@ -552,7 +548,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         runId: agentChildRunId(call),
         parentRunId,
         configPayload,
-        parentOffered,
         parentCard: call.logId,
         parentCallId: call.callId,
         grants,

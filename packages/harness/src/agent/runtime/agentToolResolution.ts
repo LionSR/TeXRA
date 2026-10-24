@@ -18,30 +18,24 @@
  *   2. The injected tools not already declared, under the same gates: the
  *      plugins' (`injectedWhen`), and every tool of an installed plugin (its
  *      MCP servers'), which the plugin's enablement offers every top-level
- *      tool-use run but a plugin agent that names its tools.
- *   3. A delegated child persona keeps only the tools its parent's step
- *      offered, with the same identity: it can only narrow its parent, so a
- *      tool its parent was withheld (a switch, a gate, a host) never reaches
- *      it. Code mode is the exception (the built-in `codemode` plugin's
- *      tools): the script tool reaches only the run's other tools and its
- *      own agent, so a child declaring it gets it, and the script-only
- *      functions (`self()`) come with it. A field another plugin's tool
- *      may set (`describe`, `withScript`), or an app plugin that takes the
- *      `codemode` id, earns no exemption. A script run (a background
- *      script, a task's recipe) is not a persona: it offers exactly the
- *      tools its launch named, so `AgentRun` passes it no parent.
- *   4. The run's own tools (caller-supplied, and the structured-output
+ *      tool-use run but a plugin agent that names its tools. The built-in
+ *      code mode plugin's script-only functions (`self()`) come with its
+ *      script tool.
+ *   3. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
  *      the offered tools only, so dispatch cannot run a tool the model was
  *      not offered.
  *
+ * A child run resolves like any other: its launcher's tools do not bound it.
+ * What it may do with them is the approval policy's, which reads the launch
+ * edge (`resolveBypass`).
+ *
  * A switched-off plugin is withheld silently: the user chose it. Every other
  * withholding of a declared tool (a missing dependency, a host the tool does
- * not run on, a capability the host lacks, a parent that was not offered it)
- * is returned as a warning, which the step reports when the offered set
- * changes, not on every step; an injected tool the run never named goes
- * quietly.
+ * not run on, a capability the host lacks) is returned as a warning, which
+ * the step reports when the offered set changes, not on every step; an
+ * injected tool the run never named goes quietly.
  */
 
 import { Context, Effect, SubscriptionRef } from 'effect';
@@ -51,12 +45,7 @@ import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
-import {
-  sameIdentity,
-  type OfferedTool,
-  type Persona,
-  type ToolDefinition,
-} from '@shared/schemas';
+import type { OfferedTool, Persona, ToolDefinition } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import {
   toolDigests,
@@ -91,7 +80,7 @@ export interface StepToolInputs {
   readonly hostCapabilities: ReadonlySet<string>;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
-  /** Tools only this run holds, laid over the resolved list (step 4). */
+  /** Tools only this run holds, laid over the resolved list (step 3). */
   readonly runTools: readonly ITool[];
   /** Whether the plugins' injected tools join (step 2). */
   readonly injectTools: boolean;
@@ -103,8 +92,6 @@ export interface StepToolInputs {
   /** The run's workspace root: the tool-availability probes answer per
    *  workspace. */
   readonly workspaceRoot: string | undefined;
-  /** What the parent's step offered, when this is a delegated child. */
-  readonly parentOffered?: readonly OfferedTool[];
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
 }
@@ -114,35 +101,6 @@ export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
   (Array.isArray(tools) ? tools : []).map((toolConfig) =>
     typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
   );
-
-/**
- * Why a delegated child cannot launch under its parent's offered tools, or
- * `undefined` when it can. A child can only narrow its parent: a built-in
- * tool its parent was not offered is withheld from the child as it is for
- * any run; but a child naming an MCP server none of whose tools its parent
- * was offered asks for more than its parent was given, and is refused
- * before it starts.
- */
-export function childToolRefusal(
-  parentOffered: readonly OfferedTool[],
-  tools: Persona['tools'],
-  agentName?: string,
-): string | undefined {
-  const servers = new Set(
-    parentOffered.flatMap(({ name }) => mcpServerOfToolName(name) ?? []),
-  );
-  const outside = declaredToolNames(tools).flatMap((tool) => {
-    const server = mcpServerOfToolName(tool);
-    if (server === undefined) return [];
-    return servers.has(server) ? [] : [{ tool, server }];
-  });
-  if (outside.length === 0) return undefined;
-  const named = [...new Set(outside.map(({ server }) => `"${server}"`))];
-  return [
-    `Subagent${agentName ? ` '${agentName}'` : ''} was not launched: it declares ${outside.map(({ tool }) => tool).join(', ')}, from MCP server${named.length > 1 ? 's' : ''} ${named.join(', ')}, which this run's tools do not include.`,
-    "A subagent can only narrow its parent's tools: declare the plugin on the parent agent, or delegate to an agent that does not need it.",
-  ].join(' ');
-}
 
 /** Resolve the tools one step offers from the catalog entries it pinned. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
@@ -166,10 +124,6 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   if (input.injectInstalled)
     for (const [name, entry] of catalog)
       if (isInstalledPluginId(entry.plugin)) injected.push(name);
-  if (input.parentOffered) {
-    const refusal = childToolRefusal(input.parentOffered, input.tools);
-    if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
-  }
   // A plugin whose dependency the workspace's last probe found missing is
   // off. Before any probe has answered for the workspace, nothing is
   // withheld on its account.
@@ -186,7 +140,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
   // The built-in code mode plugin's tools (`builtinPlugins.ts`): an app
-  // plugin that takes the id gets no exemption.
+  // plugin that takes the id is not code mode.
   const codeMode = (name: string) => {
     const entry = enabled.get(name);
     return entry?.plugin === 'codemode' && builtinTools.has(entry.tool);
@@ -195,21 +149,6 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     codeMode(name) && enabled.get(name)?.tool.describe !== undefined;
   const scriptOnly = (name: string) =>
     codeMode(name) && enabled.get(name)?.tool.scriptGlobal?.withScript === true;
-  // A child keeps only what its parent's step offered, as the same tool.
-  const parent = input.parentOffered
-    ? new Map(input.parentOffered.map((tool) => [tool.name, tool]))
-    : undefined;
-  const narrowed = (name: string): boolean => {
-    if (!parent) return true;
-    const offered = parent.get(name);
-    const entry = enabled.get(name);
-    if (isScript(name) || scriptOnly(name)) return true;
-    return (
-      offered !== undefined &&
-      entry !== undefined &&
-      sameIdentity(offered, { name, ...entry })
-    );
-  };
 
   const withheldForApproval: string[] = [];
   // A declared tool a gate withholds says so; an injected one goes quietly,
@@ -298,14 +237,6 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const resolvedNames = new Set<string>();
   const offer = (name: string, source: 'declared' | 'injected'): void => {
     if (resolvedNames.has(name)) return;
-    if (!narrowed(name)) {
-      withheld(
-        name,
-        source,
-        "this run's parent was not offered it, and a child only narrows its parent.",
-      );
-      return;
-    }
     // A missing dependency says so where the run declared the tool, before
     // any other gate, so an approval-gated tool's reason is not lost to the
     // approval notice.

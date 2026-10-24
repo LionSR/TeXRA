@@ -59,7 +59,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   const runId = agentChildRunId(call);
   const workingDirectory =
     call.env.workingDirectory ?? run.config.workingDirectory;
-  const parentOffered = yield* offeredBy(run);
+  const offered = yield* offeredBy(run);
   // The parent's agent, model and tools, opened on the call rather than on
   // a prompt: it reads no input files and renders no instruction.
   const definition = yield* prepareAgentDefinition({
@@ -82,7 +82,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         title,
         // The tools its parent's step offered it, less the parent's own
         // terminal tool and the script tool its run adds itself.
-        tools: parentOffered.flatMap(({ name, plugin }) =>
+        tools: offered.flatMap(({ name, plugin }) =>
           plugin === 'run' || name === 'script' ? [] : [name],
         ),
         ...(input.timeoutMs !== undefined && { timeoutMs: input.timeoutMs }),
@@ -99,7 +99,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         runId,
         parentRunId,
         agentName: title,
-        budgeted: true,
         buildLaunch: () =>
           restore(Clock.currentTimeMillis).pipe(
             Effect.map((startedAt) =>
@@ -120,7 +119,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
                 session,
                 startedAt,
                 ...(workingDirectory != null && { workingDirectory }),
-                parentOffered,
                 title,
               }),
             ),

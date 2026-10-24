@@ -255,7 +255,8 @@ const startLoop = (
     return started.fiber;
   });
 
-/** Start a native child's loop: no port, its launch its whole run. */
+/** Start a native child's loop: no port, its launch its whole run. Unless
+ *  `budgeted`, it is awaited, which takes no budget slot. */
 const startNativeLoop = (
   runId: RunId,
   strategy: NativeChildStrategy<FakeTurn>,
@@ -266,7 +267,7 @@ const startNativeLoop = (
     runId,
     parentRunId: PARENT_RUN_ID,
     agentName: 'fake',
-    budgeted,
+    ...(!budgeted && { awaited: true as const }),
     strategy,
   }).pipe(
     Effect.map((started) => started.fiber),

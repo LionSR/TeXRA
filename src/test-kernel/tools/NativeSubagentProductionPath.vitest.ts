@@ -57,7 +57,6 @@ import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
-import { offeredBy } from '@agent/runtime/loop/step';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -221,6 +220,8 @@ function scriptedResult(
 interface ObservedRequest {
   readonly model: string;
   readonly messages: readonly Message[];
+  /** The tool names the request offered. */
+  readonly tools: readonly string[];
 }
 
 /** The text one canonical message carries, whatever role wrote it. */
@@ -265,7 +266,11 @@ function scriptedBoundModel(
         config.ref === PARENT_MODEL &&
         text.includes('<subagent-progress') &&
         !text.includes('<subagent-result');
-      observed.push({ model: config.ref, messages: request.messages });
+      observed.push({
+        model: config.ref,
+        messages: request.messages,
+        tools: (request.tools ?? []).map(({ name }) => name),
+      });
       return Effect.succeed(preparedTurn(origin, request));
     },
     streamTurn: () =>
@@ -328,8 +333,14 @@ async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
   await Promise.all([
-    ...[PARENT_AGENT, CHILD_AGENT].map((name) =>
-      writeFile(path.join(agentsDir, `${name}.yaml`), agentYaml(name)),
+    writeFile(
+      path.join(agentsDir, `${PARENT_AGENT}.yaml`),
+      agentYaml(PARENT_AGENT),
+    ),
+    // The child declares a tool its parent never names.
+    writeFile(
+      path.join(agentsDir, `${CHILD_AGENT}.yaml`),
+      agentYaml(CHILD_AGENT, ['grep']),
     ),
     writeFile(
       path.join(agentsDir, `${WORKFLOW_CHILD_AGENT}.yaml`),
@@ -349,11 +360,12 @@ async function integrationPlatform(): Promise<FakeHost> {
   };
 }
 
-function agentYaml(name: string): string {
+function agentYaml(name: string, tools: readonly string[] = []): string {
   return [
     `name: ${name}`,
     `description: Integration fixture ${name}.`,
     `prompt: You are ${name}.`,
+    ...(tools.length > 0 ? [`tools: [${tools.join(', ')}]`] : []),
     '',
   ].join('\n');
 }
@@ -447,18 +459,14 @@ function waitForClaimRelease(runId: RunId): Promise<void> {
 }
 
 /** Launch one detached child of the parent run the way the `agent` tool
- *  does for a direct call: a fresh child id, the parent step's offered
- *  tools as the child's ceiling, and inherited approvals. */
+ *  does for a direct call: a fresh child id and inherited approvals. */
 const launchChild = (
   parent: RunToolCall,
   payload: Parameters<typeof launchDetachedSubagent>[1],
 ) =>
-  Effect.gen(function* () {
-    return yield* launchDetachedSubagent(parent, payload, {
-      runId: generateRunId(),
-      parentOffered: yield* offeredBy(parent.run),
-      grants: NO_APPROVAL_GRANTS,
-    });
+  launchDetachedSubagent(parent, payload, {
+    runId: generateRunId(),
+    grants: NO_APPROVAL_GRANTS,
   });
 
 /**
@@ -680,6 +688,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        // A child is offered what it declares, though its parent's step
+        // offered nothing: a launcher's tools do not bound its child.
+        expect(
+          observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
+        ).toContain('grep');
         const firstHandle = session.runs.get(runId)?.handle;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
