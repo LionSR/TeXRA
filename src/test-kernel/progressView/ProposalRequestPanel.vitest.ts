@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
-import type { RequestPanels } from '@progressView/frontend/components/RequestPanels';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 import {
@@ -103,99 +102,46 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         exceptRequestId: 'proposal-1',
       },
     };
-    // Approve-all carries the (unselected) overrides beside the bypass; the
-    // one-off `y` is the plain approve arm.
-    const approveAll = {
-      kind: 'request.decide',
-      runId: 'run-a',
-      requestId: 'proposal-1',
-      decision: { action: 'approve', model: null, agent: null },
-    };
+    // Approve-all is the bypass and then the plain approve arm `y` sends.
     const approve = {
       kind: 'request.decide',
       runId: 'run-a',
       requestId: 'proposal-1',
       decision: { action: 'approve' },
     };
-    expect(actions).toEqual([
-      superYolo,
-      approveAll,
-      superYolo,
-      approveAll,
-      approve,
-    ]);
+    expect(actions).toEqual([superYolo, approve, superYolo, approve, approve]);
   });
 
-  it('attaches selected overrides only to approval decisions', async () => {
+  it('opens the launch form on the proposal for Edit and its e key', async () => {
     const element = await mountComponent<ProposalRequestPanel>(
       'proposal-request-panel',
-      {
-        permission: createPermission(),
-        host: HOST,
-      },
+      { permission: createPermission(), host: HOST },
+    );
+    const opened: unknown[] = [];
+    element.addEventListener('surface-action', (event) =>
+      opened.push((event as CustomEvent).detail),
     );
     const actions = recordPermissionActions(element);
-    const modelSelect = element.shadowRoot?.querySelector(
-      '.proposal-model-dropdown',
-    ) as HTMLElement & { value?: string };
-    const agentSelect = element.shadowRoot?.querySelector(
-      '.proposal-agent-dropdown',
-    ) as HTMLElement & { value?: string };
-    // A task offers only the agents that run one.
-    expect(
-      [...agentSelect.querySelectorAll('wa-option')].map((o) =>
-        o.getAttribute('value'),
-      ),
-    ).toEqual(['writer', 'reviewer']);
 
-    modelSelect.value = 'opus';
-    modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    agentSelect.value = 'reviewer';
-    agentSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    element.shadowRoot
+      ?.querySelector<HTMLElement>('#proposal-edit-button')
+      ?.click();
+    expect(element.handleKeyboardShortcut('e')).toBe(true);
 
-    expect(element.handleKeyboardShortcut('y')).toBe(true);
-    expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(element.handleKeyboardShortcut('s')).toBe(true);
-    expect(element.handleKeyboardShortcut('n')).toBe(true);
-
-    const decisionOf = (request: (typeof actions)[number]) =>
-      'decision' in request ? request.decision : request.kind;
-    expect(actions.map(decisionOf)).toEqual([
-      { action: 'approve', model: 'opus', agent: 'reviewer' },
-      'policy.set',
-      { action: 'approve', model: 'opus', agent: 'reviewer' },
-      { action: 'setup' },
-      { action: 'reject' },
-    ]);
-  });
-
-  it('leaves a picker its typeahead keys instead of firing card shortcuts', async () => {
-    await import('@progressView/frontend/components/RequestPanels');
-    // The fixture loads Lit, so after the test DOM is up.
-    const { makeRunView } = await import('../cli/fixtures/sessionViewFixture');
-    const panels = await mountComponent<RequestPanels>('request-panels', {
-      permissions: [createPermission()],
-      run: makeRunView({ id: 'run-a' as RunId, approval: 'own' }),
-      host: HOST,
-    });
-    const card = panels.shadowRoot!.querySelector('proposal-request-panel')!;
-    await card.updateComplete;
-    const actions = recordPermissionActions(card);
-    const key = (target: Element) =>
-      target.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'y',
-          bubbles: true,
-          composed: true,
-        }),
-      );
-
-    key(card.shadowRoot!.querySelector('.proposal-agent-dropdown')!);
+    const edit = {
+      kind: 'editProposal',
+      proposal: { runId: 'run-a', requestId: 'proposal-1' },
+      patch: expect.objectContaining({
+        agent: 'writer',
+        model: 'sonnet',
+        instruction: 'Revise the introduction.',
+        inputFiles: ['/workspace/paper.tex'],
+        reflect: false,
+      }),
+    };
+    expect(opened).toEqual([edit, edit]);
+    // Edit decides nothing: the form's Send approves.
     expect(actions).toEqual([]);
-    key(card);
-    expect(actions).toEqual([
-      expect.objectContaining({ decision: { action: 'approve' } }),
-    ]);
   });
 
   it('opens the file on Enter and Space, not on other keys', async () => {

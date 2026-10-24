@@ -9,6 +9,12 @@ import {
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
 import {
+  AGENT_SOURCE,
+  agentKey,
+  type AgentConfig,
+} from '@texra-ai/harness/schemas';
+import { modelRefOf } from '@texra-ai/llm';
+import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
@@ -23,8 +29,13 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
+import {
+  DocumentTaskOptionsSchema,
+  documentTaskOptions,
+} from '@texra/shared/plugins/documents';
+import type { LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
+import type { z } from 'zod';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -203,3 +214,40 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     return preparation.request;
   },
 );
+
+/**
+ * The launcher's selections that would launch `config` again, the reverse
+ * of {@link buildLaunchRequest}: Run again… opens the form on them. The
+ * model is named as its option names it (`ref`, without an effort the
+ * picker cannot hold). An agent its caller defined (inline) is in no
+ * catalog, so the form cannot hold it and Run again… refuses.
+ */
+export function launchFormOf(
+  config: AgentConfig,
+): Effect.Effect<z.infer<typeof LaunchPatchSchema>, Rejected> {
+  if (config.agentSource === AGENT_SOURCE.INLINE)
+    return Effect.fail(
+      new Rejected({
+        reason: `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`,
+      }),
+    );
+  const teamId = config.cli?.teamId;
+  return Effect.succeed({
+    ...documentTaskOptions(config),
+    ...(teamId
+      ? { launchTarget: 'team' as const, selectedTeamId: teamId }
+      : {
+          launchTarget: 'agent' as const,
+          agent:
+            config.agentSource == null
+              ? config.agent
+              : agentKey(config.agentSource, config.agent),
+        }),
+    model: modelRefOf(config.model) ?? config.model,
+    instruction: config.instruction,
+    workingDirectory: config.workingDirectory ?? '',
+    inputFiles: [...config.inputFiles],
+    contextFiles: [...config.contextFiles],
+    mediaFiles: [...config.mediaFiles],
+  });
+}

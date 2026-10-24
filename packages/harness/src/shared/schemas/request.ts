@@ -15,24 +15,29 @@
  */
 import { z } from 'zod';
 
+import { JsonValueSchema } from './jsonValue';
 import { UserQuestionAnswersSchema } from './prompts';
 
 export const RequestDecisionSchema = z.discriminatedUnion('action', [
-  /** A plain approval. A proposal's approve may rebind its model or agent;
-   *  a tool edit's approve carries the proposed file as the user left it in
-   *  the host's diff view. */
+  /** A plain approval. A proposal's approve may carry what the person
+   *  changed in the launch form (its agent, model, instruction, files and
+   *  plugin options); a tool edit's approve carries the proposed file as the
+   *  user left it in the host's diff view. */
   z.object({
     action: z.literal('approve'),
     model: z.string().nullish(),
     agent: z.string().nullish(),
+    instruction: z.string().nullish(),
+    inputFiles: z.array(z.string()).nullish(),
+    contextFiles: z.array(z.string()).nullish(),
+    mediaFiles: z.array(z.string()).nullish(),
+    options: z.record(z.string(), JsonValueSchema).nullish(),
     content: z.string().nullish(),
   }),
   z.object({
     action: z.literal('approve_and_goal'),
     autoApproveAll: z.literal(true).nullish(),
   }),
-  /** A proposal opened for editing instead of run. */
-  z.object({ action: z.literal('setup') }),
   /** A user question's answers, keyed by question text. */
   z.object({ action: z.literal('submit'), answers: UserQuestionAnswersSchema }),
   /** An inquiry's answer, pasted back from the external model. */

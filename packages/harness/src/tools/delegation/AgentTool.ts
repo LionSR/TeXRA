@@ -499,15 +499,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       ? undefined
       : script.shared('agent:request', scriptRequest(call, script, proposal)),
   );
-  if ('status' in decided) {
-    // An approval opened for editing stops the script's calls: the script
-    // cannot continue on a task the user took over.
-    if (script !== undefined && decided.status === 'executed')
-      return errorResult(
-        `The user opened this script's agent work for editing as a new task; '${agent.name}' did not run.`,
-      );
-    return decided;
-  }
+  if ('status' in decided) return decided;
   if (script !== undefined) {
     const limited = yield* countLaunch(script, agent.name);
     if (limited !== null) return limited;

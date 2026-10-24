@@ -198,12 +198,10 @@ export interface HostRunActions {
   resume(
     runId: RunId,
   ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
-  runNew(
+  /** The saved setup Run again… opens the launch form on. */
+  runAgain(
     runId: RunId,
-  ): Effect.Effect<
-    void,
-    RequestRefusal | RunConfigUnreadable | RunLaunchFailed
-  >;
+  ): Effect.Effect<AgentConfig, RequestRefusal | RunConfigUnreadable>;
   runCompileFixer(
     runId: RunId,
   ): Effect.Effect<
@@ -385,7 +383,7 @@ export const createHostRunActions = (
 
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
-      function* (runId: RunId, action: 'resume' | 'runNew') {
+      function* (runId: RunId, action: 'resume' | 'runAgain') {
         yield* guard.require(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
@@ -657,10 +655,7 @@ export const createHostRunActions = (
           .openFinalOutput(config, result)
           .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }, guard.resuming),
-      runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 'runNew');
-        yield* runAgentRequest({ config });
-      }),
+      runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
       runValidated,
       merge: Effect.fn('HostRunActions.merge')(
         function* (baseFile, editedFile) {

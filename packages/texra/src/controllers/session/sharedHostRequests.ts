@@ -31,6 +31,7 @@ import { attachDroppedFiles } from '@texra/controllers/mainView/MainViewDroppedF
 import type { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   launchApprovalOptions,
+  launchFormOf,
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
@@ -76,7 +77,7 @@ const SHARED_HOST_REQUEST_KINDS = [
   'refreshFiles',
   'resume',
   'runCompileFixer',
-  'runNew',
+  'runAgain',
   'savePastedImage',
   'toolEdit',
   'useOwnApiKey',
@@ -301,9 +302,16 @@ export function handleSharedHostRequest(
       case 'resume':
         yield* ports.runActions.resume(request.runId);
         return done;
-      case 'runNew':
-        yield* ports.runActions.runNew(request.runId);
+      case 'runAgain': {
+        // The form opens on the run's setup; the person changes it and
+        // starts it, so nothing launches here.
+        const form = yield* launchFormOf(
+          yield* ports.runActions.runAgain(request.runId),
+        );
+        host.surfaceAction({ kind: 'selectNew' });
+        host.surfaceAction({ kind: 'launch', patch: form });
         return done;
+      }
       case 'fork': {
         const forked = yield* ports.runActions.fork(
           request.runId,

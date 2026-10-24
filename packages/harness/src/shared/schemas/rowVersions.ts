@@ -97,7 +97,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).
   'request.opened': { version: 2, upcast: [] },
-  'request.decided': V1,
+  // v2: no `setup` arm; a proposal's approve may carry edited files,
+  // instruction and options (no upcaster, as `run.config`).
+  'request.decided': { version: 2, upcast: [] },
   'approval.policy': V1,
   'run.position': V1,
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact

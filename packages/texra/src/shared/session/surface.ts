@@ -86,6 +86,12 @@ export const LaunchPatchSchema = z.object(
 );
 type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
+/** A pending agent proposal: the run asking and its request. */
+interface ProposalRef {
+  readonly runId: RunId;
+  readonly requestId: string;
+}
+
 /** An image of a follow-up: the `[fileName]` chip its text carries and
  *  the stored file the send names, once the host has saved it. */
 interface DraftImage {
@@ -139,6 +145,11 @@ export interface Surface {
    *  with, until the next request on that stream. Never persisted. */
   readonly rejected: ReadonlyMap<RunId, SurfaceRejection>;
   readonly launch: LaunchSurface;
+  /** The agent proposal the launch form is open on (a proposal card's
+   *  Edit): its Send approves that request with the form's changes. Cleared
+   *  by any selection, and once the request is no longer pending. Never
+   *  persisted. */
+  readonly editing: ProposalRef | null;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
   /** The user's expansion choice per stream in the tree, absent until they
@@ -206,6 +217,7 @@ export function loadSurface(
     sending: new Set(),
     rejected: new Map(),
     launch: persisted.launch,
+    editing: null,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     expanded: new Map(persisted.expanded),
     groups: new Map(
@@ -305,7 +317,7 @@ export function pruneSurface(
   // read-only supertype and the once-narrowed patch is cast back at the end.
   const patch: Partial<
     Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
-  > & { selected?: RunId | null } = {};
+  > & { selected?: RunId | null; editing?: null } = {};
   for (const key of PER_STREAM_MAPS) {
     const current: ReadonlyMap<RunId, unknown> = surface[key];
     const next = retain(current, view);
@@ -313,6 +325,16 @@ export function pruneSurface(
   }
   const selected = select(surface.selected);
   if (selected !== surface.selected) patch.selected = selected;
+  const { editing } = surface;
+  if (
+    editing !== null &&
+    !view.requests.some(
+      (request) =>
+        request.runId === editing.runId &&
+        request.requestId === editing.requestId,
+    )
+  )
+    patch.editing = null;
   if (Object.keys(patch).length === 0) return surface;
   return { ...surface, ...patch } as Surface;
 }
@@ -388,6 +410,13 @@ export type SurfaceAction =
       readonly patch: Partial<Draft>;
     }
   | { readonly kind: 'launch'; readonly patch: LaunchPatch }
+  /** A proposal card's Edit: the launch form opens on the proposal, filled
+   *  with what it would launch. */
+  | {
+      readonly kind: 'editProposal';
+      readonly proposal: ProposalRef;
+      readonly patch: LaunchPatch;
+    }
   | {
       readonly kind: 'inquiryDraft';
       readonly key: string;
@@ -429,14 +458,29 @@ export function applySurfaceAction(
         requestError: { _tag: 'Rejected', reason: action.reason },
       };
     case 'select':
-      return { ...surface, selected: action.runId, drawerOpen: false };
+      return {
+        ...surface,
+        selected: action.runId,
+        drawerOpen: false,
+        editing: null,
+      };
     case 'selectNew':
       return {
         ...surface,
         selected: null,
         drawerOpen: false,
         requestError: null,
+        editing: null,
         launch: { ...surface.launch, instruction: '' },
+      };
+    case 'editProposal':
+      return {
+        ...surface,
+        selected: null,
+        drawerOpen: false,
+        requestError: null,
+        editing: action.proposal,
+        launch: { ...surface.launch, ...action.patch, launchTarget: 'agent' },
       };
     case 'toggleDrawer':
       return { ...surface, drawerOpen: !surface.drawerOpen };

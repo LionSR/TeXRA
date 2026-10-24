@@ -2,9 +2,10 @@
  * The composer, one component in two states (PRD 12.1). Expanded, it is the
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
- * dictation, attach, and send controls. The agent menu lists chat agents,
- * document tasks and teams as sections: the section picked is the launch
- * mode. The follow-up keeps a two-line writing area and a separate action
+ * dictation, attach, and send controls. The agent menu lists each agent
+ * once, then the teams: the agent picked decides the launch mode. Open on
+ * an agent's proposal (a proposal card's Edit), its send approves that
+ * proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
  * row, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
@@ -453,13 +454,18 @@ export class SessionComposer extends LitElement {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return [];
-    return launcherChipMenus(launch, host, {
-      setLaunch: (patch) => this.setLaunch(patch),
-      openSettings: (target) =>
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'openSettings', target }),
-        ),
-    });
+    return launcherChipMenus(
+      launch,
+      host,
+      {
+        setLaunch: (patch) => this.setLaunch(patch),
+        openSettings: (target) =>
+          this.dispatchEvent(
+            SessionUiEvents.host({ kind: 'openSettings', target }),
+          ),
+      },
+      this.surface?.editing != null,
+    );
   }
 
   private renderChip(menu: ChipMenu): TemplateResult {
@@ -533,7 +539,8 @@ export class SessionComposer extends LitElement {
     const canSend = run
       ? canSendFollowUp(run, this.draft, { terminalBacked: true })
       : hasText;
-    const sendLabel = compact ? 'Send follow-up' : 'Start task';
+    let sendLabel = compact ? 'Send follow-up' : 'Start task';
+    if (!compact && this.surface?.editing != null) sendLabel = 'Approve';
     const sending = this.surface?.sending.has(run?.id ?? 'launch') ?? false;
 
     return html`

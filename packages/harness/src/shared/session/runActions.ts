@@ -78,7 +78,7 @@ export function runActions(
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
-    actions.push('runNew');
+    actions.push('runAgain');
     if (forkable(run)) actions.push('fork');
   }
   return [...actions, ...inspectActions()];
@@ -123,7 +123,7 @@ const ACTION_LABEL: Record<RunAction, string> = {
   grant: 'An approval grant',
   compact: 'Compaction',
   resume: 'Resume',
-  runNew: 'Run again',
+  runAgain: 'Run again',
   fork: 'Forking',
   files: "Working with the run's files",
   delete: 'Deleting',
