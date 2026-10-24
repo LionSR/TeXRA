@@ -12,8 +12,10 @@
  * Each kind is also a follow-up failure reason, so a sender's result names
  * it as is. Null when a resume may go ahead: nobody alive holds the claim,
  * or this process does with no loop behind it, which the resume takes over.
- * The rejection is shown where the user acted and is not stored. A fact
- * that cannot be read fails.
+ * The one decider: the admission of a message asks it before the row
+ * commits, the resume asks it under the run's claim, a host's run record
+ * reads it. The rejection is shown where the user acted and is not stored.
+ * A fact that cannot be read fails.
  */
 import { Effect } from 'effect';
 

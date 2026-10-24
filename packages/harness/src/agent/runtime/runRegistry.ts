@@ -84,9 +84,9 @@ export interface ChildRunActivation {
 
 /**
  * What the session hands its runs. They read a run's phase from the
- * session's fold (`RunView.status`) and keep no phase of their own; the
- * session routes each `run.end` it committed through
- * {@link RunRegistry.sweepChildrenOfFoldedStop} once the view has folded it.
+ * session's fold (`RunView.status`) and keep no phase of their own; a stop
+ * in progress is the entry's `stopReason` until the fold shows the run
+ * cancelled.
  */
 export interface RunRegistryInit {
   /** The session these runs belong to, resolved when first used. */
@@ -127,8 +127,11 @@ interface RunEntry {
   /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRegistry.isLive}). */
   launches: number;
-  /** The stop that interrupted this run here, recorded before the interrupt
-   *  for its cleanup (a `user` reason outlives a later `shutdown`). */
+  /** The stop begun for this run here, recorded at the request, before the
+   *  interrupt, for its cleanup (a `user` reason outlives a later `shutdown`)
+   *  and for child admission ({@link RunRegistry.assertAdmitsChild}): the
+   *  entry outlives the fold of the run's `run.end`, from which the view's
+   *  `cancelled` answers. Cleared by the run's next generation. */
   stopReason?: RunStopReason;
 }
 
@@ -139,10 +142,6 @@ export class RunRegistry implements RunsShape {
   private readonly entries = new Map<RunId, RunEntry>();
   /** {@link awaitDrained}'s waiters: by run, and `''` for the last entry. */
   private readonly drains = new Map<string, Deferred.Deferred<void>>();
-  /** The stops begun for each run, one token apiece, so of two overlapping
-   *  stops the first to settle cannot admit a child the second's snapshot
-   *  already left behind. */
-  private readonly stopping = new Map<RunId, Set<symbol>>();
   /** Children a detach cut before their run was created, so no row carries
    *  it: added once that detach commits, read through {@link parentOf},
    *  removed with the entry. A marked child is created detached, so once
@@ -340,15 +339,11 @@ export class RunRegistry implements RunsShape {
       ? this.parentOf(childRunId)
       : launchParent;
     if (parentRunId === null) return;
-    if (this.stopping.has(parentRunId)) {
-      if (this.isRetained(childRunId)) return;
+    const stopping = this.entries.get(parentRunId)?.stopReason !== undefined;
+    if (stopping && this.isRetained(childRunId)) return;
+    if (stopping || this.stopFolded(parentRunId))
       throw new Error(
-        `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
-      );
-    }
-    if (this.stopFolded(parentRunId))
-      throw new Error(
-        `Cannot launch child run ${childRunId} under run ${parentRunId}: that run's stop has already folded.`,
+        `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
       );
   }
 
@@ -425,7 +420,6 @@ export class RunRegistry implements RunsShape {
         if (inactiveStep) return undefined;
         // A new generation is the run starting again: whatever stop the run
         // was marked for belongs to the generation it ended.
-        this.stopping.delete(runId);
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
@@ -603,18 +597,11 @@ export class RunRegistry implements RunsShape {
    * and the stop writes the terminal row itself; a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
-    const token = Symbol('run-stop');
-    const tokens = this.stopping.get(runId) ?? new Set<symbol>();
     const entry = this.entries.get(runId);
-    // Marked at the request: a user's message sent while the stop runs waits
-    // for the run to drain (`submitFollowUp`).
+    // Marked at the request: from here a child is refused under the run
+    // (`assertAdmitsChild`) and a user's message sent while the stop runs
+    // waits for the run to drain (`submitFollowUp`).
     if (entry !== undefined) this.markStopped(runId, options.reason);
-    this.stopping.set(runId, tokens.add(token));
-    const lift = Effect.sync(() => {
-      const current = this.stopping.get(runId);
-      if (current?.delete(token) !== true) return;
-      if (current.size === 0) this.stopping.delete(runId);
-    });
 
     const detach = options.detachActiveChildren === true;
     // Something here to stop: a handle, a child driver, or a launch's fiber
@@ -675,10 +662,7 @@ export class RunRegistry implements RunsShape {
               .pipe(Effect.andThen(apply)),
           );
     }
-    return {
-      accepted: () => reached,
-      settlement: settlement.pipe(Effect.ensuring(lift)),
-    };
+    return { accepted: () => reached, settlement };
   }
 
   /** The session is closing: refuse every run registered from here on, and
@@ -716,18 +700,6 @@ export class RunRegistry implements RunsShape {
         ),
       { concurrency: 'unbounded' },
     ).pipe(Effect.map((left) => left.flat()));
-  }
-
-  /** One `run.end` this process committed, from the session's fold-gated tail
-   *  once the view has folded it: a run that ended `cancelled` closes the
-   *  admission window its stop left, so this interrupts the children admitted
-   *  between the stop's settlement and the fold — every later one
-   *  {@link assertAdmitsChild} refuses. Each interrupted driver settles its run. */
-  sweepChildrenOfFoldedStop(runId: RunId): void {
-    if (this.disposed || !this.stopFolded(runId)) return;
-    // The folded stop's reason is not known here: its children are
-    // interrupted without one, so none cancels remote work.
-    this.interruptActiveChildren(runId, new Set(), undefined);
   }
 
   /** Record why `runId` stops, before it is interrupted (see
@@ -866,7 +838,6 @@ export class RunRegistry implements RunsShape {
     this.waiting.clear();
     this.entries.clear();
     for (const key of [...this.drains.keys()]) this.completeDrain(key);
-    this.stopping.clear();
   }
 }
 

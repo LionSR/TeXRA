@@ -284,7 +284,7 @@ describe(
     );
 
     it.live(
-      'a resume whose activation is refused ends the run as failed, keeps the queued input, and leaves the run to the next resume',
+      'a resume whose activation is refused ends the run as failed and keeps the queued input, which the next resume delivers',
       () =>
         Effect.gen(function* () {
           const { session, runId, storage } = yield* parkedRunAfterCrash();
@@ -303,8 +303,8 @@ describe(
             error: { message: expect.stringContaining('injected appendAll') },
           });
           expect(yield* queuedTexts(session, runId)).toEqual(['keep me']);
-          expect(session.runs.get(runId)?.live === true).toBe(false);
-
+          // The failed generation's leave wakes the run for the message it
+          // kept; a resume asked now joins that one or runs its own.
           expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
           expect(answersOf(storage, runId).at(-1)).toContain('keep me');
         }),

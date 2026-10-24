@@ -277,7 +277,6 @@ const sessionHandleLayer = (key: SessionKey) =>
                 ),
               ),
             );
-          runs.sweepChildrenOfFoldedStop(target.id);
         }),
       ).pipe(
         Effect.catch(

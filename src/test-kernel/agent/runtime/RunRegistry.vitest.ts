@@ -101,8 +101,8 @@ function createRegistry(
   };
 } {
   // The session's publish path, in miniature: every draft the registry
-  // publishes is appended in order, and a phase the fold moved reaches
-  // the folded-stop sweep the way the session's committed tail does.
+  // publishes is appended in order, and a phase the fold moved is what the
+  // registry reads of the run's view.
   const events: PublishedEvents = { published: [] };
   const views = new Map<RunId, RunView>();
   const phases: FoldedPhases = {
@@ -116,7 +116,6 @@ function createRegistry(
         runStartedAt: extra.runStartedAt ?? null,
         parentId: null,
       } as RunView);
-      registry.sweepChildrenOfFoldedStop(runId);
     },
   };
   // What the registry reads of its session: the run's view, the grants a
@@ -765,14 +764,14 @@ describe('runRegistry', () => {
 
         expect(() =>
           registry.track(createHandle(lateChildRunId, rootRunId)),
-        ).toThrow(/while that run is stopping/);
+        ).toThrow(/that run was stopped/);
         expect(() =>
           registry.reserveChildActivation({
             runId: lateChildRunId,
             launchParent: rootRunId,
             interrupt: vi.fn(),
           }),
-        ).toThrow(/while that run is stopping/);
+        ).toThrow(/that run was stopped/);
 
         yield* Deferred.succeed(allowCommit, undefined);
         yield* Fiber.join(stopped);
@@ -786,7 +785,7 @@ describe('runRegistry', () => {
   );
 
   it.effect(
-    'sweeps a child registered between the stop settlement and its fold, and refuses admission from the fold on (issue #12442)',
+    "refuses a child under a stopped parent from the stop's request to its fold and on (issue #12442)",
     () =>
       Effect.gen(function* () {
         const { phases, registry } = createRegistry();
@@ -795,7 +794,6 @@ describe('runRegistry', () => {
         const lateChildRunId = generateRunId();
         const postFoldChildRunId = generateRunId();
         const childInterrupt = vi.fn();
-        const lateChildInterrupt = vi.fn();
 
         try {
           trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
@@ -808,42 +806,36 @@ describe('runRegistry', () => {
           );
           phases.set(rootRunId, RUN_PHASE.RUNNING);
 
-          // The detaching stop settles completely — its children severed, its
-          // in-flight token lifted — while the parent's `run.end` has not
-          // folded yet. The window the token closed is open again, and the
-          // child whose lineage read preceded the stop registers inside it.
+          // The detaching stop settles completely, its children severed,
+          // while the parent's `run.end` has not folded yet. The stop still
+          // stands on the parent's entry, so a child whose lineage read
+          // preceded the stop is refused as it registers.
           yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
             reason: 'user',
           }).settlement;
           expect(registry.parentOf(childRunId)).toBeNull();
-          trackInterruptibleHandle(
-            registry,
-            { runId: lateChildRunId, parent: rootRunId },
-            lateChildInterrupt,
-          );
-          expect(lateChildInterrupt).not.toHaveBeenCalled();
+          expect(() =>
+            registry.track(createHandle(lateChildRunId, rootRunId)),
+          ).toThrow(/that run was stopped/);
+          expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
 
-          // The parent's terminal fold closes the window: the child that
-          // slipped in is stopped by the parent's own terminal fact, through
-          // the same cascade the stop ran, while the detached child's sever
-          // is preserved exactly.
+          // The fold changes nothing for the detached child: its sever stands.
           phases.set(rootRunId, RUN_PHASE.CANCELLED);
-          expect(lateChildInterrupt).toHaveBeenCalledOnce();
           expect(childInterrupt).not.toHaveBeenCalled();
           expect(registry.parentOf(childRunId)).toBeNull();
 
           // From the fold on, admission itself refuses the stopped parent.
           expect(() =>
             registry.track(createHandle(postFoldChildRunId, rootRunId)),
-          ).toThrow(/stop has already folded/);
+          ).toThrow(/that run was stopped/);
           expect(() =>
             registry.reserveChildActivation({
               runId: postFoldChildRunId,
               launchParent: rootRunId,
               interrupt: vi.fn(),
             }),
-          ).toThrow(/stop has already folded/);
+          ).toThrow(/that run was stopped/);
           expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
         } finally {
           registry.dispose();
