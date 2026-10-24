@@ -65,7 +65,7 @@ vi.mock('@texra/controllers/mainView/teamCatalogPorts', () => ({
   createTeamCatalogPorts: mocks.createTeamCatalogPorts,
 }));
 
-const { prepareSurfaceLaunch } =
+const { launchFormOf, prepareSurfaceLaunch } =
   await import('@texra/controllers/mainView/backend/MainViewRunLaunchController');
 
 /** The requesting session's slots and the storage root its pasted images
@@ -137,6 +137,30 @@ describe('main-view run launch controller', () => {
         docsPage: 'file-management',
       });
     }),
+  );
+
+  it.effect(
+    'fills Run again… with the agent key, model and files a form launch saved',
+    () =>
+      Effect.gen(function* () {
+        // Failure modes: a saved key is qualified twice (`builtIn:builtIn:`),
+        // or the model loses the effort the run ran at.
+        const selections = {
+          agent: 'builtIn:correct',
+          model: 'openai/gpt-5.6-terra@high',
+          inputFiles: ['/papers/first/main.tex'],
+          contextFiles: ['/papers/first/refs.bib'],
+        };
+        const { config } = yield* onGlobalStorage(
+          prepareSurfaceLaunch(launchRequest(selections), ROOTS),
+        );
+
+        expect(yield* launchFormOf(config)).toMatchObject({
+          ...selections,
+          launchTarget: 'agent',
+          instruction: 'Improve the draft.',
+        });
+      }),
   );
 
   it.effect('builds the resolved team fields over the renderer agent', () =>

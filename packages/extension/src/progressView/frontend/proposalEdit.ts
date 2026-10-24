@@ -11,7 +11,6 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { modelRefOf } from '@texra-ai/llm';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
@@ -60,8 +59,10 @@ export function editedProposal(
 /**
  * The agents a proposal may launch instead: the ones the asking run may
  * delegate to (its team's, which may be hidden from the catalog, else
- * every visible one), for a task only those with a document task, and the
- * proposed one always, so an unchanged form launches what was proposed.
+ * every visible one), only those of the proposal's kind (a document task's
+ * agents for a task, the others for a chat: a task agent run as a chat has
+ * no tools), and the proposed one always, so an unchanged form launches
+ * what was proposed.
  */
 function proposalAgentOptions(
   data: AgentProposalPermission,
@@ -70,18 +71,17 @@ function proposalAgentOptions(
 ): HostSnapshot['agentOptions'] {
   const { task } = data;
   const offered = (option: HostSnapshot['agentOptions'][number]) =>
-    !task || option.rounds !== undefined;
+    (option.rounds !== undefined) === task;
   const scope = run?.agentScope ?? null;
   const agents =
     scope === null
       ? host.agentOptions.filter(offered)
       : scope.flatMap((key) => {
           const option = host.agentOptions.find(({ value }) => value === key);
-          // A member the catalog hides is offered as the team names it, but
-          // for a task only when proposed: whether it has a task is not in
-          // the catalog.
+          // A member the catalog hides is offered, as the team names it,
+          // only when proposed: whether it has a task is not in the catalog.
           if (option === undefined)
-            return !task || isProposedAgent(key, data)
+            return isProposedAgent(key, data)
               ? [{ value: key, label: agentName(key) }]
               : [];
           return offered(option) ? [option] : [];
@@ -107,13 +107,6 @@ export function formHost(
   };
 }
 
-/** The proposal's model as a model option names it: options carry a model
- *  without its effort or mode, which the proposal may (`ref@high`). */
-function proposedModel(model: string, host: HostSnapshot): string {
-  const ref = modelRefOf(model) ?? model;
-  return host.modelOptions.some((option) => option.value === ref) ? ref : model;
-}
-
 /** The launch form filled with what the proposal would launch. */
 export function proposalLaunchPatch(
   data: AgentProposalPermission,
@@ -131,7 +124,9 @@ export function proposalLaunchPatch(
   return {
     ...options,
     agent,
-    model: proposedModel(data.model, host),
+    // As proposed, effort and mode included: the model menu offers a
+    // model it does not list as itself.
+    model: data.model,
     instruction: data.instruction,
     inputFiles: [...data.inputFiles],
     contextFiles: [...data.contextFiles],
@@ -146,12 +141,10 @@ export function proposalApproval(
   data: AgentProposalPermission,
   launch: Launch,
 ): Extract<RequestDecision, { action: 'approve' }> {
-  const sameModel =
-    launch.model === data.model || launch.model === modelRefOf(data.model);
   return {
     action: 'approve',
     agent: isProposedAgent(launch.agent, data) ? null : launch.agent,
-    model: sameModel ? null : launch.model,
+    model: launch.model === data.model ? null : launch.model,
     instruction: launch.instruction,
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],

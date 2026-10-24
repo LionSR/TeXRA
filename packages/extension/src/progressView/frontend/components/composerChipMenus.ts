@@ -9,7 +9,12 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { agentName, isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import {
+  agentName,
+  getModelLabel,
+  isModelOptionAvailable,
+} from '@texra-ai/harness/schemas';
+import { modelRefOf } from '@texra-ai/llm';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -71,6 +76,23 @@ export function launcherChipMenus(
   const model = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
+  // The form's model as it will run: one the picker does not list (a saved
+  // effort or mode, or a proposal's model) is offered as itself.
+  // Its effort or mode reads after the name: `ref@high` is "Name (high)".
+  const ref = modelRefOf(launch.model) ?? launch.model;
+  const modifiers = launch.model.slice(ref.length).replace(/^[@+]/, '');
+  const modelOptions = model
+    ? host.modelOptions
+    : [
+        {
+          value: launch.model,
+          label:
+            modifiers === ''
+              ? getModelLabel(launch.model)
+              : `${getModelLabel(launch.model)} (${modifiers})`,
+        },
+        ...host.modelOptions,
+      ];
   const menus: ChipMenu[] = [
     {
       id: 'composer-agent',
@@ -148,11 +170,11 @@ export function launcherChipMenus(
     {
       id: 'composer-model',
       icon: 'bolt',
-      label: model?.label ?? launch.model,
+      label: model?.label ?? modelOptions[0].label,
       title: 'Model',
       items: html`
         ${repeat(
-          host.modelOptions,
+          modelOptions,
           (option) => option.value,
           (option) =>
             html`<wa-dropdown-item

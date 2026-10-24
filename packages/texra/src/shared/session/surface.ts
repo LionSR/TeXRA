@@ -13,6 +13,8 @@
  */
 import { z } from 'zod';
 
+import { modelRefOf } from '@texra-ai/llm';
+
 import {
   DEFAULT_AGENT_MODEL,
   NullableFileFieldsSchema,
@@ -352,10 +354,18 @@ export function pruneSurface(
 export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const { launch } = surface;
   const patch: Partial<LaunchSurface> = {};
+  // A saved effort or mode on an enabled model stays (Run again… fills the
+  // run's own), and so does a proposal's model while the form is open on it:
+  // the asking run's model access decides it, not the picker.
+  const ref = modelRefOf(launch.model) ?? launch.model;
   const current = host.modelOptions.find(
-    (option) => option.value === launch.model,
+    (option) => option.value === launch.model || option.value === ref,
   );
-  if (host.modelOptions.length > 0 && current === undefined) {
+  if (
+    surface.editing === null &&
+    host.modelOptions.length > 0 &&
+    current === undefined
+  ) {
     const next =
       host.modelOptions.find((option) => isModelOptionAvailable(option)) ??
       host.modelOptions[0];

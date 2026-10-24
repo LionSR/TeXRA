@@ -476,10 +476,15 @@ export function createSessionSurfaces(options: {
     const edited = editedProposal(surface, view);
     if (edited !== null) {
       const { data } = edited;
-      if (data.task && launch.inputFiles.length === 0) {
+      // A task works over its input or media files, as `document_task` asks.
+      if (
+        data.task &&
+        launch.inputFiles.length === 0 &&
+        launch.mediaFiles.length === 0
+      ) {
         act(entry, {
           kind: 'reportError',
-          reason: 'Choose an input file first.',
+          reason: 'Choose an input or media file first.',
         });
         return;
       }
