@@ -622,8 +622,8 @@ is its display mirror.
 ## A child run is not bounded by its parent's tools (ruled 2026-10-24)
 
 **Question.** Should a delegated child persona keep only the tools its
-parent's step offered ("a child can only narrow its parent", ruled
-2026-10-13)?
+parent's step offered ("a child can only narrow its parent", #13154, merged
+2026-09-25)?
 
 **Ruling.** No; that ruling is withdrawn. A run is offered what its own
 definition and launch declare, under the session's gates (plugin switch,
