@@ -35,24 +35,18 @@ interface RootRunClaim {
   readonly runId: RunId | undefined;
   readonly runSettled: RootRunSettled | undefined;
   readonly runCompleted: boolean;
-  /** The stop asked of this claim's run, by reason, read by every path that
-   *  would start or continue it. A `user` stop is the turn's: the run it
-   *  stopped consumes it as it completes, and the conversation continues
-   *  after. A `shutdown` (`/exit`) stands until the state is cleared: no
-   *  claim taken while leaving starts or continues a run. */
-  readonly stop: RunStopReason | null;
+  /** A stop was asked of this claim's run. The run consumes it as it
+   *  completes, and the conversation continues after; why the run stopped
+   *  is the run registry's fact (`LiveRun.stopReason`), not held here. */
+  readonly stop: boolean;
 }
 
 const NO_CLAIM: RootRunClaim = {
   runId: undefined,
   runSettled: undefined,
   runCompleted: false,
-  stop: null,
+  stop: false,
 };
-
-/** What a later claim or a completion keeps of a stop: only a shutdown. */
-const standingStop = (stop: RunStopReason | null): RunStopReason | null =>
-  stop === 'shutdown' ? stop : null;
 
 const rootRunClaim = signal<RootRunClaim>(NO_CLAIM);
 registerCliStateResetHook(() => rootRunClaim.set(NO_CLAIM));
@@ -85,6 +79,10 @@ export class TuiSession {
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedRunId: RunId | undefined;
   runExitCode: CliExitCode = CliExitCode.Success;
+  /** The chat is leaving (`/exit`, a quit). Unlike a claim's stop, this
+   *  stands until the state is cleared: no claim taken while leaving starts
+   *  or continues a run, and a stop sent while leaving is a shutdown. */
+  leaving = false;
 
   get runId(): RunId | undefined {
     return rootRunClaim.get().runId;
@@ -96,13 +94,13 @@ export class TuiSession {
   }
 
   get stopRequested(): boolean {
-    return rootRunClaim.get().stop !== null;
+    return this.leaving || rootRunClaim.get().stop;
   }
 
-  /** Ask the claim's run to stop; a shutdown is never downgraded. */
+  /** Ask the claim's run to stop; a shutdown also marks the chat leaving. */
   askStop(reason: RunStopReason): void {
-    const claim = rootRunClaim.get();
-    rootRunClaim.set({ ...claim, stop: standingStop(claim.stop) ?? reason });
+    if (reason === 'shutdown') this.leaving = true;
+    rootRunClaim.set({ ...rootRunClaim.get(), stop: true });
   }
 
   get runSettled(): RootRunSettled | undefined {
@@ -117,20 +115,16 @@ export class TuiSession {
     rootRunClaim.set(NO_CLAIM);
     this.interruptedRunId = undefined;
     this.runExitCode = CliExitCode.Success;
+    this.leaving = false;
   }
 
   /** Claim the slot for `runSettled`'s run, `runId`, in one write: a claim
    *  held with no run id read to a follow-up as "the run already settled"
    *  (`awaitRunFolded(undefined)`), so a message typed while the claimant
    *  was still choosing its model was bounced as sent to an ended
-   *  conversation. Of the stop asked before, only a shutdown carries over. */
+   *  conversation. */
   markRunPending(runSettled: RootRunSettled, runId?: RunId): void {
-    rootRunClaim.set({
-      runId,
-      runSettled,
-      runCompleted: false,
-      stop: standingStop(rootRunClaim.get().stop),
-    });
+    rootRunClaim.set({ runId, runSettled, runCompleted: false, stop: false });
     this.runExitCode = CliExitCode.Success;
   }
 
@@ -151,12 +145,11 @@ export class TuiSession {
    *  free the claim that replaced it. */
   markRunCompleted(runSettled: RootRunSettled): void {
     if (!this.holdsClaim(runSettled)) return;
-    const claim = rootRunClaim.get();
-    // The run consumed the turn's stop; a shutdown outlives it.
+    // The run consumed the turn's stop.
     rootRunClaim.set({
-      ...claim,
+      ...rootRunClaim.get(),
       runCompleted: true,
-      stop: standingStop(claim.stop),
+      stop: false,
     });
   }
 
