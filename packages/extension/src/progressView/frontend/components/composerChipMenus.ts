@@ -2,6 +2,8 @@
  * The new-task composer's chips: agent, model, approval, and the working
  * directory when there are two or more roots. Each chip is a menu over the
  * launcher's selections; the composer renders them and owns the dispatch.
+ * Open on a proposal, the form approves another run's launch, so it offers
+ * agent and model only: that run's approval and directory apply.
  */
 import { html, nothing, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
@@ -56,6 +58,7 @@ export function launcherChipMenus(
     setLaunch(patch: Partial<Launch>): void;
     openSettings(target: SettingsTarget): void;
   },
+  editing: boolean,
 ): ChipMenu[] {
   const team = host.teamOptions.find(
     (option) => option.value === launch.selectedTeamId,
@@ -173,6 +176,7 @@ export function launcherChipMenus(
       },
     },
   ];
+  if (editing) return menus;
   menus.push(approvalMenu(launch, host.approvalPolicy, actions));
   if (host.workspaceRoots.length >= 2) {
     const root = host.workspaceRoots.find(

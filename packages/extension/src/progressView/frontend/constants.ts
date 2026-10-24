@@ -19,7 +19,7 @@ export interface RunMenuAction {
   arm:
     | Extract<
         HostRequest['kind'],
-        | 'runNew'
+        | 'runAgain'
         | 'openRunStorage'
         | 'exportTranscript'
         | 'latexdiff'
@@ -40,7 +40,7 @@ export const ELEMENT_IDS = {
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
-  RUN_NEW_BTN: 'runNewBtn',
+  RUN_AGAIN_BTN: 'runAgainBtn',
   EXPORT_TRANSCRIPT_BTN: 'exportTranscriptBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
@@ -83,11 +83,11 @@ const COPY_DIAGNOSTICS_ACTION: RunMenuAction = {
 
 const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
-    id: ELEMENT_IDS.RUN_NEW_BTN,
-    action: 'runNew',
-    arm: 'runNew',
+    id: ELEMENT_IDS.RUN_AGAIN_BTN,
+    action: 'runAgain',
+    arm: 'runAgain',
     icon: 'play',
-    label: 'Run again from scratch',
+    label: 'Run again…',
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,

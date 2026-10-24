@@ -32,7 +32,7 @@ import {
   approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
-import { errorResult, executed } from '@tools/core/result';
+import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
@@ -94,12 +94,6 @@ function proposalResultToToolResult(
   const echo = summarizeProposal(proposal);
 
   if (result.action === 'approve') return null;
-  if (result.action === 'setup') {
-    return executed(
-      `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
-      `User opened '${agentName}' for editing`,
-    );
-  }
 
   const refusal = refusalOf('proposal', result);
   switch (refusal.action) {
@@ -205,6 +199,38 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   },
 );
 
+/** The fields an approval changed from the proposal, other than its agent
+ *  and model: the instruction, the file lists and the plugin's options. */
+function formEdits(
+  proposal: AgentProposal,
+  approval: Extract<RequestDecision, { action: 'approve' }>,
+): Partial<AgentProposal> {
+  const changed = (
+    edited: readonly string[] | null | undefined,
+    proposed: readonly string[],
+  ): edited is readonly string[] =>
+    edited != null &&
+    (edited.length !== proposed.length ||
+      edited.some((file, index) => file !== proposed[index]));
+  const { instruction, inputFiles, contextFiles, mediaFiles, options } =
+    approval;
+  return {
+    ...(instruction != null &&
+      instruction !== proposal.instruction && { instruction }),
+    ...(changed(inputFiles, proposal.inputFiles) && {
+      inputFiles: [...inputFiles],
+      outputFiles: [],
+    }),
+    ...(changed(contextFiles, proposal.contextFiles) && {
+      contextFiles: [...contextFiles],
+    }),
+    ...(changed(mediaFiles, proposal.mediaFiles) && {
+      mediaFiles: [...mediaFiles],
+    }),
+    ...(options != null && proposal.task && { options }),
+  };
+}
+
 /** How an approved delegation launches: the proposal with the agent and
  *  model the approval settled on, and how it was approved. */
 interface ApprovedDelegation {
@@ -305,9 +331,14 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     );
   }
 
+  // What the person changed in the launch form besides the agent and model.
+  // A changed input list drops the proposal's outputs: they were named for
+  // its inputs, and the task names its own for the new ones.
+  const edited = changes ? formEdits(proposal, result) : {};
   return {
     proposal: {
       ...proposal,
+      ...edited,
       ...(modelOverride && { model: modelOverride }),
       // Carry the override's resolved source alongside its name so launch
       // pins the exact entry the re-validation just resolved.

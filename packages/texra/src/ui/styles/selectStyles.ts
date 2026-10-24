@@ -114,39 +114,3 @@ export const compactFormControlStyles: CSSResult = css`
     box-shadow: none;
   }
 `;
-
-export const selectStyles: CSSResult = css`
-  wa-option {
-    font-family: var(--wa-font-family-body);
-  }
-
-  wa-option[disabled],
-  wa-option[data-requires-key='true'] {
-    color: var(--color-text-muted);
-    font-style: italic;
-  }
-
-  .clickable {
-    cursor: pointer;
-    transition: color var(--transition-fast);
-  }
-
-  .clickable:hover {
-    color: var(--wa-color-text-normal);
-  }
-
-  wa-icon.clickable:hover {
-    color: var(--button-hover-background, var(--wa-color-button-hover));
-  }
-
-  wa-select::part(listbox) {
-    max-height: var(--height-large, 300px);
-  }
-
-  .model-option-status {
-    color: var(--wa-color-danger-on-quiet);
-    opacity: var(--opacity-full);
-    font-style: normal;
-    margin-inline-start: var(--wa-space-3xs);
-  }
-`;

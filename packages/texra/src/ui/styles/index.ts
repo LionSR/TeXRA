@@ -30,7 +30,7 @@ export { designTokens } from './litStyles';
 //   plainly enough that the barrel would add nothing.
 
 // Component styles
-export { selectStyles, compactFormControlStyles } from './selectStyles';
+export { compactFormControlStyles } from './selectStyles';
 export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';
 
 // Shared inline wa-callout banner chrome (agent-config, api-key, dependency,

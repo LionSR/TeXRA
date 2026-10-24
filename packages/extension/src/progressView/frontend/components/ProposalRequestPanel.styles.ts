@@ -5,32 +5,8 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const proposalRequestPanelStyles: CSSResult = css`
-  /* The pickers open floating menus a scrolling body would clip, so the
-     whole card scrolls in the dock instead; the rule keeps what scrolls
-     under the sticky action row from running into it. */
-  .request-card__details {
-    max-height: none;
-    overflow-y: visible;
-  }
-
   .request-card__actions {
     border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
-  }
-
-  .workflow-proposal__pickers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: ${sp.medium};
-  }
-
-  .proposal-model-dropdown {
-    min-width: 6rem;
-    max-width: 14rem;
-  }
-
-  .proposal-agent-dropdown {
-    min-width: 5rem;
-    max-width: 8rem;
   }
 
   /* A script request's lede. */

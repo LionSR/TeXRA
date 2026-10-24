@@ -40,8 +40,8 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   /** Relaunch a settled run: a workflow through the host's launcher with
    *  its run id, a tool-use run through the resume port. */
   z.object({ kind: z.literal('resume'), ...runScoped }),
-  /** A fresh run from a settled run's setup. */
-  z.object({ kind: z.literal('runNew'), ...runScoped }),
+  /** The launch form, opened on a settled run's setup (Run again…). */
+  z.object({ kind: z.literal('runAgain'), ...runScoped }),
   /**
    * Fork: a new task holding this conversation up to `at` (its latest
    * settled point when absent), continued and shown; with `draft` (Fork

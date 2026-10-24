@@ -671,6 +671,21 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Check an agent's launch in the New task form, and run a task again
+  with changes.** An agent's proposal card has **Edit** (`e`): it opens the
+  New task form filled with what the agent would start, its agent, model,
+  instruction, files and switches, offering the agents that task may
+  delegate to. Change what you need and **Approve** starts it, as the
+  agent's own child run, with your changes; **Back to …** leaves the
+  proposal waiting. A finished task's **Run again…** opens the same form
+  filled from that task instead of relaunching it at once. Edit replaces
+  the card's agent and model pickers and its **Change and start myself**
+  button, which ended the proposal without opening anything; Run again…
+  replaces **Run again from scratch**. A script's request card no longer
+  offers either: it approves the script as a whole. SDK: a proposal's
+  `approve` decision may carry `instruction`, `inputFiles`, `contextFiles`,
+  `mediaFiles` and `options`; the `setup` decision is gone; the run action
+  `runNew` is `runAgain`.
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
   default; CLI `/config`) gives chat agents the `script` tool and their own
   tools alone, with every other tool called from inside a script. A run
