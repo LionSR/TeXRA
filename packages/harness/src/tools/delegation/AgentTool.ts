@@ -27,7 +27,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   AGENT_SOURCE,
@@ -297,7 +297,7 @@ export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
   const call = yield* requireToolRun(launch.tool);
-  const script = yield* IssuingScript;
+  const { script } = call;
   if (script === null || launch.background === true)
     return yield* agentCall(call, launch);
   const budget = yield* scriptChildBudget(call.env.roots, script);
@@ -323,7 +323,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   launch: ChildLaunch,
 ) {
   const { run } = call;
-  const script = (yield* IssuingScript) ?? undefined;
+  const script = call.script ?? undefined;
   const { session, runId: parentRunId } = run;
   const { task, files, persona } = launch;
   const agent =

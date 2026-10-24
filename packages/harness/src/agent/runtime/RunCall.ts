@@ -1,13 +1,14 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it: its place in the run (`RunCall`: the run's step and callbacks, the
- * response and attempt it belongs to), the script that issued it
- * (`IssuingScript`), and a `script` call's door to the run's tools
- * (`ScriptCalls`). The public contract every tool reads, the run
- * included, is `ToolContext`; an app's
- * tool reads none of those. The read-before-edit helpers here
- * (`recordToolFileRead`, `requireFileReadForEdit`) read the run's
- * `fileService.readFiles` through `ToolContext`, so any tool may use them.
+ * it (`RunCall`): the run's step and callbacks, the response and attempt
+ * the call belongs to, the script that issued it, and, for a `script` call,
+ * the door its guest calls the run's tools through. `RunCall` is a
+ * `Context.Reference` whose default is null, so a standalone host
+ * invocation outside a run provides nothing. The public contract every tool
+ * reads, the run included, is `ToolContext`; an app's tool reads nothing
+ * else. The read-before-edit helpers here (`recordToolFileRead`,
+ * `requireFileReadForEdit`) read the run's `fileService.readFiles` through
+ * `ToolContext`, so any tool may use them.
  */
 import {
   Context,
@@ -195,27 +196,20 @@ export interface RunCallShape {
   /** The card this call's rows open under: what a run the call launches
    *  names as its `parentCard`. */
   readonly logId: string;
+  /** The script that issued this call; null for a call a response issued. */
+  readonly script: ScriptScope | null;
+  /** For a `script` call, the door its guest calls the run's tools through,
+   *  built on the first `yield*`; null for any other call. */
+  readonly scriptCalls: Effect.Effect<ScriptDoor> | null;
 }
 
-/** The current call's place in its run; null for a standalone host
- *  invocation outside an agent run. */
-export class RunCall extends Context.Service<RunCall, RunCallShape | null>()(
+/** The current call's place in its run, which the run loop provides beside
+ *  each call; null outside a run (a standalone host invocation), which is
+ *  the reference's default, so nothing provides the null. */
+export const RunCall = Context.Reference<RunCallShape | null>(
   '@texra-ai/harness/agent/RunCall',
-) {}
-
-/** The script that issued the current call; null for a call a response
- *  (or a host) issued. */
-export class IssuingScript extends Context.Service<
-  IssuingScript,
-  ScriptScope | null
->()('@texra-ai/harness/agent/IssuingScript') {}
-
-/** The calls a `script` call's guest may issue, built on the first
- *  `yield*`; null for a call a script (or a host) issued. */
-export class ScriptCalls extends Context.Service<
-  ScriptCalls,
-  Effect.Effect<ScriptDoor> | null
->()('@texra-ai/harness/agent/ScriptCalls') {}
+  { defaultValue: () => null },
+);
 
 /** The session of a call's run, for the harness's own helpers a plugin's
  *  tool may call (an edit's approval, which `accept_run_files` asks for);
@@ -266,7 +260,7 @@ export type RunToolCall = ToolContextShape &
 /** {@link requireRun}, with the call's place in its run, for built-ins. */
 export const requireToolRun = (
   toolName: string,
-): Effect.Effect<RunToolCall, ToolError, ToolContext | RunCall> =>
+): Effect.Effect<RunToolCall, ToolError, ToolContext> =>
   Effect.gen(function* () {
     const call = yield* requireRun(toolName);
     const runCall = yield* RunCall;

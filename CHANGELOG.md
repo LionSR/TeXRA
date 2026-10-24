@@ -1143,6 +1143,29 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A script's `document_task` calls each get their own child run.** Every
+  `document_task` a script issued, in parallel or one after another, derived
+  the same child run id, so only the first could start and the rest failed
+  with "already running" or "already exists; resume it". The child-launch
+  door a plugin tool calls is now built for each call from that call's own
+  facts.
+- **A document task launched from a conversation runs its recipe.** The
+  recipe's tools (`document_context`, `document_extract`, …) were silently
+  withheld because the launching conversation had not been offered them, and
+  the recipe failed on its first line with "not a function". A script run now
+  offers exactly the tools its launch names; a child persona is still
+  narrowed to its parent's, and any declared tool that narrowing (or a host
+  gate) withholds is reported in the run's log instead of vanishing.
+- **A child conversation resumed after a restart keeps its tool limits.** It
+  used to be treated as a top-level run once its parent's step was gone,
+  gaining every installed plugin's tools from its second step on; it now
+  narrows to what its own record last offered.
+- **Error messages keep their cause.** A message that wrapped another error
+  (a child run's failure, a tool's refusal, a launch that could not be
+  persisted) showed only the outer sentence; the cause chain, and the
+  members of an aggregate failure, now follow it. The reason a subagent's
+  call failed — for example that its run id was already running — reaches
+  the model and the log.
 - **The TeXRA service exits when only waiting conversations are left.** A
   chat you closed left its conversation waiting in the service, and the
   service counted it as a running task, so it never reached its ten-minute

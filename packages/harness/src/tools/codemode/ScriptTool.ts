@@ -19,7 +19,7 @@ import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   requireToolRun,
-  ScriptCalls,
+  RunCall,
   type ScriptDoor,
   callerRun,
 } from '@agent/runtime/RunCall';
@@ -169,8 +169,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       },
       input.title ?? 'Script',
     );
-  const issued = yield* ScriptCalls;
-  if (issued === null)
+  const issued = (yield* RunCall)?.scriptCalls;
+  if (issued == null)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );

@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, type Scope } from 'effect';
+import { Context, Effect, type Scope } from 'effect';
 import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -20,9 +20,8 @@ import {
   type ProcessChildLaunch,
 } from '@tools/delegation/detachedChildRun';
 
-import { RunCall, type IssuingScript, type ScriptCalls } from './RunCall';
-import type { Runs } from './runRegistry';
-import type { SessionHandle } from './SessionHandle';
+import { Runs } from './runRegistry';
+import type { RunCallShape } from './RunCall';
 
 /** The runtime's services a call reads: the process's, the rooted
  *  filesystems of the session the call works in, and the call
@@ -41,94 +40,89 @@ export type CallServices =
  * run of the session by id: its input, live parent edge, records and
  * rows. Each needs the call's run; a standalone host call has none.
  */
-export class ChildRuns extends Context.Service<
-  ChildRuns,
-  {
-    readonly launch: (
-      launch: ChildLaunch,
-    ) => Effect.Effect<ToolResult, Error, CallServices>;
-    readonly launchProcess: <TTurn>(
-      launch: ProcessChildLaunch<TTurn>,
-    ) => Effect.Effect<RunId, Error>;
-    /** The run's input: what a tool sends it, and when it takes no more. */
-    readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-    /** Its parent while it is live in this process: null for a root run,
-     *  undefined when it is not live here. */
-    readonly parent: (
-      runId: RunId,
-    ) => Effect.Effect<RunId | null | undefined, Error>;
-    /** Its records: whether the store still lists it, and its terminal
-     *  result (null before it ends). */
-    readonly records: (runId: RunId) => {
-      readonly exists: Effect.Effect<boolean, Error>;
-      readonly end: Effect.Effect<RunEnd | null, Error>;
-    };
-    /** Its committed rows, with `types` only those. */
-    readonly rows: (
-      runId: RunId,
-      types?: readonly SessionEvent['type'][],
-    ) => Effect.Effect<readonly SessionEvent[], Error>;
-  }
->()('@texra-ai/harness/agent/ChildRuns') {}
+export interface ChildRunsShape {
+  readonly launch: (
+    launch: ChildLaunch,
+  ) => Effect.Effect<ToolResult, Error, CallServices>;
+  readonly launchProcess: <TTurn>(
+    launch: ProcessChildLaunch<TTurn>,
+  ) => Effect.Effect<RunId, Error>;
+  /** The run's input: what a tool sends it, and when it takes no more. */
+  readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
+  /** Its parent while it is live in this process: null for a root run,
+   *  undefined when it is not live here. */
+  readonly parent: (
+    runId: RunId,
+  ) => Effect.Effect<RunId | null | undefined, Error>;
+  /** Its records: whether the store still lists it, and its terminal
+   *  result (null before it ends). */
+  readonly records: (runId: RunId) => {
+    readonly exists: Effect.Effect<boolean, Error>;
+    readonly end: Effect.Effect<RunEnd | null, Error>;
+  };
+  /** Its committed rows, with `types` only those. */
+  readonly rows: (
+    runId: RunId,
+    types?: readonly SessionEvent['type'][],
+  ) => Effect.Effect<readonly SessionEvent[], Error>;
+}
 
-/** The harness's `ChildRuns`, over the session's runs, the call's place in
- *  its run and the script that issued it, which a built-in call provides:
- *  the launch reads them, the script's child budget included, and a
- *  plugin's tool never sees them. */
-export const childRunsLayer: Layer.Layer<
-  ChildRuns,
-  never,
-  RunCall | IssuingScript | Runs
-> = Layer.effect(
-  ChildRuns,
-  Effect.map(Effect.context<RunCall | IssuingScript | Runs>(), (call) => {
-    const runCall = Context.get(call, RunCall);
-    const read = <A, E>(
-      f: (session: SessionHandle) => Effect.Effect<A, E>,
-    ): Effect.Effect<A, E | Error> =>
-      runCall === null
-        ? Effect.fail(new Error("Reading the session's runs needs a run."))
-        : f(runCall.run.session);
-    return {
-      launch: (launch: ChildLaunch) =>
-        launchChildAgent(launch).pipe(Effect.provide(call)),
-      launchProcess: <TTurn>(launch: ProcessChildLaunch<TTurn>) =>
-        Effect.gen(function* () {
-          const runCall = yield* RunCall;
-          if (runCall === null)
-            return yield* Effect.fail(
-              new Error('A process child needs a run to be launched under.'),
-            );
-          const { session, runId } = runCall.run;
-          return yield* launchProcessChild(session, runId, launch);
-        }).pipe(Effect.provide(call)),
-      inbox: (runId) =>
-        read((session) => Effect.succeed(runInbox(session, runId))),
-      parent: (runId) =>
-        read((session) => Effect.succeed(session.runs.get(runId)?.parent)),
-      records: (runId) => ({
-        exists: read((session) => getRunRecords(session, runId).exists()),
-        end: read((session) => getRunRecords(session, runId).readRunEnd()),
-      }),
-      rows: (runId, types) =>
-        read((session) =>
-          session.log.rows(qualifyAggregateId('run', runId), types),
-        ),
-    };
-  }),
+const noRun = Effect.fail(
+  new Error('This call is under no run, so it launches and reads none.'),
 );
 
-/** Services the runtime supplies to a plugin's tool: the call's, and the
- *  child-launch door. A plugin's tool may require its own plugin's services
- *  beside these (`definePlugin`); never the built-ins' call services, nor
- *  the session's `Runs`. */
-export type PluginToolServices = CallServices | ChildRuns;
+/** The door outside a run (a host's standalone call): every door refuses. */
+const noRunChildRuns: ChildRunsShape = {
+  launch: () => noRun,
+  launchProcess: () => noRun,
+  inbox: () => noRun,
+  parent: () => noRun,
+  records: () => ({ exists: noRun, end: noRun }),
+  rows: () => noRun,
+};
+
+/** The door, as the run loop provides it beside each call ({@link childRuns});
+ *  outside a run it is the refusal, which is the reference's default. */
+export const ChildRuns = Context.Reference<ChildRunsShape>(
+  '@texra-ai/harness/agent/ChildRuns',
+  { defaultValue: () => noRunChildRuns },
+);
+
+/** The door of one call: over the call's place in its run and the
+ *  session's runs, which the loop read where it dispatched the call. A
+ *  launch runs under exactly those, so nothing of the dispatching fiber's
+ *  context reaches it, and a plugin's tool sees neither. */
+export const childRuns = (
+  call: RunCallShape,
+  runs: Runs['Service'],
+): ChildRunsShape => {
+  const { session, runId } = call.run;
+  return {
+    launch: (launch) =>
+      launchChildAgent(launch).pipe(Effect.provideService(Runs, runs)),
+    launchProcess: (launch) =>
+      launchProcessChild(session, runId, launch).pipe(
+        Effect.provideService(Runs, runs),
+      ),
+    inbox: (id) => Effect.succeed(runInbox(session, id)),
+    parent: (id) => Effect.succeed(session.runs.get(id)?.parent),
+    records: (id) => ({
+      exists: getRunRecords(session, id).exists(),
+      end: getRunRecords(session, id).readRunEnd(),
+    }),
+    rows: (id, types) => session.log.rows(qualifyAggregateId('run', id), types),
+  };
+};
+
+/** Services the runtime supplies to a plugin's tool: the call's. The
+ *  child-launch door (`ChildRuns`) and the call's place in its run
+ *  (`RunCall`) are references with defaults, never requirements; a plugin's
+ *  tool reads the door and never the session's `Runs`. */
+export type PluginToolServices = CallServices;
 
 /** What the runtime supplies to the harness's built-in tools: a plugin
- *  tool's services, the session's runs, and the call's place in its run
- *  and its script. */
-export type ToolServices =
-  PluginToolServices | Runs | RunCall | ScriptCalls | IssuingScript;
+ *  tool's services and the session's runs. */
+export type ToolServices = PluginToolServices | Runs;
 export type RuntimeTool<E = Error, R = ToolServices> = ITool<E, R>;
 /** The tools a run offers, by name. */
 export type RuntimeToolRegistry = ReadonlyMap<string, RuntimeTool>;

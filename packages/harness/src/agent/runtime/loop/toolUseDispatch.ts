@@ -46,15 +46,15 @@ import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
-  childRunsLayer,
+  ChildRuns,
+  childRuns,
   type RuntimeTool as ITool,
 } from '@agent/runtime/ToolServices';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
-  IssuingScript,
   RunCall,
-  ScriptCalls,
   ScriptDiverged,
+  type RunCallShape,
   type ScriptDoor,
   type ScriptScope,
   type ScriptSource,
@@ -113,10 +113,10 @@ import {
   positionRow,
   type Message,
 } from './rows';
+import { Runs } from '../runRegistry';
 import type { StepTools } from './step';
 import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
-import type { Runs } from '../runRegistry';
 
 /** Max concurrently executing parallel tool calls. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -140,9 +140,6 @@ const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
 type ResultAttachment = ToolResultPayload['attachments'][number];
-
-/** What a call may reach of scripting, provided around each call. */
-type ScriptServices = ScriptCalls | IssuingScript;
 
 interface DispatchOutcome {
   readonly state: RunState;
@@ -520,20 +517,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   /** Execute one call at `attempt` and commit its result, re-entering
    *  the request a resumed attempt left standing (`own`). Never fails: a
-   *  throwing tool is an error result. Interruption leaves no result. */
+   *  throwing tool is an error result. Interruption leaves no result.
+   *  `place`: the script that issued the call, or the door a `script` call
+   *  issues its own through. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
     fact: CallFacts,
     parsedInput: unknown,
     { attempt, raised, own: standing }: ResumedAttempt,
+    place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
   ): Effect.fn.Return<
     void,
     InvokeError,
-    | ProcessServices
-    | Runs
-    | WorkspaceFs
-    | StorageFs
-    | FileSystem.FileSystem
-    | ScriptServices
+    ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
     const tool: ITool | undefined = step.registry.get(fact.toolName);
     const stageId = scriptOf(fact)?.stageId;
@@ -592,6 +587,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         accepting = tool.slow === true;
         yield* pre.bodyStarts;
       });
+      // The call's place in its run, from this call's facts alone, and the
+      // child door over exactly it: a nested call launches under its own id.
+      const runCall: RunCallShape = {
+        run,
+        responseId,
+        instruction: userInstruction,
+        attempt,
+        logId: fact.logId,
+        ...place,
+      };
       // Guard first, under the step's roots and plugin services: a refused
       // path or unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
@@ -608,14 +613,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               requests,
               emit: onToolOutput,
             }),
-            Effect.provide(childRunsLayer),
-            Effect.provideService(RunCall, {
-              run,
-              responseId,
-              instruction: userInstruction,
-              attempt,
-              logId: fact.logId,
-            }),
+            Effect.provideService(ChildRuns, childRuns(runCall, yield* Runs)),
+            Effect.provideService(RunCall, runCall),
             Effect.provide(step.services),
           ),
         ),
@@ -732,10 +731,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     status: Exclude<CallStatus, { kind: 'settled' }>,
+    place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
   ): Effect.fn.Return<
     void,
     InvokeError,
-    ProcessServices | Runs | WorkspaceFs | StorageFs | ScriptServices
+    ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     const at = { responseId, callId: fact.callId };
     const entered = resumedAttempt(yield* cell.current, at, status);
@@ -747,7 +747,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       !entered.mayHaveRun ||
       (yield* replayable(fact, step.registry, input, logger))
     )
-      yield* execute(fact, input, entered);
+      yield* execute(fact, input, entered, place);
     else
       yield* commitResult(
         fact,
@@ -931,16 +931,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               // settled.
               yield* handedBack(replayOrder.at(-1));
               const status = recordOf(yield* cell.current, callId)?.status;
+              // The call knows the script that issued it, and issues none.
               if (status?.kind !== 'settled')
-                yield* resumeCall(fact, input, status ?? { kind: 'issued' });
+                yield* resumeCall(fact, input, status ?? { kind: 'issued' }, {
+                  script: scopeOf(source),
+                  scriptCalls: null,
+                });
               // A script's calls are not the response's: its own result
               // says whether one of them ended the turn.
               return false;
-              // The calls it makes know the script that issued them.
-            }).pipe(
-              Effect.provideService(IssuingScript, scopeOf(source)),
-              Effect.provideService(ScriptCalls, null),
-            ),
+            }),
           );
           const settledNow = resultOf(yield* cell.current, callId);
           if (settledNow === null) {
@@ -989,11 +989,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         } satisfies ScriptDoor;
       }).pipe(Effect.provideContext(services)),
     );
-    return <A, E, R>(call: Effect.Effect<A, E, R>) =>
-      call.pipe(
-        Effect.provideService(ScriptCalls, door),
-        Effect.provideService(IssuingScript, null),
-      );
+    return door;
   });
 
   const lanes = yield* makeScheduler;
@@ -1038,9 +1034,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* commitResult(fact, attempt, skippedResult(SKIPPED_AFTER_END_TURN));
     } else {
       const input = parseCallArguments(call, logger);
+      // A response's call was issued by no script; as a `script` call it
+      // issues its own through the door.
       yield* Effect.scoped(
-        Effect.flatMap(scriptCallsOf(fact), (provide) =>
-          provide(resumeCall(fact, input, status)),
+        Effect.flatMap(scriptCallsOf(fact), (door) =>
+          resumeCall(fact, input, status, { script: null, scriptCalls: door }),
         ),
       );
     }

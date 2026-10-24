@@ -74,10 +74,7 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import type {
-  ProcessChildStrategy,
-  ChildRuns,
-} from '@texra-ai/harness/plugins';
+import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -431,11 +428,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  | ToolContext
-  | ChildRuns
-  | CodexThreads
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
+  ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const toolCall = yield* ToolContext;
   const sandboxMode = yield* codexSandboxMode(input, toolCall.env.roots);
@@ -492,7 +485,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | ChildRuns | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(

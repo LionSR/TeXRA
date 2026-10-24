@@ -6,13 +6,8 @@ import { resolve } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import type {
-  IssuingScript,
-  RunCall,
-  ScriptCalls,
-} from '@agent/runtime/RunCall';
 import type { ToolRun } from '@agent/core/tools/ToolTypes';
-import type { ChildRuns, RuntimeTool } from '@agent/runtime/ToolServices';
+import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolResult } from '@shared/schemas';
@@ -269,27 +264,26 @@ describe('plugin rosters', () => {
     ]);
   });
 
-  // Failure mode: a plugin's tool requires the built-ins' call services, so
-  // a host serving exactly a plugin tool's services cannot run it. The
-  // compiler refuses it; this probe fails the typecheck if it ever accepts.
-  it("refuses a plugin tool that requires a built-in's call services", () => {
+  // Failure mode: a plugin's tool requires the session's runs, so a host
+  // serving exactly a plugin tool's services cannot run it. The compiler
+  // refuses it; this probe fails the typecheck if it ever accepts. The
+  // call's place in its run (`RunCall`) and the child-launch door
+  // (`ChildRuns`) are references with defaults, so they are never a
+  // requirement: what keeps `RunCall` from a plugin's tool is that the
+  // `plugins` entry does not export it (the deep-import ratchet holds the
+  // rest).
+  it('refuses a plugin tool that requires the session runs', () => {
     type PluginTool = NonNullable<Plugin['tools']>[string];
     const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
       definition: { name: 'probe' },
       call: () => Effect.die(service),
     });
     const probes: PluginTool[] = [
-      // @ts-expect-error a plugin's tool never requires RunCall
-      requiring<RunCall>(null as never),
-      // @ts-expect-error nor the issuing script
-      requiring<IssuingScript>(null as never),
-      // @ts-expect-error nor a script's door
-      requiring<ScriptCalls>(null as never),
-      requiring<ChildRuns>(null as never),
-      // @ts-expect-error nor the session's runs: ChildRuns is its run door
+      // @ts-expect-error a plugin's tool never requires the session's runs:
+      // ChildRuns is its run door
       requiring<Runs>(null as never),
     ];
-    expect(probes).toHaveLength(5);
+    expect(probes).toHaveLength(1);
   });
 
   // Failure mode: a plugin's tool reaches a root launch (outside any

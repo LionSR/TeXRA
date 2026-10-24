@@ -186,6 +186,16 @@ describe('tool-use tool resolution', () => {
           parent.offered,
         );
         expect(child.definitions.map((tool) => tool.name)).toEqual(['grep']);
+        // A declared tool the narrowing withholds is reported, never dropped
+        // in silence (a recipe once lost its tools this way, unseen).
+        expect(child.warnings).toEqual(
+          expect.arrayContaining([
+            expect.stringContaining('Declared tool "bash" is not offered'),
+            expect.stringContaining(
+              'Declared tool "write_file" is not offered',
+            ),
+          ]),
+        );
         const refused = yield* Effect.flip(
           resolve(['grep', 'mcp__candidate__*'], false, parent.offered),
         );
