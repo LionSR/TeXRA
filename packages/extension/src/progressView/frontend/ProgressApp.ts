@@ -463,8 +463,9 @@ export class ProgressApp extends LitElement {
     const { launch } = surface;
     // Only a document task reads Input and Context, so only an agent with
     // one gets the file section; a chat attaches through the composer alone.
-    // Open on a proposal, the proposal says which it is: the form offers
-    // only agents of its kind, and a team's hidden member has no option.
+    // Open on a proposal, its own `task` flag decides: the form offers only
+    // agents of the proposal's kind, and a team's hidden member's option
+    // carries no `rounds` to read.
     const edited = editedProposal(surface, view);
     const documentPass =
       edited !== null

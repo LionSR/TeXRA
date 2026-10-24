@@ -59,8 +59,10 @@ export function editedProposal(
 /**
  * The agents a proposal may launch instead: the ones the asking run may
  * delegate to (its team's, which may be hidden from the catalog, else
- * every visible one), for a task only those with a document task, and the
- * proposed one always, so an unchanged form launches what was proposed.
+ * every visible one), only those of the proposal's kind (a document task's
+ * agents for a task, the others for a chat: a task agent run as a chat has
+ * no tools), and the proposed one always, so an unchanged form launches
+ * what was proposed.
  */
 function proposalAgentOptions(
   data: AgentProposalPermission,
@@ -69,18 +71,17 @@ function proposalAgentOptions(
 ): HostSnapshot['agentOptions'] {
   const { task } = data;
   const offered = (option: HostSnapshot['agentOptions'][number]) =>
-    !task || option.rounds !== undefined;
+    (option.rounds !== undefined) === task;
   const scope = run?.agentScope ?? null;
   const agents =
     scope === null
       ? host.agentOptions.filter(offered)
       : scope.flatMap((key) => {
           const option = host.agentOptions.find(({ value }) => value === key);
-          // A member the catalog hides is offered as the team names it, but
-          // for a task only when proposed: whether it has a task is not in
-          // the catalog.
+          // A member the catalog hides is offered, as the team names it,
+          // only when proposed: whether it has a task is not in the catalog.
           if (option === undefined)
-            return !task || isProposedAgent(key, data)
+            return isProposedAgent(key, data)
               ? [{ value: key, label: agentName(key) }]
               : [];
           return offered(option) ? [option] : [];
