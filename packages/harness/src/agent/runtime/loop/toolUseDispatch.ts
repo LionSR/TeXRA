@@ -1,15 +1,13 @@
 /**
  * Dispatch of one committed response's tool calls, from the run's state and
  * back into it. What it guarantees, by construction: contiguous parallel
- * calls run concurrently under a
- * small window while every other call is a barrier that runs alone and in
- * order; a call repeating an earlier call's name and arguments never executes
- * and derives its primary's result with no edits, attachments or mutation;
- * a result that ends the turn stops dispatch after its partition finishes;
- * one interrupt cancels the whole in-flight batch through the fiber; and an
- * ordinary tool failure becomes a model-visible error result rather than
- * failing dispatch. Durable write failures halt dispatch so an unfinished
- * call is never recorded as successful.
+ * calls run concurrently under a small window while every other call is a
+ * barrier that runs alone and in order; a call repeating an earlier call's
+ * name and arguments never executes and derives its primary's result; a
+ * result that ends the turn stops dispatch after its partition; one
+ * interrupt cancels the whole in-flight batch through the fiber; an ordinary
+ * tool failure becomes a model-visible error result; and a durable write
+ * failure halts dispatch, so an unfinished call is never recorded as done.
  *
  * One record per call (`PendingCall`), whichever issued it: the response, or
  * a guest of one of its `script` calls. Its rows are its only facts: the
@@ -23,9 +21,8 @@
  *
  * Resume reads only row data: a call with a result keeps it; a duplicate
  * derives its primary; a call whose body never started re-enters what it
- * asked, or, untouched in a recovered response, is reported not started; a
- * call whose body started re-runs when `replayable` says so, else gets the
- * result "outcome unknown". The model decides on retries.
+ * asked (untouched in a recovered response: reported not started); one whose
+ * body started re-runs when `replayable` says so, else "outcome unknown".
  */
 import { isDeepStrictEqual } from 'node:util';
 
@@ -148,12 +145,9 @@ interface DispatchOutcome {
   readonly endTurn: boolean;
 }
 
-/**
- * A sanitized result as the run history stores it: `diagnostics` narrowed to JSON.
- * The sanitizer already reduced it to the validation-error shape or nothing,
- * so a value that is not JSON here is a defect in that projection, and the
- * row refuses it rather than storing a value `JSON.stringify` would throw on.
- */
+/** A sanitized result as the run history stores it: `diagnostics` narrowed
+ *  to JSON. The sanitizer left the validation-error shape or nothing, so a
+ *  non-JSON value here is a defect, refused rather than stored. */
 function storedResult(result: ToolResult): CallResult['result'] {
   const { diagnostics, ...rest } = result;
   if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
@@ -171,24 +165,17 @@ const withoutEffects = (result: CallResult['result']): CallResult['result'] => {
 const endsTurn = (recorded: Pick<CallResult, 'result'> | null): boolean =>
   recorded?.result.status === 'executed' && recorded.result.endTurn === true;
 
-/**
- * How long delivery waits on the provider to take one upload. Uploading is
- * an optimisation for later rounds, so a stalled files endpoint must cost
- * delivery no more than this; the bytes are delivered either way.
- */
+/** How long delivery waits on the provider to take one upload: an
+ *  optimisation for later rounds, so a stalled files endpoint costs delivery
+ *  no more than this; the bytes are delivered either way. */
 const UPLOAD_DEADLINE = '5 seconds';
 
-/**
- * The model-visible content of one call's result: text, then inline media, each
- * with its attachment's path. The run history keeps the bytes; whether a later
- * request sends them or a file id is the bound model's in-memory upload
- * cache's decision, made when it lowers.
- *
- * An attachment the binding cannot carry inline (a PDF on a route without
- * native PDF support, an image on a text-only route, any other type) reaches
- * the model as the text mention only, and says so in the transcript rather
- * than degrading silently.
- */
+/** The model-visible content of one call's result: text, then inline media,
+ *  each with its attachment's path. The run history keeps the bytes; whether
+ *  a later request sends them or a file id is the bound model's upload
+ *  cache's decision. An attachment the binding cannot carry inline (a PDF on
+ *  a route without PDF support, an image on a text-only route) reaches the
+ *  model as the text mention only, and the transcript says so. */
 function resultContent(
   recorded: Pick<CallResult, 'result' | 'attachments'>,
   capabilities: Parameters<typeof storedMediaPart>[2],
@@ -471,6 +458,23 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     attachments: [],
   });
 
+  /** Settle a call that has no result as skipped for `reason`, closing the
+   *  card its attempt opened; a call that never started opened none. */
+  const skipCall = (
+    fact: CallFacts,
+    input: unknown,
+    status: Exclude<CallStatus, { kind: 'settled' }>,
+    reason: string,
+  ) => {
+    const reached = attemptOf(status);
+    return commitResult(
+      fact,
+      Math.max(1, reached),
+      skippedResult(reason),
+      reached === 0 ? undefined : resultCards(fact, input, 'failed', reached),
+    );
+  };
+
   /** Execute one call at `attempt` and commit its result, re-entering the
    *  request a resumed attempt left standing (`own`); `place` is the script
    *  that issued it, or the door a `script` call issues its own through. A
@@ -487,11 +491,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   > {
     const tool: ITool | undefined = step.registry.get(fact.toolName);
     const stageId = scriptOf(fact)?.stageId;
-    // A slow tool's card opens as its body starts. What the tool prints
-    // while it runs streams to that card as transient text, the way a
-    // response's chunks reach a streaming row: never a row of its own,
-    // capped, and refused once the call has returned, so no chunk can be
-    // enqueued after the result that closes the card.
+    // A slow tool's card opens as its body starts; what the tool prints
+    // streams to it as transient text, capped, never a row, and refused once
+    // the call has returned, so nothing lands after the card's close.
     let accepting = false;
     let streamed = 0;
     const onToolOutput = (chunk: string): void => {
@@ -513,6 +515,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       { responseId, callId: fact.callId, attempt },
       raised,
       standing,
+      'The resumed call no longer asks it.',
     );
     // Its step's PreToolUse hooks, recorded before the approval and the body.
     const pre =
@@ -529,10 +532,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
       };
     } else {
-      // The body starts once the guard let it: from here the call may have
-      // run, so its intent commits now, with a slow tool's card, and not
-      // again for an attempt whose body already started (a body re-entering
-      // the request it parked on).
+      // From here the call may have run: its intent commits now, with a slow
+      // tool's card, unless this attempt's body already started (a re-entry).
       const bodyStarts = Effect.gen(function* () {
         if (!startedAt(yield* cell.current, fact.callId, attempt))
           yield* commit(fact, [
@@ -693,21 +694,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const at = { responseId, callId: fact.callId };
     const entered = resumedAttempt(yield* cell.current, at, status);
     const untouched = status.kind === 'issued' && entered.raised === 0;
-    const reached = attemptOf(status);
     if (untouched && replan && scriptOf(fact) === null)
-      yield* commitResult(fact, 1, skippedResult(SKIPPED_NOT_STARTED));
+      yield* skipCall(fact, input, status, SKIPPED_NOT_STARTED);
     else if (
       !entered.mayHaveRun ||
       (yield* replayable(fact, step.registry, input, logger))
     )
       yield* execute(fact, input, entered, place);
-    else
-      yield* commitResult(
-        fact,
-        reached,
-        skippedResult(SKIPPED_OUTCOME_UNKNOWN),
-        resultCards(fact, input, 'failed', reached),
-      );
+    else yield* skipCall(fact, input, status, SKIPPED_OUTCOME_UNKNOWN);
   });
 
   /** The door a `script` call's guest issues calls through: the same per-call
@@ -934,16 +928,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           // A call the guest never awaited to its end: skipped, card closed.
           settleAbandoned: Effect.flatMap(cell.current, (state) =>
             Effect.forEach(
-              issued(state).filter(({ status }) => status.kind !== 'settled'),
+              issued(state),
               ({ call: fact, status }) => {
-                const reached = attemptOf(status);
-                return commitResult(
-                  fact,
-                  Math.max(1, reached),
-                  skippedResult(SKIPPED_SCRIPT_ENDED),
-                  reached === 0
-                    ? undefined
-                    : resultCards(fact, fact.input, 'failed', reached),
+                if (status.kind === 'settled') return Effect.void;
+                const at = { responseId, callId: fact.callId };
+                const entered = resumedAttempt(state, at, status);
+                // A request the call was parked on is withdrawn with it.
+                return callRequests(
+                  run,
+                  cell,
+                  (rows) => commit(fact, rows),
+                  { ...at, attempt: entered.attempt },
+                  entered.raised,
+                  entered.own,
+                  'The script ended before this call settled.',
+                ).retireStanding.pipe(
+                  Effect.andThen(
+                    skipCall(fact, fact.input, status, SKIPPED_SCRIPT_ENDED),
+                  ),
                 );
               },
               { discard: true },
@@ -1053,13 +1055,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ],
     };
   });
-  // Offer each delivered document to the binding's upload cache, so the
-  // requests that replay this history can send a file id instead of the
-  // bytes: concurrent under the parallel-call bound, the batch under one
-  // aggregate deadline that warns with the paths that never finished. A
-  // batch that ends the turn, or one delivered while a queued model switch
-  // waits for the next boundary (whose binding never saw these ids), keeps
-  // its documents local.
+  // Offer each delivered document to the binding's upload cache, so requests
+  // replaying this history can send a file id instead of the bytes: under the
+  // parallel-call bound and one deadline that warns with the unfinished paths.
+  // A batch that ends the turn, or one delivered while a queued model switch
+  // waits (its binding never saw these ids), keeps its documents local.
   const switching =
     !endTurn &&
     (yield* run.session.followUps.read(run.runId)).followUps.some(

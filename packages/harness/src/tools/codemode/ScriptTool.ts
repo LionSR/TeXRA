@@ -260,11 +260,11 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
-      // A stop of the run leaves every row as it stands, for the resume that
-      // replays the script. Any other end is the guest's own: the sandbox
-      // has ended the calls it issued, and one the guest never awaited to
-      // its end is settled before this call's result, so nothing of the
-      // script's stays open behind it.
+      // An interruption of the run leaves every row as it stands, for the
+      // resume that replays the script. Every other exit (the guest returned
+      // or threw, the deadline, a sandbox fault) has ended the calls the
+      // guest issued: one it never awaited to its end is settled before this
+      // call's result, so nothing of the script's stays open behind it.
       Effect.onExit((exit) =>
         Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
           ? Effect.void
