@@ -671,6 +671,20 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **A message typed while a run works is answered at its next model
+  request, not after the turn ends.** Up to 0.40.10 the engine delivered a
+  follow-up at the next request inside the turn; the Effect loop kept only
+  the end-of-turn read. A message typed mid-turn now lands after the tool
+  results the run is waiting on and before its next request, so the model
+  answers it in the same turn; a turn with no tool calls reads it at the end
+  as before, and a message typed with Stop is answered by the request after
+  the stopped step's results. Under it, a run's pending input has one owner
+  per fact: one rule for which queued rows are messages, one wake for a run
+  no process holds, one admission that refuses a message (a one-shot run now
+  refuses with a reason instead of queuing a message it never reads), one
+  consume, and one in-memory record of a stop in progress and of why a
+  resume is refused. A run written by an earlier build refuses a resume as
+  such instead of failing it.
 - **Check an agent's launch in the New task form, and run a task again
   with changes.** An agent's proposal card has **Edit** (`e`): it opens the
   New task form filled with what the agent would start, its agent, model,
