@@ -17,18 +17,6 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 const DEFAULT_PAGER = 'less -FIRX';
 
 /**
- * Resolve the pager command from `$PAGER` (then `$TEXRA_PAGER` is *not* a thing
- * — we deliberately reuse the conventional env var). An explicitly empty
- * `PAGER=` disables paging, matching how `git`/`man` treat it.
- */
-function resolvePagerCommand(pagerEnv: string | undefined): string | undefined {
-  const pager = pagerEnv?.trim() ?? DEFAULT_PAGER;
-  // `PAGER=` (empty) or `PAGER=cat` are the conventional "no pager" signals.
-  if (pager === '' || pager === 'cat') return undefined;
-  return pager;
-}
-
-/**
  * Write `text` to stdout, paging through `$PAGER` (default `less -FIRX`) **only**
  * when stdout is an interactive TTY. When stdout is not a TTY (piped, redirected,
  * `--print`, `--no-input`, `--output-format json|ndjson`) this is a strict
@@ -55,8 +43,11 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
     return;
   }
 
-  const command = resolvePagerCommand(options.pager ?? cliEnvValue('PAGER'));
-  if (!command) {
+  // The conventional `$PAGER`, no TeXRA-specific variable. As for `git` and
+  // `man`, an empty `PAGER=` or `PAGER=cat` means no pager.
+  const command =
+    (options.pager ?? cliEnvValue('PAGER'))?.trim() ?? DEFAULT_PAGER;
+  if (command === '' || command === 'cat') {
     writeTextStdout(text);
     return;
   }

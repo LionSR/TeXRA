@@ -205,12 +205,6 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
-function resolveCliCommandName(entrypointPath: string): string {
-  return path.basename(entrypointPath).toLowerCase() === 'texra-local'
-    ? 'texra-local'
-    : 'texra';
-}
-
 interface CliPackageManifest {
   readonly version?: string;
   readonly bugs?: { readonly url?: string };
@@ -486,7 +480,10 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       stderrIsTty: ambient.stderrIsTty,
       stdoutColorEnabled,
       stderrColorEnabled,
-      commandName: resolveCliCommandName(readCliEntrypointPath()),
+      commandName:
+        path.basename(readCliEntrypointPath()).toLowerCase() === 'texra-local'
+          ? 'texra-local'
+          : 'texra',
       version: readCliVersion(),
       resourcesPath: yield* resolveCliResourcesPath(),
       config,
