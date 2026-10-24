@@ -23,6 +23,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateShortId } from '@utils/core';
@@ -193,12 +194,6 @@ export const consumedRows = (
 ): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
   controls.flatMap(({ followUpId, control }) =>
     control !== undefined && (kind === undefined || control.kind === kind)
-      ? [
-          {
-            type: 'followup.consumed' as const,
-            aggregateId: rowAggregate(runId),
-            followUpId,
-          },
-        ]
+      ? [consumedRow(runId, followUpId)]
       : [],
   );

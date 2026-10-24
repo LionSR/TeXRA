@@ -9,10 +9,12 @@ import {
 } from '@shared/subagentFollowup';
 import type {
   FollowUpContent,
+  FollowUpSender,
   RunId,
   RunRelation,
   ScriptDeliverySummary,
 } from '@shared/schemas';
+import { isInstruction } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { InboxItem } from './Inbox';
 
@@ -46,15 +48,6 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
     };
   }
   return { text: summarizeSubagentFollowup(followUp.text) };
-}
-
-/** Input that asks the run to do something: its user's and its parent's.
- *  A child's report, any other run's message and a host notice inform the
- *  run and never instruct it. */
-export function isInstruction({ from }: FollowUpContent): boolean {
-  return (
-    from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent')
-  );
 }
 
 /** What the run was asked to do, joined from its instructing input. */
@@ -91,4 +84,22 @@ export function queuedRow(
           : from,
     },
   };
+}
+
+/**
+ * Who a producer says a follow-up is from. Runs talk as a graph: any run may
+ * message any run in the project, whatever their places in the supervision
+ * tree. A run names only itself; the recipient's admission
+ * (`Inbox.send`) stamps how it relates to the recipient.
+ */
+export type FollowUpSenderInput =
+  | Exclude<FollowUpSender, { readonly kind: 'run' }>
+  | { readonly kind: 'run'; readonly runId: RunId };
+
+/** The sender a tool call speaks as: its run, or the user when no run
+ *  calls it. */
+export function senderOf(caller: RunId | undefined): FollowUpSenderInput {
+  return caller === undefined
+    ? { kind: 'user' }
+    : { kind: 'run', runId: caller };
 }

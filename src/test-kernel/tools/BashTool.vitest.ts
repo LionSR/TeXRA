@@ -584,9 +584,9 @@ describe('BashTool', () => {
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         // The resume a wake starts is the run's one resume in flight.
         const followUps = testDefaultSession().followUps;
-        const resumeOnce = followUps.resumeOnce.bind(followUps);
+        const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
         const tryResumeRun = vi
-          .spyOn(followUps, 'resumeOnce')
+          .spyOn(followUps.resumes, 'once')
           .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(parentWoken, Effect.void);
             return resumeOnce(resumed, resume);
@@ -648,9 +648,9 @@ describe('BashTool', () => {
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         // The resume a wake starts is the run's one resume in flight.
         const followUps = testDefaultSession().followUps;
-        const resumeOnce = followUps.resumeOnce.bind(followUps);
+        const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
         const tryResumeRun = vi
-          .spyOn(followUps, 'resumeOnce')
+          .spyOn(followUps.resumes, 'once')
           .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
             handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;

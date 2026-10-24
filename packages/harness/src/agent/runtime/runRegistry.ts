@@ -37,7 +37,6 @@ import {
   RUN_SUBSTATE,
   type RunId,
   type RunPhase,
-  type CommitOrdinal,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
@@ -121,8 +120,9 @@ export interface RunRegistryInit {
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
   readonly programs: RunPrograms;
-  /** No liveness arm of the run is left here: wake it for rows landed since. */
-  readonly wake: (runId: RunId, since: CommitOrdinal) => void;
+  /** No liveness arm of the run is left here: wake it for the input it
+   *  holds (`Inbox.wake`). */
+  readonly wake: (runId: RunId) => void;
 }
 
 /** The run programs: a root launch, a fresh run's turn, a resumed run's
@@ -150,10 +150,8 @@ interface RunEntry {
    *  step takes the lane without being one ({@link RunRegistry.isLive}). */
   launches: number;
   /** The stop that interrupted this run here, recorded before the interrupt
-   *  for its cleanup (a `user` reason outlives a later `shutdown`), and the
-   *  commit its owed wake counts from: the claim's, then its first `stop`'s. */
+   *  for its cleanup (a `user` reason outlives a later `shutdown`). */
   stopReason?: RunStopReason;
-  since: CommitOrdinal;
 }
 
 /** Session-owned registry of runs: one per session, built by the session
@@ -210,7 +208,7 @@ export class RunRegistry implements RunsShape {
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { launches: 0, since: 0 };
+    const entry: RunEntry = { launches: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
@@ -467,7 +465,6 @@ export class RunRegistry implements RunsShape {
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
-        counted.since = this.now();
         return undefined;
       };
       const leave = (): void => {
@@ -477,7 +474,7 @@ export class RunRegistry implements RunsShape {
         if (entry === undefined) return;
         entry.launches -= 1;
         this.prune(runId, entry);
-        if (!this.isLive(runId)) this.init.wake(runId, entry.since);
+        if (!this.isLive(runId)) this.init.wake(runId);
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
@@ -517,7 +514,6 @@ export class RunRegistry implements RunsShape {
       return Effect.asVoid(
         Effect.acquireRelease(
           Effect.gen({ self: this }, function* () {
-            const since = this.now();
             const ready = Deferred.makeUnsafe<void, Error>();
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
@@ -543,16 +539,16 @@ export class RunRegistry implements RunsShape {
               { startImmediately: true },
             );
             yield* Deferred.await(ready);
-            return { latch, fiber, since };
+            return { latch, fiber };
           }),
           // The join awaits the claim release before the caller's scope
           // closes; the hold was the run's liveness, so its end owes the wake.
-          ({ latch, fiber, since }) =>
+          ({ latch, fiber }) =>
             Latch.open(latch).pipe(
               Effect.andThen(Fiber.join(fiber)),
               Effect.andThen(
                 Effect.sync(() => {
-                  if (!this.isLive(runId)) this.init.wake(runId, since);
+                  if (!this.isLive(runId)) this.init.wake(runId);
                 }),
               ),
             ),
@@ -646,7 +642,9 @@ export class RunRegistry implements RunsShape {
     const token = Symbol('run-stop');
     const tokens = this.stopping.get(runId) ?? new Set<symbol>();
     const entry = this.entries.get(runId);
-    if (!tokens.size && entry && !entry.stopReason) entry.since = this.now();
+    // Marked at the request: a user's message sent while the stop runs waits
+    // for the run to drain (`submitFollowUp`).
+    if (entry !== undefined) this.markStopped(runId, options.reason);
     this.stopping.set(runId, tokens.add(token));
     const lift = Effect.sync(() => {
       const current = this.stopping.get(runId);
@@ -773,7 +771,6 @@ export class RunRegistry implements RunsShape {
   private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
     const entry = this.entries.get(runId);
     if (entry === undefined || reason === undefined) return;
-    if (!this.stopping.has(runId)) entry.since = this.now();
     if (entry.stopReason !== 'user') entry.stopReason = reason;
   }
 

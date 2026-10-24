@@ -405,9 +405,8 @@ const waitingRow = (runId: RunId, phase: 'parked' | 'resumed') =>
     phase,
   }) as const;
 
-/** A native child's progress reaches the parent as queued follow-ups,
- *  enqueued on the session's publisher where it is reported, so each
- *  commits ahead of the turn's result. */
+/** A native child's progress reaches its parent as a held follow-up, enqueued
+ *  on the publisher where it is reported, ahead of the turn's result. */
 const progressNotify =
   <TTurn, R>(
     loop: ChildLoop<TTurn, R>,
@@ -421,7 +420,7 @@ const progressNotify =
     // Nothing is queued when no session holds the run.
     if (loop.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
       return;
-    session.followUps.sendDetached(parentEdgeIn(session, runId), {
+    session.followUps.sendNotice(parentEdgeIn(session, runId), {
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
     });
@@ -697,7 +696,7 @@ const driveProcess = <TTurn, R>(
       const batch = loop.isInterrupted()
         ? null
         : yield* Effect.raceFirst(
-            input.take,
+            input.next('idle'),
             Effect.callback<null>((resume) =>
               Effect.sync(
                 onAbort(loop.signal, () => resume(Effect.succeed(null))),

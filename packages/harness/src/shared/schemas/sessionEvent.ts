@@ -353,8 +353,8 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.queued', {
     followUpId: z.string().min(1),
     content: FollowUpContentSchema,
-    /** Held until a take also carries an instruction (a pause notice). */
-    holdUntil: z.enum(['instruction']).optional(),
+    /** When the row may be read; the rules are `readableMessages`. */
+    holdUntil: z.enum(['instruction', 'turn', 'generation']).optional(),
     /** A request of the run's own, consumed by the batch that applies it. */
     control: z
       .discriminatedUnion('kind', [

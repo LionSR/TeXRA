@@ -3,17 +3,30 @@
  * them: its input (system text, instruction, activated skills, memory
  * misses), the files its calls edited and how many ran, its structured
  * output, and where its turn policy stands (the final-tool nudge, the
- * finalized answer). The row handlers in `runState.ts` and
+ * finalized answer); and the rules for reading its pending input (the
+ * `followup.queued` rows), stated once for the loop, the inbox and the view. The row handlers in `runState.ts` and
  * `turnRowHandlers.ts` set these fields, so the loop reads them off the
  * same state on the live path and on resume.
  */
 import {
-  STRUCTURED_OUTPUT_TOOL_NAME,
+  type AggregateId,
+  type FollowUpContent,
   type JsonValue,
+  qualifyAggregateId,
+  type RunId,
   type RunInput,
+  type SessionEvent,
+  STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
 } from '@shared/schemas';
 
+import {
+  isMessage,
+  isStaleNotice,
+  type QueuedFollowUp,
+  type RunLookup,
+  runRowsFrom,
+} from './runRows';
 import type { PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
@@ -109,4 +122,101 @@ function outputOf(
     return 'handed-down';
   const tool = pending.records[callId]?.script?.toolName ?? own?.toolName;
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
+}
+
+// ---------------------------------------------------- pending input
+
+/** Input that asks the run to do something: its user's and its parent's.
+ *  A child's report, any other run's message and a host notice inform the
+ *  run and never instruct it. */
+export const isInstruction = ({ from }: FollowUpContent): boolean =>
+  from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
+
+/** Where in its loop a run reads its input: before a model request inside
+ *  a turn, at the turn's end, or while it waits for input. */
+export type InputPoint = 'request' | 'turn' | 'idle';
+
+/**
+ * The pending messages a run reads at `at`, in commit order. A row held
+ * until an instruction (a child's pause or stop notice) is read only beside
+ * one. A row held until the turn ends, or one for a running generation only
+ * (a progress notice, a host notification), is not read before a request
+ * inside the turn. A notice from a child run that has ended is stale: it is
+ * consumed unread (`staleNotices`).
+ */
+export function readableMessages(
+  rows: readonly QueuedFollowUp[],
+  at: InputPoint,
+  run: RunLookup,
+): QueuedFollowUp[] {
+  const messages = rows.filter(isMessage);
+  const asked = messages.some(
+    (f) => f.holdUntil === undefined && isInstruction(f.content),
+  );
+  return messages.filter((f) => {
+    switch (f.holdUntil) {
+      case 'instruction':
+        return asked;
+      case 'turn':
+        return at !== 'request';
+      case 'generation':
+        return at !== 'request' && !isStaleNotice(f, run);
+      case undefined:
+        return true;
+    }
+  });
+}
+
+/** The stale notices among the pending rows: consumed unread by the next
+ *  batch the run takes. */
+export const staleNotices = (
+  rows: readonly QueuedFollowUp[],
+  run: RunLookup,
+): QueuedFollowUp[] => rows.filter((f) => isStaleNotice(f, run));
+
+/** The row that consumes one follow-up: committed with the message it became,
+ *  or with the end of a run that never read it. */
+export const consumedRow = (
+  runId: RunId,
+  followUpId: string,
+): {
+  readonly type: 'followup.consumed';
+  readonly aggregateId: AggregateId;
+  readonly followUpId: string;
+} => ({
+  type: 'followup.consumed',
+  aggregateId: qualifyAggregateId('run', runId),
+  followUpId,
+});
+
+/**
+ * Whether a run's pending input obliges a resume of it when no generation
+ * holds it, from its input rows (`followup.queued`, `followup.consumed`,
+ * `run.end`): a message readable at idle, from its user or a child of its,
+ * while the run never ended or ended other than by a user's Stop; after a
+ * Stop (its last `run.end` is cancelled), only the user's message committed
+ * after that end. A row for a running generation only, another run's
+ * message and a host notification wake nothing; a message a run never ended
+ * for takes the next explicit Resume.
+ */
+export function needsWake(
+  rows: readonly SessionEvent[],
+  run: RunLookup,
+): boolean {
+  const end = rows.findLast((row) => row.type === 'run.end');
+  const stopped = end?.type === 'run.end' && end.outcome === 'cancelled';
+  const committed = new Map(
+    rows.flatMap((row) =>
+      row.type === 'followup.queued' ? [[row.followUpId, row.commit]] : [],
+    ),
+  );
+  return readableMessages(runRowsFrom(rows).followUps, 'idle', run).some(
+    ({ followUpId, holdUntil, content: { from } }) => {
+      if (holdUntil === 'generation') return false;
+      if (from.kind === 'user')
+        return !stopped || (committed.get(followUpId) ?? 0) > end.commit;
+      if (from.kind === 'run' && from.relation === 'child') return !stopped;
+      return end === undefined;
+    },
+  );
 }

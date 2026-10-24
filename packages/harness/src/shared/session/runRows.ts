@@ -26,8 +26,11 @@ import {
   type RunFamily,
   type RunOutcome,
   type RunPhase,
+  type RunId,
   type SessionEvent,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunView } from './sessionView';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
@@ -63,6 +66,29 @@ export type QueuedFollowUp = Pick<
   'followUpId' | 'content' | 'holdUntil' | 'control'
 >;
 
+/** A pending follow-up that is a message, not one of the run's own requests
+ *  (`control`: a `/compact`, a model switch). */
+export const isMessage = (row: QueuedFollowUp): boolean =>
+  row.control === undefined;
+
+/** A run as the session view holds it; undefined for one it does not hold. */
+export type RunLookup = (runId: RunId) => Pick<RunView, 'status'> | undefined;
+
+/** A notice for a running generation whose child run has ended. */
+export const isStaleNotice = (row: QueuedFollowUp, run: RunLookup): boolean =>
+  row.holdUntil === 'generation' &&
+  row.content.from.kind === 'run' &&
+  row.content.from.relation === 'child' &&
+  isTerminalOutcomePhase(run(row.content.from.runId)?.status);
+
+/** The pending messages that are not stale: what the view lists as queued
+ *  and what keeps a run's input open. */
+export const pendingMessages = (
+  rows: readonly QueuedFollowUp[],
+  run: RunLookup,
+): QueuedFollowUp[] =>
+  rows.filter((f) => isMessage(f) && !isStaleNotice(f, run));
+
 /**
  * What these rows say about one run's position: everything but its pending
  * input. `RunState` has every field of it, so the run state copies the
@@ -76,38 +102,6 @@ export type RunPosition = {
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
 };
-
-/**
- * Where the loop stands, as its own branches read it: between turns
- * (`waiting`, `halted`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows.
- */
-export type RunLoopPhase =
-  'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
-
-/**
- * The phase a position leaves an opened loop in. A `halted` position changes
- * none: a stop keeps the phase the loop stopped in, so a resume continues
- * from there. `turn.ready` is input consumed while waiting, still between
- * turns; a `turn.end` that no `waiting` or `turn.begin` follows in its batch
- * is the round loop's last round closed, the run concluded before its
- * terminal row. A run's first position opens it: its opening batch's
- * `turn.ready`, or a fork's `waiting`. A halt opens nothing.
- */
-const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
-  {
-    'turn.ready': 'waiting',
-    'turn.begin': 'model.ready',
-    'response.ready': 'model.submitted',
-    'results.ready': 'results.ready',
-    'turn.end': 'halted',
-    waiting: 'waiting',
-  };
-export const phaseAfter = (
-  phase: RunLoopPhase | null,
-  at: PositionAt | null | undefined,
-): RunLoopPhase | null =>
-  at == null || at === 'halted' ? phase : PHASE_AT[at];
 
 /**
  * What these rows say about one run: its position and the input it has not

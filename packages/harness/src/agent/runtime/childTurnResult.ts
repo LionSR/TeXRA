@@ -10,11 +10,9 @@
 import { Effect, type Scope } from 'effect';
 
 import type { InboxItem, Sent, SendOptions } from '@agent/followUp/Inbox';
-import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
 import {
   getRunRecords,
-  lostResultId,
   persistedParentRunId,
   type AttemptKey,
 } from '@agent/storage/runRecords';
@@ -25,6 +23,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
+import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runState';
 import type { SessionHandle } from './SessionHandle';
@@ -150,11 +149,9 @@ export function childTurnResult(params: {
               result: params.resultMeta,
             },
           ]),
-      ...params.consumed.map((followUp) => ({
-        type: 'followup.consumed' as const,
-        aggregateId: target,
-        followUpId: followUp.followUpId,
-      })),
+      ...params.consumed.map((followUp) =>
+        consumedRow(runId, followUp.followUpId),
+      ),
       {
         type: 'child.turn',
         aggregateId: target,
@@ -362,10 +359,10 @@ export const commitPart = (
     }).pipe(Effect.scoped),
   );
 
-/** After the transaction that queued `delivery` commits: if the parent has
- *  not read the delivery yet (or the notice the child's end queued in its
- *  place, `lostResultId`), resume it unless its loop already runs here. A
- *  refused or already-read delivery needs no resume. */
+/** After the transaction that queued `delivery` commits: resume the parent
+ *  if the delivery obliges one and no generation here reads it
+ *  (`Inbox.wake`); a refused resume is a warning, and an explicit Resume
+ *  delivers the result. */
 export const wakeParent = (
   session: SessionHandle,
   delivery: ChildDelivery | undefined,
@@ -373,13 +370,7 @@ export const wakeParent = (
 ): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
     if (delivery === undefined) return;
-    const { deliveryId, from } = delivery.item;
-    const lost = lostResultId(from.runId);
-    const { followUps } = yield* session.followUps.read(delivery.to);
-    const waits = ({ followUpId }: { readonly followUpId: string }) =>
-      followUpId === deliveryId || followUpId.startsWith(lost);
-    if (!followUps.some(waits)) return;
-    if (!(yield* startFollowUpWake(delivery.to, session)))
+    if (!(yield* session.followUps.wake(delivery.to)))
       yield* warn(
         trace,
         'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
