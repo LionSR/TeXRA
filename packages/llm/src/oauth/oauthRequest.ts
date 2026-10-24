@@ -10,13 +10,12 @@
  * render `message` at their run edge.
  */
 // Third-party imports
-import { Data, Duration, Effect } from 'effect';
+import { Data, Duration, Effect, Result, Schema } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
 import { toErrorMessage } from './support.js';
 
-import type { z } from 'zod';
 import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError.js';
 
 /**
@@ -152,7 +151,7 @@ export const oauthHttpError = Effect.fn('oauthRequest.oauthHttpError')(
 export const parseOAuthJson = Effect.fn('oauthRequest.parseOAuthJson')(
   function* <T>(
     response: OAuthResponse,
-    schema: z.ZodType<T>,
+    schema: Schema.Codec<T>,
     unexpectedMessage: string,
   ) {
     const raw = yield* Effect.try({
@@ -160,13 +159,13 @@ export const parseOAuthJson = Effect.fn('oauthRequest.parseOAuthJson')(
       catch: (cause) =>
         new OAuthUnexpectedResponse({ message: unexpectedMessage, cause }),
     });
-    const parsed = schema.safeParse(raw);
-    if (!parsed.success) {
+    const parsed = Schema.decodeUnknownResult(schema)(raw);
+    if (!Result.isSuccess(parsed)) {
       return yield* new OAuthUnexpectedResponse({
         message: unexpectedMessage,
-        cause: parsed.error,
+        cause: parsed.failure,
       });
     }
-    return parsed.data;
+    return parsed.success;
   },
 );

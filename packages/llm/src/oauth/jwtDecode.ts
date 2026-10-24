@@ -5,10 +5,12 @@
  * Tokens are assumed to come from the provider token endpoint over TLS; we
  * decode the middle segment and validate through a Zod schema at the boundary.
  */
-import { z } from 'zod';
+import { Effect, Option, Result, Schema } from 'effect';
 
 /** Non-empty string claim; any other shape degrades to undefined. */
-export const NonEmptyJwtClaim = z.string().min(1).optional().catch(undefined);
+export const NonEmptyJwtClaim = Schema.optional(
+  Schema.String.check(Schema.isMinLength(1)),
+).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))));
 
 /**
  * Decode the middle base64url segment of a JWT to raw JSON. Returns `null` on
@@ -31,9 +33,11 @@ function decodeUnverifiedJwtPayload(token: string): unknown {
  */
 export function decodeJwtClaimsWithSchema<T>(
   token: string,
-  schema: z.ZodType<T>,
+  schema: Schema.Codec<T>,
   empty: T,
 ): T {
-  const parsed = schema.safeParse(decodeUnverifiedJwtPayload(token));
-  return parsed.success ? parsed.data : empty;
+  const parsed = Schema.decodeUnknownResult(schema)(
+    decodeUnverifiedJwtPayload(token),
+  );
+  return Result.isSuccess(parsed) ? parsed.success : empty;
 }

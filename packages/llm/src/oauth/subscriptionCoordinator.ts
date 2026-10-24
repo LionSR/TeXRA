@@ -4,12 +4,12 @@
  * {@link SubscriptionCoordinator} a caller holds. The implementation is
  * `SubscriptionOAuthCoordinator.ts`.
  */
+import { Schema } from 'effect';
 import type { SecretsFailed } from '../providers/credentials.js';
 import type { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { SubscriptionSessionBaseSchema } from './subscriptionSessionSchema.js';
 import type { Effect } from 'effect';
 import type { HttpClient } from 'effect/http';
-import type { z } from 'zod';
 
 /** Raw token-endpoint shape shared by authorization-code and refresh grants. */
 export interface SubscriptionTokenResponse {
@@ -22,12 +22,11 @@ export interface SubscriptionTokenResponse {
 /** Canonical stored session: the persisted base schema's shape (its single
  *  source of truth) plus the two optional identity fields the status read
  *  reports. Providers may add fields via intersection types. */
-export type SubscriptionSession = z.infer<
-  typeof SubscriptionSessionBaseSchema
-> & {
-  email?: string;
-  accountId?: string;
-};
+export type SubscriptionSession =
+  (typeof SubscriptionSessionBaseSchema)['Type'] & {
+    email?: string;
+    accountId?: string;
+  };
 
 /** The authorize URL a loopback login opens, and what its callback checks. */
 export interface SubscriptionAuthorizeRequest {

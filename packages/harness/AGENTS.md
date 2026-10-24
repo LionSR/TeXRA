@@ -62,12 +62,12 @@ stripped.
 
 ## Tool input schemas
 
-Root `AGENTS.md` "Tool input schemas" has the `.nullish()` rule.
+Root `AGENTS.md` "Tool input schemas" has the `Schema.optional(Schema.NullOr(S))` rule.
 
-**Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
+**Union branches tolerate the other branches' keys.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `Schema.Struct` ignores keys it does not declare, so each branch still enforces its own required fields and the cross-branch leakage is dropped; never add a check that rejects unknown keys to a branch.
 
-A union-branch field with a default needs `nullishWithDefault` (`packages/harness/src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
+A union-branch field with a default needs `nullishWithDefault` (`packages/harness/src/tools/core/inputSchema.ts`) rather than a decoding default alone: `withDecodingDefault` substitutes only for an absent or `undefined` field, so an explicit `null` reaches the field inside the correctly-selected branch.
 
 ### Design for the model's first call
 
-Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required: a required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior, verify it against the actual dispatch table whenever either changes.
+Any parameter with an obvious default should be optional with that default applied at dispatch time (`Schema.optional(Schema.NullOr(S))` plus a default when the tool runs), not required: a required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior, verify it against the actual dispatch table whenever either changes.

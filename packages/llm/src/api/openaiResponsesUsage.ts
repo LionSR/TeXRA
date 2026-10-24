@@ -1,24 +1,40 @@
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // Local imports - canonical model contract
 import type { TurnResult } from '../turn.js';
 
 /** One Responses usage receipt, as OpenAI and xAI report it. */
-export const ResponsesUsageSchema = z.object({
-  input_tokens: z.int().nonnegative(),
-  output_tokens: z.int().nonnegative(),
+export const ResponsesUsageSchema = Schema.Struct({
+  input_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  output_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   // Zhipu reports no total.
-  total_tokens: z.int().nonnegative().optional(),
-  input_tokens_details: z
-    .object({ cached_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
-  output_tokens_details: z
-    .object({ reasoning_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
+  total_tokens: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+  input_tokens_details: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        cached_tokens: Schema.optional(
+          Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+        ),
+      }),
+    ),
+  ),
+  output_tokens_details: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        reasoning_tokens: Schema.optional(
+          Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+        ),
+      }),
+    ),
+  ),
   // xAI's settled cost; only its receipts carry the key, and its
   // `output_tokens` exclude the reasoning tokens it bills on top.
-  cost_in_usd_ticks: z.int().nonnegative().nullish(),
+  cost_in_usd_ticks: Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ),
 });
 
 /**
@@ -26,7 +42,7 @@ export const ResponsesUsageSchema = z.object({
  * as `xai` provider evidence.
  */
 export function responsesUsage(
-  usage: z.infer<typeof ResponsesUsageSchema>,
+  usage: typeof ResponsesUsageSchema.Type,
 ): NonNullable<TurnResult['usage']> {
   return {
     inputTokens: usage.input_tokens,

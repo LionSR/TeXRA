@@ -199,27 +199,32 @@ What a tool prints while it runs is transient text on the card id
 (`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add a tool-side
 start card, a durable progress row, or a second append path.
 
-## Schemas (Zod v4)
+## Schemas (Effect Schema)
 
-Schemas are the single source of truth: define the schema, derive types with
-`z.infer`, compose with `.extend()`/`.pick()`, prefer `z.discriminatedUnion()`
-over `z.custom<T>()`. Normalize external input once at the boundary into the
-canonical shape; downstream code never branches on format version. There are
-no legacy-format readers: AGENTS.md "Compatibility and format retirement".
+Schemas are Effect Schema (`Schema` from `effect`) and the single source of
+truth: define the schema, derive the type with `typeof S.Type`, compose with
+`mapFields` and `Struct.assign`/`pick`/`omit`, prefer a `Schema.Union` of
+literal-discriminated structs over `Schema.declare<T>()`. Errors are
+`Schema.TaggedError`. Zod is gone (ruled 2026-10-24); do not add it back for
+any shape, including tool inputs and the RPC edge. Normalize external input
+once at the boundary into the canonical shape; downstream code never branches
+on format version. There are no legacy-format readers: AGENTS.md
+"Compatibility and format retirement".
 
 Two traps worth memorizing:
 
-- **Tool input schemas use `.nullish()`, not `.optional()`.** OpenAI-compatible
-  APIs (DeepSeek, Kimi, …) require optional fields to also be nullable for
-  structured output. Check for `== null` at use sites, not `=== undefined`.
-- **`.prefault()` vs `.default()` vs `.catch()` is not stylistic.**
-  `.prefault` substitutes before validation (deserialization), `.default` fills
-  a missing field after, `.catch` swallows a validation error. On persisted,
-  security, accounting, or lifecycle data, `.catch` turns corruption into a
-  silent default — and if that value feeds a later whole-file write, it becomes
-  permanent data loss.
+- **Tool input schemas use `Schema.optional(Schema.NullOr(S))`, not
+  `Schema.optional(S)`.** OpenAI-compatible APIs (DeepSeek, Kimi, …) require
+  optional fields to also be nullable for structured output. Check for
+  `== null` at use sites, not `=== undefined`.
+- **`withDecodingDefault` vs `withDecodingDefaultType` vs `catchDecoding` is
+  not stylistic.** The first substitutes before decoding (the stored form),
+  the second fills a missing field with a decoded value, the third swallows a
+  decoding failure. On persisted, security, accounting, or lifecycle data,
+  `catchDecoding` turns corruption into a silent default — and if that value
+  feeds a later whole-file write, it becomes permanent data loss.
 
-Full patterns: AGENTS.md "Zod v4 Schema Patterns".
+Full patterns: AGENTS.md "Effect Schema Patterns".
 
 ## Agent system
 

@@ -1,6 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
-import { z } from 'zod';
+import { Data, Effect, Result, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -13,48 +12,53 @@ import {
 // Local imports - canonical messages
 
 /** Enough evidence to observe accepted remote work, without a second transcript. */
-const ResponsesOperationSchema = z
-  .strictObject({
-    origin: OriginSchema.extend({
-      protocol: z.literal('openai-responses'),
-    }).readonly(),
-    providerResponseId: z.string().min(1),
-    afterSequence: z.int().nonnegative().nullable(),
-  })
-  .readonly();
+const ResponsesOperationSchema = Schema.Struct({
+  origin: OriginSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('openai-responses'),
+    }),
+  ),
+  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  afterSequence: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+});
 /** Remote work a provider accepted: enough to observe or cancel it later. */
-export const RemoteOperationSchema = z.union([
+export const RemoteOperationSchema = Schema.Union([
   ResponsesOperationSchema,
-  ResponsesOperationSchema.unwrap()
-    .extend({
-      origin: OriginSchema.extend({
-        protocol: z.literal('google-interactions'),
-      }).readonly(),
+
+  ResponsesOperationSchema /* TODO(effect-schema): unwrap; was `.unwrap()` */.mapFields(
+    Struct.assign({
+      origin: OriginSchema.mapFields(
+        Struct.assign({
+          protocol: Schema.Literal('google-interactions'),
+        }),
+      ),
       // Polling snapshots have no provider sequence or replay cursor.
-      afterSequence: z.null(),
-    })
-    .readonly(),
+      afterSequence: Schema.Null,
+    }),
+  ),
 ]);
 /** {@link RemoteOperationSchema}'s value. */
-export type RemoteOperation = z.infer<typeof RemoteOperationSchema>;
+export type RemoteOperation = typeof RemoteOperationSchema.Type;
 
 /** A subscription plan whose quota a request can exhaust, named by its route. */
-const PlanRouteSchema = z.enum([
+const PlanRouteSchema = Schema.Literals([
   'chatgpt-subscription',
   'xai-subscription',
   'kimi-code-subscription',
   'glm-coding-plan-subscription',
 ]);
 /** A subscription plan, named by the route that bills through it. */
-export type PlanRoute = z.infer<typeof PlanRouteSchema>;
+export type PlanRoute = typeof PlanRouteSchema.Type;
 /** The route a binding bills through: a plan, or the caller's API key. */
 export type BillingRoute = PlanRoute | 'api-key';
 
 /** A model failure's fields as data: what crosses a process boundary (an
  *  editor's model served to the service) and is rebuilt there as a
  *  {@link ModelError}. */
-export const ModelErrorFieldsSchema = z.strictObject({
-  kind: z.enum([
+export const ModelErrorFieldsSchema = Schema.Struct({
+  kind: Schema.Literals([
     'invalid-request',
     'unsupported',
     'authentication',
@@ -67,51 +71,52 @@ export const ModelErrorFieldsSchema = z.strictObject({
     'malformed-output',
     'observation-deadline',
   ]),
-  message: z.string(),
-  requestId: z.string().optional(),
-  responseId: z.string().optional(),
-  model: z.string().optional(),
-  status: z.int().optional(),
+  message: Schema.String,
+  requestId: Schema.optional(Schema.String),
+  responseId: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.Int),
   /** Whether repeating the request unchanged can succeed. */
-  retryable: z.boolean(),
+  retryable: Schema.Boolean,
   /**
    * What the failure is evidence about beyond this request: `model` for a
    * limit the provider scoped to one model, `route` for the shared provider,
    * credential and endpoint (an unscoped rate limit, a server failure, the
    * network). Absent when it says nothing about either.
    */
-  scope: z.enum(['model', 'route']).optional(),
+  scope: Schema.optional(Schema.Literals(['model', 'route'])),
   /**
    * The provider's own "come back in" delay, in milliseconds, as its
    * response stated it. The retry gate reads this instead of guessing a
    * backoff, so a rate limit waits exactly as long as it was told to.
    */
-  retryAfterMs: z.int().nonnegative().optional(),
+  retryAfterMs: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
   /** What a `quota-exhausted` failure used up: a plan, or the account's credit (`plan: null`). */
-  quota: z
-    .strictObject({
-      plan: PlanRouteSchema.nullable(),
+  quota: Schema.optional(
+    Schema.Struct({
+      plan: Schema.NullOr(PlanRouteSchema),
       /** The plan's tier as the provider names it (ChatGPT's `pro`). */
-      planType: z.string().optional(),
-      resetsInMs: z.int().nonnegative().optional(),
-    })
-    .readonly()
-    .optional(),
-  operation: RemoteOperationSchema.optional(),
-  providerEvidence: z
-    .discriminatedUnion('kind', [
-      z
-        .strictObject({
-          kind: z.literal('vscode-lm'),
-          origin: EditorOriginSchema.readonly(),
-          code: z.enum(['NoPermissions', 'Blocked', 'NotFound']),
-        })
-        .readonly(),
-    ])
-    .optional(),
+      planType: Schema.optional(Schema.String),
+      resetsInMs: Schema.optional(
+        Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+      ),
+    }),
+  ),
+  operation: Schema.optional(RemoteOperationSchema),
+  providerEvidence: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('vscode-lm'),
+        origin: EditorOriginSchema,
+        code: Schema.Literals(['NoPermissions', 'Blocked', 'NotFound']),
+      }),
+    ]),
+  ),
 });
 /** A {@link ModelError}'s fields: the wire fields and the local `cause`. */
-export type ModelErrorFields = z.infer<typeof ModelErrorFieldsSchema> & {
+export type ModelErrorFields = typeof ModelErrorFieldsSchema.Type & {
   readonly cause?: unknown;
 };
 
@@ -173,13 +178,16 @@ export const boundOperation = Effect.fn('llm.boundOperation')(function* (
   input: RemoteOperation,
   origin: ModelOrigin,
 ) {
-  const parsed = RemoteOperationSchema.safeParse(input);
-  if (!parsed.success || !sameModelOrigin(parsed.data.origin, origin))
+  const parsed = Schema.decodeUnknownResult(RemoteOperationSchema)(input);
+  if (
+    !Result.isSuccess(parsed) ||
+    !sameModelOrigin(parsed.success.origin, origin)
+  )
     return yield* new ModelError({
       kind: 'unsupported',
       message: 'The remote operation belongs to another model binding.',
     });
-  return parsed.data;
+  return parsed.success;
 });
 
 /**

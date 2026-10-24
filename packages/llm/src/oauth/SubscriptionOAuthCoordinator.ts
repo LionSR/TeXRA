@@ -11,7 +11,7 @@
  * secret store's own {@link SecretsFailed}.
  */
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
@@ -35,7 +35,6 @@ import type {
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
-import type { z } from 'zod';
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
@@ -67,7 +66,7 @@ export interface SubscriptionOAuthClient {
 /** Provider-specific policy: every magic URL/claim out of the machine. */
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** Zod schema for the persisted session bundle. */
-  readonly sessionSchema: z.ZodType<S>;
+  readonly sessionSchema: Schema.Codec<S>;
   /** Form token endpoint the default client grants against. */
   readonly tokenEndpoint: OAuthFormEndpoint;
   readonly notSignedInMessage: string;

@@ -8,13 +8,13 @@
  * from it, so a field added here reaches it without a hand-written mirror to
  * keep in step.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /** The fields every provider's stored session carries. */
-export const SubscriptionSessionBaseSchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  idToken: z.string().min(1).optional(),
+export const SubscriptionSessionBaseSchema = Schema.Struct({
+  accessToken: Schema.String.check(Schema.isMinLength(1)),
+  refreshToken: Schema.String.check(Schema.isMinLength(1)),
+  idToken: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Absolute expiry (ms since epoch). */
-  expiresAtMs: z.number(),
+  expiresAtMs: Schema.Number,
 });

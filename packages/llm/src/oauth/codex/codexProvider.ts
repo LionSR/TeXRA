@@ -16,9 +16,8 @@
  * - Device flow: tumf/opencode-openai-device-auth src/index.ts
  * - Zed: crates/language_models/src/provider/openai_subscribed.rs
  */
-import { z } from 'zod';
 
-import { Effect } from 'effect';
+import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { createSecretBackedCoordinator } from '../sessionAccess.js';
@@ -99,45 +98,68 @@ const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 // response is snake_case and transformed at the entry point.
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
-const CodexTokenResponseSchema = z.object({
-  access_token: z.string().min(1),
+const CodexTokenResponseSchema = Schema.Struct({
+  access_token: Schema.String.check(Schema.isMinLength(1)),
   // Refresh responses may omit a new refresh_token; the coordinator keeps the
   // previous one in that case.
-  refresh_token: z.string().min(1).nullish(),
-  id_token: z.string().min(1).nullish(),
-  expires_in: z.number(),
+  refresh_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  id_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  expires_in: Schema.Number,
 });
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
-const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
-  accountId: z.string().min(1).optional(),
-  email: z.string().min(1).optional(),
-  /** The ChatGPT plan the token was issued for (`plus`, `pro`, `team`, ...). */
-  planType: z.string().min(1).optional(),
-});
+const CodexSessionSchema = SubscriptionSessionBaseSchema.mapFields(
+  Struct.assign({
+    accountId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    email: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    /** The ChatGPT plan the token was issued for (`plus`, `pro`, `team`, ...). */
+    planType: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  }),
+);
 /** A stored ChatGPT (Codex) session. */
-export type CodexSession = z.infer<typeof CodexSessionSchema>;
+export type CodexSession = typeof CodexSessionSchema.Type;
 
 /** Device-code "usercode" response. Field name varies (`user_code`/`usercode`). */
-export const CodexDeviceUserCodeSchema = z.object({
-  device_auth_id: z.string().min(1),
-  user_code: z.string().min(1).nullish(),
-  usercode: z.string().min(1).nullish(),
+export const CodexDeviceUserCodeSchema = Schema.Struct({
+  device_auth_id: Schema.String.check(Schema.isMinLength(1)),
+  user_code: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  usercode: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
   // The endpoint sends the poll interval (seconds) as a string or a number, may
   // omit it, and could send junk. Normalize at the boundary to a positive
   // number, defaulting to 5 (matches Codex CLI / Zed).
-  interval: z.coerce.number().positive().catch(5).prefault(5),
+  interval:
+    Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
+      Schema.isGreaterThan(0),
+    )
+      .pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(5))))
+      .pipe(Schema.withDecodingDefault(Effect.succeed(5))),
   // Lifetime of the user code (seconds), same normalization policy as
   // `interval`. RFC 8628 makes this authoritative when the endpoint sends it;
   // absent or unusable, the caller applies its own fallback deadline.
-  expires_in: z.coerce.number().positive().nullish().catch(undefined),
+  expires_in: Schema.optional(
+    Schema.NullOr(
+      Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
+        Schema.isGreaterThan(0),
+      ),
+    ),
+  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
 });
 
 /** Device-code poll success: an authorization code + its PKCE verifier. */
-export const CodexDeviceTokenSchema = z.object({
-  authorization_code: z.string().min(1),
-  code_verifier: z.string().min(1),
-  code_challenge: z.string().min(1).nullish(),
+export const CodexDeviceTokenSchema = Schema.Struct({
+  authorization_code: Schema.String.check(Schema.isMinLength(1)),
+  code_verifier: Schema.String.check(Schema.isMinLength(1)),
+  code_challenge: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
 });
 
 // JWT claim extraction. We never verify the signature here (the token came
@@ -170,33 +192,43 @@ interface CodexJwtClaims {
 }
 
 /** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
-const CodexJwtClaimsSchema = z
-  .object({
-    chatgpt_account_id: NonEmptyJwtClaim,
-    chatgpt_plan_type: NonEmptyJwtClaim,
-    [CODEX_JWT_AUTH_CLAIM]: z
-      .object({
-        chatgpt_account_id: NonEmptyJwtClaim,
-        chatgpt_plan_type: NonEmptyJwtClaim,
-      })
-      .optional()
-      .catch(undefined),
-    organizations: z
-      .array(z.object({ id: NonEmptyJwtClaim }).catch({ id: undefined }))
-      .optional()
-      .catch(undefined),
-    email: NonEmptyJwtClaim,
-  })
-  .transform((claims): CodexJwtClaims => ({
-    accountId:
-      claims.chatgpt_account_id ??
-      claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
-      claims.organizations?.[0]?.id,
-    email: claims.email,
-    planType:
-      claims.chatgpt_plan_type ??
-      claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type,
-  }));
+const CodexJwtClaimsSchema = Schema.Struct({
+  chatgpt_account_id: NonEmptyJwtClaim,
+  chatgpt_plan_type: NonEmptyJwtClaim,
+  [CODEX_JWT_AUTH_CLAIM]: Schema.optional(
+    Schema.Struct({
+      chatgpt_account_id: NonEmptyJwtClaim,
+      chatgpt_plan_type: NonEmptyJwtClaim,
+    }),
+  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
+  organizations: Schema.optional(
+    Schema.Array(
+      Schema.Struct({ id: NonEmptyJwtClaim }).pipe(
+        Schema.catchDecoding(() =>
+          Effect.succeed(Option.some({ id: undefined })),
+        ),
+      ),
+    ),
+  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
+  email: NonEmptyJwtClaim,
+}).pipe(
+  Schema.decodeTo(
+    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((claims): CodexJwtClaims => ({ accountId: claims.chatgpt_account_id ?? claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ?? claims.organizations?.[0]?.id, email: claims.email, planType: claims.chatgpt_plan_type ?? claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type, }))` */,
+    {
+      decode: SchemaGetter.transform((claims): CodexJwtClaims => ({
+        accountId:
+          claims.chatgpt_account_id ??
+          claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
+          claims.organizations?.[0]?.id,
+        email: claims.email,
+        planType:
+          claims.chatgpt_plan_type ??
+          claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type,
+      })),
+      encode: SchemaGetter.forbidden(() => 'decode-only'),
+    },
+  ),
+);
 
 const EMPTY_CLAIMS: CodexJwtClaims = {};
 

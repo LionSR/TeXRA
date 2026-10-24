@@ -2,9 +2,8 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Result, Schema, Stream, Struct } from 'effect';
 import OpenAI from 'openai';
-import { z } from 'zod';
 
 // Local imports - canonical model contract
 import { ModelError, fillModelError, type RemoteOperation } from '../errors.js';
@@ -25,66 +24,76 @@ type Append = Extract<PartEvent, { kind: 'append' }>;
 // with the schemas that produce it.
 export type ResponseOrigin = RemoteOperation['origin'];
 
-const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
-const ReasoningTextSchema = z.strictObject({
-  type: z.literal('reasoning_text'),
-  text: z.string(),
+const ItemStatusSchema = Schema.Literals([
+  'in_progress',
+  'completed',
+  'incomplete',
+]);
+const ReasoningTextSchema = Schema.Struct({
+  type: Schema.Literal('reasoning_text'),
+  text: Schema.String,
 });
-const OutputItemSchema = z.discriminatedUnion('type', [
-  z.strictObject({
-    type: z.literal('message'),
-    id: z.string().min(1),
-    role: z.literal('assistant'),
+const OutputItemSchema = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal('message'),
+    id: Schema.String.check(Schema.isMinLength(1)),
+    role: Schema.Literal('assistant'),
     status: ItemStatusSchema,
-    phase: z.enum(['commentary', 'final_answer']).nullish(),
-    content: z.array(
-      z.discriminatedUnion('type', [
-        z.strictObject({
-          type: z.literal('output_text'),
-          text: z.string(),
+    phase: Schema.optional(
+      Schema.NullOr(Schema.Literals(['commentary', 'final_answer'])),
+    ),
+    content: Schema.Array(
+      Schema.Union([
+        Schema.Struct({
+          type: Schema.Literal('output_text'),
+          text: Schema.String,
           // Unsupported annotations/log probabilities cannot disappear in
           // conversion; Zhipu omits the empty annotation list.
-          annotations: z.array(z.never()).optional(),
-          logprobs: z.array(z.never()).nullish(),
+          annotations: Schema.optional(Schema.Array(Schema.Never)),
+          logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
         }),
-        z.strictObject({ type: z.literal('refusal'), refusal: z.string() }),
+        Schema.Struct({
+          type: Schema.Literal('refusal'),
+          refusal: Schema.String,
+        }),
       ]),
     ),
   }),
-  z.strictObject({
-    type: z.literal('reasoning'),
-    id: z.string().min(1),
-    status: ItemStatusSchema.optional(),
-    encrypted_content: z.string().nullish(),
+  Schema.Struct({
+    type: Schema.Literal('reasoning'),
+    id: Schema.String.check(Schema.isMinLength(1)),
+    status: Schema.optional(ItemStatusSchema),
+    encrypted_content: Schema.optional(Schema.NullOr(Schema.String)),
     // Zhipu reports no summary and one reasoning-text object, not a list.
-    summary: z
-      .array(
-        z.strictObject({ type: z.literal('summary_text'), text: z.string() }),
-      )
-      .default([]),
-    content: z
-      .union([
-        z.array(ReasoningTextSchema),
+    summary: Schema.Array(
+      Schema.Struct({
+        type: Schema.Literal('summary_text'),
+        text: Schema.String,
+      }),
+    ).pipe(Schema.withDecodingDefaultType(Effect.succeed([]))),
+    content: Schema.optional(
+      Schema.Union([
+        Schema.Array(ReasoningTextSchema),
         ReasoningTextSchema.transform((part) => [part]),
-      ])
-      .optional(),
+      ]),
+    ),
   }),
-  z.strictObject({
-    type: z.literal('function_call'),
-    id: z.string().min(1).optional(),
-    status: ItemStatusSchema.optional(),
-    call_id: z.string().min(1),
-    name: z.string().min(1),
-    arguments: z.string(),
+  Schema.Struct({
+    type: Schema.Literal('function_call'),
+    id: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    status: Schema.optional(ItemStatusSchema),
+    call_id: Schema.String.check(Schema.isMinLength(1)),
+    name: Schema.String.check(Schema.isMinLength(1)),
+    arguments: Schema.String,
   }),
 ]);
-type OutputItem = z.infer<typeof OutputItemSchema>;
+type OutputItem = typeof OutputItemSchema.Type;
 
-export const ResponseSchema = z.object({
-  id: z.string().min(1),
-  object: z.literal('response'),
-  model: z.string().min(1),
-  status: z.enum([
+export const ResponseSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isMinLength(1)),
+  object: Schema.Literal('response'),
+  model: Schema.String.check(Schema.isMinLength(1)),
+  status: Schema.Literals([
     'queued',
     'in_progress',
     'completed',
@@ -92,18 +101,29 @@ export const ResponseSchema = z.object({
     'cancelled',
     'incomplete',
   ]),
-  output: z.array(OutputItemSchema),
-  usage: ResponsesUsageSchema.nullish(),
-  error: z.object({ code: z.string(), message: z.string() }).nullish(),
-  incomplete_details: z
-    .object({ reason: z.enum(['max_output_tokens', 'content_filter']) })
-    .nullish(),
+  output: Schema.Array(OutputItemSchema),
+  usage: Schema.optional(Schema.NullOr(ResponsesUsageSchema)),
+  error: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({ code: Schema.String, message: Schema.String }),
+    ),
+  ),
+  incomplete_details: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        reason: Schema.Literals(['max_output_tokens', 'content_filter']),
+      }),
+    ),
+  ),
 });
-type ResponseValue = z.infer<typeof ResponseSchema>;
+type ResponseValue = typeof ResponseSchema.Type;
 
 const malformed = (message: string, cause?: unknown) =>
   new ModelError({ kind: 'malformed-output', message, cause });
-const decoded = <T>(result: z.ZodSafeParseResult<T>, message: string) =>
+const decoded = <T>(
+  result: Result.Result<T, Schema.SchemaError>,
+  message: string,
+) =>
   result.success
     ? Effect.succeed(result.data)
     : Effect.fail(malformed(message, result.error));
@@ -384,23 +404,29 @@ export interface DocumentAccess {
   readonly fileIdFor: (base64: string) => string | null;
 }
 
-const EventSchema = z.object({
-  type: z.string(),
-  sequence_number: z.int().nonnegative(),
+const EventSchema = Schema.Struct({
+  type: Schema.String,
+  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-export const ResponseEventSchema = EventSchema.extend({
-  response: ResponseSchema,
-});
-const ItemEventSchema = EventSchema.extend({
-  output_index: z.int().nonnegative(),
-  item: OutputItemSchema,
-});
-const DeltaEventSchema = EventSchema.extend({
-  item_id: z.string().min(1),
-  output_index: z.int().nonnegative(),
-  delta: z.string(),
-  logprobs: z.array(z.never()).nullish(),
-});
+export const ResponseEventSchema = EventSchema.mapFields(
+  Struct.assign({
+    response: ResponseSchema,
+  }),
+);
+const ItemEventSchema = EventSchema.mapFields(
+  Struct.assign({
+    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    item: OutputItemSchema,
+  }),
+);
+const DeltaEventSchema = EventSchema.mapFields(
+  Struct.assign({
+    item_id: Schema.String.check(Schema.isMinLength(1)),
+    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    delta: Schema.String,
+    logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
+  }),
+);
 
 const TERMINAL_EVENTS = new Set([
   'response.completed',
@@ -450,13 +476,16 @@ export function responsesWire(after: number) {
   let sequence = after;
   return (raw: unknown): Effect.Effect<ResponseEventParts, ModelError> =>
     Effect.gen(function* () {
-      const header = EventSchema.safeParse(raw);
-      if (!header.success || header.data.sequence_number <= sequence)
+      const header = Schema.decodeUnknownResult(EventSchema)(raw);
+      if (
+        !Result.isSuccess(header) ||
+        header.success.sequence_number <= sequence
+      )
         return yield* malformed(
           'The model emitted invalid or out-of-order events.',
         );
-      sequence = header.data.sequence_number;
-      const type = header.data.type;
+      sequence = header.success.sequence_number;
+      const type = header.success.type;
       const at = (parts: readonly PartEvent[], terminal = false) => ({
         sequence,
         parts,
@@ -464,7 +493,7 @@ export function responsesWire(after: number) {
       });
       if (SNAPSHOT_EVENTS.has(type)) {
         const { response } = yield* decoded(
-          ResponseEventSchema.safeParse(raw),
+          Schema.decodeUnknownResult(ResponseEventSchema)(raw),
           'The response snapshot is malformed or unsupported.',
         );
         if (!TERMINAL_EVENTS.has(type))
@@ -478,7 +507,7 @@ export function responsesWire(after: number) {
         type === 'response.output_item.done'
       ) {
         const { output_index: index, item } = yield* decoded(
-          ItemEventSchema.safeParse(raw),
+          Schema.decodeUnknownResult(ItemEventSchema)(raw),
           'The model returned unsupported output content.',
         );
         return at([
@@ -490,7 +519,7 @@ export function responsesWire(after: number) {
       const channel = DELTA_CHANNELS.get(type);
       if (channel !== undefined) {
         const delta = yield* decoded(
-          DeltaEventSchema.safeParse(raw),
+          Schema.decodeUnknownResult(DeltaEventSchema)(raw),
           'The model returned malformed progress content.',
         );
         return at([

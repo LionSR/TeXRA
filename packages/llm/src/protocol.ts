@@ -1,33 +1,39 @@
 // Third-party imports
-import { z } from 'zod';
+import { Schema, SchemaGetter, Struct } from 'effect';
 
 /**
  * Scheme, host and path only. The origin is written into durable rows that
  * are never scrubbed, and `z.url()` alone admits `user:key@host`,
  * `?api-key=` and `#api-key=` alike.
  */
-const EndpointSchema = z.url().refine(
-  (endpoint) => {
-    const url = new URL(endpoint);
-    return url.username === '' && url.password === '' && !/[?#]/.test(endpoint);
-  },
-  { message: 'Endpoints carry no userinfo, query string or fragment.' },
-);
-export const BackgroundCapabilitySchema = z.enum(['supported', 'unsupported']);
-export const BindingSchema = z.strictObject({
-  requestedModel: z.string().min(1),
-  deployment: z
-    .strictObject({
-      endpoint: EndpointSchema,
-      credentialScope: z.string().min(1),
-    })
-    .readonly(),
+const EndpointSchema =
+  Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */.check(
+    Schema.makeFilter(
+      (endpoint) => {
+        const url = new URL(endpoint);
+        return (
+          url.username === '' && url.password === '' && !/[?#]/.test(endpoint)
+        );
+      },
+      { message: 'Endpoints carry no userinfo, query string or fragment.' },
+    ),
+  );
+export const BackgroundCapabilitySchema = Schema.Literals([
+  'supported',
+  'unsupported',
+]);
+export const BindingSchema = Schema.Struct({
+  requestedModel: Schema.String.check(Schema.isMinLength(1)),
+  deployment: Schema.Struct({
+    endpoint: EndpointSchema,
+    credentialScope: Schema.String.check(Schema.isMinLength(1)),
+  }),
 });
 /**
  * Every wire surface the package speaks. Usage is billed per surface, so a
  * usage record's provider is the protocol of the turn that produced it.
  */
-export const TurnProtocolSchema = z.enum([
+export const TurnProtocolSchema = Schema.Literals([
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
@@ -35,36 +41,41 @@ export const TurnProtocolSchema = z.enum([
   'vscode-lm',
 ]);
 
-export const OriginSchema = BindingSchema.extend({
-  protocol: TurnProtocolSchema.exclude(['vscode-lm']),
-  codecVersion: z.literal(1),
-});
-export const EditorBindingSchema = BindingSchema.pick({
-  requestedModel: true,
-}).extend({
-  deployment: z
-    .strictObject({ vendor: z.string(), version: z.string() })
-    .readonly(),
-});
-export const EditorOriginSchema = EditorBindingSchema.extend({
-  protocol: TurnProtocolSchema.extract(['vscode-lm']),
-  codecVersion: OriginSchema.shape.codecVersion,
-});
+export const OriginSchema = BindingSchema.mapFields(
+  Struct.assign({
+    protocol: TurnProtocolSchema.exclude(['vscode-lm']),
+    codecVersion: Schema.Literal(1),
+  }),
+);
+export const EditorBindingSchema = BindingSchema.mapFields(
+  Struct.pick(['requestedModel']),
+).mapFields(
+  Struct.assign({
+    deployment: Schema.Struct({
+      vendor: Schema.String,
+      version: Schema.String,
+    }),
+  }),
+);
+export const EditorOriginSchema = EditorBindingSchema.mapFields(
+  Struct.assign({
+    protocol: TurnProtocolSchema.extract(['vscode-lm']),
+    codecVersion: OriginSchema.fields.codecVersion,
+  }),
+);
 
 /** Selected binding, distinct from an optional returned model version. */
-export const ModelOriginSchema = z.discriminatedUnion('protocol', [
-  OriginSchema.readonly(),
-  EditorOriginSchema.readonly(),
+export const ModelOriginSchema = Schema.Union([
+  OriginSchema,
+
+  EditorOriginSchema,
 ]);
 /** The binding a turn was requested on: model, deployment and protocol. */
-export type ModelOrigin = z.infer<typeof ModelOriginSchema>;
+export type ModelOrigin = typeof ModelOriginSchema.Type;
 
 /** The origin a wire model stamps on its turns: the one place `codecVersion` is written. */
-export const originOf = <P extends z.infer<typeof OriginSchema>['protocol']>(
-  config: Pick<
-    z.infer<typeof OriginSchema>,
-    'requestedModel' | 'deployment'
-  > & {
+export const originOf = <P extends (typeof OriginSchema.Type)['protocol']>(
+  config: Pick<typeof OriginSchema.Type, 'requestedModel' | 'deployment'> & {
     readonly protocol: P;
   },
 ) =>
@@ -103,7 +114,7 @@ export function sameModelOrigin(
   );
 }
 
-function freezeJson(value: z.infer<ReturnType<typeof z.json>>): typeof value {
+function freezeJson(value: ReturnType<typeof z.json>['Type']): typeof value {
   if (value !== null && typeof value === 'object') {
     for (const nested of Object.values(value)) freezeJson(nested);
     Object.freeze(value);
@@ -126,13 +137,27 @@ function hasSupportedJsonKeys(
 }
 
 /** Materialized JSON, including immutable nested containers. */
-export const JsonObjectSchema = z
-  .unknown()
-  .refine(hasSupportedJsonKeys, {
+export const JsonObjectSchema = Schema.Unknown.check(
+  Schema.makeFilter(hasSupportedJsonKeys, {
     message:
       'JSON cannot contain cycles or __proto__ keys, which this codec cannot preserve.',
-  })
-  .pipe(z.record(z.string(), z.json().transform(freezeJson)).readonly());
+  }),
+).pipe(
+  Schema.decodeTo(
+    Schema.Record(
+      Schema.String,
+      Schema.Json.pipe(
+        Schema.decodeTo(
+          Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform(freezeJson)` */,
+          {
+            decode: SchemaGetter.transform(freezeJson),
+            encode: SchemaGetter.forbidden(() => 'decode-only'),
+          },
+        ),
+      ),
+    ),
+  ),
+);
 
 /** What the prepared-history rules read of an entry: its role, an
  *  assistant's local calls and a tool group's ordinals. Over any input-part
@@ -151,7 +176,7 @@ export type PreparedHistoryEntry =
  *  next message, in call order. Only the next request needs them settled. */
 export function checkPreparedHistory(
   messages: readonly PreparedHistoryEntry[],
-  ctx: z.RefinementCtx,
+  ctx: never /* TODO(effect-schema): RefinementCtx: the filter returns a FilterOutput instead; was `z.RefinementCtx` */,
 ): void {
   for (const [index, message] of messages.entries()) {
     if (message.role === 'assistant') {

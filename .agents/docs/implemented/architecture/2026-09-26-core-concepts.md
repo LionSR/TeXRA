@@ -224,7 +224,9 @@ primitives make that one mechanism instead of one per pluggable kind.
   duplicate history, run-history resume and `packages/llm`, and stay out.
 - **Other rules.**
   - Every service method is an `Effect.fn('Owner.method')`.
-  - Errors are `Data.TaggedError`. `Error` is allowed only at host ports.
+  - Schemas are Effect Schema, and errors are `Schema.TaggedError` (ruled
+    2026-10-24; before that, Zod and `Data.TaggedError`). `Error` is allowed
+    only at host ports.
   - In-memory lifecycle states are `Data.TaggedEnum`, not optional-field bags.
   - A `ManagedRuntime` exists only at composition roots.
 

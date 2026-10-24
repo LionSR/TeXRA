@@ -2,9 +2,18 @@
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit, Stream, type Scope } from 'effect';
+import {
+  Cause,
+  Clock,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  SchemaGetter,
+  type Scope,
+  Stream,
+} from 'effect';
 import { WebSocket, createWebSocketStream } from 'ws';
-import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
@@ -29,31 +38,40 @@ import {
   responseParameters,
 } from './openaiResponsesRequest.js';
 
-const WebSocketEnvelopeSchema = z.object({
-  type: z.string(),
+const WebSocketEnvelopeSchema = Schema.Struct({
+  type: Schema.String,
   // This acquisition owns the implicit lane, not a multiplexed connection.
-  stream_id: z.never().optional(),
+  stream_id: Schema.optional(Schema.Never),
 });
-const WebSocketErrorSchema = z.union([
-  z.object({
-    type: z.literal('error'),
-    status: z.int().optional(),
-    error: z.object({
-      type: z.string(),
-      code: z.string().nullable(),
-      message: z.string(),
-      param: z.string().nullish(),
+const WebSocketErrorSchema = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal('error'),
+    status: Schema.optional(Schema.Int),
+    error: Schema.Struct({
+      type: Schema.String,
+      code: Schema.NullOr(Schema.String),
+      message: Schema.String,
+      param: Schema.optional(Schema.NullOr(Schema.String)),
     }),
   }),
-  z
-    .object({
-      type: z.literal('error'),
-      sequence_number: z.int().nonnegative(),
-      code: z.string().nullable(),
-      message: z.string(),
-      param: z.string().nullable(),
-    })
-    .transform((error) => ({ error, status: undefined })),
+  Schema.Struct({
+    type: Schema.Literal('error'),
+    sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    code: Schema.NullOr(Schema.String),
+    message: Schema.String,
+    param: Schema.NullOr(Schema.String),
+  }).pipe(
+    Schema.decodeTo(
+      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((error) => ({ error, status: undefined }))` */,
+      {
+        decode: SchemaGetter.transform((error) => ({
+          error,
+          status: undefined,
+        })),
+        encode: SchemaGetter.forbidden(() => 'decode-only'),
+      },
+    ),
+  ),
 ]);
 
 /** Acquires one physical connection; invalidation requires explicit reacquisition. */
@@ -61,9 +79,11 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   'llm.responses.webSocketModel',
 )(function* (
   configuration: OpenAIResponsesConfiguration,
-  authentication: z.infer<typeof ResponseAuthenticationSchema>,
+  authentication: typeof ResponseAuthenticationSchema.Type,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const config = ModelConfigurationSchema.parse(configuration);
+  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
+    configuration,
+  );
   if (config.protocol !== 'openai-responses')
     return yield* new ModelError({
       kind: 'unsupported',
@@ -325,28 +345,31 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       cause,
                     }),
                 );
-                const envelope = WebSocketEnvelopeSchema.safeParse(raw);
-                if (!envelope.success)
+                const envelope = Schema.decodeUnknownResult(
+                  WebSocketEnvelopeSchema,
+                )(raw);
+                if (!Result.isSuccess(envelope))
                   return yield* new ModelError({
                     kind: 'malformed-output',
                     message:
                       'The Responses event does not belong to the implicit lane.',
-                    cause: envelope.error,
+                    cause: envelope.failure,
                   });
-                if (envelope.data.type === 'error') {
-                  const rejected = WebSocketErrorSchema.safeParse(raw);
-                  if (!rejected.success)
+                if (envelope.success.type === 'error') {
+                  const rejected =
+                    Schema.decodeUnknownResult(WebSocketErrorSchema)(raw);
+                  if (!Result.isSuccess(rejected))
                     return yield* new ModelError({
                       kind: 'malformed-output',
                       message:
                         'The Responses connection returned a malformed error.',
-                      cause: rejected.error,
+                      cause: rejected.failure,
                     });
                   return yield* new ModelError({
-                    kind: authOrRejectionKind(rejected.data.status),
-                    message: rejected.data.error.message,
-                    status: rejected.data.status,
-                    cause: rejected.data.error,
+                    kind: authOrRejectionKind(rejected.success.status),
+                    message: rejected.success.error.message,
+                    status: rejected.success.status,
+                    cause: rejected.success.error,
                   });
                 }
                 return [raw] as const;

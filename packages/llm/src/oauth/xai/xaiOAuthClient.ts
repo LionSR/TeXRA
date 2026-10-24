@@ -6,8 +6,7 @@
  * device-login flow runs on one fiber.
  */
 // Third-party imports
-import { Data, Effect } from 'effect';
-import { z } from 'zod';
+import { Data, Effect, Option, Schema } from 'effect';
 
 // Local imports
 import {
@@ -67,9 +66,13 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
 );
 
 /** An RFC 6749 error body; a field of another shape reads as absent. */
-const DeviceErrorBodySchema = z.object({
-  error: z.string().optional().catch(undefined),
-  error_description: z.string().optional().catch(undefined),
+const DeviceErrorBodySchema = Schema.Struct({
+  error: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
+  error_description: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
 });
 
 /**
