@@ -245,10 +245,10 @@ export const agentRunLayer = (
           script === null &&
           !textOnly &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        // The installed plugins' tools reach a top-level run of any agent but
-        // a plugin agent that names its tools, a `self()` child, which runs
-        // as its caller, and an inheriting plugin agent; any other child gets
-        // what it declares.
+        // The installed plugins' tools reach a top-level run (unless it is a
+        // plugin agent that names its tools), a `self()` child, which runs as
+        // its caller, and an inheriting plugin agent wherever it runs; any
+        // other child gets what it declares.
         injectInstalled:
           script === null &&
           !textOnly &&
