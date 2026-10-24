@@ -8,10 +8,10 @@
 import {
   Clock,
   Context,
-  Data,
   Effect,
   Layer,
   type PlatformError,
+  Schema,
 } from 'effect';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
@@ -51,18 +51,22 @@ import type { AgentEntry } from './agentEntry';
 const CHANNEL = 'agentRegistry';
 
 /** No agent of that name in the catalog, with what the last load said. */
-export class AgentNotFound extends Data.TaggedError('AgentNotFound')<{
-  readonly agent: string;
-  readonly message: string;
-}> {}
+export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
+  'AgentNotFound',
+  {
+    agent: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
-export class AgentCatalogLoadError extends Data.TaggedError(
+export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadError>()(
   'AgentCatalogLoadError',
-)<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * The two state slots a workspace's agent list resolves against: the

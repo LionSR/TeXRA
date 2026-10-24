@@ -18,7 +18,7 @@
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
+import { Effect, FileSystem, type Path, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness';
@@ -36,8 +36,9 @@ import type { PlatformError } from 'effect/PlatformError';
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 
 /** A clipboard tool's stdout passed {@link MAX_IMAGE_BYTES}. */
-class ClipboardImageTooLarge extends Data.TaggedError(
+class ClipboardImageTooLarge extends Schema.TaggedError<ClipboardImageTooLarge>()(
   'ClipboardImageTooLarge',
+  {},
 ) {}
 
 /**
@@ -46,12 +47,13 @@ class ClipboardImageTooLarge extends Data.TaggedError(
  * threw, wrapped here so the channel stays typed. `message` is the cause's
  * own message, which is what the input bar's error hook prints.
  */
-export class ClipboardImageProbeFailed extends Data.TaggedError(
+export class ClipboardImageProbeFailed extends Schema.TaggedError<ClipboardImageProbeFailed>()(
   'ClipboardImageProbeFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const probeFailed = (cause: unknown): ClipboardImageProbeFailed =>
   new ClipboardImageProbeFailed({ message: toErrorMessage(cause), cause });

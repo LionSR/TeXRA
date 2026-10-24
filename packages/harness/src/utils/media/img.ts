@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import { imageSize } from 'image-size';
 
 // Local imports - log
@@ -27,10 +27,13 @@ const PDF_RASTER_MAX_SIZE: [number, number] = [1024, 1024];
  * or an image tool that failed. The message is the one the run
  * transcript shows.
  */
-class MediaConversionFailed extends Data.TaggedError('MediaConversionFailed')<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class MediaConversionFailed extends Schema.TaggedError<MediaConversionFailed>()(
+  'MediaConversionFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** A throw or rejection from outside Effect, carrying its own message. */
 const conversionFailure = (cause: unknown): MediaConversionFailed =>

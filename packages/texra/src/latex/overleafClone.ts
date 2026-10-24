@@ -12,7 +12,7 @@
  * instead of running them out.
  */
 
-import { Data, Effect, type FileSystem, Stream } from 'effect';
+import { Effect, type FileSystem, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -162,10 +162,13 @@ const checkOverleafClonePreconditions = Effect.fn(
  * `Tag: Module.method (pathOrDescriptor)`, with a description only when the
  * spawner supplies one).
  */
-export class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
-  readonly exitCode: number | undefined;
-  readonly message: string;
-}> {}
+export class GitCloneFailed extends Schema.TaggedError<GitCloneFailed>()(
+  'GitCloneFailed',
+  {
+    exitCode: Schema.UndefinedOr(Schema.Number),
+    message: Schema.String,
+  },
+) {}
 
 /**
  * Run one `git` command in `cwd` with the machine git environment plus

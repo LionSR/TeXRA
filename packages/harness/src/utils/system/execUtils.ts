@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Data, Duration, Effect, Fiber, Result, Stream } from 'effect';
+import { Duration, Effect, Fiber, Result, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
@@ -141,10 +141,13 @@ export interface ExecuteCommandBaseOptions {
 }
 
 /** One output stream passed `maxBuffer` decoded characters. */
-class OutputLimitExceeded extends Data.TaggedError('OutputLimitExceeded')<{
-  readonly stream: 'stdout' | 'stderr';
-  readonly limit: number;
-}> {}
+class OutputLimitExceeded extends Schema.TaggedError<OutputLimitExceeded>()(
+  'OutputLimitExceeded',
+  {
+    stream: Schema.Literals(['stdout', 'stderr']),
+    limit: Schema.Number,
+  },
+) {}
 
 /** How a spawned command ended, before it is read as an `ExecResult`. */
 type Outcome =

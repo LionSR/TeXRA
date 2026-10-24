@@ -1,16 +1,19 @@
 import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
-import { Data, Effect, FileSystem, Config, Option } from 'effect';
+import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
 import { absentReason, pathExists } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 
 /** No resources candidate holds every bundled agent directory. */
-class DesktopResourcesNotFound extends Data.TaggedError(
+class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
   'DesktopResourcesNotFound',
-)<{ readonly message: string }> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 interface ResourcesPathOptions {
   appPath?: string;

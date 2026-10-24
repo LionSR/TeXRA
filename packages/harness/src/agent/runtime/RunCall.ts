@@ -12,8 +12,8 @@
  */
 import {
   Context,
-  Data,
   Effect,
+  Schema,
   type Scope,
   type SynchronizedRef,
 } from 'effect';
@@ -49,11 +49,14 @@ import type {
 } from './runtimePresentationEvents';
 
 /** A resumed script issued another call at `seq` than its rows recorded. */
-export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
-  readonly seq: number;
-  readonly recorded: string;
-  readonly issued: string;
-}> {
+export class ScriptDiverged extends Schema.TaggedError<ScriptDiverged>()(
+  'ScriptDiverged',
+  {
+    seq: Schema.Number,
+    recorded: Schema.String,
+    issued: Schema.String,
+  },
+) {
   override get message(): string {
     return `The resumed script diverged at call ${this.seq}: it recorded ${this.recorded} and now issued ${this.issued}.`;
   }

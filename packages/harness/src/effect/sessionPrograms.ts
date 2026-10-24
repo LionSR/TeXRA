@@ -17,10 +17,10 @@
  */
 import {
   Context,
-  Data,
   Deferred,
   Effect,
   Exit,
+  Schema,
   type Scope,
   SubscriptionRef,
 } from 'effect';
@@ -126,8 +126,10 @@ function admitInput(
       try: () => {
         // The run is named as its persona's schema spells the name.
         const persona =
-          typeof agent === 'string' ? null : InlinePersonaSchema.parse(agent);
-        return AgentConfigSchema.parse({
+          typeof agent === 'string'
+            ? null
+            : Schema.decodeUnknownSync(InlinePersonaSchema)(agent);
+        return Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: persona?.name ?? resolved.name,
           agentSource: resolved.source,
           persona,
@@ -200,9 +202,13 @@ type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
 
 /** The run an open call of `parent` owns resumes with that parent: what
  *  the run's own resume job answers, under its claim. */
-class OwnedByParent extends Data.TaggedError('OwnedByParent')<{
-  readonly parent: RunId;
-}> {}
+class OwnedByParent extends Schema.TaggedError<OwnedByParent>()(
+  'OwnedByParent',
+  {
+    parent:
+      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+  },
+) {}
 
 /**
  * Continue a persisted run of `session` through the one resume path every

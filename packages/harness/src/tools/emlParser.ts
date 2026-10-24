@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import mime from 'mime-types';
 import PostalMime from 'postal-mime';
 
@@ -47,10 +47,13 @@ const turndownService = createHtmlToMarkdown();
  * process already holds, not a host port, so there is one reason and it
  * carries the library's own error.
  */
-class EmlParseFailed extends Data.TaggedError('EmlParseFailed')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class EmlParseFailed extends Schema.TaggedError<EmlParseFailed>()(
+  'EmlParseFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 export const parseEml = Effect.fn('parseEml')(function* (
   rawEml: string,

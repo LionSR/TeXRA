@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -14,13 +14,14 @@ import type {
 
 /** The clipboard write, the save dialog, or the file write behind a log
  *  action failed. */
-class DesktopLogActionFailed extends Data.TaggedError(
+class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>()(
   'DesktopLogActionFailed',
-)<{
-  readonly action: 'copy' | 'export';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    action: Schema.Literals(['copy', 'export']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 export interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;

@@ -1002,11 +1002,16 @@ function rewriteImports(text, sf, needs) {
   }
   if (effectImport) {
     const nb = effectImport.importClause.namedBindings;
-    const have = new Set(nb.elements.map((e) => e.name.text));
+    // `Data` goes when the converted error classes were its only use.
+    const body = text.slice(effectImport.getEnd());
+    const kept = nb.elements.filter(
+      (e) => !(e.name.text === 'Data' && !/\bData\./.test(body)),
+    );
+    const have = new Set(kept.map((e) => e.name.text));
     const add = [...needs].filter((n) => !have.has(n));
-    if (add.length) {
+    if (add.length || kept.length !== nb.elements.length) {
       const names = [
-        ...nb.elements.map((e) => text.slice(e.getStart(sf), e.getEnd())),
+        ...kept.map((e) => text.slice(e.getStart(sf), e.getEnd())),
         ...add,
       ].sort((a, b) =>
         a.replace(/^type /, '').localeCompare(b.replace(/^type /, '')),
@@ -1055,7 +1060,8 @@ let totalConv = 0;
 let totalTodo = 0;
 for (const file of files(process.argv.slice(2))) {
   const text = readFileSync(file, 'utf8');
-  if (!/from ['"]zod/.test(text)) continue;
+  if (!/from ['"]zod/.test(text) && !/extends Data\.TaggedError\b/.test(text))
+    continue;
   const sf = ts.createSourceFile(
     file,
     text,

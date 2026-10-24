@@ -22,7 +22,6 @@ import * as NodeSocketServer from '@effect/platform-node/NodeSocketServer';
 import {
   Clock,
   Context,
-  Data,
   Deferred,
   Duration,
   Effect,
@@ -30,6 +29,7 @@ import {
   Layer,
   Ref,
   Schedule,
+  Schema,
   type Scope,
 } from 'effect';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
@@ -66,18 +66,25 @@ import {
 } from './protocol';
 
 /** A live service already answers on this storage root's socket. */
-export class ServiceAlreadyRunning extends Data.TaggedError(
+export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
   'ServiceAlreadyRunning',
-)<{ readonly info: ServiceInfo }> {
+  {
+    info: Schema.Unknown /* TODO(effect-schema): error field type ServiceInfo; was `ServiceInfo` */,
+  },
+) {
   override get message(): string {
     return `A TeXRA service is already running (pid ${this.info.pid}, ${this.info.socket}).`;
   }
 }
 
 /** The service could not listen on its socket. */
-export class ServiceListenFailed extends Data.TaggedError(
+export class ServiceListenFailed extends Schema.TaggedError<ServiceListenFailed>()(
   'ServiceListenFailed',
-)<{ readonly socket: string; readonly cause: unknown }> {
+  {
+    socket: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
   override get message(): string {
     return `The TeXRA service could not listen on ${this.socket}.`;
   }

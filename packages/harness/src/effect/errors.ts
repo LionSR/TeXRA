@@ -15,7 +15,7 @@
  * same values every host reads, so the package adds no second
  * vocabulary for them.
  */
-import { Data } from 'effect';
+import { Schema } from 'effect';
 
 import type { AgentNotFound } from '@agent/index/agentCatalog';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
@@ -27,25 +27,31 @@ import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
  * request kind's decisions, or a switch on a plugin with no availability
  * probe.
  */
-export class PluginsRefused extends Data.TaggedError('PluginsRefused')<{
-  readonly message: string;
-}> {}
+export class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
+  'PluginsRefused',
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * The tools the caller passed cannot run here: a tool that requires
  * approval, on a session opened without an approval handler.
  */
-export class ToolsRefused extends Data.TaggedError('ToolsRefused')<{
-  readonly tools: readonly string[];
-  readonly message: string;
-}> {}
+export class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
+  'ToolsRefused',
+  {
+    tools: Schema.Array(Schema.String),
+    message: Schema.String,
+  },
+) {}
 
 /** A run that failed on its own. `cause` is exactly what the launch path
  *  threw. */
-export class RunFailure extends Data.TaggedError('RunFailure')<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
+  cause: Schema.Defect(),
+  message: Schema.String,
+}) {}
 
 /**
  * A run `session.resume` will not continue, for the runtime's reason:
@@ -55,11 +61,15 @@ export class RunFailure extends Data.TaggedError('RunFailure')<{
  * `not_resumable` (it is running here, it was deleted, or it is a child an
  * open call of its parent owns, which resumes with that parent).
  */
-export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
-  readonly runId: string;
-  readonly reason: Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>;
-  readonly message: string;
-}> {}
+export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
+  'ResumeRefused',
+  {
+    runId: Schema.String,
+    reason:
+      Schema.Unknown /* TODO(effect-schema): error field type Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>; was `Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>` */,
+    message: Schema.String,
+  },
+) {}
 
 /**
  * A run's trace that no reader can take any more: `ended` (the run settled
@@ -68,11 +78,14 @@ export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
  * was detached) or `remote` (the run runs in another process, which keeps
  * its trace). The run itself is unaffected: its `result` still answers.
  */
-export class TraceUnavailable extends Data.TaggedError('TraceUnavailable')<{
-  readonly runId: string;
-  readonly reason: 'ended' | 'truncated' | 'remote';
-  readonly message: string;
-}> {}
+export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
+  'TraceUnavailable',
+  {
+    runId: Schema.String,
+    reason: Schema.Literals(['ended', 'truncated', 'remote']),
+    message: Schema.String,
+  },
+) {}
 
 /** What a launch refuses before any model work: the two an embedder
  *  branches on. A run that fails after admission fails with

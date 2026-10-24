@@ -24,12 +24,12 @@ import { Buffer } from 'node:buffer';
 
 import {
   type Cause,
-  Data,
   Deferred,
   Effect,
   Predicate,
   Queue,
   Ref,
+  Schema,
   type Sink,
   Stream,
 } from 'effect';
@@ -42,27 +42,34 @@ const CHANNEL = 'JsonRpcConnection';
 const METHOD_NOT_FOUND = -32601;
 
 /** The connection was closed; `message` is the closer's reason. */
-export class JsonRpcConnectionDisposed extends Data.TaggedError(
+export class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisposed>()(
   'JsonRpcConnectionDisposed',
-)<{ readonly message: string }> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * The peer answered a request with a JSON-RPC error. `code` is the JSON-RPC
  * error code the peer sent.
  */
-export class JsonRpcRequestError extends Data.TaggedError(
+export class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
   'JsonRpcRequestError',
-)<{
-  readonly method: string;
-  readonly message: string;
-  readonly code?: number;
-  readonly cause: unknown;
-}> {}
+  {
+    method: Schema.String,
+    message: Schema.String,
+    code: Schema.optional(Schema.Number),
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The peer sent bytes that are not an LSP frame. Ends the reader. */
-class JsonRpcFrameError extends Data.TaggedError('JsonRpcFrameError')<{
-  readonly message: string;
-}> {}
+class JsonRpcFrameError extends Schema.TaggedError<JsonRpcFrameError>()(
+  'JsonRpcFrameError',
+  {
+    message: Schema.String,
+  },
+) {}
 
 export interface JsonRpcConnection {
   readonly request: <T>(

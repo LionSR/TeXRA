@@ -7,7 +7,7 @@
  * a 304 means "no change since that ETag".
  */
 
-import { Clock, Data, Duration, Effect } from 'effect';
+import { Clock, Duration, Effect, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -26,22 +26,32 @@ export type GitHubServices = Secrets | HttpClient.HttpClient;
 export type ConditionalResponse<T> =
   { status: 200; data: T; etag: string | undefined } | { status: 304 };
 
-export class GitHubAuthError extends Data.TaggedError('GitHubAuthError')<{
-  readonly message: string;
-}> {}
+export class GitHubAuthError extends Schema.TaggedError<GitHubAuthError>()(
+  'GitHubAuthError',
+  {
+    message: Schema.String,
+  },
+) {}
 
-export class GitHubRateLimitError extends Data.TaggedError(
+export class GitHubRateLimitError extends Schema.TaggedError<GitHubRateLimitError>()(
   'GitHubRateLimitError',
-)<{ readonly resetAt: number }> {
+  {
+    resetAt: Schema.Number,
+  },
+) {
   override get message(): string {
     return `GitHub rate limit exceeded; resets at ${new Date(this.resetAt * 1000).toISOString()}`;
   }
 }
 
 /** An HTTP status that won't recover on retry (404, 410, 422). */
-export class GitHubPermanentError extends Data.TaggedError(
+export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentError>()(
   'GitHubPermanentError',
-)<{ readonly status: number; readonly message: string }> {}
+  {
+    status: Schema.Number,
+    message: Schema.String,
+  },
+) {}
 
 /**
  * GitHub error responses are `{ message, documentation_url, ... }` JSON

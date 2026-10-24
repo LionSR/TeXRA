@@ -8,7 +8,7 @@
  * `HostCapabilities`, so the `diagnostics` tool is offered exactly while an
  * implementation is attached: one owner for the capability and its code.
  */
-import { Context, Data, Effect, type Scope } from 'effect';
+import { Context, Effect, Schema, type Scope } from 'effect';
 
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { FileLocation } from '@texra-ai/harness/schemas';
@@ -19,21 +19,30 @@ import type { FileLocation } from '@texra-ai/harness/schemas';
  * (`read-failed`), or, for a service window, it closed before answering
  * (`detached`) or did not answer in time (`no-answer`).
  */
-export class DiagnosticsReadFailed extends Data.TaggedError(
+export class DiagnosticsReadFailed extends Schema.TaggedError<DiagnosticsReadFailed>()(
   'DiagnosticsReadFailed',
-)<{
-  readonly reason: 'build-failed' | 'read-failed' | 'detached' | 'no-answer';
-  readonly path: string;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    reason: Schema.Literals([
+      'build-failed',
+      'read-failed',
+      'detached',
+      'no-answer',
+    ]),
+    path: Schema.String,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** The host's viewer refused a PDF the tool had already located on disk. */
-export class PdfOpenFailed extends Data.TaggedError('PdfOpenFailed')<{
-  readonly path: string;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class PdfOpenFailed extends Schema.TaggedError<PdfOpenFailed>()(
+  'PdfOpenFailed',
+  {
+    path: Schema.String,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** One critique the diagnostics tool adds as an editor diagnostic. */
 export interface ManualCriticismEntry {

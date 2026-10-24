@@ -73,7 +73,6 @@ import * as NodePath from '@effect/platform-node/NodePath';
 import {
   Cause,
   ConfigProvider,
-  Data,
   Duration,
   Effect,
   Exit,
@@ -83,6 +82,7 @@ import {
   Option,
   type Path,
   Predicate,
+  Schema,
   Scope,
 } from 'effect';
 import {
@@ -324,10 +324,13 @@ export const nodePlatformServices: Layer.Layer<
 );
 
 /** A project's `.env` exists but could not be read or parsed. */
-class ProjectEnvUnreadable extends Data.TaggedError('ProjectEnvUnreadable')<{
-  readonly file: string;
-  readonly cause: unknown;
-}> {
+class ProjectEnvUnreadable extends Schema.TaggedError<ProjectEnvUnreadable>()(
+  'ProjectEnvUnreadable',
+  {
+    file: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
   override get message(): string {
     return `The project's ${this.file} could not be read: ${String(this.cause)}`;
   }

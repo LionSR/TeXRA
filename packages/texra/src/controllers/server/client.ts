@@ -11,13 +11,13 @@ import { closeSync, openSync } from 'node:fs';
 
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import {
-  Data,
   Deferred,
   Effect,
   Exit,
   Layer,
   Ref,
   Schedule,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -55,12 +55,16 @@ export interface ServiceConnection {
 }
 
 /** No service could be reached or started; the message says why. */
-export class ServiceUnavailable extends Data.TaggedError('ServiceUnavailable')<{
-  readonly reason: string;
-  /** The running service speaks a newer protocol than this client: it
-   *  stays until it exits, so waiting does not bring this client back. */
-  readonly newer?: true;
-}> {
+export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()(
+  'ServiceUnavailable',
+  {
+    reason: Schema.String,
+
+    /** The running service speaks a newer protocol than this client: it
+     *  stays until it exits, so waiting does not bring this client back. */
+    newer: Schema.optional(Schema.Literal(true)),
+  },
+) {
   override get message(): string {
     return this.reason;
   }

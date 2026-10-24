@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Clock, Data, Effect, FileSystem, Option } from 'effect';
+import { Clock, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
 import { StorageFs, withLogChannel } from '@texra-ai/harness';
@@ -95,12 +95,13 @@ export const sweepStaleFiles = Effect.fn('sweepStaleFiles')(function* (
 
 /** Why a pasted image could not be persisted, worded as the host shows it so
  *  the caller yields this failure instead of re-minting one of its own. */
-export class PastedImageSaveFailed extends Data.TaggedError(
+export class PastedImageSaveFailed extends Schema.TaggedError<PastedImageSaveFailed>()(
   'PastedImageSaveFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const saveFailed = (cause: unknown): PastedImageSaveFailed =>
   new PastedImageSaveFailed({

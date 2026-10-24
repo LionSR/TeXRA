@@ -1,4 +1,4 @@
-import { Data, type Effect } from 'effect';
+import { type Effect, Schema } from 'effect';
 
 import type {
   RequestEnsureProgressViewPayload,
@@ -72,9 +72,11 @@ export type PresentationEventHandlers<
  * nothing waits on a presentation, so `presentOn` warn-logs it on the
  * detached fiber that runs it and no `fallbackMessage` follows.
  */
-export class HostPresentationFailed extends Data.TaggedError(
+export class HostPresentationFailed extends Schema.TaggedError<HostPresentationFailed>()(
   'HostPresentationFailed',
-)<{
-  readonly event: RuntimePresentationEvent;
-  readonly cause: unknown;
-}> {}
+  {
+    event:
+      Schema.Unknown /* TODO(effect-schema): error field type RuntimePresentationEvent; was `RuntimePresentationEvent` */,
+    cause: Schema.Defect(),
+  },
+) {}

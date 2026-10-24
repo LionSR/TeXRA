@@ -1,4 +1,4 @@
-import { Cause, Data, Effect, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
@@ -7,9 +7,12 @@ import { toErrorMessage, escapeAttr } from '@texra-ai/harness/schemas';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 
 /** A view's HTML template has no `<body>` to install the host bridge into. */
-class WebviewTemplateMissingBody extends Data.TaggedError(
+class WebviewTemplateMissingBody extends Schema.TaggedError<WebviewTemplateMissingBody>()(
   'WebviewTemplateMissingBody',
-)<{ readonly htmlPath: string }> {
+  {
+    htmlPath: Schema.String,
+  },
+) {
   override get message(): string {
     return `Webview template is missing a <body> tag: ${this.htmlPath}`;
   }

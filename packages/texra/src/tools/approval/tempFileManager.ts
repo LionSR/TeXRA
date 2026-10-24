@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
-import { Data, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -27,13 +27,14 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 const CHANNEL = 'approval.tempFiles';
 
 /** A staged diff side could not be written to the host filesystem. */
-class ApprovalTempWriteFailed extends Data.TaggedError(
+class ApprovalTempWriteFailed extends Schema.TaggedError<ApprovalTempWriteFailed>()(
   'ApprovalTempWriteFailed',
-)<{
-  readonly side: 'original' | 'proposed';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    side: Schema.Literals(['original', 'proposed']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const writeSide = (
   fs: FileSystem.FileSystem,

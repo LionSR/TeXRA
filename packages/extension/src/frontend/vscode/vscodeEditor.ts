@@ -4,7 +4,7 @@
  * Provides common helpers for opening and manipulating files in VS Code editors.
  */
 
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -15,13 +15,19 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
  * back. The three are separate answers because only the first says anything
  * about the file itself, and only the last leaves content unsaved.
  */
-export class EditorOpenFailed extends Data.TaggedError('EditorOpenFailed')<{
-  readonly reason:
-    'document-open-failed' | 'editor-unavailable' | 'save-failed';
-  readonly message: string;
-  readonly absolutePath: string;
-  readonly cause: unknown;
-}> {}
+export class EditorOpenFailed extends Schema.TaggedError<EditorOpenFailed>()(
+  'EditorOpenFailed',
+  {
+    reason: Schema.Literals([
+      'document-open-failed',
+      'editor-unavailable',
+      'save-failed',
+    ]),
+    message: Schema.String,
+    absolutePath: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first

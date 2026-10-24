@@ -12,7 +12,7 @@
 //     the CLI writes only the rows its `/config` panel lists.
 
 import { Settings, type SettingHost } from '@texra-ai/harness';
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   type SettingsViewStateSettingEntry,
@@ -48,9 +48,12 @@ export type StateSettingUpdateResult<
  * — the store's own `ConfigWriteFailed`, or the state store's own error, or a
  * thrown value from the approval-policy hook — so the hosts report one shape.
  */
-class StateSettingWriteFailed extends Data.TaggedError(
+class StateSettingWriteFailed extends Schema.TaggedError<StateSettingWriteFailed>()(
   'StateSettingWriteFailed',
-)<{ readonly cause: unknown }> {}
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
   readonly stores: SettingsStores;

@@ -8,7 +8,7 @@
  * the LaTeX compiler) into the app's startup.
  */
 
-import { Data } from 'effect';
+import { Schema } from 'effect';
 
 /**
  * A step of the transcript export could not be carried out.
@@ -23,11 +23,16 @@ import { Data } from 'effect';
  * either way. The two host surfaces mint the tag where they wrap their own
  * foreign edge, so the export chain lifts nothing.
  */
-export class TranscriptExportFailed extends Data.TaggedError(
+export class TranscriptExportFailed extends Schema.TaggedError<TranscriptExportFailed>()(
   'TranscriptExportFailed',
-)<{
-  readonly step:
-    'assembleTrace' | 'openController' | 'pickFormat' | 'traceViewerBundle';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    step: Schema.Literals([
+      'assembleTrace',
+      'openController',
+      'pickFormat',
+      'traceViewerBundle',
+    ]),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}

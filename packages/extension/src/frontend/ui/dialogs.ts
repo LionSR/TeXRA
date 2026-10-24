@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
@@ -15,17 +15,23 @@ const CHANNEL = 'dialogs';
  * the host's own dialog machinery faults, which is the one failure either
  * picker below can raise. `member` names which picker asked.
  */
-export class OpenDialogFailed extends Data.TaggedError('OpenDialogFailed')<{
-  readonly member: 'selectFiles' | 'selectFolder';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class OpenDialogFailed extends Schema.TaggedError<OpenDialogFailed>()(
+  'OpenDialogFailed',
+  {
+    member: Schema.Literals(['selectFiles', 'selectFolder']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** VS Code would not show a quick pick or input box. */
-export class HostPromptFailed extends Data.TaggedError('HostPromptFailed')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class HostPromptFailed extends Schema.TaggedError<HostPromptFailed>()(
+  'HostPromptFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const hostPromptFailed = (cause: unknown) =>
   new HostPromptFailed({ message: toErrorMessage(cause), cause });

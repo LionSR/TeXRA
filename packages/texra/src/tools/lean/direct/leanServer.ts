@@ -27,7 +27,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   Clock,
   Context,
-  Data,
   Deferred,
   Duration,
   Effect,
@@ -37,6 +36,7 @@ import {
   type PlatformError,
   Ref,
   Result,
+  Schema,
   type Scope,
   Stream,
 } from 'effect';
@@ -73,26 +73,38 @@ const DIAGNOSTICS_QUIET_WINDOW_MS = 400;
 const STDERR_TAIL_LIMIT = 4096;
 
 /** The server was disposed, or the file state a wait was pinned to is gone. */
-class LeanSessionDisposed extends Data.TaggedError('LeanSessionDisposed') {
+class LeanSessionDisposed extends Schema.TaggedError<LeanSessionDisposed>()(
+  'LeanSessionDisposed',
+  {},
+) {
   override readonly message = 'Lean session has been disposed.';
 }
 
 /** No live server: already exited, or shut down. */
-class LeanSessionNotRunning extends Data.TaggedError('LeanSessionNotRunning') {
+class LeanSessionNotRunning extends Schema.TaggedError<LeanSessionNotRunning>()(
+  'LeanSessionNotRunning',
+  {},
+) {
   override readonly message = 'Lean session is not running';
 }
 
 /** The server could not be spawned or did not complete `initialize`. */
-export class LeanStartError extends Data.TaggedError('LeanStartError')<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class LeanStartError extends Schema.TaggedError<LeanStartError>()(
+  'LeanStartError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** The file to open could not be read from disk. */
-class LeanFileReadError extends Data.TaggedError('LeanFileReadError')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class LeanFileReadError extends Schema.TaggedError<LeanFileReadError>()(
+  'LeanFileReadError',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 export type LeanSessionError =
   | LeanSessionDisposed

@@ -14,16 +14,16 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   Cause,
-  Data,
   Effect,
   FiberHandle,
   Layer,
   Option,
   Predicate,
-  Result,
-  Semaphore,
   Ref,
+  Result,
+  Schema,
   type Scope,
+  Semaphore,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -136,13 +136,15 @@ const callService = <A, E>(
 
 /** A task's records the service could not answer for: it is offline (or
  *  did not answer), holds no such run, or its records would not read. */
-export class TaskRecordsUnavailable extends Data.TaggedError(
+export class TaskRecordsUnavailable extends Schema.TaggedError<TaskRecordsUnavailable>()(
   'TaskRecordsUnavailable',
-)<{
-  readonly runId: RunId;
-  readonly reason: 'offline' | 'unknownRun' | 'unreadable';
-  readonly message: string;
-}> {}
+  {
+    runId:
+      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    reason: Schema.Literals(['offline', 'unknownRun', 'unreadable']),
+    message: Schema.String,
+  },
+) {}
 
 /**
  * A window's reads of its project's task records, answered by the service
@@ -243,14 +245,16 @@ export const serviceProjectState = (
   /** `value` as the wire carries it: JSON, or absent. Anything else is
    *  refused here, as the local store refuses it. */
   const json = (key: string, value: unknown) => {
-    const parsed = JsonValueSchema.optional().safeParse(value);
-    return parsed.success
-      ? Effect.succeed({ value: parsed.data })
+    const parsed = Schema.decodeUnknownResult(Schema.optional(JsonValueSchema))(
+      value,
+    );
+    return Result.isSuccess(parsed)
+      ? Effect.succeed({ value: parsed.success })
       : Effect.fail(
           new StateWriteFailed({
             key,
             message: `State key ${key} was given a value that is not JSON`,
-            cause: parsed.error,
+            cause: parsed.failure,
           }),
         );
   };

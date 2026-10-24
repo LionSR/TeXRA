@@ -28,7 +28,7 @@ import {
   type SessionHostInteractions,
 } from '@texra-ai/harness';
 import { entryTypeIn } from '@texra-ai/harness/node';
-import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import {
   type ApiKeyProviderId,
@@ -94,19 +94,29 @@ export interface WorkflowFileOperationResult {
  * The host's launcher could not start the run, or the run it started
  * failed: a bare `Error`, lifted here with that error as `cause`.
  */
-class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class RunLaunchFailed extends Schema.TaggedError<RunLaunchFailed>()(
+  'RunLaunchFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The run's saved setup could not be read: the database would not answer
  *  or refused the committed `run.config` row, or the service holding the
  *  run could not answer for it (`cause`). */
-class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
-  readonly runId: RunId;
-  readonly message: string;
-  readonly cause: DatabaseReadFailed | TaskRecordsUnavailable;
-}> {}
+class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
+  'RunConfigUnreadable',
+  {
+    runId:
+      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    message: Schema.String,
+    cause: Schema.Union([
+      Schema.Unknown /* TODO(effect-schema): error field type DatabaseReadFailed; was `DatabaseReadFailed` */,
+      Schema.Unknown /* TODO(effect-schema): error field type TaskRecordsUnavailable; was `TaskRecordsUnavailable` */,
+    ]),
+  },
+) {}
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them. */

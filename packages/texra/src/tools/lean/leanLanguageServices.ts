@@ -11,7 +11,7 @@
  * LSP requests).
  */
 
-import { Context, Data, type Effect } from 'effect';
+import { Context, type Effect, Schema } from 'effect';
 
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -48,13 +48,14 @@ import type {
  * 4 extension), which the tool answers with setup guidance, or anything else,
  * which it reports by `message` alone.
  */
-export class LeanFileCommandFailed extends Data.TaggedError(
+export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
   'LeanFileCommandFailed',
-)<{
-  readonly reason: 'toolchain_unavailable' | 'failed';
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    reason: Schema.Literals(['toolchain_unavailable', 'failed']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 export interface LeanLanguageServicesShape {
   /**

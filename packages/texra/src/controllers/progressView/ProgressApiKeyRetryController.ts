@@ -1,4 +1,4 @@
-import { Data, Effect, Equal, Redacted } from 'effect';
+import { Effect, Equal, Redacted, Schema } from 'effect';
 
 // Local imports
 import type { RequestRefusal } from '@texra-ai/harness';
@@ -24,11 +24,15 @@ interface ProgressApiKeyRetryRequest {
  * without entering a key is not a failure — the controller re-reads the store
  * and answers `false`.
  */
-export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
-  readonly provider: ApiKeyProviderId;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class ApiKeyPromptFailed extends Schema.TaggedError<ApiKeyPromptFailed>()(
+  'ApiKeyPromptFailed',
+  {
+    provider:
+      Schema.Unknown /* TODO(effect-schema): error field type ApiKeyProviderId; was `ApiKeyProviderId` */,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 interface ProgressApiKeyRetryControllerDeps {
   readKey(

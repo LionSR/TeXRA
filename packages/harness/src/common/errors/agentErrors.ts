@@ -1,4 +1,4 @@
-import { Data } from 'effect';
+import { Schema } from 'effect';
 
 /**
  * Base class for runtime errors raised by the agent layer.
@@ -23,11 +23,14 @@ export class AgentError extends Error {
  * `missing-api-key` is the one reason a host acts on (it offers the key
  * setting); every other reason is read as its message.
  */
-export class RouteUnavailable extends Data.TaggedError('RouteUnavailable')<{
-  readonly reason: 'missing-api-key' | 'unavailable';
-  readonly message: string;
-  readonly cause?: unknown;
-}> {
+export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
+  'RouteUnavailable',
+  {
+    reason: Schema.Literals(['missing-api-key', 'unavailable']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
   /** `cause`, read as the reason no route can carry the call. */
   static of(cause: Error): RouteUnavailable {
     return new RouteUnavailable({

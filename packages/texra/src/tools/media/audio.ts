@@ -6,11 +6,11 @@ import * as path from 'node:path';
 
 import {
   Clock,
-  Data,
   Duration,
   Effect,
   FileSystem,
   PlatformError,
+  Schema,
   Scope,
   Stream,
 } from 'effect';
@@ -51,10 +51,13 @@ export function recordingsDir(roots: WorkspaceRoots): string {
  * so a refusal reaches the draft request already worded and the caller never
  * re-mints one.
  */
-class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class AudioRecorderError extends Schema.TaggedError<AudioRecorderError>()(
+  'AudioRecorderError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** The failure a foreign call of `operation` carries back, logged once here
  *  where the operation is named. A filesystem failure is worded by its errno

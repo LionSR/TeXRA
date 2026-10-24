@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Data, Effect, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -40,12 +40,15 @@ const CHANNEL = 'CompareCommands';
  * VS Code reports an unregistered id in the message text and nowhere else, so
  * the text is read once, beside the dispatch, and callers match `reason`.
  */
-class VscodeCommandRefused extends Data.TaggedError('VscodeCommandRefused')<{
-  readonly reason: 'not-registered' | 'failed';
-  readonly commandId: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class VscodeCommandRefused extends Schema.TaggedError<VscodeCommandRefused>()(
+  'VscodeCommandRefused',
+  {
+    reason: Schema.Literals(['not-registered', 'failed']),
+    commandId: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Dispatch one VS Code command, naming an unregistered id as its own reason. */
 function executeVscodeCommand<T = void>(
@@ -78,11 +81,14 @@ function executeVscodeCommand<T = void>(
  * the reporting tail shows `toErrorMessage` of this failure and the reason
  * the call gave is the part the user can act on.
  */
-class AcceptEditedFailed extends Data.TaggedError('AcceptEditedFailed')<{
-  readonly step: 'pick-target' | 'replace' | 'commit';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class AcceptEditedFailed extends Schema.TaggedError<AcceptEditedFailed>()(
+  'AcceptEditedFailed',
+  {
+    step: Schema.Literals(['pick-target', 'replace', 'commit']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Word one step's rejection as the failure the reporting tail shows. */
 const acceptEditedFailure =

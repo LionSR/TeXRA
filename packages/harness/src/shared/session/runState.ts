@@ -9,7 +9,7 @@
  * or a rejection. `RunCell.append` applies every batch here before
  * publishing it, so the writer checks only what a batch alone shows.
  */
-import { Data, Result } from 'effect';
+import { Result, Schema } from 'effect';
 
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
@@ -72,18 +72,23 @@ type RunHistoryDraftType =
   | 'followup.consumed'
   | CardRowType;
 
-export class RunHistoryInconsistent extends Data.TaggedError(
+export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>()(
   'RunHistoryInconsistent',
-)<{
-  readonly reason:
-    | 'out-of-order' // commits not strictly increasing, or a row before the row it needs
-    | 'orphan-settlement' // a tool.result for no pending call
-    | 'unknown-run-row' // an unrecognized type on the run aggregate
-    | 'mismatched-delivery' // a delivering append does not match its response's results
-    | 'unreadable-turn'; // a stored turn this build of the package cannot parse
-  readonly detail: string;
-  readonly commit: CommitOrdinal | null;
-}> {}
+  {
+    reason: Schema.Literals([
+      'out-of-order',
+      'orphan-settlement',
+      'unknown-run-row',
+      'mismatched-delivery',
+      'unreadable-turn',
+    ]),
+    // a stored turn this build of the package cannot parse
+    detail: Schema.String,
+    commit: Schema.NullOr(
+      Schema.Unknown /* TODO(effect-schema): error field type CommitOrdinal; was `CommitOrdinal` */,
+    ),
+  },
+) {}
 
 /**
  * What the loop continues from. A plain type with no schema of its own,

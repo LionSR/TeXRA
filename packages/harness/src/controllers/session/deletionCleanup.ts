@@ -6,13 +6,13 @@
 import * as path from 'node:path';
 
 import {
-  Data,
-  Effect,
-  FileSystem,
   type Context,
+  Effect,
   type Fiber,
+  FileSystem,
   type Path,
   type PlatformError,
+  Schema,
   type Scope,
 } from 'effect';
 
@@ -35,9 +35,12 @@ import { isPathWithin } from '@utils/core/pathCore';
 const CHANNEL = 'DeletionCleanup';
 
 /** The runs directory does not resolve to itself, so cleanup is refused. */
-class GeneratedRootRedirected extends Data.TaggedError(
+class GeneratedRootRedirected extends Schema.TaggedError<GeneratedRootRedirected>()(
   'GeneratedRootRedirected',
-)<{ readonly message: string }> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * Remove each run's run directory under the storage root it was

@@ -7,38 +7,46 @@
  * not yet folded the other's `run.removed`, and a defect would bypass the
  * response path and leave the sender's latch pending forever.
  */
-import { Data } from 'effect';
+import { Schema } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
 import { DatabaseClaimRefused, heldElsewhereBy } from './database';
 
 /** Another live owner holds the run this request would act on. */
-export class NotOwner extends Data.TaggedError('NotOwner')<{
-  readonly runId: RunId;
-}> {}
+export class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
+  runId:
+    Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+}) {}
 
 /** The stream, request, or run the request names is gone or not in a state
  *  that can take it. */
-export class Unavailable extends Data.TaggedError('Unavailable')<{
-  readonly runId: RunId;
-  readonly reason: string;
-}> {}
+export class Unavailable extends Schema.TaggedError<Unavailable>()(
+  'Unavailable',
+  {
+    runId:
+      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    reason: Schema.String,
+  },
+) {}
 
 /** The user cancelled the operation. No refusal notice is needed. */
-export class Cancelled extends Data.TaggedError('Cancelled') {}
+export class Cancelled extends Schema.TaggedError<Cancelled>()(
+  'Cancelled',
+  {},
+) {}
 
 /** The runtime refused the request for a worded reason. */
-export class Rejected extends Data.TaggedError('Rejected')<{
-  readonly reason: string;
-  readonly docsPage?: string;
-}> {}
+export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
+  reason: Schema.String,
+  docsPage: Schema.optional(Schema.String),
+}) {}
 
 /** A handler died. The cause is in the host log under `ref` (the request
  *  id); the surface hears that the request failed, never the text. */
-export class Internal extends Data.TaggedError('Internal')<{
-  readonly ref: string;
-}> {}
+export class Internal extends Schema.TaggedError<Internal>()('Internal', {
+  ref: Schema.String,
+}) {}
 
 export type RequestError =
   NotOwner | Unavailable | Cancelled | Rejected | Internal;

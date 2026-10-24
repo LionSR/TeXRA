@@ -4,12 +4,12 @@
  */
 import {
   Context,
-  Data,
   Effect,
   FileSystem,
   Layer,
-  Stream,
   type Result,
+  Schema,
+  Stream,
 } from 'effect';
 import type { AgentSource } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
@@ -43,12 +43,16 @@ export type ConfigInspection<T = unknown> = Partial<
  * so a caller inside a program composes the write rather than adopting a
  * rejection it cannot type.
  */
-export class ConfigWriteFailed extends Data.TaggedError('ConfigWriteFailed')<{
-  readonly key: string;
-  readonly target: ConfigTarget;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
+  'ConfigWriteFailed',
+  {
+    key: Schema.String,
+    target:
+      Schema.Unknown /* TODO(effect-schema): error field type ConfigTarget; was `ConfigTarget` */,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Platform configuration provider interface.
@@ -97,18 +101,24 @@ export interface ConfigProvider {
 // ---------------------------------------------------------------------------
 
 /** An authoritative state read failed; absence is a successful read. */
-export class StateReadFailed extends Data.TaggedError('StateReadFailed')<{
-  readonly key: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class StateReadFailed extends Schema.TaggedError<StateReadFailed>()(
+  'StateReadFailed',
+  {
+    key: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** A host or database refused an application-state write. */
-export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
-  readonly key: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
+  'StateWriteFailed',
+  {
+    key: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Application state read from its authority when the Effect executes. A read
@@ -177,14 +187,16 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
  * travel with the agent-catalog load beside them, so a caller inside a program
  * composes the read rather than adopting a rejection it cannot type.
  */
-export class AgentDirectoriesFailed extends Data.TaggedError(
+export class AgentDirectoriesFailed extends Schema.TaggedError<AgentDirectoriesFailed>()(
   'AgentDirectoriesFailed',
-)<{
-  /** Which of the port's readers failed. */
-  readonly source: AgentSource;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    /** Which of the port's readers failed. */
+    source:
+      Schema.Unknown /* TODO(effect-schema): error field type AgentSource; was `AgentSource` */,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Host-provided agent directory paths. All are `Effect`s (not Promises)

@@ -5,12 +5,12 @@
 
 import {
   Cause,
-  Data,
   Deferred,
   Effect,
   Exit,
   Fiber,
   Option,
+  Schema,
   Scope,
   Stream,
 } from 'effect';
@@ -115,10 +115,13 @@ interface PreparingRoot {
  * selection reads the process stores, which does not report a normal outcome
  * this way.
  */
-class ChatSessionCallFailed extends Data.TaggedError('ChatSessionCallFailed')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class ChatSessionCallFailed extends Schema.TaggedError<ChatSessionCallFailed>()(
+  'ChatSessionCallFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Hand a run program's own exit to the deferred the root-run slot holds. The
@@ -512,7 +515,7 @@ export function createChatSessionController(
         Effect.gen(function* () {
           yield* adoptRunConfig(config);
           const registeredConfig = yield* Effect.try({
-            try: () => AgentConfigSchema.parse(config),
+            try: () => Schema.decodeUnknownSync(AgentConfigSchema)(config),
             catch: ensureError,
           });
           // Each chat round mints a fresh root run id, so bash/tool-edit/
