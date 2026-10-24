@@ -46,11 +46,7 @@ type ToolEditPreviewAction = 'openDiff' | 'showLatexdiff' | 'previewProposed';
 export type SurfaceDecision =
   | RequestDecision
   | { readonly action: typeof APPROVE_SESSION_ACTION }
-  | {
-      readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION;
-      readonly model?: string | null;
-      readonly agent?: string | null;
-    }
+  | { readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION }
   | { readonly action: ToolEditPreviewAction };
 
 /**
@@ -105,14 +101,6 @@ export function approvalDecisionArms(
           `A ${permission.kind} request has no session bypass to enable.`,
         );
       }
-      const approve: RequestDecision =
-        decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION
-          ? {
-              action: 'approve',
-              model: decision.model ?? null,
-              agent: decision.agent ?? null,
-            }
-          : { action: 'approve' };
       // Enable the session-wide bypass first: the field-level mutation the
       // approval authority applies, not a snapshot.
       return [
@@ -128,7 +116,7 @@ export function approvalDecisionArms(
             },
           },
         },
-        decide(approve),
+        decide({ action: 'approve' }),
       ];
     }
     case 'openDiff':
@@ -167,7 +155,6 @@ export function approvalDecisionArms(
     }
     case 'approve':
     case 'approve_and_goal':
-    case 'setup':
     case 'submit':
     case 'answer':
     case 'skip':

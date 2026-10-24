@@ -79,8 +79,8 @@ The header provides a summary and actions for the selected stream:
   time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
   A workflow task also shows which pass it is on, as **Pass 2 of 3**.
   The menu holds the task's actions, then Open tasks in editor,
-  LaTeXDiffs, and Figures. Every task offers Rename. Workflow tasks offer Run again from
-  scratch, Open task folder, Export, Copy diagnostics, latexdiff,
+  LaTeXDiffs, and Figures. Every task offers Rename. Workflow tasks offer
+  Run again… (the New task form, filled from the task, to change and start), Open task folder, Export, Copy diagnostics, latexdiff,
   Archive outputs, and Delete output files; conversations offer Fork,
   Compact, Open task folder, Export, and Copy diagnostics, and list the forks made from them. Export saves the
   conversation as Markdown, HTML, or PDF.
@@ -113,6 +113,16 @@ Each action in detail:
 
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.
+
+### Checking an agent's launch
+
+When an agent asks to start another agent, its card shows the agent, the
+model, the instruction and the files it would run. **Edit** (`e`) opens the
+New task form filled with that proposal. Change the files, the switches,
+the instruction, the agent or the model, then press **Approve** to start it
+with your changes. It still runs as the asking agent's child, and its
+result goes back to that agent. **Back to …** returns to the asking task and
+leaves the proposal waiting.
 
 ### Auto-approval
 

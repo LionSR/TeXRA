@@ -15,6 +15,8 @@
  *   parent's constraint context;
  * - a proposal is approved, denied or asked against the run's policy, or an
  *   unavailable model override is launched;
+ * - an approval that carries the launch form's changes (instruction, files)
+ *   launches the proposal as the agent made it;
  * - a detached child's result is delivered to the parent that released it.
  */
 import { writeFileSync } from 'node:fs';
@@ -593,6 +595,29 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
           "Approved model override 'anthropic/claude-opus-5-5' is not available",
         );
         expect(childrenOf(parent)).toEqual([]);
+      }),
+  );
+
+  it.live(
+    "launches the child with the instruction and files the person's approval carries",
+    () =>
+      Effect.gen(function* () {
+        const parent = yield* parkedParent(false);
+        writeFileSync(join(parent.storage, 'notes.md'), 'Lemma 2.\n');
+        yield* answerOpenedRequests(parent.session, {
+          action: 'approve',
+          instruction: 'Check Lemma 2 only.',
+          contextFiles: [join(parent.storage, 'notes.md')],
+        });
+
+        const result = yield* delegateReview(parent);
+        const child = yield* untilChildRow(parent, 'run.config');
+
+        expect(result.status).toBe('executed');
+        expect(childConfig(parent, child)).toMatchObject({
+          instruction: 'Check Lemma 2 only.',
+          contextFiles: [join(parent.storage, 'notes.md')],
+        });
       }),
   );
 

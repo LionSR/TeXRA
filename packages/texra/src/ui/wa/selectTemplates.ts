@@ -1,19 +1,7 @@
 /**
- * Lit-native template helpers for rendering select options.
+ * Helpers for Web Awesome select and dropdown events.
  */
 
-import '@awesome.me/webawesome/dist/components/option/option.js';
-
-import { html, nothing, type TemplateResult } from 'lit';
-import { repeat } from 'lit/directives/repeat.js';
-
-import {
-  MODEL_AVAILABILITY_STATUS,
-  type ModelOptionData,
-} from '@texra-ai/harness/schemas';
-import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
-import { AGENT_DECORATORS, getModelProviderDecorator } from '@ui/wa/icons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
@@ -55,93 +43,4 @@ export function afterDropdownHides(event: Event, then: () => void): void {
     then();
   };
   dropdown.addEventListener('wa-after-hide', onHidden);
-}
-
-function buildAgentTooltip(opt: DocumentAgentOption): string {
-  const { properties } = AGENT_DECORATORS;
-  const hints: string[] = [];
-
-  if (opt.isOrchestrator)
-    hints.push(
-      'Plans a pipeline of specialized agents. Ask it which agent to use, or name agents in your instruction to steer delegation.',
-    );
-  // The two built-in sources carry no origin hint and have no row here.
-  if (opt.source !== undefined && opt.source in properties)
-    hints.push(properties[opt.source as keyof typeof properties].hint);
-  if (opt.rounds !== undefined)
-    hints.push(`Document task: ${opt.rounds} revisions over your files`);
-
-  return hints.join('\n');
-}
-
-function renderAgentOption(opt: DocumentAgentOption): TemplateResult {
-  const tooltip = buildAgentTooltip(opt);
-
-  return html`
-    <wa-option
-      value=${opt.value}
-      title=${tooltip || nothing}
-      data-label=${opt.label}
-    >
-      ${
-        opt.isOrchestrator
-          ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
-          : nothing
-      }${opt.label}
-    </wa-option>
-  `;
-}
-
-export function renderAgentOptions(
-  options: DocumentAgentOption[],
-): TemplateResult {
-  return html` ${repeat(options, (opt) => opt.value, renderAgentOption)} `;
-}
-
-function renderModelOption(opt: ModelOptionData): TemplateResult {
-  const decorator = getModelProviderDecorator(opt.provider ?? '');
-  // `modelOptionsFrom` is the sole producer of the kind; a row without
-  // one came from the secret-free basic list, which has no availability
-  // verdict to show.
-  const { availability } = opt;
-  const status =
-    availability === undefined
-      ? undefined
-      : MODEL_AVAILABILITY_STATUS[availability];
-  const availabilityLabel = status?.label;
-  const disabled = status !== undefined && !status.available;
-
-  const hints = [decorator.label];
-  if (opt.hint) hints.push(opt.hint);
-  if (availabilityLabel) hints.push(availabilityLabel);
-  const tooltip = hints.join(' | ');
-
-  return html`
-    <wa-option
-      value=${opt.value}
-      ?disabled=${disabled}
-      title=${tooltip || nothing}
-      data-provider=${opt.provider || nothing}
-      data-context=${opt.context || nothing}
-      data-cost=${opt.cost || nothing}
-      data-availability=${availability || nothing}
-      data-requires-key=${status?.requiresKey ? 'true' : nothing}
-      aria-label=${
-        availabilityLabel ? `${opt.label} (${availabilityLabel})` : opt.label
-      }
-    >
-      <span class="agent-icon">${waIcon(decorator.icon)} </span>${opt.label}
-      ${
-        disabled
-          ? html`<span class="model-option-status">
-              ${availabilityLabel}
-            </span>`
-          : nothing
-      }
-    </wa-option>
-  `;
-}
-
-export function renderModelOptions(options: ModelOptionData[]): TemplateResult {
-  return html` ${repeat(options, (opt) => opt.value, renderModelOption)} `;
 }

@@ -34,6 +34,7 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
 import { playCompletionSound } from './audioNotification';
+import { editedProposal, proposalApproval } from './proposalEdit';
 import {
   installWebviewTransport,
   transcriptAggregates,
@@ -395,6 +396,11 @@ export function createSessionSurfaces(options: {
       request.kind === 'followUp.send'
         ? entry.surface$.get().drafts.get(request.runId)
         : undefined;
+    // Read before the answer: the view may retire the request, and the
+    // form's hold on it, before the response arrives.
+    const fromForm =
+      request.kind === 'request.decide' &&
+      entry.surface$.get().editing?.requestId === request.requestId;
     const result = await transport.request({
       kind: 'runtime.request',
       session: key,
@@ -412,6 +418,12 @@ export function createSessionSurfaces(options: {
         ...current,
         rejected: new Map(current.rejected).set(runId, result.error),
       });
+    }
+    // The form's approval went through: back to the run that asked, where
+    // its child starts.
+    if (result.ok && fromForm && request.kind === 'request.decide') {
+      act(entry, { kind: 'launch', patch: { instruction: '' } });
+      act(entry, { kind: 'select', runId: request.runId });
     }
     if (request.kind !== 'followUp.send') return;
     const current = entry.surface$.get();
@@ -460,6 +472,25 @@ export function createSessionSurfaces(options: {
     const { launch } = surface;
     const instruction = launch.instruction.trim();
     if (instruction === '') return;
+    // Open on a proposal, the form approves it with the form's changes.
+    const edited = editedProposal(surface, view);
+    if (edited !== null) {
+      const { data } = edited;
+      if (data.task && launch.inputFiles.length === 0) {
+        act(entry, {
+          kind: 'reportError',
+          reason: 'Choose an input file first.',
+        });
+        return;
+      }
+      void runtimeRequestFor(entry, {
+        kind: 'request.decide',
+        runId: data.runId,
+        requestId: data.requestId,
+        decision: proposalApproval(data, { ...launch, instruction }),
+      });
+      return;
+    }
     // Auto-approve is this launch's alone: the request carries it, and the
     // request settles only with the run, so the next task must not find it.
     if (launch.approval !== 'policy')

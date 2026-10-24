@@ -120,8 +120,8 @@ const RUN_ACTIONS = [
   'compact',
   /** Continue the run where it stopped. */
   'resume',
-  /** Launch the run's saved setup again from scratch. */
-  'runNew',
+  /** Open the launch form on the run's saved setup, to change and start. */
+  'runAgain',
   /** A new task holding this conversation (`run.fork`). */
   'fork',
   /** A settled run's files: read, copied, or removed (`run.files`). */

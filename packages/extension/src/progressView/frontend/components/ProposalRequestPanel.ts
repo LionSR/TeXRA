@@ -3,15 +3,12 @@
 // Third-party imports
 import {
   getBasename,
-  agentKey,
-  agentName,
   getProposalFileGroups,
   type AgentProposalPermission,
-  type PermissionPayload,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
-import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -19,17 +16,13 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { modelRefOf } from '@texra-ai/llm';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
-import { selectStyles } from '@ui/styles';
 import {
   DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
@@ -43,48 +36,18 @@ import {
   scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
 import { markdownStyles } from '@ui/styles/markdownStyles';
-import {
-  readSelectValue,
-  renderAgentOptions,
-  renderModelOptions,
-} from '@ui/wa/selectTemplates';
 
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
+import { proposalLaunchPatch } from '../proposalEdit';
 import { getComposedPathElement } from '../utils';
 import type { RunView } from '@texra-ai/harness/schemas';
-
-/** The proposal's agent as an option value: options carry source-qualified
- *  keys, and a proposal with no source names the agent bare. */
-function proposedAgentKey({ agent, agentSource }: AgentProposalPermission) {
-  return agentSource == null ? agent : agentKey(agentSource, agent);
-}
-
-/** Whether an agent option value (a key) is the proposal's agent: the
- *  exact key, or, for a proposal with no source, any key of that name.
- *  Every agent match on the card goes through this. */
-function isProposedAgent(
-  value: string,
-  data: AgentProposalPermission,
-): boolean {
-  return (
-    value === proposedAgentKey(data) ||
-    (data.agentSource == null && agentName(value) === data.agent)
-  );
-}
-
-function proposalRequestIdOf(
-  p: PermissionPayload | null | undefined,
-): string | undefined {
-  return p?.kind === 'proposal' ? p.data.requestId : undefined;
-}
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
@@ -92,140 +55,89 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     BaseRequestPanel.styles,
     markdownStyles,
     proposalRequestPanelStyles,
-    selectStyles,
   ];
 
-  /** The host's catalogs, the lists the composer launches from. */
+  /** The host's catalogs, the lists the launch form offers. */
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  /** The asking run: its `agentScope` bounds the agent picker. */
+  /** The asking run: its `agentScope` bounds the form's agents. */
   @property({ attribute: false }) run: RunView | null = null;
 
-  @state() private selectedModel: string | null = null;
-  @state() private selectedAgent: string | null = null;
-
   protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve', ...this.proposalOverrides });
+    this.emitAction({ action: 'approve' });
   }
 
   protected override get grant(): RunGrant {
     return {
       label: RUN_GRANT_LABEL.superYolo,
       scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
-      decision: {
-        action: APPROVE_ALL_DELEGATED_WORK_ACTION,
-        ...this.proposalOverrides,
-      },
+      decision: { action: APPROVE_ALL_DELEGATED_WORK_ACTION },
     };
   }
 
-  /**
-   * What the agent wants to start, naming the agent (unless the agent
-   * picker below names it) and the model (unless the model picker does).
-   */
+  /** What the agent wants to start: the agent and the model. */
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
     if (data.script) {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
-    const { agents, models } = this.pickers;
-    const agent =
-      agents.length > 0 ? nothing : html` <strong>${data.agent}</strong>`;
-    const model =
-      models.length > 0 ? nothing : html` on ${getModelLabel(data.model)}`;
+    const agent = html` <strong>${data.agent}</strong>`;
+    const model = html` on ${getModelLabel(data.model)}`;
     return data.task
-      ? html`Run${agent === nothing ? ' an agent' : agent}${model}`
-      : html`Delegate a
-        task${agent === nothing ? '' : html` to${agent}`}${model}`;
-  }
-
-  // Reset selections only when the proposal's identity changes, so an async
-  // permission upsert that just adds dropdown options doesn't wipe the user's
-  // in-progress pick for the same proposal.
-  protected override willUpdate(changed: PropertyValues): void {
-    super.willUpdate(changed);
-    const previous = changed.get('permission') as
-      PermissionPayload | null | undefined;
-    if (
-      changed.has('permission') &&
-      proposalRequestIdOf(previous) !== proposalRequestIdOf(this.permission)
-    ) {
-      this.selectedModel = null;
-      this.selectedAgent = null;
-    }
-    // A catalog refresh may drop a pick: the select then shows the
-    // proposal again, which the pickers always offer.
-    const { agents, models } = this.pickers;
-    if (!agents.some(({ value }) => value === this.selectedAgent))
-      this.selectedAgent = null;
-    if (!models.some(({ value }) => value === this.selectedModel))
-      this.selectedModel = null;
+      ? html`Run${agent}${model}`
+      : html`Delegate a task to${agent}${model}`;
   }
 
   protected override handleExtraKey(key: string): boolean {
-    if (key === 's') {
-      this.emitAction({ action: 'setup' });
+    if (key === 'e' && this.editable) {
+      this.edit();
       return true;
     }
     return false;
   }
 
+  /** A script's request approves the script, not one call's agent work,
+   *  so only an agent's own proposal opens in the form. */
+  private get editable(): boolean {
+    return !this.readOnly && this.host !== null && !this.permission.data.script;
+  }
+
+  /** Edit: the launch form opens on this proposal, filled with what it
+   *  would launch; the form's Send approves it with the changes. */
+  private edit(): void {
+    const { host } = this;
+    if (host === null) return;
+    const data = this.permission.data;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'editProposal',
+        proposal: { runId: data.runId, requestId: data.requestId },
+        patch: proposalLaunchPatch(data, this.run ?? undefined, host),
+      }),
+    );
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data;
-    const { agents: agentOptions, models: modelOptions } = this.pickers;
-    const pickers =
-      agentOptions.length > 0 || modelOptions.length > 0
-        ? html`<div class="workflow-proposal__pickers">
-            ${
-              agentOptions.length > 0
-                ? html`<wa-select
-                    class="proposal-agent-dropdown"
-                    .value=${this.selectedAgent ?? this.proposedAgent}
-                    ?disabled=${this.readOnly}
-                    @change=${this.handleAgentSelectChange}
-                  >
-                    <span slot="label" class="visually-hidden">Agent</span>
-                    ${waIcon('wand-magic-sparkles', { slot: 'start' })}
-                    ${renderAgentOptions(agentOptions)}
-                  </wa-select>`
-                : nothing
-            }
-            ${
-              modelOptions.length > 0
-                ? html`<wa-select
-                    class="proposal-model-dropdown"
-                    .value=${this.selectedModel ?? this.proposedModel}
-                    ?disabled=${this.readOnly}
-                    @change=${this.handleSelectChange}
-                  >
-                    <span slot="label" class="visually-hidden">Model</span>
-                    ${waIcon('robot', { slot: 'start' })}
-                    ${renderModelOptions(modelOptions)}
-                  </wa-select>`
-                : nothing
-            }
-          </div>`
-        : nothing;
-
-    let body: TemplateResult;
-    if (data.script)
-      body = html`${pickers} ${this.renderScriptSummary(data, data.script)}`;
-    else
-      body = html`${pickers} ${this.renderDefinedAgent(data)}
-      ${this.renderInstruction(data.instruction)}
-      ${data.task ? this.renderExtractFlags(data) : nothing}
-      ${this.renderProposalFiles(data)}`;
+    const body = data.script
+      ? this.renderScriptSummary(data, data.script)
+      : html`${this.renderDefinedAgent(data)}
+        ${this.renderInstruction(data.instruction)}
+        ${data.task ? this.renderExtractFlags(data) : nothing}
+        ${this.renderProposalFiles(data)}`;
     return this.renderCard(
       body,
-      renderLabeledActionButton({
-        id: 'proposal-setup-button',
-        icon: 'reply',
-        text: 'Change and start myself',
-        tooltip: 'Change and start myself (s)',
-        action: 'setup',
-        disabled: this.readOnly,
-        onClick: () => this.emitAction({ action: 'setup' }),
-      }),
+      data.script
+        ? nothing
+        : renderLabeledActionButton({
+            id: 'proposal-edit-button',
+            icon: 'pencil',
+            text: 'Edit',
+            tooltip: 'Edit before approving (e)',
+            action: 'edit',
+            disabled: !this.editable,
+            onClick: () => this.edit(),
+          }),
     );
   }
 
@@ -285,9 +197,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const { persona } = data;
-    // A catalog agent picked instead runs without it.
-    const picked = this.selectedAgent ?? this.proposedAgent;
-    if (!persona || picked !== this.proposedAgent) return nothing;
+    if (!persona) return nothing;
     return html`<div class="workflow-proposal__plan-note">
         ${DEFINED_AGENT_COPY.heading(persona)}
       </div>
@@ -431,105 +341,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const file = fileEl.dataset.file;
     if (file) this.openFile(file);
   };
-
-  private handleSelectChange = (event: Event): void => {
-    const value = readSelectValue(event);
-    if (value) {
-      this.selectedModel = value;
-    }
-  };
-
-  private handleAgentSelectChange = (event: Event): void => {
-    const value = readSelectValue(event);
-    if (value) {
-      this.selectedAgent = value;
-    }
-  };
-
-  /**
-   * What the pickers offer, from the host's catalogs: the agents the run
-   * may delegate to (its team's, which may be hidden from the catalog,
-   * else every visible one), and for a task only the catalog's agents
-   * with a document task, and the proposed one. A script's request
-   * approves the script, not one call's agent or model (`decideDelegation`
-   * ignores both there), so it offers none. A proposed agent or model
-   * the catalog no longer lists stays offered as proposed, so the select
-   * always shows what an unchanged approval launches.
-   */
-  private get pickers(): {
-    agents: HostSnapshot['agentOptions'];
-    models: HostSnapshot['modelOptions'];
-  } {
-    const { host } = this;
-    const data = this.permission.data;
-    const { script, task, agent, model } = data;
-    if (host === null || script) return { agents: [], models: [] };
-    const scope = this.run?.agentScope ?? null;
-    const offered = (option: HostSnapshot['agentOptions'][number]) =>
-      !task || option.rounds !== undefined;
-    const agents =
-      scope === null
-        ? host.agentOptions.filter(offered)
-        : scope.flatMap((key) => {
-            const option = host.agentOptions.find(({ value }) => value === key);
-            // A member the catalog hides is offered as the team names it,
-            // but for a task only when proposed: whether it has a task is
-            // not in the catalog.
-            if (option === undefined)
-              return !task || isProposedAgent(key, data)
-                ? [{ value: key, label: agentName(key) }]
-                : [];
-            return offered(option) ? [option] : [];
-          });
-    const ref = modelRefOf(model) ?? model;
-    const models = host.modelOptions;
-    return {
-      agents:
-        agents.length === 0 ||
-        agents.some((o) => isProposedAgent(o.value, data))
-          ? agents
-          : [{ value: proposedAgentKey(data), label: agent }, ...agents],
-      models:
-        models.length === 0 ||
-        models.some((o) => [ref, model].includes(o.value))
-          ? models
-          : [{ value: model, label: getModelLabel(model) }, ...models],
-    };
-  }
-
-  /** The proposed agent's option value (`isProposedAgent`). */
-  private get proposedAgent(): string {
-    const data = this.permission.data;
-    return (
-      this.pickers.agents.find((o) => isProposedAgent(o.value, data))?.value ??
-      data.agent
-    );
-  }
-
-  /** The proposed model's option value: options name a model without
-   *  its effort or mode, which the proposal may carry (`ref@high`). An
-   *  unchanged pick sends no override, so the proposal's own form runs. */
-  private get proposedModel(): string {
-    const { model } = this.permission.data;
-    const ref = modelRefOf(model) ?? model;
-    return this.pickers.models.some((option) => option.value === ref)
-      ? ref
-      : model;
-  }
-
-  private get proposalOverrides(): { model?: string; agent?: string } {
-    const model = this.proposedModel;
-    const agent = this.proposedAgent;
-    const { selectedModel, selectedAgent } = this;
-    return {
-      ...(selectedModel && selectedModel !== model
-        ? { model: selectedModel }
-        : {}),
-      ...(selectedAgent && selectedAgent !== agent
-        ? { agent: selectedAgent }
-        : {}),
-    };
-  }
 }
 
 declare global {
