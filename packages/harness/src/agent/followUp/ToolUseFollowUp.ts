@@ -88,7 +88,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
 };
 
-export const FOLLOW_UP_WAKE_FAILED_MESSAGE =
+const FOLLOW_UP_WAKE_FAILED_MESSAGE =
   'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.';
 
 /** The one wording of each refusal, shared by every host and tool output. */

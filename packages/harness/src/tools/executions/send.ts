@@ -12,8 +12,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import {
-  describeFollowUpFailure,
-  FOLLOW_UP_WAKE_FAILED_MESSAGE,
+  presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpMessages';
@@ -86,22 +85,21 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
     { session },
   );
   const name = `'${recipient.label}' (${target})`;
-  if (result.status === 'failed') {
+  const shown = presentFollowUpResult(result);
+  if (shown.severity === 'warning') {
     return yield* Effect.fail(
-      new ToolError(
-        `${name} did not accept the message (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
-      ),
+      new ToolError(`${name} did not accept the message: ${shown.message}`),
     );
   }
-  if (result.status === 'queued' && result.wake === 'failed') {
+  if (shown.severity === 'info') {
     return executed(
-      `Message queued for ${name}, but the run could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+      `Message queued for ${name}. ${shown.message}`,
       `Message queued for '${recipient.label}' (resume failed)`,
     );
   }
   const verb = result.status === 'sent' ? 'Sent' : 'Queued';
   return executed(
-    `${verb} to ${name}. It reads the message at its next turn boundary. A reply, if any, arrives as your own follow-up; use action: "wait" to block on it.`,
+    `${verb} to ${name}. It reads the message before its next model request, or at its next turn boundary. A reply, if any, arrives as your own follow-up; use action: "wait" to block on it.`,
     `${verb} message to '${recipient.label}'`,
   );
 });

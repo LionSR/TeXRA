@@ -1,11 +1,12 @@
 /**
  * The run's follow-up input: the `followup.queued` rows that have no
  * `followup.consumed` (the session publisher's pending set), the blocking
- * wait and the non-blocking probe, and `consume`, which commits one batch's
- * `followup.consumed` rows with the user message they become and
- * `run.position turn.ready`, in one batch of the run's cell. A crash before
- * that commit leaves the rows queued, so the next consumer delivers them
- * again; after it, nothing re-delivers them.
+ * wait and the non-blocking probe, and `consume`, the one way a batch leaves
+ * the queue: it commits the batch's `followup.consumed` rows with the user
+ * message they become, and, when the batch starts a turn, `run.position
+ * turn.ready`, in one batch of the run's cell. A crash before that commit
+ * leaves the rows queued, so the next consumer delivers them again; after
+ * it, nothing re-delivers them.
  *
  * One batch enters the conversation as **one** user message carrying every
  * queued item as its own text part, not one message per item. The retired
@@ -47,31 +48,29 @@ import { blobRows } from './run/requestContext';
 import { appendRow, positionRow, type Message } from './loop/rows';
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
-import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { AgentRunShape } from './run/AgentRun';
 
-/** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch: its message's `append` carries what the delivery changes
- *  (the instruction it stores, the skills it activates). `delivered` logs
- *  them once durable. */
-export interface JoinedFollowUps {
+/** A batch as the rows that consume it: its message's `append` carries what
+ *  the delivery changes (the instruction it stores, the skills it
+ *  activates). `delivered` logs them once durable. */
+interface BatchRows {
   readonly rows: readonly RunHistoryDraft[];
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
   readonly delivered: () => void;
 }
 
-/** A turn's end and a child's delivery, committed with the next input. */
-export interface Boundary {
-  readonly rows: readonly RunHistoryDraft[];
+/** How one batch commits. */
+export interface ConsumeOptions {
+  /** Rows committed before the batch's: a turn's end and a child's
+   *  delivery, so one batch carries the boundary and the next input. */
+  readonly rows?: readonly RunHistoryDraft[];
   readonly alongside?: Alongside<Error>;
-}
-
-export interface ConsumedFollowUps {
-  readonly state: RunState;
-  /** False when every item was a progress notice of an ended child: the
-   *  batch was consumed without a message, and no turn follows. */
-  readonly turn: boolean;
+  /** Whether a batch with a message starts a turn (`run.position
+   *  turn.ready`, the default) or joins the one running (delivery at the
+   *  next request, `false`). */
+  readonly position?: boolean;
 }
 
 export interface FollowUps {
@@ -85,35 +84,21 @@ export interface FollowUps {
   /** Block for the next batch readable at `at`; null once the generation
    *  ended. */
   readonly next: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
-  /**
-   * A run the user stopped (its last step a cancelled halt): the follow-up
-   * batch queued for it, as rows the caller commits in its own transaction
-   * so one request carries both. Null, without waiting, for any other run
-   * or when no user follow-up is queued.
-   */
-  readonly joinStopped: (
-    state: RunState,
-  ) => Effect.Effect<
-    JoinedFollowUps | null,
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  >;
   /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
    * Commit a batch through the run's cell: its `followup.consumed` rows, its
-   * user message, and `run.position turn.ready` in one batch, answering the
-   * state it folds to. On failure nothing is consumed and the run's rows
-   * still queue the batch.
+   * user message, and the position it opens, in one batch, answering the
+   * state it folds to and whether a message was delivered (`turn` is false
+   * when every item was a notice of an ended child). On failure nothing is
+   * consumed and the run's rows still queue the batch.
    */
   readonly consume: (
     cell: RunCell,
     batch: FollowUpBatch,
-    /** The turn boundary this batch commits with (input already queued
-     *  when the turn ended). */
-    boundary?: Boundary,
+    options?: ConsumeOptions,
   ) => Effect.Effect<
-    ConsumedFollowUps,
+    { readonly state: RunState; readonly turn: boolean },
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   >;
@@ -175,7 +160,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     state: RunState,
     batch: FollowUpBatch,
   ): Effect.fn.Return<
-    JoinedFollowUps,
+    BatchRows,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
@@ -272,21 +257,22 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const consume = Effect.fn('FollowUps.consume')(function* (
     cell: RunCell,
     batch: FollowUpBatch,
-    boundary?: Boundary,
+    options: ConsumeOptions = {},
   ): Effect.fn.Return<
-    ConsumedFollowUps,
+    { readonly state: RunState; readonly turn: boolean },
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const state = yield* cell.current;
-    const joined = yield* batchRows(state, batch);
-    const rows = [...(boundary?.rows ?? []), ...joined.rows];
+    const built = yield* batchRows(state, batch);
+    const rows = [...(options.rows ?? []), ...built.rows];
+    const opens = built.turn && options.position !== false;
     const committed = yield* cell.append(
-      joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
-      boundary?.alongside,
+      opens ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
+      options.alongside,
     );
-    joined.delivered();
-    return { state: committed, turn: joined.turn };
+    built.delivered();
+    return { state: committed, turn: built.turn };
   });
 
   return {
@@ -294,20 +280,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     controls: input.controls,
     read: input.read,
     next: input.next,
-    // Only a user stop joins: that halt carries no error fact to clear and
-    // no turn.ready row to write, which is why the join skips `consume`'s.
-    joinStopped: (state) =>
-      state.at !== 'halted' || state.outcome !== 'cancelled'
-        ? Effect.succeed(null)
-        : Effect.gen(function* () {
-            // A read consumes nothing, so a declined batch is left for the
-            // ordinary wait.
-            const batch = yield* input.read('idle');
-            return batch === null ||
-              !batch.followUps.some((f) => isInstruction(f.content))
-              ? null
-              : yield* batchRows(state, batch);
-          }),
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
       session.followUps.release(

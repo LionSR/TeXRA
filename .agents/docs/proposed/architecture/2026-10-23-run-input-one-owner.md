@@ -178,10 +178,11 @@ members.
 
 ### Two pure functions beside the row reader
 
-In `packages/harness/src/shared/session/runInput.ts`, beside `runRows.ts`
-(the view cannot import `@agent/*`, so `shared/session` is the one place every
-reader can reach; its own module because `runRows.ts` would cross the
-400-line core limit). `isInstruction` moves here from `followUpMessages.ts`.
+In `packages/harness/src/shared/session/runFacts.ts`, the module that reads a
+run's facts off its rows (the view cannot import `@agent/*`, so
+`shared/session` is the one place every reader can reach; `runRows.ts` would
+cross the 400-line core limit, and a new file would widen the `entry-files`
+ratchet). `isInstruction` moves here from `followUpMessages.ts`.
 
 ```ts
 export type InputPoint = 'request' | 'turn' | 'idle';
@@ -236,13 +237,18 @@ Called at four moments:
 4. the registry's hold-release (`runRegistry.ts:555`).
 
 Moments 3 and 4 already call `init.wake(runId, since)`; the hook stays and the
-ordinal goes. Deleted: `wakeAfterGeneration`, `wakeParent`'s row re-read and
-the `lostResultId` prefix match, `entry.since` and its three stamps,
-`SendOptions.wake`, `Sent.wake`, `admitQueued` with its
-`'live' | 'wake' | 'quiet'` modes. `Sent` becomes
-`queued { read } | duplicate | refused`. `SubmitFollowUpResult` keeps
-`wake: 'failed'` on the wire: it is the sender relaying `Inbox.wake`'s
-answer, so `executions send` and the CLI's adopt path keep their input.
+ordinal goes. Moment 1 is the sender's: `Inbox.send` stays the pure door (one
+transaction; `Sent` is `queued { read } | duplicate | refused`), and a sender
+whose row no reader took asks `wake` — `submitFollowUp` for every host and
+tool, relaying the answer as the wire's `wake: 'failed'`; `wakeParent` for a
+child's delivery, which commits inside the child's transaction
+(`admission`). Keeping the door pure matters: a resume's own host step sends
+input to the run it is resuming, and a door that woke would wait on itself;
+`wake` also answers true while a resume is in flight, since that resume reads
+the input when it lands. Deleted: `wakeAfterGeneration`, `wakeParent`'s row
+re-read and the `lostResultId` prefix match, `entry.since` and its three
+stamps, `SendOptions.wake`, `Sent.wake`, `admitQueued` with its
+`'live' | 'wake' | 'quiet'` modes.
 
 ### The Stop fence is the cancelled `run.end`, and a send waits for it
 
@@ -250,12 +256,16 @@ A message committed after the run's last cancelled `run.end` continues the
 run; one committed before it does not restart it by itself. For that to hold
 for "Stop, then retype" — a window the review sized as the whole unwind (the
 interrupted tool's fiber, a child's stop cascade, `finalizeRun`), not
-milliseconds — the admission does what the CLI does today in
+milliseconds — `submitFollowUp` does what the CLI does today in
 `chatSessionController.ts:1004-1016`: a user's message to a run whose stop is
-in progress (`runs.get(runId)?.stopReason !== undefined`) waits for the run to
-drain (`LiveRun.drained`) before its row commits. The row then lands after the
-`run.end`, `needsWake` is true, and the run resumes with it. The CLI's own
-wait becomes redundant (second PR).
+in progress (`runs.get(runId)?.stopReason !== undefined`, set before the
+interrupt and cleared with the entry) waits for the run to drain
+(`LiveRun.drained`) before its row commits. The row then lands after the
+`run.end`, `needsWake` is true, and the sender's wake resumes the run. The
+CLI's wait becomes redundant (second PR). Behaviour change, stated: a child's
+result delivered after its parent's user Stop no longer revives the parent
+(today the retained activation made it `'queue'`d and woken); the user's next
+message carries it.
 
 ### One admission, `submitFollowUp`
 
@@ -276,43 +286,54 @@ is admitted and wakes it by `needsWake`, as traced in the review.
 
 ### One consume
 
-`FollowUps.consume(cell, batch, { rows?, alongside?, position? })`.
-`joinStopped` is `consume` without the `turn.ready` row; so is delivery at
-the next request. One `consumedRow(runId, followUpId)` constructor in
-`runRows.ts` replaces the four literal shapes (the child's own consumed
-prompts included; same shape, its own aggregate). Behaviour change, stated:
-today `joinStopped` joins only instruction rows to a stopped turn's dispatch;
-`consume` joins every readable row (a child's result too).
+`FollowUps.consume(cell, batch, { rows?, alongside?, position? })` is the
+one way a batch leaves the queue: `rows` are the boundary it commits with (a
+turn's end, a child's delivery), `position: false` joins the batch to the
+turn running instead of opening one with `turn.ready`. `joinStopped` is
+deleted: the message a user typed with a Stop is delivered by the request
+that follows the stopped response's results, the same path as every message
+typed mid-turn, so the dispatcher no longer carries follow-up rows. One
+`consumedRow(runId, followUpId)` constructor in `runFacts.ts` replaces the
+four literal shapes (the child's own consumed prompts included; same shape,
+its own aggregate). Behaviour change, stated: `joinStopped` joined only
+instruction rows and committed them with the results; the request delivery
+takes every readable row (a child's result too), in its own batch after the
+results. A crash between the two leaves the message queued, not lost.
 
 ### The reader reads
 
-`RunInput`: `next(at)` blocks, `pending(at)` reads, `controls` reads. The
-compaction request text moves to `run/compaction.ts`. The comment stops
-claiming an in-flight guarantee. `toolUseDispatch.ts:1106` uses `controls`.
-The native child loop's `AbortSignal` race becomes interruption; the process
-child keeps the abort, which is what ends its wait.
+`RunInput`: `next(at)` blocks, `read(at)` reads, `hasPending(at)` probes,
+`controls` reads the run's own requests. The compaction request text lives
+in `run/compaction.ts` beside the compaction that answers it. The dispatcher
+takes the loop's `controls` for its model-switch check instead of reading
+the session inbox directly. A process child's wait keeps its `AbortSignal`
+race: the abort is what ends it.
 
 ### Delivery at the next request
 
-In `runTurn` (`toolUse.ts:363`), before each new request
-(`state.invocation === null`) and after `compaction.atBoundary`:
+In `runTurn`, before each new request (`state.invocation === null`), after
+`compaction.atBoundary`, and only when the history ends in a tool group:
 
 ```ts
-const batch = yield * followUps.pending('request');
-if (batch !== null)
-  state = (yield * followUps.consume(cell, batch, { position: false })).state;
+if (state.messages.at(-1)?.role === 'tool') {
+  const queued = yield * followUps.read('request');
+  if (queued !== null)
+    state = (yield * followUps.consume(cell, queued, { position: false }))
+      .state;
+}
 ```
 
-The user message lands after the tool results and before the step's rows;
-the append is uninterruptible; resume reads the same rows (the fold's
-`append` handler, `turnRowHandlers.ts:226`, is the one the loop's own nudges
-already use mid-turn). A request whose attempt is open is not changed: a
-retry resends the history it had. What is delivered at a request: the user's
+The user message lands after the tool results; the append is uninterruptible;
+resume reads the same rows (the fold's `append` handler is the one the loop's
+own nudges already use mid-turn). A request whose history already ends in a
+user message (the turn's first request, a nudge) takes nothing: providers
+refuse two user turns in a row, and the message is read at the next tool
+boundary or the turn's end as before. A request whose attempt is open is not
+changed: a retry resends the history it had. What is delivered at a request: the user's
 messages without `'turn'`, a parent's instruction, a child's result. What
 waits for the turn's end: `'turn'` and `'generation'` rows. Two loop-level
 reads that change with it: `afterTextResponse`'s blank-nudge test
-(`toolUse.ts:298`, `messages.at(-2)?.role === 'tool'`) must look past a
-delivered user message; `resumeQueuedToolUse` reports `delivered` on
+(`messages.at(-2)?.role === 'tool'`) looks past a delivered user message; `resumeQueuedToolUse` reports `delivered` on
 `onIdle`, which a mid-turn consume does not fire — acceptable, since a
 resumed run takes its first message at idle, not mid-turn.
 
@@ -356,19 +377,20 @@ combines into one turn with the tool results first. No codec change.
 
 ## Deleted
 
-| Element                                                                           | Where                                                                                         | Lines |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----- |
-| `wakeAfterGeneration` and `since`                                                 | `ToolUseFollowUp.ts:205-255`, `runRegistry.ts:470, 480, 555, 649, 776`, `sessionLayer.ts:206` | ~70   |
-| `wakeParent`'s row re-read, `lostResultId` prefix match                           | `childTurnResult.ts:362-390` (body becomes `Inbox.wake`)                                      | ~20   |
-| `getToolUseFollowUpTarget`, `ToolUseFollowUpTarget`, `retainsTerminalParent`      | `runRegistry.ts:85-110, 326-350`, `childRunLoop.ts:422, 935`, comment `sessionEvent.ts:329`   | ~45   |
-| `admitQueued` modes, `mode: 'live_notification'`, `SendOptions.wake`, `Sent.wake` | `ToolUseFollowUp.ts:60-69, 262-345`, `Inbox.ts`, `RunSubscriptionRegistry.ts:135`             | ~40   |
-| `joinStopped`                                                                     | `FollowUps.ts:95-101, 316-330`                                                                | ~25   |
-| `endedChildProgress`, `subagentProgressRunId` use in the loop                     | `FollowUps.ts:160-175`                                                                        | ~15   |
-| Four `followup.consumed` literals                                                 | five sites                                                                                    | ~20   |
-| `isInstruction` duplicate home                                                    | `followUpMessages.ts:52` (moves)                                                              | 0     |
-| Direct inbox read                                                                 | `toolUseDispatch.ts:1106`                                                                     | ~5    |
-| Native child `AbortSignal` race                                                   | `childRunLoop.ts:698-705`                                                                     | ~5    |
-| Two rebuilt wordings of the send result                                           | `executions/send.ts:114-120`, `TasksForm.tsx:381` (use `presentFollowUpResult`)               | ~10   |
+| Element                                                                           | Where                                                                                         | Lines  |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
+| `wakeAfterGeneration` and `since`                                                 | `ToolUseFollowUp.ts:205-255`, `runRegistry.ts:470, 480, 555, 649, 776`, `sessionLayer.ts:206` | ~70    |
+| `wakeParent`'s row re-read, `lostResultId` prefix match                           | `childTurnResult.ts:362-390` (body becomes `Inbox.wake`)                                      | ~20    |
+| `getToolUseFollowUpTarget`, `ToolUseFollowUpTarget`, `retainsTerminalParent`      | `runRegistry.ts:85-110, 326-350`, `childRunLoop.ts:422, 935`, comment `sessionEvent.ts:329`   | ~45    |
+| `admitQueued` modes, `mode: 'live_notification'`, `SendOptions.wake`, `Sent.wake` | `ToolUseFollowUp.ts:60-69, 262-345`, `Inbox.ts`, `RunSubscriptionRegistry.ts:135`             | ~40    |
+| `joinStopped`                                                                     | `FollowUps.ts:95-101, 316-330`                                                                | ~25    |
+| `endedChildProgress`, `subagentProgressRunId` use in the loop                     | `FollowUps.ts:160-175`                                                                        | ~15    |
+| Four `followup.consumed` literals                                                 | five sites                                                                                    | ~20    |
+| `isInstruction` duplicate home                                                    | `followUpMessages.ts:52` (moves)                                                              | 0      |
+| `followUpSender.ts` (two exports, 19 lines)                                       | folded into `followUpMessages.ts`; `plugins.ts`, `send.ts`, `Inbox.ts` repointed              | 1 file |
+| Direct inbox read                                                                 | `toolUseDispatch.ts:1106`                                                                     | ~5     |
+| Native child `AbortSignal` race                                                   | `childRunLoop.ts:698-705`                                                                     | ~5     |
+| Two rebuilt wordings of the send result                                           | `executions/send.ts:114-120`, `TasksForm.tsx:381` (use `presentFollowUpResult`)               | ~10    |
 
 About 255 lines out; added: `readableMessages`, `needsWake`, `consumedRow`,
 `Inbox.wake`, the drain wait in the admission, the consume at the next
@@ -392,12 +414,15 @@ Checked beside the design: every export of the chain and its caller count.
   `joined` (`effect/runHandle.ts:297`), `closeInput` (`resumeRun.ts:182`),
   `forget` (`sessionLayer.ts:258`), `sendDetached` (`childRunLoop.ts:424`),
   `onClosed` (one consumer, the GitHub registry). The first two are resume
-  questions that sat on the inbox because the `resumes` map did; step 1 moved
-  the map and its three methods to `agent/followUp/Resumes.ts`
-  (`followUps.resumes.once / settled / joined / inFlight`), which also keeps
-  `Inbox.ts` under the 400-line core limit.
-- `FollowUps`: 7 members and 3 single-consumer types → `pending`, `next`,
-  `controls`, `consume`, `release`; the types inline.
+  questions that sat on the inbox because the `resumes` map did; they moved
+  to a `Resumes` class (`followUps.resumes.once / settled / joined`, and the
+  `inFlight` set the wake reads), which lives in `ToolUseFollowUp.ts` beside
+  the resume it dedups, and keeps `Inbox.ts` under the 400-line core limit;
+  `followUpSender.ts` folds into `followUpMessages.ts`. The `entry-files`
+  ratchet holds: no entry closure gained a file.
+- `FollowUps`: 7 members and 3 single-consumer types → `read`, `hasPending`,
+  `next`, `controls`, `consume`, `release`; `ConsumeOptions` is the one
+  exported type.
 - Kept with reason: `FollowUpFailureReason` (every value produced; one
   wording table), `InboxItem.displayText` (three readers),
   `SendOptions.fromParent` (the only-the-parent-instructs rule), `RunInbox`
@@ -466,9 +491,12 @@ What the fresh review (2026-10-23, read-only against `a20cc39310`) changed:
 
 ## Open for the owner
 
-1. **`holdUntil: 'turn'` in the CLI.** Enter sends for the next request; a
-   second key holds for the turn's end. Or deliver at the next request always
-   and add no key (the enum member still serves the API).
+1. **`holdUntil: 'turn'` in the CLI.** This PR delivers at the next request
+   and adds no key: the CLI's own delivery queue still holds a typed message
+   until the turn ends, so a key atop it would say nothing. The key (Enter
+   sends for the next request, a second key holds for the turn's end) lands
+   with the second PR, which cuts that queue; the enum member serves the API
+   now.
 2. **Second PR**: the CLI's `FollowUpDeliveryQueue`, `interruptedRunId`,
    `claimPreparingRoot` and `awaitRunFolded` race, and `FollowUpHost`.
 
@@ -484,9 +512,10 @@ One PR, in this order, each step type-checked and `test:pure` green:
    notices and GitHub events send `'generation'`.
 3. `submitFollowUp` owns admission and the drain wait; delete
    `getToolUseFollowUpTarget`.
-4. One `consume`; renames; the compaction text moves; the two bypasses go.
-5. Delivery at the next request; the blank-nudge test; the CLI key if
-   decision 1 says so.
+4. One `consume`; `joinStopped` goes; the compaction text moves; the
+   dispatcher reads the loop's controls; one presenter for the send result.
+5. Delivery at the next request; the blank-nudge test. The CLI key goes to
+   the second PR (decision 1).
 6. E2E: the CLI PTY harness, a message typed during a two-tool turn, the
    transcript showing it answered before the turn ends; one crash-suite case
    for a message consumed at a request boundary.

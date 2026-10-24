@@ -6,17 +6,13 @@
  */
 import { Effect, Latch } from 'effect';
 
+import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import {
   type InputPoint,
   readableMessages,
   staleNotices,
 } from '@shared/session/runFacts';
 import type { QueuedFollowUp, RunLookup } from '@shared/session/runRows';
-
-/** The message a `/compact` on an idle run wakes it with: the compaction
- *  runs at that turn's model boundary, which consumes the request. */
-const COMPACTION_REQUEST =
-  'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 /**
  * What a run reads from its input: the messages readable at this point, with

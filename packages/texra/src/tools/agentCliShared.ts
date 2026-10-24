@@ -6,7 +6,6 @@ import { Effect, type Context } from 'effect';
 
 // Local imports
 import {
-  describeFollowUpFailure,
   presentFollowUpResult,
   ToolContext,
   type ToolContextShape,
@@ -75,10 +74,11 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     });
     if (result.status === 'failed' && result.reason === 'not_parent')
       return yield* notOwned(id, labels);
-    if (result.status === 'failed') {
+    const shown = presentFollowUpResult(result);
+    if (shown.severity === 'warning') {
       return yield* Effect.fail(
         new ToolError(
-          `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+          `${labels.notActiveLabel} '${id}' did not accept the follow-up: ${shown.message}`,
         ),
       );
     }
@@ -86,10 +86,9 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     const preview = previewLabel(prompt);
     // A queued follow-up whose wake failed is still queued: it is delivered
     // when the agent is resumed, so the caller must not offer it again.
-    const wakeFailed = presentFollowUpResult(result);
     const followUpLine =
-      wakeFailed.severity !== 'none'
-        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${wakeFailed.message}`
+      shown.severity === 'info'
+        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. ${shown.message}`
         : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
     return executed(
       [followUpLine, `Run ID: ${stored.runId}`].join('\n'),

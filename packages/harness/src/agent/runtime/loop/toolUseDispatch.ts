@@ -79,6 +79,7 @@ import {
   type PendingCall,
 } from '@shared/session/inFlight';
 import type { RunCell } from '@shared/session/runHistory';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
@@ -115,7 +116,6 @@ import {
 } from './rows';
 import { Runs } from '../runRegistry';
 import type { StepTools } from './step';
-import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 
 /** Max concurrently executing parallel tool calls. */
@@ -292,11 +292,12 @@ const makeScheduler = Effect.gen(function* () {
 });
 
 /** Dispatch the pending response's unsettled calls under `step`'s tools,
- *  then deliver, with the `joined` rows and what they record. */
+ *  then deliver. `controls` are the run's pending requests (`FollowUps`):
+ *  a queued model switch keeps the delivered documents local. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   step: StepTools,
-  joined?: Pick<JoinedFollowUps, 'rows'> | null,
+  controls: Effect.Effect<readonly QueuedFollowUp[]>,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -1059,10 +1060,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // A batch that ends the turn, or one delivered while a queued model switch
   // waits (its binding never saw these ids), keeps its documents local.
   const switching =
-    !endTurn &&
-    (yield* run.session.followUps.read(run.runId)).followUps.some(
-      (f) => f.control?.kind === 'model',
-    );
+    !endTurn && (yield* controls).some((f) => f.control?.kind === 'model');
   const documents = (endTurn || switching ? [] : media).flatMap(
     ({ path, part }) => (part.kind === 'document' ? [{ path, part }] : []),
   );
@@ -1111,7 +1109,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const group: Message = { role: 'tool', results };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], { sourceResponse: responseId }),
-    ...(joined?.rows ?? []),
     positionRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };
