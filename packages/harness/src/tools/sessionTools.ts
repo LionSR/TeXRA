@@ -52,6 +52,9 @@ export interface ToolStep {
   /** The built-in plugins on as the step read the switches, in list order:
    *  the step reads their continuation and prompt section. */
   readonly plugins: readonly Plugin[];
+  /** The modules its scripts may import, source by specifier: each of the
+   *  on built-in plugins' `scriptModules` as `builtIn:<name>`. */
+  readonly modules: { readonly [specifier: string]: string };
   /** The installed plugins the step loaded, by id, as read (those that ship
    *  only skills included): its installed skills' source. */
   readonly installed: ReadonlyMap<string, LoadablePlugin>;
@@ -250,6 +253,14 @@ const pinStep = <E>(
     return {
       entries: merged.entries,
       plugins,
+      modules: Object.fromEntries(
+        plugins.flatMap(({ scriptModules = {} }) =>
+          Object.entries(scriptModules).map(([name, source]) => [
+            `builtIn:${name}`,
+            source,
+          ]),
+        ),
+      ),
       installed: new Map(read.plugins.map(({ id, source }) => [id, source])),
       warnings: [...read.warnings, ...failures, ...merged.warnings],
       services: (used) =>

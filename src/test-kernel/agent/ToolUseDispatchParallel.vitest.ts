@@ -363,6 +363,7 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
     services: Context.empty() as PluginContext,
     stepRoots: [],
     hooks: [],
+    modules: {},
   }).pipe(Effect.provide(kit.layer));
 
 /** The one tool group the dispatch delivers, in call order. */

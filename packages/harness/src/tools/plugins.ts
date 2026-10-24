@@ -124,8 +124,7 @@ export interface Plugin {
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
-  /** Its section of each request's system text; a run's step pins it while
-   *  the plugin is switched on. */
+  /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
    *  pins it. A host-supplied one (Copilot's, in VS
@@ -140,8 +139,9 @@ export interface Plugin {
   readonly arms?: readonly PluginArm[];
   /** The agent-file block it owns (`AgentBlock`), on or off. */
   readonly agentBlock?: AgentBlock;
-  /** The plugins it runs on, by id: a list that holds it without them is
-   *  rejected. */
+  /** Script module sources by name, imported as `builtIn:<name>`. */
+  readonly scriptModules?: Readonly<Record<string, string>>;
+  /** The plugins it runs on, by id; a list lacking one is rejected. */
   readonly requires?: readonly string[];
 }
 

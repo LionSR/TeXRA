@@ -686,6 +686,20 @@ history`, a resume and a follow-up say it was "written by an earlier
   `approve` decision may carry `instruction`, `inputFiles`, `contextFiles`,
   `mediaFiles` and `options`; the `setup` decision is gone; the run action
   `runNew` is `runAgain`.
+- **Scripts import modules, starting with the document tasks.** A script
+  loads a module with `await import(specifier)`:
+  `const { revise, from } = await import('builtIn:documents')` gives
+  `revise(agentName, args)`, which runs that agent's document task as
+  `document_task` would and resolves to its result, and `from(result, args)`,
+  which takes a finished task's revised files as the next task's inputs, so
+  `revise('correct', from(polished))` corrects what a polish produced. A module can import
+  another with an ordinary `import` line; a script, being a function body,
+  uses `import()`. A resumed script loads the modules its run recorded,
+  never a newer copy shipped since. SDK: `Plugin.scriptModules` (module
+  source by name, imported as `builtIn:<name>`); a `tools.offered` row
+  records the modules' addresses (`modules`, row v4), and the `RunState`
+  fields `offeredSkills` and `offeredHooks` are now `offeredWith.skills`
+  and `offeredWith.hooks`, beside `offeredWith.modules`.
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
   default; CLI `/config`) gives chat agents the `script` tool and their own
   tools alone, with every other tool called from inside a script. A run

@@ -60,6 +60,7 @@ import {
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
 import { DocumentTaskTool } from './documents/DocumentTaskTool';
 import { DOCUMENT_TASK_RESULT } from './documents/documentResult';
+import { DOCUMENTS_MODULE } from './documents/documentsModule';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
@@ -211,8 +212,16 @@ const documents: Plugin = {
   // The delegation targets mark a task's agent `(task)`.
   prompt: ({ offered }) =>
     offered.includes('document_task')
-      ? 'An agent marked (task) in the available agents also runs a document task over files with `document_task`.'
+      ? [
+          'An agent marked (task) in the available agents also runs a document task over files with `document_task`.',
+          ...(offered.includes('script')
+            ? [
+                "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",
+              ]
+            : []),
+        ].join(' ')
       : '',
+  scriptModules: { documents: DOCUMENTS_MODULE },
   tools: {
     accept_run_files: AcceptRunFilesTool,
     document_task: DocumentTaskTool,
