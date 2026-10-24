@@ -31,12 +31,14 @@ an agent gets `script` when its YAML names it (the bundled `assistant`,
 `engineer` and `orchestrator` do). The `texra.codeMode.scriptOnly` setting
 (`GlobalStateKey.SCRIPT_ONLY`, off by default) is "only": the codemode
 plugin injects `script` into every chat run (`injectedWhen`), and the
-request sends the model `script` and the run's own tools alone
-(`sentDefinitions` in `agent/runtime/agentToolResolution.ts`); the other
+request sends the model `script` and the run's own tools alone; the other
 offered tools stay in the step's registry, callable from a script. The
-narrowing is read live from the setting and not recorded on the
-`tools.offered` row. Flipping the default waits for the evaluation under
-"Still open".
+step reads the setting once when it resolves its tools and records the
+choice per tool on its `tools.offered` row (`sent`, row version 3), so the
+request sends what the row records (`sentDefinitions` in
+`tools/catalogEntries.ts`) and a resumed step sends what it
+recorded whatever the setting says now. Flipping the default waits for the
+evaluation under "Still open".
 
 ## Separation of concerns
 
@@ -345,10 +347,16 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   `validate-journeys.mjs --script-only --repeat 3` on the three tool-using
   journeys (latexFixer, latexdiff, citations; `polish` is a document task
   whose agent has no tools, so both arms are the same run). glm53flash is
-  OpenRouter-only in the catalog and was not funded. Every run's NDJSON
-  and the `results.jsonl` rows are the script's `--out` directory; the
-  four arms ran in parallel on one laptop with a test suite beside them,
-  so wall times are under load.
+  OpenRouter-only in the catalog and was not funded. The 36 result rows
+  and the script that computes the table from them are in
+  [`../../evidence/2026-10-24-codemode-script-only-round-1/`](../../evidence/2026-10-24-codemode-script-only-round-1/)
+  (`node summarize.mjs results.jsonl`); each run's NDJSON stays in the
+  script's `--out` directory. The four arms ran in parallel on one laptop
+  with a test suite beside them, so wall times are under load. Columns:
+  pass is the count of passing runs; $ per pass and tokens are the mean
+  cost and mean total tokens over the passing runs; median wall is the
+  median wall time over all runs, failures included; scripts per run is
+  the mean count of `script` calls over the passing runs.
 
   | model, arm              | pass | $ per pass | tokens | median wall | scripts per run |
   | ----------------------- | ---- | ---------- | ------ | ----------- | --------------- |
@@ -365,9 +373,7 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   1.25× on DeepSeek, past the 1.2× line at n = 9 under load. Still to do
   before the default flips: pool the DeepSeek wall time over more rounds on
   an idle machine, fund glm53flash (an OpenRouter key) or route it direct,
-  add the fan-out journey that exercises `agent()`, and record the narrowed
-  set on the `tools.offered` row so a resumed run sends what it recorded.
-  The ruling was written for nightlies; live journeys run on demand only
+  and add the fan-out journey that exercises `agent()`. The ruling was written for nightlies; live journeys run on demand only
   (#13614).
 
 - **Google tool results reject a PDF attachment.** The one `direct` failure

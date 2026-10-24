@@ -49,17 +49,16 @@ import { Context, Effect, SubscriptionRef } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { Persona } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   sameIdentity,
   type OfferedTool,
+  type Persona,
   type ToolDefinition,
 } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import {
-  toolDefinitionsFor,
   toolDigests,
   type HeldPlugins,
   type ToolEntry,
@@ -159,9 +158,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         if (
           setting === true ||
           (yield* Settings.get<boolean>(input.stores, setting))
-        ) {
+        )
           injected.push(name);
-        }
       }
     }
   }
@@ -358,6 +356,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     if (index === -1) definitions.push(tool.definition);
     else definitions[index] = tool.definition;
   }
+  // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
+  const scriptAlone =
+    [...resolvedNames].some(isScript) &&
+    (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool>();
   const offered: OfferedTool[] = [];
@@ -374,6 +376,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         ...toolDigests(own),
         plugin: 'run',
         revision: 'run',
+        sent: true,
       });
     } else if (entry) {
       offeredTools.set(name, entry.tool);
@@ -383,6 +386,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
+        sent: !scriptAlone || isScript(name),
       });
     }
   }
@@ -393,36 +397,4 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     warnings,
     withheldForApproval,
   };
-});
-
-/**
- * The tool definitions a request sends, in wire form: every tool the step
- * offers, or, while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`)
- * and the step offers `script`, the script tool and the run's own tools
- * alone (its structured-output terminal, which a forced tool choice names).
- * Every other offered tool stays offered, called from inside a script.
- */
-export const sentDefinitions = Effect.fn('sentDefinitions')(function* (
-  tools: {
-    readonly definitions: readonly ToolDefinition[];
-    readonly registry: ReadonlyMap<string, ITool>;
-    readonly offered: readonly OfferedTool[];
-  },
-  stores: ModelOptionStores,
-) {
-  const script = (name: string) =>
-    tools.registry.get(name)?.describe !== undefined;
-  const scriptOnly =
-    (yield* Settings.get<boolean>(stores, GlobalStateKey.SCRIPT_ONLY)) &&
-    tools.definitions.some(({ name }) => script(name));
-  const own = new Set(
-    tools.offered.flatMap(({ name, plugin }) =>
-      plugin === 'run' ? [name] : [],
-    ),
-  );
-  return toolDefinitionsFor(
-    scriptOnly
-      ? tools.definitions.filter(({ name }) => own.has(name) || script(name))
-      : tools.definitions,
-  );
 });

@@ -15,9 +15,9 @@
  *     [--no-build] [--out dir] [--script-only] [--repeat n]
  *
  * `--script-only` runs every journey with the `texra.codeMode.scriptOnly`
- * setting on in the run's home (the model sees the `script` tool alone), the
- * "only" arm of the code mode comparison; `--repeat` runs each journey that
- * many times. Every run appends one JSON line to `<out>/results.jsonl`.
+ * setting on in the run's home (the model is sent `script` and the run's own
+ * tools alone), the "only" arm of the code mode comparison; `--repeat` runs
+ * each journey that many times. Every run appends one JSON line to `<out>/results.jsonl`.
  *
  * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
  * list of models the journeys run.
@@ -353,6 +353,10 @@ mkdirSync(values.out, { recursive: true });
 const scriptOnly = values['script-only'];
 const arm = scriptOnly ? 'only' : 'direct';
 const repeat = Number(values.repeat);
+if (!Number.isInteger(repeat) || repeat < 1) {
+  console.error(`--repeat must be a positive integer, got ${values.repeat}`);
+  process.exit(2);
+}
 const resultsFile = path.join(values.out, 'results.jsonl');
 let failed = false;
 for (const model of funded) {
