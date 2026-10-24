@@ -136,7 +136,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       },
     };
     /** No resume here is ever joined by another caller. */
-    readonly followUps = { joined: () => false };
+    readonly followUps = { resumes: { joined: () => false } };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
