@@ -352,6 +352,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           continue;
         }
         const bound = yield* SynchronizedRef.get(run.model);
+        // A message typed while the turn ran joins the request after the tool
+        // results (past a context update), never a user message: read before
+        // the step opens, so a skill it activates is the step's, and before a
+        // summary lands, which keeps what the loop appended after its base.
+        const tail = state.messages.findLast((m) => m.role !== 'system');
+        if (state.invocation === null && tail?.role === 'tool') {
+          const queued = yield* followUps.read('request');
+          if (queued !== null)
+            state = (yield* followUps.consume(cell, queued, {
+              position: false,
+            })).state;
+        }
         // The step this request opens, its offered set recorded when changed.
         let step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
@@ -359,13 +371,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // One round: the compaction the history may need, the `/compact`s
         // it answers, the invocation. An open attempt's history is fixed.
         if (state.invocation === null) {
-          // The queued `/compact`s are consumed by the edit that answers
-          // them, or, with nothing to summarize, by this round's admission.
+          // A `/compact`: consumed by the edit answering it, else admitted here.
           const controls = yield* followUps.controls;
           const requests = consumedRows(runId, controls, 'compact');
           state = yield* compaction.atBoundary(cell, bound, requests);
-          // A compaction replaced the history, the context updates in it
-          // too: a new step renders the system text anew, each one in it.
+          // A compaction dropped the context updates: a new step renders them.
           if (state.offeredContext === null) {
             step = yield* openStep(state, 'request');
             state = yield* cell.append(step.rows);
@@ -376,16 +386,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
           const admitted = consumedRows(runId, unanswered, 'compact');
           if (admitted.length > 0) state = yield* cell.append(admitted);
-          // A message typed while the turn ran joins the request after the
-          // tool results (past a step's context update), never a user message.
-          const last = state.messages.findLast((m) => m.role !== 'system');
-          if (last?.role === 'tool') {
-            const queued = yield* followUps.read('request');
-            if (queued !== null)
-              state = (yield* followUps.consume(cell, queued, {
-                position: false,
-              })).state;
-          }
         }
         const toolChoice =
           state.forceFinalTool &&
