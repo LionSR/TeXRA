@@ -695,11 +695,9 @@ history`, a resume and a follow-up say it was "written by an earlier
   `revise('correct', from(polished))` corrects what a polish produced. A module can import
   another with an ordinary `import` line; a script, being a function body,
   uses `import()`. A resumed script loads the modules its run recorded,
-  never a newer copy shipped since. SDK: `Plugin.scriptModules` (module
-  source by name, imported as `builtIn:<name>`); a `tools.offered` row
-  records the modules' addresses (`modules`, row v4), and the `RunState`
-  fields `offeredSkills` and `offeredHooks` are now `offeredWith.skills`
-  and `offeredWith.hooks`, beside `offeredWith.modules`.
+  never a newer copy shipped since. SDK: a plugin ships modules as
+  `Plugin.scriptModules` (module source by name, imported as
+  `builtIn:<name>`).
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
   default; CLI `/config`) gives chat agents the `script` tool and their own
   tools alone, with every other tool called from inside a script. A run
