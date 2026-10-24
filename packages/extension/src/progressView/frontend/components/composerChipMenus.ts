@@ -78,13 +78,18 @@ export function launcherChipMenus(
   );
   // The form's model as it will run: one the picker does not list (a saved
   // effort or mode, or a proposal's model) is offered as itself.
+  // Its effort or mode reads after the name: `ref@high` is "Name (high)".
   const ref = modelRefOf(launch.model) ?? launch.model;
+  const modifiers = launch.model.slice(ref.length).replace(/^[@+]/, '');
   const modelOptions = model
     ? host.modelOptions
     : [
         {
           value: launch.model,
-          label: `${getModelLabel(launch.model)}${launch.model.slice(ref.length)}`,
+          label:
+            modifiers === ''
+              ? getModelLabel(launch.model)
+              : `${getModelLabel(launch.model)} (${modifiers})`,
         },
         ...host.modelOptions,
       ];
