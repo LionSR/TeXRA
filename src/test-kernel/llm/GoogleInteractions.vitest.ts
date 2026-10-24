@@ -1229,62 +1229,89 @@ describe('canonical Google Interactions protocol', () => {
     }),
   );
 
-  it.effect.each([
-    'raw-audio',
-    'tool-audio',
-    'tool-video',
-    'tool-document',
-    'background-mode',
-  ] as const)('rejects unsupported %s before provider I/O', (unsupported) =>
-    Effect.gen(function* () {
-      const configured = model();
-      const prepared = yield* configured.prepareTurn(request());
-      assert(prepared.mode === 'foreground');
-      const result = yield* completedTurn(configured.streamTurn(prepared));
-      const next = JSON.parse(JSON.stringify(exchange(result)));
-      let expectedMessage = 'Google tool results';
-      if (unsupported === 'background-mode') {
-        next.mode = 'background';
-        expectedMessage = 'Google background execution';
-      } else if (unsupported === 'raw-audio') {
-        expectedMessage = 'Raw Google audio';
-        next.messages.push({
-          role: 'user',
-          content: [
-            {
-              kind: 'audio',
-              mimeType: 'audio/L16 ; rate=24000',
-              base64: 'AA==',
-            },
-          ],
+  it.effect(
+    "carries a tool result's document in a user turn after the results",
+    () =>
+      Effect.gen(function* () {
+        const configured = model();
+        const prepared = yield* configured.prepareTurn(request());
+        assert(prepared.mode === 'foreground');
+        const result = yield* completedTurn(configured.streamTurn(prepared));
+        const next = JSON.parse(JSON.stringify(exchange(result)));
+        next.messages[2].results[0].content.push({
+          kind: 'document',
+          mimeType: 'application/pdf',
+          base64: 'AA==',
         });
-      } else {
-        const parts = {
-          'tool-audio': {
-            kind: 'audio',
-            mimeType: 'audio/mp3',
-            base64: 'AA==',
+        const prepared2 = yield* configured.prepareTurn(next);
+        assert(prepared2.mode === 'foreground');
+        yield* completedTurn(configured.streamTurn(prepared2));
+        const sent = fetchModel.mock.calls[1][0] as Request;
+        const body = yield* Effect.promise(() => sent.json());
+        expect(body.input.slice(-3)).toEqual([
+          {
+            type: 'function_result',
+            call_id: 'call_1',
+            name: 'search',
+            result: [
+              { type: 'text', text: 'a' },
+              {
+                type: 'image',
+                mime_type: 'image/png',
+                data: 'AQ==',
+                resolution: 'ultra_high',
+              },
+            ],
           },
-          'tool-video': {
-            kind: 'video',
-            mimeType: 'video/mp4',
-            base64: 'AA==',
+          {
+            type: 'function_result',
+            call_id: 'call_2',
+            name: 'fetch',
+            result: [{ type: 'text', text: 'b' }],
           },
-          'tool-document': {
-            kind: 'document',
-            mimeType: 'application/pdf',
-            base64: 'AA==',
+          {
+            type: 'user_input',
+            content: [
+              { type: 'text', text: 'From search:' },
+              { type: 'document', mime_type: 'application/pdf', data: 'AA==' },
+            ],
           },
-        };
-        next.messages[2].results[0].content.push(parts[unsupported]);
-      }
-      expect(yield* Effect.flip(configured.prepareTurn(next))).toMatchObject({
-        _tag: 'ModelError',
-        kind: 'unsupported',
-        message: expect.stringContaining(expectedMessage),
-      });
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-    }),
+        ]);
+      }),
+  );
+
+  it.effect.each(['raw-audio', 'background-mode'] as const)(
+    'rejects unsupported %s before provider I/O',
+    (unsupported) =>
+      Effect.gen(function* () {
+        const configured = model();
+        const prepared = yield* configured.prepareTurn(request());
+        assert(prepared.mode === 'foreground');
+        const result = yield* completedTurn(configured.streamTurn(prepared));
+        const next = JSON.parse(JSON.stringify(exchange(result)));
+        let expectedMessage = 'Raw Google audio';
+        if (unsupported === 'background-mode') {
+          next.mode = 'background';
+          expectedMessage = 'Google background execution';
+        } else {
+          next.messages.push({
+            role: 'user',
+            content: [
+              {
+                kind: 'audio',
+                mimeType: 'audio/L16 ; rate=24000',
+                base64: 'AA==',
+              },
+            ],
+          });
+        }
+        expect(yield* Effect.flip(configured.prepareTurn(next))).toMatchObject({
+          _tag: 'ModelError',
+          kind: 'unsupported',
+          message: expect.stringContaining(expectedMessage),
+        });
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.effect(

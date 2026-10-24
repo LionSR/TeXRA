@@ -1175,6 +1175,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Gemini: a tool that attaches a PDF no longer ends the run.** A `bash`
+  result carrying a compiled PDF (or audio or video) failed the next
+  request with "Google tool results support only text and image content"
+  and the run stopped. The file now reaches the model in the turn after the
+  tool results, labeled with the tool that attached it.
 - **Script-only tools: a direct call to a tool the model was not sent is
   refused.** With `texra.codeMode.scriptOnly` on, the model is sent only
   `script` and the run's own tools, yet a model that guessed a tool's name
