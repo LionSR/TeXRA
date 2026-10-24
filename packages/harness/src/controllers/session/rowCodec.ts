@@ -26,8 +26,7 @@
  */
 import { constants, zstdCompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
-import { Effect, Predicate, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, Predicate, Result, Schema, Struct } from 'effect';
 import {
   AggregateIdSchema,
   aggregateTarget,
@@ -114,8 +113,11 @@ export function aggregateLists(
 
 /** The `AggregateId` two columns name. */
 export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
-  return AggregateIdSchema.parse(
-    JSON.stringify([z.string().parse(kind), z.string().parse(logicalId)]),
+  return Schema.decodeUnknownSync(AggregateIdSchema)(
+    JSON.stringify([
+      Schema.decodeUnknownSync(Schema.String)(kind),
+      Schema.decodeUnknownSync(Schema.String)(logicalId),
+    ]),
   );
 }
 
@@ -131,9 +133,9 @@ const readableFrom = (type: SessionEventDraft['type']): number =>
 /** Whether `decodeRow` parses this row's data (a kind and version this
  *  build reads): another build's row is refused before its blobs are read. */
 export function decodable(row: SqlRow): boolean {
-  const { type, version } = RowSchema.pick({ type: true, version: true }).parse(
-    row,
-  );
+  const { type, version } = Schema.decodeUnknownSync(
+    RowSchema.mapFields(Struct.pick(['type', 'version'])),
+  )(row);
   if (!hasKind(type)) return false;
   const stored = version ?? ROW_KINDS[type].version;
   return stored >= readableFrom(type) && stored <= ROW_KINDS[type].version;
@@ -166,7 +168,7 @@ export function prepareEventDraft(input: WithBlobs<SessionEventDraft>): {
   readonly row: EncodedRow;
 } {
   const { blobs = [], ...rest } = input;
-  const draft = SessionEventDraftSchema.parse(rest);
+  const draft = Schema.decodeUnknownSync(SessionEventDraftSchema)(rest);
   return { draft, row: encodeDraft(draft, blobs) };
 }
 
@@ -218,27 +220,28 @@ export function encodeDraft(
 /** Where a row failed, never its stored text (a JSON parse error quotes it). */
 function causeOf(error: unknown): string {
   if (error instanceof SyntaxError) return 'not JSON';
-  const issue = error instanceof z.ZodError ? error.issues[0] : undefined;
+  const issue =
+    error instanceof Schema.SchemaError ? error.issues[0] : undefined;
   return issue ? `${issue.code} at "${issue.path.join('.')}"` : String(error);
 }
 
 /** A selected row's columns, as `EVENT_COLUMNS` names them. */
-export const RowSchema = z.object({
-  commit: z.int(),
-  kind: z.string(),
-  logicalId: z.string(),
-  uid: z.string(),
-  seq: z.int(),
-  type: z.string(),
-  version: z.int().positive().nullable(),
-  origin: z.string(),
-  at: z.int(),
-  data: z.string(),
+export const RowSchema = Schema.Struct({
+  commit: Schema.Int,
+  kind: Schema.String,
+  logicalId: Schema.String,
+  uid: Schema.String,
+  seq: Schema.Int,
+  type: Schema.String,
+  version: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+  origin: Schema.String,
+  at: Schema.Int,
+  data: Schema.String,
 });
 /** A batch's blobs, inflated and verified by the reader, by digest. */
 export type Blobs = ReadonlyMap<string, string>;
 
-const JsonObjectSchema = z.record(z.string(), z.json());
+const JsonObjectSchema = Schema.Record(Schema.String, Schema.Json);
 
 /** `data`, its references inflated from `blobs` (one missing throws) and
  *  its escaped keys restored. */
@@ -274,7 +277,7 @@ export function decodeRow(
   SessionEvent | LeftOut,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
-  const row = RowSchema.parse(input);
+  const row = Schema.decodeUnknownSync(RowSchema)(input);
   const corrupt = (error: unknown, type = row.type) =>
     Result.fail(
       new DatabaseRowCorrupt({
@@ -296,20 +299,22 @@ export function decodeRow(
     );
   let data: Record<string, JsonValue>;
   try {
-    data = JsonObjectSchema.parse(parseData(row.data, blobs));
+    data = Schema.decodeUnknownSync(JsonObjectSchema)(
+      parseData(row.data, blobs),
+    );
     for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
       data = { ...step(data) };
     if (row.type === 'context.blob') {
-      const field = JsonObjectSchema.parse(data.payload);
+      const field = Schema.decodeUnknownSync(JsonObjectSchema)(data.payload);
       // The value is stored canonical, so its text hashes to its address.
-      const text = z.string().parse(field.value);
+      const text = Schema.decodeUnknownSync(Schema.String)(field.value);
       if (sha256Hex(text) !== field.digest) throw new Error('digest mismatch');
       data = { ...data, payload: { ...field, value: JSON.parse(text) } };
     }
   } catch (error) {
     return corrupt(error);
   }
-  const parsed = SessionEventSchema.safeParse({
+  const parsed = Schema.decodeUnknownResult(SessionEventSchema)({
     ...data,
     aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,
@@ -318,8 +323,8 @@ export function decodeRow(
     at: row.at,
     type: row.type,
   });
-  if (!parsed.success) return corrupt(parsed.error);
-  const event = parsed.data;
+  if (!Result.isSuccess(parsed)) return corrupt(parsed.failure);
+  const event = parsed.success;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
   const arm = pluginFactArm(event, row.commit, arms);
@@ -391,9 +396,9 @@ export const storeGate = <E>(
 ): Effect.Effect<void, E | DatabaseStoreNewer> =>
   Effect.gen(function* () {
     for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
-      const { type, version } = z
-        .object({ type: z.string(), version: z.int() })
-        .parse(input);
+      const { type, version } = Schema.decodeUnknownSync(
+        Schema.Struct({ type: Schema.String, version: Schema.Int }),
+      )(input);
       if (version > readableVersion(type, arms))
         return yield* Effect.fail(new DatabaseStoreNewer({ type, version }));
     }

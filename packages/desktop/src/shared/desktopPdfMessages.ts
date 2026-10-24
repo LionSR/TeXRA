@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // IPC for the PDF workbench tab. `desktopPreviewHost.openBuildDisplay`
 // compiles a TeX source (or takes a PDF as it is) and posts `desktop:showPdf`
@@ -19,16 +19,20 @@ export const DESKTOP_PDF_COMMANDS = {
   SHOW_PDF: 'desktop:showPdf',
 } as const;
 
-export const DesktopShowPdfMessageSchema = z.object({
-  session: z.string().min(1),
-  command: z.literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
-  title: z.string(),
-  pdfUrl: z
-    .url({ protocol: /^file$/ })
-    .refine((url) => new URL(url).pathname.toLowerCase().endsWith('.pdf'), {
-      message: 'Not a PDF',
-    }),
-  build: z.number(),
+export const DesktopShowPdfMessageSchema = Schema.Struct({
+  session: Schema.String.check(Schema.isMinLength(1)),
+  command: Schema.Literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
+  title: Schema.String,
+  pdfUrl:
+    Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url({ protocol: /^file$/ })` */.check(
+      Schema.makeFilter(
+        (url) => new URL(url).pathname.toLowerCase().endsWith('.pdf'),
+        {
+          message: 'Not a PDF',
+        },
+      ),
+    ),
+  build: Schema.Number,
 });
 
-export type DesktopShowPdfMessage = z.infer<typeof DesktopShowPdfMessageSchema>;
+export type DesktopShowPdfMessage = typeof DesktopShowPdfMessageSchema.Type;

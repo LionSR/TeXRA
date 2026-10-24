@@ -7,8 +7,7 @@
  * its rows that summarizes it (its calls, the files they wrote, what its
  * children spent).
  */
-import { Clock, Effect } from 'effect';
-import { z } from 'zod';
+import { Clock, Effect, Result, Schema } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
@@ -111,19 +110,19 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
 /** The files a call's child wrote, when its value is a run's envelope: a
  *  recipe's changes (`AgentBlock.result.changes`, in the order it wrote
  *  them), or an agent's edits. */
-const EnvelopeFilesSchema = z.object({
-  files: z.array(z.string()),
-  changes: z
-    .array(
-      z.object({
-        path: z.string(),
-        absolutePath: z.string(),
-        base: z.string().nullable(),
-        added: z.number().nullable(),
-        removed: z.number().nullable(),
+const EnvelopeFilesSchema = Schema.Struct({
+  files: Schema.Array(Schema.String),
+  changes: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        path: Schema.String,
+        absolutePath: Schema.String,
+        base: Schema.NullOr(Schema.String),
+        added: Schema.NullOr(Schema.Number),
+        removed: Schema.NullOr(Schema.Number),
       }),
-    )
-    .optional(),
+    ),
+  ),
 });
 
 /** A document's count over the calls that wrote it: the counted calls
@@ -160,11 +159,13 @@ function deliveredFiles(
     });
   };
   for (const call of calls) {
-    const envelope = EnvelopeFilesSchema.safeParse(call.value);
-    if (!envelope.success) continue;
-    const { changes } = envelope.data;
+    const envelope = Schema.decodeUnknownResult(EnvelopeFilesSchema)(
+      call.value,
+    );
+    if (!Result.isSuccess(envelope)) continue;
+    const { changes } = envelope.success;
     if (changes === undefined) {
-      for (const path of envelope.data.files) add(path, null, null);
+      for (const path of envelope.success.files) add(path, null, null);
       continue;
     }
     // A later entry for the same document is its later revision.

@@ -2,8 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Predicate, Result } from 'effect';
-import { ZodError } from 'zod';
+import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 
 // Local imports - common
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
@@ -66,10 +65,10 @@ function normalizeSkillName(
 ): { name?: string; errors: SkillLoadIssue[] } {
   const errors: SkillLoadIssue[] = [];
   const candidate = typeof rawName === 'string' ? rawName : directoryName;
-  const parsed = SkillNameSchema.safeParse(candidate);
+  const parsed = Schema.decodeUnknownResult(SkillNameSchema)(candidate);
 
-  if (parsed.success) {
-    const name = parsed.data;
+  if (Result.isSuccess(parsed)) {
+    const name = parsed.success;
     if (typeof rawName === 'string' && name !== directoryName) {
       errors.push(
         issue(
@@ -88,15 +87,15 @@ function normalizeSkillName(
       issue(
         'warning',
         'invalid_name',
-        `Ignoring invalid skill name: ${firstZodMessage(parsed.error)}`,
+        `Ignoring invalid skill name: ${firstZodMessage(parsed.failure)}`,
         { path: skillPath },
       ),
     );
   }
 
-  const fallback = SkillNameSchema.safeParse(directoryName);
-  if (fallback.success) {
-    return { name: fallback.data, errors };
+  const fallback = Schema.decodeUnknownResult(SkillNameSchema)(directoryName);
+  if (Result.isSuccess(fallback)) {
+    return { name: fallback.success, errors };
   }
 
   errors.push(
@@ -104,7 +103,7 @@ function normalizeSkillName(
       'error',
       'invalid_name',
       `Directory name cannot be used as a skill name: ${firstZodMessage(
-        fallback.error,
+        fallback.failure,
       )}`,
       { path: skillPath },
     ),
@@ -205,7 +204,7 @@ export function loadCommandFile(
         );
       if (!descriptionResult.description) return { errors };
       return {
-        skill: SkillSchema.parse({
+        skill: Schema.decodeUnknownSync(SkillSchema)({
           name: nameResult.name,
           description: descriptionResult.description,
           body,
@@ -268,7 +267,7 @@ export function loadSkillDirectory(
           errors.push(...descriptionResult.errors);
           if (!descriptionResult.description) return { errors };
 
-          const skill = SkillSchema.parse({
+          const skill = Schema.decodeUnknownSync(SkillSchema)({
             name: nameResult.name,
             description: descriptionResult.description,
             body,

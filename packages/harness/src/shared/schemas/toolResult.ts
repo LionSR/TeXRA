@@ -1,4 +1,4 @@
-import { z, type ZodIssue } from 'zod';
+import { Result, Schema, Struct } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
@@ -8,41 +8,46 @@ import { Sha256Schema } from './offeredTools';
  * Base schema for file references (metadata only, no binary data).
  * Used when binary data has been stripped for serialization/logging.
  */
-const FileReferenceSchema = z.looseObject({
-  /** Workspace-relative or descriptive path for the file */
-  path: z.string(),
-  /** MIME type for the file */
-  mimeType: z.string(),
-  /** Optional human readable description */
-  description: z.string().optional(),
-});
-export type FileReference = z.infer<typeof FileReferenceSchema>;
+const FileReferenceSchema = Schema.StructWithRest(
+  Schema.Struct({
+    /** Workspace-relative or descriptive path for the file */
+    path: Schema.String,
+    /** MIME type for the file */
+    mimeType: Schema.String,
+    /** Optional human readable description */
+    description: Schema.optional(Schema.String),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
+export type FileReference = typeof FileReferenceSchema.Type;
 
 /**
  * Schema for file attachments with optional binary data.
  * Extends FileReferenceSchema with binary payload fields.
  */
-const ToolFileAttachmentSchema = FileReferenceSchema.extend({
-  /** Base64 encoded payload when inline transport is supported */
-  base64Data: z.string().optional(),
-  /** Raw bytes for providers that require binary uploads */
-  bytes: z.instanceof(Uint8Array).optional(),
-  /** Bytes the session store already holds under this address: a file a
-   *  script relays from one of its calls' settled attachments. */
-  digest: Sha256Schema.optional(),
-});
-export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
+const ToolFileAttachmentSchema = FileReferenceSchema.mapFields(
+  Struct.assign({
+    /** Base64 encoded payload when inline transport is supported */
+    base64Data: Schema.optional(Schema.String),
+    /** Raw bytes for providers that require binary uploads */
+    bytes: Schema.optional(Schema.instanceOf(Uint8Array)),
+    /** Bytes the session store already holds under this address: a file a
+     *  script relays from one of its calls' settled attachments. */
+    digest: Schema.optional(Sha256Schema),
+  }),
+);
+export type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
 /**
  * Schema for edit records in tool results.
  */
-const EditRecordSchema = z.object({
-  path: z.string(),
-  lineChanges: LineChangesSchema.optional(),
+const EditRecordSchema = Schema.Struct({
+  path: Schema.String,
+  lineChanges: Schema.optional(LineChangesSchema),
   /** 1-based line number where the edit starts (for navigation) */
-  startLine: z.int().positive().optional(),
+  startLine: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
-export type EditRecord = z.infer<typeof EditRecordSchema>;
+export type EditRecord = typeof EditRecordSchema.Type;
 
 // ============================================================================
 // Diagnostics Types (not Zod - these are complex unions with external types)
@@ -60,13 +65,13 @@ export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
  * is JSON by construction: the settled tool result is stored as a JSON value,
  * and a present-but-undefined key there is a refused row, not a dropped key.
  */
-const FormattedZodIssueSchema = z.object({
-  path: z.string(),
-  message: z.string(),
-  expected: z.string().optional(),
-  code: z.string().optional(),
+const FormattedZodIssueSchema = Schema.Struct({
+  path: Schema.String,
+  message: Schema.String,
+  expected: Schema.optional(Schema.String),
+  code: Schema.optional(Schema.String),
 });
-type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
+type FormattedZodIssue = typeof FormattedZodIssueSchema.Type;
 
 /**
  * Structured validation error diagnostics. One of several shapes a tool's
@@ -74,13 +79,12 @@ type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
  * the one produced for Zod input-validation failures, used to provide rich
  * error information to models for self-correction.
  */
-export const ValidationErrorDiagnosticsSchema = z.object({
-  type: z.literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
-  formatted: z.array(FormattedZodIssueSchema),
+export const ValidationErrorDiagnosticsSchema = Schema.Struct({
+  type: Schema.Literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
+  formatted: Schema.Array(FormattedZodIssueSchema),
 });
-export type ValidationErrorDiagnostics = z.infer<
-  typeof ValidationErrorDiagnosticsSchema
->;
+export type ValidationErrorDiagnostics =
+  (typeof ValidationErrorDiagnosticsSchema)['Type'];
 
 /**
  * Format Zod issues into structured diagnostics for model consumption.
@@ -110,7 +114,7 @@ export function formatZodIssuesForDiagnostics(
  */
 const ToolResultSharedFields = {
   /** User instruction that was processed */
-  userInstruction: z.string().optional(),
+  userInstruction: Schema.optional(Schema.String),
   /**
    * Additional diagnostic information. Deliberately `z.unknown()`: every tool
    * shapes its own payload here (validation issues, severity counts, an
@@ -118,70 +122,72 @@ const ToolResultSharedFields = {
    * validate against. Consumers that care about one specific shape — e.g.
    * {@link ValidationErrorDiagnosticsSchema} — parse it themselves.
    */
-  diagnostics: z.unknown().optional(),
+  diagnostics: Schema.optional(Schema.Unknown),
   /** Summary added by handlers when attachments are available */
-  attachmentSummary: z.string().optional(),
+  attachmentSummary: Schema.optional(Schema.String),
 };
 
 /** A `plugin.fact` of one of the calling tool's plugin's arms
  *  (`Plugin.arms`), committed in its call's `tool.result` batch. */
-const ToolFactSchema = z.strictObject({
-  plugin: z.string().min(1),
-  kind: z.string().min(1),
+const ToolFactSchema = Schema.Struct({
+  plugin: Schema.String.check(Schema.isMinLength(1)),
+  kind: Schema.String.check(Schema.isMinLength(1)),
   /** The arm's version `value` is written at. */
-  version: z.int().positive(),
+  version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
    *  under the calling run; absent, the fact is about the run itself. */
-  aggregate: z.string().min(1).optional(),
+  aggregate: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
 });
 /** A fact a tool's call states about its run (`ToolFactSchema`). */
-export type ToolFact = z.infer<typeof ToolFactSchema>;
+export type ToolFact = typeof ToolFactSchema.Type;
 
-const ExecutedToolResultSchema = z.object({
-  status: z.literal('executed'),
+const ExecutedToolResultSchema = Schema.Struct({
+  status: Schema.Literal('executed'),
   /** Detailed output from the tool */
-  output: z.string().optional(),
+  output: Schema.optional(Schema.String),
   /** Brief summary of the tool run result */
-  summary: z.string().optional(),
+  summary: Schema.optional(Schema.String),
   /** End the current model turn after this successful tool result is paired. */
-  endTurn: z.boolean().optional(),
-  error: z.undefined().optional(),
+  endTurn: Schema.optional(Schema.Boolean),
+  error: Schema.optional(Schema.Undefined),
   /** Records of edits made during tool run */
-  edits: z.array(EditRecordSchema).optional(),
+  edits: Schema.optional(Schema.Array(EditRecordSchema)),
   /** File attachments (may contain binary data) */
-  files: z.array(ToolFileAttachmentSchema).optional(),
+  files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
   /** What a script's `await` gets for this call in place of
    *  `{ output, summary }`: a tool whose answer is data, not prose. */
-  value: JsonValueSchema.optional(),
+  value: Schema.optional(JsonValueSchema),
   /** The key a later call of the same tool in this run may take this result
    *  under instead of running again; only an executed result carries one. */
-  reuseKey: z.string().min(1).optional(),
+  reuseKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** The call whose result this one took under its `reuseKey`. */
-  reusedFrom: z.string().min(1).optional(),
+  reusedFrom: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Follow-ups queued on the calling run that this result answers (a
    *  child's report a wait returned): consumed in the call's settlement
    *  batch, so they leave the run's input only with the result. Not stored
    *  on the result. */
-  consumedFollowUps: z.array(z.string().min(1)).optional(),
+  consumedFollowUps: Schema.optional(
+    Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  ),
   /** Facts about the call's run, committed beside its `tool.result` as
    *  `plugin.fact` rows; never stored on the result itself. */
-  facts: z.array(ToolFactSchema).optional(),
+  facts: Schema.optional(Schema.Array(ToolFactSchema)),
   ...ToolResultSharedFields,
 });
 
-const ErrorToolResultSchema = z.object({
-  status: z.literal('error'),
+const ErrorToolResultSchema = Schema.Struct({
+  status: Schema.Literal('error'),
   /** Error message if tool run failed */
-  error: z.string().min(1),
+  error: Schema.String.check(Schema.isMinLength(1)),
   /** The name of the Error a script's `await` throws; `ToolFailed` when
    *  absent. */
-  name: z.string().min(1).optional(),
+  name: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Brief summary for human-facing logs */
-  summary: z.string().optional(),
-  output: z.undefined().optional(),
-  edits: z.undefined().optional(),
-  files: z.undefined().optional(),
+  summary: Schema.optional(Schema.String),
+  output: Schema.optional(Schema.Undefined),
+  edits: Schema.optional(Schema.Undefined),
+  files: Schema.optional(Schema.Undefined),
   ...ToolResultSharedFields,
 });
 
@@ -189,11 +195,11 @@ const ErrorToolResultSchema = z.object({
  *  output through: its settled result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 
-export const ToolResultSchema = z.discriminatedUnion('status', [
+export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,
 ]);
-export type ToolResult = z.infer<typeof ToolResultSchema>;
+export type ToolResult = typeof ToolResultSchema.Type;
 
 export class ToolError extends Error {
   /** Brief human-facing summary carried through to the ToolResult, when set. */
@@ -214,15 +220,15 @@ export class ToolError extends Error {
  *  inline, so the history a window or a resume reads carries no attachment
  *  bytes; a capture failure records the omission and its reason rather than
  *  a claim that bytes were included. */
-export const SettledAttachmentSchema = z.strictObject({
-  path: z.string().min(1),
-  mimeType: z.string().min(1),
-  description: z.string().optional(),
-  content: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('stored'), digest: Sha256Schema }),
-    z.strictObject({
-      kind: z.literal('metadata-only'),
-      reason: z.string().min(1),
+export const SettledAttachmentSchema = Schema.Struct({
+  path: Schema.String.check(Schema.isMinLength(1)),
+  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  description: Schema.optional(Schema.String),
+  content: Schema.Union([
+    Schema.Struct({ kind: Schema.Literal('stored'), digest: Sha256Schema }),
+    Schema.Struct({
+      kind: Schema.Literal('metadata-only'),
+      reason: Schema.String.check(Schema.isMinLength(1)),
     }),
   ]),
 });
@@ -247,25 +253,27 @@ export const SettledAttachmentSchema = z.strictObject({
  * already committed. The check runs after the transform rather than as a
  * `.pipe`, so the accepted input stays the real attachment a tool produced.
  */
-const SettledFileMetadataSchema = ToolFileAttachmentSchema.omit({
-  base64Data: true,
-  bytes: true,
-}).catchall(JsonValueSchema);
+const SettledFileMetadataSchema = ToolFileAttachmentSchema.mapFields(
+  Struct.omit(['base64Data', 'bytes']),
+); /* TODO(effect-schema): catchall; was `.catchall(JsonValueSchema)` */
 const SettledFileSchema = ToolFileAttachmentSchema.transform(
   ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
 ).superRefine((file, ctx) => {
-  const metadata = SettledFileMetadataSchema.safeParse(file);
-  if (metadata.success) return;
-  for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
+  const metadata = Schema.decodeUnknownResult(SettledFileMetadataSchema)(file);
+  if (Result.isSuccess(metadata)) return;
+  for (const issue of metadata.failure.issues) ctx.addIssue({ ...issue });
 });
-export const SettledToolResultSchema = z.discriminatedUnion('status', [
-  ExecutedToolResultSchema.omit({
-    files: true,
-    consumedFollowUps: true,
-    facts: true,
-  }).extend({
-    files: z.array(SettledFileSchema).optional(),
-    diagnostics: JsonValueSchema.optional(),
-  }),
-  ErrorToolResultSchema.extend({ diagnostics: JsonValueSchema.optional() }),
+export const SettledToolResultSchema = Schema.Union([
+  ExecutedToolResultSchema.mapFields(
+    Struct.omit(['files', 'consumedFollowUps', 'facts']),
+  ).mapFields(
+    Struct.assign({
+      files: Schema.optional(Schema.Array(SettledFileSchema)),
+      diagnostics: Schema.optional(JsonValueSchema),
+    }),
+  ),
+
+  ErrorToolResultSchema.mapFields(
+    Struct.assign({ diagnostics: Schema.optional(JsonValueSchema) }),
+  ),
 ]);

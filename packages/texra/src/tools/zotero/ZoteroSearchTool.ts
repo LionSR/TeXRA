@@ -7,8 +7,7 @@
 
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
@@ -38,35 +37,55 @@ const AUTHOR_DESCRIPTION =
 
 const YEAR_DESCRIPTION = 'Filter by publication year (exact match).';
 
-const ZoteroSearchInputSchema = z
-  .strictObject({
-    query: z.string().min(1).describe(QUERY_DESCRIPTION).nullish(),
-    title: z.string().describe(TITLE_DESCRIPTION).nullish(),
-    author: z.string().describe(AUTHOR_DESCRIPTION).nullish(),
-    year: z
-      .union([z.string(), z.number()])
-      .describe(YEAR_DESCRIPTION)
-      .nullish(),
-    library: z
-      .string()
-      .describe(
-        'Optional library name to search in. Use "*" to search all libraries.',
-      )
-      .nullish(),
-    include_collections: z
-      .boolean()
-      .describe(
-        'When true, each result includes the Zotero collections (folders) it belongs to, ' +
+const ZoteroSearchInputSchema = Schema.Struct({
+  query: Schema.optional(
+    Schema.NullOr(
+      Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: QUERY_DESCRIPTION,
+      }),
+    ),
+  ),
+  title: Schema.optional(
+    Schema.NullOr(Schema.String.annotate({ description: TITLE_DESCRIPTION })),
+  ),
+  author: Schema.optional(
+    Schema.NullOr(Schema.String.annotate({ description: AUTHOR_DESCRIPTION })),
+  ),
+  year: Schema.optional(
+    Schema.NullOr(
+      Schema.Union([Schema.String, Schema.Number]).annotate({
+        description: YEAR_DESCRIPTION,
+      }),
+    ),
+  ),
+  library: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description:
+          'Optional library name to search in. Use "*" to search all libraries.',
+      }),
+    ),
+  ),
+  include_collections: Schema.optional(
+    Schema.NullOr(
+      Schema.Boolean.annotate({
+        description:
+          'When true, each result includes the Zotero collections (folders) it belongs to, ' +
           'shown as breadcrumb paths. Useful for understanding how the library is organized.',
-      )
-      .nullish(),
-  })
-  .refine(
+      }),
+    ),
+  ),
+}).check(
+  Schema.makeFilter(
     (data) => data.query || data.title || data.author || data.year,
-    'At least one of query, title, author, or year must be provided.',
-  );
+    {
+      message:
+        'At least one of query, title, author, or year must be provided.',
+    },
+  ),
+);
 
-type ZoteroSearchInput = z.infer<typeof ZoteroSearchInputSchema>;
+type ZoteroSearchInput = typeof ZoteroSearchInputSchema.Type;
 
 /**
  * Build a human-readable label from whichever search parameters are set.
@@ -138,7 +157,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
     'item.search',
     params,
     port,
-    z.array(BbtSearchResultItemSchema),
+    Schema.Array(BbtSearchResultItemSchema),
   );
 
   const label = describeSearch({ query, title, author, year });
@@ -155,7 +174,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
         'item.collections',
         [result.map((r) => r.citekey), true],
         port,
-        z.record(z.string(), z.array(BbtCollectionChainSchema)),
+        Schema.Record(Schema.String, Schema.Array(BbtCollectionChainSchema)),
       )
     : null;
 

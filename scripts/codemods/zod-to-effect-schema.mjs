@@ -234,7 +234,7 @@ class Converter {
     if (ts.isTypeReferenceNode(n) && this.isZodQualified(n.typeName)) return n;
     if (
       ts.isExpressionWithTypeArguments(n) &&
-      this.isZodQualifiedExpr(n.expression)
+      (this.isZodQualifiedExpr(n.expression) || this.isDataTaggedError(n))
     )
       return n;
     if (!this.isChainLink(n)) return null;
@@ -408,7 +408,110 @@ class Converter {
   }
 
   convertHeritage(n) {
+    if (this.isDataTaggedError(n)) return this.convertTaggedError(n);
     return this.todo('heritage clause', this.src(n), this.src(n));
+  }
+
+  // ---- Data.TaggedError → Schema.TaggedError ------------------------------
+
+  /** `extends Data.TaggedError('Tag')<{ fields }>` (the only form used). */
+  isDataTaggedError(n) {
+    const e = n.expression;
+    return (
+      ts.isCallExpression(e) &&
+      ts.isPropertyAccessExpression(e.expression) &&
+      ts.isIdentifier(e.expression.expression) &&
+      e.expression.expression.text === 'Data' &&
+      e.expression.name.text === 'TaggedError' &&
+      e.arguments.length === 1
+    );
+  }
+
+  convertTaggedError(n) {
+    const tag = this.src(n.expression.arguments[0]);
+    const cls = n.parent?.parent;
+    const self =
+      cls && ts.isClassDeclaration(cls) && cls.name ? cls.name.text : null;
+    const literal = n.typeArguments?.[0];
+    const fields = [];
+    if (literal && ts.isTypeLiteralNode(literal)) {
+      for (const m of literal.members) {
+        if (!ts.isPropertySignature(m) || !m.type) {
+          fields.push(this.todo('error field', this.src(m), ''));
+          continue;
+        }
+        const name = ts.isIdentifier(m.name) ? m.name.text : this.src(m.name);
+        const doc = this.text.slice(m.pos, m.getStart(this.sf));
+        let schema = this.fieldSchema(m.type, name);
+        if (m.questionToken) schema = `Schema.optional(${schema})`;
+        fields.push(
+          `${doc.trimEnd()}${doc.trim() ? '\n  ' : ''}${name}: ${schema}`,
+        );
+      }
+    } else if (literal) {
+      fields.push(this.todo('error fields', this.src(literal), ''));
+    }
+    if (!self)
+      return this.todo('anonymous Data.TaggedError', this.src(n), this.src(n));
+    return `Schema.TaggedError<${self}>()(${tag}, {${fields.length ? `\n  ${fields.join(',\n  ')},\n` : ''}})`;
+  }
+
+  /** A property type as a field schema, by its text; `unknown` named
+   *  `cause` is a defect. */
+  fieldSchema(type, name) {
+    const t = this.src(type);
+    const simple = {
+      string: 'Schema.String',
+      number: 'Schema.Number',
+      boolean: 'Schema.Boolean',
+      true: 'Schema.Literal(true)',
+      false: 'Schema.Literal(false)',
+      bigint: 'Schema.BigInt',
+      null: 'Schema.Null',
+      undefined: 'Schema.Undefined',
+      Error: 'Schema.Defect()',
+      Date: 'Schema.Date',
+      'Duration.Duration': 'Schema.Duration',
+    };
+    if (t === 'unknown')
+      return name === 'cause' ? 'Schema.Defect()' : 'Schema.Unknown';
+    if (t in simple) return simple[t];
+    if (ts.isLiteralTypeNode(type)) return `Schema.Literal(${t})`;
+    if (ts.isUnionTypeNode(type)) {
+      const members = type.types;
+      const isNull = (x) =>
+        ts.isLiteralTypeNode(x) && x.literal.kind === ts.SyntaxKind.NullKeyword;
+      const isUndef = (x) => x.kind === ts.SyntaxKind.UndefinedKeyword;
+      const rest = members.filter((x) => !isNull(x) && !isUndef(x));
+      let inner;
+      if (rest.every((x) => ts.isLiteralTypeNode(x) && !isNull(x)))
+        inner = `Schema.Literals([${rest.map((x) => this.src(x)).join(', ')}])`;
+      else if (rest.length === 1) inner = this.fieldSchema(rest[0], name);
+      else
+        inner = `Schema.Union([${rest.map((x) => this.fieldSchema(x, name)).join(', ')}])`;
+      if (members.some(isNull)) inner = `Schema.NullOr(${inner})`;
+      if (members.some(isUndef)) inner = `Schema.UndefinedOr(${inner})`;
+      return inner;
+    }
+    if (ts.isArrayTypeNode(type))
+      return `Schema.Array(${this.fieldSchema(type.elementType, name)})`;
+    if (
+      ts.isTypeOperatorNode(type) &&
+      type.operator === ts.SyntaxKind.ReadonlyKeyword
+    )
+      return this.fieldSchema(type.type, name);
+    if (ts.isTypeReferenceNode(type)) {
+      const ref = this.src(type.typeName);
+      const args = type.typeArguments ?? [];
+      if ((ref === 'ReadonlyArray' || ref === 'Array') && args[0])
+        return `Schema.Array(${this.fieldSchema(args[0], name)})`;
+      if (ref === 'Record' && args.length === 2)
+        return `Schema.Record(${this.fieldSchema(args[0], name)}, ${this.fieldSchema(args[1], name)})`;
+      // `Foo` with a `FooSchema` in this file.
+      if (args.length === 0 && this.text.includes(`${ref}Schema`))
+        return `${ref}Schema`;
+    }
+    return this.todo(`error field type ${t}`, t, 'Schema.Unknown');
   }
 
   // ---- expressions -------------------------------------------------------

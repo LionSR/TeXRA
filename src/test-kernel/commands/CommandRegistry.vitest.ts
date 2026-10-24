@@ -1,6 +1,6 @@
 // Third-party imports
+import { Schema } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 // Local imports
 import {
@@ -18,15 +18,15 @@ function makeActions(): TestActions {
   return { noop: vi.fn(), packed: vi.fn() };
 }
 
-const PackArgs = z.tuple([
-  z.object({
-    inputFile: z.string().min(1),
-    agent: z.string().min(1),
+const PackArgs = Schema.Tuple([
+  Schema.Struct({
+    inputFile: Schema.String.check(Schema.isMinLength(1)),
+    agent: Schema.String.check(Schema.isMinLength(1)),
   }),
 ]);
 
 const packRegistry = {
-  'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(
+  'test.pack': definedHandler<TestActions, typeof PackArgs.Type>(
     PackArgs,
     (a, args) => {
       a.packed(args);
@@ -87,7 +87,7 @@ describe('shared command registry', () => {
       expect.objectContaining({
         kind: 'invalidArguments',
         id: 'test.pack',
-        error: expect.any(z.ZodError),
+        error: expect.any(Schema.SchemaError),
       }),
     );
   });

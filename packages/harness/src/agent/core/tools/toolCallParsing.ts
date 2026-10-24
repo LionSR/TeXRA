@@ -1,5 +1,5 @@
+import { Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -75,7 +75,7 @@ export function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!(error instanceof z.ZodError)) {
+  if (!(error instanceof Schema.SchemaError)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 

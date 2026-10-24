@@ -1,4 +1,5 @@
 // Node imports
+import { Schema } from 'effect';
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +11,6 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
@@ -54,7 +54,7 @@ interface Versioned {
   readonly version: number;
   /** The upcasters from version 1, `upcast[i]` taking `i + 1` to `i + 2`. */
   readonly upcasts: number;
-  readonly schema: z.ZodType;
+  readonly schema: Schema.Top;
 }
 
 /** Every current-value family, each declared by its owner; the first case
@@ -70,15 +70,7 @@ const VALUE_FAMILIES = [
 ];
 
 const VERSIONED: readonly Versioned[] = [
-  ...SessionEventDraftSchema.options.map((arm) => {
-    const kind = ROW_KINDS[arm.shape.type.value];
-    return {
-      name: arm.shape.type.value,
-      version: kind.version,
-      upcasts: kind.upcast.length,
-      schema: arm,
-    };
-  }),
+  ...SessionEventDraftSchema.members /* TODO(effect-schema): map; was `.map((arm) => { const kind = ROW_KINDS[arm.shape.type.value]; return { name: arm.shape.type.value, version: kind.version, upcasts: kind.upcast.length, schema: arm, }; })` */,
   ...Object.entries(armsOf(texraPlugins())).map(([name, arm]) => ({
     name: `plugin.fact.${name.replace('/', '.')}`,
     version: arm.version,
@@ -94,9 +86,9 @@ const VERSIONED: readonly Versioned[] = [
 ];
 
 /** A version's fingerprint: its schema as JSON Schema, as the store reads it. */
-const fingerprint = (schema: z.ZodType): string =>
+const fingerprint = (schema: Schema.Top): string =>
   `${JSON.stringify(
-    z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }),
+    Schema.toJsonSchemaDocument(schema).schema /* TODO(effect-schema): toJSONSchema; was `z.Schema.toJsonSchemaDocument(/* TODO(effect-schema): toJSONSchema */ schema, { io: 'input', unrepresentable: 'any' })` */,
     null,
     2,
   )}\n`;
@@ -133,16 +125,13 @@ describe('row versions', () => {
     // A kind deleted without a retirement would make every store that holds
     // it refuse to open. The list only grows: check-ratchet-baselines fails a
     // name the base branch lists and the tree does not.
-    const { kinds } = z
-      .object({ kinds: z.array(z.string()) })
-      .parse(
+    const { kinds } = Schema.decodeUnknownSync(Schema.Struct({ kinds: Schema.Array(Schema.String) }))(
         JSON.parse(
           readFileSync(
             resolve(REPO_ROOT, 'config/storage/row-kinds-ever.json'),
             'utf8',
           ),
-        ),
-      );
+        ));
     expect(kinds, 'kept sorted and unique').toEqual(
       [...new Set(kinds)].toSorted(),
     );

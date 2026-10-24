@@ -1,6 +1,6 @@
 /** Subscription sign-in status, as the model access controllers report it
  *  and every host's account surface shows it, and how its account is named. */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 
@@ -10,16 +10,15 @@ import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
  * and the same routing preference — so the payload names the provider instead
  * of the command doing it.
  */
-export const SubscriptionAuthStatusSchema = z.object({
-  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
-  signedIn: z.boolean(),
-  email: z.string().nullish(),
-  accountId: z.string().nullish(),
-  preferSubscription: z.boolean(),
+export const SubscriptionAuthStatusSchema = Schema.Struct({
+  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  signedIn: Schema.Boolean,
+  email: Schema.optional(Schema.NullOr(Schema.String)),
+  accountId: Schema.optional(Schema.NullOr(Schema.String)),
+  preferSubscription: Schema.Boolean,
 });
-export type SubscriptionAuthStatus = z.infer<
-  typeof SubscriptionAuthStatusSchema
->;
+export type SubscriptionAuthStatus =
+  (typeof SubscriptionAuthStatusSchema)['Type'];
 
 /**
  * Sign-in status per provider, as a settings view holds it. Partial because a

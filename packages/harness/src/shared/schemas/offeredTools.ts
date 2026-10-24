@@ -4,19 +4,21 @@
  * the `context.blob` arm, the one store of the model-facing content those
  * rows and every `attempt` row name by digest.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
 
 /** A content address: the sha256 of a value's canonical JSON. */
-export const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+export const Sha256Schema = Schema.String.check(
+  Schema.isPattern(/^[0-9a-f]{64}$/),
+);
 
 /** One offered tool and its identity: a call to it runs only while the tool
  *  the run would dispatch still has this name, digest, plugin and revision. */
-const OfferedToolSchema = z.strictObject({
-  name: z.string().min(1),
+const OfferedToolSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
   /** sha256 over the canonical JSON of the name and input schema, every
    *  description left out: the identity a call is checked against. */
   digest: Sha256Schema,
@@ -26,15 +28,15 @@ const OfferedToolSchema = z.strictObject({
    *  the identity, so it rejects no call. */
   shown: Sha256Schema,
   /** The contributing plugin; `run` for a tool only this run holds. */
-  plugin: z.string().min(1),
-  revision: z.string().min(1),
+  plugin: Schema.String.check(Schema.isMinLength(1)),
+  revision: Schema.String.check(Schema.isMinLength(1)),
   /** Whether the step's requests send the model this declaration. False
    *  while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`) for
    *  every tool but `script` and the run's own: the model reaches it from
    *  inside a script alone. Not part of the identity. */
-  sent: z.boolean(),
+  sent: Schema.Boolean,
 });
-export type OfferedTool = z.infer<typeof OfferedToolSchema>;
+export type OfferedTool = typeof OfferedToolSchema.Type;
 
 /**
  * The tools a step offers, in offer order, the plugins whose prompt
@@ -43,22 +45,22 @@ export type OfferedTool = z.infer<typeof OfferedToolSchema>;
  * previous step recorded. The latest one is what the run was last offered,
  * which a resume and every call are checked against.
  */
-export const ToolsOfferedPayloadSchema = z.strictObject({
-  tools: z.array(OfferedToolSchema).readonly(),
+export const ToolsOfferedPayloadSchema = Schema.Struct({
+  tools: Schema.Array(OfferedToolSchema),
   /** The names of the skills the step lists, in listing order. */
-  skills: z.array(z.string().min(1)).readonly(),
+  skills: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
   /** The address of the system text the run's requests send: its base text
    *  with every section as the step that opened the run's context rendered
    *  them, frozen until a compaction opens it again. Null when it sends
    *  none. */
-  system: Sha256Schema.nullable(),
+  system: Schema.NullOr(Sha256Schema),
   /** The address of the context the model has been told, its sections by
    *  name and its tools' names (`RunContextSchema`): what a later step
    *  appends to the history as a system message is the change from it. */
   context: Sha256Schema,
   /** The installed plugins' hooks the step pinned, each as
    *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
-  hooks: z.array(z.string().min(1)).readonly(),
+  hooks: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
 });
 
 /**
@@ -67,29 +69,29 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
  * delegation (null when they could not be read); and whether worktrees are
  * on (null when no agent can be launched).
  */
-const DelegationTargetsSchema = z.strictObject({
-  agents: z.array(
-    z.strictObject({
-      name: z.string().min(1),
-      description: z.string(),
-      tools: z.array(z.string()),
-      task: z.boolean(),
+const DelegationTargetsSchema = Schema.Struct({
+  agents: Schema.Array(
+    Schema.Struct({
+      name: Schema.String.check(Schema.isMinLength(1)),
+      description: Schema.String,
+      tools: Schema.Array(Schema.String),
+      task: Schema.Boolean,
     }),
   ),
-  models: z.array(z.string()).nullable(),
-  worktree: z.boolean().nullable(),
+  models: Schema.NullOr(Schema.Array(Schema.String)),
+  worktree: Schema.NullOr(Schema.Boolean),
 });
-export type DelegationTargets = z.infer<typeof DelegationTargetsSchema>;
+export type DelegationTargets = typeof DelegationTargetsSchema.Type;
 
 /** The context a run's model has been told, as a `tools.offered` row names
  *  it: the sections and the delegation targets its system text renders at
  *  the freeze, and the names of the tools it offers. */
-export const RunContextSchema = z.strictObject({
-  sections: z.record(z.string(), z.string()),
-  tools: z.array(z.string()),
-  delegation: DelegationTargetsSchema.optional(),
+export const RunContextSchema = Schema.Struct({
+  sections: Schema.Record(Schema.String, Schema.String),
+  tools: Schema.Array(Schema.String),
+  delegation: Schema.optional(DelegationTargetsSchema),
 });
-export type RunContext = z.infer<typeof RunContextSchema>;
+export type RunContext = typeof RunContextSchema.Type;
 
 /**
  * One piece of model-facing content: a tool declaration, a system text, a
@@ -97,7 +99,7 @@ export type RunContext = z.infer<typeof RunContextSchema>;
  * per run, before the first row that names its digest, and removed only
  * with the run.
  */
-export const ContextBlobSchema = z.strictObject({
+export const ContextBlobSchema = Schema.Struct({
   digest: Sha256Schema,
   value: JsonValueSchema,
 });

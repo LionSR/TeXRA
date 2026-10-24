@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { z } from 'zod';
+import { Effect, Schema, SchemaGetter } from 'effect';
 
 // Local imports
 import { RunIdSchema } from '@shared/schemas';
@@ -21,9 +21,11 @@ import { nullishWithDefault } from '../core/inputSchema';
 import { ViewRangeSchema } from '../formatting';
 
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
-const PathFieldSchema = z.string().describe('Path starting with /executions');
+const PathFieldSchema = Schema.String.annotate({
+  description: 'Path starting with /executions',
+});
 
-const ViewActionSchema = z.strictObject({
+const ViewActionSchema = Schema.Struct({
   path: PathFieldSchema,
   // Optional + defaulted, NOT .nullish() (unlike every other nullish field in
   // this file): 'view' is the common no-op-preamble call, so omitting
@@ -43,110 +45,131 @@ const ViewActionSchema = z.strictObject({
   // absent) is handled separately below by ExecutionsToolInputSchema's
   // preprocess, which strips a `null` action down to omitted before this
   // branch's own default runs — so the type stays a plain optional literal.
-  action: z
-    .literal('view')
-    .optional()
-    .default('view')
-    .describe('Read run data (returns immediately). Default action.'),
+  action: Schema.optional(Schema.Literal('view'))
+    .pipe(Schema.withDecodingDefaultType(Effect.succeed('view')))
+    .annotate({
+      description: 'Read run data (returns immediately). Default action.',
+    }),
 
   /** Optional line range [start, end] for large outputs. */
-  view_range: ViewRangeSchema.nullish().describe(
-    'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
-  ),
+  view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)).annotate({
+    description:
+      'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
+  }),
 
   /** Zero-based offset for list or conversation pagination. */
-  offset: nullishWithDefault(z.int().min(0), 0).describe(
+  offset: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    0,
+  ).describe(
     'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation.',
   ),
 
   /** Maximum list entries or conversation messages to return. */
-  limit: nullishWithDefault(z.int().min(1).max(200), 100).describe(
+  limit: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(200),
+    ),
+    100,
+  ).describe(
     'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Max: 200.',
   ),
 });
 
-const WaitActionSchema = z.strictObject({
+const WaitActionSchema = Schema.Struct({
   path: PathFieldSchema,
-  action: z
-    .literal('wait')
-    .describe(
+  action: Schema.Literal('wait').annotate({
+    description:
       'Wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops).',
-    ),
+  }),
 
   /** Run IDs to wait on (with /executions only; ignored on /executions/{id}). */
-  ids: z
-    .array(RunIdSchema)
-    .min(1)
-    .max(50)
-    .nullish()
-    .describe(
-      'List of run IDs to wait on (with /executions only). ' +
-        'Waits for any of the listed executions to change status. ' +
-        'If omitted, waits for any active run.',
+  ids: Schema.optional(
+    Schema.NullOr(
+      Schema.Array(RunIdSchema)
+        .check(Schema.isMinLength(1))
+        .check(Schema.isMaxLength(50)),
     ),
+  ).annotate({
+    description:
+      'List of run IDs to wait on (with /executions only). ' +
+      'Waits for any of the listed executions to change status. ' +
+      'If omitted, waits for any active run.',
+  }),
 
   /** Max seconds to wait. Default: 300. */
-  timeout: z
-    .number()
-    .finite()
-    .nullish()
-    // Clamp in the schema so input.timeout is always a ready-to-use number:
-    // an out-of-range or missing value becomes a value inside the wait window.
-    .transform((v) => executionsWaitTimeoutSeconds(v))
-    .describe(
-      `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
-    ),
+  timeout: Schema.optional(Schema.NullOr(Schema.Finite))
+    .pipe(
+      Schema.decodeTo(
+        Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((v) => executionsWaitTimeoutSeconds(v))` */,
+        {
+          decode: SchemaGetter.transform((v) =>
+            executionsWaitTimeoutSeconds(v),
+          ),
+          encode: SchemaGetter.forbidden(() => 'decode-only'),
+        },
+      ),
+    )
+    .annotate({
+      description: `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
+    }),
 
   /** Zero-based offset for the /executions listing returned once the wait resolves. */
-  offset: nullishWithDefault(z.int().min(0), 0).describe(
+  offset: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    0,
+  ).describe(
     'Zero-based offset into the executions list returned once the wait resolves (with /executions only).',
   ),
 
   /** Maximum list entries in the /executions listing returned once the wait resolves. */
-  limit: nullishWithDefault(z.int().min(1).max(200), 100).describe(
+  limit: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(200),
+    ),
+    100,
+  ).describe(
     'Max entries in the executions list returned once the wait resolves (with /executions only). Max: 200.',
   ),
 });
 
-const KillActionSchema = z.strictObject({
+const KillActionSchema = Schema.Struct({
   path: PathFieldSchema,
-  action: z
-    .literal('kill')
-    .describe('Terminate a live run by ID (use on /executions/{id}).'),
+  action: Schema.Literal('kill').annotate({
+    description: 'Terminate a live run by ID (use on /executions/{id}).',
+  }),
 });
 
-const SendActionSchema = z.strictObject({
+const SendActionSchema = Schema.Struct({
   path: PathFieldSchema,
-  action: z
-    .literal('send')
-    .describe(
+  action: Schema.Literal('send').annotate({
+    description:
       "Put a message on another run's input (use on /executions/{id}). It is read when that run finishes its current turn; a one-shot run takes none. A reply, if any, arrives as your own follow-up.",
-    ),
-  message: z.string().min(1).describe('The message for the run.'),
+  }),
+  message: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'The message for the run.',
+  }),
 });
 
 // `path` stays required here as on every arm: the provider-facing schema
 // flattens this union and keeps a field required only if every arm requires
 // it (`flattenTopLevelUnion`), so an optional one would loosen all four.
-const QueryActionSchema = z.strictObject({
+const QueryActionSchema = Schema.Struct({
   path: PathFieldSchema,
-  action: z
-    .literal('query')
-    .describe(
+  action: Schema.Literal('query').annotate({
+    description:
       'Run one read-only SQL statement over the run-history views listed in the description (use on /executions).',
-    ),
-  sql: z
-    .string()
-    .min(1)
-    .describe(
+  }),
+  sql: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'One SELECT, WITH, EXPLAIN or VALUES statement; bind values as ?.',
-    ),
-  params: nullishWithDefault(z.array(z.string()), []).describe(
+  }),
+  params: nullishWithDefault(Schema.Array(Schema.String), []).describe(
     'Values for the ? placeholders in sql, in order, bound as text.',
   ),
 });
 
-const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
+const ExecutionsToolActionSchema = Schema.Union([
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
@@ -163,17 +186,7 @@ const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
 // does for a truly omitted key. A genuinely absent key needs no help: Zod
 // already matches that against the one branch whose discriminator accepts
 // undefined.
-export const ExecutionsToolInputSchema = z.preprocess((value) => {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'action' in value &&
-    value.action === null
-  ) {
-    const { action: _null, ...rest } = value;
-    return rest;
-  }
-  return value;
-}, ExecutionsToolActionSchema);
+export const ExecutionsToolInputSchema =
+  ExecutionsToolActionSchema; /* TODO(effect-schema): preprocess; was `z.preprocess((value) => { if ( value && typeof value === 'object' && 'action' in value && value.action === null ) { const { action: _null, ...rest } = value; return rest; } return value; }, ExecutionsToolActionSchema)` */
 
-export type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
+export type ExecutionsToolInput = typeof ExecutionsToolActionSchema.Type;

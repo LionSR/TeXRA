@@ -1,8 +1,10 @@
-import { z } from 'zod';
+import { Effect, Schema, Struct } from 'effect';
 
-export const TokenCountSchema = z.int().nonnegative();
+export const TokenCountSchema = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+);
 
-export const UsageRouteSchema = z.enum([
+export const UsageRouteSchema = Schema.Literals([
   'chatgpt-subscription',
   'xai-subscription',
   'kimi-code-subscription',
@@ -11,7 +13,7 @@ export const UsageRouteSchema = z.enum([
 ]);
 
 /** The route a request's usage is billed through. */
-export type UsageRoute = z.infer<typeof UsageRouteSchema>;
+export type UsageRoute = typeof UsageRouteSchema.Type;
 
 /**
  * The subscription routes a run can decline. A retry the user answered with
@@ -23,24 +25,24 @@ export type UsageRoute = z.infer<typeof UsageRouteSchema>;
  */
 export const DeclinableUsageRouteSchema = UsageRouteSchema.exclude(['api-key']);
 
-export type DeclinableUsageRoute = z.infer<typeof DeclinableUsageRouteSchema>;
+export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 
-export const TokenUsageStatsSchema = z.strictObject({
+export const TokenUsageStatsSchema = Schema.Struct({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
-  cost: z.number().nonnegative(),
-  cacheReadInputTokens: TokenCountSchema.optional(),
-  cacheMissInputTokens: TokenCountSchema.optional(),
-  cacheCreationInputTokens: TokenCountSchema.optional(),
-  reasoningTokens: TokenCountSchema.optional(),
-  usageRoute: UsageRouteSchema.optional(),
+  cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  cacheReadInputTokens: Schema.optional(TokenCountSchema),
+  cacheMissInputTokens: Schema.optional(TokenCountSchema),
+  cacheCreationInputTokens: Schema.optional(TokenCountSchema),
+  reasoningTokens: Schema.optional(TokenCountSchema),
+  usageRoute: Schema.optional(UsageRouteSchema),
   /** The subscription plan that covered this usage, when the route names one
    *  (today only `chatgpt-subscription`). Recorded per usage row so a resumed
    *  run still reports the plan it actually ran on, not today's. */
-  usagePlan: z.string().optional(),
+  usagePlan: Schema.optional(Schema.String),
 });
 
-export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
+export type TokenUsageStats = typeof TokenUsageStatsSchema.Type;
 
 type EmptyUsageStats = Required<
   Omit<TokenUsageStats, 'usageRoute' | 'usagePlan'>
@@ -61,10 +63,8 @@ export function emptyUsageStats(): EmptyUsageStats {
 }
 
 /** The numeric counters of a usage row; the route and plan are not counted. */
-const USAGE_COUNTER_KEYS = TokenUsageStatsSchema.keyof().options.filter(
-  (key): key is Exclude<typeof key, 'usageRoute' | 'usagePlan'> =>
-    key !== 'usageRoute' && key !== 'usagePlan',
-);
+const USAGE_COUNTER_KEYS =
+  TokenUsageStatsSchema /* TODO(effect-schema): keyof; was `.keyof()` */.members; /* TODO(effect-schema): filter; was `.filter((key): key is Exclude<typeof key, 'usageRoute' | 'usagePlan'> => key !== 'usageRoute' && key !== 'usagePlan')` */
 
 /** Whether usage stats are all zeros (effectively empty). */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
@@ -93,14 +93,17 @@ export function sumUsageStats(
 }
 
 /** Extended token usage with per-round deltas. */
-export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
-  elapsedTime: z.number().nonnegative().optional(),
-  toolUseTokens: TokenCountSchema.optional(),
-});
+export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.mapFields(
+  Struct.assign({
+    elapsedTime: Schema.optional(
+      Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+    ),
+    toolUseTokens: Schema.optional(TokenCountSchema),
+  }),
+);
 
-export type ExtendedTokenUsageStats = z.infer<
-  typeof ExtendedTokenUsageStatsSchema
->;
+export type ExtendedTokenUsageStats =
+  (typeof ExtendedTokenUsageStatsSchema)['Type'];
 
 /**
  * Schema for the totals recorded when a run ends.
@@ -109,27 +112,45 @@ export type ExtendedTokenUsageStats = z.infer<
  * calculated per provider (including prompt-cache discounts or creation
  * premiums). No extra adjustments are applied here.
  */
-export const RunUsageTotalsSchema = z.object({
-  firstInputTokens: TokenCountSchema.prefault(0),
-  totalInputTokens: TokenCountSchema.prefault(0),
-  totalOutputTokens: TokenCountSchema.prefault(0),
-  totalCost: z.number().nonnegative().prefault(0),
-  totalCacheReadInputTokens: TokenCountSchema.prefault(0),
-  totalCacheMissInputTokens: TokenCountSchema.prefault(0),
-  totalCacheCreationInputTokens: TokenCountSchema.prefault(0),
-  totalReasoningTokens: TokenCountSchema.prefault(0),
-  totalToolUsePromptTokens: TokenCountSchema.prefault(0),
+export const RunUsageTotalsSchema = Schema.Struct({
+  firstInputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalInputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalOutputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalCacheReadInputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalCacheMissInputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalCacheCreationInputTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalReasoningTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  totalToolUsePromptTokens: TokenCountSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
 });
 
-export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
 
 /** `totals` summed field by field; the first input is the first's. */
 export function sumRunUsageTotals(
   totals: readonly RunUsageTotals[],
 ): RunUsageTotals {
-  const sum = RunUsageTotalsSchema.parse({});
+  const sum = Schema.decodeUnknownSync(RunUsageTotalsSchema)({});
   for (const usage of totals)
-    for (const key of RunUsageTotalsSchema.keyof().options)
+    for (const key of RunUsageTotalsSchema /* TODO(effect-schema): keyof; was `.keyof()` */.members)
       if (key !== 'firstInputTokens') sum[key] += usage[key];
   sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
   return sum;
@@ -137,5 +158,5 @@ export function sumRunUsageTotals(
 
 /** A run's usage before its first turn: every counter at its zero. */
 export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
-  RunUsageTotalsSchema.parse({}),
+  Schema.decodeUnknownSync(RunUsageTotalsSchema)({}),
 );

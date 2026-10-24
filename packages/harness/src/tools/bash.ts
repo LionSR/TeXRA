@@ -1,7 +1,6 @@
-import { Clock, Effect, type Scope } from 'effect';
+import { Clock, Effect, Schema, type Scope } from 'effect';
 
 // Third-party imports
-import { z } from 'zod';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -193,26 +192,26 @@ function toDeliveryExcerpt(
   };
 }
 
-const BashInputSchema = z.strictObject({
-  command: z.string(),
-  description: z
-    .string()
-    .nullish()
-    .describe(
+const BashInputSchema = Schema.Struct({
+  command: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'A short description of what the command does, in 5-10 words (e.g. "Run the unit tests"). It names the call in the transcript and the background task list; execution ignores it.',
-    ),
+  }),
   timeout: nullishWithDefault(
-    z.int().min(1000).max(600_000),
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
+      Schema.isLessThanOrEqualTo(600_000),
+    ),
     BASH_TOOL_DEFAULT_TIMEOUT_MS,
   ).describe(
     'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
   ),
-  run_in_background: nullishWithDefault(z.boolean(), false).describe(
+  run_in_background: nullishWithDefault(Schema.Boolean, false).describe(
     'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete.',
   ),
 });
 
-type BashInput = z.infer<typeof BashInputSchema>;
+type BashInput = typeof BashInputSchema.Type;
 
 /**
  * The child-run strategy for one background shell command: a single terminal

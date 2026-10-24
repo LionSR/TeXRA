@@ -4,8 +4,7 @@
 // so two hosts changing it at once lose nothing and no lock is taken.
 
 // Third-party imports
-import { Effect, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { InstalledPluginSchema, type InstalledPlugin } from '@shared/schemas';
@@ -24,18 +23,18 @@ export type PluginEnv = Pick<SettingsStores, 'globalState'> & {
   readonly globalStorage: string;
 };
 
-const InstalledPluginsSchema = z.array(InstalledPluginSchema);
+const InstalledPluginsSchema = Schema.Array(InstalledPluginSchema);
 
 /** The record as its schema reads it: absent is empty, anything that does
  *  not validate refuses, so a change never writes over it and loses it. */
 function storedRecord(stored: unknown) {
   if (stored === undefined) return Result.succeed([] as InstalledPlugin[]);
-  const parsed = InstalledPluginsSchema.safeParse(stored);
-  return parsed.success
-    ? Result.succeed(parsed.data)
+  const parsed = Schema.decodeUnknownResult(InstalledPluginsSchema)(stored);
+  return Result.isSuccess(parsed)
+    ? Result.succeed(parsed.success)
     : Result.fail(
         new PluginError({
-          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${z.prettifyError(parsed.error)}`,
+          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${parsed.error.message}`,
         }),
       );
 }

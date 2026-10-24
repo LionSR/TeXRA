@@ -1,6 +1,11 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import {
+  Effect,
+  JsonSchema,
+  Result,
+  Schema,
+  SchemaRepresentation,
+} from 'effect';
 
 // Internal imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -20,7 +25,7 @@ import { defineTool } from './core/definition';
 
 type StructuredOutputSchema = {
   readonly jsonSchema: JSONSchemaObject;
-  readonly zodSchema: z.ZodType;
+  readonly zodSchema: Schema.Top;
 };
 
 // A sandbox schema crosses into host Zod compilation via z.fromJSONSchema, so
@@ -146,11 +151,17 @@ function assertSafeSandboxSchema(schema: unknown): void {
  * provider-facing object schema conversion.
  */
 export function normalizeStructuredOutputSchema(
-  input: z.ZodType | Record<string, unknown>,
+  input: Schema.Top | Record<string, unknown>,
 ): StructuredOutputSchema {
-  const fromZod = input instanceof z.ZodType;
+  const fromZod =
+    input instanceof
+    Schema.Unknown; /* TODO(effect-schema): z.ZodType; was `z.ZodType()` */
   if (!fromZod) assertSafeSandboxSchema(input);
-  const zodSchema = fromZod ? input : z.fromJSONSchema(input);
+  const zodSchema = fromZod
+    ? input
+    : SchemaRepresentation.fromJsonSchemaDocument(
+        JsonSchema.fromSchemaDraft2020_12(input),
+      ); /* TODO(effect-schema): fromJSONSchema; was `z.fromJSONSchema(input)` */
   const jsonSchema = convertToolSchema({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     zodSchema,
@@ -177,7 +188,7 @@ export function normalizeStructuredOutputSchema(
  * result is the run's structured output (`RunState.structured`).
  */
 export function buildTerminalTool(
-  input: z.ZodType | Record<string, unknown>,
+  input: Schema.Top | Record<string, unknown>,
 ): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
@@ -197,13 +208,13 @@ export function buildTerminalTool(
             new ToolError('submit_output can only be accepted once per run.'),
           );
         }
-        const parsed = JsonValueSchema.safeParse(input);
-        if (!parsed.success) return Effect.fail(parsed.error);
+        const parsed = Schema.decodeUnknownResult(JsonValueSchema)(input);
+        if (!Result.isSuccess(parsed)) return Effect.fail(parsed.failure);
         captured = true;
         return Effect.succeed<ToolResult>({
           status: 'executed',
           endTurn: true,
-          value: parsed.data,
+          value: parsed.success,
           summary: 'Structured output captured.',
           output: 'Structured output captured.',
         });

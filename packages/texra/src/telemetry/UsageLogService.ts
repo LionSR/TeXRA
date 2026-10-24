@@ -10,10 +10,10 @@ import {
   Layer,
   Queue,
   Schedule,
+  Schema,
   Semaphore,
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
-import { z } from 'zod';
 
 import {
   UsageLog,
@@ -38,23 +38,23 @@ interface UsageLogBatch {
 }
 
 /** The edge function's answer to a batch. */
-const UsageLogResponseSchema = z.discriminatedUnion('success', [
-  z.object({
-    success: z.literal(true),
-    accepted: z.int().nonnegative(),
+const UsageLogResponseSchema = Schema.Union([
+  Schema.Struct({
+    success: Schema.Literal(true),
+    accepted: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
-  z.object({
-    success: z.literal(false),
-    accepted: z.literal(0),
-    error: z.string().optional(),
+  Schema.Struct({
+    success: Schema.Literal(false),
+    accepted: Schema.Literal(0),
+    error: Schema.optional(Schema.String),
     /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
-    errorCode: z.string().optional(),
+    errorCode: Schema.optional(Schema.String),
     /** Only an explicit false permits the client to discard instead of retry. */
-    retryable: z.boolean().optional(),
+    retryable: Schema.optional(Schema.Boolean),
   }),
 ]);
 
-type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
+type UsageLogResponse = typeof UsageLogResponseSchema.Type;
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
@@ -181,10 +181,15 @@ interface RetryBatch {
  * that does not cover the batch. `requeue` is the batch to keep for the
  * retry, or null when it failed before a batch was taken.
  */
-class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
-  readonly reason: string;
-  readonly requeue: RetryBatch | null;
-}> {}
+class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
+  'UsageBatchUndelivered',
+  {
+    reason: Schema.String,
+    requeue: Schema.NullOr(
+      Schema.Unknown /* TODO(effect-schema): error field type RetryBatch; was `RetryBatch` */,
+    ),
+  },
+) {}
 
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
@@ -525,7 +530,7 @@ class UsageLogServiceImpl {
         }),
       );
       const response: UsageLogResponse = yield* Effect.try({
-        try: () => UsageLogResponseSchema.parse(data),
+        try: () => Schema.decodeUnknownSync(UsageLogResponseSchema)(data),
         catch: (error) => undelivered(toErrorMessage(error)),
       });
       if (!response.success) {

@@ -3,7 +3,7 @@
  *
  * Outbound: Backend → Frontend (UPDATE_PROFILE)
  */
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
@@ -16,33 +16,39 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
  * one Models tab control (its rows are catalog rows, `stateSettings.ts`
  * `surfaces.models`) with its runtime `value`.
  */
-const ProviderSettingSchema = z.object({
-  key: z.string(),
-  label: z.string(),
-  description: z.string(),
-  warning: z.string().optional(),
-  warningUrl: z.string().optional(),
-  warningUrlLabel: z.string().optional(),
-  value: z.boolean(),
+const ProviderSettingSchema = Schema.Struct({
+  key: Schema.String,
+  label: Schema.String,
+  description: Schema.String,
+  warning: Schema.optional(Schema.String),
+  warningUrl: Schema.optional(Schema.String),
+  warningUrlLabel: Schema.optional(Schema.String),
+  value: Schema.Boolean,
 });
-export type ProviderSetting = z.infer<typeof ProviderSettingSchema>;
+export type ProviderSetting = typeof ProviderSettingSchema.Type;
 
-const ProviderKeyStatusSchema = z.object({
-  provider: z.string(),
-  displayName: z.string(),
-  status: z.enum(['set', 'env', 'not-set']),
-  customEndpoint: z.string().prefault(''),
-  supportsCustomEndpoint: z.boolean().prefault(false),
-  providerSettings: z.array(ProviderSettingSchema).prefault([]),
+const ProviderKeyStatusSchema = Schema.Struct({
+  provider: Schema.String,
+  displayName: Schema.String,
+  status: Schema.Literals(['set', 'env', 'not-set']),
+  customEndpoint: Schema.String.pipe(
+    Schema.withDecodingDefault(Effect.succeed('')),
+  ),
+  supportsCustomEndpoint: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  providerSettings: Schema.Array(ProviderSettingSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
 });
-export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
+export type ProviderKeyStatus = typeof ProviderKeyStatusSchema.Type;
 
 // ============================================================
 // Outbound message schemas (backend → frontend)
 // ============================================================
 
-export const UpdateProfileMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
-  providerKeyStatuses: z.array(ProviderKeyStatusSchema),
+export const UpdateProfileMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
+  providerKeyStatuses: Schema.Array(ProviderKeyStatusSchema),
 });
-export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
+export type UpdateProfileMessage = typeof UpdateProfileMessageSchema.Type;

@@ -33,10 +33,9 @@
  * section whose text an update changed: nothing a request sends differs
  * from the latest record unrecorded.
  */
-import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Schema, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
@@ -188,7 +187,8 @@ function describedAtFreeze<
         : state.offeredTools?.find((tool) => tool.name === name)?.shown;
     return shown === undefined
       ? undefined
-      : stored(state, shown, z.object({ description: z.string() })).description;
+      : stored(state, shown, Schema.Struct({ description: Schema.String }))
+          .description;
   };
   const definitions = tools.definitions.map((definition) => {
     const describe = tools.registry.get(definition.name)?.describe;
@@ -288,7 +288,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredSkills;
     const listing =
       recordedSkills === null
-        ? AgentSkillsEnabledSchema.parse(
+        ? Schema.decodeUnknownSync(AgentSkillsEnabledSchema)(
             roots.config.get(AGENT_SKILLS_CONFIG_KEY),
           )
         : recordedSkills.length > 0;
@@ -377,7 +377,7 @@ const openStep = Effect.fn('Step.open')(function* (
   const base =
     state.input.system === undefined
       ? openingSystem
-      : stored(state, state.input.system, z.string());
+      : stored(state, state.input.system, Schema.String);
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);

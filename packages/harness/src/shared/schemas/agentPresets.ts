@@ -7,7 +7,7 @@
  * match across built-in and custom sources.
  */
 
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
@@ -19,35 +19,41 @@ const AGENT_MODE_PRESET_ICON_NAMES = [
 ] as const;
 
 /** Schema for a single agent team: its members, by name. */
-export const AgentModePresetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  icon: z.enum(AGENT_MODE_PRESET_ICON_NAMES),
-  agents: z.array(z.string()),
+export const AgentModePresetSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.String,
+  icon: Schema.Enum(AGENT_MODE_PRESET_ICON_NAMES),
+  agents: Schema.Array(Schema.String),
 });
 
-export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
+export type AgentModePreset = typeof AgentModePresetSchema.Type;
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
-  const parsedRecords = z.array(z.unknown()).prefault([]).safeParse(raw);
-  if (!parsedRecords.success) {
+  const parsedRecords = Schema.decodeUnknownResult(
+    Schema.Array(Schema.Unknown).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+    ),
+  )(raw);
+  if (!Result.isSuccess(parsedRecords)) {
     console.warn(
       `[agentPresets] Custom agent teams are not an array; ignoring them for ` +
-        `this read: ${parsedRecords.error.message}`,
+        `this read: ${parsedRecords.failure.message}`,
     );
     return [];
   }
 
-  return parsedRecords.data.flatMap((rawPreset, index) => {
-    const result = AgentModePresetSchema.safeParse(rawPreset);
-    if (result.success) return [result.data];
+  return parsedRecords.success.flatMap((rawPreset, index) => {
+    const result = Schema.decodeUnknownResult(AgentModePresetSchema)(rawPreset);
+    if (Result.isSuccess(result)) return [result.success];
 
-    const name = z.object({ name: z.string() }).safeParse(rawPreset).data?.name;
+    const name = Schema.decodeUnknownResult(
+      Schema.Struct({ name: Schema.String }),
+    )(rawPreset).data.name;
     console.warn(
       `[agentPresets] Ignoring malformed custom agent team ` +
         `${name == null ? `at index ${index}` : `"${name}" (index ${index})`}: ` +
-        result.error.message,
+        result.failure.message,
     );
     return [];
   });

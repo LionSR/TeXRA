@@ -17,8 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, type Layer, Result, Stream } from 'effect';
-import { z } from 'zod';
+import { Effect, type Layer, Result, Schema, Stream } from 'effect';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
@@ -74,7 +73,7 @@ export interface PluginArm {
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;
-  readonly schema: z.ZodType;
+  readonly schema: Schema.Top;
   readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
   /** The kind's own transition rule, checked by the store in the writing
    *  transaction against the aggregate's latest row of the kind (none
@@ -186,7 +185,7 @@ export const defineBuiltinPlugin = <ROut = never>(
   return erase(plugin);
 };
 
-const DisabledToolIdsSchema = z.array(z.string());
+const DisabledToolIdsSchema = Schema.Array(Schema.String);
 
 /**
  * The switch record as stored, checked: the ids the user holds off, or
@@ -199,14 +198,14 @@ export function storedDisabledTools(
   stored: unknown,
 ): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
   if (stored === undefined) return Result.succeed(undefined);
-  const parsed = DisabledToolIdsSchema.safeParse(stored);
-  return parsed.success
-    ? Result.succeed(new Set(parsed.data))
+  const parsed = Schema.decodeUnknownResult(DisabledToolIdsSchema)(stored);
+  return Result.isSuccess(parsed)
+    ? Result.succeed(new Set(parsed.success))
     : Result.fail(
         new StateReadFailed({
           key: GlobalStateKey.DISABLED_TOOLS,
-          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${z.prettifyError(parsed.error)}`,
-          cause: parsed.error,
+          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${parsed.error.message}`,
+          cause: parsed.failure,
         }),
       );
 }

@@ -6,6 +6,7 @@
  * the two, so nothing above it sees a
  * stored turn and nothing below it sees a package type.
  */
+import { Schema } from 'effect';
 import type {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
@@ -18,7 +19,6 @@ import type {
   RemoteOperation,
   TurnResult,
 } from '@texra-ai/llm';
-import type { z } from 'zod';
 
 /**
  * One entry of the history the fold holds: the stored user, tool and system
@@ -46,7 +46,7 @@ export type WithBlobs<Draft> = Draft & {
 
 type Replace<T, R> = Omit<T, keyof R> & R;
 type StoredPayload<K> = Extract<
-  z.output<typeof ModelMessagePayloadSchema>,
+  typeof ModelMessagePayloadSchema.Type,
   { kind: K }
 >;
 
@@ -64,7 +64,7 @@ export type ModelMessagePayload =
     >;
 
 type ContextEditPayload = Replace<
-  z.output<typeof ContextEditPayloadSchema>,
+  typeof ContextEditPayloadSchema.Type,
   { readonly messages: readonly HistoryMessage[] }
 >;
 

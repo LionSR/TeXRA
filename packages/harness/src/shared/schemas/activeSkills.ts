@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /** The most skills a run's catalog keeps per source, and a step lists. */
 export const SKILL_CATALOG_MAX_SKILLS = 200;
@@ -10,7 +10,7 @@ export const ACTIVATED_SKILLS_MAX = 20;
 /** Canonical skill-source scope vocabulary, shared with the skills loader
  *  and the persisted disabled-source setting, so
  *  a scope added here is representable everywhere. */
-export const ActiveSkillSourceScopeSchema = z.enum([
+export const ActiveSkillSourceScopeSchema = Schema.Literals([
   'bundled',
   'user',
   'project',
@@ -18,6 +18,5 @@ export const ActiveSkillSourceScopeSchema = z.enum([
   'custom',
 ]);
 
-export type ActiveSkillSourceScope = z.infer<
-  typeof ActiveSkillSourceScopeSchema
->;
+export type ActiveSkillSourceScope =
+  (typeof ActiveSkillSourceScopeSchema)['Type'];

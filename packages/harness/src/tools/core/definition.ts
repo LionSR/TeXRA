@@ -1,6 +1,5 @@
 // Type imports
-import { Cause, Effect, type Scope } from 'effect';
-import { z, ZodError, type ZodType } from 'zod';
+import { Cause, Effect, Schema, type Scope } from 'effect';
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -77,13 +76,14 @@ export function defineTool<T, R = never>(
   } = def;
   const validate = (rawInput: unknown) =>
     Effect.try({
-      try: () => schema.parse(rawInput),
+      try: () => Schema.decodeUnknownSync(schema)(rawInput),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
-        error instanceof z.core.$ZodAsyncError
+        error instanceof
+        SchemaIssue /* TODO(effect-schema): z.core; was `z.core()` */.$ZodAsyncError
           ? Effect.tryPromise({
-              try: () => schema.parseAsync(rawInput),
+              try: () => Schema.decodeUnknownPromise(schema)(rawInput),
               catch: ensureError,
             })
           : Effect.fail(error),
@@ -115,7 +115,7 @@ export function defineTool<T, R = never>(
             if (error instanceof ZodError) {
               return Effect.succeed<ToolResult>({
                 status: 'error',
-                error: `Invalid input:\n${z.prettifyError(error)}`,
+                error: `Invalid input:\n${error.message}`,
                 diagnostics: {
                   type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
                   formatted: formatZodIssuesForDiagnostics(error.issues),

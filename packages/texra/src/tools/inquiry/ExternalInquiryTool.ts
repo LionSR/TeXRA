@@ -16,8 +16,7 @@
  */
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Cause, Effect } from 'effect';
-import { z } from 'zod';
+import { Cause, Effect, Schema } from 'effect';
 import { defineTool, withLogChannel, type ToolResult } from '@texra-ai/harness';
 import {
   callerRun,
@@ -49,81 +48,89 @@ const CHANNEL = 'InquiryTool';
 // Schemas
 // ============================================================================
 
-const InquiryInputSchema = z.discriminatedUnion('command', [
-  z.looseObject({
-    command: z
-      .literal('ask')
-      .describe(
-        'Dispatch a question to the user (who will consult an external AI model). ' +
+const InquiryInputSchema = Schema.Union([
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('ask').annotate({
+        description:
+          'Dispatch a question to the user (who will consult an external AI model). ' +
           'Returns immediately with {status: "dispatched", thread_id}. ' +
           'Do NOT wait: the answer arrives as a separate [inquiry] continuation message later.',
-      ),
-    question: z
-      .string()
-      .min(1)
-      .describe(
-        'The self-contained question. The external model has NO context from this conversation; ' +
+      }),
+      question: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description:
+          'The self-contained question. The external model has NO context from this conversation; ' +
           'include all definitions, notation, and problem setup directly, and say what kind of ' +
           'answer you need (proof sketch, calculation, reference, etc.).',
+      }),
+      thread_id: Schema.optional(Schema.NullOr(InquiryThreadIdSchema)).annotate(
+        {
+          description:
+            'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
+            'prior Q/A in that thread is preserved and shown to the user. ' +
+            'Passing a thread_id that is still open or dropped will error.',
+        },
       ),
-    thread_id: InquiryThreadIdSchema.nullish().describe(
-      'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
-        'prior Q/A in that thread is preserved and shown to the user. ' +
-        'Passing a thread_id that is still open or dropped will error.',
-    ),
-    context: z
-      .string()
-      .nullish()
-      .describe(
-        'Short note shown to the user explaining why this question is being asked.',
-      ),
-    suggestSearch: z
-      .boolean()
-      .nullish()
-      .describe(
-        'Set true when the external model should enable web search for this question.',
-      ),
-    attachFiles: z
-      .array(z.string())
-      .nullish()
-      .describe(
-        'Workspace-relative paths the user should upload to the external model.',
-      ),
-  }),
-  z.looseObject({
-    command: z
-      .literal('read')
-      .describe(
-        'Read the full untruncated transcript of one inquiry thread. ' +
+      context: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+        description:
+          'Short note shown to the user explaining why this question is being asked.',
+      }),
+      suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+        description:
+          'Set true when the external model should enable web search for this question.',
+      }),
+      attachFiles: Schema.optional(
+        Schema.NullOr(Schema.Array(Schema.String)),
+      ).annotate({
+        description:
+          'Workspace-relative paths the user should upload to the external model.',
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('read').annotate({
+        description:
+          'Read the full untruncated transcript of one inquiry thread. ' +
           'Use this when a [inquiry] continuation truncated content you need, ' +
           'or when revisiting an earlier thread.',
-      ),
-    thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
-  }),
-  z.looseObject({
-    command: z
-      .literal('list')
-      .describe(
-        'Enumerate inquiry threads. Filter by status to find what is still pending, what has been ' +
+      }),
+      thread_id: InquiryThreadIdSchema.annotate({
+        description: 'The thread to read.',
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('list').annotate({
+        description:
+          'Enumerate inquiry threads. Filter by status to find what is still pending, what has been ' +
           'answered, or what was dropped. Useful for self-orientation after multiple wake-ups, ' +
           'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
+      }),
+      status: nullishWithDefault(
+        Schema.Literals(['open', 'answered', 'dropped', 'any']),
+        'open',
+      ).describe(
+        '"open" → awaiting user answer (default: matches the most common need). ' +
+          '"answered" → user has submitted an answer. ' +
+          '"dropped" → user rejected the inquiry. ' +
+          '"any" → all threads regardless of status.',
       ),
-    status: nullishWithDefault(
-      z.enum(['open', 'answered', 'dropped', 'any']),
-      'open',
-    ).describe(
-      '"open" → awaiting user answer (default: matches the most common need). ' +
-        '"answered" → user has submitted an answer. ' +
-        '"dropped" → user rejected the inquiry. ' +
-        '"any" → all threads regardless of status.',
-    ),
-    scope: nullishWithDefault(z.enum(['run', 'all']), 'run').describe(
-      '"run" → only threads belonging to this run; "all" → every run\'s threads.',
-    ),
-  }),
+      scope: nullishWithDefault(
+        Schema.Literals(['run', 'all']),
+        'run',
+      ).describe(
+        '"run" → only threads belonging to this run; "all" → every run\'s threads.',
+      ),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
 ]);
 
-type InquiryInput = z.infer<typeof InquiryInputSchema>;
+type InquiryInput = typeof InquiryInputSchema.Type;
 
 // ============================================================================
 // Read / list subcommand outputs

@@ -3,7 +3,7 @@
  * IPC `command` wrapper so both the outbound and inbound message modules can
  * compose them without a circular import.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   AgentProposalPermissionSchema,
@@ -25,8 +25,8 @@ import { ScriptDeliverySummarySchema } from '../scriptDelivery';
  * the `image-attachment` / `document-attachment` split that
  * `normalizeConversationForExport` turns into export attachment parts.
  */
-export const MediaAttachmentKindSchema = z.enum(['image', 'document']);
-export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
+export const MediaAttachmentKindSchema = Schema.Literals(['image', 'document']);
+export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
 
 /**
  * `userMessage` row payload: attachment kind + count only — never
@@ -39,10 +39,10 @@ export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
  */
-export const UserMessagePayloadSchema = z.object({
-  attachments: z.array(MediaAttachmentKindSchema).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-  scriptSummary: ScriptDeliverySummarySchema.optional(),
+export const UserMessagePayloadSchema = Schema.Struct({
+  attachments: Schema.optional(Schema.Array(MediaAttachmentKindSchema)),
+  mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+  scriptSummary: Schema.optional(ScriptDeliverySummarySchema),
 });
 
 /**
@@ -55,8 +55,8 @@ export const TOOL_CALL_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed',
 } as const;
-export const ToolCallStatusSchema = z.enum(TOOL_CALL_STATUS);
-export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
+export const ToolCallStatusSchema = Schema.Enum(TOOL_CALL_STATUS);
+export type ToolCallStatus = typeof ToolCallStatusSchema.Type;
 
 /**
  * A card a tool states itself instead of one the fold derives from its tool
@@ -64,73 +64,76 @@ export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
  * a turn) shows. Plain data in the generic section kinds every renderer
  * already paints, so the fold stays plugin-agnostic.
  */
-export const ToolCardSchema = z.object({
+export const ToolCardSchema = Schema.Struct({
   /** The row header, in place of the tool's display name. */
-  title: z.string(),
-  sections: z
-    .array(
-      z.discriminatedUnion('kind', [
-        z.object({
-          kind: z.literal('text'),
-          label: z.string(),
-          text: z.string(),
-        }),
-        z.object({
-          kind: z.literal('status'),
-          label: z.string(),
-          status: z.string(),
-        }),
-        z.object({
-          kind: z.literal('identifier'),
-          label: z.string(),
-          value: z.string(),
-        }),
-        z.object({
-          kind: z.literal('badges'),
-          label: z.string(),
-          badges: z.array(z.string()).readonly(),
-        }),
-        z.object({
-          kind: z.literal('fileList'),
-          label: z.string(),
-          files: z
-            .array(z.object({ path: z.string(), note: z.string().optional() }))
-            .readonly(),
-        }),
-      ]),
-    )
-    .readonly(),
+  title: Schema.String,
+  sections: Schema.Array(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('text'),
+        label: Schema.String,
+        text: Schema.String,
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('status'),
+        label: Schema.String,
+        status: Schema.String,
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('identifier'),
+        label: Schema.String,
+        value: Schema.String,
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('badges'),
+        label: Schema.String,
+        badges: Schema.Array(Schema.String),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('fileList'),
+        label: Schema.String,
+        files: Schema.Array(
+          Schema.Struct({
+            path: Schema.String,
+            note: Schema.optional(Schema.String),
+          }),
+        ),
+      }),
+    ]),
+  ),
 });
 /** A card a tool states itself (`ToolCardSchema`). */
-export type ToolCard = z.infer<typeof ToolCardSchema>;
+export type ToolCard = typeof ToolCardSchema.Type;
 
 /**
  * An MCP tool call's output: its status, its structured content, and its
  * content blocks. A server need not emit this shape; the tool row shows
  * output that does not parse as it came.
  */
-export const McpToolOutputSchema = z.object({
-  status: z.string().nullish(),
-  structuredContent: z.unknown().nullish(),
-  contentBlocks: z.array(z.record(z.string(), z.unknown())).nullish(),
+export const McpToolOutputSchema = Schema.Struct({
+  status: Schema.optional(Schema.NullOr(Schema.String)),
+  structuredContent: Schema.optional(Schema.NullOr(Schema.Unknown)),
+  contentBlocks: Schema.optional(
+    Schema.NullOr(Schema.Array(Schema.Record(Schema.String, Schema.Unknown))),
+  ),
 });
 /** The output an MCP tool call reports (`McpToolOutputSchema`). */
-export type McpToolOutput = z.infer<typeof McpToolOutputSchema>;
+export type McpToolOutput = typeof McpToolOutputSchema.Type;
 
-export const ToolUseLogSchema = z.object({
-  toolName: z.string().optional(),
-  input: z.unknown().optional(),
-  output: z.unknown().optional(),
-  summary: z.string().optional(),
-  error: z.string().optional(),
-  userInstruction: z.string().optional(),
+export const ToolUseLogSchema = Schema.Struct({
+  toolName: Schema.optional(Schema.String),
+  input: Schema.optional(Schema.Unknown),
+  output: Schema.optional(Schema.Unknown),
+  summary: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  userInstruction: Schema.optional(Schema.String),
   /** The one spelling of a command row's exit code: the builder that owns the
    *  code states it here, and renderers read it instead of scraping prose. */
-  exitCode: z.int().optional(),
-  status: ToolCallStatusSchema.optional(),
-  card: ToolCardSchema.optional(),
+  exitCode: Schema.optional(Schema.Int),
+  status: Schema.optional(ToolCallStatusSchema),
+  card: Schema.optional(ToolCardSchema),
 });
-export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
+export type ToolUseLog = typeof ToolUseLogSchema.Type;
 
 /**
  * The flat, renderer-friendly tool-use view `normalizeToolUse`
@@ -151,34 +154,37 @@ export type NormalizedToolUse = {
   card?: ToolCard;
 };
 
-export const WebSearchPayloadSchema = z.object({
-  query: z.string().optional(),
+export const WebSearchPayloadSchema = Schema.Struct({
+  query: Schema.optional(Schema.String),
 });
 
 /** What a pending request shows (diff, command, question), never host
  *  handles: the payload of `request.opened`. */
-export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('toolEdit'), data: ToolEditPermissionSchema }),
-  z.object({ kind: z.literal('bash'), data: BashPermissionSchema }),
-  z.object({ kind: z.literal('retry'), data: RetryPermissionSchema }),
-  z.object({
-    kind: z.literal('proposal'),
+export const PermissionPayloadSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('toolEdit'),
+    data: ToolEditPermissionSchema,
+  }),
+  Schema.Struct({ kind: Schema.Literal('bash'), data: BashPermissionSchema }),
+  Schema.Struct({ kind: Schema.Literal('retry'), data: RetryPermissionSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('proposal'),
     data: AgentProposalPermissionSchema,
   }),
-  z.object({
-    kind: z.literal('planApproval'),
+  Schema.Struct({
+    kind: Schema.Literal('planApproval'),
     data: PlanApprovalPermissionSchema,
   }),
-  z.object({
-    kind: z.literal('externalInquiry'),
+  Schema.Struct({
+    kind: Schema.Literal('externalInquiry'),
     data: ExternalInquiryPermissionSchema,
   }),
-  z.object({
-    kind: z.literal('userQuestion'),
+  Schema.Struct({
+    kind: Schema.Literal('userQuestion'),
     data: UserQuestionPermissionSchema,
   }),
 ]);
-export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
+export type PermissionPayload = typeof PermissionPayloadSchema.Type;
 /**
  * The one request kind vocabulary, read off the payload union. The
  * `request.opened` fact and every surface that lists pending requests key

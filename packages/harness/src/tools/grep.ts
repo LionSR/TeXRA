@@ -2,8 +2,7 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
@@ -22,53 +21,62 @@ const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
 type OutputMode = (typeof OUTPUT_MODES)[number];
 
-const GrepInputSchema = z.strictObject({
-  pattern: z.string().min(1, 'pattern is required').describe('Regex pattern.'),
-  path: z.string().nullish().describe('File or directory to search in.'),
-  glob: z
-    .string()
-    .nullish()
-    .describe('Glob filter for file names (e.g. "*.tex").'),
-  output_mode: nullishWithDefault(z.enum(OUTPUT_MODES), 'content').describe(
+const GrepInputSchema = Schema.Struct({
+  pattern: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'Regex pattern.',
+  }),
+  path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'File or directory to search in.',
+  }),
+  glob: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'Glob filter for file names (e.g. "*.tex").',
+  }),
+  output_mode: nullishWithDefault(
+    Schema.Enum(OUTPUT_MODES),
+    'content',
+  ).describe(
     'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
   ),
-  '-B': z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
+  '-B': Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ).annotate({
+    description:
       'Lines of context BEFORE each match (only with output_mode "content").',
-    ),
-  '-A': z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
+  }),
+  '-A': Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ).annotate({
+    description:
       'Lines of context AFTER each match (only with output_mode "content").',
-    ),
-  '-C': z
-    .int()
-    .min(0)
-    .nullish()
-    .describe('Lines of context before AND after each match.'),
-  '-n': z.boolean().nullish().describe('Show line numbers.'),
-  '-i': z.boolean().nullish().describe('Case-insensitive search.'),
-  type: z
-    .string()
-    .nullish()
-    .describe('Ripgrep file type filter (e.g. "tex", "py").'),
-  offset: nullishWithDefault(z.int().min(0), 0).describe(
-    'Skip first N results.',
-  ),
-  head_limit: z.int().min(1).nullish().describe('Limit to first N results.'),
-  multiline: z
-    .boolean()
-    .nullish()
-    .describe('Enable multiline matching (pattern can span lines).'),
-  literal: z.boolean().nullish().describe('Exact string, not regex.'),
+  }),
+  '-C': Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ).annotate({ description: 'Lines of context before AND after each match.' }),
+  '-n': Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Show line numbers.',
+  }),
+  '-i': Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Case-insensitive search.',
+  }),
+  type: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'Ripgrep file type filter (e.g. "tex", "py").',
+  }),
+  offset: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    0,
+  ).describe('Skip first N results.'),
+  head_limit: Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  ).annotate({ description: 'Limit to first N results.' }),
+  multiline: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Enable multiline matching (pattern can span lines).',
+  }),
+  literal: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Exact string, not regex.',
+  }),
 });
 
-export type GrepInput = z.infer<typeof GrepInputSchema>;
+export type GrepInput = typeof GrepInputSchema.Type;
 
 const CHANNEL = 'GrepTool';
 // Pagination and total counts require draining all of ripgrep's output. Keep

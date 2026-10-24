@@ -15,13 +15,14 @@ import {
   Context,
   Data,
   type Effect,
-  type SubscriptionRef,
-  type Result,
   type RcMap,
+  type Result,
+  Schema,
+  SchemaGetter,
   type Stream,
+  type SubscriptionRef,
 } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
-import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
@@ -39,30 +40,40 @@ import type { WithBlobs } from './historyTurns';
 import type { ValueFamily } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
-export const InputHistoryRecordSchema = z.object({
-  at: z.number(),
-  value: z.string(),
+export const InputHistoryRecordSchema = Schema.Struct({
+  at: Schema.Number,
+  value: Schema.String,
 });
-export type InputHistoryRecord = z.infer<typeof InputHistoryRecordSchema>;
+export type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
 export const INPUT_HISTORY_LIMIT = 1000;
 
 /** Only an explicit single-run deletion may replace an unprovable owner. */
-export const DeletionModeSchema = z.enum(['single', 'bulk', 'automatic']);
-export type DeletionMode = z.infer<typeof DeletionModeSchema>;
+export const DeletionModeSchema = Schema.Literals([
+  'single',
+  'bulk',
+  'automatic',
+]);
+export type DeletionMode = typeof DeletionModeSchema.Type;
 
 /** The current claim and existence, independent of historical event writers. */
-export const AggregateStateSchema = z.object({
+export const AggregateStateSchema = Schema.Struct({
   aggregateId: AggregateIdSchema,
   /** The incarnation's durable identity, minted with its first row. */
-  uid: z.uuid(),
-  ownerId: OwnerIdSchema.nullable(),
-  closed: z
-    .union([z.literal(0), z.literal(1)])
-    .transform((value) => value === 1),
-  parentId: AggregateIdSchema.nullable(),
-  startCommit: z.int().positive().nullable(),
+  uid: Schema.String.check(Schema.isUUID()),
+  ownerId: Schema.NullOr(OwnerIdSchema),
+  closed: Schema.Union([Schema.Literal(0), Schema.Literal(1)]).pipe(
+    Schema.decodeTo(
+      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value) => value === 1)` */,
+      {
+        decode: SchemaGetter.transform((value) => value === 1),
+        encode: SchemaGetter.forbidden(() => 'decode-only'),
+      },
+    ),
+  ),
+  parentId: Schema.NullOr(AggregateIdSchema),
+  startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
 });
-export type AggregateState = z.infer<typeof AggregateStateSchema>;
+export type AggregateState = typeof AggregateStateSchema.Type;
 
 /**
  * The current claim on one aggregate, its owner's liveness proved in the same
@@ -99,42 +110,51 @@ const storeFailureMessage = (cause: unknown): string =>
     : toErrorMessage(cause);
 
 /** The database could not be opened, or its schema could not be applied. */
-export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
-  readonly path: string;
-  readonly cause: unknown;
-}> {
+export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()(
+  'DatabaseOpenFailed',
+  {
+    path: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
   override readonly message = storeFailureMessage(this.cause);
 }
 
 /** A batch was rejected whole: no member, sequence or wake level moved. */
-export class DatabaseWriteFailed extends Data.TaggedError(
+export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>()(
   'DatabaseWriteFailed',
-)<{
-  readonly path: string;
-  readonly cause: unknown;
-}> {
+  {
+    path: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
   override readonly message = storeFailureMessage(this.cause);
 }
 
 /** A batch member targets an aggregate this process does not hold open;
  *  nothing was written. Ownership, not the disk, so it is never wrapped in
  *  `DatabaseWriteFailed`. */
-export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
-  readonly aggregateId: AggregateId;
-  /** The holder and closure at refusal time, read in the refusing transaction. */
-  readonly ownerId: OwnerId | null;
-  readonly closed: boolean;
-}> {
+export class DatabaseNotOwner extends Schema.TaggedError<DatabaseNotOwner>()(
+  'DatabaseNotOwner',
+  {
+    aggregateId: AggregateIdSchema,
+
+    /** The holder and closure at refusal time, read in the refusing transaction. */
+    ownerId: Schema.NullOr(OwnerIdSchema),
+    closed: Schema.Boolean,
+  },
+) {
   override readonly message = `${this.aggregateId} is ${this.closed ? 'closed' : `held by ${this.ownerId ?? 'no process'}, not this one`}; nothing was written.`;
 }
 
 /** A claim the deletion policy refuses: its owner is alive, or unproven dead. */
-export class DatabaseClaimRefused extends Data.TaggedError(
+export class DatabaseClaimRefused extends Schema.TaggedError<DatabaseClaimRefused>()(
   'DatabaseClaimRefused',
-)<{
-  readonly ownerId: OwnerId;
-  readonly verdict: 'alive' | 'unprovable';
-}> {
+  {
+    ownerId: OwnerIdSchema,
+    verdict: Schema.Literals(['alive', 'unprovable']),
+  },
+) {
   override readonly message = `Another process (${this.ownerId}) ${this.verdict === 'alive' ? 'holds this run.' : 'may hold this run: it could not be proven to have exited.'}`;
 }
 
@@ -152,10 +172,13 @@ export const heldElsewhereBy = (error: unknown): OwnerId | null => {
 };
 
 /** A query failed or encountered an invalid persisted row. */
-export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
-  readonly path: string;
-  readonly cause: unknown;
-}> {
+export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(
+  'DatabaseReadFailed',
+  {
+    path: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
   override readonly message = storeFailureMessage(this.cause);
 }
 
@@ -171,27 +194,36 @@ export interface SessionStoreMovedAside {
 
 /** The store gate's refusal (`storeGate`): the store holds a kind or version
  *  this build does not read, so it is refused whole. */
-export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
-  readonly type: string;
-  readonly version: number;
-}> {
+export class DatabaseStoreNewer extends Schema.TaggedError<DatabaseStoreNewer>()(
+  'DatabaseStoreNewer',
+  {
+    type: Schema.String,
+    version: Schema.Number,
+  },
+) {
   override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer build wrote them, or a pre-release of a different format. Update to a newer build, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
 
 /** A stored row that does not decode as its kind's shape. */
-export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
-  readonly commit: number;
-  readonly type: string;
-  readonly detail: string;
-}> {
+export class DatabaseRowCorrupt extends Schema.TaggedError<DatabaseRowCorrupt>()(
+  'DatabaseRowCorrupt',
+  {
+    commit: Schema.Number,
+    type: Schema.String,
+    detail: Schema.String,
+  },
+) {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
 }
 
 /** A row an earlier build wrote below the version this one reads: its run cannot open. */
-export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
-  readonly commit: number;
-  readonly type: string;
-}> {
+export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()(
+  'DatabaseRowEarlier',
+  {
+    commit: Schema.Number,
+    type: Schema.String,
+  },
+) {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build; it can't be opened by this one.`;
 }
 
@@ -244,12 +276,13 @@ export interface CurrentValues {
 
 /** A root's session is already open over the other store (persistent or
  *  in memory), which it keeps: an open asking for the other is refused. */
-export class SessionOptionsConflict extends Data.TaggedError(
+export class SessionOptionsConflict extends Schema.TaggedError<SessionOptionsConflict>()(
   'SessionOptionsConflict',
-)<{
-  readonly storage: string;
-  readonly message: string;
-}> {}
+  {
+    storage: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 /** Why a session's root could not be opened: its database or its reads
  *  failed, or it is open over the other store. */

@@ -29,10 +29,9 @@
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
  */
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema, Struct } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
 import * as SchemaIssue from 'effect/SchemaIssue';
-import { z } from 'zod';
 
 import {
   AgentConfigSchema,
@@ -101,18 +100,18 @@ function jsonValue(value: unknown): unknown {
  * parse (defaults and preprocessing included) and fails with the Zod
  * message; the encoded form is the JSON value itself.
  */
-function zodWire<T extends z.ZodType>(
+function zodWire<T extends Schema.Top>(
   schema: T,
-): Schema.declareConstructor<z.output<T>, z.output<T>, readonly []> {
-  return Schema.declareConstructor<z.output<T>, z.output<T>>()(
+): Schema.declareConstructor<T['Type'], T['Type'], readonly []> {
+  return Schema.declareConstructor<T['Type'], T['Type']>()(
     [],
     () => (input, _ast, options) => {
-      const parsed = schema.safeParse(input);
-      return parsed.success
-        ? Effect.succeed(jsonValue(parsed.data) as z.output<T>)
+      const parsed = Schema.decodeUnknownResult(schema)(input);
+      return Result.isSuccess(parsed)
+        ? Effect.succeed(jsonValue(parsed.success) as T['Type'])
         : Effect.fail(
             new SchemaIssue.InvalidValue(
-              { message: z.prettifyError(parsed.error) },
+              { message: parsed.error.message },
               input,
               options,
             ),
@@ -122,31 +121,30 @@ function zodWire<T extends z.ZodType>(
 }
 
 /** What `service.hello` and `texra service status` report. */
-const ServiceInfoSchema = z.object({
-  protocol: z.int().positive(),
+const ServiceInfoSchema = Schema.Struct({
+  protocol: Schema.Int.check(Schema.isGreaterThan(0)),
   /** The build that is serving: the package version. */
-  version: z.string(),
-  pid: z.int().positive(),
+  version: Schema.String,
+  pid: Schema.Int.check(Schema.isGreaterThan(0)),
   /** Where clients connect: the Unix socket path. */
-  socket: z.string(),
-  startedAt: z.int().positive(),
-  clients: z.int().nonnegative(),
+  socket: Schema.String,
+  startedAt: Schema.Int.check(Schema.isGreaterThan(0)),
+  clients: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   /** Tasks this service is running now, across its projects. */
-  running: z.int().nonnegative(),
+  running: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   /** A drain is in progress: no new task starts here. */
-  draining: z.boolean(),
+  draining: Schema.Boolean,
 });
-export type ServiceInfo = z.infer<typeof ServiceInfoSchema>;
+export type ServiceInfo = typeof ServiceInfoSchema.Type;
 
 /** The running service's record, claimed once it listens: where a client
  *  finds it. */
-const ServiceRecordSchema = ServiceInfoSchema.pick({
-  pid: true,
-  protocol: true,
-  version: true,
-  startedAt: true,
-}).extend({ socket: z.string().min(1) });
-export type ServiceRecord = z.infer<typeof ServiceRecordSchema>;
+const ServiceRecordSchema = ServiceInfoSchema.mapFields(
+  Struct.pick(['pid', 'protocol', 'version', 'startedAt']),
+).mapFields(
+  Struct.assign({ socket: Schema.String.check(Schema.isMinLength(1)) }),
+);
+export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's
  *  current values, read and changed under its write lock. */
@@ -157,49 +155,51 @@ export const TEXRA_SERVICE: ValueFamily<ServiceRecord, true> = {
 };
 
 /** One top-level task in `tasks.list`. */
-const TaskSummarySchema = z.object({
+const TaskSummarySchema = Schema.Struct({
   /** The project folder the task works in: what the other procedures take. */
-  workspace: z.string(),
+  workspace: Schema.String,
   runId: RunIdSchema,
-  label: z.string(),
-  description: z.string().nullable(),
-  statusKey: z.enum(RUN_STATUS_KEYS),
+  label: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  statusKey: Schema.Enum(RUN_STATUS_KEYS),
   /** Launch time, ms since the epoch: the list's order. */
-  launchedAt: z.int().positive(),
+  launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
   /** This service runs it now, so it answers approvals and streams text. */
-  live: z.boolean(),
+  live: Schema.Boolean,
 });
-export type TaskSummary = z.infer<typeof TaskSummarySchema>;
+export type TaskSummary = typeof TaskSummarySchema.Type;
 
 /** Why `task.start` or `task.resume` did not reach its run. */
-const TaskFailedSchema = z.object({
-  _tag: z.literal('TaskFailed'),
-  message: z.string(),
+const TaskFailedSchema = Schema.Struct({
+  _tag: Schema.Literal('TaskFailed'),
+  message: Schema.String,
   /** The service already presented it, through the window attached to the
    *  project: the caller does not present it again. */
-  presented: z.boolean().optional(),
+  presented: Schema.optional(Schema.Boolean),
 });
-export type TaskFailed = z.infer<typeof TaskFailedSchema>;
+export type TaskFailed = typeof TaskFailedSchema.Type;
 
 /** Why a task's records have no answer: the service holds no such run in
  *  the project, or its records would not read. */
-const TaskRecordsFailedSchema = z.object({
-  _tag: z.literal('TaskRecordsFailed'),
-  reason: z.enum(['unknownRun', 'unreadable']),
-  message: z.string(),
+const TaskRecordsFailedSchema = Schema.Struct({
+  _tag: Schema.Literal('TaskRecordsFailed'),
+  reason: Schema.Literals(['unknownRun', 'unreadable']),
+  message: Schema.String,
 });
-export type TaskRecordsFailed = z.infer<typeof TaskRecordsFailedSchema>;
+export type TaskRecordsFailed = typeof TaskRecordsFailedSchema.Type;
 
 /** Why the project's state has no answer: the service could not open the
  *  project, or its store refused the read or the write. */
-const ProjectStateFailedSchema = z.object({
-  _tag: z.literal('ProjectStateFailed'),
-  message: z.string(),
+const ProjectStateFailedSchema = Schema.Struct({
+  _tag: Schema.Literal('ProjectStateFailed'),
+  message: Schema.String,
 });
-export type ProjectStateFailed = z.infer<typeof ProjectStateFailedSchema>;
+export type ProjectStateFailed = typeof ProjectStateFailedSchema.Type;
 
 /** A state key's stored value: `value` absent when the key is unset. */
-const StoredStateSchema = z.object({ value: JsonValueSchema.optional() });
+const StoredStateSchema = Schema.Struct({
+  value: Schema.optional(JsonValueSchema),
+});
 
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
@@ -214,7 +214,7 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('tasks.list', {
     /** `all`: every task, for resolving an id; otherwise the newest. */
     payload: { all: Schema.Boolean },
-    success: zodWire(z.array(TaskSummarySchema)),
+    success: zodWire(Schema.Array(TaskSummarySchema)),
   }),
   Rpc.make('task.watch', {
     payload: { workspace, subscribe: zodWire(SubscribeSchema) },
@@ -233,7 +233,7 @@ export const TexraRpcs = RpcGroup.make(
       runId: zodWire(RunIdSchema),
       config: zodWire(AgentConfigSchema),
       /** The chat's previous root: its bypass settings carry over. */
-      continues: zodWire(RunIdSchema.nullable()),
+      continues: zodWire(Schema.NullOr(RunIdSchema)),
       /** Run on the configured helper model (the "fix LaTeX" actions). */
       preferHelperModel: Schema.Boolean,
       /** Replaces a quota-exhausted retry with the user's own API key. */
@@ -243,7 +243,7 @@ export const TexraRpcs = RpcGroup.make(
       approveDelegatedWork: Schema.Boolean,
       /** The policy the launch asked for: one stricter than the project's
        *  narrows this task only; a more permissive one is ignored. */
-      approvalPolicy: zodWire(ApprovalPolicySchema.nullable()),
+      approvalPolicy: zodWire(Schema.NullOr(ApprovalPolicySchema)),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),
@@ -254,7 +254,7 @@ export const TexraRpcs = RpcGroup.make(
     /** The run that resumed: the asked one, or the parent that owns it;
      *  null when something it needs (its agent, a plugin) is missing, so it
      *  stays interrupted. */
-    success: zodWire(RunIdSchema.nullable()),
+    success: zodWire(Schema.NullOr(RunIdSchema)),
     error: zodWire(TaskFailedSchema),
   }),
   /** What a task's current activation ends with, once it ends: its
@@ -264,16 +264,20 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(
-      RunEndSchema.pick({ outcome: true, output: true, error: true }).extend({
-        at: CommitOrdinalSchema,
-      }),
+      RunEndSchema.mapFields(
+        Struct.pick(['outcome', 'output', 'error']),
+      ).mapFields(
+        Struct.assign({
+          at: CommitOrdinalSchema,
+        }),
+      ),
     ),
     error: zodWire(TaskFailedSchema),
   }),
   /** The run's saved setup; null when it saved none. */
   Rpc.make('task.config', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    success: zodWire(AgentConfigSchema.nullable()),
+    success: zodWire(Schema.NullOr(AgentConfigSchema)),
     error: zodWire(TaskRecordsFailedSchema),
   }),
   /** What the HTML transcript export reads: the run's display rows and its
@@ -281,17 +285,19 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.exportTrace', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(
-      z.discriminatedUnion('status', [
-        z.object({
-          status: z.literal('ok'),
+      Schema.Union([
+        Schema.Struct({
+          status: Schema.Literal('ok'),
           // A `TraceDocument`: the run's display rows, in commit order.
-          trace: z.object({
+          trace: Schema.Struct({
             runId: RunIdSchema,
-            events: z.array(DisplaySessionEventSchema),
+            events: Schema.Array(DisplaySessionEventSchema),
           }),
           record: RunRecordFieldsSchema,
         }),
-        z.object({ status: z.enum(['config_missing', 'streamLogs_missing']) }),
+        Schema.Struct({
+          status: Schema.Literals(['config_missing', 'streamLogs_missing']),
+        }),
       ]),
     ),
     error: zodWire(TaskRecordsFailedSchema),
@@ -301,9 +307,9 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.exportInput', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(
-      z.object({
-        config: AgentConfigSchema.nullable(),
-        exportInput: ChatExportInputSchema.nullable(),
+      Schema.Struct({
+        config: Schema.NullOr(AgentConfigSchema),
+        exportInput: Schema.NullOr(ChatExportInputSchema),
       }),
     ),
     error: zodWire(TaskRecordsFailedSchema),
@@ -311,7 +317,7 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('host.attach', {
     payload: {
       workspace,
-      capabilities: zodWire(z.array(HostCapabilitySchema)),
+      capabilities: zodWire(Schema.Array(HostCapabilitySchema)),
     },
     success: zodWire(HostFrameSchema),
     error: zodWire(TaskFailedSchema),
@@ -331,7 +337,7 @@ export const TexraRpcs = RpcGroup.make(
       workspace,
       key: Schema.String,
       next: zodWire(StoredStateSchema),
-      ifCurrent: zodWire(StoredStateSchema.nullable()),
+      ifCurrent: zodWire(Schema.NullOr(StoredStateSchema)),
     },
     success: Schema.Boolean,
     error: zodWire(ProjectStateFailedSchema),

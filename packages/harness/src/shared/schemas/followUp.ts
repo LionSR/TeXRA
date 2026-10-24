@@ -4,7 +4,7 @@
  * parent's or peer's message, a host notice — writes this one shape, so
  * messaging between runs and subagent reporting are the same row.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 
@@ -14,7 +14,7 @@ import { RunIdSchema } from './identifiers';
  * may talk to whom; every run in a project may message every other.
  * `peer` is any run with no ancestor line to the other and no shared parent.
  */
-const RunRelationSchema = z.enum([
+const RunRelationSchema = Schema.Literals([
   'parent',
   'child',
   'ancestor',
@@ -22,7 +22,7 @@ const RunRelationSchema = z.enum([
   'sibling',
   'peer',
 ]);
-export type RunRelation = z.infer<typeof RunRelationSchema>;
+export type RunRelation = typeof RunRelationSchema.Type;
 
 /**
  * Who put the input on the run. A run sender's `relation` is what the sender
@@ -30,21 +30,21 @@ export type RunRelation = z.infer<typeof RunRelationSchema>;
  * lineage as the session view holds it, never taken from the sender: it is
  * the relation as admitted, and a later detach does not rewrite it.
  */
-const FollowUpSenderSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('user') }),
-  z.strictObject({
-    kind: z.literal('run'),
+const FollowUpSenderSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('user') }),
+  Schema.Struct({
+    kind: Schema.Literal('run'),
     runId: RunIdSchema,
     relation: RunRelationSchema,
   }),
   /** A host notice about the run's world (a watched PR's CI or review). It
    *  informs the run and never becomes its instruction. */
-  z.strictObject({
-    kind: z.literal('notification'),
-    source: z.literal('github'),
+  Schema.Struct({
+    kind: Schema.Literal('notification'),
+    source: Schema.Literal('github'),
   }),
 ]);
-export type FollowUpSender = z.infer<typeof FollowUpSenderSchema>;
+export type FollowUpSender = typeof FollowUpSenderSchema.Type;
 
 /**
  * One follow-up as it is queued, taken, and shown. `from` is the provenance
@@ -52,12 +52,12 @@ export type FollowUpSender = z.infer<typeof FollowUpSenderSchema>;
  * a child's delivery envelope is summarized for the transcript. A loop's own
  * maintenance wake is never a follow-up row.
  */
-export const FollowUpContentSchema = z.object({
-  text: z.string(),
+export const FollowUpContentSchema = Schema.Struct({
+  text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
-  displayText: z.string().nullish(),
+  displayText: Schema.optional(Schema.NullOr(Schema.String)),
   /** Media file paths (e.g. pasted images) attached to a user follow-up. */
-  mediaFiles: z.array(z.string()).nullish(),
+  mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   from: FollowUpSenderSchema,
 });
-export type FollowUpContent = z.infer<typeof FollowUpContentSchema>;
+export type FollowUpContent = typeof FollowUpContentSchema.Type;

@@ -2,6 +2,7 @@
 // registered by the time --wa-font-family-body resolves. Geist carries the UI,
 // JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
 // than fetched, since the app must render identically offline.
+import { Effect, Schema } from 'effect';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 
@@ -17,7 +18,6 @@ import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { z } from 'zod';
 import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
@@ -126,7 +126,11 @@ const rendererState: KeyValueStore = {
 const appearance = new PersistedState(
   rendererState,
   'desktop.appearance',
-  z.object({ theme: DesktopThemePreferenceSchema.prefault('system') }),
+  Schema.Struct({
+    theme: DesktopThemePreferenceSchema.pipe(
+      Schema.withDecodingDefault(Effect.succeed('system')),
+    ),
+  }),
 );
 const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 const forcedColors = window.matchMedia('(forced-colors: active)');
@@ -156,7 +160,11 @@ forcedColors.addEventListener('change', applyTheme);
 const persistedShell = new PersistedState(
   rendererState,
   'shell',
-  z.object({ collapsed: z.array(z.string()).prefault([]) }),
+  Schema.Struct({
+    collapsed: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+    ),
+  }),
 );
 let shell: Shell = {
   active: '',

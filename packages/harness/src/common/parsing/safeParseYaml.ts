@@ -1,6 +1,5 @@
-import { Result } from 'effect';
+import { Result, Schema } from 'effect';
 import * as yaml from 'yaml';
-import { type ZodType } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -37,9 +36,9 @@ export function parseYamlWith<T>(
   schema: ZodType<T>,
 ): Result.Result<T, Error> {
   return Result.flatMap(safeParseYaml(text), (value) => {
-    const result = schema.safeParse(value);
-    return result.success
-      ? Result.succeed(result.data)
-      : Result.fail(result.error);
+    const result = Schema.decodeUnknownResult(schema)(value);
+    return Result.isSuccess(result)
+      ? Result.succeed(result.success)
+      : Result.fail(result.failure);
   });
 }

@@ -3,9 +3,8 @@
 import * as path from 'node:path';
 
 import { glob } from 'glob';
-import { ZodError, type z, type ZodIssue } from 'zod';
 
-import { Data, Effect, FileSystem, Result } from 'effect';
+import { Data, Effect, FileSystem, Result, Schema, Struct } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -29,11 +28,14 @@ const CHANNEL = 'agentRegistry';
  * `scanDirectory`'s channel — it exists to be recovered from, and the channel
  * is `never` at the export. Defects (programming errors) stay defects.
  */
-class AgentScanError extends Data.TaggedError('AgentScanError')<{
-  readonly path: string;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class AgentScanError extends Schema.TaggedError<AgentScanError>()(
+  'AgentScanError',
+  {
+    path: Schema.String,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 interface AgentDirectoryScan {
   readonly entries: AgentEntry[];
@@ -75,9 +77,11 @@ export function scanDirectory(
     // A file is the persona's keys plus the blocks the listed plugins own;
     // any other key is refused, as before.
     const { blocks } = yield* ToolRegistry;
-    const fileSchema = AgentDefinitionSchema.extend(
-      Object.fromEntries(
-        [...blocks].map(([key, block]) => [key, block.schema.optional()]),
+    const fileSchema = AgentDefinitionSchema.mapFields(
+      Struct.assign(
+        Object.fromEntries(
+          [...blocks].map(([key, block]) => [key, block.schema.optional()]),
+        ),
       ),
     );
     const issues: AgentScanIssue[] = [];
@@ -181,7 +185,7 @@ function entriesWithUniqueNames(
 function readYamlDefinition(
   yamlPath: string,
   dir: string,
-  fileSchema: z.ZodType<Record<string, unknown>>,
+  fileSchema: Schema.Codec<Record<string, unknown>>,
   blockKeys: readonly string[],
 ): Effect.Effect<ParsedAgentYaml, AgentScanError, FileSystem.FileSystem> {
   const displayPath = path.relative(dir, yamlPath);
@@ -230,7 +234,10 @@ function splitBlocks(
     delete definition[key];
   }
   // The file schema checked these keys already; this reads them typed.
-  return { definition: AgentDefinitionSchema.parse(definition), blocks };
+  return {
+    definition: Schema.decodeUnknownSync(AgentDefinitionSchema)(definition),
+    blocks,
+  };
 }
 
 function formatScanFailure(error: unknown): string {
@@ -259,12 +266,12 @@ function formatSchemaIssue(issue: ZodIssue): string {
  */
 export function agentEntryOf(
   // As written (a file's tools are parsed, an inline persona's are names).
-  definition: z.input<typeof AgentDefinitionSchema>,
+  definition: typeof AgentDefinitionSchema.Encoded,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
   blocks: Readonly<Record<string, unknown>> = {},
 ): AgentEntry {
   const { name, description, basedOn, ...fields } = definition;
-  const persona = PersonaSchema.parse(fields);
+  const persona = Schema.decodeUnknownSync(PersonaSchema)(fields);
   const keys = Object.keys(blocks);
   if (keys.length > 0 && persona.tools.length > 0)
     throw new Error(

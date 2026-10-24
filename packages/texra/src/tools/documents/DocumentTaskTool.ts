@@ -5,8 +5,7 @@
  * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
-import { Effect, Predicate } from 'effect';
-import { z } from 'zod';
+import { Effect, Predicate, Schema } from 'effect';
 
 import { defineTool, type ToolResult, AgentCatalog } from '@texra-ai/harness';
 import {
@@ -24,22 +23,18 @@ import {
 } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
-const DocumentTaskInputSchema = z.strictObject({
-  prompt: z
-    .string()
-    .describe(
+const DocumentTaskInputSchema = Schema.Struct({
+  prompt: Schema.String.annotate({
+    description:
       'The instruction the task follows, in plain prose: what to change and what to keep. Empty for the task as its agent defines it.',
-    ),
-  agentName: z
-    .string()
-    .min(1, 'agentName is required')
-    .describe('The agent whose document task to run.'),
-  model: z
-    .string()
-    .nullish()
-    .describe(
+  }),
+  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'The agent whose document task to run.',
+  }),
+  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'Model reference, `@effort` suffix allowed. Defaults to your current model when available.',
-    ),
+  }),
   inputFiles: fileList('The files it revises, one revised document each.'),
   contextFiles: fileList(
     'Read-only context (guidance, .bib, .sty). Say in the prompt what each is for.',
@@ -48,23 +43,19 @@ const DocumentTaskInputSchema = z.strictObject({
   outputFiles: fileList(
     'Output paths, a subset of `inputFiles`. Empty for the default outputs.',
   ),
-  extractFigures: z
-    .boolean()
-    .nullish()
-    .describe('Attach the figures the input LaTeX includes as media.'),
-  extractTikz: z
-    .boolean()
-    .nullish()
-    .describe('Compile the input LaTeX TikZ figures and attach them.'),
-  reflect: z
-    .boolean()
-    .nullish()
-    .describe(
+  extractFigures: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Attach the figures the input LaTeX includes as media.',
+  }),
+  extractTikz: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description: 'Compile the input LaTeX TikZ figures and attach them.',
+  }),
+  reflect: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
       'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
-    ),
+  }),
   ...CALL_FIELDS,
 });
-type DocumentTaskInput = z.infer<typeof DocumentTaskInputSchema>;
+type DocumentTaskInput = typeof DocumentTaskInputSchema.Type;
 
 const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
@@ -110,13 +101,15 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           documentTaskPatch(
             { ...chosen, agent: key, agentSource: null },
             entry,
-            DocumentTaskOptionsSchema.parse(chosen.options ?? {}),
+            Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
+              chosen.options ?? {},
+            ),
           );
         return patch
           ? { script: patch.script, outputFiles: patch.outputFiles }
           : null;
       },
-      options: DocumentTaskOptionsSchema.parse({
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({
         ...(input.extractFigures != null && {
           autoExtractFigure: input.extractFigures,
         }),

@@ -1,28 +1,29 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
-const AgentKeyListSchema = z.array(z.string().trim().min(1));
+const AgentKeyListSchema = Schema.Array(
+  Schema.Trim.check(Schema.isMinLength(1)),
+);
 
 /**
  * One durable description of how a workspace obtains its visible agents.
  * The discriminant keeps inheritance, the complete catalog, named teams, and
  * exact custom selections distinct instead of overloading absent arrays.
  */
-export const WorkspaceAgentsSelectionSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('inherit') }),
-  z.strictObject({ kind: z.literal('all') }),
-  z.strictObject({
-    kind: z.literal('team'),
-    teamId: z.string().trim().min(1),
+export const WorkspaceAgentsSelectionSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('inherit') }),
+  Schema.Struct({ kind: Schema.Literal('all') }),
+  Schema.Struct({
+    kind: Schema.Literal('team'),
+    teamId: Schema.Trim.check(Schema.isMinLength(1)),
   }),
-  z.strictObject({
-    kind: z.literal('custom'),
+  Schema.Struct({
+    kind: Schema.Literal('custom'),
     agentKeys: AgentKeyListSchema,
   }),
 ]);
 
-export type WorkspaceAgentsSelection = z.infer<
-  typeof WorkspaceAgentsSelectionSchema
->;
+export type WorkspaceAgentsSelection =
+  (typeof WorkspaceAgentsSelectionSchema)['Type'];
 
 /**
  * The custom agents a workspace has hidden. A custom agent is shown unless it
@@ -40,4 +41,4 @@ export const INHERITED_WORKSPACE_AGENTS: WorkspaceAgentsSelection =
 /** Exact delegation catalog attached to a run, independent of durable UI state. */
 export const AgentDelegationScopeSchema = AgentKeyListSchema;
 
-export type AgentDelegationScope = z.infer<typeof AgentDelegationScopeSchema>;
+export type AgentDelegationScope = typeof AgentDelegationScopeSchema.Type;

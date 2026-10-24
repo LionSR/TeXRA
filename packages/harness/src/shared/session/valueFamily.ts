@@ -9,7 +9,7 @@
  * decodes with at the database boundary; a row that no longer decodes fails
  * the read.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { JsonValueSchema, type JsonValue } from '@shared/schemas';
 
@@ -20,7 +20,7 @@ import { JsonValueSchema, type JsonValue } from '@shared/schemas';
  */
 export interface ValueFamily<T, Deletable extends boolean = false> {
   readonly name: string;
-  readonly schema: z.ZodType<T>;
+  readonly schema: Schema.Codec<T>;
   readonly deletable: Deletable;
 }
 
@@ -46,6 +46,6 @@ export const REPO_STATE: ValueFamily<JsonValue, true> = {
  */
 export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> = {
   name: 'workspace-store',
-  schema: z.object({ root: z.string().min(1) }),
+  schema: Schema.Struct({ root: Schema.String.check(Schema.isMinLength(1)) }),
   deletable: false,
 };

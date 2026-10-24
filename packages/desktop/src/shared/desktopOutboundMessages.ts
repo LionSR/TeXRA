@@ -15,7 +15,7 @@
 // renderer's route table, which is typed over it, so no surface opts into stricter unknown-key handling. Keep it that
 // way for new members.
 
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   DesktopCloseDiffMessageSchema,
@@ -41,7 +41,7 @@ import {
   DesktopOpenDocumentMessageSchema,
 } from './desktopWorkspaceMessages.js';
 
-export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
+export const DesktopOutboundMessageSchema = Schema.Union([
   // Editor tree
   DesktopWorkspaceFilesChangedMessageSchema,
   DesktopOpenDocumentMessageSchema,

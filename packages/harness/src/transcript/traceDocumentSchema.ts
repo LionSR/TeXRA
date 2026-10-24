@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   DisplaySessionEventSchema,
@@ -16,19 +16,19 @@ import {
  * no owner, no parent, no checkpoint and no follow-up support, because an
  * exported file has no producer, no siblings and no writable host.
  */
-export const TraceDocumentSchema = z.object({
+export const TraceDocumentSchema = Schema.Struct({
   runId: RunIdSchema,
-  events: z.array(DisplaySessionEventSchema),
+  events: Schema.Array(DisplaySessionEventSchema),
 });
 
-export type TraceDocument = Readonly<z.infer<typeof TraceDocumentSchema>>;
+export type TraceDocument = Readonly<typeof TraceDocumentSchema.Type>;
 
 /** A plugin row kind as an imported trace reads it: a `Plugin` arm. */
 export interface TraceFactArm {
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;
-  readonly schema: z.ZodType;
+  readonly schema: Schema.Top;
   readonly upcasters: readonly unknown[];
 }
 
@@ -71,7 +71,7 @@ export function readTraceFacts(
     const parsed = arm.schema.safeParse(event.value);
     if (!parsed.success)
       throw new Error(
-        `the plugin fact ${name} does not match its schema:\n${z.prettifyError(parsed.error)}`,
+        `the plugin fact ${name} does not match its schema:\n${parsed.error.message}`,
       );
     return true;
   });

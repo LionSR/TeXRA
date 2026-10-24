@@ -3,7 +3,7 @@
  * shell's `openSettings` request can carry a target without pulling the
  * settings-view wire format into the conversation webview.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /**
  * The settings pages in nav order — single source of truth for tab names,
@@ -58,7 +58,7 @@ export type SettingsTarget =
       [P in SettingsTabPanelName]: `${P}/${SettingsSectionName<P>}`;
     }[SettingsTabPanelName];
 
-export const SettingsTargetSchema = z.enum(
+export const SettingsTargetSchema = Schema.Enum(
   SETTINGS_TAB_ORDER.flatMap((page) => [
     page,
     ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),

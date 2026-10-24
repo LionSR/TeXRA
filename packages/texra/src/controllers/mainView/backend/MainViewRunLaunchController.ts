@@ -1,4 +1,4 @@
-import { Effect, absurd } from 'effect';
+import { absurd, Effect, Schema } from 'effect';
 
 import {
   AgentCatalog,
@@ -35,7 +35,6 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
-import type { z } from 'zod';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -86,7 +85,7 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
 
   // A task's options are the form's switches; a chat takes none.
   const optionsResult = task
-    ? DocumentTaskOptionsSchema.safeParse(launch)
+    ? Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(launch)
     : undefined;
   if (optionsResult !== undefined && !optionsResult.success) {
     const issue = optionsResult.error.issues[0];
@@ -223,7 +222,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
  */
 export function launchFormOf(
   config: AgentConfig,
-): Effect.Effect<z.infer<typeof LaunchPatchSchema>, Rejected> {
+): Effect.Effect<typeof LaunchPatchSchema.Type, Rejected> {
   if (config.agentSource === AGENT_SOURCE.INLINE)
     return Effect.fail(
       new Rejected({

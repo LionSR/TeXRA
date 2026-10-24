@@ -14,7 +14,7 @@
  * assigned, `RunCell.append` needs no intra-batch reference resolution, and this
  * module needs no import from `sessionEvent.ts` (which imports it).
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
@@ -31,32 +31,32 @@ import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 
 /* ------------------------------------------------------------------ ids */
 
-const RunFamilySchema = z.enum(['toolUse']);
-export type RunFamily = z.infer<typeof RunFamilySchema>;
+const RunFamilySchema = Schema.Literals(['toolUse']);
+export type RunFamily = typeof RunFamilySchema.Type;
 
 /**
  * One completed provider turn. Runtime-minted when the response row is
  * authored: durable, stable across compaction and branching, and needing no
  * commit resolution. A commit identifies a row; this identifies a response.
  */
-const ResponseIdSchema = z.uuid();
+const ResponseIdSchema = Schema.String.check(Schema.isUUID());
 
 /**
  * One model invocation and its billed attempt. `attempt` increases only for a
  * retry of the same invocation. The package carries no attempt correlation
  * and retries belong to the runtime, so it lives on the row envelope.
  */
-const InvocationRefSchema = z.strictObject({
-  invocationId: z.uuid(),
-  attempt: z.int().positive(),
+const InvocationRefSchema = Schema.Struct({
+  invocationId: Schema.String.check(Schema.isUUID()),
+  attempt: Schema.Int.check(Schema.isGreaterThan(0)),
 });
-export type InvocationRef = z.infer<typeof InvocationRefSchema>;
+export type InvocationRef = typeof InvocationRefSchema.Type;
 
 /** Why an invocation is made: a run's turn, or a compaction's summary,
  *  whose rows record its billed calls and nothing the loop continues from. */
-const InvocationPurposeSchema = z.enum(['turn', 'summary']);
+const InvocationPurposeSchema = Schema.Literals(['turn', 'summary']);
 /** Why an invocation is made, as its attempt rows record it. */
-export type InvocationPurpose = z.infer<typeof InvocationPurposeSchema>;
+export type InvocationPurpose = typeof InvocationPurposeSchema.Type;
 
 /**
  * What follows a failed attempt: another attempt (`retry`, or `unchain`,
@@ -64,23 +64,26 @@ export type InvocationPurpose = z.infer<typeof InvocationPurposeSchema>;
  * the person's answer to the retry request `requestId` (`ask`), the end of
  * the invocation as failed (`stop`) or as a user abort (`cancel`).
  */
-const FailedNextSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('retry') }),
-  z.strictObject({ kind: z.literal('unchain') }),
-  z.strictObject({ kind: z.literal('ask'), requestId: z.string().min(1) }),
-  z.strictObject({ kind: z.literal('stop') }),
-  z.strictObject({ kind: z.literal('cancel') }),
+const FailedNextSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('retry') }),
+  Schema.Struct({ kind: Schema.Literal('unchain') }),
+  Schema.Struct({
+    kind: Schema.Literal('ask'),
+    requestId: Schema.String.check(Schema.isMinLength(1)),
+  }),
+  Schema.Struct({ kind: Schema.Literal('stop') }),
+  Schema.Struct({ kind: Schema.Literal('cancel') }),
 ]);
 /** The move a `failed` row records after its attempt. */
-export type FailedNext = z.infer<typeof FailedNextSchema>;
+export type FailedNext = typeof FailedNextSchema.Type;
 
 /** The canonical call key: `providerCallId`, never null, so a completed
  *  turn cannot carry a call without an identity. */
-const CallIdSchema = z.string().min(1);
+const CallIdSchema = Schema.String.check(Schema.isMinLength(1));
 
 /* ---------------------------------------------------------- run.position */
 
-const PositionAtSchema = z.enum([
+const PositionAtSchema = Schema.Literals([
   'turn.ready',
   'turn.begin',
   'turn.end',
@@ -89,24 +92,26 @@ const PositionAtSchema = z.enum([
   'waiting',
   'halted',
 ]);
-export type PositionAt = z.infer<typeof PositionAtSchema>;
+export type PositionAt = typeof PositionAtSchema.Type;
 
 /** Where the loop stands (`at`, not "step": a step is one model call) and
  *  the turn it stands in: the one record of the loop's position, which the
  *  fold projects to `RunState.phase` and `RunView.position`. */
-export const RunPositionPayloadSchema = z
-  .strictObject({
-    family: RunFamilySchema,
-    at: PositionAtSchema,
-    turn: z.int().nonnegative().nullish(),
-    /** The loop's own terminal word. The canonical terminal fact stays
-     *  `run.end`, which also covers failures before the runtime starts. */
-    outcome: RunOutcomeSchema.nullish(),
-  })
-  .refine(
-    (p) => (p.at === 'halted') === (p.outcome != null),
-    'Only a halted position carries an outcome, and it always carries one.',
-  );
+export const RunPositionPayloadSchema = Schema.Struct({
+  family: RunFamilySchema,
+  at: PositionAtSchema,
+  turn: Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ),
+  /** The loop's own terminal word. The canonical terminal fact stays
+   *  `run.end`, which also covers failures before the runtime starts. */
+  outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
+}).check(
+  Schema.makeFilter((p) => (p.at === 'halted') === (p.outcome != null), {
+    message:
+      'Only a halted position carries an outcome, and it always carries one.',
+  }),
+);
 
 /* ---------------------------------------------------------- model.message */
 
@@ -115,185 +120,192 @@ export const RunPositionPayloadSchema = z
  * rule stay data-only and need no tool registry. One entry per local-call
  * part of the response, in content order.
  */
-const DispatchFactsSchema = z.strictObject({
+const DispatchFactsSchema = Schema.Struct({
   callId: CallIdSchema,
-  toolName: z.string().min(1),
-  lane: z.enum(['parallel', 'barrier', 'own']),
+  toolName: Schema.String.check(Schema.isMinLength(1)),
+  lane: Schema.Literals(['parallel', 'barrier', 'own']),
   /** The tool's replay declaration when the call was committed: a resume
    *  re-runs an unfinished call unasked only when this and the tool's
    *  current declaration both say `safe`. */
-  replay: z.enum(['safe', 'unsafe']),
+  replay: Schema.Literals(['safe', 'unsafe']),
   /** The primary this call duplicates. A duplicate never executes and never
    *  reapplies its primary's effects. */
-  duplicateOf: CallIdSchema.nullable(),
+  duplicateOf: Schema.NullOr(CallIdSchema),
   /** The call's card id, minted with the response: a slow tool's card opens
    *  under it before the call runs, a fast tool's opens and closes with the
    *  settlement, and a resumed settlement closes the same card. */
-  logId: z.string().min(1),
+  logId: Schema.String.check(Schema.isMinLength(1)),
 });
-export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;
+export type DispatchFacts = typeof DispatchFactsSchema.Type;
 
-export const ModelMessagePayloadSchema = z
-  .discriminatedUnion('kind', [
-    /** A billed request is about to leave the process. Carries no history,
-     *  only the address of the rest it sends (`requestContext.ts`). */
-    z.strictObject({
-      kind: z.literal('attempt'),
-      invocation: InvocationRefSchema,
-      purpose: InvocationPurposeSchema,
-      request: Sha256Schema,
-      origin: StoredOriginSchema,
-    }),
-    /** Provider identity observed before completion. */
-    z.strictObject({
-      kind: z.literal('identified'),
-      invocation: InvocationRefSchema,
-      providerResponseId: z.string().min(1),
-    }),
-    /** The attempt failed: what went wrong, in the runtime's own failure
-     *  vocabulary (deliberately not the llm package's `ModelError`), and what
-     *  the invoker does next, decided once here so a resume replays it. */
-    z.strictObject({
-      kind: z.literal('failed'),
-      invocation: InvocationRefSchema,
-      purpose: InvocationPurposeSchema,
-      error: RetryErrorInfoSchema,
-      next: FailedNextSchema,
-    }),
-    /** The commit barrier: the accepted remote operation, committed before
-     *  `observe` is called. `deadlineAtMs` is the limit admitted with the
-     *  submission, never one recomputed from current settings; the package
-     *  produces neither it nor an attempt, so both ride the envelope. */
-    z.strictObject({
-      kind: z.literal('accepted'),
-      invocation: InvocationRefSchema,
-      operation: StoredOperationSchema,
-      deadlineAtMs: z.int().positive(),
-    }),
-    /** A user stop cancelled the accepted operation, as the provider
-     *  confirmed. It retires the operation, so a resume starts a new attempt
-     *  instead of observing work the user stopped. A cancel not confirmed
-     *  leaves no row, and the operation stays observable. */
-    z.strictObject({
-      kind: z.literal('cancelled'),
-      invocation: InvocationRefSchema,
-    }),
+export const ModelMessagePayloadSchema = Schema.Union([
+  /** A billed request is about to leave the process. Carries no history,
+   *  only the address of the rest it sends (`requestContext.ts`). */
+  Schema.Struct({
+    kind: Schema.Literal('attempt'),
+    invocation: InvocationRefSchema,
+    purpose: InvocationPurposeSchema,
+    request: Sha256Schema,
+    origin: StoredOriginSchema,
+  }),
+  /** Provider identity observed before completion. */
+  Schema.Struct({
+    kind: Schema.Literal('identified'),
+    invocation: InvocationRefSchema,
+    providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  }),
+  /** The attempt failed: what went wrong, in the runtime's own failure
+   *  vocabulary (deliberately not the llm package's `ModelError`), and what
+   *  the invoker does next, decided once here so a resume replays it. */
+  Schema.Struct({
+    kind: Schema.Literal('failed'),
+    invocation: InvocationRefSchema,
+    purpose: InvocationPurposeSchema,
+    error: RetryErrorInfoSchema,
+    next: FailedNextSchema,
+  }),
+  /** The commit barrier: the accepted remote operation, committed before
+   *  `observe` is called. `deadlineAtMs` is the limit admitted with the
+   *  submission, never one recomputed from current settings; the package
+   *  produces neither it nor an attempt, so both ride the envelope. */
+  Schema.Struct({
+    kind: Schema.Literal('accepted'),
+    invocation: InvocationRefSchema,
+    operation: StoredOperationSchema,
+    deadlineAtMs: Schema.Int.check(Schema.isGreaterThan(0)),
+  }),
+  /** A user stop cancelled the accepted operation, as the provider
+   *  confirmed. It retires the operation, so a resume starts a new attempt
+   *  instead of observing work the user stopped. A cancel not confirmed
+   *  leaves no row, and the operation stays observable. */
+  Schema.Struct({
+    kind: Schema.Literal('cancelled'),
+    invocation: InvocationRefSchema,
+  }),
+  /**
+   * A completed provider turn, committed once and reused after restart.
+   * `turn` is the storage-owned `StoredTurn`: ordered content, the
+   * complete call list, finish reason and observed token counts, with its
+   * signatures, encrypted reasoning, native evidence and continuation kept
+   * as opaque provider evidence.
+   */
+  Schema.Struct({
+    kind: Schema.Literal('response'),
+    responseId: ResponseIdSchema,
+    invocation: InvocationRefSchema,
+    turn: StoredTurnSchema,
+    calls: Schema.Array(DispatchFactsSchema),
     /**
-     * A completed provider turn, committed once and reused after restart.
-     * `turn` is the storage-owned `StoredTurn`: ordered content, the
-     * complete call list, finish reason and observed token counts, with its
-     * signatures, encrypted reasoning, native evidence and continuation kept
-     * as opaque provider evidence.
+     * The run's priced usage for this turn, stamped by the writer at append
+     * beside `calls`, exactly as the dispatch facts are. `turn.usage` is the
+     * package's observation: token counts only, with no runtime price and
+     * none of the runtime's own accounting metrics. The run's cost is a
+     * runtime fact, so the row carries the `NormalizedUsage` the handler
+     * produced for this invocation and the fold sums it into
+     * `RunState.usage`. `null` only when the invocation produced no
+     * usage at all: an editor turn, or a provider that reported none.
+     * The rows are the only carrier.
      */
-    z.strictObject({
-      kind: z.literal('response'),
-      responseId: ResponseIdSchema,
-      invocation: InvocationRefSchema,
-      turn: StoredTurnSchema,
-      calls: z.array(DispatchFactsSchema).readonly(),
-      /**
-       * The run's priced usage for this turn, stamped by the writer at append
-       * beside `calls`, exactly as the dispatch facts are. `turn.usage` is the
-       * package's observation: token counts only, with no runtime price and
-       * none of the runtime's own accounting metrics. The run's cost is a
-       * runtime fact, so the row carries the `NormalizedUsage` the handler
-       * produced for this invocation and the fold sums it into
-       * `RunState.usage`. `null` only when the invocation produced no
-       * usage at all: an editor turn, or a provider that reported none.
-       * The rows are the only carrier.
-       */
-      usage: NormalizedUsageSchema.nullable(),
-    }),
-    /** The call the app hands a script's run: no model, attempt or usage. */
-    z.strictObject({
-      kind: z.literal('handed-down'),
-      responseId: ResponseIdSchema,
-      call: DispatchFactsSchema,
-      argumentsText: z.string(),
-    }),
-    /**
-     * Canonical messages appended to history, verbatim. When
-     * `sourceResponse` is set the row carries ONLY the settlement group
-     * (and any accompanying user message). The assistant message is derived
-     * by the fold from the pending response's own row, so the paid turn is
-     * stored once on an aggregate that never rewrites and never deletes, and
-     * no partial group or independently appended pending assistant enters
-     * provider history. `input` is what the appended messages change about
-     * what the run answers (a fresh run's opening and a delivery record it
-     * here); `reason` names a message the loop appended itself, so the turn's
-     * policy is read off the rows: `blank-continuation` after a blank turn
-     * that followed a tool result, `final-tool` before the forced turn that
-     * must submit the structured output.
-     */
-    z.strictObject({
-      kind: z.literal('append'),
-      messages: z.array(StoredMessageSchema).min(1).readonly(),
-      sourceResponse: ResponseIdSchema.nullable(),
-      input: RunInputSchema.nullish(),
-      reason: z.enum(['blank-continuation', 'final-tool']).nullish(),
-    }),
-  ])
-  .superRefine((p, ctx) => {
-    if (p.kind !== 'response') return;
-    // The editor arm has no local calls.
-    if (p.turn.kind !== 'http') {
-      if (p.calls.length > 0) {
+    usage: Schema.NullOr(NormalizedUsageSchema),
+  }),
+  /** The call the app hands a script's run: no model, attempt or usage. */
+  Schema.Struct({
+    kind: Schema.Literal('handed-down'),
+    responseId: ResponseIdSchema,
+    call: DispatchFactsSchema,
+    argumentsText: Schema.String,
+  }),
+  /**
+   * Canonical messages appended to history, verbatim. When
+   * `sourceResponse` is set the row carries ONLY the settlement group
+   * (and any accompanying user message). The assistant message is derived
+   * by the fold from the pending response's own row, so the paid turn is
+   * stored once on an aggregate that never rewrites and never deletes, and
+   * no partial group or independently appended pending assistant enters
+   * provider history. `input` is what the appended messages change about
+   * what the run answers (a fresh run's opening and a delivery record it
+   * here); `reason` names a message the loop appended itself, so the turn's
+   * policy is read off the rows: `blank-continuation` after a blank turn
+   * that followed a tool result, `final-tool` before the forced turn that
+   * must submit the structured output.
+   */
+  Schema.Struct({
+    kind: Schema.Literal('append'),
+    messages: Schema.Array(StoredMessageSchema).check(Schema.isMinLength(1)),
+    sourceResponse: Schema.NullOr(ResponseIdSchema),
+    input: Schema.optional(Schema.NullOr(RunInputSchema)),
+    reason: Schema.optional(
+      Schema.NullOr(Schema.Literals(['blank-continuation', 'final-tool'])),
+    ),
+  }),
+]).check(
+  Schema.makeFilter(
+    (p, ctx) => {
+      if (p.kind !== 'response') return;
+      // The editor arm has no local calls.
+      if (p.turn.kind !== 'http') {
+        if (p.calls.length > 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['calls'],
+            message: 'An editor turn dispatches no local calls.',
+          });
+        }
+        return;
+      }
+      const local = p.turn.content.filter((part) => part.kind === 'local-call');
+      if (local.length !== p.calls.length) {
         ctx.addIssue({
           code: 'custom',
           path: ['calls'],
-          message: 'An editor turn dispatches no local calls.',
+          message:
+            'Every local call of the response has exactly one dispatch fact.',
         });
+        return;
       }
-      return;
-    }
-    const local = p.turn.content.filter((part) => part.kind === 'local-call');
-    if (local.length !== p.calls.length) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['calls'],
-        message:
-          'Every local call of the response has exactly one dispatch fact.',
+      const ids = new Set(p.calls.map((c) => c.callId));
+      // A duplicate has a primary to reuse, so it names a call that precedes it
+      // and is not itself a duplicate. Membership in `ids` alone would admit a
+      // call naming itself, which can never settle.
+      const earlierPrimaries = new Set<string>();
+      p.calls.forEach((call, index) => {
+        // Order, identity and tool: a fact that names another tool than the
+        // part it stands for is the one the resume rule would dispatch, so the
+        // provider's requested tool is bound here, not only its call id.
+        if (
+          call.callId !== local[index]?.providerCallId ||
+          call.toolName !== local[index]?.name
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['calls', index],
+            message:
+              'Dispatch facts follow the response call order, identity and tool.',
+          });
+        }
+        if (
+          call.duplicateOf != null &&
+          !earlierPrimaries.has(call.duplicateOf)
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['calls', index, 'duplicateOf'],
+            message:
+              'A duplicate names an earlier non-duplicate call of this same response.',
+          });
+        }
+        if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
       });
-      return;
-    }
-    const ids = new Set(p.calls.map((c) => c.callId));
-    // A duplicate has a primary to reuse, so it names a call that precedes it
-    // and is not itself a duplicate. Membership in `ids` alone would admit a
-    // call naming itself, which can never settle.
-    const earlierPrimaries = new Set<string>();
-    p.calls.forEach((call, index) => {
-      // Order, identity and tool: a fact that names another tool than the
-      // part it stands for is the one the resume rule would dispatch, so the
-      // provider's requested tool is bound here, not only its call id.
-      if (
-        call.callId !== local[index]?.providerCallId ||
-        call.toolName !== local[index]?.name
-      ) {
+      if (ids.size !== p.calls.length) {
         ctx.addIssue({
           code: 'custom',
-          path: ['calls', index],
-          message:
-            'Dispatch facts follow the response call order, identity and tool.',
+          path: ['calls'],
+          message: 'Duplicate call id.',
         });
       }
-      if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['calls', index, 'duplicateOf'],
-          message:
-            'A duplicate names an earlier non-duplicate call of this same response.',
-        });
-      }
-      if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
-    });
-    if (ids.size !== p.calls.length) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['calls'],
-        message: 'Duplicate call id.',
-      });
-    }
-  });
+    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((p, ctx) => { if (p.kind !== 'response') return; // The editor arm has no local calls. if (p.turn.kind !== 'http') { if (p.calls.length > 0) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'An editor turn dispatches no local calls.', }); } return; } const local = p.turn.content.filter((part) => part.kind === 'local-call'); if (local.length !== p.calls.length) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'Every local call of the response has exactly one dispatch fact.', }); return; } const ids = new Set(p.calls.map((c) => c.callId)); // A duplicate has a primary to reuse, so it names a call that precedes it // and is not itself a duplicate. Membership in `ids` alone would admit a // call naming itself, which can never settle. const earlierPrimaries = new Set<string>(); p.calls.forEach((call, index) => { // Order, identity and tool: a fact that names another tool than the // part it stands for is the one the resume rule would dispatch, so the // provider's requested tool is bound here, not only its call id. if ( call.callId !== local[index]?.providerCallId || call.toolName !== local[index]?.name ) { ctx.addIssue({ code: 'custom', path: ['calls', index], message: 'Dispatch facts follow the response call order, identity and tool.', }); } if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) { ctx.addIssue({ code: 'custom', path: ['calls', index, 'duplicateOf'], message: 'A duplicate names an earlier non-duplicate call of this same response.', }); } if (call.duplicateOf == null) earlierPrimaries.add(call.callId); }); if (ids.size !== p.calls.length) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'Duplicate call id.', }); } })` */,
+  ),
+);
 
 /* ----------------------------------------------------------- context.edit */
 
@@ -312,29 +324,32 @@ export const ModelMessagePayloadSchema = z
  * history's check, at write and cold load: a payload cannot see the
  * history it edits.
  */
-export const ContextEditPayloadSchema = z
-  .strictObject({
-    cause: z.enum(['compaction', 'fork']),
-    trigger: z.enum(['context-limit', 'user']).nullable(),
-    base: z.int().positive().nullable(),
-    range: z.strictObject({
-      from: z.int().nonnegative(),
-      to: z.int().nonnegative(),
+export const ContextEditPayloadSchema = Schema.Struct({
+  cause: Schema.Literals(['compaction', 'fork']),
+  trigger: Schema.NullOr(Schema.Literals(['context-limit', 'user'])),
+  base: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+  range: Schema.Struct({
+    from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    to: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  }),
+  messages: Schema.Array(StoredMessageSchema),
+  usage: Schema.NullOr(NormalizedUsageSchema),
+  input: Schema.optional(Schema.NullOr(RunInputSchema)),
+})
+  .check(
+    Schema.makeFilter(({ range }) => range.from <= range.to, {
+      path: ['range'],
+      message: 'An edit range ends before it starts.',
     }),
-    messages: z.array(StoredMessageSchema).readonly(),
-    usage: NormalizedUsageSchema.nullable(),
-    input: RunInputSchema.nullish(),
-  })
-  .refine(({ range }) => range.from <= range.to, {
-    path: ['range'],
-    message: 'An edit range ends before it starts.',
-  })
-  .refine(
-    ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
-    {
-      path: ['trigger'],
-      message: 'A compaction names its trigger, and no other cause has one.',
-    },
+  )
+  .check(
+    Schema.makeFilter(
+      ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
+      {
+        path: ['trigger'],
+        message: 'A compaction names its trigger, and no other cause has one.',
+      },
+    ),
   );
 
 /* ------------------------------------------------------------ script.call */
@@ -345,49 +360,51 @@ export const ContextEditPayloadSchema = z
  * `tool.intent`. A resume replays the script against these rows: the call at
  * `seq` must be this `toolName` with this `input`, or the script diverged.
  */
-export const ScriptCallPayloadSchema = z
-  .strictObject({
-    /** The `script` call of the pending response that issued this one. */
-    scriptCallId: CallIdSchema,
-    /** Issue order inside the script, from 0. */
-    seq: z.int().nonnegative(),
-    /** `<scriptCallId>/<seq>`. */
-    callId: CallIdSchema,
-    toolName: z.string().min(1),
-    input: JsonValueSchema,
-    /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
-    replay: z.enum(['safe', 'unsafe']),
-    logId: z.string().min(1),
-    /** The script's stage, which its calls' cards open under. */
-    stageId: z.string().min(1),
-    /** The guest's latest `phase()` title when it issued the call. */
-    phase: z.string().nullable(),
-  })
-  .refine(
-    (p) => p.callId === `${p.scriptCallId}/${p.seq}`,
-    'A script call is named by its script and its issue order.',
-  );
-export type ScriptCallPayload = z.infer<typeof ScriptCallPayloadSchema>;
+export const ScriptCallPayloadSchema = Schema.Struct({
+  /** The `script` call of the pending response that issued this one. */
+  scriptCallId: CallIdSchema,
+  /** Issue order inside the script, from 0. */
+  seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  /** `<scriptCallId>/<seq>`. */
+  callId: CallIdSchema,
+  toolName: Schema.String.check(Schema.isMinLength(1)),
+  input: JsonValueSchema,
+  /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
+  replay: Schema.Literals(['safe', 'unsafe']),
+  logId: Schema.String.check(Schema.isMinLength(1)),
+  /** The script's stage, which its calls' cards open under. */
+  stageId: Schema.String.check(Schema.isMinLength(1)),
+  /** The guest's latest `phase()` title when it issued the call. */
+  phase: Schema.NullOr(Schema.String),
+}).check(
+  Schema.makeFilter((p) => p.callId === `${p.scriptCallId}/${p.seq}`, {
+    message: 'A script call is named by its script and its issue order.',
+  }),
+);
+export type ScriptCallPayload = typeof ScriptCallPayloadSchema.Type;
 
 /* ------------------------------------------------------------ tool.intent */
 
 /** What issued the call whose body an intent starts: a response's dispatch
  *  facts, or the guest of one of its `script` calls (`script.call`). */
-const ToolIntentOriginSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('response'), responseId: ResponseIdSchema }),
-  z.strictObject({ kind: z.literal('script'), scriptCallId: CallIdSchema }),
+const ToolIntentOriginSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('response'),
+    responseId: ResponseIdSchema,
+  }),
+  Schema.Struct({ kind: Schema.Literal('script'), scriptCallId: CallIdSchema }),
 ]);
 
 /** One call's body starts: committed after its PreToolUse hooks, its guard
  *  and its approval, so before it nothing of the attempt has run and after
  *  it the body may have. */
-export const ToolIntentPayloadSchema = z.strictObject({
+export const ToolIntentPayloadSchema = Schema.Struct({
   origin: ToolIntentOriginSchema,
   callId: CallIdSchema,
   /** Increases only after a re-run decision: a person's, or the replay rule
    *  for a call whose saved and current declarations both say `safe`. An
    *  earlier approval never authorizes another attempt implicitly. */
-  attempt: z.int().positive(),
+  attempt: Schema.Int.check(Schema.isGreaterThan(0)),
 });
 
 /* ------------------------------------------------------------ tool.result */
@@ -397,54 +414,56 @@ export const ToolIntentPayloadSchema = z.strictObject({
  * it. What the call did to the run (the files it edited, that it ran) is
  * folded from these fields, never restated beside them.
  */
-export const ToolResultPayloadSchema = z
-  .strictObject({
-    responseId: ResponseIdSchema,
-    callId: CallIdSchema,
-    attempt: z.int().positive(),
-    /** The fold's key fact: a cancelled call is a disposition, never a
-     *  match on the English prose of an error message. */
-    disposition: z.enum([
-      'executed',
-      'failed',
-      'cancelled',
-      'skipped',
-      'duplicate',
-    ]),
-    duplicateOf: CallIdSchema.nullable(),
-    result: SettledToolResultSchema,
-    attachments: z.array(SettledAttachmentSchema).readonly(),
-  })
-  .superRefine((p, ctx) => {
-    if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['duplicateOf'],
-        message:
-          'A duplicate settlement names its primary, and only a duplicate does.',
-      });
-    }
-    // Both directions. The provider-facing status of the delivered tool group
-    // is derived from `result.status` alone, so a call the run recorded as
-    // failed, cancelled or skipped carrying an executed result is delivered to
-    // the model as a success. A duplicate is the one disposition that copies
-    // its primary's status, whichever that was.
-    if (
-      p.disposition !== 'duplicate' &&
-      (p.disposition === 'executed') !== (p.result.status === 'executed')
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['result'],
-        message:
-          'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
-      });
-    }
-    if (p.disposition === 'duplicate' && p.attachments.length > 0) {
-      ctx.addIssue({
-        code: 'custom',
-        message: "A duplicate never reapplies its primary's effects.",
-      });
-    }
-  });
-export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
+export const ToolResultPayloadSchema = Schema.Struct({
+  responseId: ResponseIdSchema,
+  callId: CallIdSchema,
+  attempt: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The fold's key fact: a cancelled call is a disposition, never a
+   *  match on the English prose of an error message. */
+  disposition: Schema.Literals([
+    'executed',
+    'failed',
+    'cancelled',
+    'skipped',
+    'duplicate',
+  ]),
+  duplicateOf: Schema.NullOr(CallIdSchema),
+  result: SettledToolResultSchema,
+  attachments: Schema.Array(SettledAttachmentSchema),
+}).check(
+  Schema.makeFilter(
+    (p, ctx) => {
+      if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['duplicateOf'],
+          message:
+            'A duplicate settlement names its primary, and only a duplicate does.',
+        });
+      }
+      // Both directions. The provider-facing status of the delivered tool group
+      // is derived from `result.status` alone, so a call the run recorded as
+      // failed, cancelled or skipped carrying an executed result is delivered to
+      // the model as a success. A duplicate is the one disposition that copies
+      // its primary's status, whichever that was.
+      if (
+        p.disposition !== 'duplicate' &&
+        (p.disposition === 'executed') !== (p.result.status === 'executed')
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['result'],
+          message:
+            'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
+        });
+      }
+      if (p.disposition === 'duplicate' && p.attachments.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          message: "A duplicate never reapplies its primary's effects.",
+        });
+      }
+    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((p, ctx) => { if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) { ctx.addIssue({ code: 'custom', path: ['duplicateOf'], message: 'A duplicate settlement names its primary, and only a duplicate does.', }); } // Both directions. The provider-facing status of the delivered tool group // is derived from `result.status` alone, so a call the run recorded as // failed, cancelled or skipped carrying an executed result is delivered to // the model as a success. A duplicate is the one disposition that copies // its primary's status, whichever that was. if ( p.disposition !== 'duplicate' && (p.disposition === 'executed') !== (p.result.status === 'executed') ) { ctx.addIssue({ code: 'custom', path: ['result'], message: 'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.', }); } if (p.disposition === 'duplicate' && p.attachments.length > 0) { ctx.addIssue({ code: 'custom', message: "A duplicate never reapplies its primary's effects.", }); } })` */,
+  ),
+);
+export type ToolResultPayload = typeof ToolResultPayloadSchema.Type;

@@ -3,90 +3,104 @@
 // guest value crosses as JSON text, so neither side ever holds the other's
 // objects.
 
-import { z } from 'zod';
+import { Schema, SchemaGetter } from 'effect';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What the worker is started with: one script and the limits it runs under. */
-export const WorkerInputSchema = z.object({
-  source: z.string(),
+export const WorkerInputSchema = Schema.Struct({
+  source: Schema.String,
   /** Names the realm installs as `tools.<name>(args)`. */
-  tools: z.array(z.string()),
+  tools: Schema.Array(Schema.String),
   /** Names the realm installs as global functions: `name(...args)` issues
    *  an op named `name()` whose input is the argument list. */
-  globals: z.array(z.string()),
-  cpuBudgetMs: z.number().positive(),
+  globals: Schema.Array(Schema.String),
+  cpuBudgetMs: Schema.Number.check(Schema.isGreaterThan(0)),
   /** The QuickJS module the host compiled once, shared with every worker. */
-  wasm: z.instanceof(WebAssembly.Module),
+  wasm: Schema.instanceOf(WebAssembly.Module),
   /** One Int32 the host sets to preempt guest code that never yields. */
-  interrupt: z.instanceof(SharedArrayBuffer),
+  interrupt: Schema.instanceOf(SharedArrayBuffer),
 });
-export type WorkerInput = z.infer<typeof WorkerInputSchema>;
+export type WorkerInput = typeof WorkerInputSchema.Type;
 
 /** One settlement, delivered to the realm in the order the host chooses. */
-export const SettleMessageSchema = z.discriminatedUnion('ok', [
-  z.object({
-    seq: z.int().nonnegative(),
-    ok: z.literal(true),
+export const SettleMessageSchema = Schema.Union([
+  Schema.Struct({
+    seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    ok: Schema.Literal(true),
     /** JSON text of the value; absent resolves the guest's promise with undefined. */
-    json: z.string().optional(),
+    json: Schema.optional(Schema.String),
   }),
-  z.object({
-    seq: z.int().nonnegative(),
-    ok: z.literal(false),
-    name: z.string(),
-    message: z.string(),
+  Schema.Struct({
+    seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    ok: Schema.Literal(false),
+    name: Schema.String,
+    message: Schema.String,
   }),
 ]);
-export type SettleMessage = z.infer<typeof SettleMessageSchema>;
+export type SettleMessage = typeof SettleMessageSchema.Type;
 
 /** JSON text from the realm, parsed into the value it encodes. */
-const JsonText = z.string().transform((text, ctx): unknown => {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch (error) {
-    ctx.issues.push({
-      code: 'custom',
-      input: text,
-      message: `not JSON text: ${toErrorMessage(error)}`,
-    });
-    return z.NEVER;
-  }
-});
+const JsonText = Schema.String.pipe(
+  Schema.decodeTo(
+    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((text, ctx): unknown => { try { return JSON.parse(text) as unknown; } catch (error) { ctx.issues.push({ code: 'custom', input: text, message: `not JSON text: ${toErrorMessage(error)}`, }); return z.NEVER; } })` */,
+    {
+      decode: SchemaGetter.transform((text, ctx): unknown => {
+        try {
+          return JSON.parse(text) as unknown;
+        } catch (error) {
+          ctx.issues.push({
+            code: 'custom',
+            input: text,
+            message: `not JSON text: ${toErrorMessage(error)}`,
+          });
+          return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
+        }
+      }),
+      encode: SchemaGetter.forbidden(() => 'decode-only'),
+    },
+  ),
+);
 
-const IssuedOpSchema = z.object({
+const IssuedOpSchema = Schema.Struct({
   /** Issue order inside the realm, from 0. */
-  seq: z.int().nonnegative(),
-  name: z.string(),
+  seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  name: Schema.String,
   /** The guest's argument, as JSON text on the wire. */
   input: JsonText,
   /** The title of the guest's latest `phase()` call when it issued this. */
-  phase: z.string().nullable(),
+  phase: Schema.NullOr(Schema.String),
 });
 
-const ScriptEndSchema = z.discriminatedUnion('_tag', [
-  z.object({ _tag: z.literal('Returned'), value: JsonText.optional() }),
-  z.object({
-    _tag: z.literal('Threw'),
-    name: z.string(),
-    message: z.string(),
-    stack: z.string().optional(),
+const ScriptEndSchema = Schema.Union([
+  Schema.Struct({
+    _tag: Schema.Literal('Returned'),
+    value: Schema.optional(JsonText),
   }),
-  z.object({ _tag: z.literal('SyntaxError'), message: z.string() }),
-  z.object({ _tag: z.literal('CpuExhausted') }),
-  z.object({ _tag: z.literal('MemoryExhausted') }),
+  Schema.Struct({
+    _tag: Schema.Literal('Threw'),
+    name: Schema.String,
+    message: Schema.String,
+    stack: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal('SyntaxError'),
+    message: Schema.String,
+  }),
+  Schema.Struct({ _tag: Schema.Literal('CpuExhausted') }),
+  Schema.Struct({ _tag: Schema.Literal('MemoryExhausted') }),
 ]);
-export type ScriptEnd = z.output<typeof ScriptEndSchema>;
+export type ScriptEnd = typeof ScriptEndSchema.Type;
 
 /**
  * What one step reports: the ops the guest issued while the job queue
  * drained, in issue order, the tail of the lines it logged (and how many
  * earlier ones the tail dropped), and how it ended if it did.
  */
-export const StepReportSchema = z.object({
-  ops: z.array(IssuedOpSchema),
-  logs: z.array(z.string()),
-  logsDropped: z.int().nonnegative(),
-  end: ScriptEndSchema.optional(),
+export const StepReportSchema = Schema.Struct({
+  ops: Schema.Array(IssuedOpSchema),
+  logs: Schema.Array(Schema.String),
+  logsDropped: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  end: Schema.optional(ScriptEndSchema),
 });
 /** A report as the worker writes it, with guest values still JSON text. */
-export type StepReportWire = z.input<typeof StepReportSchema>;
+export type StepReportWire = typeof StepReportSchema.Encoded;

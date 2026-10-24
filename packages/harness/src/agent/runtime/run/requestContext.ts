@@ -16,9 +16,8 @@
  * before a request leaves the process, that the rows it just committed,
  * read back from the store, rebuild that turn exactly.
  */
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 import {
   JsonObjectSchema,
   ResolvedTurnSchema,
@@ -56,10 +55,10 @@ import type { AgentRunShape } from './AgentRun';
  * ones), less its history and continuation, which the rows below its
  * attempt hold.
  */
-const RecordedRequestSchema = z.strictObject({
-  mode: z.enum(['foreground', 'background']),
-  system: Sha256Schema.nullable(),
-  tools: z.array(Sha256Schema),
+const RecordedRequestSchema = Schema.Struct({
+  mode: Schema.Literals(['foreground', 'background']),
+  system: Schema.NullOr(Sha256Schema),
+  tools: Schema.Array(Sha256Schema),
   /** The resolved controls: tool choice, output limit, storage and every
    *  other parameter the binding (the attempt's `origin`) sent. */
   controls: JsonValueSchema,
@@ -76,9 +75,9 @@ export const chainedContinuation = (state: RunState, origin: ModelOrigin) =>
     ? { continuation: state.continuation }
     : {};
 
-const DeclarationSchema = z.strictObject({
-  name: z.string().min(1),
-  description: z.string(),
+const DeclarationSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
+  description: Schema.String,
   parameters: JsonObjectSchema,
 });
 
@@ -195,7 +194,7 @@ export function contextAt(
     system:
       state.offeredSystem === null
         ? undefined
-        : stored(state, state.offeredSystem, z.string()),
+        : stored(state, state.offeredSystem, Schema.String),
     update: contextUpdate(
       stored(state, state.offeredContext, RunContextSchema),
       context,
@@ -208,8 +207,8 @@ export function contextAt(
 export const stored = <T>(
   state: RunState,
   digest: string,
-  schema: z.ZodType<T>,
-): T => schema.parse(blob(state, digest));
+  schema: Schema.Codec<T>,
+): T => Schema.decodeUnknownSync(schema)(blob(state, digest));
 
 /** One stored blob, verified against its address: a blob that is missing
  *  or does not hash to its digest is a corrupt record. */
@@ -231,7 +230,9 @@ function blob(state: RunState, digest: string): unknown {
 function recordedTurn(state: RunState) {
   const open = state.invocation?.current.sent;
   if (open == null) throw new Error('no sent attempt to rebuild');
-  const recorded = RecordedRequestSchema.parse(blob(state, open.request));
+  const recorded = Schema.decodeUnknownSync(RecordedRequestSchema)(
+    blob(state, open.request),
+  );
   blob(state, recorded.agent);
   return {
     recorded,
@@ -240,10 +241,10 @@ function recordedTurn(state: RunState) {
       mode: recorded.mode,
       ...(recorded.system === null
         ? {}
-        : { system: stored(state, recorded.system, z.string()) }),
+        : { system: stored(state, recorded.system, Schema.String) }),
       messages: state.messages,
       tools: recorded.tools.map((digest) =>
-        DeclarationSchema.parse(blob(state, digest)),
+        Schema.decodeUnknownSync(DeclarationSchema)(blob(state, digest)),
       ),
       controls: recorded.controls,
       ...chainedContinuation(state, open.origin),
@@ -280,7 +281,7 @@ export const admittedTurn = (
 > =>
   Effect.map(providerMessages(state.messages, blobs), (messages) => {
     const { origin, turn } = recordedTurn(state);
-    const admitted = ResolvedTurnSchema.parse({
+    const admitted = Schema.decodeUnknownSync(ResolvedTurnSchema)({
       ...origin,
       ...turn,
       messages,

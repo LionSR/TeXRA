@@ -3,17 +3,17 @@
  * dependency, as the plugin values (`@tools/plugins`), the availability
  * probes and every Tools dashboard read them.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /** Availability of a tool dependency (not a tool call's `ToolCallStatus`). */
-export const ToolDependencyStatusSchema = z.enum([
+export const ToolDependencyStatusSchema = Schema.Literals([
   'available',
   'not-found',
   'unknown',
 ]);
-export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
+export type ToolDependencyStatus = typeof ToolDependencyStatusSchema.Type;
 
-export const ToolCategorySchema = z.enum([
+export const ToolCategorySchema = Schema.Literals([
   'file',
   'latex',
   'academic',
@@ -24,4 +24,4 @@ export const ToolCategorySchema = z.enum([
   'system',
   'ai-agents',
 ]);
-export type ToolCategory = z.infer<typeof ToolCategorySchema>;
+export type ToolCategory = typeof ToolCategorySchema.Type;

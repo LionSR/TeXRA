@@ -7,8 +7,7 @@
  * from its rows and commits them again; none holds state between calls, so
  * a resumed recipe replays against the rows.
  */
-import { Effect, Exit, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, Exit, FileSystem, Schema } from 'effect';
 
 import { defineTool, Settings } from '@texra-ai/harness';
 import {
@@ -57,10 +56,11 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 
 /** A revision of a document task, by its zero-based index. */
-export const RevisionSchema = z
-  .int()
-  .nonnegative()
-  .describe('The revision, from 0, in the order the task runs them.');
+export const RevisionSchema = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).annotate({
+  description: 'The revision, from 0, in the order the task runs them.',
+});
 
 /** The documents of the run the calling tool `tool` serves. */
 export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
@@ -163,12 +163,11 @@ export const DocumentContextTool = defineTool({
   scriptReturns:
     '{ prompt: string; mediaFiles: string[]; memories: string[]; revisions: number; reflect: boolean }',
   replay: 'safe',
-  schema: z.strictObject({
+  schema: Schema.Struct({
     revision: RevisionSchema,
-    critique: z
-      .string()
-      .nullish()
-      .describe("The critic's review of the last revision."),
+    critique: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+      description: "The critic's review of the last revision.",
+    }),
   }),
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
@@ -239,9 +238,9 @@ export const DocumentExtractTool = defineTool({
     "Take the documents out of the reply a revision's agent run gave (`run`, the run id `agent()` resolved with): they become the revision's output files, with their lineage and diff stats. Resolves to `{ files, missing }`: `missing` names the expected files the revision lacks, and `<unextracted document N>` for each document its reply held that did not extract.",
   scriptReturns: '{ files: string[]; missing: string[] }',
   replay: 'safe',
-  schema: z.strictObject({
+  schema: Schema.Struct({
     revision: RevisionSchema,
-    run: RunIdSchema.describe("The revision's agent run."),
+    run: RunIdSchema.annotate({ description: "The revision's agent run." }),
   }),
   execute: Effect.fn('document_extract')(function* ({ revision, run }) {
     const docs = yield* documentsOfCall('document_extract');
@@ -333,7 +332,7 @@ export const DocumentCompileTool = defineTool({
   scriptReturns:
     '{ failures: { output: string; log: string }[]; checked: boolean }',
   replay: 'safe',
-  schema: z.strictObject({ revision: RevisionSchema }),
+  schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_compile');
     const { roots, fileService, logger } = docs.deps;
@@ -389,7 +388,7 @@ export const DocumentDiffTool = defineTool({
   scriptReturns:
     '{ diffs: string[]; failed: { document: string; error: string }[]; notRun: string | null }',
   replay: 'safe',
-  schema: z.strictObject({ revision: RevisionSchema }),
+  schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_diff')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_diff');
     const outputs = docs.state.rounds.get(revision)?.outputs ?? [];
@@ -452,7 +451,7 @@ export const DocumentProposeTool = defineTool({
     "End the document task: propose the outputs of its latest revision that wrote any for the user to accept, with their diffs against the documents they started from. Fails, naming the failed outputs, when that revision did not compile and failed compiles are rejected. Resolves to `{ files, documents }`: the proposed files and every revision's documents with the proposed ones' diffs, which the task's run ends with.",
   scriptReturns: '{ files: string[]; documents: unknown }',
   replay: 'safe',
-  schema: z.strictObject({}),
+  schema: Schema.Struct({}),
   execute: Effect.fn('document_propose')(function* () {
     const docs = yield* documentsOfCall('document_propose');
     const rounds = roundsToPersisted(docs.state);

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   CompactionActivityDataSchema,
@@ -12,9 +12,12 @@ import {
   WebSearchPayloadSchema,
 } from './progressView/data';
 
-const StreamingTextDataSchema = z.looseObject({
-  status: z.enum(['running', 'completed']).optional(),
-});
+const StreamingTextDataSchema = Schema.StructWithRest(
+  Schema.Struct({
+    status: Schema.optional(Schema.Literals(['running', 'completed'])),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
 /**
  * The payload contract of a durable `log` row, one per `messageType`. The
@@ -22,26 +25,28 @@ const StreamingTextDataSchema = z.looseObject({
  * schema rejects becomes a visible error row, never a cast.
  */
 const LOG_PAYLOAD_SCHEMAS = {
-  [MESSAGE_TYPES.THINKING]: StreamingTextDataSchema.optional(),
-  [MESSAGE_TYPES.SCRATCHPAD]: StreamingTextDataSchema.optional(),
-  [MESSAGE_TYPES.FILE_LIST]: z.array(FileListEntrySchema),
+  [MESSAGE_TYPES.THINKING]: Schema.optional(StreamingTextDataSchema),
+  [MESSAGE_TYPES.SCRATCHPAD]: Schema.optional(StreamingTextDataSchema),
+  [MESSAGE_TYPES.FILE_LIST]: Schema.Array(FileListEntrySchema),
   // Passthrough: a tool's extra fields (e.g. `files`) are forwarded as-is.
-  [MESSAGE_TYPES.TOOL_USE]: ToolUseLogSchema.loose(),
+  [MESSAGE_TYPES.TOOL_USE]: Schema.StructWithRest(ToolUseLogSchema, [
+    Schema.Record(Schema.String, Schema.Unknown),
+  ]),
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,
-  [MESSAGE_TYPES.MODEL_RESPONSE]: StreamingTextDataSchema.optional(),
-  [MESSAGE_TYPES.USER_MESSAGE]: UserMessagePayloadSchema.optional(),
-  [MESSAGE_TYPES.PROGRESS_STATUS]: z.unknown().optional(),
+  [MESSAGE_TYPES.MODEL_RESPONSE]: Schema.optional(StreamingTextDataSchema),
+  [MESSAGE_TYPES.USER_MESSAGE]: Schema.optional(UserMessagePayloadSchema),
+  [MESSAGE_TYPES.PROGRESS_STATUS]: Schema.optional(Schema.Unknown),
   [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
-  [MESSAGE_TYPES.ERROR]: ErrorLogDataSchema.optional(),
+  [MESSAGE_TYPES.ERROR]: Schema.optional(ErrorLogDataSchema),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
-  [MESSAGE_TYPES.DEFAULT]: z.unknown().optional(),
-} satisfies Record<MessageType, z.ZodType>;
+  [MESSAGE_TYPES.DEFAULT]: Schema.optional(Schema.Unknown),
+} satisfies Record<MessageType, Schema.Top>;
 
 /** A decoded `log` row payload, discriminated by its message type. */
 export type LogPayload = {
   [K in MessageType]: {
     readonly messageType: K;
-    readonly data: z.output<(typeof LOG_PAYLOAD_SCHEMAS)[K]>;
+    readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Type'];
   };
 }[MessageType];
 

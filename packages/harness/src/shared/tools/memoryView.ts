@@ -1,18 +1,18 @@
 /** One memory file, as the memory tool lists it and every host's memory
  *  view shows it. */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
-export const MemoryViewItemSchema = z.object({
-  displayPath: z.string(),
-  storagePath: z.string(),
-  size: z.number(),
-  mtime: z.string(),
-  lineCount: z.number().optional(),
-  preview: z.string().optional(),
-  previewError: z.boolean().optional(),
+export const MemoryViewItemSchema = Schema.Struct({
+  displayPath: Schema.String,
+  storagePath: Schema.String,
+  size: Schema.Number,
+  mtime: Schema.String,
+  lineCount: Schema.optional(Schema.Number),
+  preview: Schema.optional(Schema.String),
+  previewError: Schema.optional(Schema.Boolean),
   /** Agent that last modified this file (from frontmatter attribution). */
-  modifiedBy: z.string().optional(),
+  modifiedBy: Schema.optional(Schema.String),
   /** Whether this memory is pinned as a core long-term insight. */
-  pinned: z.boolean().optional(),
+  pinned: Schema.optional(Schema.Boolean),
 });
-export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
+export type MemoryViewItem = typeof MemoryViewItemSchema.Type;

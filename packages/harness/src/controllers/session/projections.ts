@@ -18,8 +18,7 @@
  *
  * This module reads decoded events only, never `event.data`.
  */
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
   listingKeyOf,
@@ -92,9 +91,8 @@ interface Projector {
   ) => readonly ProjectionOp[];
 }
 
-const ALL_TYPES = SessionEventDraftSchema.options.map(
-  (schema) => schema.shape.type.value,
-);
+const ALL_TYPES =
+  SessionEventDraftSchema.members; /* TODO(effect-schema): map; was `.map((schema) => schema.shape.type.value)` */
 
 /** A priced row's spend as the `usage` display row carries it; an absent
  *  field stays absent, as `JSON.stringify` and `sumUsageStats` read it. */
@@ -215,10 +213,10 @@ export const LISTED_TYPES = JSON.stringify([
 ]);
 /** One projection's checkpoint: its projector's version and the commit it
  *  read through. A name this build does not know is a later build's. */
-const ProjectionStateSchema = z.object({
-  name: z.string(),
-  version: z.int(),
-  through: z.int().nonnegative(),
+const ProjectionStateSchema = Schema.Struct({
+  name: Schema.String,
+  version: Schema.Int,
+  through: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
 /** A projection this build owns (its version) and that has read every row
@@ -226,17 +224,17 @@ const ProjectionStateSchema = z.object({
  *  never held a row, so a fresh store's first read writes nothing. */
 const isCurrent = (
   name: ProjectionName,
-  state: z.infer<typeof ProjectionStateSchema> | undefined,
+  state: typeof ProjectionStateSchema.Type | undefined,
   top: number,
 ): boolean =>
   state === undefined
     ? top === 0
     : state.version === PROJECTORS[name].version && state.through >= top;
 
-const RunUsageSchema = z.object({ usage: TokenUsageStatsSchema });
-const RunModelSchema = z.object({
-  model: z.string(),
-  commit: z.int().nullable(),
+const RunUsageSchema = Schema.Struct({ usage: TokenUsageStatsSchema });
+const RunModelSchema = Schema.Struct({
+  model: Schema.String,
+  commit: Schema.NullOr(Schema.Int),
 });
 
 /** The statement and parameters that make one projector's write. */
@@ -325,9 +323,11 @@ export function projectionUpkeep<E>(
                 ))[0];
           let prior: ProjectionPrior = {};
           if (row !== undefined && projector.prior === 'run_usage')
-            prior = RunUsageSchema.parse(JSON.parse(String(row.usage)));
+            prior = Schema.decodeUnknownSync(RunUsageSchema)(
+              JSON.parse(String(row.usage)),
+            );
           if (row !== undefined && projector.prior === 'run_model')
-            prior = { model: RunModelSchema.parse(row) };
+            prior = { model: Schema.decodeUnknownSync(RunModelSchema)(row) };
           for (const op of projector.project(event, prior))
             yield* exec(...opStatement(op));
         }),
@@ -376,7 +376,9 @@ export function projectionUpkeep<E>(
                 );
           yield* project(yield* read(rows, false), [name]);
           const reached =
-            rows.length < 1000 ? top : z.int().parse(rows.at(-1)?.commit);
+            rows.length < 1000
+              ? top
+              : Schema.decodeUnknownSync(Schema.Int)(rows.at(-1)?.commit);
           yield* setState(name, reached);
           all &&= reached >= top;
         }

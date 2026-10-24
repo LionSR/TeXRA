@@ -7,7 +7,7 @@
  * union, and the inbound (webview → backend) message union plus their
  * dispatchers.
  */
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
@@ -67,8 +67,8 @@ export {
 } from './profileViewMessages';
 
 /** Outbound schema to switch tabs, addressed by page or `page/section`. */
-const SetTabMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
+const SetTabMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
   tab: SettingsTargetSchema,
 });
 
@@ -112,10 +112,10 @@ export type DerivedSettingsSnapshot =
  * boundary, so both directions address a setting the same way.
  */
 function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
-  return z.object({
-    command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT),
-    snapshot: z.literal(snapshot),
-    values: z.strictObject(
+  return Schema.Struct({
+    command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT),
+    snapshot: Schema.Literal(snapshot),
+    values: Schema.Struct(
       Object.fromEntries(
         TEXRA_SETTINGS.snapshotEntries(snapshot).map((entry) => [
           entry.key,
@@ -130,7 +130,7 @@ const [firstDerivedSnapshot, ...otherDerivedSnapshots] =
   DERIVED_SETTINGS_SNAPSHOTS;
 
 /** Outbound: backend → frontend catalog-derived snapshot, keyed by `snapshot`. */
-const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
+const UpdateSettingsSnapshotMessageSchema = Schema.Union([
   snapshotMessage(firstDerivedSnapshot),
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
@@ -138,37 +138,34 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
 // ==================== Agent selection data schema ====================
 
 /** Agent selection data for the settings view: one catalog agent. */
-const AgentSelectionItemSchema = z.object({
+const AgentSelectionItemSchema = Schema.Struct({
   /** Its catalog name: its own, or `<plugin>:<name>` for an installed
    *  plugin's agent. */
-  name: z
-    .string()
-    .trim()
-    .min(1)
-    .regex(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u, {
-      message:
-        'Agent names must be identifiers (letters, numbers, underscores, or hyphens), optionally after a plugin name and a colon.',
-    }),
+  name: Schema.Trim.check(Schema.isMinLength(1)).check(
+    Schema.isPattern(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u),
+  ),
   /** Its file has a `task:` block: it is also launchable as a document task. */
-  hasTask: z.boolean(),
-  description: z.string().optional(),
+  hasTask: Schema.Boolean,
+  description: Schema.optional(Schema.String),
   source: AgentSourceSchema,
-  filePath: z.string().optional(),
-  tools: z.array(z.string()).optional(),
+  filePath: Schema.optional(Schema.String),
+  tools: Schema.optional(Schema.Array(Schema.String)),
   /**
    * On a customized copy: the source of the bundled agent it overrides, when
    * an update changed that agent since the copy was taken.
    */
-  newerBuiltIn: AgentSourceSchema.optional(),
-  enabled: z.boolean(),
+  newerBuiltIn: Schema.optional(AgentSourceSchema),
+  enabled: Schema.Boolean,
 });
-export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
+export type AgentSelectionItem = typeof AgentSelectionItemSchema.Type;
 
 /** Outbound: backend → frontend agent selection data */
-const UpdateAgentSelectionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
-  agents: z.array(AgentSelectionItemSchema),
-  customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
+const UpdateAgentSelectionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
+  agents: Schema.Array(AgentSelectionItemSchema),
+  customAgentIssues: Schema.Array(AgentScanIssueSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
 });
 
 // ==================== Model selection data schema ====================
@@ -203,69 +200,70 @@ type AssertNever<T extends never> = T;
 export const MODEL_SOURCE_ORDER: readonly string[] =
   Object.freeze(MODEL_SOURCES);
 
-const ModelSelectionItemSchema = z.object({
-  name: z.string(),
-  label: z.string(),
-  provider: z.string(),
-  enabled: z.boolean(),
-  deprecated: z.boolean(),
-  contextWindow: z.string().optional(),
-  cost: z.string().optional(),
+const ModelSelectionItemSchema = Schema.Struct({
+  name: Schema.String,
+  label: Schema.String,
+  provider: Schema.String,
+  enabled: Schema.Boolean,
+  deprecated: Schema.Boolean,
+  contextWindow: Schema.optional(Schema.String),
+  cost: Schema.optional(Schema.String),
   /** Whether this model supports user-configurable reasoning effort. */
-  supportsReasoningLevel: z.boolean().optional(),
+  supportsReasoningLevel: Schema.optional(Schema.Boolean),
   /** The model's default reasoning level from its static config. */
-  defaultReasoningLevel: ReasoningEffortSchema.optional(),
+  defaultReasoningLevel: Schema.optional(ReasoningEffortSchema),
   /** The user's chosen reasoning level override (undefined = use default). */
-  reasoningLevel: ReasoningEffortSchema.optional(),
+  reasoningLevel: Schema.optional(ReasoningEffortSchema),
   /** Exact registry-declared effort vocabulary for this model. */
-  supportedReasoningLevels: z.array(ReasoningEffortSchema).optional(),
+  supportedReasoningLevels: Schema.optional(
+    Schema.Array(ReasoningEffortSchema),
+  ),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
-  isFast: z.boolean().optional(),
+  isFast: Schema.optional(Schema.Boolean),
   /** Whether this model's API pricing earns the premium warning (price-based). */
-  isExpensive: z.boolean().optional(),
+  isExpensive: Schema.optional(Schema.Boolean),
   // Resolved once by modelOptionsFrom and carried verbatim so the
   // Models tab renders availability without re-deriving it at render time.
-  ...ModelAvailabilityFieldsSchema.shape,
+  ...ModelAvailabilityFieldsSchema.fields,
 });
-export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
+export type ModelSelectionItem = typeof ModelSelectionItemSchema.Type;
 
 /**
  * One discovered Copilot access route, keyed by the canonical base model id
  * (#9635). The Models tab Copilot section renders route status from this list
  * — routes are transports for base models, never picker rows of their own.
  */
-const CopilotRouteInfoSchema = z.object({
-  name: z.string(),
-  label: z.string(),
-  access: z.enum(['allowed', 'consent-required', 'unavailable']),
+const CopilotRouteInfoSchema = Schema.Struct({
+  name: Schema.String,
+  label: Schema.String,
+  access: Schema.Literals(['allowed', 'consent-required', 'unavailable']),
   /** Whether the user has chosen this route for the base model (#9635). */
-  preferred: z.boolean(),
+  preferred: Schema.Boolean,
 });
-export type CopilotRouteInfo = z.infer<typeof CopilotRouteInfoSchema>;
+export type CopilotRouteInfo = typeof CopilotRouteInfoSchema.Type;
 
 /** Outbound: backend → frontend model selection data */
-const UpdateModelSelectionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
-  models: z.array(ModelSelectionItemSchema),
-  helperModel: z.string(),
+const UpdateModelSelectionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
+  models: Schema.Array(ModelSelectionItemSchema),
+  helperModel: Schema.String,
   /** Whether the user prefers short (unpinned) model names. */
-  preferShortModelNames: z.boolean(),
+  preferShortModelNames: Schema.Boolean,
   /** Discovered Copilot routes and their editor-reported access state. */
-  copilotModels: z.array(CopilotRouteInfoSchema),
+  copilotModels: Schema.Array(CopilotRouteInfoSchema),
 });
-export type UpdateModelSelectionMessage = z.infer<
-  typeof UpdateModelSelectionMessageSchema
->;
+export type UpdateModelSelectionMessage =
+  (typeof UpdateModelSelectionMessageSchema)['Type'];
 
 // ============================================================
 // Custom agent directory data schema
 // ============================================================
 
 /** Outbound: backend → frontend custom agent directory info */
-const UpdateCustomAgentDirMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR),
-  path: z.string(),
-  isDefault: z.boolean(),
+const UpdateCustomAgentDirMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR),
+  path: Schema.String,
+  isDefault: Schema.Boolean,
 });
 
 // ============================================================
@@ -273,21 +271,25 @@ const UpdateCustomAgentDirMessageSchema = z.object({
 // ============================================================
 
 /** Outbound: backend → frontend agent teams (built-in + custom) */
-const UpdateAgentModePresetsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
-  customPresets: z.array(AgentModePresetSchema),
+const UpdateAgentModePresetsMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
+  customPresets: Schema.Array(AgentModePresetSchema),
   /**
    * Agent names that can lead a team (carry delegation tools), computed from
    * the agent registry so preset cards badge orchestrators by capability
    * instead of guessing from the agent's name.
    */
-  orchestratorAgents: z.array(z.string()).prefault([]),
+  orchestratorAgents: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /**
    * The team the workspace agents currently resolves to, or null when it runs
    * no team. Owned by the workspace agents so a preset card reports the applied team
    * rather than the last one the user clicked.
    */
-  activePresetId: z.string().nullable().prefault(null),
+  activePresetId: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
 
 // ============================================================
@@ -295,42 +297,56 @@ const UpdateAgentModePresetsMessageSchema = z.object({
 // ============================================================
 
 /** One tool a dashboard card groups, by name. */
-const ToolInfoSchema = z.object({
-  name: z.string(),
+const ToolInfoSchema = Schema.Struct({
+  name: Schema.String,
 });
 
 /** One setup action exposed by a tool dashboard card. */
-const ToolInstallActionSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('guide'), text: z.string().min(1) }),
-  z.strictObject({ kind: z.literal('url'), url: z.url() }),
-  z.strictObject({
-    kind: z.literal('extension'),
-    extensionId: z.string().min(1),
+const ToolInstallActionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('guide'),
+    text: Schema.String.check(Schema.isMinLength(1)),
   }),
-  z.strictObject({ kind: z.literal('command'), command: z.string().min(1) }),
-  z.strictObject({ kind: z.literal('auth'), command: z.string().min(1) }),
+  Schema.Struct({
+    kind: Schema.Literal('url'),
+    url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('extension'),
+    extensionId: Schema.String.check(Schema.isMinLength(1)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('command'),
+    command: Schema.String.check(Schema.isMinLength(1)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('auth'),
+    command: Schema.String.check(Schema.isMinLength(1)),
+  }),
 ]);
-export type ToolInstallAction = z.infer<typeof ToolInstallActionSchema>;
+export type ToolInstallAction = typeof ToolInstallActionSchema.Type;
 
 /** One dashboard card; `settings` are its inline rows as [catalog key, label]. */
-const ToolDashboardItemSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
+const ToolDashboardItemSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
   category: ToolCategorySchema,
-  description: z.string(),
-  tools: z.array(ToolInfoSchema),
+  description: Schema.String,
+  tools: Schema.Array(ToolInfoSchema),
   status: ToolDependencyStatusSchema,
-  requiresSetup: z.boolean(),
-  statusLabel: z.string().optional(),
-  installActions: z.array(ToolInstallActionSchema),
-  configNotes: z.string().optional(),
-  statusDetail: z.string().optional(),
-  authNote: z.string().optional(),
-  toggleable: z.boolean().optional(),
-  enabled: z.boolean().optional(),
-  settings: z.array(z.tuple([z.string(), z.string()])).optional(),
+  requiresSetup: Schema.Boolean,
+  statusLabel: Schema.optional(Schema.String),
+  installActions: Schema.Array(ToolInstallActionSchema),
+  configNotes: Schema.optional(Schema.String),
+  statusDetail: Schema.optional(Schema.String),
+  authNote: Schema.optional(Schema.String),
+  toggleable: Schema.optional(Schema.Boolean),
+  enabled: Schema.optional(Schema.Boolean),
+  settings: Schema.optional(
+    Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
+  ),
 });
-export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
+export type ToolDashboardItem = typeof ToolDashboardItemSchema.Type;
 
 /**
  * One row of the Plugins page and the TUI's `/plugins`: everything that adds
@@ -339,73 +355,75 @@ export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
  * plugin its listing, and an MCP server from the user's `mcp.json` its name
  * and command. `usedBy` names the agents whose tool lists reach the row.
  */
-const PluginRowSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('texra'),
+const PluginRowSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('texra'),
     item: ToolDashboardItemSchema,
-    usedBy: z.array(z.string()),
+    usedBy: Schema.Array(Schema.String),
   }),
-  z.strictObject({
-    kind: z.literal('installed'),
+  Schema.Struct({
+    kind: Schema.Literal('installed'),
     plugin: PluginListItemSchema,
-    usedBy: z.array(z.string()),
+    usedBy: Schema.Array(Schema.String),
   }),
-  z.strictObject({
-    kind: z.literal('mcp'),
-    name: z.string().min(1),
-    command: z.string().min(1),
-    usedBy: z.array(z.string()),
+  Schema.Struct({
+    kind: Schema.Literal('mcp'),
+    name: Schema.String.check(Schema.isMinLength(1)),
+    command: Schema.String.check(Schema.isMinLength(1)),
+    usedBy: Schema.Array(Schema.String),
   }),
 ]);
-export type PluginRow = z.infer<typeof PluginRowSchema>;
+export type PluginRow = typeof PluginRowSchema.Type;
 
 /** Outbound: the Plugins page's rows, the MCP config file they read, and
  *  what that file's invalid entries raise. */
-const UpdatePluginsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
-  rows: z.array(PluginRowSchema),
-  mcpConfigPath: z.string(),
-  mcpWarnings: z.array(z.string()),
+const UpdatePluginsMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+  rows: Schema.Array(PluginRowSchema),
+  mcpConfigPath: Schema.String,
+  mcpWarnings: Schema.Array(Schema.String),
 });
 
 /** Outbound: the Skills tab's skills and their issues. */
-const UpdateSkillsListMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
-  skills: z.array(SkillDisplayItemSchema),
-  issues: z.array(SkillDisplayIssueSchema),
+const UpdateSkillsListMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
+  skills: Schema.Array(SkillDisplayItemSchema),
+  issues: Schema.Array(SkillDisplayIssueSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
-const UpdateGitHubTokenStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
+const UpdateGitHubTokenStatusMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
   /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN/GH_TOKEN env var; 'none' = missing. */
-  status: z.enum(['secret', 'env', 'none']),
+  status: Schema.Literals(['secret', 'env', 'none']),
 });
 
-const UpdateSubscriptionAuthStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
+const UpdateSubscriptionAuthStatusMessageSchema = Schema.Struct({
+  command: Schema.Literal(
+    SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
+  ),
   status: SubscriptionAuthStatusSchema,
 });
 
-const UpdateSubscriptionUsageMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
+const UpdateSubscriptionUsageMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
   snapshots: SubscriptionUsageSnapshotsSchema,
 });
-const PRSubscriptionOwnerSchema = z.object({
+const PRSubscriptionOwnerSchema = Schema.Struct({
   runId: RunIdSchema,
-  label: z.string(),
+  label: Schema.String,
 });
 
-const PRSubscriptionEntrySchema = z.object({
-  key: z.string().min(1),
-  owners: z.array(PRSubscriptionOwnerSchema),
+const PRSubscriptionEntrySchema = Schema.Struct({
+  key: Schema.String.check(Schema.isMinLength(1)),
+  owners: Schema.Array(PRSubscriptionOwnerSchema),
 });
-export type PRSubscriptionEntry = z.infer<typeof PRSubscriptionEntrySchema>;
+export type PRSubscriptionEntry = typeof PRSubscriptionEntrySchema.Type;
 
 /** Outbound: backend → frontend active PR subscriptions. */
-const UpdatePRSubscriptionsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
-  subscriptions: z.array(PRSubscriptionEntrySchema),
+const UpdatePRSubscriptionsMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
+  subscriptions: Schema.Array(PRSubscriptionEntrySchema),
 });
 
 // ============================================================
@@ -413,27 +431,27 @@ const UpdatePRSubscriptionsMessageSchema = z.object({
 // ============================================================
 
 /** Status of each recommended LaTeX-related VS Code setting. */
-const LatexSettingsStatusSchema = z.object({
-  outDir: z.boolean(),
-  autoRevealExclude: z.boolean(),
-  texDistributionInstalled: z.boolean(),
-  latexWorkshopInstalled: z.boolean(),
-  latexdiffInstalled: z.boolean(),
-  latexindentInstalled: z.boolean(),
-  texcountInstalled: z.boolean(),
-  imageProcessingInstalled: z.boolean(),
-  platform: z.enum(['darwin', 'win32', 'linux']),
-  pdflatexPath: z.string().nullable(),
-  latexmkPath: z.string().nullable(),
-  latexdiffPath: z.string().nullable(),
-  latexindentPath: z.string().nullable(),
-  texcountPath: z.string().nullable(),
-  ghostscriptPath: z.string().nullable(),
-  graphicsmagickPath: z.string().nullable(),
+const LatexSettingsStatusSchema = Schema.Struct({
+  outDir: Schema.Boolean,
+  autoRevealExclude: Schema.Boolean,
+  texDistributionInstalled: Schema.Boolean,
+  latexWorkshopInstalled: Schema.Boolean,
+  latexdiffInstalled: Schema.Boolean,
+  latexindentInstalled: Schema.Boolean,
+  texcountInstalled: Schema.Boolean,
+  imageProcessingInstalled: Schema.Boolean,
+  platform: Schema.Literals(['darwin', 'win32', 'linux']),
+  pdflatexPath: Schema.NullOr(Schema.String),
+  latexmkPath: Schema.NullOr(Schema.String),
+  latexdiffPath: Schema.NullOr(Schema.String),
+  latexindentPath: Schema.NullOr(Schema.String),
+  texcountPath: Schema.NullOr(Schema.String),
+  ghostscriptPath: Schema.NullOr(Schema.String),
+  graphicsmagickPath: Schema.NullOr(Schema.String),
   /** Detected package manager available on the system (null = none found). */
-  packageManager: z.enum(['brew', 'apt', 'scoop']).nullable(),
+  packageManager: Schema.NullOr(Schema.Literals(['brew', 'apt', 'scoop'])),
 });
-export type LatexSettingsStatus = z.infer<typeof LatexSettingsStatusSchema>;
+export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
 
 /** Shared default — used by SettingsApp and LaTeXTab before backend data arrives. */
 export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
@@ -457,8 +475,8 @@ export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
 };
 
 /** Outbound: backend → frontend LaTeX settings status */
-const UpdateLatexSettingsStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
+const UpdateLatexSettingsStatusMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
   settings: LatexSettingsStatusSchema,
 });
 
@@ -466,7 +484,7 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
 // Outbound messages (extension host → settings webview)
 // ============================================================
 
-const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
+const SettingsViewOutboundMessageSchema = Schema.Union([
   SetTabMessageSchema,
   UpdateMemoryMessageSchema,
   UpdateMemoryPreviewMessageSchema,
@@ -485,9 +503,8 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateProfileMessageSchema,
 ]);
 
-export type SettingsViewOutboundMessage = z.infer<
-  typeof SettingsViewOutboundMessageSchema
->;
+export type SettingsViewOutboundMessage =
+  (typeof SettingsViewOutboundMessageSchema)['Type'];
 
 export type SettingsViewOutboundHandlerRegistry =
   HandlerRegistry<SettingsViewOutboundMessage>;
@@ -498,22 +515,25 @@ export const dispatchSettingsViewOutbound = createDispatcher(
 
 /** Inbound message addressed to a provider by name. */
 function providerCommand<T extends string>(command: T) {
-  return z.object({ command: z.literal(command), provider: z.string().min(1) });
+  return Schema.Struct({
+    command: Schema.Literal(command),
+    provider: Schema.String.check(Schema.isMinLength(1)),
+  });
 }
 
 /** Inbound message addressed to a model by name. */
 function modelCommand<T extends string>(command: T) {
-  return z.object({
-    command: z.literal(command),
-    modelName: z.string().min(1),
+  return Schema.Struct({
+    command: Schema.Literal(command),
+    modelName: Schema.String.check(Schema.isMinLength(1)),
   });
 }
 
 /** Inbound message addressed to an agent by name and source. */
 function agentCommand<T extends string>(command: T) {
-  return z.object({
-    command: z.literal(command),
-    agentName: z.string().min(1),
+  return Schema.Struct({
+    command: Schema.Literal(command),
+    agentName: Schema.String.check(Schema.isMinLength(1)),
     agentSource: AgentSourceSchema,
   });
 }
@@ -528,21 +548,21 @@ const RemoveProviderKeyMessageSchema = providerCommand(
 const OpenProviderKeyUrlMessageSchema = providerCommand(
   SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
 );
-const OpenExternalUrlMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL),
-  url: z.url(),
+const OpenExternalUrlMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL),
+  url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */,
 });
 
 // Model selection inbound messages
 const SetModelEnabledMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-).extend({ enabled: z.boolean() });
+).extend({ enabled: Schema.Boolean });
 
 const SetModelReasoningLevelMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
 ).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
-  level: ReasoningEffortSchema.nullable(),
+  level: Schema.NullOr(ReasoningEffortSchema),
 });
 const RequestModelAccessMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
@@ -557,32 +577,32 @@ const OpenAgentYamlMessageSchema = agentCommand(
 );
 const SetAgentEnabledMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-).extend({ enabled: z.boolean() });
+).extend({ enabled: Schema.Boolean });
 
-const SetAllAgentsEnabledMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
+const SetAllAgentsEnabledMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
   source: AgentSourceSchema,
-  enabled: z.boolean(),
+  enabled: Schema.Boolean,
 });
-const OpenAgentFolderMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
-  folderType: z.literal('custom'),
+const OpenAgentFolderMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
+  folderType: Schema.Literal('custom'),
 });
-const CreateAgentMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
+const CreateAgentMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
   /** From the document-task template rather than the chat one. */
-  task: z.boolean(),
+  task: Schema.Boolean,
 });
 const CustomizeAgentMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
 );
-const DeleteCustomAgentMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
-  agentName: z.string().min(1),
+const DeleteCustomAgentMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
+  agentName: Schema.String.check(Schema.isMinLength(1)),
 });
-const KeepCustomAgentMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
-  agentName: z.string().min(1),
+const KeepCustomAgentMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
+  agentName: Schema.String.check(Schema.isMinLength(1)),
 });
 const RevealAgentFileMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
@@ -597,39 +617,38 @@ const ResetCustomAgentDirMessageSchema = commandOnly(
 );
 
 // Agent team inbound messages
-const ApplyAgentModePresetMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
-  presetId: z.string().min(1),
+const ApplyAgentModePresetMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
+  presetId: Schema.String.check(Schema.isMinLength(1)),
 });
 const SaveAgentModePresetMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
 );
-const DeleteAgentModePresetMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
-  presetId: z.string().min(1),
+const DeleteAgentModePresetMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
+  presetId: Schema.String.check(Schema.isMinLength(1)),
 });
 
 // Tool dashboard inbound messages
-const InstallToolExtensionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
-  extensionId: z.string().min(1),
+const InstallToolExtensionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
+  extensionId: Schema.String.check(Schema.isMinLength(1)),
 });
 const RecheckToolStatusMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
 );
-const ToggleToolMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL),
-  toolId: z.string().min(1),
-  enabled: z.boolean(),
+const ToggleToolMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL),
+  toolId: Schema.String.check(Schema.isMinLength(1)),
+  enabled: Schema.Boolean,
 });
-const RunToolCommandMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND),
-  toolId: z.string().min(1),
-  kind: z.enum(['install', 'auth']),
+const RunToolCommandMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND),
+  toolId: Schema.String.check(Schema.isMinLength(1)),
+  kind: Schema.Literals(['install', 'auth']),
 });
-export type ToolCommandKind = z.infer<
-  typeof RunToolCommandMessageSchema
->['kind'];
+export type ToolCommandKind =
+  (typeof RunToolCommandMessageSchema)['Type']['kind'];
 // GitHub token messages (for PR subscription tool)
 const SetGitHubTokenMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
@@ -641,149 +660,145 @@ const OpenGitHubTokenUrlMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
 );
 // Subscription sign-in messages, addressed by provider
-const SignInSubscriptionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
-  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+const SignInSubscriptionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
+  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
 });
-const SignOutSubscriptionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION),
-  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+const SignOutSubscriptionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION),
+  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
 });
-const SetSubscriptionPreferenceMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE),
-  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
-  enabled: z.boolean(),
+const SetSubscriptionPreferenceMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE),
+  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  enabled: Schema.Boolean,
 });
-const GetSubscriptionUsageMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
-  forceRefresh: z.boolean().optional(),
+const GetSubscriptionUsageMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
+  forceRefresh: Schema.optional(Schema.Boolean),
 });
-const UnsubscribePRMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
-  key: z.string().min(1),
+const UnsubscribePRMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
+  key: Schema.String.check(Schema.isMinLength(1)),
 });
-const OpenPRSubscriptionStreamMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
+const OpenPRSubscriptionStreamMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
   runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
-const ApplyLatexSettingsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS),
-  field: z.enum(['outDir', 'autoRevealExclude']).optional(),
-  reset: z.boolean().optional(),
+const ApplyLatexSettingsMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS),
+  field: Schema.optional(Schema.Literals(['outDir', 'autoRevealExclude'])),
+  reset: Schema.optional(Schema.Boolean),
 });
 const InstallLatexWorkshopMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
 );
-const RunInstallCommandMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
-  installCommand: z.string().min(1),
+const RunInstallCommandMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
+  installCommand: Schema.String.check(Schema.isMinLength(1)),
 });
 
 // Generic catalog-driven setting write. This boundary accepts exactly the
 // value shapes used by catalog entries; the selected entry's schema performs
 // the narrower per-key validation in the backend handler.
-const StateSettingValueSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.array(z.string()),
-  z.record(z.string(), z.string()),
-  z.null(),
+const StateSettingValueSchema = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Array(Schema.String),
+  Schema.Record(Schema.String, Schema.String),
+  Schema.Null,
 ]);
-export type StateSettingValue = z.infer<typeof StateSettingValueSchema>;
+export type StateSettingValue = typeof StateSettingValueSchema.Type;
 
-const UpdateStateSettingMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING),
-  key: z.string().min(1),
-  value: StateSettingValueSchema.optional(),
+const UpdateStateSettingMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING),
+  key: Schema.String.check(Schema.isMinLength(1)),
+  value: Schema.optional(StateSettingValueSchema),
 });
 
 /** One skill, or one skill source, switched on or off. The host applies it
  *  to the list it holds, so a second switch sent before the first one's
  *  snapshot returned cannot undo it. */
-const SetSkillEnabledMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED),
-  key: z.enum([
+const SetSkillEnabledMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED),
+  key: Schema.Literals([
     WorkspaceStateKey.DISABLED_SKILLS,
     WorkspaceStateKey.DISABLED_SKILL_SOURCES,
   ]),
-  item: z.string().min(1),
-  enabled: z.boolean(),
+  item: Schema.String.check(Schema.isMinLength(1)),
+  enabled: Schema.Boolean,
 });
 
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
 
-export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
-  'command',
-  [
-    // Lifecycle
-    WebviewReadyMessageSchema,
-    // Tool dashboard messages
-    InstallToolExtensionMessageSchema,
-    RecheckToolStatusMessageSchema,
-    ToggleToolMessageSchema,
-    RunToolCommandMessageSchema,
-    PluginActionMessageSchema,
-    // LaTeX settings messages
-    ApplyLatexSettingsMessageSchema,
-    InstallLatexWorkshopMessageSchema,
-    RunInstallCommandMessageSchema,
-    // Memory messages
-    GetMemoryDataMessageSchema,
-    GetMemoryPreviewMessageSchema,
-    OpenMemoryFileMessageSchema,
-    OpenMemoryFolderMessageSchema,
-    DeleteMemoryMessageSchema,
-    PinMemoryMessageSchema,
-    UnpinMemoryMessageSchema,
-    // Profile messages
-    SetProviderKeyMessageSchema,
-    RemoveProviderKeyMessageSchema,
-    OpenProviderKeyUrlMessageSchema,
-    OpenExternalUrlMessageSchema,
-    // Model selection messages
-    SetModelEnabledMessageSchema,
-    SetModelReasoningLevelMessageSchema,
-    RequestModelAccessMessageSchema,
-    ClearCopilotRouteMessageSchema,
-    // Agent selection messages
-    OpenAgentYamlMessageSchema,
-    SetAgentEnabledMessageSchema,
-    SetAllAgentsEnabledMessageSchema,
-    OpenAgentFolderMessageSchema,
-    CreateAgentMessageSchema,
-    CustomizeAgentMessageSchema,
-    DeleteCustomAgentMessageSchema,
-    KeepCustomAgentMessageSchema,
-    RevealAgentFileMessageSchema,
-    // Custom agent directory messages
-    SetCustomAgentDirMessageSchema,
-    ResetCustomAgentDirMessageSchema,
-    // GitHub token messages
-    SetGitHubTokenMessageSchema,
-    RemoveGitHubTokenMessageSchema,
-    OpenGitHubTokenUrlMessageSchema,
-    // Subscription sign-in messages
-    SignInSubscriptionMessageSchema,
-    SignOutSubscriptionMessageSchema,
-    SetSubscriptionPreferenceMessageSchema,
-    GetSubscriptionUsageMessageSchema,
-    UnsubscribePRMessageSchema,
-    OpenPRSubscriptionStreamMessageSchema,
-    // Generic catalog-driven scalar-setting write
-    UpdateStateSettingMessageSchema,
-    SetSkillEnabledMessageSchema,
-    // Agent team messages
-    ApplyAgentModePresetMessageSchema,
-    SaveAgentModePresetMessageSchema,
-    DeleteAgentModePresetMessageSchema,
-  ],
-);
+export const SettingsViewInboundMessageSchema = Schema.Union([
+  // Lifecycle
+  WebviewReadyMessageSchema,
+  // Tool dashboard messages
+  InstallToolExtensionMessageSchema,
+  RecheckToolStatusMessageSchema,
+  ToggleToolMessageSchema,
+  RunToolCommandMessageSchema,
+  PluginActionMessageSchema,
+  // LaTeX settings messages
+  ApplyLatexSettingsMessageSchema,
+  InstallLatexWorkshopMessageSchema,
+  RunInstallCommandMessageSchema,
+  // Memory messages
+  GetMemoryDataMessageSchema,
+  GetMemoryPreviewMessageSchema,
+  OpenMemoryFileMessageSchema,
+  OpenMemoryFolderMessageSchema,
+  DeleteMemoryMessageSchema,
+  PinMemoryMessageSchema,
+  UnpinMemoryMessageSchema,
+  // Profile messages
+  SetProviderKeyMessageSchema,
+  RemoveProviderKeyMessageSchema,
+  OpenProviderKeyUrlMessageSchema,
+  OpenExternalUrlMessageSchema,
+  // Model selection messages
+  SetModelEnabledMessageSchema,
+  SetModelReasoningLevelMessageSchema,
+  RequestModelAccessMessageSchema,
+  ClearCopilotRouteMessageSchema,
+  // Agent selection messages
+  OpenAgentYamlMessageSchema,
+  SetAgentEnabledMessageSchema,
+  SetAllAgentsEnabledMessageSchema,
+  OpenAgentFolderMessageSchema,
+  CreateAgentMessageSchema,
+  CustomizeAgentMessageSchema,
+  DeleteCustomAgentMessageSchema,
+  KeepCustomAgentMessageSchema,
+  RevealAgentFileMessageSchema,
+  // Custom agent directory messages
+  SetCustomAgentDirMessageSchema,
+  ResetCustomAgentDirMessageSchema,
+  // GitHub token messages
+  SetGitHubTokenMessageSchema,
+  RemoveGitHubTokenMessageSchema,
+  OpenGitHubTokenUrlMessageSchema,
+  // Subscription sign-in messages
+  SignInSubscriptionMessageSchema,
+  SignOutSubscriptionMessageSchema,
+  SetSubscriptionPreferenceMessageSchema,
+  GetSubscriptionUsageMessageSchema,
+  UnsubscribePRMessageSchema,
+  OpenPRSubscriptionStreamMessageSchema,
+  // Generic catalog-driven scalar-setting write
+  UpdateStateSettingMessageSchema,
+  SetSkillEnabledMessageSchema,
+  // Agent team messages
+  ApplyAgentModePresetMessageSchema,
+  SaveAgentModePresetMessageSchema,
+  DeleteAgentModePresetMessageSchema,
+]);
 
-export type SettingsViewInboundMessage = z.infer<
-  typeof SettingsViewInboundMessageSchema
->;
+export type SettingsViewInboundMessage =
+  (typeof SettingsViewInboundMessageSchema)['Type'];

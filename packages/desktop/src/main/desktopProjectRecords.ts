@@ -1,6 +1,5 @@
 /** The desktop profile's ordered project selection, independent of project sessions. */
-import { Context, Effect, Result } from 'effect';
-import { z } from 'zod';
+import { Context, Effect, Result, Schema } from 'effect';
 
 import type { CurrentValues, ValueFamily } from '@texra-ai/harness';
 
@@ -26,9 +25,9 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
  */
 export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
   name: 'desktop-projects',
-  schema: z.object({
-    remembered: z.array(z.string().min(1)),
-    recent: z.array(z.string().min(1)),
+  schema: Schema.Struct({
+    remembered: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+    recent: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
   }),
   deletable: false,
 };

@@ -5,7 +5,7 @@
 // (`2026-09-28-code-plugins-hooks-v1.md`).
 
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
@@ -15,36 +15,39 @@ const isSupportedEvent = (event: string): event is HookEvent =>
 
 /** One handler as the reference declares it; the fields the harness does not
  *  read are stripped. */
-const HookHandlerSchema = z.object({
-  type: z.string(),
-  command: z.string().optional(),
-  args: z.array(z.string()).optional(),
-  timeout: z.number().positive().optional(),
-  async: z.boolean().optional(),
-  asyncRewake: z.boolean().optional(),
-  shell: z.string().optional(),
+const HookHandlerSchema = Schema.Struct({
+  type: Schema.String,
+  command: Schema.optional(Schema.String),
+  args: Schema.optional(Schema.Array(Schema.String)),
+  timeout: Schema.optional(Schema.Number.check(Schema.isGreaterThan(0))),
+  async: Schema.optional(Schema.Boolean),
+  asyncRewake: Schema.optional(Schema.Boolean),
+  shell: Schema.optional(Schema.String),
   /** Accepted, not evaluated: the hook runs for every call its matcher
    *  matches, which the reference allows when it cannot tell what a command
    *  runs (`2026-09-28-code-plugins-hooks-v1.md`). */
-  if: z.string().optional(),
+  if: Schema.optional(Schema.String),
 });
 
-const MatcherGroupSchema = z.object({
-  matcher: z.string().optional(),
-  hooks: z.array(HookHandlerSchema),
+const MatcherGroupSchema = Schema.Struct({
+  matcher: Schema.optional(Schema.String),
+  hooks: Schema.Array(HookHandlerSchema),
 });
 
 /** The events map: event name to its matcher groups. */
-const HookEventsSchema = z.record(z.string(), z.array(MatcherGroupSchema));
+const HookEventsSchema = Schema.Record(
+  Schema.String,
+  Schema.Array(MatcherGroupSchema),
+);
 
 /** A hooks file (`hooks/hooks.json`, or a path the manifest names), or the
  *  manifest's inline `hooks` object: the events under `hooks`, optionally
  *  beside a `description`. */
-export const HooksConfigSchema = z.object({
-  description: z.string().optional(),
+export const HooksConfigSchema = Schema.Struct({
+  description: Schema.optional(Schema.String),
   hooks: HookEventsSchema,
 });
-type HooksConfig = z.infer<typeof HooksConfigSchema>;
+type HooksConfig = typeof HooksConfigSchema.Type;
 
 /** One command hook the harness runs: its event, matcher and command as the
  *  plugin wrote them, placeholders unexpanded. */

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 export const DESKTOP_PROMPT_COMMANDS = {
   SHOW: 'desktop:showPrompt',
@@ -11,24 +11,22 @@ export const DESKTOP_PROMPT_COMMANDS = {
 // `DesktopOutboundMessageSchema`'s discriminated union plus the route table,
 // not by per-surface strictness. See the header of desktopOutboundMessages.ts.
 
-export const DesktopShowPromptMessageSchema = z.object({
-  command: z.literal(DESKTOP_PROMPT_COMMANDS.SHOW),
-  requestId: z.uuid(),
-  title: z.string(),
-  prompt: z.string(),
-  password: z.boolean(),
+export const DesktopShowPromptMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SHOW),
+  requestId: Schema.String.check(Schema.isUUID()),
+  title: Schema.String,
+  prompt: Schema.String,
+  password: Schema.Boolean,
 });
 
-export type DesktopShowPromptMessage = z.infer<
-  typeof DesktopShowPromptMessageSchema
->;
+export type DesktopShowPromptMessage =
+  (typeof DesktopShowPromptMessageSchema)['Type'];
 
-export const DesktopSettlePromptMessageSchema = z.object({
-  command: z.literal(DESKTOP_PROMPT_COMMANDS.SETTLE),
-  requestId: z.uuid(),
-  value: z.string().nullable(),
+export const DesktopSettlePromptMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SETTLE),
+  requestId: Schema.String.check(Schema.isUUID()),
+  value: Schema.NullOr(Schema.String),
 });
 
-export type DesktopSettlePromptMessage = z.infer<
-  typeof DesktopSettlePromptMessageSchema
->;
+export type DesktopSettlePromptMessage =
+  (typeof DesktopSettlePromptMessageSchema)['Type'];

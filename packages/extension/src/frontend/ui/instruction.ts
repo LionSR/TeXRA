@@ -1,10 +1,9 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, Settings } from '@texra-ai/harness';
-import { z } from 'zod';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type {
@@ -20,7 +19,9 @@ const CHANNEL = 'instruction';
 const INSTRUCTION_PREFIX = 'instruction.';
 
 /** A suppression flag is off until the user dismisses its instruction. */
-const SuppressedSchema = z.boolean().prefault(false);
+const SuppressedSchema = Schema.Boolean.pipe(
+  Schema.withDecodingDefault(Effect.succeed(false)),
+);
 
 /** Show an instruction message that can be permanently dismissed. */
 export function showInstructionWithSuppress(

@@ -6,6 +6,7 @@
  * receives it with the events frame (`sessionFrames.ts`), and the design
  * harness passes literals. Zod because it crosses the bridge.
  */
+import { Schema, Struct } from 'effect';
 import {
   getBasename,
   ModelOptionDataSchema,
@@ -13,21 +14,20 @@ import {
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
-import { z } from 'zod';
 
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 
-const visible = { visible: z.boolean() };
+const visible = { visible: Schema.Boolean };
 
 /** Open workspace folder offered as a run working directory. */
-const WorkspaceRootOptionDataSchema = z.object({
-  value: z.string(),
-  label: z.string(),
+const WorkspaceRootOptionDataSchema = Schema.Struct({
+  value: Schema.String,
+  label: Schema.String,
 });
 
-const AgentConfigBannerDataSchema = z.object({
-  agentName: z.string().nullish(),
-  customDirSet: z.boolean().nullish(),
+const AgentConfigBannerDataSchema = Schema.Struct({
+  agentName: Schema.optional(Schema.NullOr(Schema.String)),
+  customDirSet: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });
 
 /**
@@ -36,34 +36,34 @@ const AgentConfigBannerDataSchema = z.object({
  * requirement (GraphicsMagick vs ImageMagick) — the wire carries that
  * choose-one fact so no renderer has to decode it from an id.
  */
-const MissingToolSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  interchangeable: z.boolean(),
+const MissingToolSchema = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  interchangeable: Schema.Boolean,
   /** What TeXRA can't do without it, completing "TeXRA can't …". */
-  usedFor: z.string(),
+  usedFor: Schema.String,
 });
-export type MissingTool = z.infer<typeof MissingToolSchema>;
+export type MissingTool = typeof MissingToolSchema.Type;
 
-const DependencyBannerDataSchema = z.object({
-  missingTools: z.array(MissingToolSchema).nullish(),
+const DependencyBannerDataSchema = Schema.Struct({
+  missingTools: Schema.optional(Schema.NullOr(Schema.Array(MissingToolSchema))),
 });
 
-const FileOptionsSchema = z.object({
-  baseFile: z.array(z.string()),
-  editedFile: z.array(z.string()),
-  commit: z.array(z.string()),
+const FileOptionsSchema = Schema.Struct({
+  baseFile: Schema.Array(Schema.String),
+  editedFile: Schema.Array(Schema.String),
+  commit: Schema.Array(Schema.String),
 });
-export type FileOptions = z.infer<typeof FileOptionsSchema>;
+export type FileOptions = typeof FileOptionsSchema.Type;
 
 /** How a project is named in a rail row, a chip, and the hero subtitle. */
-const ProjectDisplaySchema = z.object({
-  key: z.string().min(1),
-  name: z.string(),
-  initials: z.string(),
-  subtitle: z.string(),
+const ProjectDisplaySchema = Schema.Struct({
+  key: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.String,
+  initials: Schema.String,
+  subtitle: Schema.String,
 });
-export type ProjectDisplay = z.infer<typeof ProjectDisplaySchema>;
+export type ProjectDisplay = typeof ProjectDisplaySchema.Type;
 
 /** The display record of one open folder, produced by the host once so no
  *  renderer derives a name or initials from a path; the no-folder session
@@ -100,42 +100,44 @@ export function projectDisplayOf(
  * Where the onboarding funnel stands (PRD: agent-native onboarding): the
  * state hosts push to webviews. `onboardingFunnel.ts` derives it.
  */
-const OnboardingFunnelStateSchema = z.enum([
+const OnboardingFunnelStateSchema = Schema.Literals([
   'needs-credential',
   'setup',
   'done',
 ]);
-export type OnboardingFunnelState = z.infer<typeof OnboardingFunnelStateSchema>;
+export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
-export const HostSnapshotSchema = z.object({
+export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   /** Every agent; one that is also a document task carries its `rounds`. */
-  agentOptions: z.array(DocumentAgentOptionSchema),
-  modelOptions: z.array(ModelOptionDataSchema),
-  teamOptions: z.array(TeamOptionDataSchema),
-  workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
+  agentOptions: Schema.Array(DocumentAgentOptionSchema),
+  modelOptions: Schema.Array(ModelOptionDataSchema),
+  teamOptions: Schema.Array(TeamOptionDataSchema),
+  workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
   approvalPolicy: ApprovalPolicySchema,
   fileOptions: FileOptionsSchema,
-  isGitRepo: z.boolean(),
+  isGitRepo: Schema.Boolean,
   /** The one recorder per process and where its take is going. */
-  recording: z.object({ session: z.string(), target: z.string() }).nullable(),
+  recording: Schema.NullOr(
+    Schema.Struct({ session: Schema.String, target: Schema.String }),
+  ),
   /** The New-task state's notices; host-owned visibility. */
-  banners: z.object({
+  banners: Schema.Struct({
     /** A credential that worked (a task has finished) stopped working;
      *  before a first task the "Connect a model" card is the prompt. */
-    apiKey: z.object(visible),
-    agentConfig: AgentConfigBannerDataSchema.extend(visible),
-    dependency: DependencyBannerDataSchema.extend(visible),
-    gettingStarted: z.boolean(),
+    apiKey: Schema.Struct(visible),
+    agentConfig: AgentConfigBannerDataSchema.mapFields(Struct.assign(visible)),
+    dependency: DependencyBannerDataSchema.mapFields(Struct.assign(visible)),
+    gettingStarted: Schema.Boolean,
     /** Why the background service this window's tasks run in is out of
      *  reach (it went away and the window is reaching it again, or a newer
      *  TeXRA's service refused this window); null while it is reached. */
-    serviceOffline: z.string().nullable(),
+    serviceOffline: Schema.NullOr(Schema.String),
   }),
   onboarding: OnboardingFunnelStateSchema,
 });
-export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
+export type HostSnapshot = typeof HostSnapshotSchema.Type;
 
 export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {

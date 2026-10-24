@@ -8,8 +8,7 @@
  * schema, its writer and its one reader, beside the service over the
  * thread records. Browser-safe: it imports only schemas, `zod` and `effect`.
  */
-import { Context, type Effect } from 'effect';
-import { z } from 'zod';
+import { Context, type Effect, Result, Schema, Struct } from 'effect';
 
 import {
   ExternalInquiryTurnRecordSchema,
@@ -23,45 +22,50 @@ import {
 import type { ValueFamily } from '@texra-ai/harness';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
-const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
+const InquiryThreadStatusSchema = Schema.Literals([
+  'open',
+  'answered',
+  'dropped',
+]);
 /** Where a thread stands: awaiting an answer, answered, or dropped. */
-type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
+type InquiryThreadStatus = typeof InquiryThreadStatusSchema.Type;
 
 /** A thread as a list shows it: its status, last question and turn count. */
-const InquiryThreadSummarySchema = z.object({
+const InquiryThreadSummarySchema = Schema.Struct({
   threadId: InquiryThreadIdSchema,
   /** The run the last question was asked under; continuations flow back to it. */
-  parentRunId: RunIdSchema.nullable(),
+  parentRunId: Schema.NullOr(RunIdSchema),
   status: InquiryThreadStatusSchema,
-  lastQuestionPreview: z.string(),
-  lastActivityIso: z.iso.datetime(),
-  turnCount: z.int().nonnegative(),
+  lastQuestionPreview: Schema.String,
+  lastActivityIso:
+    Schema.String /* TODO(effect-schema): z.iso.datetime; was `z.iso.datetime()` */,
+  turnCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 /** A thread as a list shows it. */
-export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
+export type InquiryThreadSummary = typeof InquiryThreadSummarySchema.Type;
 
 /** An open turn's unsent answer, as its panel keeps it between renders. */
-export const InquiryDraftSchema = z.object({
-  answer: z.string(),
-  sessionLinks: z.string(),
+export const InquiryDraftSchema = Schema.Struct({
+  answer: Schema.String,
+  sessionLinks: Schema.String,
 });
 /** An open turn's unsent answer. */
-export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
+export type InquiryDraft = typeof InquiryDraftSchema.Type;
 
 /** A thread's full record: its turns, explicit `status` and the asking run. */
-const InquiryThreadRecordSchema = z.object({
+const InquiryThreadRecordSchema = Schema.Struct({
   threadId: InquiryThreadIdSchema,
   /** The run the last question was asked under; a continuation is addressed
    *  to it. Kept beside the row's `parent` edge because the global record
    *  spans projects, and listing a run's threads reads it here. */
-  parentRunId: RunIdSchema.nullable(),
-  status: InquiryThreadSummarySchema.shape.status,
-  createdAt: z.string().min(1),
-  updatedAt: z.string().min(1),
-  turns: z.array(ExternalInquiryTurnRecordSchema),
+  parentRunId: Schema.NullOr(RunIdSchema),
+  status: InquiryThreadSummarySchema.fields.status,
+  createdAt: Schema.String.check(Schema.isMinLength(1)),
+  updatedAt: Schema.String.check(Schema.isMinLength(1)),
+  turns: Schema.Array(ExternalInquiryTurnRecordSchema),
 });
 /** A thread's full record, as the global database stores it. */
-export type InquiryThreadRecord = z.infer<typeof InquiryThreadRecordSchema>;
+export type InquiryThreadRecord = typeof InquiryThreadRecordSchema.Type;
 
 /** The thread records, in the global database's current values and keyed by
  *  thread id, so a follow-up from another project still reaches its thread.
@@ -74,9 +78,9 @@ export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
 
 /** The row's value: the summary less its asking run, which is the row's
  *  `parent` edge and has no second copy. */
-const InquiryThreadRowSchema = InquiryThreadSummarySchema.omit({
-  parentRunId: true,
-});
+const InquiryThreadRowSchema = InquiryThreadSummarySchema.mapFields(
+  Struct.omit(['parentRunId']),
+);
 
 /** A thread row as the transition rule reads it. */
 interface ThreadRow {
@@ -93,14 +97,16 @@ function admitsThreadRow(
   previous: ThreadRow | undefined,
   next: ThreadRow,
 ): string | null {
-  const after = InquiryThreadRowSchema.safeParse(next.value);
-  if (!after.success) return 'Unreadable inquiry thread row';
+  const after = Schema.decodeUnknownResult(InquiryThreadRowSchema)(next.value);
+  if (!Result.isSuccess(after)) return 'Unreadable inquiry thread row';
   if (previous === undefined) return null;
-  const before = InquiryThreadRowSchema.safeParse(previous.value);
-  if (!before.success)
-    return `Unreadable inquiry history: ${after.data.threadId}`;
-  const was = before.data;
-  const now = after.data;
+  const before = Schema.decodeUnknownResult(InquiryThreadRowSchema)(
+    previous.value,
+  );
+  if (!Result.isSuccess(before))
+    return `Unreadable inquiry history: ${after.success.threadId}`;
+  const was = before.success;
+  const now = after.success;
   const reopened = was.status === 'answered' && now.status === 'open';
   if (now.turnCount < was.turnCount)
     return `Inquiry update must preserve turn order: ${now.threadId}`;
@@ -122,14 +128,14 @@ function admitsThreadRow(
 /** A thread's latest row supersedes a call's lagging `next` when the turn
  *  `next` opens was already closed (answered or dropped) or passed. */
 function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
-  const was = InquiryThreadRowSchema.safeParse(latest.value);
-  const now = InquiryThreadRowSchema.safeParse(next.value);
-  if (!was.success || !now.success) return false;
+  const was = Schema.decodeUnknownResult(InquiryThreadRowSchema)(latest.value);
+  const now = Schema.decodeUnknownResult(InquiryThreadRowSchema)(next.value);
+  if (!Result.isSuccess(was) || !Result.isSuccess(now)) return false;
   return (
-    was.data.turnCount > now.data.turnCount ||
-    (was.data.turnCount === now.data.turnCount &&
-      was.data.status !== 'open' &&
-      now.data.status === 'open')
+    was.success.turnCount > now.success.turnCount ||
+    (was.success.turnCount === now.success.turnCount &&
+      was.success.status !== 'open' &&
+      now.success.status === 'open')
   );
 }
 
@@ -156,7 +162,7 @@ export function inquiryThreadFact(
     plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
     kind: EXTERNAL_INQUIRY_THREAD_ARM.kind,
     version: EXTERNAL_INQUIRY_THREAD_ARM.version,
-    value: InquiryThreadRowSchema.parse(value),
+    value: Schema.decodeUnknownSync(InquiryThreadRowSchema)(value),
     aggregate: `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
   };
 }
@@ -170,7 +176,12 @@ export function inquiryThreadsUnder(
     fact.plugin === EXTERNAL_INQUIRY_THREAD_ARM.plugin &&
     fact.kind === EXTERNAL_INQUIRY_THREAD_ARM.kind &&
     fact.parent === runId
-      ? [{ ...InquiryThreadRowSchema.parse(fact.value), parentRunId: runId }]
+      ? [
+          {
+            ...Schema.decodeUnknownSync(InquiryThreadRowSchema)(fact.value),
+            parentRunId: runId,
+          },
+        ]
       : [],
   );
 }

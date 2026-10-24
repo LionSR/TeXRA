@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
@@ -18,25 +17,23 @@ import { ensureError } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool } from './core/definition';
 
-const EditInputSchema = z.strictObject({
-  path: z
-    .string()
-    .describe('Workspace-relative or absolute file path to edit.'),
-  old_str: z
-    .string()
-    .describe('Exact literal text to replace, copied from read_file output.'),
-  new_str: z
-    .string()
-    .describe('Replacement text to write in place of old_str.'),
-  replace_all: z
-    .boolean()
-    .nullish()
-    .describe(
+const EditInputSchema = Schema.Struct({
+  path: Schema.String.annotate({
+    description: 'Workspace-relative or absolute file path to edit.',
+  }),
+  old_str: Schema.String.annotate({
+    description: 'Exact literal text to replace, copied from read_file output.',
+  }),
+  new_str: Schema.String.annotate({
+    description: 'Replacement text to write in place of old_str.',
+  }),
+  replace_all: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
       'Replace every occurrence instead of requiring one unique match.',
-    ),
+  }),
 });
 
-type EditInput = z.infer<typeof EditInputSchema>;
+type EditInput = typeof EditInputSchema.Type;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,

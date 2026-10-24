@@ -33,11 +33,12 @@ import {
   Effect,
   Exit,
   Fiber,
+  Result,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 
 import {
   type HostRequestFailure,
@@ -66,9 +67,9 @@ const CHANNEL = 'SessionBridge';
 
 /** Enough of any up message to answer it: a message that names a request
  *  id gets its `Invalid` response even when the rest did not parse. */
-const RequestEnvelopeSchema = z.object({
-  session: z.string(),
-  requestId: z.string().min(1),
+const RequestEnvelopeSchema = Schema.Struct({
+  session: Schema.String,
+  requestId: Schema.String.check(Schema.isMinLength(1)),
 });
 
 interface SessionBridgeOptions {
@@ -113,8 +114,9 @@ export interface AttachedPort {
 }
 
 /** Expected refusal when a host attaches after the bridge has closed. */
-class SessionBridgeClosedError extends Data.TaggedError(
+class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedError>()(
   'SessionBridgeClosedError',
+  {},
 ) {
   override get message(): string {
     return 'SessionBridge is closed; cannot attach a port';
@@ -317,26 +319,28 @@ export class SessionBridge {
     return Effect.suspend(() => {
       const { port } = entry;
       if (this.ports.get(port.id) !== entry) return Effect.void;
-      const parsed = UpMessageSchema.safeParse(message);
-      if (!parsed.success) {
-        const envelope = RequestEnvelopeSchema.safeParse(message);
-        const reason = `Unparseable message from port ${port.id}: ${z.prettifyError(parsed.error)}`;
+      const parsed = Schema.decodeUnknownResult(UpMessageSchema)(message);
+      if (!Result.isSuccess(parsed)) {
+        const envelope = Schema.decodeUnknownResult(RequestEnvelopeSchema)(
+          message,
+        );
+        const reason = `Unparseable message from port ${port.id}: ${parsed.error.message}`;
         return Effect.logWarning(reason).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
             Effect.sync(() => {
-              if (!envelope.success) return;
+              if (!Result.isSuccess(envelope)) return;
               port.send({
                 kind: 'response',
-                session: envelope.data.session,
-                requestId: envelope.data.requestId,
+                session: envelope.success.session,
+                requestId: envelope.success.requestId,
                 result: { ok: false, error: { _tag: 'Invalid', reason } },
               });
             }),
           ),
         );
       }
-      const up = parsed.data;
+      const up = parsed.success;
       if (up.session !== this.key) {
         return Effect.logWarning(
           `Port ${port.id} addressed session ${up.session}; this session is ${this.key}`,

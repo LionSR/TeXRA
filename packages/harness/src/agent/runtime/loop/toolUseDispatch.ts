@@ -33,11 +33,11 @@ import {
   Exit,
   FileSystem,
   Ref,
+  Schema,
   type Scope,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
-import { z } from 'zod';
 
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
@@ -148,7 +148,10 @@ function storedResult(result: ToolResult): CallResult['result'] {
   const { diagnostics, ...rest } = result;
   if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
   if (diagnostics === undefined) return rest;
-  return { ...rest, diagnostics: JsonValueSchema.parse(diagnostics) };
+  return {
+    ...rest,
+    diagnostics: Schema.decodeUnknownSync(JsonValueSchema)(diagnostics),
+  };
 }
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
@@ -320,7 +323,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const at = initial.input.instruction;
   const userInstruction =
     run.config.rootUserInstruction ??
-    (at ? stored(initial, at, z.string()) : run.config.instruction);
+    (at ? stored(initial, at, Schema.String) : run.config.instruction);
   // Concurrent results of one parallel partition commit one at a time under
   // the cell's lock, each onto the latest state.
   const { append } = cell;

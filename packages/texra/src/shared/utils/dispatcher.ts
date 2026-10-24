@@ -1,5 +1,4 @@
-import { Predicate } from 'effect';
-import type { z } from 'zod';
+import { Predicate, Result, Schema } from 'effect';
 
 type CommandMessage = { command: string };
 
@@ -84,20 +83,20 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
  * ```
  */
 export function createDispatcher<TMessage extends CommandMessage>(
-  schema: z.ZodType<TMessage>,
+  schema: Schema.Codec<TMessage>,
 ): DispatcherFn<TMessage> {
   return (
     raw: unknown,
     handlers: HandlerRegistry<TMessage>,
     onError?: (error: unknown) => void,
   ): boolean => {
-    const parseResult = schema.safeParse(raw);
-    if (!parseResult.success) {
-      onError?.(parseResult.error);
+    const parseResult = Schema.decodeUnknownResult(schema)(raw);
+    if (!Result.isSuccess(parseResult)) {
+      onError?.(parseResult.failure);
       return false;
     }
 
-    const message = parseResult.data;
+    const message = parseResult.success;
     const entry = handlers[message.command as TMessage['command']] as
       MessageHandler<typeof message> | Unsupported;
 
@@ -131,7 +130,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
   };
 }
 
-function isZodError(error: unknown): error is z.ZodError {
+function isZodError(error: unknown): error is Schema.SchemaError {
   return (
     Predicate.isObjectOrArray(error) &&
     'issues' in error &&
@@ -206,16 +205,16 @@ function isDevAssertionMode(): boolean {
  * real mismatch and throws immediately.
  */
 export function assertKnownOutboundMessage(
-  domains: readonly z.ZodType<CommandMessage>[],
+  domains: readonly Schema.Codec<CommandMessage>[],
   message: unknown,
 ): void {
   if (!isDevAssertionMode()) return;
   for (const schema of domains) {
-    const result = schema.safeParse(message);
-    if (result.success) return;
-    if (!isUnrecognizedCommand(result.error)) {
+    const result = Schema.decodeUnknownResult(schema)(message);
+    if (Result.isSuccess(result)) return;
+    if (!isUnrecognizedCommand(result.failure)) {
       throw new Error(
-        `Outbound message failed schema validation: ${result.error.message}`,
+        `Outbound message failed schema validation: ${result.failure.message}`,
       );
     }
   }

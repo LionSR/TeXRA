@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 import { TokenCountSchema } from './usage';
 
-const ContextManagementAction = z.enum([
+const ContextManagementAction = Schema.Literals([
   'compaction',
   'clear_tool_uses',
   'clear_thinking',
@@ -10,58 +10,67 @@ const ContextManagementAction = z.enum([
   'max_tokens_reduced',
 ]);
 
-const PositiveTokenCountSchema = z.int().positive();
+const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
 
-const ContextManagementDataBaseSchema = z.object({
+const ContextManagementDataBaseSchema = Schema.Struct({
   tokensBefore: TokenCountSchema,
   contextWindow: PositiveTokenCountSchema,
-  utilizationBefore: z.number().nonnegative(),
-  details: z.string().optional(),
-  summary: z.string().optional(),
+  utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  details: Schema.optional(Schema.String),
+  summary: Schema.optional(Schema.String),
 });
 
-const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.extend({
-  action: z.literal('max_tokens_reduced'),
-  originalMaxTokens: PositiveTokenCountSchema,
-  reducedMaxTokens: PositiveTokenCountSchema,
-});
+const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.mapFields(
+  Struct.assign({
+    action: Schema.Literal('max_tokens_reduced'),
+    originalMaxTokens: PositiveTokenCountSchema,
+    reducedMaxTokens: PositiveTokenCountSchema,
+  }),
+);
 
-const TokensFreedDataSchema = ContextManagementDataBaseSchema.extend({
-  action: ContextManagementAction.exclude(['max_tokens_reduced']),
-  tokensAfter: TokenCountSchema,
-  utilizationAfter: z.number().nonnegative(),
-});
+const TokensFreedDataSchema = ContextManagementDataBaseSchema.mapFields(
+  Struct.assign({
+    action: ContextManagementAction.exclude(['max_tokens_reduced']),
+    tokensAfter: TokenCountSchema,
+    utilizationAfter: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  }),
+);
 
-export const ContextManagementDataSchema = z.discriminatedUnion('action', [
+export const ContextManagementDataSchema = Schema.Union([
   MaxTokensReducedDataSchema,
   TokensFreedDataSchema,
 ]);
 
-export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
+export type ContextManagementData = typeof ContextManagementDataSchema.Type;
 
 /**
  * Lifecycle event for one context-compaction operation. Completion statistics
  * remain in {@link ContextManagementDataSchema}; this smaller payload lets
  * hosts project one stable activity row from start through its terminal state.
  */
-export const CompactionActivityDataSchema = z.object({
-  activity: z.literal('context_compaction'),
-  operationId: z.string().min(1),
-  state: z.enum(['started', 'completed', 'failed', 'cancelled', 'skipped']),
+export const CompactionActivityDataSchema = Schema.Struct({
+  activity: Schema.Literal('context_compaction'),
+  operationId: Schema.String.check(Schema.isMinLength(1)),
+  state: Schema.Literals([
+    'started',
+    'completed',
+    'failed',
+    'cancelled',
+    'skipped',
+  ]),
 });
 
-export type CompactionActivityData = z.infer<
-  typeof CompactionActivityDataSchema
->;
+export type CompactionActivityData =
+  (typeof CompactionActivityDataSchema)['Type'];
 export type CompactionActivityOutcome = Exclude<
   CompactionActivityData['state'],
   'started'
 >;
 
-export const ContextStateDataSchema = z.object({
+export const ContextStateDataSchema = Schema.Struct({
   inputTokens: TokenCountSchema,
   contextWindow: PositiveTokenCountSchema,
-  utilizationPercent: z.number().nonnegative(),
+  utilizationPercent: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
-export type ContextStateData = z.infer<typeof ContextStateDataSchema>;
+export type ContextStateData = typeof ContextStateDataSchema.Type;

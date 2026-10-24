@@ -10,8 +10,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem, type PlatformError } from 'effect';
-import { z } from 'zod';
+import {
+  Data,
+  Effect,
+  FileSystem,
+  type PlatformError,
+  Result,
+  Schema,
+} from 'effect';
 
 // Local imports - common
 import { SkillNameSchema } from '@shared/schemas';
@@ -32,45 +38,60 @@ import {
 } from './mcpServers';
 
 /** A plugin that cannot be read or installed; the message is for the user. */
-export class PluginError extends Data.TaggedError('PluginError')<{
-  readonly message: string;
-}> {}
+export class PluginError extends Schema.TaggedError<PluginError>()(
+  'PluginError',
+  {
+    message: Schema.String,
+  },
+) {}
 
 /** What the user asked for cannot be done as asked: an unknown or taken
  *  name, or a marketplace that needs the plugin named. */
-export class PluginRequestError extends Data.TaggedError('PluginRequestError')<{
-  readonly message: string;
-}> {}
+export class PluginRequestError extends Schema.TaggedError<PluginRequestError>()(
+  'PluginRequestError',
+  {
+    message: Schema.String,
+  },
+) {}
 
 export const failPlugin = (message: string) =>
   Effect.fail(new PluginError({ message }));
 
 /** A component path field: one relative path or several. */
-export const ComponentPathsSchema = z.union([z.string(), z.array(z.string())]);
+export const ComponentPathsSchema = Schema.Union([
+  Schema.String,
+  Schema.Array(Schema.String),
+]);
 
 /**
  * The manifest fields the harness reads. The Claude Code and Codex manifests
  * agree on these, so one schema reads both. `mcpServers` is a path, several, or
  * the servers inline; the fields after it are read only to classify them.
  */
-const PluginManifestSchema = z.object({
-  name: z.string(),
-  version: z.string().optional(),
-  description: z.string().optional(),
-  skills: ComponentPathsSchema.optional(),
-  commands: ComponentPathsSchema.optional(),
-  agents: ComponentPathsSchema.optional(),
-  mcpServers: z
-    .union([ComponentPathsSchema, z.record(z.string(), z.unknown())])
-    .optional(),
-  hooks: z
-    .union([ComponentPathsSchema, z.record(z.string(), z.unknown())])
-    .optional(),
-  lspServers: z.unknown().optional(),
-  outputStyles: z.unknown().optional(),
-  apps: z.unknown().optional(),
+const PluginManifestSchema = Schema.Struct({
+  name: Schema.String,
+  version: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
+  skills: Schema.optional(ComponentPathsSchema),
+  commands: Schema.optional(ComponentPathsSchema),
+  agents: Schema.optional(ComponentPathsSchema),
+  mcpServers: Schema.optional(
+    Schema.Union([
+      ComponentPathsSchema,
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  ),
+  hooks: Schema.optional(
+    Schema.Union([
+      ComponentPathsSchema,
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  ),
+  lspServers: Schema.optional(Schema.Unknown),
+  outputStyles: Schema.optional(Schema.Unknown),
+  apps: Schema.optional(Schema.Unknown),
 });
-type PluginManifest = z.infer<typeof PluginManifestSchema>;
+type PluginManifest = typeof PluginManifestSchema.Type;
 
 export const PLUGIN_MANIFEST_FILES = [
   path.join('.claude-plugin', 'plugin.json'),
@@ -78,7 +99,7 @@ export const PLUGIN_MANIFEST_FILES = [
 ] as const;
 
 /** A `.mcp.json` file: the servers under `mcpServers`, or the map itself. */
-const McpFileSchema = z.record(z.string(), z.unknown());
+const McpFileSchema = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * Components that run code the harness does not run yet: LSP servers. A
@@ -112,7 +133,7 @@ const exists = (target: string) =>
   );
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
-export function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
+export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(file).pipe(
@@ -127,13 +148,13 @@ export function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
           message: `${file} is not valid JSON: ${jsonSyntaxError(error)}`,
         }),
     });
-    const parsed = schema.safeParse(json);
-    if (!parsed.success) {
+    const parsed = Schema.decodeUnknownResult(schema)(json);
+    if (!Result.isSuccess(parsed)) {
       return yield* failPlugin(
-        `${file} does not match the expected shape: ${z.prettifyError(parsed.error)}`,
+        `${file} does not match the expected shape: ${parsed.error.message}`,
       );
     }
-    return parsed.data;
+    return parsed.success;
   });
 }
 
@@ -287,10 +308,10 @@ function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
       if (read.has(resolved)) continue;
       read.add(resolved);
       const json = (yield* readJsonFile(resolved, McpFileSchema)) ?? {};
-      const inner = McpFileSchema.safeParse(json.mcpServers);
+      const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
       maps.push({
         where: resolved,
-        servers: inner.success ? inner.data : json,
+        servers: Result.isSuccess(inner) ? inner.success : json,
       });
     }
     const servers: McpServerConfig[] = [];
@@ -342,7 +363,7 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
     // call their matcher matches (which the trust listing describes), and
     // the departure from the plugin's own configuration is warned once.
     const unevaluated: string[] = [];
-    const add = (source: string, config: z.infer<typeof HooksConfigSchema>) => {
+    const add = (source: string, config: typeof HooksConfigSchema.Type) => {
       const found = configuredHooks(source, config);
       hooks.push(...found.hooks);
       unsupported.push(...found.unsupported);
@@ -374,14 +395,14 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
     }
     for (const entry of declared) {
       if (typeof entry === 'string' || Array.isArray(entry)) continue;
-      const config = HooksConfigSchema.safeParse(
+      const config = Schema.decodeUnknownResult(HooksConfigSchema)(
         'hooks' in entry ? entry : { hooks: entry },
       );
-      if (!config.success)
+      if (!Result.isSuccess(config))
         return yield* failPlugin(
-          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${z.prettifyError(config.error)}`,
+          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${config.error.message}`,
         );
-      add('manifest', config.data);
+      add('manifest', config.success);
     }
     if (unevaluated.length > 0)
       yield* Effect.logWarning(
@@ -432,17 +453,17 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
         `No plugin manifest in ${dir}: expected ${PLUGIN_MANIFEST_FILES.join(' or ')}.`,
       );
     }
-    const name = SkillNameSchema.safeParse(primary.name);
-    if (!name.success) {
+    const name = Schema.decodeUnknownResult(SkillNameSchema)(primary.name);
+    if (!Result.isSuccess(name)) {
       return yield* failPlugin(
-        `Plugin name "${primary.name}" is not usable: ${name.error.issues[0]?.message ?? 'invalid name'}.`,
+        `Plugin name "${primary.name}" is not usable: ${name.failure.issues[0]?.message ?? 'invalid name'}.`,
       );
     }
     // A plugin's MCP servers are named plugin_<plugin>_<server>: the plugin
     // name must fit a server name on its own.
-    if (!ServerNameSchema.safeParse(name.data).success) {
+    if (!Schema.decodeUnknownResult(ServerNameSchema)(name.data).success) {
       return yield* failPlugin(
-        `Plugin name "${name.data}" is too long: use at most 32 characters.`,
+        `Plugin name "${name.success}" is too long: use at most 32 characters.`,
       );
     }
     const declared = [
@@ -456,14 +477,14 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
         // The conventional directory is optional; a declared one is not.
         if (index === 0) continue;
         return yield* failPlugin(
-          `Plugin ${name.data} declares skills at "${candidate}", which does not exist.`,
+          `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
         );
       }
       skills.add(path.relative(dir, resolved) || '.');
     }
-    const mcp = yield* mcpServersOf(dir, name.data, found);
+    const mcp = yield* mcpServersOf(dir, name.success, found);
     return {
-      name: name.data,
+      name: name.success,
       version: primary.version,
       description: primary.description,
       skills: [...skills],
@@ -478,7 +499,7 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
         found.flatMap((manifest) => toList(manifest.agents)),
       ),
       mcpServers: mcp.servers,
-      hooks: yield* hooksOf(dir, name.data, found),
+      hooks: yield* hooksOf(dir, name.success, found),
       code: yield* presentComponents(dir, found, CODE_COMPONENTS),
       ignored: yield* presentComponents(dir, found, IGNORED_COMPONENTS),
       warnings: mcp.warnings,

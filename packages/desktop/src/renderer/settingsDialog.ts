@@ -1,8 +1,8 @@
+import { Result, Schema } from 'effect';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@settingsView/frontend';
 import { html, render } from 'lit';
-import { z } from 'zod';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { readSelectValue } from '@ui/wa/selectTemplates';
@@ -18,8 +18,12 @@ interface DesktopSettingsDialog {
   remount(): void;
 }
 
-export const DesktopThemePreferenceSchema = z.enum(['system', 'light', 'dark']);
-type ThemePreference = z.infer<typeof DesktopThemePreferenceSchema>;
+export const DesktopThemePreferenceSchema = Schema.Literals([
+  'system',
+  'light',
+  'dark',
+]);
+type ThemePreference = typeof DesktopThemePreferenceSchema.Type;
 
 /**
  * Settings as a popup over the shell. The one `<settings-app>` is mounted on
@@ -64,10 +68,10 @@ export function createDesktopSettingsDialog(
               aria-describedby="desktopThemeHelp"
               .value=${hooks.getTheme()}
               @change=${(event: Event) => {
-                const result = DesktopThemePreferenceSchema.safeParse(
-                  readSelectValue(event),
-                );
-                if (result.success) hooks.setTheme(result.data);
+                const result = Schema.decodeUnknownResult(
+                  DesktopThemePreferenceSchema,
+                )(readSelectValue(event));
+                if (Result.isSuccess(result)) hooks.setTheme(result.success);
               }}
             >
               <wa-option value="system">System</wa-option>

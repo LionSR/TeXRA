@@ -5,10 +5,10 @@
 // they are Zod schemas: the renderer's requests are validated in the main
 // process before touching the filesystem or spawning a shell.
 
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 /** Auxiliary resources and replies belong to the paper that opened them. */
-const DesktopWorkspaceMessageSchema = z.object({ session: z.string() });
+const DesktopWorkspaceMessageSchema = Schema.Struct({ session: Schema.String });
 
 export const DESKTOP_WORKSPACE_COMMANDS = {
   // Editor
@@ -44,130 +44,162 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
  * way to keep consistent with the directories it has not loaded.
  */
 export const DesktopWorkspaceFilesChangedMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
+    }),
+  );
 
 export const DesktopOpenDocumentMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT),
-    target: z.string(),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT),
+      target: Schema.String,
+    }),
+  );
 
 // ── Terminal ──
 
-const DesktopTerminalStartMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START),
-  sessionId: z.string(),
-  cols: z.int().positive(),
-  rows: z.int().positive(),
-  initialCommand: z.string().min(1).optional(),
-});
+const DesktopTerminalStartMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START),
+      sessionId: Schema.String,
+      cols: Schema.Int.check(Schema.isGreaterThan(0)),
+      rows: Schema.Int.check(Schema.isGreaterThan(0)),
+      initialCommand: Schema.optional(
+        Schema.String.check(Schema.isMinLength(1)),
+      ),
+    }),
+  );
 
-const DesktopTerminalInputMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT),
-  sessionId: z.string(),
-  data: z.string(),
-});
+const DesktopTerminalInputMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT),
+      sessionId: Schema.String,
+      data: Schema.String,
+    }),
+  );
 
-const DesktopTerminalResizeMessageSchema = DesktopWorkspaceMessageSchema.extend(
-  {
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE),
-    sessionId: z.string(),
-    cols: z.int().positive(),
-    rows: z.int().positive(),
-  },
-);
+const DesktopTerminalResizeMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE),
+      sessionId: Schema.String,
+      cols: Schema.Int.check(Schema.isGreaterThan(0)),
+      rows: Schema.Int.check(Schema.isGreaterThan(0)),
+    }),
+  );
 
-const DesktopTerminalCloseMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE),
-  sessionId: z.string(),
-});
+const DesktopTerminalCloseMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE),
+      sessionId: Schema.String,
+    }),
+  );
 
 export const DesktopTerminalDataMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA),
-    sessionId: z.string(),
-    data: z.string(),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA),
+      sessionId: Schema.String,
+      data: Schema.String,
+    }),
+  );
 
 export const DesktopTerminalExitMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT),
-    sessionId: z.string(),
-    exitCode: z.int(),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT),
+      sessionId: Schema.String,
+      exitCode: Schema.Int,
+    }),
+  );
 
 export const DesktopTerminalErrorMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR),
-    sessionId: z.string(),
-    message: z.string(),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR),
+      sessionId: Schema.String,
+      message: Schema.String,
+    }),
+  );
 
 export const DesktopTerminalOpenCommandMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
-    initialCommand: z.string().min(1),
-  });
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
+      initialCommand: Schema.String.check(Schema.isMinLength(1)),
+    }),
+  );
 
 // ── Browser ──
 
-const DesktopBrowserBoundsSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-  width: z.number().nonnegative(),
-  height: z.number().nonnegative(),
+const DesktopBrowserBoundsSchema = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  height: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
-export type DesktopBrowserBounds = z.infer<typeof DesktopBrowserBoundsSchema>;
+export type DesktopBrowserBounds = typeof DesktopBrowserBoundsSchema.Type;
 
-const DesktopBrowserOpenMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN),
-  tabId: z.string(),
-  url: z.string(),
-});
-
-const DesktopBrowserBoundsMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS),
-  tabId: z.string(),
-  bounds: DesktopBrowserBoundsSchema,
-});
-
-const DesktopBrowserHideMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE),
-});
-
-const DesktopBrowserCloseMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE),
-  tabId: z.string(),
-});
-
-export const DesktopBrowserStateMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
-    tabId: z.string(),
-    title: z.string(),
-  });
-
-/** Everything the main process accepts from the renderer. */
-export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
-  'command',
-  [
-    DesktopTerminalStartMessageSchema,
-    DesktopTerminalInputMessageSchema,
-    DesktopTerminalResizeMessageSchema,
-    DesktopTerminalCloseMessageSchema,
-    DesktopBrowserOpenMessageSchema,
-    DesktopBrowserBoundsMessageSchema,
-    DesktopBrowserHideMessageSchema,
-    DesktopBrowserCloseMessageSchema,
-  ],
+const DesktopBrowserOpenMessageSchema = DesktopWorkspaceMessageSchema.mapFields(
+  Struct.assign({
+    command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN),
+    tabId: Schema.String,
+    url: Schema.String,
+  }),
 );
 
-export type DesktopWorkspaceInboundMessage = z.infer<
-  typeof DesktopWorkspaceInboundMessageSchema
->;
+const DesktopBrowserBoundsMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS),
+      tabId: Schema.String,
+      bounds: DesktopBrowserBoundsSchema,
+    }),
+  );
+
+const DesktopBrowserHideMessageSchema = DesktopWorkspaceMessageSchema.mapFields(
+  Struct.assign({
+    command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE),
+  }),
+);
+
+const DesktopBrowserCloseMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE),
+      tabId: Schema.String,
+    }),
+  );
+
+export const DesktopBrowserStateMessageSchema =
+  DesktopWorkspaceMessageSchema.mapFields(
+    Struct.assign({
+      command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
+      tabId: Schema.String,
+      title: Schema.String,
+    }),
+  );
+
+/** Everything the main process accepts from the renderer. */
+export const DesktopWorkspaceInboundMessageSchema = Schema.Union([
+  DesktopTerminalStartMessageSchema,
+  DesktopTerminalInputMessageSchema,
+  DesktopTerminalResizeMessageSchema,
+  DesktopTerminalCloseMessageSchema,
+  DesktopBrowserOpenMessageSchema,
+  DesktopBrowserBoundsMessageSchema,
+  DesktopBrowserHideMessageSchema,
+  DesktopBrowserCloseMessageSchema,
+]);
+
+export type DesktopWorkspaceInboundMessage =
+  (typeof DesktopWorkspaceInboundMessageSchema)['Type'];
 
 /** A workspace request before the project transport stamps its `session`. */
 export type DesktopWorkspaceRequest =
@@ -179,16 +211,14 @@ export type DesktopWorkspaceRequest =
 
 /** The commands the main process routes to a project's workspace. */
 export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
-  DesktopWorkspaceInboundMessageSchema.options.flatMap((option) => [
-    ...option.shape.command.values,
-  ]);
+  DesktopWorkspaceInboundMessageSchema.members; /* TODO(effect-schema): flatMap; was `.flatMap((option) => [ ...option.shape.command.values, ])` */
 
 type WorkspaceOutbound =
-  | z.infer<typeof DesktopWorkspaceFilesChangedMessageSchema>
-  | z.infer<typeof DesktopTerminalDataMessageSchema>
-  | z.infer<typeof DesktopTerminalExitMessageSchema>
-  | z.infer<typeof DesktopTerminalErrorMessageSchema>
-  | z.infer<typeof DesktopBrowserStateMessageSchema>;
+  | typeof DesktopWorkspaceFilesChangedMessageSchema.Type
+  | typeof DesktopTerminalDataMessageSchema.Type
+  | typeof DesktopTerminalExitMessageSchema.Type
+  | typeof DesktopTerminalErrorMessageSchema.Type
+  | typeof DesktopBrowserStateMessageSchema.Type;
 
 /** A workspace reply before the project transport stamps its `session`. */
 export type DesktopWorkspaceReply = WorkspaceOutbound extends infer M

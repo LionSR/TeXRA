@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {
@@ -63,7 +63,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   constructor(
     private readonly storage: KeyValueStore,
     private readonly key: string,
-    private readonly schema: z.ZodType<T>,
+    private readonly schema: Schema.Codec<T>,
   ) {
     this.state = this.load();
   }
@@ -125,7 +125,7 @@ function describeStored(value: unknown): string {
 }
 
 /** First few zod issues, trimmed so the console stays readable. */
-function summarizeIssues(error: z.ZodError): Record<string, unknown>[] {
+function summarizeIssues(error: Schema.SchemaError): Record<string, unknown>[] {
   return error.issues.slice(0, 5).map((issue) => ({
     path: issue.path.join('.') || '(root)',
     code: issue.code,

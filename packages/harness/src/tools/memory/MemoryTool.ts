@@ -1,7 +1,13 @@
 // Node and third-party imports
 import * as path from 'node:path';
-import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
-import { z } from 'zod';
+import {
+  DateTime,
+  Effect,
+  type FileSystem,
+  Option,
+  Schema,
+  Stream,
+} from 'effect';
 
 // Local imports
 import { Runs } from '@agent/runtime/runRegistry';
@@ -63,76 +69,108 @@ const LISTING_DEFAULT_OFFSET = 0;
 const LISTING_DEFAULT_LIMIT = 100;
 const LISTING_MAX_LIMIT = 200;
 
-const MemoryToolInputSchema = z.discriminatedUnion('command', [
-  z.looseObject({
-    command: z.literal('view'),
-    path: z
-      .string()
-      .nullish()
-      .describe(
-        `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
+const MemoryToolInputSchema = Schema.Union([
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('view'),
+      path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+        description: `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
+      }),
+      view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)),
+      /** Zero-based offset for paginating directory listings (path points to a directory). */
+      offset: nullishWithDefault(
+        Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        LISTING_DEFAULT_OFFSET,
+      ).describe(
+        `Zero-based offset into the directory listing. Use with limit for pagination. Default: ${LISTING_DEFAULT_OFFSET}.`,
       ),
-    view_range: ViewRangeSchema.nullish(),
-    /** Zero-based offset for paginating directory listings (path points to a directory). */
-    offset: nullishWithDefault(z.int().min(0), LISTING_DEFAULT_OFFSET).describe(
-      `Zero-based offset into the directory listing. Use with limit for pagination. Default: ${LISTING_DEFAULT_OFFSET}.`,
-    ),
-    /** Maximum entries to return from a directory listing (path points to a directory). */
-    limit: nullishWithDefault(
-      z.int().min(1).max(LISTING_MAX_LIMIT),
-      LISTING_DEFAULT_LIMIT,
-    ).describe(
-      `Max entries to return from directory listing. Default: ${LISTING_DEFAULT_LIMIT}, max: ${LISTING_MAX_LIMIT}.`,
-    ),
-  }),
-  z.looseObject({
-    command: z.literal('create'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    file_text: z.string(),
-  }),
-  z.looseObject({
-    command: z.literal('str_replace'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    old_str: z.string(),
-    new_str: z.string(),
-  }),
-  // Built here, not passed as a shape: the branch carries a cross-field check.
-  z
-    .looseObject({
-      command: z.literal('insert'),
-      path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-      insert_line: z.int().min(0),
-      insert_text: z
-        .string()
-        .nullish()
-        .describe('Text to insert. Aliased by `new_str` if omitted.'),
-      new_str: z.string().nullish(),
-    })
-    .refine((data) => data.insert_text != null || data.new_str != null, {
-      message: 'insert_text is required for command="insert".',
-      path: ['insert_text'],
+      /** Maximum entries to return from a directory listing (path points to a directory). */
+      limit: nullishWithDefault(
+        Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+          Schema.isLessThanOrEqualTo(LISTING_MAX_LIMIT),
+        ),
+        LISTING_DEFAULT_LIMIT,
+      ).describe(
+        `Max entries to return from directory listing. Default: ${LISTING_DEFAULT_LIMIT}, max: ${LISTING_MAX_LIMIT}.`,
+      ),
     }),
-  z.looseObject({
-    command: z.literal('delete'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('rename'),
-    old_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    new_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('pin'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('unpin'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('create'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+      file_text: Schema.String,
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('str_replace'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+      old_str: Schema.String,
+      new_str: Schema.String,
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  // Built here, not passed as a shape: the branch carries a cross-field check.
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('insert'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+      insert_line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+      insert_text: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+        description: 'Text to insert. Aliased by `new_str` if omitted.',
+      }),
+      new_str: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ).check(
+    Schema.makeFilter(
+      (data) => data.insert_text != null || data.new_str != null,
+      {
+        message: 'insert_text is required for command="insert".',
+        path: ['insert_text'],
+      },
+    ),
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('delete'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('rename'),
+      old_path: Schema.String.annotate({
+        description: MEMORY_PATH_DESCRIPTION,
+      }),
+      new_path: Schema.String.annotate({
+        description: MEMORY_PATH_DESCRIPTION,
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('pin'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('unpin'),
+      path: Schema.String.annotate({ description: MEMORY_PATH_DESCRIPTION }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
 ]);
 
 /** Derived from MemoryToolInputSchema - single source of truth */
-type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
+type MemoryToolInput = typeof MemoryToolInputSchema.Type;
 
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };

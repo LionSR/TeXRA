@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // IPC plumbing for the in-app Review workbench.
 //
@@ -17,47 +17,51 @@ export const DESKTOP_DIFF_COMMANDS = {
   CLOSE_DIFF: 'desktop:closeDiff',
 } as const;
 
-export const DesktopShowDiffMessageSchema = z.object({
-  session: z.string().min(1),
-  command: z.literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
+export const DesktopShowDiffMessageSchema = Schema.Struct({
+  session: Schema.String.check(Schema.isMinLength(1)),
+  command: Schema.Literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   /**
    * Names the diff this message opens, so the `desktop:closeDiff` below can
    * close that diff and no other. A tool-edit preview uses its request id;
    * every other producer gets one minted by `desktopDiffHost.openDiff`.
    */
-  previewId: z.string().min(1),
-  title: z.string(),
+  previewId: Schema.String.check(Schema.isMinLength(1)),
+  title: Schema.String,
   // The one path the Review workbench displays. Always supplied by the
   // producer; no fallback reconstruction in the renderer.
-  displayPath: z.string(),
-  originalText: z.string(),
-  proposedText: z.string(),
-  additions: z.int().nonnegative().prefault(0),
-  deletions: z.int().nonnegative().prefault(0),
+  displayPath: Schema.String,
+  originalText: Schema.String,
+  proposedText: Schema.String,
+  additions: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  deletions: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
   // Monaco language id (e.g. 'plaintext', 'typescript', 'latex'). The
   // renderer falls back to 'plaintext' on unknown values.
-  language: z.string().default('plaintext'),
+  language: Schema.String.pipe(
+    Schema.withDecodingDefaultType(Effect.succeed('plaintext')),
+  ),
 });
 
-export type DesktopShowDiffMessage = z.infer<
-  typeof DesktopShowDiffMessageSchema
->;
+export type DesktopShowDiffMessage =
+  (typeof DesktopShowDiffMessageSchema)['Type'];
 
-export const DesktopCloseDiffMessageSchema = z.object({
-  session: z.string().min(1),
-  command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
+export const DesktopCloseDiffMessageSchema = Schema.Struct({
+  session: Schema.String.check(Schema.isMinLength(1)),
+  command: Schema.Literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
   /**
    * The `previewId` of the diff the sender opened. The Review pane keys its
    * reviews by this id, so the renderer drops this review and no other (a
    * second pending edit of the same file stays), and the Review tab goes
    * only once that empties the pane.
    */
-  previewId: z.string().min(1),
+  previewId: Schema.String.check(Schema.isMinLength(1)),
 });
 
-export type DesktopCloseDiffMessage = z.infer<
-  typeof DesktopCloseDiffMessageSchema
->;
+export type DesktopCloseDiffMessage =
+  (typeof DesktopCloseDiffMessageSchema)['Type'];
 
 // `desktop:closeDiff` is consumed by the renderer's window-message
 // handler. The main process posts it from `desktopDiffHost.closeDiff`,

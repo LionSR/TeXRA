@@ -1,3 +1,4 @@
+import { Effect, Schema } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -5,7 +6,6 @@ import {
   type ModelConfig,
   type ModelRef,
 } from 'llm-zoo';
-import { z } from 'zod';
 
 /**
  * Agent CLI setting value schemas shared by settings IPC and tool runtimes.
@@ -35,7 +35,7 @@ function pickerModels(eligible: (config: ModelConfig) => boolean) {
     (config) => eligible(config) && config.deprecated !== true,
   );
   return {
-    schema: z.enum(configs.map((config) => config.ref)),
+    schema: Schema.Enum(configs.map((config) => config.ref)),
     labels: configs.map((config) => config.label),
   };
 }
@@ -62,29 +62,35 @@ const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
  * `claudeAgentShared.ts` guards this against the Claude SDK's `EffortLevel`
  * and `codexConfig.ts` against the Codex SDK's `ModelReasoningEffort`.
  */
-export const AgentCliEffortSchema = z.enum([
+export const AgentCliEffortSchema = Schema.Literals([
   ReasoningEffort.LOW,
   ReasoningEffort.MEDIUM,
   ReasoningEffort.HIGH,
   ReasoningEffort.XHIGH,
   ReasoningEffort.MAX,
 ]);
-export type AgentCliEffort = z.infer<typeof AgentCliEffortSchema>;
+export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 
 /** The reasoning policy's `DEFAULT_EFFORT` (a test holds them equal). */
 const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
 export const CLAUDE_AGENT_MODEL_SETTING = {
-  schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
+  schema: ClaudeAgentModelSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(CLAUDE_AGENT_DEFAULT_MODEL)),
+  ),
   enumLabels: claudeCodeModels.labels,
 };
 export const CODEX_MODEL_SETTING = {
-  schema: CodexModelSchema.prefault(CODEX_DEFAULT_MODEL),
+  schema: CodexModelSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(CODEX_DEFAULT_MODEL)),
+  ),
   enumLabels: codexModels.labels,
 };
 export const AGENT_CLI_EFFORT_SETTING = {
-  schema: AgentCliEffortSchema.prefault(AGENT_CLI_EFFORT_DEFAULT),
+  schema: AgentCliEffortSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(AGENT_CLI_EFFORT_DEFAULT)),
+  ),
   enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
 };
 
@@ -93,23 +99,23 @@ export const AGENT_CLI_EFFORT_SETTING = {
 // ============================================================================
 
 /** Valid Codex sandbox modes. */
-export const CodexSandboxModeSchema = z.enum([
+export const CodexSandboxModeSchema = Schema.Literals([
   'read-only',
   'workspace-write',
   'danger-full-access',
 ]);
-export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
+export type CodexSandboxMode = typeof CodexSandboxModeSchema.Type;
 
 export const CODEX_SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
 
 /** Valid Codex approval policies. */
-export const CodexApprovalPolicySchema = z.enum([
+export const CodexApprovalPolicySchema = Schema.Literals([
   'never',
   'on-request',
   'untrusted',
   'on-failure',
 ]);
-export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
+export type CodexApprovalPolicy = typeof CodexApprovalPolicySchema.Type;
 
 export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 
@@ -118,15 +124,14 @@ export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 // ============================================================================
 
 /** Claude Code CLI permission modes exposed in settings. */
-export const ClaudeAgentPermissionModeSchema = z.enum([
+export const ClaudeAgentPermissionModeSchema = Schema.Literals([
   'default',
   'acceptEdits',
   'bypassPermissions',
   'plan',
 ]);
-export type ClaudeAgentPermissionMode = z.infer<
-  typeof ClaudeAgentPermissionModeSchema
->;
+export type ClaudeAgentPermissionMode =
+  (typeof ClaudeAgentPermissionModeSchema)['Type'];
 
 export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode =
   'acceptEdits';

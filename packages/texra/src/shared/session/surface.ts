@@ -11,7 +11,7 @@
  * where a `Map` serializes to `{}`, so the persisted form beside it is a Zod
  * schema whose maps are entry arrays, rebuilt into `Map`s at load.
  */
-import { z } from 'zod';
+import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 
 import { modelRefOf } from '@texra-ai/llm';
 
@@ -37,15 +37,22 @@ import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 
 /** Who runs a main-view request: a single agent or a team. */
-const LaunchTargetSchema = z.enum(['agent', 'team']);
+const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
 
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */
-const UIFileFieldsSchema = NullableFileFieldsSchema.extend({
-  editedFile: z
-    .string()
-    .nullish()
-    .transform((v) => v ?? ''),
-});
+const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
+  Struct.assign({
+    editedFile: Schema.optional(Schema.NullOr(Schema.String)).pipe(
+      Schema.decodeTo(
+        Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((v) => v ?? '')` */,
+        {
+          decode: SchemaGetter.transform((v) => v ?? ''),
+          encode: SchemaGetter.forbidden(() => 'decode-only'),
+        },
+      ),
+    ),
+  }),
+);
 
 /**
  * The new-task composer's selections, separate from host-derived state.
@@ -53,40 +60,64 @@ const UIFileFieldsSchema = NullableFileFieldsSchema.extend({
  * with a document task (its option's `rounds`) runs it over the selected
  * files; any other agent, and a team, chats.
  */
-export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
-  DocumentTaskOptionsSchema,
-).extend({
-  launchTarget: LaunchTargetSchema.prefault('agent'),
-  selectedTeamId: z.string().prefault(''),
-  workingDirectory: z.string().prefault(''),
-  agent: z.string().prefault('orchestrator'),
-  model: z.string().prefault(DEFAULT_AGENT_MODEL),
-  commit: z.string().prefault('HEAD'),
-  instruction: z.string().prefault(''),
-  baseFile: z.string().prefault(''),
-  /** Per-task approval, applied at launch by `launchApprovalOptions`. */
-  approval: z.enum(['policy', 'autoApprove']).prefault('policy'),
-});
-type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
+export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
+  Struct.assign(DocumentTaskOptionsSchema.fields),
+).mapFields(
+  Struct.assign({
+    launchTarget: LaunchTargetSchema.pipe(
+      Schema.withDecodingDefault(Effect.succeed('agent')),
+    ),
+    selectedTeamId: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('')),
+    ),
+    workingDirectory: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('')),
+    ),
+    agent: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('orchestrator')),
+    ),
+    model: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_MODEL)),
+    ),
+    commit: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('HEAD')),
+    ),
+    instruction: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('')),
+    ),
+    baseFile: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('')),
+    ),
+    /** Per-task approval, applied at launch by `launchApprovalOptions`. */
+    approval: Schema.Literals(['policy', 'autoApprove']).pipe(
+      Schema.withDecodingDefault(Effect.succeed('policy')),
+    ),
+  }),
+);
+type LaunchSurface = typeof LaunchSurfaceSchema.Type;
 type LaunchShape = typeof LaunchSurfaceSchema.shape;
 
 /** A change to the launcher, carried by the host's `surface.action`: every
  *  field optional with its `.prefault` unwrapped, since `.partial()` keeps
  *  prefaults that Zod runs for an absent key, so `{ commit }` would reset
  *  the agent, the draft and the file lists. */
-export const LaunchPatchSchema = z.object(
+export const LaunchPatchSchema = Schema.Struct(
   Object.fromEntries(
-    Object.entries(LaunchSurfaceSchema.shape).map(([key, field]) => [
+    Object.entries(LaunchSurfaceSchema.fields).map(([key, field]) => [
       key,
-      (field instanceof z.ZodPrefault ? field.unwrap() : field).optional(),
+      (field instanceof
+      Schema.Unknown /* TODO(effect-schema): z.ZodPrefault; was `z.ZodPrefault()` */
+        ? field.unwrap()
+        : field
+      ).optional(),
     ]),
   ) as {
-    [K in keyof LaunchShape]: z.ZodOptional<
-      LaunchShape[K] extends z.ZodPrefault<infer Inner> ? Inner : LaunchShape[K]
-    >;
+    [
+      K in keyof LaunchShape
+    ]: unknown /* TODO(effect-schema): type z.ZodOptional; was `z.ZodOptional< LaunchShape[K] extends z.ZodPrefault<infer Inner> ? Inner : LaunchShape[K] >` */;
   },
 );
-type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
+type LaunchPatch = typeof LaunchPatchSchema.Type;
 
 /** A pending agent proposal: the run asking and its request. */
 interface ProposalRef {
@@ -173,8 +204,10 @@ export interface Surface {
   readonly workbench: WorkbenchLayout | null;
 }
 
-function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
-  return z.array(z.tuple([key, value])).prefault([]);
+function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
+  return Schema.Array(Schema.Tuple([key, value])).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  );
 }
 
 /**
@@ -184,23 +217,36 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
  * `PersistedState` warns with the failing key and resets that session's
  * whole record to these defaults.
  */
-export const PersistedSurfaceSchema = z.object({
-  selected: RunIdSchema.nullable().prefault(null),
-  launch: LaunchSurfaceSchema.prefault({}),
+export const PersistedSurfaceSchema = Schema.Struct({
+  selected: Schema.NullOr(RunIdSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  launch: LaunchSurfaceSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   /** Text only; image bytes are not persisted. */
-  drafts: entries(RunIdSchema, z.string()),
-  inquiryDrafts: entries(z.string(), InquiryDraftSchema),
-  expanded: entries(RunIdSchema, z.boolean()),
-  groups: entries(RunIdSchema, entries(z.string(), z.boolean())),
-  seen: entries(RunIdSchema, z.number()),
-  drawerOpen: z.boolean().prefault(false),
-  storageHintDismissed: z.boolean().prefault(false),
-  workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
+  drafts: entries(RunIdSchema, Schema.String),
+  inquiryDrafts: entries(Schema.String, InquiryDraftSchema),
+  expanded: entries(RunIdSchema, Schema.Boolean),
+  groups: entries(RunIdSchema, entries(Schema.String, Schema.Boolean)),
+  seen: entries(RunIdSchema, Schema.Number),
+  drawerOpen: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  storageHintDismissed: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  workbench: Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
-type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
+type PersistedSurface = typeof PersistedSurfaceSchema.Type;
 
 export function emptySurface(session: string): Surface {
-  return loadSurface(session, PersistedSurfaceSchema.parse({}));
+  return loadSurface(
+    session,
+    Schema.decodeUnknownSync(PersistedSurfaceSchema)({}),
+  );
 }
 
 /** The signal record from its persisted form: entry arrays back into Maps. */

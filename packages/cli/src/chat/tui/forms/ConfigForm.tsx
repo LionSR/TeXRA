@@ -7,9 +7,9 @@
 // Reads/writes go through the host-aware `Settings` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
+import { Schema } from 'effect';
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
-import { z } from 'zod';
 
 import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { isCtrlInput } from '@cli/tui/inputKeys';
@@ -50,10 +50,26 @@ function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (settingEnumOptions(entry)) return 'enum';
   const stored = settingSchemaWithoutPrefault(entry);
   // A nullable setting edits as its value; Ctrl-R resets it to null.
-  const schema = stored instanceof z.ZodNullable ? stored.unwrap() : stored;
-  if (schema instanceof z.ZodBoolean) return 'boolean';
-  if (schema instanceof z.ZodNumber) return 'number';
-  if (schema instanceof z.ZodString) return 'string';
+  const schema =
+    stored instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodNullable; was `z.ZodNullable()` */
+      ? stored.unwrap()
+      : stored;
+  if (
+    schema instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodBoolean; was `z.ZodBoolean()` */
+  )
+    return 'boolean';
+  if (
+    schema instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodNumber; was `z.ZodNumber()` */
+  )
+    return 'number';
+  if (
+    schema instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodString; was `z.ZodString()` */
+  )
+    return 'string';
   return 'readonly';
 }
 

@@ -1,8 +1,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Path } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Path, Schema } from 'effect';
 
 // Local imports
 import {
@@ -60,18 +59,20 @@ const listExtractedEntries = Effect.fn('listExtractedEntries')(function* (
   return formatted.length > 0 ? formatted.join('\n') : NO_ENTRIES_MESSAGE;
 });
 
-const ArxivDownloadInputSchema = z.strictObject({
-  id: z.string().describe('arXiv identifier or URL for the source archive.'),
-  autoIndent: nullishWithDefault(z.boolean(), true).describe(
+const ArxivDownloadInputSchema = Schema.Struct({
+  id: Schema.String.annotate({
+    description: 'arXiv identifier or URL for the source archive.',
+  }),
+  autoIndent: nullishWithDefault(Schema.Boolean, true).describe(
     'Auto-indent extracted TeX files after downloading source.',
   ),
   destination: nullishWithDefault(
-    z.enum(['root', 'references']),
+    Schema.Literals(['root', 'references']),
     'references',
   ).describe('Where to extract the source: workspace root or References/.'),
 });
 
-type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
+type ArxivDownloadInput = typeof ArxivDownloadInputSchema.Type;
 
 const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,

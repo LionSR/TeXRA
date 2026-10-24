@@ -13,10 +13,10 @@ import {
   Effect,
   Result,
   Schedule,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
@@ -60,10 +60,13 @@ export const READ_RETRY = Schedule.exponential('250 millis').pipe(
  *  wrote is never read as this build's shape, and one that no longer
  *  decodes fails the read naming itself. */
 function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
-  const version = z.int().parse(row.version);
+  const version = Schema.decodeUnknownSync(Schema.Int)(row.version);
   if (version > VALUE_VERSION)
     throw new DatabaseStoreNewer({ type: CURRENT_VALUE_KIND, version });
-  const parsed = parseJsonWith(z.string().parse(row.value), family.schema);
+  const parsed = parseJsonWith(
+    Schema.decodeUnknownSync(Schema.String)(row.value),
+    family.schema,
+  );
   if (Result.isSuccess(parsed)) return parsed.success;
   throw new Error(
     `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
@@ -151,7 +154,7 @@ export function currentValues(store: {
         ).pipe(
           Effect.map((rows) =>
             rows.map((row) => ({
-              key: z.string().parse(row.key),
+              key: Schema.decodeUnknownSync(Schema.String)(row.key),
               value: decodeValue(family, row),
             })),
           ),
@@ -167,8 +170,8 @@ export function currentValues(store: {
             Effect.map((rows) =>
               JSON.stringify(
                 rows.map((row) => [
-                  z.string().parse(row.key),
-                  z.string().parse(row.value),
+                  Schema.decodeUnknownSync(Schema.String)(row.key),
+                  Schema.decodeUnknownSync(Schema.String)(row.value),
                 ]),
               ),
             ),
@@ -194,7 +197,9 @@ export function currentValues(store: {
       read: query(
         exec('SELECT at, value FROM input_history ORDER BY id').pipe(
           Effect.map((rows) =>
-            rows.map((row) => InputHistoryRecordSchema.parse(row)),
+            rows.map((row) =>
+              Schema.decodeUnknownSync(InputHistoryRecordSchema)(row),
+            ),
           ),
         ),
       ),

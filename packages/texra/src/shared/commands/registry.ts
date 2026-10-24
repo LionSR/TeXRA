@@ -1,5 +1,5 @@
 // Third-party imports
-import type { z } from 'zod';
+import { Schema } from 'effect';
 
 /**
  * Handler for a registry-dispatched command.
@@ -31,7 +31,7 @@ export interface TypedCommandHandler<
   TResult = boolean | Promise<boolean>,
 > {
   run: (actions: TActions, ...args: TArgs) => TResult;
-  argsSchema: z.ZodType<TArgs>;
+  argsSchema: Schema.Codec<TArgs>;
 }
 
 /**
@@ -59,7 +59,7 @@ export function definedHandler<
   TArgs extends readonly unknown[],
   TResult = boolean | Promise<boolean>,
 >(
-  argsSchema: z.ZodType<TArgs>,
+  argsSchema: Schema.Codec<TArgs>,
   run: (actions: TActions, ...args: TArgs) => TResult,
 ): TypedCommandHandler<TActions, TArgs, TResult> {
   return { run, argsSchema };
@@ -67,7 +67,7 @@ export function definedHandler<
 
 export type CommandDispatchFailure<TId extends string> =
   | { kind: 'unhandled'; id: TId }
-  | { kind: 'invalidArguments'; id: TId; error: z.ZodError };
+  | { kind: 'invalidArguments'; id: TId; error: Schema.SchemaError };
 
 /**
  * Dispatch a command through its registered handler. Returns the

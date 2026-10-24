@@ -1,8 +1,7 @@
 // Third-party imports
 import { describe, expect } from 'vitest';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema, SchemaGetter } from 'effect';
 
 // Local imports - tools
 import {
@@ -38,9 +37,9 @@ describe('normalizeStructuredOutputSchema', () => {
 
   it('rejects non-object and unconstrained roots at normalization time', () => {
     expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
-    expect(() => normalizeStructuredOutputSchema(z.array(z.string()))).toThrow(
-      /object.*root/,
-    );
+    expect(() =>
+      normalizeStructuredOutputSchema(Schema.Array(Schema.String)),
+    ).toThrow(/object.*root/);
   });
 
   it('rejects regex-bearing sandbox schemas before host compilation', () => {
@@ -128,10 +127,10 @@ describe('normalizeStructuredOutputSchema', () => {
 });
 
 describe('buildTerminalTool', () => {
-  const schema = z.strictObject({ title: z.string(), count: z.number() });
+  const schema = Schema.Struct({ title: Schema.String, count: Schema.Number });
 
   it('rejects a non-object root schema so provider tool inputs stay valid', () => {
-    expect(() => buildTerminalTool(z.array(z.string()))).toThrow(
+    expect(() => buildTerminalTool(Schema.Array(Schema.String))).toThrow(
       /object at the root/,
     );
   });
@@ -141,8 +140,10 @@ describe('buildTerminalTool', () => {
     () =>
       Effect.gen(function* () {
         const tool = buildTerminalTool(
-          z.strictObject({
-            title: z.string().refine(async (value) => value === 'accepted'),
+          Schema.Struct({
+            title: Schema.String.check(
+              Schema.makeFilter(async (value) => value === 'accepted'),
+            ),
           }),
         );
 
@@ -160,7 +161,17 @@ describe('buildTerminalTool', () => {
     () =>
       Effect.gen(function* () {
         const tool = buildTerminalTool(
-          z.strictObject({ value: z.string().transform(() => 1n) }),
+          Schema.Struct({
+            value: Schema.String.pipe(
+              Schema.decodeTo(
+                Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform(() => 1n)` */,
+                {
+                  decode: SchemaGetter.transform(() => 1n),
+                  encode: SchemaGetter.forbidden(() => 'decode-only'),
+                },
+              ),
+            ),
+          }),
         );
 
         expect(yield* tool.call({ value: 'one' })).toMatchObject({

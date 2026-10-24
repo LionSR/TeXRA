@@ -10,7 +10,7 @@
  * and a follow-up batch is restored to its queue with the failure
  * reported. Nothing drops an attachment silently.
  */
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -31,11 +31,10 @@ import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm';
-import type { z } from 'zod';
 
 /** One element of a canonical user or tool-result message. */
 export type InputPart = Extract<
-  z.infer<typeof MessageSchema>,
+  typeof MessageSchema.Type,
   { role: 'user' }
 >['content'][number];
 

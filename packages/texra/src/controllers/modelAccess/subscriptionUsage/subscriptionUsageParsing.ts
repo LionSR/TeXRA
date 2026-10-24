@@ -1,6 +1,13 @@
-import { Duration, Effect, Number as Num, Predicate } from 'effect';
+import {
+  Duration,
+  Effect,
+  Number as Num,
+  Predicate,
+  Result,
+  Schema,
+  SchemaGetter,
+} from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
-import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 
@@ -45,13 +52,10 @@ export function asObject(value: unknown): JsonObject | undefined {
 
 /** A loosely-typed wire number: a real number, or a non-blank numeric string
  *  (provider responses mix both for the same logical field). */
-const looseFiniteNumber = z.preprocess((value) => {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string' && value.trim() !== '') return Number(value);
-  return value;
-}, z.number().finite());
+const looseFiniteNumber =
+  Schema.Finite; /* TODO(effect-schema): preprocess; was `z.preprocess((value) => { if (typeof value === 'number') return value; if (typeof value === 'string' && value.trim() !== '') return Number(value); return value; }, z.number().finite())` */
 
-const nonBlankString = z.string().trim().min(1);
+const nonBlankString = Schema.Trim.check(Schema.isMinLength(1));
 
 /** A wire timestamp expressed as an epoch number (seconds or milliseconds,
  *  whichever `looseFiniteNumber` resolves to) or an ISO 8601 (or otherwise
@@ -60,41 +64,57 @@ const nonBlankString = z.string().trim().min(1);
  *  rejected outright rather than falling through to `Date.parse`, which
  *  accepts some non-ISO numeric-looking strings as dates (`Date.parse('-1')`
  *  resolves to 2001-01-01). */
-const timestampMsField = z.any().transform((value, ctx) => {
-  const numeric = looseFiniteNumber.safeParse(value);
-  if (numeric.success) {
-    if (numeric.data < 0) {
-      ctx.addIssue({ code: 'custom', message: 'negative epoch timestamp' });
-      return z.NEVER;
-    }
-    return Math.trunc(
-      numeric.data < 100_000_000_000 ? numeric.data * 1000 : numeric.data,
-    );
-  }
-  if (typeof value !== 'string') {
-    ctx.addIssue({ code: 'custom', message: 'not a timestamp' });
-    return z.NEVER;
-  }
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) {
-    ctx.addIssue({ code: 'custom', message: 'not a parseable date string' });
-    return z.NEVER;
-  }
-  return parsed;
-});
+const timestampMsField = Schema.Any.pipe(
+  Schema.decodeTo(
+    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value, ctx) => { const numeric = looseFiniteNumber.safeParse(value); if (numeric.success) { if (numeric.data < 0) { ctx.addIssue({ code: 'custom', message: 'negative epoch timestamp' }); return z.NEVER; } return Math.trunc( numeric.data < 100_000_000_000 ? numeric.data * 1000 : numeric.data, ); } if (typeof value !== 'string') { ctx.addIssue({ code: 'custom', message: 'not a timestamp' }); return z.NEVER; } const parsed = Date.parse(value); if (Number.isNaN(parsed)) { ctx.addIssue({ code: 'custom', message: 'not a parseable date string' }); return z.NEVER; } return parsed; })` */,
+    {
+      decode: SchemaGetter.transform((value, ctx) => {
+        const numeric = Schema.decodeUnknownResult(looseFiniteNumber)(value);
+        if (Result.isSuccess(numeric)) {
+          if (numeric.success < 0) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'negative epoch timestamp',
+            });
+            return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
+          }
+          return Math.trunc(
+            numeric.success < 100_000_000_000
+              ? numeric.success * 1000
+              : numeric.success,
+          );
+        }
+        if (typeof value !== 'string') {
+          ctx.addIssue({ code: 'custom', message: 'not a timestamp' });
+          return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
+        }
+        const parsed = Date.parse(value);
+        if (Number.isNaN(parsed)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'not a parseable date string',
+          });
+          return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
+        }
+        return parsed;
+      }),
+      encode: SchemaGetter.forbidden(() => 'decode-only'),
+    },
+  ),
+);
 
 /** Pick the first field, by alias, that parses against `schema`. Every
  *  subscription-usage adapter reads the same provider concept under several
  *  different wire spellings (`reset_at` / `resets_at` / `resetTime` / …), so
  *  the alias fallback lives once here instead of once per detector. */
 function pickField<Value>(
-  schema: z.ZodType<Value>,
+  schema: Schema.Codec<Value>,
   object: JsonObject | undefined,
   keys: readonly string[],
 ): Value | undefined {
   for (const key of keys) {
-    const result = schema.safeParse(object?.[key]);
-    if (result.success) return result.data;
+    const result = Schema.decodeUnknownResult(schema)(object?.[key]);
+    if (Result.isSuccess(result)) return result.success;
   }
   return undefined;
 }

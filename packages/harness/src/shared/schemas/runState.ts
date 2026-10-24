@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // Conversation Progress (tool-call counters updated during run)
 
-export const ConversationProgressSchema = z.object({
+export const ConversationProgressSchema = Schema.Struct({
   /** Cumulative number of individual tool calls executed. */
-  toolCallCount: z.number(),
+  toolCallCount: Schema.Number,
 });

@@ -6,8 +6,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Result, Schema, SchemaGetter } from 'effect';
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
@@ -38,7 +37,7 @@ import { escapesRoot } from '@utils/core/pathCore';
  * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
  * handles read failures gracefully, avoiding a TOCTOU race.
  */
-export const memoriesField = nullishWithDefault(z.array(z.string()), [])
+export const memoriesField = nullishWithDefault(Schema.Array(Schema.String), [])
   .describe(
     'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
   )
@@ -118,23 +117,24 @@ export function withToolUseSubagentHandoffInstruction(
 
 /** An agent an `agent` call defines instead of naming one from the
  *  catalog, named by its `agentName`. */
-export const personaField = z
-  .strictObject({
-    prompt: z
-      .string()
-      .min(1)
-      .describe('Its system prompt: who it is and how it works.'),
-    tools: z
-      .array(z.string().min(1))
-      .nullish()
-      .describe(
-        'The tools it gets, by name; omitted, none. It gets only those you have.',
-      ),
-  })
-  .nullish()
-  .describe(
+export const personaField = Schema.optional(
+  Schema.NullOr(
+    Schema.Struct({
+      prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: 'Its system prompt: who it is and how it works.',
+      }),
+      tools: Schema.optional(
+        Schema.NullOr(Schema.Array(Schema.String.check(Schema.isMinLength(1)))),
+      ).annotate({
+        description:
+          'The tools it gets, by name; omitted, none. It gets only those you have.',
+      }),
+    }),
+  ),
+).annotate({
+  description:
     'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
-  );
+});
 
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
@@ -142,25 +142,35 @@ export const personaField = z
  * canonical `string | undefined` value — no trimming or absolute-path checks
  * needed at the call site.
  */
-export const workingDirectoryField = z
-  .string()
-  .nullish()
-  .describe(
-    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
-  )
-  .transform((value, ctx): string | undefined => {
-    const fail = (message: string): typeof z.NEVER => {
-      ctx.addIssue({ code: 'custom', message });
-      return z.NEVER;
-    };
-    const parsed = Result.try(() => parseWorkingDirectory(value));
-    if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
-    // Neither the worktree opt-in nor the path's existence is checked here:
-    // this transform runs on the tool facade's one parse of a static schema,
-    // before any call exists. Both run in `execute`, through
-    // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
-    return parsed.success;
-  });
+export const workingDirectoryField = Schema.optional(
+  Schema.NullOr(Schema.String),
+)
+  .annotate({
+    description:
+      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
+  })
+  .pipe(
+    Schema.decodeTo(
+      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value, ctx): string | undefined => { const fail = (message: string): typeof z.NEVER => { ctx.addIssue({ code: 'custom', message }); return z.NEVER; }; const parsed = Result.try(() => parseWorkingDirectory(value)); if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure)); // Neither the worktree opt-in nor the path's existence is checked here: // this transform runs on the tool facade's one parse of a static schema, // before any call exists. Both run in `execute`, through // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project. return parsed.success; })` */,
+      {
+        decode: SchemaGetter.transform((value, ctx): string | undefined => {
+          const fail = (message: string): typeof z.NEVER => {
+            ctx.addIssue({ code: 'custom', message });
+            return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
+          };
+          const parsed = Result.try(() => parseWorkingDirectory(value));
+          if (Result.isFailure(parsed))
+            return fail(toErrorMessage(parsed.failure));
+          // Neither the worktree opt-in nor the path's existence is checked here:
+          // this transform runs on the tool facade's one parse of a static schema,
+          // before any call exists. Both run in `execute`, through
+          // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
+          return parsed.success;
+        }),
+        encode: SchemaGetter.forbidden(() => 'decode-only'),
+      },
+    ),
+  );
 
 /**
  * `workspaceAbsolutePath` validates the path it resolved and throws when the

@@ -19,8 +19,7 @@
  * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
  * shared-to-agent allowlist empty).
  */
-import { Result } from 'effect';
-import { z } from 'zod';
+import { Result, Schema, Struct } from 'effect';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
@@ -53,27 +52,32 @@ import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
 /** The complete process identity, encoded canonically without losing null. */
-const OwnerIdentitySchema = z.tuple([
-  z.string().min(1),
-  z.int().positive(),
-  z.string().min(1).nullable(),
+const OwnerIdentitySchema = Schema.Tuple([
+  Schema.String.check(Schema.isMinLength(1)),
+  Schema.Int.check(Schema.isGreaterThan(0)),
+  Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 ]);
 
 /**
  * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
  * is necessary: a missing local pid cannot prove a foreign process dead.
  */
-export const OwnerIdSchema = z.string().refine(
-  (value) =>
-    Result.match(parseJsonWith(value, OwnerIdentitySchema), {
-      onSuccess: (identity) =>
-        identity[0] === identity[0].toLowerCase() &&
-        JSON.stringify(identity) === value,
-      onFailure: () => false,
-    }),
-  'Expected a canonical [hostname, pid, processStart] process identity',
+export const OwnerIdSchema = Schema.String.check(
+  Schema.makeFilter(
+    (value) =>
+      Result.match(parseJsonWith(value, OwnerIdentitySchema), {
+        onSuccess: (identity) =>
+          identity[0] === identity[0].toLowerCase() &&
+          JSON.stringify(identity) === value,
+        onFailure: () => false,
+      }),
+    {
+      message:
+        'Expected a canonical [hostname, pid, processStart] process identity',
+    },
+  ),
 );
-export type OwnerId = z.infer<typeof OwnerIdSchema>;
+export type OwnerId = typeof OwnerIdSchema.Type;
 
 /** Decode an owner already validated at the event or transport boundary. */
 export function ownerIdentity(ownerId: OwnerId): {
@@ -81,9 +85,9 @@ export function ownerIdentity(ownerId: OwnerId): {
   pid: number;
   processStart: string | null;
 } {
-  const [hostname, pid, processStart] = JSON.parse(ownerId) as z.infer<
-    typeof OwnerIdentitySchema
-  >;
+  const [hostname, pid, processStart] = JSON.parse(
+    ownerId,
+  ) as (typeof OwnerIdentitySchema)['Type'];
   return { hostname, pid, processStart };
 }
 
@@ -100,21 +104,24 @@ export function ownerPid(ownerId: OwnerId): number {
  */
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
-const AggregateKindSchema = z.enum(['run', 'plugin']);
+const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
 /** The kind separates lifecycles even when their logical ids coincide:
  *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
-export type AggregateKind = z.infer<typeof AggregateKindSchema>;
-const AggregateKeySchema = z
-  .tuple([AggregateKindSchema, z.string().min(1)])
-  .refine(
-    ([kind, id]) => kind !== 'run' || RunIdSchema.safeParse(id).success,
-    'A run aggregate is keyed by a run id',
-  );
+export type AggregateKind = typeof AggregateKindSchema.Type;
+const AggregateKeySchema = Schema.Tuple([
+  AggregateKindSchema,
+  Schema.String.check(Schema.isMinLength(1)),
+]).check(
+  Schema.makeFilter(
+    ([kind, id]) =>
+      kind !== 'run' || Schema.decodeUnknownResult(RunIdSchema)(id).success,
+    { message: 'A run aggregate is keyed by a run id' },
+  ),
+);
 
 /** The canonical JSON encoding of an aggregate kind and its logical id. */
-export const AggregateIdSchema = z
-  .string()
-  .refine(
+export const AggregateIdSchema = Schema.String.check(
+  Schema.makeFilter(
     (value) =>
       Result.match(parseJsonWith(value, AggregateKeySchema), {
         onSuccess: (key) => JSON.stringify(key) === value,
@@ -124,13 +131,15 @@ export const AggregateIdSchema = z
       error: 'Expected a canonical [kind, logicalId] aggregate key',
       abort: true,
     },
-  )
-  .brand<'AggregateId'>();
-export type AggregateId = z.infer<typeof AggregateIdSchema>;
+  ),
+).pipe(Schema.brand('AggregateId'));
+export type AggregateId = typeof AggregateIdSchema.Type;
 
 /** A logical id that is not itself an already-qualified aggregate key. */
 export type LogicalId = string & {
-  readonly [z.$brand]?: { readonly AggregateId?: never };
+  readonly [Schema.Unknown /* TODO(effect-schema): z.$brand; was `z.$brand()` */]?: {
+    readonly AggregateId?: never;
+  };
 };
 
 /** Qualify a logical id once. An already-qualified key is not an input. */
@@ -143,7 +152,9 @@ export function qualifyAggregateId(
   kind: AggregateKind,
   logicalId: string,
 ): AggregateId {
-  return AggregateIdSchema.parse(JSON.stringify([kind, logicalId]));
+  return Schema.decodeUnknownSync(AggregateIdSchema)(
+    JSON.stringify([kind, logicalId]),
+  );
 }
 
 /** A decoded aggregate key: the `run` arm carries its logical id as a `RunId`. */
@@ -153,19 +164,23 @@ export type AggregateTarget =
 
 /** Decode a validated aggregate key at a logical-id boundary. */
 export function aggregateTarget(key: AggregateId): AggregateTarget {
-  const [kind, id] = JSON.parse(key) as z.infer<typeof AggregateKeySchema>;
-  return kind === 'run' ? { kind, id: RunIdSchema.parse(id) } : { kind, id };
+  const [kind, id] = JSON.parse(key) as typeof AggregateKeySchema.Type;
+  return kind === 'run'
+    ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
+    : { kind, id };
 }
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
  *  1, assigned by the substrate's publisher and by nothing else. */
-const SeqSchema = z.int().positive();
+const SeqSchema = Schema.Int.check(Schema.isGreaterThan(0));
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. Local: no row
  *  stores one. */
-export const CommitOrdinalSchema = z.int().nonnegative();
-export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
+export const CommitOrdinalSchema = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+);
+export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 
 /**
  * The envelope every durable arm rides, in the event table's own columns. A
@@ -179,26 +194,28 @@ const envelope = {
   commit: CommitOrdinalSchema,
   /** The process that appended the row (not the aggregate's claim holder);
    *  null for the trace viewer's reconstruction, which has no writer. */
-  origin: OwnerIdSchema.nullable(),
+  origin: Schema.NullOr(OwnerIdSchema),
   /** The publish clock in whole milliseconds: the store keeps it in an
    *  `INTEGER` column of a `STRICT` table, so the vocabulary states that
    *  rule here and the substrate restates it nowhere. */
-  at: z.int(),
+  at: Schema.Int,
 };
 
-function durable<T extends string, S extends z.ZodRawShape>(
-  type: T,
-  shape: S,
-  kind: AggregateKind = 'run',
-) {
-  return z.object({
-    aggregateId: AggregateIdSchema.refine(
-      (key) => aggregateTarget(key).kind === kind,
-      `Expected a ${kind} aggregate for ${type}`,
+function durable<
+  T extends string,
+  S extends
+    unknown /* TODO(effect-schema): type z.ZodRawShape; was `z.ZodRawShape` */,
+>(type: T, shape: S, kind: AggregateKind = 'run') {
+  return Schema.Struct({
+    aggregateId: AggregateIdSchema.check(
+      Schema.makeFilter(
+        (key) => aggregateTarget(key).kind === kind,
+        `Expected a ${kind} aggregate for ${type}`,
+      ),
     ),
-    stageId: z.string().optional(),
-    type: z.literal(type),
-    ...shape,
+    stageId: Schema.optional(Schema.String),
+    type: Schema.Literal(type),
+    ...fields,
   });
 }
 
@@ -209,15 +226,15 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * can never redirect the child to a later incarnation of its parent. Any other spelling of the edge is `parent !== null`, computed from
  * the fold or the handle.
  */
-const RunParentSchema = z.object({
+const RunParentSchema = Schema.Struct({
   id: RunIdSchema,
-  uid: z.uuid(),
+  uid: Schema.String.check(Schema.isUUID()),
   /** The parent's tool call that launched this run (an `agent` call's
    *  child, a background `script` run), which owns it until it detaches;
    *  null for a child no call launched. */
-  callId: z.string().min(1).nullable(),
+  callId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
-export type RunParent = z.infer<typeof RunParentSchema>;
+export type RunParent = typeof RunParentSchema.Type;
 
 /**
  * Where a run's history came from, when not from its own launch: a fork
@@ -225,14 +242,14 @@ export type RunParent = z.infer<typeof RunParentSchema>;
  * not a provenance; it is the same run. (Not `origin`: the envelope's
  * `origin` is the process that wrote the row.)
  */
-const RunProvenanceSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('fork'),
-    from: RunParentSchema.pick({ id: true, uid: true }),
-    at: z.int().positive(),
+const RunProvenanceSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('fork'),
+    from: RunParentSchema.mapFields(Struct.pick(['id', 'uid'])),
+    at: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
 ]);
-export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
+export type RunProvenance = typeof RunProvenanceSchema.Type;
 
 /**
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`
@@ -251,44 +268,50 @@ export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
 const RunStartEventSchema = durable('run.start', {
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
-  worktree: WorktreeInfoSchema.nullish(),
+  worktree: Schema.optional(Schema.NullOr(WorktreeInfoSchema)),
   /** The launching run with its creation coordinate; null for a root. */
-  parent: RunParentSchema.nullable(),
+  parent: Schema.NullOr(RunParentSchema),
   /** Null for a run that starts fresh. */
-  provenance: RunProvenanceSchema.nullable(),
+  provenance: Schema.NullOr(RunProvenanceSchema),
   /** The parent's tool card (its `logId`) whose call launched this run: an
    *  `agent` call's child, a `script` call's background run. Absent for a
    *  root and for a child no card launched. */
-  parentCard: z.string().min(1).nullish(),
+  parentCard: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
   /** The run's approval policy at launch, from the session's single authority. */
-  approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
+  approvalPolicy: Schema.optional(Schema.NullOr(ApprovalPolicySnapshotSchema)),
 });
 
 /** The run directories to remove with this lifecycle, derived by the database. */
 const RunRemovedEventSchema = durable('run.removed', {
-  runIds: z.array(RunIdSchema),
+  runIds: Schema.Array(RunIdSchema),
 });
 
 /** A launcher names the parent; the database stamps its creation commit. */
-const RunStartDraftSchema = RunStartEventSchema.omit({ parent: true }).extend({
-  parent: RunParentSchema.omit({ uid: true }).nullable(),
-});
-const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
-  runIds: true,
-});
+const RunStartDraftSchema = RunStartEventSchema.mapFields(
+  Struct.omit(['parent']),
+).mapFields(
+  Struct.assign({
+    parent: Schema.NullOr(RunParentSchema.mapFields(Struct.omit(['uid']))),
+  }),
+);
+const RunRemovedDraftSchema = RunRemovedEventSchema.mapFields(
+  Struct.omit(['runIds']),
+);
 
 /** A row of a plugin's own kind (`Plugin.arms`): core folds `value`
  *  latest per (plugin, kind) and never reads it; the plugin decodes it. A
  *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
  *  under its `parent` run (whose deletion collects it) or none. */
 export const PluginFactDraftSchema = durable('plugin.fact', {
-  plugin: z.string().min(1),
-  kind: z.string().min(1),
+  plugin: Schema.String.check(Schema.isMinLength(1)),
+  kind: Schema.String.check(Schema.isMinLength(1)),
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
-  version: z.int().positive(),
+  version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
-  parent: RunIdSchema.nullable(),
+  parent: Schema.NullOr(RunIdSchema),
 }).extend({ aggregateId: AggregateIdSchema });
 
 /**
@@ -298,7 +321,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
  * arms carry the session facts with the payload flattened. `run.removed` is
  * the tombstone: the last row of its aggregate, final (PRD 5.2, "Existence").
  */
-const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
+const DisplaySessionEventDraftSchema = Schema.Union([
   RunStartDraftSchema,
   /** Every activation of a run, the first launch and each resume (PRD 6,
    *  item 8); `run.start` is the creation fact and happens once. */
@@ -306,9 +329,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   /** What the run runs with: the newest row's model and `binding` hold. */
   durable('run.config', {
     config: RunRecordFieldsSchema,
-    binding: RunBindingSchema.nullish(),
+    binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
-  durable('run.model', { model: z.string().min(1) }), // projected (`projections.ts`), never stored
+  durable('run.model', { model: Schema.String.check(Schema.isMinLength(1)) }), // projected (`projections.ts`), never stored
   /** The parent edge severed by a stop that detaches the run: the only
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
@@ -319,7 +342,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * finalizer, after the run's last transcript row; the fold derives the
    * terminal phase from it and from nothing else.
    */
-  durable('run.end', RunEndRowSchema.shape),
+  durable('run.end', RunEndRowSchema.fields),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
@@ -334,44 +357,49 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * process held it, delivered when next admitted; `ends`: that turn's end.
    */
   durable('child.park', {
-    phase: z.enum(['parked', 'resumed', 'paused']),
-    resumeId: z.string().optional(),
-    heldFor: z.string().min(1).optional(),
-    ends: z.enum(['completed', 'failed']).optional(),
+    phase: Schema.Literals(['parked', 'resumed', 'paused']),
+    resumeId: Schema.optional(Schema.String),
+    heldFor: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    ends: Schema.optional(Schema.Literals(['completed', 'failed'])),
   }),
   RunRemovedDraftSchema,
   /** A run's title, and who gave it: the model's summary, or the user's
    *  rename, which a later model title does not replace. */
   durable('run.description', {
-    description: z.string(),
-    by: z.enum(['model', 'user']),
+    description: Schema.String,
+    by: Schema.Literals(['model', 'user']),
   }),
   PluginFactDraftSchema,
   /** Input a run has not taken yet (one run model, section 3.7), whole, so
    *  a crash loses nothing; `followUpId` is the producer's delivery id or
    *  minted. Pending is queued without consumed. */
   durable('followup.queued', {
-    followUpId: z.string().min(1),
+    followUpId: Schema.String.check(Schema.isMinLength(1)),
     content: FollowUpContentSchema,
     /** Held until a take also carries an instruction (a pause notice). */
-    holdUntil: z.enum(['instruction']).optional(),
+    holdUntil: Schema.optional(Schema.Literals(['instruction'])),
     /** A request of the run's own, consumed by the batch that applies it. */
-    control: z
-      .discriminatedUnion('kind', [
-        z.object({ kind: z.literal('compact') }),
-        z.object({ kind: z.literal('model'), model: z.string().min(1) }),
-      ])
-      .optional(),
+    control: Schema.optional(
+      Schema.Union([
+        Schema.Struct({ kind: Schema.Literal('compact') }),
+        Schema.Struct({
+          kind: Schema.Literal('model'),
+          model: Schema.String.check(Schema.isMinLength(1)),
+        }),
+      ]),
+    ),
   }),
   /** The follow-up became the message a turn carries, in that
    *  message's batch: never delivered twice. */
-  durable('followup.consumed', { followUpId: z.string().min(1) }),
+  durable('followup.consumed', {
+    followUpId: Schema.String.check(Schema.isMinLength(1)),
+  }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows,
    * never host handles. Pending is opened without decided.
    */
   durable('request.opened', {
-    requestId: z.string().min(1),
+    requestId: Schema.String.check(Schema.isMinLength(1)),
     payload: PermissionPayloadSchema,
   }),
   /**
@@ -381,7 +409,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * alone, and an automatic close names its cause here.
    */
   durable('request.decided', {
-    requestId: z.string().min(1),
+    requestId: Schema.String.check(Schema.isMinLength(1)),
     decision: RequestDecisionSchema,
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
@@ -393,19 +421,23 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
-    schema.extend({
-      aggregateId: AggregateIdSchema.refine(
-        (key) => aggregateTarget(key).kind === 'run',
-        `Expected a run aggregate for ${schema.shape.type.value}`,
-      ),
-    }),
+    schema.mapFields(
+      Struct.assign({
+        aggregateId: AggregateIdSchema.check(
+          Schema.makeFilter(
+            (key) => aggregateTarget(key).kind === 'run',
+            `Expected a run aggregate for ${schema.fields.type.value}`,
+          ),
+        ),
+      }),
+    ),
   ),
 ]);
 /** The run's private records, read by the runtime and never by a renderer
  *  (`isDisplaySessionEvent`). `followup.closed`: its input is closed until a
  *  claim reopens it or it activates again. */
-const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
-  durable('run.report', { report: z.string().nullable() }),
+const RunRecordEventDraftSchema = Schema.Union([
+  durable('run.report', { report: Schema.NullOr(Schema.String) }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('followup.closed', {}),
 ]);
@@ -414,7 +446,7 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
  * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */
-const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
+const RunHistoryEventDraftSchema = Schema.Union([
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('context.edit', { payload: ContextEditPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
@@ -433,41 +465,29 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
    * parent's `followup.queued` commits in the same transaction.
    */
   durable('child.turn', {
-    attemptId: z.string().min(1),
-    turnIndex: z.int().positive(),
-    phase: z.enum(['accepted', 'settled']),
+    attemptId: Schema.String.check(Schema.isMinLength(1)),
+    turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
+    phase: Schema.Literals(['accepted', 'settled']),
   }),
 ]);
-export const SessionEventDraftSchema = z.discriminatedUnion('type', [
-  ...DisplaySessionEventDraftSchema.options,
-  ...RunRecordEventDraftSchema.options,
-  ...RunHistoryEventDraftSchema.options,
+export const SessionEventDraftSchema = Schema.Union([
+  ...DisplaySessionEventDraftSchema.members,
+  ...RunRecordEventDraftSchema.members,
+  ...RunHistoryEventDraftSchema.members,
 ]);
-export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
-  RunStartEventSchema.extend(envelope),
-  RunRemovedEventSchema.extend(envelope),
-  ...DisplaySessionEventDraftSchema.options
-    .filter(
-      (
-        schema,
-      ): schema is Exclude<
-        typeof schema,
-        typeof RunStartDraftSchema | typeof RunRemovedDraftSchema
-      > =>
-        schema.shape.type.value !== 'run.start' &&
-        schema.shape.type.value !== 'run.removed',
-    )
-    .map((schema) => schema.extend(envelope)),
+export const DisplaySessionEventSchema = Schema.Union([
+  RunStartEventSchema.mapFields(Struct.assign(envelope)),
+
+  RunRemovedEventSchema.mapFields(Struct.assign(envelope)),
+  ...DisplaySessionEventDraftSchema.members /* TODO(effect-schema): filter; was `.filter(( schema, ): schema is Exclude< typeof schema, typeof RunStartDraftSchema | typeof RunRemovedDraftSchema > => schema.shape.type.value !== 'run.start' && schema.shape.type.value !== 'run.removed')` */ /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
 ]);
-export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
-export const SessionEventSchema = z.discriminatedUnion('type', [
-  ...DisplaySessionEventSchema.options,
-  ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
-  ...RunHistoryEventDraftSchema.options.map((schema) =>
-    schema.extend(envelope),
-  ),
+export type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
+export const SessionEventSchema = Schema.Union([
+  ...DisplaySessionEventSchema.members,
+  ...RunRecordEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
+  ...RunHistoryEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
 ]);
-export type SessionEvent = z.infer<typeof SessionEventSchema>;
+export type SessionEvent = typeof SessionEventSchema.Type;
 
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
@@ -475,7 +495,7 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
  * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
-export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
+export type SessionEventDraft = typeof SessionEventDraftSchema.Type;
 
 /** Aggregate identities introduced by a fact and its declared lifecycle edges. */
 export function referencedAggregates(event: SessionEvent): AggregateId[] {
@@ -625,9 +645,7 @@ export function pendingKeyOf(
 }
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
-  DisplaySessionEventDraftSchema.options.map(
-    (schema) => schema.shape.type.value,
-  ),
+  DisplaySessionEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.shape.type.value)` */,
 );
 
 /** A run's private records and the profile-state rows never enter display transport. */

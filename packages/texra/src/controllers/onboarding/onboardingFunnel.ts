@@ -18,8 +18,7 @@
  * `OnboardingFunnelRefresher`, which the webview hosts own one of each.
  */
 
-import { Effect, Semaphore } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema, Semaphore } from 'effect';
 
 import { Settings, StateReadFailed } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
@@ -31,7 +30,9 @@ import type {
 } from '@texra-ai/harness';
 
 /** An onboarding flag: off until something sets it. */
-const OnboardingFlagSchema = z.boolean().prefault(false);
+const OnboardingFlagSchema = Schema.Boolean.pipe(
+  Schema.withDecodingDefault(Effect.succeed(false)),
+);
 
 /** Record whether the user chose "Skip for now" on the State 0 picker. */
 export function setOnboardingDeclined(

@@ -9,8 +9,7 @@
  */
 import { zstdDecompressSync } from 'node:zlib';
 
-import { Effect, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema, Struct } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -98,15 +97,15 @@ export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
 const READ_BLOBS = `SELECT digest, value FROM blob
   WHERE digest IN (SELECT value FROM json_each(?))`;
 /** One stored blob, as `READ_BLOBS` selects it. */
-const BlobRowSchema = z.object({
-  digest: z.string(),
-  value: z.instanceof(Uint8Array),
+const BlobRowSchema = Schema.Struct({
+  digest: Schema.String,
+  value: Schema.instanceOf(Uint8Array),
 });
 /** One blob's string, verified against its address. */
 function inflateBlob(value: Uint8Array, digest: string): string {
   const text = zstdDecompressSync(value).toString('utf8');
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
-  return z.string().parse(JSON.parse(text));
+  return Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
 }
 /** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
  *  the data of the rows this build decodes. A payload's own `$b` key is
@@ -123,10 +122,10 @@ function blobDigests(rows: readonly SqlRow[]): string[] {
 }
 
 /** An earlier-build run row, as `EARLIER_RUNS` selects it. */
-const EarlierRowSchema = z.object({
-  logicalId: z.string(),
-  commit: z.int(),
-  type: z.string(),
+const EarlierRowSchema = Schema.Struct({
+  logicalId: Schema.String,
+  commit: Schema.Int,
+  type: Schema.String,
 });
 
 /** Every run's plugin fact, its envelope and raw payload: a fact's version
@@ -138,14 +137,16 @@ const RUN_PLUGIN_FACTS = `SELECT s.logical_id AS logicalId, e."commit" AS "commi
 
 /** A plugin fact row's header: the top-level fields `decodeRow` reads. A
  *  row this cannot read is left to `decodeRow`, which reads it as damaged. */
-const PluginFactHeaderSchema = z.object({
-  plugin: z.string(),
-  kind: z.string(),
-  version: z.int(),
+const PluginFactHeaderSchema = Schema.Struct({
+  plugin: Schema.String,
+  kind: Schema.String,
+  version: Schema.Int,
 });
 const factHeader = (data: unknown) => {
   try {
-    return PluginFactHeaderSchema.safeParse(JSON.parse(String(data))).data;
+    return Schema.decodeUnknownResult(PluginFactHeaderSchema)(
+      JSON.parse(String(data)),
+    ).data;
   } catch {
     return undefined;
   }
@@ -223,16 +224,17 @@ export function rowReader<E>(
     if (scanned) return;
     for (const [statement, params] of EARLIER_RUNS)
       for (const row of yield* exec(statement, params)) {
-        const { logicalId, commit, type } = EarlierRowSchema.parse(row);
+        const { logicalId, commit, type } =
+          Schema.decodeUnknownSync(EarlierRowSchema)(row);
         markEarlier(
-          RunIdSchema.parse(logicalId),
+          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
           new DatabaseRowEarlier({ commit, type }),
         );
       }
     for (const row of floored ? yield* exec(RUN_PLUGIN_FACTS, []) : []) {
-      const { logicalId, commit } = EarlierRowSchema.omit({
-        type: true,
-      }).parse(row);
+      const { logicalId, commit } = Schema.decodeUnknownSync(
+        EarlierRowSchema.mapFields(Struct.omit(['type'])),
+      )(row);
       const header = factHeader(row.data);
       const arm = header && pluginFactArm(header, commit, arms);
       if (
@@ -240,7 +242,10 @@ export function rowReader<E>(
         Result.isFailure(arm) &&
         arm.failure._tag === 'DatabaseRowEarlier'
       )
-        markEarlier(RunIdSchema.parse(logicalId), arm.failure);
+        markEarlier(
+          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+          arm.failure,
+        );
     }
     scanned = true;
   });
@@ -252,7 +257,8 @@ export function rowReader<E>(
           // a strict read of it fails by name.
           const texts = new Map<string, string>();
           for (const row of rows) {
-            const { digest, value } = BlobRowSchema.parse(row);
+            const { digest, value } =
+              Schema.decodeUnknownSync(BlobRowSchema)(row);
             try {
               texts.set(digest, inflateBlob(value, digest));
             } catch {
@@ -273,9 +279,10 @@ export function rowReader<E>(
       if (whole) {
         yield* scan;
         const [refusal] = rows.flatMap((row) => {
-          const { kind, logicalId } = RowSchema.parse(row);
+          const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
           return kind === 'run'
-            ? (earlier.get(RunIdSchema.parse(logicalId)) ?? [])
+            ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
+                [])
             : [];
         });
         if (refusal !== undefined) return yield* Effect.fail(refusal);
@@ -300,10 +307,10 @@ export function rowReader<E>(
           `${decoded.failure.commit}`,
           `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
         );
-        const { kind, logicalId } = RowSchema.parse(row);
+        const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
         if (kind === 'run')
           mark(
-            RunIdSchema.parse(logicalId),
+            Schema.decodeUnknownSync(RunIdSchema)(logicalId),
             decoded.failure._tag === 'DatabaseRowEarlier',
           );
         const start = bareStart(row);
@@ -322,7 +329,7 @@ export function rowReader<E>(
 
 /** A damaged `run.start` as a bare one, so its run still lists. */
 function bareStart(input: SqlRow): SessionEvent | null {
-  const row = RowSchema.parse(input);
+  const row = Schema.decodeUnknownSync(RowSchema)(input);
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
   return {
     type: 'run.start',

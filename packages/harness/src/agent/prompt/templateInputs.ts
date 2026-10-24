@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Predicate } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Predicate, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -32,44 +31,44 @@ import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
  * A plugin may render its own templates with more variables beside these
  * (see {@link TemplateVars}); they are not in this vocabulary.
  */
-const TemplateInputsSchema = z.object({
+const TemplateInputsSchema = Schema.Struct({
   /** The launch instruction. */
-  INSTRUCTION: z.string(),
+  INSTRUCTION: Schema.String,
   /** Provider gate for Anthropic-specific agent prompt blocks. */
-  IS_ANTHROPIC_MODEL: z.boolean(),
+  IS_ANTHROPIC_MODEL: Schema.Boolean,
   /** Workspace root the run operates in. */
-  CWD: z.string(),
+  CWD: Schema.String,
   /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
-  BUILTIN_AGENTS_DIR: z.string(),
-  CUSTOM_AGENTS_DIR: z.string(),
-  AGENT_DOCS_DIR: z.string(),
+  BUILTIN_AGENTS_DIR: Schema.String,
+  CUSTOM_AGENTS_DIR: Schema.String,
+  AGENT_DOCS_DIR: Schema.String,
   /** Per-category primary file and its content, null when none is readable. */
-  INPUT_FILE: z.string().nullable(),
-  INPUT_CONTENT: z.string().nullable(),
-  CONTEXT_FILE: z.string().nullable(),
-  CONTEXT_CONTENT: z.string().nullable(),
-  EDITED_FILE: z.string().nullable(),
-  EDITED_CONTENT: z.string().nullable(),
+  INPUT_FILE: Schema.NullOr(Schema.String),
+  INPUT_CONTENT: Schema.NullOr(Schema.String),
+  CONTEXT_FILE: Schema.NullOr(Schema.String),
+  CONTEXT_CONTENT: Schema.NullOr(Schema.String),
+  EDITED_FILE: Schema.NullOr(Schema.String),
+  EDITED_CONTENT: Schema.NullOr(Schema.String),
   /** Per-category readable files as prompt-displayed names. */
-  INPUT_FILES: z.array(z.string()),
-  CONTEXT_FILES: z.array(z.string()),
-  EDITED_FILES: z.array(z.string()),
+  INPUT_FILES: Schema.Array(Schema.String),
+  CONTEXT_FILES: Schema.Array(Schema.String),
+  EDITED_FILES: Schema.Array(Schema.String),
   /** Per-category XML bundle of readable files, null when none are readable. */
-  ALL_INPUTS: z.string().nullable(),
-  ALL_CONTEXTS: z.string().nullable(),
-  ALL_EDITEDS: z.string().nullable(),
+  ALL_INPUTS: Schema.NullOr(Schema.String),
+  ALL_CONTEXTS: Schema.NullOr(Schema.String),
+  ALL_EDITEDS: Schema.NullOr(Schema.String),
   /** Per-category comma-separated readable file list, '' when empty. */
-  LIST_OF_ALL_INPUTS: z.string(),
-  LIST_OF_ALL_CONTEXTS: z.string(),
-  LIST_OF_ALL_EDITEDS: z.string(),
+  LIST_OF_ALL_INPUTS: Schema.String,
+  LIST_OF_ALL_CONTEXTS: Schema.String,
+  LIST_OF_ALL_EDITEDS: Schema.String,
   /** First attached media file; content is never inlined (display-only). */
-  MEDIA_FILE: z.string().nullable(),
+  MEDIA_FILE: Schema.NullOr(Schema.String),
   /** The run's output file list; absent when it has none. */
-  OUTPUT_FILES: z.array(z.string()).optional(),
+  OUTPUT_FILES: Schema.optional(Schema.Array(Schema.String)),
 });
 
 /** The fixed variables every prompt template may read. */
-export type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
+export type TemplateInputs = typeof TemplateInputsSchema.Type;
 
 /**
  * The template-variable map accepted at the render boundary (PromptBuilder):
@@ -82,7 +81,7 @@ export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 /** The fixed vocabulary as a runtime list; its reader builds a map from it,
  *  so its order is irrelevant. */
 const TEMPLATE_INPUT_TOKENS = Object.keys(
-  TemplateInputsSchema.shape,
+  TemplateInputsSchema.fields,
 ) as (keyof TemplateInputs)[];
 
 /**

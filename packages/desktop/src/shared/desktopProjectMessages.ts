@@ -4,7 +4,7 @@
 // session key (the storage root the fold's `SessionView.key` carries), so
 // the rail row, the frames, and the requests of one project all share it.
 
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 export const DESKTOP_PROJECT_COMMANDS = {
   PROJECTS: 'desktop:projects',
@@ -14,26 +14,26 @@ export const DESKTOP_PROJECT_COMMANDS = {
   CLOSE_PROJECT: 'desktop:projects:close',
 } as const;
 
-export const DesktopProjectsMessageSchema = z.object({
-  command: z.literal(DESKTOP_PROJECT_COMMANDS.PROJECTS),
+export const DesktopProjectsMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.PROJECTS),
   /** The open projects' session keys, in rail order. What a rail row,
    *  switcher entry, or project chip prints for one is the `project` display
    *  record of its host snapshot (PRD 8.1), which rides the session's frames
    *  and is not repeated here; its folder stays with the main process. */
-  open: z.array(z.string()),
+  open: Schema.Array(Schema.String),
   /** Key of the session this window shows: an open project's, or the
    *  no-workspace session's, which is never listed in `open`. */
-  activeKey: z.string(),
+  activeKey: Schema.String,
 });
 
-export const DesktopSelectProjectMessageSchema = z.object({
-  command: z.literal(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT),
-  key: z.string(),
+export const DesktopSelectProjectMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT),
+  key: Schema.String,
 });
 
-export const DesktopCloseProjectMessageSchema = z.object({
-  command: z.literal(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT),
-  key: z.string(),
+export const DesktopCloseProjectMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT),
+  key: Schema.String,
   /** Dirtiness belongs to the addressed project's editor, including when hidden. */
-  hasUnsavedChanges: z.boolean(),
+  hasUnsavedChanges: Schema.Boolean,
 });

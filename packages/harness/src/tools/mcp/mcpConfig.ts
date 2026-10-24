@@ -35,10 +35,11 @@ import {
   Hash,
   Option,
   RcMap,
+  Result,
+  Schema,
   type Scope,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { z } from 'zod';
 
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import {
@@ -64,8 +65,8 @@ export function mcpConfigPathOf(storageRoot: string): string {
   return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
 }
 
-const McpConfigFileSchema = z.object({
-  mcpServers: z.record(z.string(), z.unknown()),
+const McpConfigFileSchema = Schema.Struct({
+  mcpServers: Schema.Record(Schema.String, Schema.Unknown),
 });
 
 /** The file's text, or `null` when it does not exist. */
@@ -103,14 +104,14 @@ export const readMcpConfig = (
       catch: (error) =>
         new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
     });
-    const parsed = McpConfigFileSchema.safeParse(json);
-    if (!parsed.success)
+    const parsed = Schema.decodeUnknownResult(McpConfigFileSchema)(json);
+    if (!Result.isSuccess(parsed))
       return yield* Effect.fail(
         new Error(
-          `${file} must be { "mcpServers": { ... } }: ${z.prettifyError(parsed.error)}`,
+          `${file} must be { "mcpServers": { ... } }: ${parsed.error.message}`,
         ),
       );
-    return parseMcpServers(file, parsed.data.mcpServers);
+    return parseMcpServers(file, parsed.success.mcpServers);
   }).pipe(
     Effect.catch((error) =>
       Effect.succeed({ servers: [], warnings: [error.message] }),

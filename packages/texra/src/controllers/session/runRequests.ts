@@ -1,9 +1,9 @@
+import { Result, Schema, SchemaIssue } from 'effect';
 import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigInput,
 } from '@texra-ai/harness/schemas';
-import type { z } from 'zod';
 
 /** A fresh launch: a persisted run resumes through `resumeRun`. */
 export interface RunRequest {
@@ -16,12 +16,14 @@ export interface ValidatedRunRequest {
 
 type RunValidationResult =
   | { valid: true; request: ValidatedRunRequest }
-  | { valid: false; message: string; issue?: z.ZodIssue };
+  | { valid: false; message: string; issue?: SchemaIssue.Issue };
 
 export function validateRunRequest(request: RunRequest): RunValidationResult {
-  const parseResult = AgentConfigSchema.safeParse(request.config);
-  if (!parseResult.success) {
-    const issue = parseResult.error.issues[0];
+  const parseResult = Schema.decodeUnknownResult(AgentConfigSchema)(
+    request.config,
+  );
+  if (!Result.isSuccess(parseResult)) {
+    const issue = parseResult.failure.issues[0];
     const errorPath = issue?.path.join('.') || 'unknown';
     return {
       valid: false,
@@ -32,6 +34,6 @@ export function validateRunRequest(request: RunRequest): RunValidationResult {
 
   return {
     valid: true,
-    request: { config: parseResult.data },
+    request: { config: parseResult.success },
   };
 }

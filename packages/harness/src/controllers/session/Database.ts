@@ -27,10 +27,10 @@ import {
   FileSystem,
   Layer,
   Option,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
@@ -234,7 +234,11 @@ export const databaseLayer = (
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
       const commitFromRows = (rows: readonly SqlRow[]) => {
         const row = rows[0];
-        return row === undefined ? 0 : z.int().nonnegative().parse(row.seq);
+        return row === undefined
+          ? 0
+          : Schema.decodeUnknownSync(
+              Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+            )(row.seq);
       };
       const writeFailed = (cause: unknown): DatabaseWriteFailed =>
         new DatabaseWriteFailed({ path, cause });
@@ -477,7 +481,7 @@ export const databaseLayer = (
       const readState = (ids: readonly AggregateId[]) =>
         Effect.gen(function* () {
           return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
-            AggregateStateSchema.parse({
+            Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
               aggregateId: aggregateOf(row.kind, row.logicalId),
               parentId:
@@ -678,7 +682,9 @@ export const databaseLayer = (
               );
             }
             parent = {
-              id: RunIdSchema.parse(aggregateTarget(edges.parent).id),
+              id: Schema.decodeUnknownSync(RunIdSchema)(
+                aggregateTarget(edges.parent).id,
+              ),
               uid: parentState.uid,
               callId:
                 draft.type === 'run.start'
@@ -693,7 +699,9 @@ export const databaseLayer = (
               const owned = yield* exec(deletionRuns, columns);
               return {
                 ...draft,
-                runIds: owned.map((owned) => RunIdSchema.parse(owned.runId)),
+                runIds: owned.map((owned) =>
+                  Schema.decodeUnknownSync(RunIdSchema)(owned.runId),
+                ),
               };
             }
             if (draft.type === 'run.start') return { ...draft, parent };
@@ -915,7 +923,10 @@ export const databaseLayer = (
                 return yield* Effect.fail(
                   new Error(`Deletion target changed since admission: ${id}`),
                 );
-              yield* claimAll(observed, DeletionModeSchema.parse(mode));
+              yield* claimAll(
+                observed,
+                Schema.decodeUnknownSync(DeletionModeSchema)(mode),
+              );
               const removal = prepareEventDraft({
                 type: 'run.removed',
                 aggregateId: id,

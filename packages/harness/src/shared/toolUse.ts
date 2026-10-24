@@ -6,7 +6,7 @@
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
-import { Predicate } from 'effect';
+import { Predicate, Result, Schema, SchemaIssue } from 'effect';
 import yaml from 'yaml';
 
 import {
@@ -16,7 +16,6 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
-import type { z } from 'zod';
 
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -114,7 +113,7 @@ const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
  * valid `read`/`bash` row cannot leak its full output into the diagnostic.
  */
 function malformedToolUseDiagnostic(
-  issues: readonly z.core.$ZodIssue[],
+  issues: readonly z.SchemaIssue.Issue[],
 ): string {
   const fields = [
     ...new Set(
@@ -139,12 +138,16 @@ function malformedToolUseDiagnostic(
  * rather than as a quiet success.
  */
 export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
-  const parsed = ToolUseLogSchema.loose().safeParse(data);
-  if (parsed.success) return parsed.data;
+  const parsed = Schema.decodeUnknownResult(
+    Schema.StructWithRest(ToolUseLogSchema, [
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  )(data);
+  if (Result.isSuccess(parsed)) return parsed.success;
   return {
     ...(typeof data.toolName === 'string' ? { toolName: data.toolName } : {}),
     ...('input' in data ? { input: data.input } : {}),
-    error: malformedToolUseDiagnostic(parsed.error.issues),
+    error: malformedToolUseDiagnostic(parsed.failure.issues),
     status:
       data.status === TOOL_CALL_STATUS.IN_PROGRESS
         ? TOOL_CALL_STATUS.IN_PROGRESS

@@ -1,6 +1,6 @@
 /** Trace inputs used by the same transcript fold during live display and replay. */
 // Shared contracts and utilities
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { ContextStateDataSchema } from './contextManagement';
 import { JsonValueSchema } from './jsonValue';
@@ -10,11 +10,15 @@ import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 
-function trace<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
-  return z.object({
-    type: z.literal(type),
-    stageId: z.string().optional(),
-    ...shape,
+function trace<
+  T extends string,
+  S extends
+    unknown /* TODO(effect-schema): type z.ZodRawShape; was `z.ZodRawShape` */,
+>(type: T, shape: S) {
+  return Schema.Struct({
+    type: Schema.Literal(type),
+    stageId: Schema.optional(Schema.String),
+    ...fields,
   });
 }
 
@@ -22,28 +26,30 @@ function trace<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
 export const TranscriptEventSchemas = {
   log: trace('log', {
     level: LogLevelSchema,
-    message: z.string(),
-    data: JsonValueSchema.optional(),
-    messageType: MessageTypeSchema.optional(),
+    message: Schema.String,
+    data: Schema.optional(JsonValueSchema),
+    messageType: Schema.optional(MessageTypeSchema),
   }),
   stageStart: trace('stage.start', {
-    id: z.string(),
-    label: z.string(),
-    parentId: z.string().nullish(),
-    kind: StageKindSchema.nullish(),
+    id: Schema.String,
+    label: Schema.String,
+    parentId: Schema.optional(Schema.NullOr(Schema.String)),
+    kind: Schema.optional(Schema.NullOr(StageKindSchema)),
   }),
-  stageEnd: trace('stage.end', { id: z.string(), status: RunOutcomeSchema }),
+  stageEnd: trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
   toolStart: trace('tool.start', {
-    logId: z.string(),
-    toolName: z.string(),
+    logId: Schema.String,
+    toolName: Schema.String,
     input: JsonValueSchema,
     /** A script's call: the guest's latest `phase()` title when it issued
      *  the call (`script.call.phase`). */
-    phase: z.string().optional(),
+    phase: Schema.optional(Schema.String),
     /** The intent attempt the card opens for, from the second on. */
-    attempt: z.int().min(2).optional(),
+    attempt: Schema.optional(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(2)),
+    ),
     /** The card the tool states for this call (`ToolUseLog.card`). */
-    card: ToolCardSchema.optional(),
+    card: Schema.optional(ToolCardSchema),
   }),
   /**
    * On a run with a run history the card stores no output: `result` is projected
@@ -52,10 +58,10 @@ export const TranscriptEventSchemas = {
    * without a run history (an agent-CLI child) stores `result` here.
    */
   toolEnd: trace('tool.end', {
-    logId: z.string(),
+    logId: Schema.String,
     status: ToolCallStatusSchema,
-    result: JsonValueSchema.optional(),
-    files: z.array(FileListEntrySchema).optional(),
+    result: Schema.optional(JsonValueSchema),
+    files: Schema.optional(Schema.Array(FileListEntrySchema)),
   }),
   /**
    * One priced model turn of the row's run: never a running total, so a
@@ -68,16 +74,16 @@ export const TranscriptEventSchemas = {
    */
   usage: trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
   context: trace('context.state', {
-    inputTokens: ContextStateDataSchema.shape.inputTokens,
-    contextWindow: ContextStateDataSchema.shape.contextWindow,
+    inputTokens: ContextStateDataSchema.fields.inputTokens,
+    contextWindow: ContextStateDataSchema.fields.contextWindow,
   }),
   streamStart: trace('stream.start', {
-    id: z.string(),
+    id: Schema.String,
     kind: MessageTypeSchema,
   }),
   streamEnd: trace('stream.end', {
-    id: z.string(),
-    finalText: z.string().optional(),
+    id: Schema.String,
+    finalText: Schema.optional(Schema.String),
   }),
   /** Authoritative final assistant text for the round that just ended the
    *  turn, decided once at the flow boundary (after replacement-rule
@@ -85,16 +91,15 @@ export const TranscriptEventSchemas = {
    *  boundary, not only the terminal round. The round's MODEL_RESPONSE stream carries raw
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
-  response: trace('response.finalized', { text: z.string() }),
+  response: trace('response.finalized', { text: Schema.String }),
 };
 
-export type TranscriptEvent = z.infer<
-  (typeof TranscriptEventSchemas)[keyof typeof TranscriptEventSchemas]
->;
+export type TranscriptEvent =
+  (typeof TranscriptEventSchemas)[keyof typeof TranscriptEventSchemas]['Type'];
 
 const TRANSCRIPT_EVENT_TYPES = new Set<string>(
   Object.values(TranscriptEventSchemas).map(
-    (schema) => schema.shape.type.value,
+    (schema) => schema.fields.type.value,
   ),
 );
 

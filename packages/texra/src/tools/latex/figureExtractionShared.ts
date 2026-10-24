@@ -1,5 +1,4 @@
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext, type ToolResult } from '@texra-ai/harness';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -14,8 +13,12 @@ import {
 } from '@texra-ai/harness/plugins';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
-export function texPathField(description: string): z.ZodString {
-  return z.string().min(1, 'texPath is required.').describe(description);
+export function texPathField(
+  description: string,
+): unknown /* TODO(effect-schema): type z.ZodString; was `z.ZodString` */ {
+  return Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: description,
+  });
 }
 
 interface LatexFileResolution {

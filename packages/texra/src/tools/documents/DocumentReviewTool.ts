@@ -4,8 +4,7 @@
  * recipe in `@agent/output/documentRecipe` calls it). The bundled `critic`
  * persona holds the instructions; this tool only gathers what it reads.
  */
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import { defineTool } from '@texra-ai/harness';
 import { executed, renderPrompt } from '@texra-ai/harness/plugins';
@@ -75,14 +74,12 @@ export const DocumentReviewTool = defineTool({
     "The evidence a critic reviews for a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt }`, to pass to the `critic` agent.",
   scriptReturns: '{ prompt: string }',
   replay: 'safe',
-  schema: z.strictObject({
+  schema: Schema.Struct({
     revision: RevisionSchema,
-    checked: z
-      .boolean()
-      .nullish()
-      .describe(
+    checked: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+      description:
         "Whether the revision's compile check ran (`document_compile`).",
-      ),
+    }),
   }),
   execute: Effect.fn('document_review')(function* ({ revision, checked }) {
     const docs = yield* documentsOfCall('document_review');

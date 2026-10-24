@@ -3,7 +3,7 @@
  */
 
 // Third-party imports
-import type { z } from 'zod';
+import { Schema, SchemaGetter } from 'effect';
 
 /**
  * An optional tool-input field whose absence resolves to `fallback` before
@@ -17,9 +17,17 @@ import type { z } from 'zod';
  * covers both, which is why the resulting field's output type is not nullable
  * and use sites need no `== null` check of their own.
  */
-export function nullishWithDefault<Schema extends z.ZodType>(
+export function nullishWithDefault<Schema extends Schema.Top>(
   schema: Schema,
-  fallback: z.output<Schema>,
-): z.ZodType<z.output<Schema>, z.input<Schema> | null | undefined> {
-  return schema.nullish().transform((value) => value ?? fallback);
+  fallback: Schema['Type'],
+): Schema.Codec<Schema['Type'], Schema['Encoded'] | null | undefined> {
+  return Schema.optional(Schema.NullOr(schema)).pipe(
+    Schema.decodeTo(
+      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value) => value ?? fallback)` */,
+      {
+        decode: SchemaGetter.transform((value) => value ?? fallback),
+        encode: SchemaGetter.forbidden(() => 'decode-only'),
+      },
+    ),
+  );
 }

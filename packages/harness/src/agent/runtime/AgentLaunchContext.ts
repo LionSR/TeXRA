@@ -1,5 +1,4 @@
-import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
-import { ZodError } from 'zod';
+import { Cause, Effect, Exit, FileSystem, Schema, Scope } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { selectModel } from '@texra-ai/llm';

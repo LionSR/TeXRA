@@ -8,7 +8,7 @@
  * the package's own schemas parse them back here, so a turn another build of
  * the package can no longer read is a refusal of that run, never a default.
  */
-import { Effect, Predicate, Result } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 
 import {
   AssistantMessageSchema,
@@ -19,7 +19,6 @@ import {
   TurnResultSchema,
   type RemoteOperation,
 } from '@texra-ai/llm';
-import { z } from 'zod';
 import {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
@@ -105,13 +104,15 @@ export function storedDraft(
   if (row.type === 'context.edit')
     return {
       ...row,
-      payload: ContextEditPayloadSchema.parse(stored(row.payload)),
+      payload: Schema.decodeUnknownSync(ContextEditPayloadSchema)(
+        stored(row.payload),
+      ),
     };
   if (row.type !== 'model.message') return row;
   const { payload } = row;
   return {
     ...row,
-    payload: ModelMessagePayloadSchema.parse(
+    payload: Schema.decodeUnknownSync(ModelMessagePayloadSchema)(
       stored(
         payload.kind === 'accepted'
           ? { ...payload, operation: storedOperation(payload.operation) }
@@ -123,34 +124,31 @@ export function storedDraft(
 
 /** A history entry as the fold holds it: the stored user, tool and system
  *  messages (media by address), the assistant message in the package's. */
-const HistoryMessageSchema = z.discriminatedUnion('role', [
+const HistoryMessageSchema = Schema.Union([
   AssistantMessageSchema,
-  ...StoredMessageSchema.options.filter(
-    (
-      option,
-    ): option is Exclude<
-      (typeof StoredMessageSchema.options)[number],
-      { shape: { role: z.ZodLiteral<'assistant'> } }
-    > => option.shape.role.value !== 'assistant',
-  ),
+  ...StoredMessageSchema.members /* TODO(effect-schema): filter; was `.filter(( option, ): option is Exclude< (typeof StoredMessageSchema.options)[number], { shape: { role: z.ZodLiteral<'assistant'> } } > => option.shape.role.value !== 'assistant')` */,
 ]);
 const liveMessages = (messages: readonly unknown[]): HistoryMessage[] =>
-  messages.map((message) => HistoryMessageSchema.parse(live(message)));
-const PreparedRunHistorySchema = z
-  .array(HistoryMessageSchema)
-  .min(1)
-  .superRefine(checkPreparedHistory)
-  .readonly();
+  messages.map((message) =>
+    Schema.decodeUnknownSync(HistoryMessageSchema)(live(message)),
+  );
+const PreparedRunHistorySchema = Schema.Array(HistoryMessageSchema)
+  .check(Schema.isMinLength(1))
+  .check(
+    Schema.makeFilter(
+      checkPreparedHistory /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine(checkPreparedHistory)` */,
+    ),
+  );
 /** Why `history` breaks the package's prepared-history rules, or null. */
 export function unpreparedHistory(
   history: readonly HistoryMessage[],
 ): string | null {
-  const parsed = PreparedRunHistorySchema.safeParse(history);
-  return parsed.success ? null : parsed.error.message;
+  const parsed = Schema.decodeUnknownResult(PreparedRunHistorySchema)(history);
+  return Result.isSuccess(parsed) ? null : parsed.failure.message;
 }
 
 function livePayload(
-  p: z.output<typeof ModelMessagePayloadSchema>,
+  p: typeof ModelMessagePayloadSchema.Type,
 ): ModelMessagePayload {
   switch (p.kind) {
     case 'identified':
@@ -159,16 +157,22 @@ function livePayload(
     case 'handed-down':
       return p;
     case 'attempt':
-      return { ...p, origin: ModelOriginSchema.parse(p.origin) };
+      return {
+        ...p,
+        origin: Schema.decodeUnknownSync(ModelOriginSchema)(p.origin),
+      };
     case 'response':
-      return { ...p, turn: TurnResultSchema.parse(live(p.turn)) };
+      return {
+        ...p,
+        turn: Schema.decodeUnknownSync(TurnResultSchema)(live(p.turn)),
+      };
     case 'append':
       return { ...p, messages: liveMessages(p.messages) };
     case 'accepted': {
       const { origin, providerResponseId, evidence } = p.operation;
       return {
         ...p,
-        operation: RemoteOperationSchema.parse({
+        operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin,
           providerResponseId,
           ...evidence.data,
@@ -213,7 +217,7 @@ export function runHistoryRows(
 // provider call, and the recorded-request check turns the bytes a turn sent
 // back into addresses to compare them with the rows.
 
-type ProviderMessage = z.output<typeof MessageSchema>;
+type ProviderMessage = typeof MessageSchema.Type;
 type ProviderInputPart = Extract<
   ProviderMessage,
   { readonly role: 'user' }

@@ -1,5 +1,4 @@
-import { Effect, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
 /**
  * Copilot routing: the per-model preference for serving a canonical base
@@ -110,7 +109,9 @@ const discoverCopilotRoutes = Effect.fn('copilotRouting.discoverCopilotRoutes')(
   },
 );
 
-const RouteModelsSchema = z.array(z.string()).prefault([]);
+const RouteModelsSchema = Schema.Array(Schema.String).pipe(
+  Schema.withDecodingDefault(Effect.succeed([])),
+);
 
 /**
  * Persisted canonical model ids whose Copilot route the user prefers, read
@@ -148,12 +149,12 @@ function setCopilotRoutePreference(
   preferred: boolean,
   state: StateStore,
 ) {
-  let invalid: z.ZodError | undefined;
+  let invalid: Schema.SchemaError | undefined;
   return state
     .modify(GlobalStateKey.COPILOT_ROUTE_MODELS, (stored) => {
-      const parsed = RouteModelsSchema.safeParse(stored);
-      invalid = parsed.error;
-      const current = liveRouteModels(parsed.data ?? []);
+      const parsed = Schema.decodeUnknownResult(RouteModelsSchema)(stored);
+      invalid = parsed.failure;
+      const current = liveRouteModels(parsed.success ?? []);
       return Result.succeed(
         preferred
           ? [...new Set([...current, model])]
@@ -166,7 +167,7 @@ function setCopilotRoutePreference(
           ? Effect.void
           : Effect.logWarning(
               `Replaced an invalid stored ${GlobalStateKey.COPILOT_ROUTE_MODELS}.`,
-              z.prettifyError(invalid),
+              invalid.message,
             ),
       ),
       Effect.asVoid,

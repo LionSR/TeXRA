@@ -1,7 +1,6 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import {
   defineTool,
   ToolContext,
@@ -20,11 +19,11 @@ import {
   texPathField,
 } from './figureExtractionShared';
 
-const ExtractFiguresInputSchema = z.strictObject({
+const ExtractFiguresInputSchema = Schema.Struct({
   texPath: texPathField('Path to the primary LaTeX file to inspect.'),
 });
 
-type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
+type ExtractFiguresInput = typeof ExtractFiguresInputSchema.Type;
 
 const DEFAULT_MAX_FILES = 20;
 

@@ -4,7 +4,7 @@
  * functions of a row, so the extension webview, the desktop renderer and the
  * CLI `/config` panel render the same choices.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import type {
   StateSettingEntry,
@@ -22,7 +22,8 @@ export interface PluginSettingRow {
 export function settingSchemaWithoutPrefault(
   entry: StateSettingEntry,
 ): unknown {
-  return entry.schema instanceof z.ZodPrefault
+  return entry.schema instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodPrefault; was `z.ZodPrefault()` */
     ? entry.schema.unwrap()
     : entry.schema;
 }
@@ -37,7 +38,8 @@ export function settingEnumOptions(
   entry: StateSettingEntry,
 ): readonly string[] | undefined {
   const inner = settingSchemaWithoutPrefault(entry);
-  return inner instanceof z.ZodEnum
+  return inner instanceof
+    Schema.Unknown /* TODO(effect-schema): z.ZodEnum; was `z.ZodEnum()` */
     ? (inner.options as readonly string[])
     : undefined;
 }

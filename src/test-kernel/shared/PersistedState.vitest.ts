@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect, Schema } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -8,13 +9,14 @@ import {
   vi,
   type MockInstance,
 } from 'vitest';
-import { z } from 'zod';
 
 // Local imports - shared state
 import { PersistedState } from '@texra/shared/state/PersistedState';
 
-const StateSchema = z.object({
-  density: z.enum(['compact', 'comfortable']).prefault('comfortable'),
+const StateSchema = Schema.Struct({
+  density: Schema.Literals(['compact', 'comfortable']).pipe(
+    Schema.withDecodingDefault(Effect.succeed('comfortable')),
+  ),
 });
 
 describe('PersistedState loading', () => {

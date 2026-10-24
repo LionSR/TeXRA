@@ -1,8 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { z } from 'zod';
-
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Exit, Result, Schema, SchemaGetter } from 'effect';
 import {
   canonicalizeWorkspacePath,
   executeCommand,
@@ -166,19 +164,35 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
  * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
  * `effect`-importing file keeps no raw catch.
  */
-const HomebrewFormulaEntrySchema = z.object({
-  name: z.string(),
-  versions: z.object({ stable: z.string().nullish() }).nullish(),
+const HomebrewFormulaEntrySchema = Schema.Struct({
+  name: Schema.String,
+  versions: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({ stable: Schema.optional(Schema.NullOr(Schema.String)) }),
+    ),
+  ),
 });
-const HomebrewInfoSchema = z.object({
-  formulae: z
-    .array(
-      z.unknown().transform((entry) => {
-        const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry);
-        return parsed.success ? parsed.data : null;
-      }),
-    )
-    .nullish(),
+const HomebrewInfoSchema = Schema.Struct({
+  formulae: Schema.optional(
+    Schema.NullOr(
+      Schema.Array(
+        Schema.Unknown.pipe(
+          Schema.decodeTo(
+            Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((entry) => { const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry); return parsed.success ? parsed.data : null; })` */,
+            {
+              decode: SchemaGetter.transform((entry) => {
+                const parsed = Schema.decodeUnknownResult(
+                  Schema.NullOr(HomebrewFormulaEntrySchema),
+                )(entry);
+                return Result.isSuccess(parsed) ? parsed.success : null;
+              }),
+              encode: SchemaGetter.forbidden(() => 'decode-only'),
+            },
+          ),
+        ),
+      ),
+    ),
+  ),
 });
 
 function parseHomebrewFormulaVersion(

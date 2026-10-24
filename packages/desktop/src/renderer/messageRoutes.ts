@@ -2,10 +2,10 @@
 // outbound union (`DesktopOutboundMessageSchema`), so a main-process push added
 // there without its renderer end fails to compile.
 
+import { Result, Schema } from 'effect';
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages';
-import type { z } from 'zod';
 
-type Push = z.output<typeof DesktopOutboundMessageSchema>;
+type Push = typeof DesktopOutboundMessageSchema.Type;
 
 /** One handler per main-process push, keyed by its command. */
 export type DesktopPushRoutes = {
@@ -25,12 +25,14 @@ export function createMessageRoutes(
     if (typeof data !== 'object' || data === null) return;
     if (!('command' in data) || typeof data.command !== 'string') return;
     if (!data.command.startsWith('desktop:')) return;
-    const parsed = DesktopOutboundMessageSchema.safeParse(data);
-    if (!parsed.success) {
-      console.warn(`Dropped a malformed ${data.command} push`, parsed.error);
+    const parsed = Schema.decodeUnknownResult(DesktopOutboundMessageSchema)(
+      data,
+    );
+    if (!Result.isSuccess(parsed)) {
+      console.warn(`Dropped a malformed ${data.command} push`, parsed.failure);
       return;
     }
-    const route = routes[parsed.data.command] as (message: Push) => void;
-    route(parsed.data);
+    const route = routes[parsed.success.command] as (message: Push) => void;
+    route(parsed.success);
   };
 }

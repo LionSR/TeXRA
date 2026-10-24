@@ -1,6 +1,5 @@
-import { Data, Effect, Result } from 'effect';
+import { Data, Effect, Result, Schema } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
-import { z } from 'zod';
 
 import {
   type ApiKeyProviderId,
@@ -271,13 +270,14 @@ function resolveModelAvailability(
  * failure a caller recovers from like an unreadable secret store. The module's
  * own invariant ({@link resolveModelAvailability}) stays a defect.
  */
-export class ModelHostFactUnreadable extends Data.TaggedError(
+export class ModelHostFactUnreadable extends Schema.TaggedError<ModelHostFactUnreadable>()(
   'ModelHostFactUnreadable',
-)<{
-  readonly fact: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    fact: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Give state-read failures the availability computation's public error. */
 const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
@@ -426,11 +426,11 @@ function withConsultedKeyStatuses(
  * to the curated defaults reaches every user while a default they turned off
  * stays off and a model they turned on stays on.
  */
-const ModelSelectionSchema = z.object({
-  enabledExtras: z.array(z.string()).readonly(),
-  disabledDefaults: z.array(z.string()).readonly(),
+const ModelSelectionSchema = Schema.Struct({
+  enabledExtras: Schema.Array(Schema.String),
+  disabledDefaults: Schema.Array(Schema.String),
 });
-type ModelSelection = z.infer<typeof ModelSelectionSchema>;
+type ModelSelection = typeof ModelSelectionSchema.Type;
 
 const EMPTY_MODEL_SELECTION: ModelSelection = {
   enabledExtras: [],
@@ -444,18 +444,20 @@ const EMPTY_MODEL_SELECTION: ModelSelection = {
  */
 function selectionOf(stored: unknown) {
   const parsed =
-    stored === undefined ? undefined : ModelSelectionSchema.safeParse(stored);
+    stored === undefined
+      ? undefined
+      : Schema.decodeUnknownResult(ModelSelectionSchema)(stored);
   return parsed?.success === false
     ? { selection: EMPTY_MODEL_SELECTION, invalid: parsed.error }
     : { selection: parsed?.data ?? EMPTY_MODEL_SELECTION };
 }
 
-const reportInvalid = (invalid: z.ZodError | undefined) =>
+const reportInvalid = (invalid: Schema.SchemaError | undefined) =>
   invalid === undefined
     ? Effect.void
     : Effect.logWarning(
         `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
-        z.prettifyError(invalid),
+        invalid.message,
       );
 
 /**
@@ -519,7 +521,7 @@ export function setModelEnabled(input: {
       refuse(`Model "${input.model}" is retired and cannot be enabled.`),
     );
   }
-  let invalid: z.ZodError | undefined;
+  let invalid: Schema.SchemaError | undefined;
   // Edit the list the picker shows — including the all-defaults fallback — and
   // re-encode the delta from it, so a write never acts on a hidden state. An
   // explicit enable is recorded in `enabledExtras` even for a default, so it

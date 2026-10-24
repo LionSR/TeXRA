@@ -4,16 +4,16 @@
  * schema rather than in the root's declarations, so a browser reaches them
  * through `@texra-ai/harness/schemas`.
  */
-import type { z } from 'zod';
+import { Schema } from 'effect';
 
 import type { ReadonlyDeep } from './readonlyDeep';
 import type { SessionViewSchema } from './sessionView';
 
 /** One published level of the session's fold: an immutable value. */
-export type SessionView = ReadonlyDeep<z.infer<typeof SessionViewSchema>>;
+export type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
 /** One stream of the {@link SessionView}. */
 export type RunView = ReadonlyDeep<
-  z.infer<typeof SessionViewSchema.shape.runs.valueType>
+  typeof SessionViewSchema.shape.runs.valueType.Type
 >;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = RunView['transcript'];

@@ -1,7 +1,6 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Context, Effect, Option } from 'effect';
-import { z } from 'zod';
+import { Context, Effect, Option, Schema } from 'effect';
 import {
   defineTool,
   ToolContext,
@@ -95,68 +94,98 @@ const requireProvider = Effect.gen(function* () {
 const THREAD_ID_DESCRIPTION = 'The thread id returned by "add" or "list".';
 const COMMENT_BODY_DESCRIPTION = 'The comment text (Markdown supported).';
 
-const InlineCommentInputSchema = z.discriminatedUnion('command', [
+const InlineCommentInputSchema = Schema.Union([
   // Built here rather than passed as a shape: the branch carries a
   // cross-field check.
-  z
-    .looseObject({
-      command: z
-        .literal('add')
-        .describe('Open a new comment thread on a file range.'),
-      path: z.string().trim().min(1).describe(
-        // Provider conversion advertises one `path` for all commands and keeps
-        // this first-declared branch's description (flattenTopLevelUnion), so
-        // it must also carry the list command's guidance.
-        'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
-      ),
-      line: z
-        .int()
-        .min(1)
-        .describe('1-based start line the comment anchors to.'),
-      endLine: z
-        .int()
-        .min(1)
-        .nullish()
-        .describe('1-based end line of the range; defaults to the start line.'),
-      body: z.string().min(1).describe(COMMENT_BODY_DESCRIPTION),
-    })
-    .refine((data) => data.endLine == null || data.endLine >= data.line, {
-      message: 'endLine must be greater than or equal to line.',
-      path: ['endLine'],
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('add').annotate({
+        description: 'Open a new comment thread on a file range.',
+      }),
+      path: Schema.Trim.check(Schema.isMinLength(1)).annotate({
+        description:
+          // Provider conversion advertises one `path` for all commands and keeps
+          // this first-declared branch's description (flattenTopLevelUnion), so
+          // it must also carry the list command's guidance.
+          'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
+      }),
+      line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+        description: '1-based start line the comment anchors to.',
+      }),
+      endLine: Schema.optional(
+        Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+      ).annotate({
+        description:
+          '1-based end line of the range; defaults to the start line.',
+      }),
+      body: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: COMMENT_BODY_DESCRIPTION,
+      }),
     }),
-  z.looseObject({
-    command: z
-      .literal('reply')
-      .describe('Append a comment to an existing thread.'),
-    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
-    body: z.string().min(1).describe(COMMENT_BODY_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('resolve').describe('Mark a thread resolved.'),
-    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('unresolve').describe('Reopen a resolved thread.'),
-    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z
-      .literal('list')
-      .describe(
-        "Read open threads and their comments, including the user's replies.",
-      ),
-    path: z
-      .string()
-      .trim()
-      .min(1)
-      .nullish()
-      .describe(
-        'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
-      ),
-  }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ).check(
+    Schema.makeFilter(
+      (data) => data.endLine == null || data.endLine >= data.line,
+      {
+        message: 'endLine must be greater than or equal to line.',
+        path: ['endLine'],
+      },
+    ),
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('reply').annotate({
+        description: 'Append a comment to an existing thread.',
+      }),
+      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: THREAD_ID_DESCRIPTION,
+      }),
+      body: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: COMMENT_BODY_DESCRIPTION,
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('resolve').annotate({
+        description: 'Mark a thread resolved.',
+      }),
+      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: THREAD_ID_DESCRIPTION,
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('unresolve').annotate({
+        description: 'Reopen a resolved thread.',
+      }),
+      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: THREAD_ID_DESCRIPTION,
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('list').annotate({
+        description:
+          "Read open threads and their comments, including the user's replies.",
+      }),
+      path: Schema.optional(
+        Schema.NullOr(Schema.Trim.check(Schema.isMinLength(1))),
+      ).annotate({
+        description:
+          'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
 ]);
 
-type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
+type InlineCommentInput = typeof InlineCommentInputSchema.Type;
 type AddCommentInput = Extract<InlineCommentInput, { command: 'add' }>;
 type ReplyCommentInput = Extract<InlineCommentInput, { command: 'reply' }>;
 type SetResolvedInput = Extract<

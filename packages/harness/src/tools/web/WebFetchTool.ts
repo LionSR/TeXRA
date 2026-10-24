@@ -2,11 +2,10 @@
 import { lookup } from 'node:dns';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
 import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
-import { z } from 'zod';
 
 // Local imports - core
 import { undiciFetchThrough } from '@platform/defaults/longRunningModelTransport';
@@ -27,22 +26,23 @@ const WEB_FETCH_RETRIES = 2;
 const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MiB
 const MAX_REDIRECTS = 5;
 
-const WebFetchInputSchema = z.strictObject({
-  url: z
-    .url('Provide a valid absolute URL to fetch.')
-    .refine(
+const WebFetchInputSchema = Schema.Struct({
+  url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url('Provide a valid absolute URL to fetch.')` */.check(
+    Schema.makeFilter(
       (value) => value.startsWith('http://') || value.startsWith('https://'),
-      'URL must use HTTP or HTTPS protocol',
-    )
-    .describe('Public HTTP or HTTPS URL to fetch.'),
-  prompt: z
-    .string()
-    .min(1)
-    .nullish()
-    .describe('Optional instruction describing what to extract from the page.'),
+      { message: 'URL must use HTTP or HTTPS protocol' },
+    ),
+  )
+    .annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
+  prompt: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ).annotate({
+    description:
+      'Optional instruction describing what to extract from the page.',
+  }),
 });
 
-type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
+type WebFetchInput = typeof WebFetchInputSchema.Type;
 
 const PRIVATE_ADDRESS_REFUSAL =
   'Cannot fetch localhost or private network addresses. Provide a public URL instead.';

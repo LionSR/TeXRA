@@ -14,12 +14,14 @@ import '@test/support/defaultSessionTestSetup';
 
 import {
   Cause,
-  Deferred,
   Context,
-  Exit,
+  Deferred,
   Effect,
+  Exit,
   Fiber,
   Layer,
+  Result,
+  Schema,
   Scope,
   Stream,
   SynchronizedRef,
@@ -29,7 +31,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
-import { z } from 'zod';
 import {
   type Model,
   type ModelOrigin,
@@ -153,7 +154,7 @@ const makeCall = (
 
 /** The completed turn whose calls the dispatch settles. */
 function turnWithCalls(calls: readonly Call[]): TurnResult {
-  return TurnResultSchema.parse({
+  return Schema.decodeUnknownSync(TurnResultSchema)({
     kind: 'http',
     providerResponseId: 'resp-1',
     requestedOrigin: ORIGIN,
@@ -239,7 +240,7 @@ function agentRun(
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
     {
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'assistant',
         model: GPT54,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
@@ -505,7 +506,9 @@ describe('tool-use dispatch', () => {
     Effect.gen(function* () {
       // An empty object against a required array: the issue names no
       // `received` value, and the settled row must still be JSON.
-      const parsed = z.object({ files: z.array(z.string()) }).safeParse({});
+      const parsed = Schema.decodeUnknownResult(
+        Schema.Struct({ files: Schema.Array(Schema.String) }),
+      )({});
       const invalidInputTool: ITool = {
         definition: { name: 'texcount', description: 'texcount' },
         call: () =>
@@ -515,7 +518,7 @@ describe('tool-use dispatch', () => {
             diagnostics: {
               type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
               formatted: formatZodIssuesForDiagnostics(
-                parsed.error?.issues ?? [],
+                parsed.failure?.issues ?? [],
               ),
             },
           }),

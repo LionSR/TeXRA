@@ -16,8 +16,15 @@
  */
 
 // Third-party imports
-import { Cause, Data, Effect, Exit, Result, SynchronizedRef } from 'effect';
-import { z } from 'zod';
+import {
+  Cause,
+  Data,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  SynchronizedRef,
+} from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -79,41 +86,40 @@ import {
 } from './subagentRun';
 
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
-class AgentTimedOut extends Data.TaggedError('AgentTimedOut')<{
-  readonly timeoutMs: number;
-}> {}
+class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
+  'AgentTimedOut',
+  {
+    timeoutMs: Schema.Number,
+  },
+) {}
 
 /** A list of file paths, empty when the call names none. */
 export const fileList = (
   description: string,
-): ReturnType<typeof nullishWithDefault<z.ZodArray<z.ZodString>>> =>
-  nullishWithDefault(z.array(z.string()), []).describe(description);
+): ReturnType<
+  typeof nullishWithDefault<unknown /* TODO(effect-schema): type z.ZodArray; was `z.ZodArray<z.ZodString>` */>
+> => nullishWithDefault(Schema.Array(Schema.String), []).describe(description);
 
 /** The fields that name what an `agent` call runs and with which model. */
 const LAUNCH_FIELDS = {
-  prompt: z
-    .string()
-    .min(1, 'prompt is required')
-    .describe(
+  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'The task, in plain prose. Name the files it concerns and copy every constraint the agent must follow: it does not see your conversation.',
-    ),
-  agentName: z
-    .string()
-    .min(1, 'agentName is required')
-    .describe('The agent to run. It works with its own tools.'),
+  }),
+  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'The agent to run. It works with its own tools.',
+  }),
   persona: personaField,
-  model: z
-    .string()
-    .nullish()
-    .describe(
+  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'Model reference, `@effort` suffix allowed (`@low` … `@max`, `@none`). Defaults to your current model when available.',
-    ),
-  schema: z
-    .record(z.string(), z.unknown())
-    .nullish()
-    .describe(
+  }),
+  schema: Schema.optional(
+    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
+  ).annotate({
+    description:
       'A JSON Schema object: the agent finishes by submitting a value of it, returned as `structured`.',
-    ),
+  }),
   mediaFiles: fileList(
     'Images, figures, PDFs or audio attached to the prompt.',
   ),
@@ -126,28 +132,29 @@ const LAUNCH_FIELDS = {
 export const CALL_FIELDS = {
   memories: memoriesField,
   working_directory: workingDirectoryField,
-  id: z
-    .string()
-    .nullish()
-    .describe(
+  id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
+  }),
+  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'A short title for the call’s card.',
+  }),
+  timeoutMs: Schema.optional(
+    Schema.NullOr(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
+        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
+      ),
     ),
-  label: z.string().nullish().describe('A short title for the call’s card.'),
-  timeoutMs: z
-    .int()
-    .min(1000)
-    .max(24 * 60 * 60 * 1000)
-    .nullish()
-    .describe('Stops the agent after this many milliseconds: `TimedOut`.'),
-  background: z
-    .boolean()
-    .nullish()
-    .describe(
+  ).annotate({
+    description: 'Stops the agent after this many milliseconds: `TimedOut`.',
+  }),
+  background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
       'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
-    ),
+  }),
 };
-const AgentInputSchema = z.strictObject({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
-type AgentInput = z.infer<typeof AgentInputSchema>;
+const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
+type AgentInput = typeof AgentInputSchema.Type;
 
 /**
  * One child launch as the shared core runs it: the agent and its prompt,
@@ -471,25 +478,27 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       name: 'ModelUnavailable',
     });
   const workingDirectory = launch.workingDirectory ?? call.env.workingDirectory;
-  const proposal: AgentProposal = AgentProposalSchema.parse({
-    agent: agent.name,
-    agentSource: agent.source,
-    ...(persona != null && { persona }),
-    model: selected.value,
-    memories: launch.memories,
-    ...(workingDirectory !== undefined && { workingDirectory }),
-    task: task !== null,
-    instruction: handsOff
-      ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
-      : launch.prompt,
-    inputFiles: inputs.map(({ file }) => file),
-    contextFiles,
-    mediaFiles: media.map(({ file }) => file),
-    outputFiles: files.outputFiles,
-    // A task's options reach the child through its plugin's recipe.
-    ...(task !== null && { options: task.options }),
-    ...(task === null && { rootUserInstruction: call.instruction }),
-  });
+  const proposal: AgentProposal = Schema.decodeUnknownSync(AgentProposalSchema)(
+    {
+      agent: agent.name,
+      agentSource: agent.source,
+      ...(persona != null && { persona }),
+      model: selected.value,
+      memories: launch.memories,
+      ...(workingDirectory !== undefined && { workingDirectory }),
+      task: task !== null,
+      instruction: handsOff
+        ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
+        : launch.prompt,
+      inputFiles: inputs.map(({ file }) => file),
+      contextFiles,
+      mediaFiles: media.map(({ file }) => file),
+      outputFiles: files.outputFiles,
+      // A task's options reach the child through its plugin's recipe.
+      ...(task !== null && { options: task.options }),
+      ...(task === null && { rootUserInstruction: call.instruction }),
+    },
+  );
 
   const decided = yield* decideDelegation(
     call,

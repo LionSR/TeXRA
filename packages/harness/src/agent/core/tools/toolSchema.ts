@@ -5,8 +5,7 @@
  * stripped). The tool catalog builds the package's uniform tool
  * definitions from it; the structured-output tool builder shares it.
  */
-import { Predicate } from 'effect';
-import { toJSONSchema, type core } from 'zod';
+import { Predicate, Schema } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -201,7 +200,10 @@ const TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({
 export const inputSchema = (definition: ToolDefinition): unknown =>
   definition.zodSchema === undefined
     ? definition.parameters
-    : toJSONSchema(definition.zodSchema, TOOL_JSON_SCHEMA_OPTIONS);
+    : Schema.toJsonSchemaDocument(
+        /* TODO(effect-schema): toJSONSchema */ definition.zodSchema,
+        TOOL_JSON_SCHEMA_OPTIONS,
+      );
 
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted

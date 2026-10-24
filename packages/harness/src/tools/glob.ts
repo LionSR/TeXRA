@@ -2,9 +2,15 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Option, Predicate, type Scope } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Option,
+  Predicate,
+  Schema,
+  type Scope,
+} from 'effect';
 import { Glob } from 'glob';
-import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports
@@ -21,18 +27,16 @@ import { pluralize } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/definition';
 
-const GlobInputSchema = z.strictObject({
-  pattern: z
-    .string()
-    .min(1, 'pattern is required')
-    .describe('Glob pattern to match, such as "**/*.tex" or "src/**/*.ts".'),
-  path: z
-    .string()
-    .nullish()
-    .describe('Directory to search within. Defaults to the workspace root.'),
+const GlobInputSchema = Schema.Struct({
+  pattern: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'Glob pattern to match, such as "**/*.tex" or "src/**/*.ts".',
+  }),
+  path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'Directory to search within. Defaults to the workspace root.',
+  }),
 });
 
-type GlobInput = z.infer<typeof GlobInputSchema>;
+type GlobInput = typeof GlobInputSchema.Type;
 
 interface GlobMatchInfo {
   relativePath: string;

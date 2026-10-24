@@ -7,6 +7,7 @@
  * harness holds none of it. Browser-safe: it imports only schemas and
  * browser-safe path helpers.
  */
+import { Effect, Result, Schema, Struct } from 'effect';
 import {
   getBasename,
   DiffStatsSchema,
@@ -17,25 +18,26 @@ import {
   type DiffStats,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { z } from 'zod';
 
 /** A zero-based round (a document task's revision) number. */
-const RoundNumberSchema = z.int().nonnegative();
+const RoundNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
-const FileLineageSchema = z.strictObject({
-  original: FileLocationSchema.nullable(),
-  diffBase: FileLocationSchema.nullable(),
+const FileLineageSchema = Schema.Struct({
+  original: Schema.NullOr(FileLocationSchema),
+  diffBase: Schema.NullOr(FileLocationSchema),
 });
 
 /** A file a document task wrote, with its lineage and diff stats. */
-const OutputFileInfoSchema = z.strictObject({
-  source: z.string(),
+const OutputFileInfoSchema = Schema.Struct({
+  source: Schema.String,
   location: FileLocationSchema,
-  round: RoundNumberSchema.prefault(() => 0),
-  lineage: FileLineageSchema.nullable(),
-  diff: DiffStatsSchema.nullable(),
+  round: RoundNumberSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(() => 0)),
+  ),
+  lineage: Schema.NullOr(FileLineageSchema),
+  diff: Schema.NullOr(DiffStatsSchema),
 });
-export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+export type OutputFileInfo = typeof OutputFileInfoSchema.Type;
 
 // The output protocol: every agent wraps its documents in
 // `<documents><document name="...">...</document></documents>`, after its
@@ -144,22 +146,22 @@ export function outputDiffCounts(
  * run metadata. It keeps persisted workflow summaries independent from
  * the richer file-location internals used while a run is active.
  */
-const OutputFileSummarySchema = z.object({
+const OutputFileSummarySchema = Schema.Struct({
   round: RoundNumberSchema,
-  relativePath: z.string(),
-  absolutePath: z.string(),
-  location: z.enum(['workspace', 'runStorage', 'external']),
-  originalPath: z.string().nullable(),
-  added: LineCountSchema.nullable(),
-  removed: LineCountSchema.nullable(),
+  relativePath: Schema.String,
+  absolutePath: Schema.String,
+  location: Schema.Literals(['workspace', 'runStorage', 'external']),
+  originalPath: Schema.NullOr(Schema.String),
+  added: Schema.NullOr(LineCountSchema),
+  removed: Schema.NullOr(LineCountSchema),
 });
 
-const CompileFailureSchema = z.strictObject({
+const CompileFailureSchema = Schema.Struct({
   round: RoundNumberSchema,
-  displayName: z.string(),
+  displayName: Schema.String,
   output: FileLocationSchema,
   log: FileLocationSchema,
-  logRelativePath: z.string(),
+  logRelativePath: Schema.String,
 });
 
 /**
@@ -181,38 +183,43 @@ export function finalWorkflowOutput(
  * Flattened projection of {@link CompileFailure} for agent results and
  * run metadata.
  */
-const CompileFailureSummarySchema = z.object({
+const CompileFailureSummarySchema = Schema.Struct({
   round: RoundNumberSchema,
-  displayName: z.string(),
-  outputPath: z.string(),
-  logPath: z.string(),
-  logAbsolutePath: z.string(),
+  displayName: Schema.String,
+  outputPath: Schema.String,
+  logPath: Schema.String,
+  logAbsolutePath: Schema.String,
 });
-type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
+type CompileFailureSummary = typeof CompileFailureSummarySchema.Type;
 
-const LatexdiffPairSchema = z.strictObject({
+const LatexdiffPairSchema = Schema.Struct({
   /** The round's output the diff marks up. */
   revised: FileLocationSchema,
   /** The workspace document the output descends from, which names it. */
-  original: FileLocationSchema.nullable(),
+  original: Schema.NullOr(FileLocationSchema),
   base: FileLocationSchema,
   /** The round the base came from; null for the task's starting document. */
-  baseRound: RoundNumberSchema.nullable(),
+  baseRound: Schema.NullOr(RoundNumberSchema),
 });
 
 /** One latexdiff of a round's output against a base: its marked-up file,
  *  or why latexdiff failed. */
-const LatexdiffEntrySchema = z.discriminatedUnion('status', [
-  LatexdiffPairSchema.extend({
-    status: z.literal('ok'),
-    diff: FileLocationSchema,
-  }),
-  LatexdiffPairSchema.extend({
-    status: z.literal('failed'),
-    error: z.string(),
-  }),
+const LatexdiffEntrySchema = Schema.Union([
+  LatexdiffPairSchema.mapFields(
+    Struct.assign({
+      status: Schema.Literal('ok'),
+      diff: FileLocationSchema,
+    }),
+  ),
+
+  LatexdiffPairSchema.mapFields(
+    Struct.assign({
+      status: Schema.Literal('failed'),
+      error: Schema.String,
+    }),
+  ),
 ]);
-export type LatexdiffEntry = z.infer<typeof LatexdiffEntrySchema>;
+export type LatexdiffEntry = typeof LatexdiffEntrySchema.Type;
 
 /** The name a latexdiff entry reads by: its workspace document's file name,
  *  else its base's path. */
@@ -222,7 +229,7 @@ export function latexdiffDisplayName(entry: LatexdiffEntry): string {
     : fileLocationShortDisplayPath(entry.base);
 }
 
-export const RoundOutputSchema = z.strictObject({
+export const RoundOutputSchema = Schema.Struct({
   round: RoundNumberSchema,
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
@@ -230,17 +237,16 @@ export const RoundOutputSchema = z.strictObject({
    *  files it lacks (the disk check owns those) and the documents its reply
    *  held that did not extract. Persisted with all round outputs in the
    *  documents plugin's output fact. */
-  missingOutputs: z
-    .string()
-    .array()
-    .prefault(() => []),
+  missingOutputs: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(() => [])),
+  ),
   /** The round's latexdiffs, as its last `document_diff` wrote them. */
-  latexdiffs: z.array(LatexdiffEntrySchema),
+  latexdiffs: Schema.Array(LatexdiffEntrySchema),
   /** Where the round's reply is kept, which a reader opens to check the
    *  documents it should have held; null until extraction keeps it. */
-  reply: FileLocationSchema.nullable(),
+  reply: Schema.NullOr(FileLocationSchema),
 });
-export type RoundOutput = z.infer<typeof RoundOutputSchema>;
+export type RoundOutput = typeof RoundOutputSchema.Type;
 
 const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
   (output) => ({
@@ -269,7 +275,7 @@ export function roundOutputsToOutputSummaries(
 ): OutputFileSummary[] {
   return roundOutputs.flatMap((roundOutput) =>
     roundOutput.outputs.map((output) =>
-      OutputFileSummaryFromInfoSchema.parse({
+      Schema.decodeUnknownSync(OutputFileSummaryFromInfoSchema)({
         ...output,
         round: roundOutput.round,
       }),
@@ -282,49 +288,53 @@ export function roundOutputsToCompileFailureSummaries(
 ): CompileFailureSummary[] {
   return roundOutputs.flatMap((roundOutput) =>
     roundOutput.compileFailures.map((failure) =>
-      CompileFailureSummaryFromFailureSchema.parse(failure),
+      Schema.decodeUnknownSync(CompileFailureSummaryFromFailureSchema)(failure),
     ),
   );
 }
 
-export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
-export type CompileFailure = z.infer<typeof CompileFailureSchema>;
+export type OutputFileSummary = typeof OutputFileSummarySchema.Type;
+export type CompileFailure = typeof CompileFailureSchema.Type;
 
 /** A diff of one output against the document it started from, written to
  *  the run's storage for a reader to open (`diffRelPath`). */
-const ResultDiffSummarySchema = z.strictObject({
+const ResultDiffSummarySchema = Schema.Struct({
   /** The output's absolute path. */
-  path: z.string(),
-  diffRelPath: z.string(),
-  largeChange: z.boolean(),
+  path: Schema.String,
+  diffRelPath: Schema.String,
+  largeChange: Schema.Boolean,
 });
-export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
+export type ResultDiffSummary = typeof ResultDiffSummarySchema.Type;
 
 /** The diffs of a task's proposed revision, as its documents fact records them:
  *  absent until the task proposes; `diffsUnavailable` says why they are not. */
-export const DocumentDiffsSchema = z.strictObject({
-  diffs: z.array(ResultDiffSummarySchema).optional(),
-  diffsUnavailable: z.string().optional(),
+export const DocumentDiffsSchema = Schema.Struct({
+  diffs: Schema.optional(Schema.Array(ResultDiffSummarySchema)),
+  diffsUnavailable: Schema.optional(Schema.String),
 });
-export type DocumentDiffs = z.infer<typeof DocumentDiffsSchema>;
+export type DocumentDiffs = typeof DocumentDiffsSchema.Type;
 
 /**
  * What a document task's run reports: every revision's outputs and compile
  * failures, and its proposed revision's diffs. Its recipe returns it, so it is
  * the run's `output.structured`.
  */
-export const DocumentsResultSchema = z.strictObject({
-  outputs: z.array(OutputFileSummarySchema),
-  compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
-  diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
-  diffsUnavailable: z.string().optional(),
+export const DocumentsResultSchema = Schema.Struct({
+  outputs: Schema.Array(OutputFileSummarySchema),
+  compileFailures: Schema.Array(CompileFailureSummarySchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed(() => [])),
+  ),
+  diffs: Schema.Array(ResultDiffSummarySchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed(() => [])),
+  ),
+  diffsUnavailable: Schema.optional(Schema.String),
 });
-export type DocumentsResult = z.infer<typeof DocumentsResultSchema>;
+export type DocumentsResult = typeof DocumentsResultSchema.Type;
 
 /** The documents a run reports, when its value is a document task's. */
 export function documentsResultOf(
   structured: unknown,
 ): DocumentsResult | undefined {
-  const parsed = DocumentsResultSchema.safeParse(structured);
-  return parsed.success ? parsed.data : undefined;
+  const parsed = Schema.decodeUnknownResult(DocumentsResultSchema)(structured);
+  return Result.isSuccess(parsed) ? parsed.success : undefined;
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /**
  * The one id a run has: minted once at launch, assigned
@@ -6,12 +6,13 @@ import { z } from 'zod';
  * when generated, 24 when derived from a checkpoint identity. Branded so a
  * string that was never minted as a run id cannot be passed for one.
  */
-export const RunIdSchema = z
-  .string()
-  .min(6)
-  .regex(/^[0-9a-f][-0-9a-f]*$/i, 'Invalid run ID: expected hex')
-  .brand<'RunId'>();
-export type RunId = z.infer<typeof RunIdSchema>;
+export const RunIdSchema = Schema.String.check(Schema.isMinLength(6))
+  .check(Schema.isPattern(/^[0-9a-f][-0-9a-f]*$/i))
+  .pipe(Schema.brand('RunId'));
+export type RunId = typeof RunIdSchema.Type;
 
 /** A run id, or the empty-string sentinel meaning "no active run". */
-export const RunSelectionSchema = z.union([RunIdSchema, z.literal('')]);
+export const RunSelectionSchema = Schema.Union([
+  RunIdSchema,
+  Schema.Literal(''),
+]);

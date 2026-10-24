@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -23,18 +22,15 @@ const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
 /** Grace period before re-reading the extension registry after an install. */
 const REGISTRATION_GRACE_MS = 250;
 
-const InstallVscodeExtensionInputSchema = z.strictObject({
-  extensionId: z
-    .string()
-    .min(1)
-    .describe(
+const InstallVscodeExtensionInputSchema = Schema.Struct({
+  extensionId: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'VS Code extension ID in "<publisher>.<name>" form (e.g. "James-Yu.latex-workshop").',
-    ),
+  }),
 });
 
-type InstallVscodeExtensionInput = z.infer<
-  typeof InstallVscodeExtensionInputSchema
->;
+type InstallVscodeExtensionInput =
+  (typeof InstallVscodeExtensionInputSchema)['Type'];
 
 const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
   function* (input: InstallVscodeExtensionInput) {

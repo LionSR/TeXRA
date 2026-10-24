@@ -11,8 +11,7 @@
  * aren't in the registry yet are reported rather than silently dropped.
  */
 
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 import { AgentCatalog, defineTool, ToolContext } from '@texra-ai/harness';
 
 import { executed, ToolError } from '@texra-ai/harness/plugins';
@@ -32,16 +31,15 @@ function describeTeams(): string {
   ).join('\n');
 }
 
-const ApplyTeamInputSchema = z.strictObject({
-  teamId: z
-    .string()
-    .refine((value) => TEAM_IDS.includes(value), {
+const ApplyTeamInputSchema = Schema.Struct({
+  teamId: Schema.String.check(
+    Schema.makeFilter((value) => TEAM_IDS.includes(value), {
       message: `Expected one of: ${TEAM_IDS.join(', ')}`,
-    })
-    .describe(`Team to apply. One of:\n${describeTeams()}`),
+    }),
+  ).annotate({ description: `Team to apply. One of:\n${describeTeams()}` }),
 });
 
-type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
+type ApplyTeamInput = typeof ApplyTeamInputSchema.Type;
 
 const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,

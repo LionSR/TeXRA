@@ -19,6 +19,7 @@ import {
   Random,
   Result,
   Schedule,
+  Schema,
   Scope,
 } from 'effect';
 
@@ -39,7 +40,6 @@ import {
 import { shouldDropBotEvent } from './botFilter';
 import type { DedupedResource } from './pollingDedup';
 import type { GhUser } from './prTypes';
-import type { ZodType } from 'zod';
 
 /**
  * Called on the emitting turn to capture the binding and owner before detach.
@@ -77,9 +77,12 @@ export function createBasePollState(now: number): BasePollSubscriptionState {
  * only failure a poll hook may report, so the base can classify every one of
  * them without inspecting a wider channel.
  */
-export class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
-  readonly cause: unknown;
-}> {}
+export class PollHookRejected extends Schema.TaggedError<PollHookRejected>()(
+  'PollHookRejected',
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 interface PollingSourceConfig {
   /** Display name used as the log channel and in exception messages. */
@@ -362,11 +365,11 @@ export abstract class PollingSourceBase<
     label: string,
   ): Effect.Effect<ConditionalResponse<T> | undefined> {
     if (res.status === 304) return Effect.succeed(res);
-    const parsed = schema.safeParse(res.data);
-    if (!parsed.success) {
-      return this.logWarning(label, parsed.error).pipe(Effect.as(undefined));
+    const parsed = Schema.decodeUnknownResult(schema)(res.data);
+    if (!Result.isSuccess(parsed)) {
+      return this.logWarning(label, parsed.failure).pipe(Effect.as(undefined));
     }
-    return Effect.succeed({ ...res, data: parsed.data });
+    return Effect.succeed({ ...res, data: parsed.success });
   }
 
   /**

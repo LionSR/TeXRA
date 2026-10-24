@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
@@ -32,7 +32,11 @@ export enum DocumentsStateKey {
 export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
+      ),
+    ),
     title: 'Auto-compile outputs',
     description:
       'Compile the LaTeX project automatically after a document task writes its output.',
@@ -42,10 +46,15 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
+    schema: Schema.Int.check(
+      Schema.isGreaterThanOrEqualTo(
+        LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+      ),
+    ).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
+      ),
+    ),
     title: 'Auto-compile timeout',
     description:
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
@@ -55,7 +64,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
+      ),
+    ),
     title: 'Open the compiled PDF',
     description:
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
@@ -67,9 +80,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-    schema: z
-      .boolean()
-      .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
+      ),
+    ),
     title: 'Repair failed compiles',
     description:
       'When the automatic compile fails, spend the next revision repairing the output from the compile log.',
@@ -82,7 +97,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   // `/config`; the rest are deferred from `/config` by product decision.
   {
     key: DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
+      ),
+    ),
     title: 'Diff consecutive revisions',
     description:
       'Also diff each revision against the previous one, not only against your original input.',
@@ -92,11 +111,17 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.LATEXDIFF_TIMEOUT_MS,
-    schema: z
-      .int()
-      .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
-      .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
+    schema: Schema.Int.check(
+      Schema.isGreaterThanOrEqualTo(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min),
+    )
+      .check(
+        Schema.isLessThanOrEqualTo(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max),
+      )
+      .pipe(
+        Schema.withDecodingDefault(
+          Effect.succeed(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
+        ),
+      ),
     title: 'latexdiff timeout',
     description:
       'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
@@ -106,9 +131,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-    schema: z
-      .enum(LATEXDIFF_MATH_MARKUP_VALUES)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
+    schema: Schema.Enum(LATEXDIFF_MATH_MARKUP_VALUES).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
+      ),
+    ),
     title: 'Math markup in diffs',
     description: 'How latexdiff marks up changes inside math environments.',
     category: 'latexdiff',
@@ -123,7 +150,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
-    schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
+      ),
+    ),
     title: 'Only changed pages in diff PDFs',
     description:
       'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
