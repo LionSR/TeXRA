@@ -14,12 +14,17 @@
  * - **Blobs.** A payload string of 4096+ characters is stored once per store,
  *   zstd of its JSON encoding (lone surrogates survive) under that text's
  *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
- *   stored `$$b`), and the read inflates it, digest verified. A
- *   `context.blob` row's value is stored as its canonical JSON text.
+ *   stored `$$b`), and the read inflates it, digest verified, from the
+ *   batch's blobs the reader fetched (`rowReader.ts`). A `context.blob`
+ *   row's value is stored as its canonical JSON text.
+ * - **Media.** A media part and a tool attachment name their bytes by the
+ *   same address; the draft brings the bytes beside the row (`WithBlobs`),
+ *   stored under their address or linked when the store holds them. No
+ *   read inflates them: the invocation resolves them before the call.
  * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
  *   `logical_id`, and composed back from them here.
  */
-import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
+import { constants, zstdCompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect, Predicate, Result } from 'effect';
 import { z } from 'zod';
@@ -27,7 +32,6 @@ import {
   AggregateIdSchema,
   aggregateTarget,
   CURRENT_VALUE_VERSION,
-  DISPLAY_EVENT_TYPES,
   pluginFactFloor,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
@@ -43,8 +47,9 @@ import {
   DatabaseRowEarlier,
   DatabaseStoreNewer,
 } from '@shared/session/database';
+import type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
 import type { PluginArms } from '@tools/plugins';
-import { sha256Hex } from '@utils/core/idHash';
+import { blobAddress, sha256Hex } from '@utils/core/idHash';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -70,33 +75,11 @@ const renameRefShaped = (value: object, rename: (key: string) => string) =>
 /** The column tuple every event read selects over {@link EVENT_FROM}. */
 export const EVENT_COLUMNS = `e."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, e.type AS type,
-  e.version AS version, e.origin AS origin, e.at AS at, e.data AS data,
-  (SELECT group_concat(r.digest || hex(b.value)) FROM event_blob r
-    JOIN blob b ON b.digest = r.digest WHERE r."commit" = e."commit") AS blobs`;
+  e.version AS version, e.origin AS origin, e.at AS at, e.data AS data`;
 /** An event `e`'s aggregate key, joined on. */
 export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate`;
-/** An event with its aggregate's key and its blobs, each its digest then
- *  its value in hex. */
+/** An event with its aggregate's key. */
 export const EVENT_FROM = `event e ${EVENT_JOINS}`;
-/** One aggregate's surrogate, from its two columns. */
-export const AGGREGATE =
-  '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
-/** The same tuple for a projected row, on its source row's envelope: this
- *  build's projector wrote it, so it is at the current version. */
-export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
-  s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, p.type AS type,
-  NULL AS version, e.origin AS origin, e.at AS at, p.data AS data,
-  NULL AS blobs`;
-export const PROJECTED_FROM = `projected_row p
-  JOIN event e ON e."commit" = p."commit"
-  JOIN event_sequence s ON s.id = e.aggregate`;
-
-/** The kinds a display read selects: the display rows, and the settlements
- *  their tool cards' output is projected from (`settleCards`). */
-export const DISPLAY_READ_TYPES = JSON.stringify([
-  ...DISPLAY_EVENT_TYPES,
-  'tool.result',
-]);
 
 /** A draft as `Database` inserts it, with the blobs it references. */
 export interface EncodedRow {
@@ -104,6 +87,9 @@ export interface EncodedRow {
   readonly version: number;
   readonly data: string;
   readonly blobs: readonly { digest: string; value: Uint8Array }[];
+  /** Blobs the row names that the store already holds: linked to the row,
+   *  so collection keeps them while it lives. */
+  readonly references: readonly string[];
 }
 
 /** An aggregate as its two columns. */
@@ -142,6 +128,16 @@ const hasKind = (type: string): type is SessionEventDraft['type'] =>
 // empty below `version`, exactly the versions under this floor.
 const readableFrom = (type: SessionEventDraft['type']): number =>
   ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
+/** Whether `decodeRow` parses this row's data (a kind and version this
+ *  build reads): another build's row is refused before its blobs are read. */
+export function decodable(row: SqlRow): boolean {
+  const { type, version } = RowSchema.pick({ type: true, version: true }).parse(
+    row,
+  );
+  if (!hasKind(type)) return false;
+  const stored = version ?? ROW_KINDS[type].version;
+  return stored >= readableFrom(type) && stored <= ROW_KINDS[type].version;
+}
 
 /** The queries, with their parameters, for the runs holding a row an
  *  earlier build wrote below the version this build reads. */
@@ -162,18 +158,22 @@ export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
         : [],
     );
 
-/** Validate a draft and encode it at its kind's current version. Throws on
- *  a draft that does not parse, is not JSON, or whose blob does not hash to
- *  its digest. */
-export function prepareEventDraft(input: SessionEventDraft): {
+/** Validate a draft and encode it at its kind's current version, with the
+ *  blobs it brings. Throws on a draft that does not parse, is not JSON, or
+ *  whose blob does not hash to its digest. */
+export function prepareEventDraft(input: WithBlobs<SessionEventDraft>): {
   readonly draft: SessionEventDraft;
   readonly row: EncodedRow;
 } {
-  const draft = SessionEventDraftSchema.parse(input);
-  return { draft, row: encodeDraft(draft) };
+  const { blobs = [], ...rest } = input;
+  const draft = SessionEventDraftSchema.parse(rest);
+  return { draft, row: encodeDraft(draft, blobs) };
 }
 
-export function encodeDraft(draft: SessionEventDraft): EncodedRow {
+export function encodeDraft(
+  draft: SessionEventDraft,
+  brought: readonly DraftBlob[] = [],
+): EncodedRow {
   const { type, aggregateId: _key, ...payload } = draft;
   const { version } = ROW_KINDS[type];
   let stored: object = payload;
@@ -185,6 +185,13 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
     stored = { ...payload, payload: { digest, value: canonical } };
   }
   const blobs = new Map<string, string>();
+  const references = new Set<string>();
+  for (const { digest, text } of brought) {
+    if (text === undefined) references.add(digest);
+    else if (blobAddress(text) !== digest)
+      throw new Error(`The blob ${digest} does not hash to its address`);
+    else blobs.set(digest, JSON.stringify(text));
+  }
   // The replacer sees each value (after `toJSON`) before its children.
   const data = JSON.stringify(stored, (_key, value: unknown) => {
     if (typeof value === 'string' && value.length >= 4096) {
@@ -204,6 +211,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
       digest,
       value: zstdCompressSync(text, ZSTD_LEVEL_3),
     })),
+    references: [...references].filter((digest) => !blobs.has(digest)),
   };
 }
 
@@ -226,28 +234,24 @@ export const RowSchema = z.object({
   origin: z.string(),
   at: z.int(),
   data: z.string(),
-  blobs: z.string().nullable(),
 });
+/** A batch's blobs, inflated and verified by the reader, by digest. */
+export type Blobs = ReadonlyMap<string, string>;
 
 const JsonObjectSchema = z.record(z.string(), z.json());
 
-/** `data`, its references inflated from `blobs` (one missing or not hashing
- *  to its digest throws) and its escaped keys restored. */
-function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
+/** `data`, its references inflated from `blobs` (one missing throws) and
+ *  its escaped keys restored. */
+function parseData(data: string, blobs: Blobs): unknown {
   if (!/"\$+b":/.test(data)) return JSON.parse(data);
-  const hex = new Map(
-    blobs?.split(',').map((b) => [b.slice(0, 64), b.slice(64)]),
-  );
   return JSON.parse(data, (_key, value: unknown) => {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
       return value;
     if (!('$b' in value)) return renameRefShaped(value, (key) => key.slice(1));
     const digest = String(value.$b);
-    const zst = Buffer.from(hex.get(digest) ?? '', 'hex');
-    const text = zstdDecompressSync(zst).toString('utf8');
-    if (sha256Hex(text) !== digest)
-      throw new Error(`Blob ${digest} is corrupt`);
-    return z.string().parse(JSON.parse(text));
+    const text = blobs.get(digest);
+    if (text === undefined) throw new Error(`Blob ${digest} is missing`);
+    return text;
   });
 }
 
@@ -265,6 +269,7 @@ interface LeftOut {
 export function decodeRow(
   input: SqlRow,
   arms: PluginArms,
+  blobs: Blobs,
 ): Result.Result<
   SessionEvent | LeftOut,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
@@ -291,7 +296,7 @@ export function decodeRow(
     );
   let data: Record<string, JsonValue>;
   try {
-    data = JsonObjectSchema.parse(parseData(row));
+    data = JsonObjectSchema.parse(parseData(row.data, blobs));
     for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
       data = { ...step(data) };
     if (row.type === 'context.blob') {

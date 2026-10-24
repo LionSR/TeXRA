@@ -14,7 +14,6 @@ import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { forkSeed } from '@agent/runtime/forkRun';
 import { offeredBy } from '@agent/runtime/loop/step';
 import {
-  IssuingScript,
   requireToolRun,
   type RunToolCall,
   type ScriptScope,
@@ -235,7 +234,7 @@ Forked (the default), the child continues this conversation as it stood when the
   execute: (input: SelfInput) =>
     Effect.gen(function* () {
       const call = yield* requireToolRun('self');
-      const script = yield* IssuingScript;
+      const { script } = call;
       if (script === null)
         return errorResult('self() runs only inside a script.');
       const budget = yield* scriptChildBudget(call.env.roots, script);

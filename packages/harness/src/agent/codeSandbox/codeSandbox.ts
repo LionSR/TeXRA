@@ -115,7 +115,8 @@ interface ScriptRequest<E, R> {
   readonly globals?: ReadonlyArray<string>;
   /**
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
-   * if the script ends first. Settlements reach the realm one at a time, in
+   * if the script ends first (the caller then records it as stopped, once
+   * `run` has returned). Settlements reach the realm one at a time, in
    * the order these effects complete: a caller that completes each at its
    * run history commit makes the realm's delivery order the commit order. A
    * failure is not the guest's to catch: it ends the script with it.

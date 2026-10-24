@@ -7,7 +7,6 @@
  */
 import { Effect, Result, SynchronizedRef } from 'effect';
 
-import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   qualifyAggregateId,
   type RunId,
@@ -39,7 +38,8 @@ import type {
   RunHistoryRow,
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
-import { runHistoryRows, storedDraft } from './storedTurn';
+import { runHistoryRows, storedDraft, unpreparedHistory } from './storedTurn';
+import type { ModelOrigin } from '@texra-ai/llm';
 import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
@@ -146,7 +146,7 @@ const candidates = (
   }));
 
 /**
- * `PreparedHistorySchema` over `history` from message `from` on: its rules
+ * The prepared-history rules over `history` from message `from` on: they
  * are between neighbours, so a suffix starting on a checked message, never
  * on a tool group, re-checks every pair past it; a refusal's detail is still
  * the whole parse's, whose indices name the whole history.
@@ -158,14 +158,11 @@ const unprepared = (
 ): RunHistoryRefused | null => {
   let start = Math.max(0, from - 1);
   if (start > 0 && history[start]?.role === 'tool') start -= 1;
-  if (PreparedHistorySchema.safeParse(history.slice(start)).success)
-    return null;
+  if (unpreparedHistory(history.slice(start)) === null) return null;
   return new RunHistoryRefused({
     reason: 'unprepared-history',
     runId,
-    detail:
-      PreparedHistorySchema.safeParse(history).error?.message ??
-      `history from message ${start}`,
+    detail: unpreparedHistory(history) ?? `history from message ${start}`,
   });
 };
 

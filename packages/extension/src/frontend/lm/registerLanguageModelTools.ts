@@ -19,7 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Context, Data, Effect, Fiber, Layer, Option, Stream } from 'effect';
+import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
   ToolCatalog,
@@ -30,7 +30,6 @@ import {
   sessionFsLayer,
 } from '@texra-ai/harness';
 import {
-  ChildRuns,
   WebFetchTool,
   type PluginToolServices,
   type ProcessPluginLayer,
@@ -69,22 +68,6 @@ function toResultText(result: ToolResult): string {
   }
   return result.output ?? result.summary ?? '(no output)';
 }
-
-// A Copilot call is under no run, so it launches and reads none.
-class CopilotToolRunRefused extends Data.TaggedError('CopilotToolRunRefused')<{
-  readonly message: string;
-}> {}
-const noRun = Effect.fail(
-  new CopilotToolRunRefused({ message: 'A Copilot tool call is under no run' }),
-);
-const refusingChildRuns = Layer.succeed(ChildRuns)({
-  launch: () => noRun,
-  launchProcess: () => noRun,
-  inbox: () => noRun,
-  parent: () => noRun,
-  records: () => ({ exists: noRun, end: noRun }),
-  rows: () => noRun,
-});
 
 /**
  * The `copilot` plugin's process layer: the curated TeXRA tools registered
@@ -172,7 +155,8 @@ const copilotTools = Effect.fnUntraced(function* (
                   env: { roots },
                   emit: () => undefined,
                 }),
-                Effect.provide(refusingChildRuns),
+                // A Copilot call is under no run: `ChildRuns` and `RunCall`
+                // keep their defaults, which launch and read none.
                 // Every `WorkspaceFs`/`StorageFs` service read in this call
                 // resolves against the window's folders, and path resolution
                 // takes `ToolContext.env` as data.

@@ -28,3 +28,10 @@ export function truncatedHexId(source: BinaryLike, length: number): string {
 export function deriveRunId(identity: RunIdFields): RunId {
   return truncatedHexId(stableStringify(identity), 24) as RunId;
 }
+
+/** The session store's blob address of a string: the sha256 of its JSON
+ *  text, which is what the row codec stores the string under and what a
+ *  history's media part or captured attachment names (`storedTurn.ts`,
+ *  `toolResult.ts`). */
+export const blobAddress = (text: string): string =>
+  sha256Hex(JSON.stringify(text));

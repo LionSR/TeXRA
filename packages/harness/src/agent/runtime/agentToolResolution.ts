@@ -19,25 +19,29 @@
  *      plugins' (`injectedWhen`), and every tool of an installed plugin (its
  *      MCP servers'), which the plugin's enablement offers every top-level
  *      tool-use run but a plugin agent that names its tools.
- *   3. A delegated child keeps only the tools its parent's step offered,
- *      with the same identity: it can only narrow its parent, so a tool its
- *      parent was withheld (a switch, a gate, a host) never reaches it.
- *      Code mode is the exception (the built-in `codemode` plugin's
+ *   3. A delegated child persona keeps only the tools its parent's step
+ *      offered, with the same identity: it can only narrow its parent, so a
+ *      tool its parent was withheld (a switch, a gate, a host) never reaches
+ *      it. Code mode is the exception (the built-in `codemode` plugin's
  *      tools): the script tool reaches only the run's other tools and its
  *      own agent, so a child declaring it gets it, and the script-only
  *      functions (`self()`) come with it. A field another plugin's tool
  *      may set (`describe`, `withScript`), or an app plugin that takes the
- *      `codemode` id, earns no exemption.
+ *      `codemode` id, earns no exemption. A script run (a background
+ *      script, a task's recipe) is not a persona: it offers exactly the
+ *      tools its launch named, so `AgentRun` passes it no parent.
  *   4. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
  *      the offered tools only, so dispatch cannot run a tool the model was
  *      not offered.
  *
- * A switched-off plugin is withheld silently: the user chose it. The other
- * outcomes, a declared tool whose dependency is missing included, are
- * returned as warnings, which the step reports when
- * the offered set changes, not on every step.
+ * A switched-off plugin is withheld silently: the user chose it. Every other
+ * withholding of a declared tool (a missing dependency, a host the tool does
+ * not run on, a capability the host lacks, a parent that was not offered it)
+ * is returned as a warning, which the step reports when the offered set
+ * changes, not on every step; an injected tool the run never named goes
+ * quietly.
  */
 
 import { Context, Effect, SubscriptionRef } from 'effect';
@@ -45,11 +49,12 @@ import { Context, Effect, SubscriptionRef } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { Persona } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   sameIdentity,
   type OfferedTool,
+  type Persona,
   type ToolDefinition,
 } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
@@ -153,9 +158,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         if (
           setting === true ||
           (yield* Settings.get<boolean>(input.stores, setting))
-        ) {
+        )
           injected.push(name);
-        }
       }
     }
   }
@@ -208,15 +212,38 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   };
 
   const withheldForApproval: string[] = [];
-  const passesRuntimeGates = (name: string): boolean => {
+  // A declared tool a gate withholds says so; an injected one goes quietly,
+  // as the run never asked for it by name.
+  const withheld = (
+    name: string,
+    source: 'declared' | 'injected',
+    reason: string,
+  ): false => {
+    if (source === 'declared')
+      warnings.push(`Declared tool "${name}" is not offered: ${reason}`);
+    return false;
+  };
+  const passesRuntimeGates = (
+    name: string,
+    source: 'declared' | 'injected',
+  ): boolean => {
     const tool = enabled.get(name)?.tool ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
-    if (excluded.includes(input.host)) return false;
+    if (excluded.includes(input.host))
+      return withheld(
+        name,
+        source,
+        `it does not run on the ${input.host} host.`,
+      );
     if (
       tool?.hostCapability !== undefined &&
       !input.hostCapabilities.has(tool.hostCapability)
     )
-      return false;
+      return withheld(
+        name,
+        source,
+        `this host does not serve "${tool.hostCapability}".`,
+      );
     if (tool?.requiresApproval && input.approvalPromptsUnavailable) {
       // One whose plugin is off is withheld for that, silently.
       if (enabled.has(name)) withheldForApproval.push(name);
@@ -270,7 +297,15 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const definitions: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
   const offer = (name: string, source: 'declared' | 'injected'): void => {
-    if (resolvedNames.has(name) || !narrowed(name)) return;
+    if (resolvedNames.has(name)) return;
+    if (!narrowed(name)) {
+      withheld(
+        name,
+        source,
+        "this run's parent was not offered it, and a child only narrows its parent.",
+      );
+      return;
+    }
     // A missing dependency says so where the run declared the tool, before
     // any other gate, so an approval-gated tool's reason is not lost to the
     // approval notice.
@@ -282,7 +317,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         );
       return;
     }
-    if (!passesRuntimeGates(name)) return;
+    if (!passesRuntimeGates(name, source)) return;
     const entry = enabled.get(name);
     if (!entry) {
       // A name with no registration is a configuration error (typo, or a
@@ -321,6 +356,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     if (index === -1) definitions.push(tool.definition);
     else definitions[index] = tool.definition;
   }
+  // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
+  const scriptAlone =
+    [...resolvedNames].some(isScript) &&
+    (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool>();
   const offered: OfferedTool[] = [];
@@ -337,6 +376,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         ...toolDigests(own),
         plugin: 'run',
         revision: 'run',
+        sent: true,
       });
     } else if (entry) {
       offeredTools.set(name, entry.tool);
@@ -346,6 +386,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
+        sent: !scriptAlone || isScript(name),
       });
     }
   }

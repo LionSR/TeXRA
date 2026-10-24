@@ -105,10 +105,7 @@ const removeRunDirectories = (
  * next pass, and a failed read of the records is logged.
  */
 export const deletionCollector = (
-  database: Pick<
-    Context.Service.Shape<typeof Database>,
-    'readPendingDeletions' | 'collectDeletion'
-  >,
+  database: Pick<Context.Service.Shape<typeof Database>, 'deletions'>,
   storage: string,
 ): Effect.Effect<
   Effect.Effect<Fiber.Fiber<void>>,
@@ -119,12 +116,10 @@ export const deletionCollector = (
     const fs = yield* FileSystem.FileSystem;
     const scope = yield* Effect.scope;
     const pass = Effect.gen(function* () {
-      for (const event of yield* database.readPendingDeletions()) {
+      for (const event of yield* database.deletions.pending()) {
         if (event.type !== 'run.removed') continue;
-        yield* database
-          .collectDeletion(event, (ids) =>
-            removeRunDirectories(fs, storage, ids),
-          )
+        yield* database.deletions
+          .collect(event, (ids) => removeRunDirectories(fs, storage, ids))
           .pipe(
             Effect.catch((error) =>
               Effect.logWarning(

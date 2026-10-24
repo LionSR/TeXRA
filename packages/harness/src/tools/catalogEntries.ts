@@ -9,7 +9,7 @@ import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/core/tools/toolSchema';
-import type { ToolDefinition } from '@shared/schemas';
+import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 import { sha256 } from '@utils/core/idHash';
 
@@ -27,6 +27,24 @@ export function toolDefinitionsFor(
     ),
   }));
 }
+
+/**
+ * The tool definitions a step's requests send, in wire form: the offered
+ * tools whose record marks them `sent` (every tool, or, under script-only
+ * tools, `script` and the run's own alone). The step's record decides, so
+ * a resumed step sends what it recorded whatever the setting says now.
+ */
+export const sentDefinitions = (tools: {
+  readonly definitions: readonly ToolDefinition[];
+  readonly offered: readonly OfferedTool[];
+}): ToolDefinitions => {
+  const sent = new Set(
+    tools.offered.flatMap(({ name, sent }) => (sent ? [name] : [])),
+  );
+  return toolDefinitionsFor(
+    tools.definitions.filter(({ name }) => sent.has(name)),
+  );
+};
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {

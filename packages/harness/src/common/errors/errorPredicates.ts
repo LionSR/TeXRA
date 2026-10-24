@@ -1,5 +1,7 @@
 import { Predicate } from 'effect';
 
+import { causeChain } from '@utils/errors/errorMessage';
+
 /** Check if an error represents a file-not-found condition. */
 export function isFileNotFoundError(err: unknown): boolean {
   return (
@@ -19,25 +21,6 @@ export function isModuleNotFoundError(err: unknown): boolean {
     Predicate.hasProperty(err, 'code') &&
     (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND')
   );
-}
-
-/** `err` followed by its `cause` chain, outermost first. Shared traversal for
- *  predicates/metadata lookups that may be attached at any depth of a wrapped
- *  error's cause chain. */
-export function causeChain(err: unknown): unknown[] {
-  // Ad-hoc wrapping can produce circular causes (err.cause === err); guard so
-  // a lookup in an error path cannot itself hang the process.
-  const chain: unknown[] = [];
-  const seen = new Set<unknown>();
-  for (
-    let current: unknown = err;
-    current != null && typeof current === 'object' && !seen.has(current);
-    current = (current as { cause?: unknown }).cause
-  ) {
-    seen.add(current);
-    chain.push(current);
-  }
-  return chain;
 }
 
 /** Walks `err` and its `cause` chain, returning the first defined result of

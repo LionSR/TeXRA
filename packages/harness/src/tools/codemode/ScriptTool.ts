@@ -2,12 +2,13 @@
  * The `script` tool: one JavaScript program that calls the run's tools as
  * `await tools.<name>(args)`. The program runs in the code sandbox
  * (`@agent/codeSandbox/codeSandbox`); every call it issues goes through the
- * run loop's per-call program (`ScriptCalls`), which commits its
- * rows and, on a resume, hands back what they already settled. This tool
- * names no other tool and writes no row.
+ * run loop's per-call program, reached through the door on the call's
+ * `RunCall` (`scriptCalls`), which commits its rows and, on a resume, hands
+ * back what they already settled. This tool names no other tool and writes
+ * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Data, Duration, Effect, Layer } from 'effect';
+import { Cause, Data, Duration, Effect, Exit, Layer } from 'effect';
 import { z } from 'zod';
 
 import {
@@ -19,7 +20,7 @@ import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   requireToolRun,
-  ScriptCalls,
+  RunCall,
   type ScriptDoor,
   callerRun,
 } from '@agent/runtime/RunCall';
@@ -169,8 +170,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       },
       input.title ?? 'Script',
     );
-  const issued = yield* ScriptCalls;
-  if (issued === null)
+  const issued = (yield* RunCall)?.scriptCalls;
+  if (issued == null)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
@@ -196,14 +197,14 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const issue = (op: ScriptOp) =>
     Effect.flatMap(scriptCalls.call(op, script), (settled) => {
       for (const attached of settled.attachments)
-        if (attached.content.kind === 'base64')
+        if (attached.content.kind === 'stored')
           files.push({
             path: attached.path,
             mimeType: attached.mimeType,
             ...(attached.description !== undefined && {
               description: attached.description,
             }),
-            base64Data: attached.content.data,
+            digest: attached.content.digest,
           });
       return settlementOf(settled.result);
     });
@@ -259,6 +260,16 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
+      // An interruption of the run leaves every row as it stands, for the
+      // resume that replays the script. Every other exit (the guest returned
+      // or threw, the deadline, a sandbox fault) has ended the calls the
+      // guest issued: one it never awaited to its end is settled before this
+      // call's result, so nothing of the script's stays open behind it.
+      Effect.onExit((exit) =>
+        Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
+          ? Effect.void
+          : scriptCalls.settleAbandoned,
+      ),
       Effect.map((result) => ({ _tag: 'Returned' as const, result })),
       Effect.catchTag('EndedTurn', (ended) => Effect.succeed(ended)),
       // A script that ends in failure still returns its log tail: the lines

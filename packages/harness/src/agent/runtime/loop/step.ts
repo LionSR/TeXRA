@@ -35,6 +35,7 @@
  */
 import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
+import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
@@ -103,18 +104,12 @@ export interface OpenStep {
 }
 
 /** Whether `b` is the set `a` records: the same tools, as the same
- *  definitions. A description change is a new set to record, though it
- *  leaves every tool's identity as it was. */
+ *  definitions, sent as recorded. A description change is a new set to
+ *  record, though it leaves every tool's identity as it was. */
 const sameSet = (
   a: readonly OfferedTool[] | null,
   b: readonly OfferedTool[],
-): boolean =>
-  a !== null &&
-  a.length === b.length &&
-  a.every(
-    (tool, index) =>
-      sameIdentity(tool, b[index]) && tool.shown === b[index].shown,
-  );
+): boolean => a !== null && stableStringify(a) === stableStringify(b);
 
 /** The recorded tools a resumed step may still offer, and why the rest
  *  are not offered. */
@@ -126,10 +121,12 @@ function heldToRecord(
   readonly notes: string[];
 } {
   const current = new Map(resolved.offered.map((tool) => [tool.name, tool]));
-  // The current entry, which may describe the tool anew.
+  // The current entry, which may describe the tool anew; sent as recorded.
   const kept = recorded.flatMap((tool) => {
     const now = current.get(tool.name);
-    return now !== undefined && sameIdentity(now, tool) ? [now] : [];
+    return now !== undefined && sameIdentity(now, tool)
+      ? [{ ...now, sent: tool.sent }]
+      : [];
   });
   const names = new Set(kept.map(({ name }) => name));
   const notes = recorded

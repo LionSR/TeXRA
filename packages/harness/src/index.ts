@@ -104,7 +104,9 @@ export type { ValueFamily } from '@shared/session/valueFamily';
 export {
   DatabaseWriteFailed,
   type CurrentValues,
+  type EventsRead,
 } from '@shared/session/database';
+export type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
 export type { AppStateStore } from '@platform/interfaces';
 export {
   deleteStorageInventory,
@@ -314,8 +316,8 @@ export {
   type AgentErrorKind,
   type AgentErrorPresentation,
 } from '@common/errors/agentErrorClassification';
+export { causeChain } from '@utils/errors/errorMessage';
 export {
-  causeChain,
   isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,

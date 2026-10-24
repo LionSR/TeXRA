@@ -7,6 +7,7 @@ import {
   OriginSchema,
   sameModelOrigin,
   type ModelOrigin,
+  checkPreparedHistory,
 } from './protocol.js';
 
 const TextPartSchema = z
@@ -251,7 +252,8 @@ export function validateAssistantContent(
   }
 }
 
-const AssistantMessageSchema = z
+/** The assistant message: a turn's content with its origin. */
+export const AssistantMessageSchema = z
   .strictObject({
     role: z.literal('assistant'),
     /** `null` when no model produced the content (a handed-down call). */
@@ -310,49 +312,11 @@ export const MessageSchema = z.discriminatedUnion('role', [
 export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
 
-/** The history a turn sends: each assistant's local calls answered by the
- *  next message, in call order. Only the next request needs them settled. */
+/** The history a turn sends, under the prepared-history rules. */
 export const PreparedHistorySchema = z
   .array(MessageSchema)
   .min(1)
-  .superRefine((messages, ctx) => {
-    for (const [index, message] of messages.entries()) {
-      if (message.role === 'assistant') {
-        const calls = message.content.filter(
-          (part) => part.kind === 'local-call',
-        );
-        if (calls.length === 0) continue;
-        const results = messages[index + 1];
-        if (
-          results?.role !== 'tool' ||
-          results.results.length !== calls.length ||
-          !results.results.every(
-            (result, ordinal) => result.callOrdinal === ordinal,
-          )
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [index],
-            message:
-              'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
-          });
-        }
-      } else if (message.role === 'tool') {
-        const previous = messages[index - 1];
-        if (
-          previous?.role !== 'assistant' ||
-          !previous.content.some((part) => part.kind === 'local-call')
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [index],
-            message:
-              'Tool results require an immediately preceding calling assistant.',
-          });
-        }
-      }
-    }
-  })
+  .superRefine(checkPreparedHistory)
   .readonly();
 type HistoryMessage = z.infer<typeof MessageSchema>;
 

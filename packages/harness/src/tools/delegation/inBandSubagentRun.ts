@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Clock, Data, Effect, Exit, Fiber } from 'effect';
+import { Cause, Clock, Effect, Exit, Fiber, Schema } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -55,12 +55,11 @@ const CHANNEL = 'inBandSubagentRun';
  * call, because a durability fault must abort the caller's run instead of
  * returning a null value to it.
  */
-export class SubagentDurabilityError extends Data.TaggedError(
+export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabilityError>()(
   'SubagentDurabilityError',
-)<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  // What failed under the fault rides as `Error.cause`, after the sentence.
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   /** The run this attempt executes under; the caller owns its derivation. */

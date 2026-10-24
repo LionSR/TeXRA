@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Attachments no longer freeze TeXRA.** A workspace whose conversations
+  carried large attachments (recordings, PDFs, images) made every TeXRA
+  window and terminal flip between "The TeXRA service is offline" and
+  "Reconnected to the TeXRA service" every ten seconds, and a message sent
+  during the drop came back as "The conversation ended before the message
+  could be sent": each window that opened re-read every attachment, and
+  the service stalled for seconds. Attachments are now kept apart from the
+  conversation and loaded only when a model request needs them. Conversations
+  with attachments that an earlier build saved show as written by that
+  build and cannot be resumed by this one; their files and transcripts are
+  unaffected.
+
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
@@ -659,6 +671,11 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
+  default; CLI `/config`) gives chat agents the `script` tool and their own
+  tools alone, with every other tool called from inside a script. A run
+  keeps the tool set it started with when it resumes, even if the setting
+  changed in between.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt
@@ -1143,6 +1160,36 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A call a script issued and never awaited to its end is settled.** When
+  a script ended while a call it had issued was still running (a rejected
+  `Promise.all`, a thrown error), the sandbox stopped the call but nothing
+  recorded its result: its card stayed open forever and, on a resume, the
+  parent counted a child it had launched as still owned. The script's door
+  now settles every such call as skipped, naming the reason, and withdraws
+  the approval it was waiting on, before the script's own result commits.
+- **A script's `document_task` calls each get their own child run.** Every
+  `document_task` a script issued, in parallel or one after another, derived
+  the same child run id, so only the first could start and the rest failed
+  with "already running" or "already exists; resume it". The child-launch
+  door a plugin tool calls is now built for each call from that call's own
+  facts.
+- **A document task launched from a conversation runs its recipe.** The
+  recipe's tools (`document_context`, `document_extract`, …) were silently
+  withheld because the launching conversation had not been offered them, and
+  the recipe failed on its first line with "not a function". A script run now
+  offers exactly the tools its launch names; a child persona is still
+  narrowed to its parent's, and any declared tool that narrowing (or a host
+  gate) withholds is reported in the run's log instead of vanishing.
+- **A child conversation resumed after a restart keeps its tool limits.** It
+  used to be treated as a top-level run once its parent's step was gone,
+  gaining every installed plugin's tools from its second step on; it now
+  narrows to what its own record last offered.
+- **Error messages keep their cause.** A message that wrapped another error
+  (a child run's failure, a tool's refusal, a launch that could not be
+  persisted) showed only the outer sentence; the cause chain, and the
+  members of an aggregate failure, now follow it. The reason a subagent's
+  call failed — for example that its run id was already running — reaches
+  the model and the log.
 - **The TeXRA service exits when only waiting conversations are left.** A
   chat you closed left its conversation waiting in the service, and the
   service counted it as a running task, so it never reached its ten-minute

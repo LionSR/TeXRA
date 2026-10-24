@@ -7,11 +7,14 @@
  * never reads a run's history. The tool cards' read-time output
  * (`settleCards`) is settled over the decoded rows.
  */
+import { zstdDecompressSync } from 'node:zlib';
+
 import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
+  DISPLAY_EVENT_TYPES,
   pluginFactFloor,
   RunIdSchema,
   type AggregateId,
@@ -26,16 +29,98 @@ import {
   type DatabaseStoreNewer,
 } from '@shared/session/database';
 import type { PluginArms } from '@tools/plugins';
+import { sha256Hex } from '@utils/core/idHash';
 
 import {
   aggregateOf,
+  decodable,
   decodeRow,
   EARLIER_RUNS,
   pluginFactArm,
+  EVENT_COLUMNS,
   EVENT_FROM,
+  EVENT_JOINS,
   RowSchema,
+  type Blobs,
   type SqlRow,
 } from './rowCodec';
+
+/** One aggregate's surrogate, from its two columns. */
+export const AGGREGATE =
+  '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
+/** The event column tuple for a projected row, on its source row's
+ *  envelope: this build's projector wrote it, so it is at the current
+ *  version. */
+export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
+  s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, p.type AS type,
+  NULL AS version, e.origin AS origin, e.at AS at, p.data AS data`;
+/** A projected row joined to its source row's envelope. */
+export const PROJECTED_FROM = `projected_row p
+  JOIN event e ON e."commit" = p."commit"
+  JOIN event_sequence s ON s.id = e.aggregate`;
+/** The kinds a display read selects: the display rows, and the settlements
+ *  their tool cards' output is projected from (`settleCards`). */
+export const DISPLAY_READ_TYPES = JSON.stringify([
+  ...DISPLAY_EVENT_TYPES,
+  'tool.result',
+]);
+/** The listing (each aggregate's `listing_entry` rows, each run's spend on
+ *  its newest priced row's envelope and its latest model switch, in commit
+ *  order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
+ *  store is never `ANALYZE`d), each by its event's primary key. */
+const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
+  ${EVENT_JOINS}`;
+
+/** The cold listing: the latest listing row per aggregate and type, the
+ *  runs' priced usage and model switches, in commit order. */
+export const READ_LISTING = `SELECT * FROM (
+  SELECT ${EVENT_COLUMNS} FROM ${LISTED}
+  UNION ALL
+  SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
+    s.uid AS uid,
+    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
+    e.at AS at, u.usage AS data
+  FROM run_usage u
+    JOIN event e ON e."commit" = u."commit"
+    JOIN event_sequence s ON s.id = u.aggregate
+  UNION ALL
+  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
+) ORDER BY "commit"`;
+
+/** One open run's listing rows, its pending sets left out. */
+export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
+  WHERE l.aggregate = (SELECT id FROM event_sequence
+      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL)
+    AND e.type NOT IN ('request.opened', 'followup.queued')
+  ORDER BY e."commit"`;
+/** The blobs of the digests bound as one `json_each` array. */
+const READ_BLOBS = `SELECT digest, value FROM blob
+  WHERE digest IN (SELECT value FROM json_each(?))`;
+/** One stored blob, as `READ_BLOBS` selects it. */
+const BlobRowSchema = z.object({
+  digest: z.string(),
+  value: z.instanceof(Uint8Array),
+});
+/** One blob's string, verified against its address. */
+function inflateBlob(value: Uint8Array, digest: string): string {
+  const text = zstdDecompressSync(value).toString('utf8');
+  if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
+  return z.string().parse(JSON.parse(text));
+}
+/** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
+ *  the data of the rows this build decodes. A payload's own `$b` key is
+ *  stored `$$b`, so it never matches; a media part's address is not a
+ *  reference, so its bytes are never fetched. */
+function blobDigests(rows: readonly SqlRow[]): string[] {
+  const digests = new Set<string>();
+  for (const row of rows) {
+    if (typeof row.data !== 'string' || !decodable(row)) continue;
+    for (const match of row.data.matchAll(/"\$b":"([0-9a-f]{64})"/g))
+      digests.add(match[1] ?? '');
+  }
+  return [...digests];
+}
 
 /** An earlier-build run row, as `EARLIER_RUNS` selects it. */
 const EarlierRowSchema = z.object({
@@ -81,6 +166,11 @@ export interface RowReader<E> {
    *  never costs the session. An absent plugin's kind is left out, warned.
    *  A strict read of a run an earlier build wrote fails as that build's,
    *  whichever of its rows it selected. */
+  /** The strings stored under `digests`, inflated and verified; a digest
+   *  the store lacks fails the read. */
+  readonly blobs: (
+    digests: readonly string[],
+  ) => Effect.Effect<ReadonlyMap<string, string>, E>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -154,6 +244,30 @@ export function rowReader<E>(
     }
     scanned = true;
   });
+  const stored = (digests: readonly string[]) =>
+    digests.length === 0
+      ? Effect.succeed(new Map<string, string>())
+      : Effect.map(exec(READ_BLOBS, [JSON.stringify(digests)]), (rows) => {
+          // A damaged blob is left out: the row naming it reads as damaged,
+          // a strict read of it fails by name.
+          const texts = new Map<string, string>();
+          for (const row of rows) {
+            const { digest, value } = BlobRowSchema.parse(row);
+            try {
+              texts.set(digest, inflateBlob(value, digest));
+            } catch {
+              continue;
+            }
+          }
+          return texts;
+        });
+  const blobs = (digests: readonly string[]) =>
+    Effect.map(stored(digests), (texts) => {
+      const missing = digests.filter((digest) => !texts.has(digest));
+      if (missing.length > 0)
+        throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
+      return texts;
+    });
   const read = (rows: readonly SqlRow[], whole: boolean) =>
     Effect.gen(function* () {
       if (whole) {
@@ -166,9 +280,11 @@ export function rowReader<E>(
         });
         if (refusal !== undefined) return yield* Effect.fail(refusal);
       }
+      // The batch's blobs in one statement: a row carries addresses only.
+      const texts: Blobs = yield* stored(blobDigests(rows));
       const events: SessionEvent[] = [];
       for (const row of rows) {
-        const decoded = decodeRow(row, arms);
+        const decoded = decodeRow(row, arms, texts);
         if (Result.isSuccess(decoded)) {
           if (!('_tag' in decoded.success)) events.push(decoded.success);
           else
@@ -197,6 +313,7 @@ export function rowReader<E>(
     });
   return {
     read,
+    blobs,
     damaged: Effect.map(scan, () =>
       [...unopenable].map(([runId, reason]) => ({ runId, reason })),
     ),

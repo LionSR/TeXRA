@@ -10,11 +10,7 @@ import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import {
-  rowAggregate,
-  positionRow,
-  type Message,
-} from '@agent/runtime/loop/rows';
+import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -26,6 +22,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { registryOf } from '@agent/runtime/runRegistry';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
 import {
   AgentConfigSchema,
@@ -143,7 +140,7 @@ export const toolCallTurn = (
  */
 export type ScriptedTurn =
   | TurnResult
-  | { readonly compactTo: readonly Message[]; readonly turn: TurnResult }
+  | { readonly compactTo: readonly HistoryMessage[]; readonly turn: TurnResult }
   | { readonly failWith: RetryErrorInfo }
   | { readonly cancelled: true };
 

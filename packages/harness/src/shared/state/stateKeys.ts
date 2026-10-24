@@ -35,6 +35,9 @@ export enum WorkspaceStateKey {
 
 export enum GlobalStateKey {
   MEMORY_ENABLED = 'texra.memory.enabled',
+  /** Code mode's "only" stage: every chat run gets `script`, and the model
+   *  sees no other tool; the rest are callable from scripts alone. */
+  SCRIPT_ONLY = 'texra.codeMode.scriptOnly',
 
   // Child-work policy. Global rather than per-workspace: these describe how the
   // user wants their own child runs handled, not anything about a checkout.
