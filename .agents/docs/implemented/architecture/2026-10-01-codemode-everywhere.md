@@ -410,12 +410,16 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   The ruling was written for nightlies; live journeys run on demand only
   (#13614).
 
-- **Google tool results reject a PDF attachment.** The one `direct` failure
-  (gemini-3.8-flash, latexdiff): a `bash` result carried the compiled PDF
-  and the request failed with "Google tool results support only text and
-  image content", ending the run. Under `only` the same call's attachment
-  rides the script's result and the request goes through. A provider
-  conversion defect, independent of code mode; it needs its own fix.
+- **Google tool results reject a PDF attachment (fixed).** The one `direct`
+  failure (gemini-3.8-flash, latexdiff): a `bash` result carried the
+  compiled PDF and the request failed with "Google tool results support
+  only text and image content", ending the run. Google's Interactions API
+  takes text and images alone in a function result and a document in a
+  user turn only; both arms lower a tool's attachments the same way (a
+  script relays its calls' files onto its own result), so the `only` run
+  passed because its `bash` call attached no PDF, not because of code mode.
+  The Google codec now carries a document, audio or video part in a
+  `user_input` step after the function results, labeled with its call.
 - **The per-model fallback flag (Q3).** A model that fails the bar keeps
   direct tools. The flag is meant to live on `BoundModel`
   (`agent/runtime/modelAccess/ModelAccess.ts`) beside the vendor
