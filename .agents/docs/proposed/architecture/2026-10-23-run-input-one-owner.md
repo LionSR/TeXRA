@@ -516,9 +516,16 @@ One PR, in this order, each step type-checked and `test:pure` green:
    dispatcher reads the loop's controls; one presenter for the send result.
 5. Delivery at the next request; the blank-nudge test. The CLI key goes to
    the second PR (decision 1).
-6. E2E: the CLI PTY harness, a message typed during a two-tool turn, the
-   transcript showing it answered before the turn ends; one crash-suite case
-   for a message consumed at a request boundary.
+6. E2E: `validate-run.mjs` (the hermetic CLI validator every PR runs)
+   drives a real `texra chat` under a PTY against the validation model: the
+   agent's one command waits for a release file, the message is typed while
+   it waits, the file is written once the message's row is queued. The
+   chat's rows are the artifact (`mid-turn-delivery.json`): the
+   `followup.consumed` row sits between the command's `tool.result` and the
+   turn's second model attempt, and the run has one turn. The crash suite's
+   clean pass already crosses the new commit point for its `/compact` and
+   `/model` requests; a user message consumed at a request boundary is the
+   same row pair, pinned queued-once and consumed-once by the suite.
 7. From the ownership audit (`2026-10-24-ownership-audit.md`), the two
    findings on this chain. F1: the stop begun for a run is the registry
    entry's `stopReason` from the request until the view folds the run's end;
