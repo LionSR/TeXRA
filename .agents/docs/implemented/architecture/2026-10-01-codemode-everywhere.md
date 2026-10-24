@@ -26,9 +26,18 @@ checkpoint journal, its five `workflow.*` row kinds, and the
 `delegate_agent` and `delegate_workflow` tools (#13616 to #13626).
 
 The rollout has two stages: **"on"**, where `script` sits beside the direct
-tools, and **"only"**, where it is all the model sees. Today is "on": an
-agent gets `script` when its YAML names it (the bundled `assistant`,
-`engineer` and `orchestrator` do). The switch to "only" waits for the
+tools, and **"only"**, where it is all the model sees. The default is "on":
+an agent gets `script` when its YAML names it (the bundled `assistant`,
+`engineer` and `orchestrator` do). The `texra.codeMode.scriptOnly` setting
+(`GlobalStateKey.SCRIPT_ONLY`, off by default) is "only": the codemode
+plugin injects `script` into every chat run (`injectedWhen`), and the
+request sends the model `script` and the run's own tools alone; the other
+offered tools stay in the step's registry, callable from a script. The
+step reads the setting once when it resolves its tools and records the
+choice per tool on its `tools.offered` row (`sent`, row version 3), so the
+request sends what the row records (`sentDefinitions` in
+`tools/catalogEntries.ts`) and a resumed step sends what it
+recorded whatever the setting says now. Flipping the default waits for the
 evaluation under "Still open".
 
 ## Separation of concerns
@@ -334,18 +343,45 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
 
 ## Still open
 
-- **Evaluation and the "only" flip.** Not run. Run the live journeys
-  (`packages/cli/scripts/validate-journeys.mjs`) under `direct` and `only` on
-  gemini38f, deepseek41T and glm53flash, plus one fan-out journey that
-  exercises `agent()`, and report pass rate, total tokens, cost, wall time
-  and the cached share of input tokens per journey. The bar (Q10), per
-  model: the lower bound of a 90% interval on `only − direct` pass rate is
-  not below −5 points; mean cost per passing task is no higher than
-  `direct`'s; median wall time is at most 1.2 times `direct`'s. Each journey
-  runs three times per arm per nightly, pooled over the last five nightlies
-  (60 tasks per arm per model) on one commit range and model version; a change to the
-  prompt or the tool surface restarts the window. The ruling was written for
-  nightlies; live journeys now run on demand only (#13614).
+- **Evaluation and the "only" flip.** First round run on 2026-10-24 with
+  `validate-journeys.mjs --script-only --repeat 3` on the three tool-using
+  journeys (latexFixer, latexdiff, citations; `polish` is a document task
+  whose agent has no tools, so both arms are the same run). glm53flash is
+  OpenRouter-only in the catalog and was not funded. The 36 result rows
+  and the script that computes the table from them are in
+  [`../../evidence/2026-10-24-codemode-script-only-round-1/`](../../evidence/2026-10-24-codemode-script-only-round-1/)
+  (`node summarize.mjs results.jsonl`); each run's NDJSON stays in the
+  script's `--out` directory. The four arms ran in parallel on one laptop
+  with a test suite beside them, so wall times are under load. Columns:
+  pass is the count of passing runs; $ per pass and tokens are the mean
+  cost and mean total tokens over the passing runs; median wall is the
+  median wall time over all runs, failures included; scripts per run is
+  the mean count of `script` calls over the passing runs.
+
+  | model, arm              | pass | $ per pass | tokens | median wall | scripts per run |
+  | ----------------------- | ---- | ---------- | ------ | ----------- | --------------- |
+  | deepseek-flash direct   | 9/9  | 0.0019     | 56,580 | 75 s        | 0               |
+  | deepseek-flash only     | 9/9  | 0.0017     | 39,761 | 94 s        | 6.6             |
+  | gemini-3.8-flash direct | 8/9  | 0.0512     | 66,758 | 114 s       | 0               |
+  | gemini-3.8-flash only   | 9/9  | 0.0225     | 28,016 | 93 s        | 5.6             |
+
+  Against the bar (Q10): pass rate holds on both models (the one `direct`
+  failure is a provider defect, below); cost per passing task is lower under
+  `only` on both (11% on DeepSeek, 56% on Gemini, from 30% to 58% fewer
+  tokens, since a script's nested calls return one result row instead of a
+  model round trip each); median wall time is 0.8× `direct` on Gemini and
+  1.25× on DeepSeek, past the 1.2× line at n = 9 under load. Still to do
+  before the default flips: pool the DeepSeek wall time over more rounds on
+  an idle machine, fund glm53flash (an OpenRouter key) or route it direct,
+  and add the fan-out journey that exercises `agent()`. The ruling was written for nightlies; live journeys run on demand only
+  (#13614).
+
+- **Google tool results reject a PDF attachment.** The one `direct` failure
+  (gemini-3.8-flash, latexdiff): a `bash` result carried the compiled PDF
+  and the request failed with "Google tool results support only text and
+  image content", ending the run. Under `only` the same call's attachment
+  rides the script's result and the request goes through. A provider
+  conversion defect, independent of code mode; it needs its own fix.
 - **The per-model fallback flag (Q3).** A model that fails the bar keeps
   direct tools. The flag is meant to live on `BoundModel`
   (`agent/runtime/modelAccess/ModelAccess.ts`) beside the vendor

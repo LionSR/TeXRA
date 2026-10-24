@@ -28,6 +28,11 @@ const OfferedToolSchema = z.strictObject({
   /** The contributing plugin; `run` for a tool only this run holds. */
   plugin: z.string().min(1),
   revision: z.string().min(1),
+  /** Whether the step's requests send the model this declaration. False
+   *  while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`) for
+   *  every tool but `script` and the run's own: the model reaches it from
+   *  inside a script alone. Not part of the identity. */
+  sent: z.boolean(),
 });
 export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 
@@ -98,10 +103,10 @@ export const ContextBlobSchema = z.strictObject({
 });
 
 /** Whether two offered tools are the same tool: a call made to one may run
- *  as the other. The shown digest is left out. */
+ *  as the other. The shown digest and `sent` are left out. */
 export const sameIdentity = (
-  a: Omit<OfferedTool, 'shown'>,
-  b: Omit<OfferedTool, 'shown'>,
+  a: Omit<OfferedTool, 'shown' | 'sent'>,
+  b: Omit<OfferedTool, 'shown' | 'sent'>,
 ): boolean =>
   a.name === b.name &&
   a.digest === b.digest &&
