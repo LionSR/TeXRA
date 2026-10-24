@@ -217,14 +217,14 @@ interface ChildRunLoopShared {
 }
 
 /**
- * One child loop's parameters, by family: a native child (no port), gated
- * by the session's child-run budget when `budgeted`, or a process child with the port that presents and ends it, outside it.
+ * One child loop's parameters, by family: a native child (no port), in the session's child-run budget
+ * unless `awaited` (it rides its caller's slot), or a process child with the port that presents and ends it.
  */
 export type ChildRunLoopParams<TTurn, R = never> = ChildRunLoopShared &
   (
     | {
         readonly childRun?: undefined;
-        readonly budgeted: boolean;
+        readonly awaited?: true;
         readonly strategy: NativeChildStrategy<TTurn, R>;
       }
     | {
@@ -937,7 +937,7 @@ const launchChildLoop = <TTurn, R extends AgentRunServices>(
     });
     yield* Scope.addFinalizer(setup, Effect.sync(releaseActivation));
     // Read after the reservation, so no stop lands while there is no target.
-    if (params.childRun === undefined && params.budgeted)
+    if (params.childRun === undefined && params.awaited !== true)
       loop.budget = yield* loop.runs.childRunBudget(
         yield* resolveChildRunConcurrencyBudget(params.session.roots),
       );

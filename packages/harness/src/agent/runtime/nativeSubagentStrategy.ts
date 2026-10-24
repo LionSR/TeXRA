@@ -18,12 +18,7 @@ import {
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
-import {
-  emptyRunEndOutput,
-  type OfferedTool,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
 import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
@@ -39,11 +34,6 @@ export interface ChildRunLaunchOptions {
   /** The launching run: the child's parent edge. */
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
-  /**
-   * What the parent's step offered, which a fresh child can only narrow; a
-   * resumed child is held to its own record.
-   */
-  readonly parentOffered?: readonly OfferedTool[];
   /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
   readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
@@ -66,7 +56,6 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
         readonly resume?: never;
-        readonly parentOffered: readonly OfferedTool[];
       }
     | {
         readonly definition?: never;
@@ -118,7 +107,6 @@ export function createNativeSubagentStrategy(
           const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
-            parentOffered: params.parentOffered,
             onAdmitted: params.onAdmitted,
             onProgress: notify,
             ...(params.inBand === true && { stopAfterCycle: true }),

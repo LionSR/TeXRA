@@ -22,7 +22,6 @@ import {
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
-import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
@@ -36,7 +35,6 @@ import {
   AgentConfigSchema,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
-  type OfferedTool,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
@@ -90,7 +88,6 @@ type InBandLaunch =
   | {
       readonly kind: 'fresh';
       readonly definition: PreparedAgentDefinition;
-      readonly parentOffered: readonly OfferedTool[];
     }
   | { readonly kind: 'resume'; readonly identity: ResumeTurnIdentity };
 
@@ -149,7 +146,6 @@ const executeInBand = Effect.fn('executeInBand')(
       agentName: config.agent,
       // The parent is blocked awaiting this child, so it rides the parent's
       // budget slot (child-run budget design note).
-      budgeted: false,
       awaited: true,
       ...(options.notify !== undefined && { notify: options.notify }),
       // Built inside the loop's launch guard, like every attempt-scoped
@@ -161,7 +157,6 @@ const executeInBand = Effect.fn('executeInBand')(
             ...(launch.kind === 'fresh'
               ? {
                   definition: launch.definition,
-                  parentOffered: launch.parentOffered,
                   // Registered with its opening, which the child's run
                   // commits as it starts.
                   registration: {
@@ -328,8 +323,6 @@ const executeInBand = Effect.fn('executeInBand')(
 export const executeSubagentInBand = (
   options: InBandSubagentRunBaseOptions & {
     readonly configPayload: AgentConfigPayload;
-    /** What the parent's step offered, which the child can only narrow. */
-    readonly parentOffered: readonly OfferedTool[];
   },
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   awaitInBand(
@@ -340,19 +333,7 @@ export const executeSubagentInBand = (
         session: options.session,
         suppressErrorNotification: true,
       });
-      // A child that needs a plugin its parent's step lacks is an ordinary
-      // failed call, refused before any row records it.
-      const refusal = childToolRefusal(
-        options.parentOffered,
-        definition.persona.tools,
-        definition.config.agent,
-      );
-      if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
-      return yield* executeInBand(options, {
-        kind: 'fresh',
-        definition,
-        parentOffered: options.parentOffered,
-      });
+      return yield* executeInBand(options, { kind: 'fresh', definition });
     }).pipe(defectsAsErrors),
   );
 

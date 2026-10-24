@@ -134,7 +134,6 @@ const runInBand = (
     configPayload: { agent: 'review', model: MODEL, instruction },
     parentRunId: parent.runId,
     session: parent.session,
-    parentOffered: [],
   }).pipe(Effect.provideService(Runs, parent.session.runs), (program) =>
     withProcessServices(testRuntime(), program),
   );

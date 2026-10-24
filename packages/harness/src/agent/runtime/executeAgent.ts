@@ -9,7 +9,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   isTaskConfig,
-  type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
@@ -189,12 +188,6 @@ interface SubagentRunOptions {
   parentRunId?: RunId;
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /**
-   * What the parent's step offered when it launched this fresh delegated
-   * child, which the child can only narrow. A resume is held to its own
-   * record instead.
-   */
-  parentOffered?: readonly OfferedTool[];
   /** Session owning this run's coordination state. */
   readonly session: SessionHandle;
   /** Fires once with the run's id right after its handle is tracked. */
@@ -249,10 +242,7 @@ export function executeAgent(
         ),
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
-      toolPolicy: {
-        stopAfterCycle: options.stopAfterCycle,
-        parentOffered: options.parentOffered,
-      },
+      toolPolicy: { stopAfterCycle: options.stopAfterCycle },
     });
     const { config, session: runSession } = ctx;
 
@@ -360,8 +350,7 @@ export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions,
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
-  // A child its parent resumes in band narrows as it launched.
-  const { session: runSession, stopAfterCycle, parentOffered } = options;
+  const { session: runSession, stopAfterCycle } = options;
   const resumed = Effect.gen(function* () {
     if (!(yield* canResume(identity.runId, runSession)))
       return yield* new ResumeSessionUnavailableError({
@@ -377,7 +366,7 @@ export function resumeToolUseFromResumeData(
       definition,
       runId: identity.runId,
       session: runSession,
-      toolPolicy: { stopAfterCycle, parentOffered },
+      toolPolicy: { stopAfterCycle },
     });
     return yield* runWithLifecycle(
       ctx,

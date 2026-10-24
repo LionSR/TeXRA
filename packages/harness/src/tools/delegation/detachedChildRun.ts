@@ -47,7 +47,7 @@ import {
  * loop owns these field contracts, and the two members the guard supplies
  * itself (`strategy` from `buildLaunch`, `childRun` from
  * `createChildRun`) are the only ones a launch site does not pass through;
- * a native launch also says whether it is `budgeted`.
+ * a native launch also says whether its caller awaits it.
  */
 type DetachedChildRunInputBase = Omit<
   ChildRunLoopParams<never>,
@@ -72,9 +72,9 @@ export type DetachedChildRunInput<
     | {
         /** Native strategies let `executeAgent` own one handle for the native lifetime. */
         readonly createChildRun?: undefined;
-        readonly budgeted: boolean;
-        /** The caller joins the loop's fiber and owns its failure; for any
-         *  other caller a late failure is logged here. */
+        /** The caller joins the loop's fiber and owns its failure, and the
+         *  child takes no budget slot; for any other caller a late failure
+         *  is logged here. */
         readonly awaited?: true;
         /**
          * Build the strategy (and any attempt-scoped setup) inside the owned-run
@@ -108,7 +108,7 @@ export function startDetachedChildRunLoop<
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           if (input.createChildRun === undefined) {
-            const { buildLaunch, awaited: _awaited, ...loopParams } = input;
+            const { buildLaunch, ...loopParams } = input;
             const strategy = yield* buildLaunch();
             return yield* startChildRunLoop({ ...loopParams, strategy });
           }

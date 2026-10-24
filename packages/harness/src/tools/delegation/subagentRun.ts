@@ -8,7 +8,6 @@
 // Third-party imports
 import { Clock, Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 
 // Local imports
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -21,11 +20,10 @@ import {
 import {
   AgentConfigSchema,
   USER_FOLLOW_UP_SUPPORT,
-  type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { errorResult, executed } from '@tools/core/result';
+import { executed } from '@tools/core/result';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
@@ -92,9 +90,7 @@ export interface ApprovalMeta {
 
 /**
  * Launch one detached child under `runId` and return the receipt the model
- * reads: the child's result arrives later as a follow-up. A child that needs
- * a plugin its parent's step lacks is refused here, before any row records
- * it.
+ * reads: the child's result arrives later as a follow-up.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
@@ -102,14 +98,12 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     childConfigPayload: AgentConfigPayload,
     launch: {
       readonly runId: RunId;
-      /** The most the child may be offered: its parent step's tools. */
-      readonly parentOffered: readonly OfferedTool[];
       /** The grants the child is registered with. */
       readonly grants: ApprovalGrants;
       readonly approvalMeta?: ApprovalMeta;
     },
   ) {
-    const { runId, parentOffered, grants } = launch;
+    const { runId, grants } = launch;
     const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
@@ -120,19 +114,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       suppressErrorNotification: true,
     });
     const { config } = definition;
-    // A detached child launches after this call settles, so a child that needs
-    // a plugin its parent's step lacks is refused here, on the call
-    // that asked for it, before any row records it.
-    const refusal = childToolRefusal(
-      parentOffered,
-      definition.persona.tools,
-      agentName,
-    );
-    if (refusal !== undefined) {
-      return errorResult(refusal, {
-        summary: `Subagent '${agentName}' not launched`,
-      });
-    }
     // A conversation takes follow-ups; a run opened on a script (a document
     // task) ends with its script. One decision: the child row it registers
     // under and the run it launches must agree.
@@ -158,7 +139,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           session: parentSession,
           startedAt,
           workingDirectory,
-          parentOffered,
         };
 
         yield* startDetachedChildRunLoop({
@@ -166,7 +146,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           runId,
           parentRunId,
           agentName,
-          budgeted: true,
           buildLaunch: () =>
             restore(Effect.void).pipe(
               Effect.andThen(

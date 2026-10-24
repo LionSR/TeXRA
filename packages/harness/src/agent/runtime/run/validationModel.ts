@@ -55,7 +55,7 @@ const results = await Promise.allSettled([
 return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
 /** The golden store's script: finds the reading tool, two reads and a command
- *  in one `Promise.all`, then an agent it defines (`persona`), narrowed. */
+ *  in one `Promise.all`, then an agent it defines (`persona`). */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)

@@ -12,7 +12,6 @@ import { z } from 'zod';
 
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { forkSeed } from '@agent/runtime/forkRun';
-import { offeredBy } from '@agent/runtime/loop/step';
 import {
   requireToolRun,
   type RunToolCall,
@@ -202,7 +201,6 @@ const runSelf = Effect.fn('self.call')(function* (
           asCaller: true,
         }),
         ...(forked !== null && { seed: forked.seed }),
-        parentOffered: yield* offeredBy(run),
         parentCard: call.logId,
         parentCallId: call.callId,
         notify,

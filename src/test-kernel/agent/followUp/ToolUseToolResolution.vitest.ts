@@ -15,7 +15,7 @@ import {
   StateReadFailed,
   type StateStore,
 } from '@platform/interfaces';
-import type { OfferedTool, ToolDefinition } from '@shared/schemas';
+import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -161,64 +161,6 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    "a child only narrows its parent: it passes the parent's gates and cannot name a plugin the parent lacks",
-    () =>
-      Effect.gen(function* () {
-        const resolve = (
-          names: readonly string[],
-          approvalPromptsUnavailable: boolean,
-          parentOffered?: readonly OfferedTool[],
-        ) =>
-          resolveTestStep({
-            tools: toolDefs(names),
-            injectTools: false,
-            stores: hostStores(),
-            workspaceRoot: undefined,
-            host: 'vscode',
-            approvalPromptsUnavailable,
-            parentOffered,
-          });
-        const parent = yield* resolve(['grep'], true);
-        // The child's own host could answer approvals; its parent's could not.
-        const child = yield* resolve(
-          ['bash', 'grep', 'write_file'],
-          false,
-          parent.offered,
-        );
-        expect(child.definitions.map((tool) => tool.name)).toEqual(['grep']);
-        // A declared tool the narrowing withholds is reported, never dropped
-        // in silence (a recipe once lost its tools this way, unseen).
-        expect(child.warnings).toEqual(
-          expect.arrayContaining([
-            expect.stringContaining('Declared tool "bash" is not offered'),
-            expect.stringContaining(
-              'Declared tool "write_file" is not offered',
-            ),
-          ]),
-        );
-        const refused = yield* Effect.flip(
-          resolve(['grep', 'mcp__candidate__*'], false, parent.offered),
-        );
-        expect(refused.message).toContain('mcp__candidate__*');
-        expect(refused.message).toContain('MCP server "candidate"');
-      }).pipe(
-        Effect.scoped,
-        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-        Effect.provide(
-          pluginCatalogLayer(
-            texraPlugins(),
-            mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
-          ).pipe(
-            Layer.provide(
-              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
-            ),
-          ),
-        ),
-        Effect.provide(nodeSpawnerLayer),
-      ),
-  );
-
-  it.effect(
     'a switch reaches the next pin; a step keeps its plugin layer until it closes',
     () => {
       const events: string[] = [];
@@ -247,14 +189,13 @@ describe('tool-use tool resolution', () => {
       ]);
       const stores = hostStores();
       return Effect.gen(function* () {
-        const resolve = (parentOffered?: readonly OfferedTool[]) =>
+        const resolve = () =>
           resolveTestStep({
             tools: toolDefs(['zotero_search']),
             injectTools: false,
             stores,
             workspaceRoot: undefined,
             host: 'vscode',
-            parentOffered,
           }).pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
@@ -269,14 +210,10 @@ describe('tool-use tool resolution', () => {
         expect(events).toEqual(['open']);
 
         yield* (yield* ToolCatalog).setEnabled('zotero', false);
-        // The next pin is without the plugin, and a child reads the same
-        // catalog: it cannot keep what its parent's step was
-        // offered once the tool has left.
+        // The next pin is without the plugin.
         const nextScope = yield* Scope.make();
         const next = yield* Scope.provide(resolve(), nextScope);
         expect(names(next)).toEqual([]);
-        const child = yield* Scope.provide(resolve(first.offered), nextScope);
-        expect(names(child)).toEqual([]);
 
         // The first step still holds the layer until it closes.
         expect(events).toEqual(['open']);

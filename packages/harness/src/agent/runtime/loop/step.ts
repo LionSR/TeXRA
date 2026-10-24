@@ -472,8 +472,8 @@ export const stepFor = Effect.fn('Step.for')(function* (
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });
 
-/** What `run`'s current step offers: the most a child it launches now may
- *  be offered. */
+/** What `run`'s current step offers: the tools a background script it
+ *  launches now declares. */
 export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
   Effect.map(
     SynchronizedRef.get(run.steps),

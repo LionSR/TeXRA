@@ -345,8 +345,8 @@ describe('the golden 1.0 store', () => {
           [SCRIPTED, 'validation-script-1/4'],
           [SERVICE_TASK, null],
         ]);
-        // It asked for `executions`, which its parent was not offered: it
-        // gets the rest.
+        // It asked for `executions`, which the build that wrote the fixture
+        // withheld because its parent was not offered it.
         const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
         expect(
           events.flatMap((event) =>

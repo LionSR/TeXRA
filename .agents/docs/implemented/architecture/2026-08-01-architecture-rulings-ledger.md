@@ -619,6 +619,25 @@ is its display mirror.
 
 ---
 
+## A child run is not bounded by its parent's tools (ruled 2026-10-24)
+
+**Question.** Should a delegated child persona keep only the tools its
+parent's step offered ("a child can only narrow its parent", #13154, merged
+2026-09-25)?
+
+**Ruling.** No; that ruling is withdrawn. A run is offered what its own
+definition and launch declare, under the session's gates (plugin switch,
+dependency probe, host, capability, approval prompts). What a child may do
+with a tool is the approval policy's, which already reads the launch edge
+(`resolveBypass`, `delegatedChildGrants`, `grantsKept`). Design and
+evidence: [peer runs](./2026-10-24-peer-runs.md).
+
+**Forbids.** Re-passing a parent's offered list into a child's launch
+(`parentOffered` and its refusal were deleted), and any other launch option
+that restates a fact the `run.start` parent edge already holds.
+
+---
+
 ## Rulings from the 2026-09-30 decision board (ruled 2026-09-30)
 
 The owner took every decision on the board as recommended. Each entry below

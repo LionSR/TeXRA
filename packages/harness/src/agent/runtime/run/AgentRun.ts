@@ -34,7 +34,6 @@ import {
   DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
-  type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -72,9 +71,6 @@ interface LaunchEntry {
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
-  /** What the parent's step offered when it launched this delegated child:
-   *  the child can only narrow it. */
-  readonly parentOffered?: readonly OfferedTool[];
 }
 
 interface RunCallbacks {
@@ -114,8 +110,8 @@ export interface AgentRunShape {
   >;
   /**
    * The run's current step: the tools it offers and the pin that holds its
-   * catalog generation, replaced by each new step. A delegated child reads
-   * what its parent's step offered here.
+   * catalog generation, replaced by each new step. A background script
+   * reads what its parent's step offered here.
    */
   readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
@@ -204,9 +200,8 @@ export const agentRunLayer = (
       // names (a background script's parent's, a task's recipe's).
       const script = config.script ?? null;
       // A plugin agent that names no tools inherits them, as a Claude Code
-      // subagent does: a child every tool its parent's step offered (the
-      // narrow-only rule then keeps exactly those), a top-level run the
-      // standard file, shell and web tools and the installed plugins' tools.
+      // subagent does: the standard file, shell and web tools and the
+      // installed plugins' tools, whoever launched it.
       const inherits =
         config.agentSource === AGENT_SOURCE.PLUGIN &&
         script === null &&
@@ -220,27 +215,16 @@ export const agentRunLayer = (
       // newest config's); a fresh run binds the launch model under today's
       // default route.
       const folded = yield* runHistory.load(runId);
-      // What a child persona is narrowed to: its parent's step while the
-      // parent is live, else (a child resumed on its own, whose parent's
-      // step is gone) what the child's own record last offered. A script
-      // run is not narrowed: it offers exactly what its launch named.
-      const parentOffered =
-        script !== null
-          ? undefined
-          : (ctx.toolPolicy.parentOffered ??
-            (root ? undefined : (folded?.offeredTools ?? undefined)));
-      // A script run offers its script; an inheriting plugin agent what its
-      // parent was offered, or at top level, beside the installed plugins'
-      // tools, the file, shell and web tools; anyone else its persona's.
+      // A run is offered what its own definition and launch declare, under
+      // the session's gates; its launcher's tools do not bound it. A script
+      // run offers its script; an inheriting plugin agent, beside the
+      // installed plugins' tools, the file, shell and web tools; anyone else
+      // its persona's.
       let tools = persona.tools;
       if (script !== null)
         tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
       else if (inherits)
-        tools = (
-          parentOffered
-            ?.filter(({ plugin }) => plugin !== 'run')
-            .map(({ name }) => name) ?? CLAUDE_COUNTERPART_TOOLS
-        ).map((name) => ({ name }));
+        tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
       // The loaded plugins (MCP servers) the declared tools name, held in
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
@@ -261,18 +245,17 @@ export const agentRunLayer = (
           script === null &&
           !textOnly &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        // The installed plugins' tools reach a top-level run of any agent but
-        // a plugin agent that names its tools, and a `self()` child, which
-        // runs as its caller; any other child gets what it declares, narrowed
-        // to its parent's.
+        // The installed plugins' tools reach a top-level run (unless it is a
+        // plugin agent that names its tools), a `self()` child, which runs as
+        // its caller, and an inheriting plugin agent wherever it runs; any
+        // other child gets what it declares.
         injectInstalled:
           script === null &&
           !textOnly &&
-          (root || config.asCaller === true) &&
+          (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
-        parentOffered,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's row).
