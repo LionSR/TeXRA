@@ -618,9 +618,12 @@ describe('tool-use dispatch', () => {
         expect(own).toBeGreaterThanOrEqual(0);
         expect(results[nested]?.disposition).toBe('skipped');
         const skipped = results[nested]?.result;
-        expect(skipped?.status === 'error' ? skipped.error : '').toContain(
-          'The script ended before this call settled',
+        const reason = skipped?.status === 'error' ? skipped.error : '';
+        // It had started, so the reason carries the unknown-outcome warning.
+        expect(reason).toContain(
+          'The script ended while this call was running',
         );
+        expect(reason).toContain('Its outcome is unknown');
         // Committed before the script's own result.
         expect(nested).toBeLessThan(own);
         yield* closeSessionOf(kit.session);

@@ -101,7 +101,7 @@ import {
   SKIPPED_AFTER_END_TURN,
   SKIPPED_NOT_STARTED,
   SKIPPED_OUTCOME_UNKNOWN,
-  SKIPPED_SCRIPT_ENDED,
+  skippedByScriptEnd,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -728,8 +728,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             ({ script: call, status }) =>
               call?.scriptCallId === script.callId ? [{ call, status }] : [],
           );
-        // The settled calls, in the order their settlements committed: each
-        // is handed back once the one before it reached the guest.
+        // Settled calls in commit order, each handed back after the one before.
         const replayOrder = issued(yield* cell.current)
           .flatMap(({ call, status }) =>
             status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
@@ -773,8 +772,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           }),
         );
 
-        // What the script's calls share while it runs here
-        // (`ScriptScope.shared`).
+        // What the script's calls share while it runs (`ScriptScope.shared`).
         const sharedValues = new Map<
           string,
           Deferred.Deferred<unknown, unknown>
@@ -852,8 +850,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             phase: op.phase,
           };
           if (answer !== undefined) {
-            // It reads the pinned catalog only, and runs no tool: it takes no
-            // lane, and commits whole, in one batch.
+            // Reads the pinned catalog only and runs no tool: no lane, one commit.
             yield* lanes.pass(op.seq);
             yield* handedBack(replayOrder.at(-1));
             const result = answer();
@@ -867,8 +864,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           }
           yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
             Effect.gen(function* () {
-              // Nothing runs again until the guest holds everything that
-              // settled.
+              // Nothing runs again until the guest holds all that settled.
               yield* handedBack(replayOrder.at(-1));
               const status = recordOf(yield* cell.current, callId)?.status;
               if (status?.kind !== 'settled')
@@ -876,8 +872,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   script: scopeOf(source),
                   scriptCalls: null,
                 });
-              // A script's calls are not the response's: its own result
-              // says whether one of them ended the turn.
+              // The script's own result says whether a call ended the turn.
               return false;
             }),
           );
@@ -944,7 +939,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   'The script ended before this call settled.',
                 ).retireStanding.pipe(
                   Effect.andThen(
-                    skipCall(fact, fact.input, status, SKIPPED_SCRIPT_ENDED),
+                    skipCall(
+                      fact,
+                      fact.input,
+                      status,
+                      skippedByScriptEnd(attemptOf(status) > 0),
+                    ),
                   ),
                 );
               },
