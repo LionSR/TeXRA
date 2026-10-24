@@ -370,11 +370,26 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   `only` on both (11% on DeepSeek, 56% on Gemini, from 30% to 58% fewer
   tokens, since a script's nested calls return one result row instead of a
   model round trip each); median wall time is 0.8× `direct` on Gemini and
-  1.25× on DeepSeek, past the 1.2× line at n = 9 under load. Still to do
-  before the default flips: pool the DeepSeek wall time over more rounds on
-  an idle machine, fund glm53flash (an OpenRouter key) or route it direct,
-  and add the fan-out journey that exercises `agent()`. The ruling was written for nightlies; live journeys run on demand only
-  (#13614).
+  1.25× on DeepSeek, past the 1.2× line at n = 9 under load.
+
+  **Round 2 (DeepSeek, idle machine).** Rerun the same evening with no test
+  suite or other arm beside it, the two arms one after the other
+  (`--repeat 3`, same three journeys; rows in
+  [`../../evidence/2026-10-24-codemode-script-only-round-2-deepseek-idle/`](../../evidence/2026-10-24-codemode-script-only-round-2-deepseek-idle/),
+  summarized with round 1's `summarize.mjs`). Every run took a fifth of its
+  round 1 wall time, so round 1's wall column measured the laptop's load,
+  not the arms. Rested, `only` is 0.88× `direct` on DeepSeek, inside the
+  bar; cost and tokens repeat round 1.
+
+  | model, arm            | pass | $ per pass | tokens | median wall | scripts per run |
+  | --------------------- | ---- | ---------- | ------ | ----------- | --------------- |
+  | deepseek-flash direct | 9/9  | 0.0020     | 61,344 | 17 s        | 0               |
+  | deepseek-flash only   | 9/9  | 0.0017     | 36,578 | 15 s        | 6.1             |
+
+  Still to do before the default flips: rerun Gemini rested the same way,
+  fund glm53flash (an OpenRouter key) or route it direct, and add the
+  fan-out journey that exercises `agent()`. The ruling was written for
+  nightlies; live journeys run on demand only (#13614).
 
 - **Google tool results reject a PDF attachment.** The one `direct` failure
   (gemini-3.8-flash, latexdiff): a `bash` result carried the compiled PDF
