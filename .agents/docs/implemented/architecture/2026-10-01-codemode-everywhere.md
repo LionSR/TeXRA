@@ -370,10 +370,44 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   `only` on both (11% on DeepSeek, 56% on Gemini, from 30% to 58% fewer
   tokens, since a script's nested calls return one result row instead of a
   model round trip each); median wall time is 0.8× `direct` on Gemini and
-  1.25× on DeepSeek, past the 1.2× line at n = 9 under load. Still to do
-  before the default flips: pool the DeepSeek wall time over more rounds on
-  an idle machine, fund glm53flash (an OpenRouter key) or route it direct,
-  and add the fan-out journey that exercises `agent()`. The ruling was written for nightlies; live journeys run on demand only
+  1.25× on DeepSeek, past the 1.2× line at n = 9 under load.
+
+  **Round 2 (idle machine).** Rerun the same evening with no test suite or
+  other arm beside it, one model at a time and the two arms one after the
+  other (`--repeat 3`, same three journeys; rows in
+  [`../../evidence/2026-10-24-codemode-script-only-round-2-idle/`](../../evidence/2026-10-24-codemode-script-only-round-2-idle/),
+  summarized with round 1's `summarize.mjs`). The median wall time fell
+  4.3× (DeepSeek `direct`), 6.3× (DeepSeek `only`), 3.4× (Gemini
+  `direct`) and 4.2× (Gemini `only`, clean runs of both rounds), so round
+  1's wall column measured the laptop's load, not the arms. Ratios below are
+  computed from the rows, not the rounded cells.
+
+  Four Gemini `only` runs across the two rounds (round 1 latexdiff #1 and
+  latexFixer #2, round 2 latexdiff #2 and #3) record zero `script` calls:
+  Gemini emitted a direct `bash` or `read_file` call it was never sent,
+  reading the names off the script declarations, and the dispatcher ran it
+  because the tool was offered (#14268 refuses such a call; DeepSeek never
+  did it). They are not script-only observations, so the Gemini `only` row
+  is the seven clean runs; the rows stay in `results.jsonl` with
+  `scripts: 0`. Round 1's Gemini `only` row, cleaned the same way, is 7/7
+  at $0.0226 per pass and 1.06× `direct` wall.
+
+  | model, arm              | pass | $ per pass | tokens | median wall | scripts per run |
+  | ----------------------- | ---- | ---------- | ------ | ----------- | --------------- |
+  | deepseek-flash direct   | 9/9  | 0.0020     | 61,344 | 17.5 s      | 0               |
+  | deepseek-flash only     | 9/9  | 0.0017     | 36,578 | 14.9 s      | 6.1             |
+  | gemini-3.8-flash direct | 9/9  | 0.0463     | 60,282 | 33.0 s      | 0               |
+  | gemini-3.8-flash only   | 7/7  | 0.0155     | 18,960 | 28.7 s      | 4.6             |
+
+  Rested, `only` is 0.85× `direct` wall on DeepSeek and 0.87× on Gemini,
+  both inside the bar; cost per pass is 18% and 66% lower. The Gemini
+  `direct` arm passed 9/9 this time: whether a `bash` result carries the
+  compiled PDF depends on the model's call, so the provider defect below is
+  intermittent.
+
+  Still to do before the default flips: fund glm53flash (an OpenRouter key)
+  or route it direct, and add the fan-out journey that exercises `agent()`.
+  The ruling was written for nightlies; live journeys run on demand only
   (#13614).
 
 - **Google tool results reject a PDF attachment.** The one `direct` failure
