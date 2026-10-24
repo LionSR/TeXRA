@@ -1175,6 +1175,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Script-only tools: a direct call to a tool the model was not sent is
+  refused.** With `texra.codeMode.scriptOnly` on, the model is sent only
+  `script` and the run's own tools, yet a model that guessed a tool's name
+  from the script declarations (Gemini does) had its direct call run as if
+  the tool had been offered directly, so the setting leaked. Such a call now
+  settles as unavailable with a message naming the script form
+  (`tools.bash(...)`), and the run continues.
 - **A call a script issued and never awaited to its end is settled.** When
   a script ended while a call it had issued was still running (a rejected
   `Promise.all`, a thrown error), the sandbox stopped the call but nothing

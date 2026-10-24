@@ -42,11 +42,7 @@ import { z } from 'zod';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import {
-  ChildRuns,
-  childRuns,
-  type RuntimeTool as ITool,
-} from '@agent/runtime/ToolServices';
+import { ChildRuns, childRuns } from '@agent/runtime/ToolServices';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   RunCall,
@@ -216,7 +212,7 @@ function resultContent(
   return { text: { kind: 'text', text }, media };
 }
 
-/** A response call's lane: its tool's (`ITool.lane`) when parallel, else a
+/** A response call's lane: its tool's (`RuntimeTool.lane`) when parallel, else a
  *  barrier; a duplicate's `'own'` (it only waits for its primary). */
 const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
   if (fact.duplicateOf !== null) return 'own';
@@ -489,11 +485,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
-    const tool: ITool | undefined = step.registry.get(fact.toolName);
-    const stageId = scriptOf(fact)?.stageId;
-    // A slow tool's card opens as its body starts; what the tool prints
-    // streams to it as transient text, capped, never a row, and refused once
-    // the call has returned, so nothing lands after the card's close.
+    const script = scriptOf(fact);
+    // A tool the step offers but did not send (script-only tools on) is
+    // reached from inside a script alone: a response's call to it has no body.
+    const unsent =
+      script === null &&
+      step.offered.some((t) => t.name === fact.toolName && !t.sent);
+    const tool = unsent ? undefined : step.registry.get(fact.toolName);
+    const stageId = script?.stageId;
+    // A slow tool's card opens as its body starts; what the tool prints is
+    // transient text on it, capped, never a row, refused once the call returned.
     let accepting = false;
     let streamed = 0;
     const onToolOutput = (chunk: string): void => {
@@ -528,7 +529,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     } else if (!tool || !pre) {
       result = {
         status: 'error',
-        error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
+        error: unsent
+          ? `tool_unavailable: "${fact.toolName}" is not a direct call in this run; call it from a script as tools.${fact.toolName}(...).`
+          : `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
         diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
       };
     } else {
@@ -578,8 +581,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
-        // A finalizer may also have failed while cancellation drained a write.
-        // Preserve that cause instead of replacing it with a bare interrupt.
+        // Keep a finalizer failure from the cancelled write beside the interrupt.
         return yield* Effect.failCause(
           Cause.fromReasons<never>(
             invoked.cause.reasons.map((reason) =>
@@ -638,9 +640,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
-    // The whole card commits with the result (a slow tool's closes here,
-    // a fast tool's opens and closes here): a terminal card outside the batch
-    // would show the call completed while recovery sees it unfinished.
+    // The card commits with the result (a slow tool's closes, a fast tool's
+    // opens and closes here); outside the batch recovery could see it undone.
     const cards = resultCards(fact, parsedInput, status, attempt, editedFiles);
     // An executed call's PostToolUse rows, the follow-ups its result answers
     // and its facts (the run's, and its plugin's own aggregates') commit too.
@@ -1096,9 +1097,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
     ).pipe(
-      // The dispatch runs inside the loop's uninterruptible handoff; the
-      // aggregate deadline only bounds the uploads if it can interrupt
-      // them, so say it here rather than depend on how the race forks.
+      // The dispatch runs in the loop's uninterruptible handoff; the deadline
+      // bounds the uploads only if it can interrupt them, so say so here.
       Effect.interruptible,
       Effect.timeoutOrElse({
         duration: UPLOAD_DEADLINE,
