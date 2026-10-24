@@ -519,6 +519,17 @@ One PR, in this order, each step type-checked and `test:pure` green:
 6. E2E: the CLI PTY harness, a message typed during a two-tool turn, the
    transcript showing it answered before the turn ends; one crash-suite case
    for a message consumed at a request boundary.
+7. From the ownership audit (`2026-10-24-ownership-audit.md`), the two
+   findings on this chain. F1: the stop begun for a run is the registry
+   entry's `stopReason` from the request until the view folds the run's end;
+   child admission reads it, so the per-stop tokens, their lift at settlement
+   and the folded-stop sweep that patched the window between them go, with
+   one refusal message. F2: `runRejection` is the one decider of why a resume
+   here is refused, asked by the message admission before the row commits, by
+   the resume under the run's claim (in place of `canResume`), and by a
+   host's run record; an earlier build's rows refuse as `earlier_build`
+   instead of failing the resume. `blocked` stays the resume's alone: the
+   blocker needs the catalog services the admission's callers do not carry.
 
 Files: `runRows.ts`, `rowVersions.ts`, `RunInput.ts`, `Inbox.ts`,
 `FollowUps.ts`, `ToolUseFollowUp.ts`, `followUpMessages.ts`, `toolUse.ts`,
