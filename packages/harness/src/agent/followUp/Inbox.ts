@@ -216,7 +216,7 @@ export class Inbox {
       yield* this.port.log.settled;
       // A reader here, or a resume in flight, reads the input.
       if (this.disposed || this.readers.has(runId)) return true;
-      if (this.resumes.inFlight.has(runId)) return true;
+      if (this.resumes.has(runId)) return true;
       const input = yield* this.read(runId);
       if (input.closed || !needsWake(input.rows, this.port.run)) return true;
       return yield* this.port.resume(runId);

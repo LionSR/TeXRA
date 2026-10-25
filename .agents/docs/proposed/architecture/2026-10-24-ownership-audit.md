@@ -312,7 +312,7 @@ lines with the comments that explain the precedence.
 
 ### F6. Smaller instances, same species
 
-- **`Resumes.inFlight` restates `Resumes.running`** (HEAD
+- **`Resumes.inFlight` restates `Resumes.running`** (built 2026-10-25: `Resumes.has` reads `running`; the set is gone) (HEAD
   `ToolUseFollowUp.ts:119-120, 147-154`): a `Set` and a `Map` keyed the same,
   added and deleted together; `Inbox.wake` (HEAD `Inbox.ts:217`) reads the
   set. `running.has(runId)` behind a method. 5 lines.
