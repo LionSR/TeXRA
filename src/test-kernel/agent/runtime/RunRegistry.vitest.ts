@@ -673,6 +673,9 @@ describe('runRegistry', () => {
         );
         expect(error.message).toBe('detach batch refused');
         expect(registry.parentOf(childRunId) === rootRunId).toBe(true);
+        // The run goes on: its stop mark is gone, so a message to it waits
+        // for no drain and a child is admitted under it.
+        expect(registry.get(rootRunId)?.stopReason).toBeUndefined();
       } finally {
         registry.dispose();
       }

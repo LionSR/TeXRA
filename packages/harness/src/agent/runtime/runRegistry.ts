@@ -586,31 +586,28 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run and apply the caller's declared child policy. A run this
-   * process drives is stopped where it stands: its children first, by the
-   * policy, then its handle or child driver. A cascading stop does that now,
-   * so {@link RunStop.accepted} answers at once; a detaching one commits the
-   * children's durable `run.detach` batch first, or a child completing while
-   * that batch commits would route its terminal result to the just-stopped
-   * parent. A run no handle or child driver here owns is stopped from
-   * outside: its claim fences the whole gesture, descendant sweep included,
-   * and the stop writes the terminal row itself; a refused row fails it.
+   * Stop a run by the caller's child policy. A run this process drives is
+   * stopped where it stands, children first: a cascading stop now, so
+   * {@link RunStop.accepted} answers at once; a detaching one after the
+   * children's `run.detach` batch commits, or a child completing meanwhile
+   * would route its result to the just-stopped parent. A run nothing here
+   * owns is stopped under its claim, descendants swept, the terminal row
+   * written here; a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const entry = this.entries.get(runId);
     // Marked at the request: from here a child is refused under the run
     // (`assertAdmitsChild`) and a user's message sent while the stop runs
-    // waits for the run to drain (`submitFollowUp`).
+    // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
+    const marked = entry?.stopReason;
     if (entry !== undefined) this.markStopped(runId, options.reason);
 
     const detach = options.detachActiveChildren === true;
-    // Something here to stop: a handle, a child driver, or a launch's fiber
-    // that has not tracked its handle yet.
+    // Something here to stop: a handle, a child driver, or a launch's fiber.
     const local = this.isRetained(runId) || entry?.fiber !== undefined;
     let reached = false;
     const stopHere = (): boolean => {
-      // Shared across the child sweep and the root cascade so each run in
-      // the chain is interrupted exactly once.
+      // Shared by the child sweep and the root cascade: each run once.
       const visited = new Set<string>();
       const { reason } = options;
       if (!detach) this.interruptActiveChildren(runId, visited, reason);
@@ -632,11 +629,9 @@ export class RunRegistry implements RunsShape {
       ).pipe(
         Effect.andThen(
           Effect.suspend(() =>
-            // A reached handle or child driver owns terminal finalization;
-            // only an ownerless stop writes the terminal fact here, as an
-            // inactive-run step: a generation admitted meanwhile (a resume
-            // here) refuses it with `RunLive` and becomes the stop's target
-            // and its lifecycle's one writer. An ended run keeps its verdict.
+            // A reached target finalizes itself; an ownerless stop writes the
+            // terminal row as an inactive-run step, which a generation admitted
+            // meanwhile refuses (`RunLive`) and becomes the target instead.
             stopHere()
               ? Effect.void
               : this.withInactiveRunStep(
@@ -652,6 +647,13 @@ export class RunRegistry implements RunsShape {
                 ),
           ),
         ),
+        // Refused before anything was stopped: the run goes on, unmarked.
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            const current = this.entries.get(runId);
+            if (!reached && current !== undefined) current.stopReason = marked;
+          }),
+        ),
       );
       settlement = local
         ? apply
@@ -666,13 +668,11 @@ export class RunRegistry implements RunsShape {
   }
 
   /** The session is closing: refuse every run registered from here on, and
-   *  stop every run no other run here stops, cascading into its children (a
-   *  child whose parent this registry holds is stopped by that parent's
-   *  cascade; every other run is stopped itself). Answers the runs left for
-   *  the caller to settle: those no live target took the stop for, since
-   *  nothing here drives them, and those whose stop failed to record what it
-   *  owed storage (logged here). Stopped runs keep their records until they
-   *  settle ({@link awaitDrained}). */
+   *  stop every run whose parent this registry does not hold (that parent's
+   *  cascade stops the rest). Answers the runs left for the caller to settle:
+   *  those no live target took the stop for, and those whose stop failed to
+   *  record what it owed storage (logged here). Stopped runs keep their
+   *  records until they settle ({@link awaitDrained}). */
   stopAll(): Effect.Effect<readonly RunId[]> {
     this.closing = true;
     const shutdown = {
