@@ -221,6 +221,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         DESCRIBE_TOOL,
         ...scriptCalls.globals.map(({ tool }) => tool),
       ],
+      modules: scriptCalls.modules,
       timeout: Duration.millis(input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       call: (op: ScriptOp) => {
         const global = globals.get(op.name);
@@ -335,7 +336,8 @@ const SURFACE = [
     '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` from the prompt alone. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
-  'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
+  '`const { name } = await import(specifier)` loads a module by the specifier a description names (`builtIn:<module>`); a static `import` line does not parse in a function body.',
+  'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
 const SCRIPT_TOOL = 'script';

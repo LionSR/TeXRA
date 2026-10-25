@@ -345,8 +345,8 @@ describe('the golden 1.0 store', () => {
           [SCRIPTED, 'validation-script-1/4'],
           [SERVICE_TASK, null],
         ]);
-        // It is offered what it declares, `executions` included, though its
-        // parent was not offered that tool (#14253).
+        // It asked for `executions`, and a child is offered what it declares,
+        // whatever its parent was offered.
         const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
         expect(
           events.flatMap((event) =>

@@ -152,7 +152,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // continuation this build has none of).
   // v3: each tool records whether the step's requests send its declaration
   // (`sent`); an earlier build's row would send every tool directly.
-  'tools.offered': { version: 3, upcast: [] },
+  // v4: the modules a script may import (`modules`); an earlier build's
+  // row would resume a script against the modules shipped now.
+  'tools.offered': { version: 4, upcast: [] },
   'context.blob': V1,
   'hook.outcome': V1,
   'child.turn': V1,

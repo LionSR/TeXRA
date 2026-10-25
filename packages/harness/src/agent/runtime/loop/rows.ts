@@ -143,7 +143,7 @@ export function displayRow(
 }
 
 /** The tool a script's run calls: `script`, whatever launched the run. */
-const SCRIPT_TOOL_NAME = 'script';
+export const SCRIPT_TOOL_NAME = 'script';
 
 /**
  * The row of a script's run's one call (`AgentConfig.script`): the call the

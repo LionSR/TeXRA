@@ -38,12 +38,14 @@ import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { DOCUMENTS_MODULE } from '@texra/tools/documents/documentsModule';
 import { texraPlugins } from '@texra/tools/registry';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
+import { sha256 } from '@utils/core/idHash';
 
 import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
@@ -383,6 +385,82 @@ describe('run-scoped tool resolution', () => {
               text: 'These tools are now available: zotero_search.',
             },
           ],
+        });
+        yield* closeSessionOf(session);
+      }),
+  );
+
+  // Failure modes: a resumed step (1) loads the module source a plugin
+  // ships now rather than the one its run recorded, or (2) records nothing
+  // when the next step loads the new source; (3) a step that offers no
+  // script records a module.
+  it.effect(
+    'a resumed step loads the script modules its run recorded, and the next records the ones shipped now',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const launch = (tools: readonly string[]) => {
+          const runId = generateRunId();
+          publishTestRunStart(session, runId);
+          const config = AgentConfigSchema.parse({
+            agent: 'chat',
+            model: 'test-model',
+            workingDirectory: process.cwd(),
+          });
+          return {
+            runId,
+            ctx: {
+              ...validationLaunch({ runId, session }, config),
+              persona: PersonaSchema.parse({
+                tools: tools.map((name) => ({ name })),
+              }),
+            } satisfies AgentLaunchContext,
+          };
+        };
+        const ran = (tools: readonly string[]) =>
+          Effect.gen(function* () {
+            const { runId, ctx } = launch(tools);
+            yield* runToolUse({ resume: false }).pipe(
+              Effect.provide(runLayer(ctx, [])),
+              Effect.orDie,
+            );
+            return { ctx, state: (yield* session.runHistory.load(runId))! };
+          });
+        expect((yield* ran(['read_file'])).state.offeredWith.modules).toEqual(
+          {},
+        );
+
+        const { ctx, state } = yield* ran(['script', 'document_task']);
+        const shipped = state.offeredWith.modules['builtIn:documents'];
+        assert(shipped !== undefined);
+        expect(state.contents[shipped]).toBe(DOCUMENTS_MODULE);
+        // The run as an earlier build recorded it: another source.
+        const earlier = 'export const revise = () => 1;';
+        const recorded = {
+          ...state,
+          offeredWith: {
+            ...state.offeredWith,
+            modules: { 'builtIn:documents': sha256(earlier) },
+          },
+          contents: { ...state.contents, [sha256(earlier)]: earlier },
+        };
+        const [held, next] = yield* Effect.gen(function* () {
+          const run = yield* AgentRun;
+          return [
+            yield* stepFor(run, recorded, 'request', false),
+            yield* stepFor(run, recorded, 'request', false),
+          ];
+        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
+
+        expect(held.tools.modules).toEqual({ 'builtIn:documents': earlier });
+        expect(held.rows).toEqual([]);
+        expect(next.tools.modules).toEqual({
+          'builtIn:documents': DOCUMENTS_MODULE,
+        });
+        const offered = next.rows.find((row) => row.type === 'tools.offered');
+        assert(offered?.type === 'tools.offered');
+        expect(offered.payload.modules).toEqual({
+          'builtIn:documents': shipped,
         });
         yield* closeSessionOf(session);
       }),

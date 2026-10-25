@@ -365,6 +365,7 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
       services: Context.empty() as PluginContext,
       stepRoots: [],
       hooks: [],
+      modules: {},
     },
     // The run's pending requests, as its `FollowUps.controls` reads them.
     Effect.map(kit.session.followUps.read(kit.runId), ({ followUps }) =>

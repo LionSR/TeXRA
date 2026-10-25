@@ -84,6 +84,9 @@ export interface ScriptDoor {
     readonly tool: string;
     readonly positional: string;
   }[];
+  /** The modules the guest may import, source by specifier, as the step
+   *  that offered the script pinned them. */
+  readonly modules: Readonly<Record<string, string>>;
   /** Settles one issued call, at its `tool.result` commit: its result and
    *  the attachment bytes that commit captured. */
   readonly call: (

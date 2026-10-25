@@ -672,19 +672,15 @@ history`, a resume and a follow-up say it was "written by an earlier
 ### Features
 
 - **A message typed while a run works is answered at its next model
-  request, not after the turn ends.** Up to 0.40.10 the engine delivered a
-  follow-up at the next request inside the turn; the Effect loop kept only
-  the end-of-turn read. A message typed mid-turn now lands after the tool
-  results the run is waiting on and before its next request, so the model
-  answers it in the same turn; a turn with no tool calls reads it at the end
-  as before, and a message typed with Stop is answered by the request after
-  the stopped step's results. Under it, a run's pending input has one owner
-  per fact: one rule for which queued rows are messages, one wake for a run
-  no process holds, one admission that refuses a message (a one-shot run now
-  refuses with a reason instead of queuing a message it never reads), one
-  consume, and one in-memory record of a stop in progress and of why a
-  resume is refused. A run written by an earlier build refuses a resume as
-  such instead of failing it.
+  request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
+  model inside the turn; since then it waited for the turn to end. A message
+  typed mid-turn now lands after the tool results the run is waiting on, so
+  the model answers it in the same turn; a turn with no tool calls reads it
+  at the end as before, and a message typed with Stop is answered by the
+  request after the stopped step's results. A message to a run that ends
+  after its one turn is refused with that reason instead of queuing unread,
+  and a run written by an earlier build refuses a resume as such instead of
+  failing it.
 - **Check an agent's launch in the New task form, and run a task again
   with changes.** An agent's proposal card has **Edit** (`e`): it opens the
   New task form filled with what the agent would start, its agent, model,
@@ -700,6 +696,18 @@ history`, a resume and a follow-up say it was "written by an earlier
   `approve` decision may carry `instruction`, `inputFiles`, `contextFiles`,
   `mediaFiles` and `options`; the `setup` decision is gone; the run action
   `runNew` is `runAgain`.
+- **Scripts import modules, starting with the document tasks.** A script
+  loads a module with `await import(specifier)`:
+  `const { revise, from } = await import('builtIn:documents')` gives
+  `revise(agentName, args)`, which runs that agent's document task as
+  `document_task` would and resolves to its result, and `from(result, args)`,
+  which takes a finished task's revised files as the next task's inputs, so
+  `revise('correct', from(polished))` corrects what a polish produced. A module can import
+  another with an ordinary `import` line; a script, being a function body,
+  uses `import()`. A resumed script loads the modules its run recorded,
+  never a newer copy shipped since. SDK: a plugin ships modules as
+  `Plugin.scriptModules` (module source by name, imported as
+  `builtIn:<name>`).
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
   default; CLI `/config`) gives chat agents the `script` tool and their own
   tools alone, with every other tool called from inside a script. A run
@@ -1189,6 +1197,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Gemini: a tool that attaches a PDF no longer ends the run.** A `bash`
+  result carrying a compiled PDF (or audio or video) failed the next
+  request with "Google tool results support only text and image content"
+  and the run stopped. The file now reaches the model in the turn after the
+  tool results, labeled with the tool that attached it.
 - **Script-only tools: a direct call to a tool the model was not sent is
   refused.** With `texra.codeMode.scriptOnly` on, the model is sent only
   `script` and the run's own tools, yet a model that guessed a tool's name

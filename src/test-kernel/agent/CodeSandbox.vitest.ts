@@ -14,6 +14,9 @@
 // 5. A malformed worker message is trusted instead of failing its decode.
 // 6. A call that dies leaves the script waiting out its deadline (review of
 //    #13601).
+// 7. A script loads a module it was not given (a relative path included), a
+//    failed import cannot be caught, or a module's own static import of
+//    another given module does not resolve.
 
 import { it } from '@effect/vitest';
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
@@ -255,9 +258,52 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
           'ScriptSyntaxError',
           "unexpected token in expression: ';' (line 2, column 11)",
         ],
-        ['ScriptSyntaxError', "expecting '(' (line 1, column 8)"],
+        [
+          'ScriptSyntaxError',
+          "expecting '(' (line 1, column 8); a script imports a module as `const { name } = await import('specifier')`",
+        ],
       ]);
     }),
+  );
+
+  it.effect(
+    'a script imports the modules it is given, and only those, by name',
+    () =>
+      Effect.gen(function* () {
+        const sandbox = yield* CodeSandbox;
+        const ops: ScriptOp[] = [];
+        const result = yield* sandbox.run({
+          source: `
+const { twice } = await import('builtIn:twice');
+let refused = null;
+for (const name of ['builtIn:nope', './echo']) {
+  try { await import(name); } catch (error) { refused ??= error.message; }
+}
+return { twice: await twice('x'), refused };`,
+          tools: ['echo'],
+          modules: {
+            'builtIn:echo':
+              'export const echo = async (v) => (await tools.echo({ v })).v;',
+            'builtIn:twice':
+              "import { echo } from 'builtIn:echo';\nexport const twice = async (v) => echo(await echo(v + v));",
+          },
+          timeout: '20 seconds',
+          call: (op) =>
+            Effect.sync(() => {
+              ops.push(op);
+              return answer(op);
+            }),
+        });
+        expect(result.value).toEqual({
+          twice: 'xx',
+          refused:
+            'No module "builtIn:nope" is offered to this script; it may import "builtIn:echo", "builtIn:twice".',
+        });
+        expect(ops.map(({ name, input }) => [name, input])).toEqual([
+          ['echo', { v: 'xx' }],
+          ['echo', { v: 'xx' }],
+        ]);
+      }),
   );
 });
 

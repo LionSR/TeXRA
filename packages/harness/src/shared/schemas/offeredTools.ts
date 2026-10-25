@@ -59,6 +59,10 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
   /** The installed plugins' hooks the step pinned, each as
    *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
   hooks: z.array(z.string().min(1)).readonly(),
+  /** The modules a `script` of the step may import, each source's address
+   *  by specifier (`builtIn:<name>`), stored as a `context.blob`: a resumed
+   *  script loads these. Empty when the step offers no script. */
+  modules: z.record(z.string(), Sha256Schema),
 });
 
 /**

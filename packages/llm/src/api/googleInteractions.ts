@@ -216,6 +216,10 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
         previous.content = [...(previous.content ?? []), ...content];
       else steps.push({ type: 'user_input', content });
     } else if (message.role === 'tool') {
+      // A function result takes text and images alone; a document, audio or
+      // video a tool attached is accepted in a user turn only, so those parts
+      // follow the results in one user_input step, each named by its call.
+      const carried: Interactions.Content[] = [];
       for (const result of message.results) {
         // The canonical grammar guarantees adjacent, complete ordinals.
         const call = calls[result.callOrdinal];
@@ -224,14 +228,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
         > = [];
         for (const input of result.content) {
           const part = yield* lowerInputPart(input);
-          if (part.type !== 'text' && part.type !== 'image') {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'Google tool results support only text and image content.',
-            });
-          }
-          content.push(part);
+          if (part.type === 'text' || part.type === 'image') content.push(part);
+          else carried.push({ type: 'text', text: `From ${call.name}:` }, part);
         }
         steps.push({
           type: 'function_result',
@@ -241,6 +239,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
           result: content,
         });
       }
+      if (carried.length > 0)
+        steps.push({ type: 'user_input', content: carried });
       calls = [];
     } else {
       calls = [];
