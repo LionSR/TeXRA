@@ -39,7 +39,7 @@
     "@xterm/xterm": "^6.0.0",
     "effect": "catalog:",
     "electron": "^44.9.1",
-    "electron-builder": "^26.17.0",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "escape-string-regexp": "catalog:",
     "fix-path": "^5.0.0",
@@ -47,7 +47,7 @@
     "nanoid": "catalog:",
     "signal-polyfill": "^0.2.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "yaml": "catalog:"
   },
   "dependencies": {
