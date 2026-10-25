@@ -47,9 +47,6 @@ packages/desktop/playwright-report/
 # still locate TeXRA resources. Packaged builds get this from the builder.
 packages/desktop/extension/
 
-# External design references cloned locally; do not vendor them into TeXRA.
-references/openrouter-skills/
-
 .pnpm-store/
 # The claude.yml bot workflow checks this repo out a second time here at the
 # PR's *base* ref, so the automation prompt and tool allowlist it runs with come from trusted

@@ -329,7 +329,6 @@ Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and
 - **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
 - **Anthropic API Key**: Available from [Claude Console](https://platform.claude.com/settings/keys); a Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that this key can spend once you link a Console organization to the plan
 - **Google API Key**: Available from [Google AI Studio](https://aistudio.google.com/app/apikey)
-- **OpenRouter API Key**: Available from [OpenRouter Dashboard](https://openrouter.ai/keys)
 - **xAI API Key**: Available from [xAI Console](https://console.x.ai/)
 - **DeepSeek API Key**: Available from [DeepSeek Platform](https://platform.deepseek.com/api_keys)
 - **Moonshot API Key**: Available from [Moonshot Console](https://platform.moonshot.cn/console); a Kimi Code plan key (`KIMI_CODE_API_KEY`) is a separate slot alongside it

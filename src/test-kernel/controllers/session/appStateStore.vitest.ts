@@ -63,15 +63,15 @@ describe('application state on SQLite', () => {
       const two = yield* openStore(storage);
       // Interleaved, as two hosts on one project are: the whole-file store
       // this replaces would have lost whichever key flushed second.
-      yield* one.update('texra.useOpenRouter', true);
+      yield* one.update('texra.kimiCode.prefer', true);
       yield* two.update('texra.glm.codingPlan', false);
       yield* one.update('texra.memory.enabled', true);
 
-      expect(yield* two.get('texra.useOpenRouter')).toBe(true);
+      expect(yield* two.get('texra.kimiCode.prefer')).toBe(true);
       expect(yield* one.get('texra.glm.codingPlan')).toBe(false);
       expect(yield* two.get('texra.memory.enabled')).toBe(true);
-      yield* two.update('texra.useOpenRouter', undefined);
-      expect(yield* one.get('texra.useOpenRouter')).toBeUndefined();
+      yield* two.update('texra.kimiCode.prefer', undefined);
+      expect(yield* one.get('texra.kimiCode.prefer')).toBeUndefined();
 
       // Concurrent read-modify-writes of one key both land: each changes
       // the value the other committed, never a stale read of its own.

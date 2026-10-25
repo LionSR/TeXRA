@@ -18,7 +18,6 @@ export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
     minimax: 'minimax/MiniMax-M3',
     glm: 'glm/glm-5.3',
     meta: 'meta/muse-spark-1.3',
-    openRouter: 'anthropic/claude-sonnet-5-5',
     kimiCode: 'moonshot/kimi-k3',
   });
 

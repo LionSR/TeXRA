@@ -236,10 +236,8 @@ export class HostDraftRequests {
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );
       // The transcription endpoint is an OpenAI SDK operation the llm
-      // package does not model, and the direct OpenAI route is deliberate:
-      // `gpt-4o-transcribe` is an OpenAI-only endpoint model with no
-      // OpenRouter route, so the global OpenRouter preference is not
-      // applied to it. The take holds no session frame to enter — its
+      // package does not model, so it calls OpenAI directly:
+      // `gpt-4o-transcribe` is an OpenAI-only endpoint model. The take holds no session frame to enter — its
       // roots travel with each call — so the endpoint read runs in the
       // calling frame, and the resolved credential reaches the
       // transcription as data.

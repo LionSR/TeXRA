@@ -34,7 +34,6 @@ const WIRE_PROTOCOLS = [
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
-  'openrouter-chat',
 ] as const;
 /**
  * Every wire surface the package speaks. Usage is billed per surface, so a

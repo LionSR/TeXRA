@@ -2264,7 +2264,10 @@ describe('native OpenAI Responses protocol', () => {
               {
                 kind: 'reasoning',
                 summary: [],
-                evidence: { kind: 'openrouter-reasoning', details: [] },
+                evidence: {
+                  kind: 'anthropic-redacted-thinking',
+                  data: 'opaque',
+                },
               },
             ] as const
           ).map((part) => ({
@@ -2275,7 +2278,7 @@ describe('native OpenAI Responses protocol', () => {
                 role: 'assistant' as const,
                 origin: {
                   ...OPERATION.origin,
-                  protocol: 'openrouter-chat' as const,
+                  protocol: 'anthropic-messages' as const,
                 },
                 content: [part],
               },

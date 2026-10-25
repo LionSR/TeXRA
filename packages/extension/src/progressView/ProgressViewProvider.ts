@@ -284,7 +284,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
         Effect.all([
-          hasUsableSetupCredential(this.roots, this.secrets, 'vscode').pipe(
+          hasUsableSetupCredential(this.roots, this.secrets).pipe(
             withLogChannel('Setup Credentials'),
           ),
           getFirstRunDone(globalState),

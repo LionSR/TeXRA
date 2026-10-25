@@ -222,7 +222,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
     [
       Effect.all(
         {
-          useOpenRouter: flag(GlobalStateKey.USE_OPENROUTER),
           preferKimiCode: Effect.succeed(preferKimiCode),
           glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
           glmEndpoint: Effect.map(

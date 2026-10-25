@@ -57,8 +57,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
  *   CLI `/config`, the Models tab's per-provider controls).
  * - **`onWrite`** — write-time consequences declared once, so the CLI form and
- *   the webview Models tab cannot enforce different rules (the Kimi Code /
- *   OpenRouter mutual exclusion used to exist on one path only).
+ *   the webview Models tab cannot enforce different rules.
  *
  * Everything downstream is a filter over these rows: the CLI unknown-key set,
  * the `/config` panel, the settings-view write gate, the Models tab rows, and
@@ -118,11 +117,6 @@ export interface SettingSurfaces {
 
 /** Consequences of writing a row, declared once for every write path. */
 export interface SettingWriteEffects {
-  /**
-   * Catalog keys forced to `false` when this row is written `true` — mutually
-   * exclusive routes. Applied by `writeSetting`, so every host inherits it.
-   */
-  readonly disablesWhenEnabled?: readonly string[];
   /**
    * Writing the row changes which models are available or how they route, so
    * hosts must recompute their cached model options.
@@ -234,14 +228,6 @@ function globalProviderToggle(opts: {
 // ============================================================================
 // Core (config-tree) rows
 // ============================================================================
-
-/**
- * The ChatGPT and Grok subscription routes apply only with OpenRouter off, so
- * preferring one clears the OpenRouter switch on every write path.
- */
-const SUBSCRIPTION_PREFERENCE_WRITE: SettingWriteEffects = {
-  disablesWhenEnabled: [GlobalStateKey.USE_OPENROUTER],
-};
 
 /**
  * Every config-file-backed setting, keyed by its dotted path under `texra.`.
@@ -392,7 +378,6 @@ const HARNESS_CONFIG_ROWS: Record<
     ),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
-    onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   'chatgptCodex.contextWindowK': {
     schema: Schema.NullOr(
@@ -416,7 +401,6 @@ const HARNESS_CONFIG_ROWS: Record<
     ),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   maxImageDimension: {
     schema: Schema.Int.check(Schema.isGreaterThanOrEqualTo(100))
@@ -755,29 +739,11 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: { settingsView: 'models' },
   } satisfies SurfacedSettingEntry,
 
-  // --- OpenRouter routing ----------------------------------------------------
-  globalProviderToggle({
-    key: GlobalStateKey.USE_OPENROUTER,
-    default: false,
-    onWrite: { invalidatesModelOptions: true },
-    model: {
-      provider: 'openRouter',
-      label: 'Use OpenRouter for all models',
-      description:
-        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-    },
-  }),
-
   // --- Provider routing & region toggles --------------------------------------
   globalProviderToggle({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     default: false,
-    // Kimi Code and OpenRouter are alternative routes for the same dual-backend
-    // models, so enabling one clears the other on every write path.
-    onWrite: {
-      disablesWhenEnabled: [GlobalStateKey.USE_OPENROUTER],
-      invalidatesModelOptions: true,
-    },
+    onWrite: { invalidatesModelOptions: true },
     model: {
       provider: 'kimiCode',
       label: 'Kimi Code subscription',

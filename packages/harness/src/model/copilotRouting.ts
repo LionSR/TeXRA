@@ -3,7 +3,7 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
 /**
  * Copilot routing: the per-model preference for serving a canonical base
  * model through the editor's GitHub Copilot language-model access instead of
- * a provider key, OpenRouter, or a subscription, and the route the editor
+ * a provider key or a subscription, and the route the editor
  * offers for it.
  *
  * The preference is persisted state. The route is never stored: the editor's
@@ -15,6 +15,7 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
 import {
   type ApiKeyProviderId,
   decideModelRoute,
+  isUnservedModel,
   modelConfig,
   OWN_KEY_ROUTE_FACTS,
   selectModel,
@@ -58,7 +59,7 @@ function matchingBaseModel(info: LanguageModelInfo): string | undefined {
   return Object.entries(MODEL_CONFIGS)
     .filter(
       ([, config]) =>
-        !config.retired &&
+        !isUnservedModel(config) &&
         !config.deprecated &&
         modelRouteNames(config).some((name) =>
           nativeNames.has(name.trim().toLowerCase()),
@@ -135,9 +136,12 @@ function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
 
 /** A stored preference list without the models that left the catalog. */
 const liveRouteModels = (stored: readonly string[]) =>
-  stored.filter(
-    (model) => !modelConfig(model)?.retired && !modelConfig(model)?.deprecated,
-  );
+  stored.filter((model) => {
+    const config = modelConfig(model);
+    return (
+      config === undefined || (!isUnservedModel(config) && !config.deprecated)
+    );
+  });
 
 /**
  * Persist (or clear) the Copilot route preference for one base model. A
@@ -178,7 +182,7 @@ function setCopilotRoutePreference(
  * Why a model decided onto the Copilot route cannot be served through it with
  * the route discovered for it, or undefined when it can. The preference is a
  * hard route choice: handler routing reports this reason and never
- * falls through to a provider key, OpenRouter, or a subscription the user did
+ * falls through to a provider key or a subscription the user did
  * not choose for this model.
  */
 export function copilotRouteUnavailableReason(
@@ -204,17 +208,14 @@ export function copilotRouteUnavailableReason(
 /** Direct-key route for a model the editor was serving through Copilot. */
 function getRuntimeModelDirectFallback(
   model: string,
-  useOpenRouter: boolean,
 ): { readonly model: string; readonly provider: ApiKeyProviderId } | undefined {
   const selected = selectModel(model);
   if (!selected) return undefined;
   // The replacement run declines every subscription route and Copilot.
   const route = decideModelRoute(selected.config, {
     ...OWN_KEY_ROUTE_FACTS,
-    useOpenRouter,
     mode: selected.request.mode,
   });
-  if (route.kind === 'openrouter') return { model, provider: 'openRouter' };
   return route.kind === 'api-key'
     ? { model, provider: route.provider }
     : undefined;

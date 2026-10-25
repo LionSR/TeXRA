@@ -26,12 +26,13 @@ const PickerOptionBaseSchema = Schema.Struct({
 
 const ModelAvailabilityKindSchema = Schema.Literals([
   'provider-key',
-  'openrouter-key',
   'missing-key',
   // The provider's key is stored, or may be, but the secret store could not
   // be read: not a missing key, so never worded as one.
   'key-unreadable',
   'retired',
+  // Only OpenRouter serves the model, and TeXRA does not call OpenRouter.
+  'unserved',
   // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
   // The same, on the user's Grok (xAI) subscription.
@@ -45,7 +46,6 @@ const ModelAvailabilityKindSchema = Schema.Literals([
   'copilot-allowed',
   'copilot-consent-required',
   'copilot-unavailable',
-  'provider-unavailable',
   // The model id survives in a host's enabled-models list but the live
   // registry no longer describes it, so nothing can route a request for it.
   'unknown-model',
@@ -66,11 +66,6 @@ export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
  * run, and `readonly` is compile-time only.
  */
 export const MODEL_AVAILABILITY_STATUS = {
-  'openrouter-key': {
-    label: 'OpenRouter key',
-    available: true,
-    requiresKey: false,
-  },
   'provider-key': { label: 'API key set', available: true, requiresKey: false },
   'missing-key': {
     label: 'Missing API key',
@@ -107,15 +102,8 @@ export const MODEL_AVAILABILITY_STATUS = {
     available: false,
     requiresKey: false,
   },
-  // Only the OpenRouter route produces this kind (`computeModelOptions` maps
-  // the decided `openrouter-unsupported` route to it), so the one label the
-  // kind carries names that route.
-  'provider-unavailable': {
-    label: 'Unavailable through OpenRouter',
-    available: false,
-    requiresKey: false,
-  },
   retired: { label: 'Retired', available: false, requiresKey: false },
+  unserved: { label: 'Unavailable', available: false, requiresKey: false },
   'unknown-model': {
     label: 'Unknown model',
     available: false,

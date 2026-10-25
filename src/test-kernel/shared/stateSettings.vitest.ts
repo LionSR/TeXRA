@@ -238,18 +238,6 @@ describe('Settings', () => {
     }),
   );
 
-  it.effect('preferring a subscription route turns OpenRouter off', () =>
-    Effect.gen(function* () {
-      const { stores, globalState } = makeFakeSettingsStores();
-      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-      yield* Settings.set(stores, 'texra.xaiGrok.preferSubscription', true);
-      assert.equal(
-        yield* globalState.get(GlobalStateKey.USE_OPENROUTER),
-        false,
-      );
-    }),
-  );
-
   it.effect('routes telemetry writes to global configuration', () =>
     Effect.gen(function* () {
       const { stores, config } = makeFakeSettingsStores();

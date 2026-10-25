@@ -58,7 +58,6 @@ const ApiKeyProviderIdSchema = Schema.Literals([
   'minimax',
   'glm',
   'meta',
-  'openRouter',
   'kimiCode',
 ]);
 

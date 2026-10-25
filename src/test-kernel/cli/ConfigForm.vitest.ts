@@ -23,7 +23,7 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
@@ -515,26 +515,6 @@ describe('/config slash command wiring', () => {
       expect(
         yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
       ).toBe(false);
-    }),
-  );
-
-  it.live('turns OpenRouter off when Kimi Code subscription is on', () =>
-    Effect.gen(function* () {
-      const { stores, globalState } = makeFakeSettingsStores('cli');
-      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-      const props = yield* Effect.promise(() => openConfigFormProps(stores));
-      const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
-      yield* props.writeValue(preferKimiCode, true);
-
-      expect(yield* globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(
-        true,
-      );
-      expect(yield* globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
-
-      // Disabling the preference leaves the OpenRouter toggle untouched.
-      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-      yield* props.writeValue(preferKimiCode, false);
-      expect(yield* globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
     }),
   );
 });

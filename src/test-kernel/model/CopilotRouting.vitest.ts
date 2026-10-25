@@ -153,22 +153,14 @@ describe('Copilot route discovery', () => {
   );
 
   it('reports the direct fallback for a base model and a legacy copilot id', () => {
-    expect(CopilotRoutes.directFallback(GEMINI31P, false)).toEqual({
+    expect(CopilotRoutes.directFallback(GEMINI31P)).toEqual({
       model: GEMINI31P,
       provider: 'google',
     });
-    expect(CopilotRoutes.directFallback(GEMINI31P, true)).toEqual({
-      model: GEMINI31P,
-      provider: 'openRouter',
-    });
-    expect(CopilotRoutes.directFallback(GPT56_TERRA, false)).toEqual({
+    expect(CopilotRoutes.directFallback(GPT56_TERRA)).toEqual({
       model: GPT56_TERRA,
       provider: 'openai',
     });
-    // OpenRouter serves no provider reasoning mode, so `+pro` keeps its key.
-    expect(
-      CopilotRoutes.directFallback('openai/gpt-5.6-sol+pro', true),
-    ).toBeUndefined();
   });
 
   it.effect('reports no route error only when the route is allowed', () =>

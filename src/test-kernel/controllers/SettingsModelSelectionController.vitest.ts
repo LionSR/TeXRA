@@ -43,7 +43,12 @@ const resolveModelOptions = (
             availability: 'provider-key',
             published: config,
             config,
-            route: { kind: 'openrouter' },
+            // The controller never reads the route; any ready route will do.
+            route: {
+              kind: 'api-key',
+              provider: 'openai',
+              usageRoute: 'api-key',
+            },
             source: config.provider,
             savedEffort: undefined,
             reasoning: undefined,

@@ -66,15 +66,11 @@ const signedInSession: CodexSession = {
 };
 
 async function installSubscriptionPlatform(options?: {
-  useOpenRouter?: boolean;
   signedIn?: boolean;
 }): Promise<void> {
   await installPlatform({
     config: {
       'texra.chatgptCodex.preferSubscription': true,
-    },
-    globalState: {
-      'texra.useOpenRouter': options?.useOpenRouter ?? false,
     },
     secrets:
       options?.signedIn === false
@@ -164,16 +160,6 @@ describe('ChatGPT subscription model routing', () => {
 
         expect(yield* prospectiveRoute()).toBeUndefined();
       }),
-  );
-
-  it.effect('does not override OpenRouter routing', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installSubscriptionPlatform({ useOpenRouter: true }),
-      );
-
-      expect(yield* prospectiveRoute()).toBeUndefined();
-    }),
   );
 
   it.effect(

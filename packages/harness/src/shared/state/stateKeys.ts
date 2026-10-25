@@ -77,7 +77,6 @@ export enum GlobalStateKey {
   KIMI_CODE_PREFER = 'texra.kimiCode.prefer',
 
   // Routing settings
-  USE_OPENROUTER = 'texra.useOpenRouter',
   /** Canonical base model ids the user prefers to serve through Copilot. */
   COPILOT_ROUTE_MODELS = 'texra.copilotRouteModels',
 

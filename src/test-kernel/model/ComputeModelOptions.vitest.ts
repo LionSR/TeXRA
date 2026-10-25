@@ -6,6 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import {
   apiKeySecretName,
   decideModelRoute,
+  isUnservedModel,
   OWN_KEY_ROUTE_FACTS,
   SecretsFailed,
 } from '@texra-ai/llm';
@@ -93,7 +94,6 @@ async function installAccessPlatform(
     secrets?: Record<string, string>;
     config?: Record<string, unknown>;
     enabledModels?: string[];
-    useOpenRouter?: boolean;
   } = {},
 ): Promise<void> {
   await installPlatform({
@@ -102,9 +102,6 @@ async function installAccessPlatform(
       [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(
         options.enabledModels ?? [GPT55],
       ),
-      ...(options.useOpenRouter === undefined
-        ? {}
-        : { [GlobalStateKey.USE_OPENROUTER]: options.useOpenRouter }),
     },
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
@@ -138,13 +135,13 @@ afterEach(() => {
 describe('model catalogue direct-route key ownership', () => {
   it('assigns every servable direct route to an API-key provider', () => {
     for (const [modelId, config] of Object.entries(MODEL_CONFIGS)) {
-      if (config.retired) continue;
+      if (isUnservedModel(config)) continue;
       const route = decideModelRoute(config, OWN_KEY_ROUTE_FACTS);
-      if (route.kind === 'openrouter' || route.kind === 'copilot') continue;
+      if (route.kind === 'copilot') continue;
 
       expect(
         route.kind,
-        `${modelId} (${config.provider}) is servable without OpenRouter but has no direct API-key owner`,
+        `${modelId} (${config.provider}) is servable but has no direct API-key owner`,
       ).not.toBe('no-api-key');
     }
   });
@@ -272,12 +269,12 @@ describe('model availability', () => {
         // The provider reads run concurrently, so the order is not fixed.
         expect(logs.at('WARN').map((entry) => entry.message)).toEqual(
           expect.arrayContaining(
-            ['OpenAI', 'OpenRouter', 'Kimi Code'].map((name) =>
+            ['OpenAI', 'Kimi Code'].map((name) =>
               expect.stringContaining(`Failed to read ${name} API key status`),
             ),
           ),
         );
-        expect(logs.at('WARN')).toHaveLength(3);
+        expect(logs.at('WARN')).toHaveLength(2);
       }).pipe(withDiagnostics),
   );
 
@@ -311,8 +308,8 @@ describe('model availability', () => {
           'retired',
           'retired',
         ]);
-        // Only the two routing keys every call resolves up front.
-        expect(logs.at('WARN')).toHaveLength(2);
+        // Only the Kimi Code routing key every call resolves up front.
+        expect(logs.at('WARN')).toHaveLength(1);
 
         // Two models that do reach the Copilot branch: one preference read each.
         const keyed = modelOptionsFrom(
@@ -447,75 +444,6 @@ describe('model availability', () => {
         availability: 'missing-key',
       });
     }),
-  );
-
-  it.effect('marks GPT-5.6 Pro unavailable through OpenRouter', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installAccessPlatform({ useOpenRouter: true }),
-      );
-
-      const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
-      );
-      const reason = unavailableReasonOf(
-        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
-        GPT56_PRO,
-      );
-
-      expect(model).toMatchObject({
-        availability: 'provider-unavailable',
-      });
-      expect(reason).toBe(
-        'Model "openai/gpt-5.6-sol+pro" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.',
-      );
-    }),
-  );
-
-  it.effect(
-    'asks for an OpenRouter key, not the provider key, on the OpenRouter route',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installAccessPlatform({ secrets: {}, useOpenRouter: true }),
-        );
-
-        const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55]),
-        );
-        const reason = unavailableReasonOf(
-          yield* availabilityInputs(hostStores(), [GPT55]),
-          GPT55,
-        );
-
-        expect(model).toMatchObject({
-          availability: 'missing-key',
-        });
-        expect(reason).toBe(
-          'Model "openai/gpt-5.5-2026-04-23" requires an OpenRouter API key.',
-        );
-      }),
-  );
-
-  it.effect(
-    'does not offer an OpenRouter key while the OpenRouter toggle is off',
-    () =>
-      Effect.gen(function* () {
-        // Dispatch with the toggle off asks the direct provider for its key, so
-        // an OpenRouter key alone must not mark the row ready.
-        yield* Effect.promise(() =>
-          installAccessPlatform({
-            secrets: { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
-            useOpenRouter: false,
-          }),
-        );
-
-        const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GEMINI31P]),
-        );
-
-        expect(model.availability).toBe('missing-key');
-      }),
   );
 
   it.effect(
@@ -681,23 +609,6 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
           availability: 'provider-key',
           cost: '$0.000/$0.000',
           context: '262K',
-        });
-      }),
-  );
-
-  it.effect(
-    'reports OpenRouter without changing the Kimi K3 registry identity',
-    () =>
-      Effect.gen(function* () {
-        const model = yield* kimi3Option(
-          { [GlobalStateKey.USE_OPENROUTER]: true },
-          { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
-        );
-
-        expect(model).toMatchObject({
-          provider: 'moonshot',
-          routeLabel: 'Via OpenRouter',
-          availability: 'openrouter-key',
         });
       }),
   );

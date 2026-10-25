@@ -180,13 +180,6 @@ describe('CLI model access resolution', () => {
             }),
             status: 'api key set',
           }),
-          model('openrouterOnlyT', {
-            model: modelOption('openrouterOnlyT', {
-              label: 'OpenRouter Only',
-              availability: 'openrouter-key',
-            }),
-            status: 'openrouter key',
-          }),
           model('google/gemini-3.1-pro-preview', {
             available: false,
             model: modelOption('google/gemini-3.1-pro-preview', {
@@ -199,11 +192,9 @@ describe('CLI model access resolution', () => {
 
         expect(rows.map((row) => row.value)).toEqual([
           'deepseek/deepseek-v4-flash',
-          'openrouterOnlyT',
         ]);
         expect(rows.map((row) => row.description)).toEqual([
           'api: api key set · reasoning setting: Default (High)',
-          'api: openrouter key',
         ]);
       }),
   );

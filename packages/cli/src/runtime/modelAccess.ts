@@ -271,12 +271,11 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'key-unreadable':
       return 'The API key could not be read from secret storage: check that the store is unlocked and readable, then retry.';
     case 'provider-key':
-    case 'openrouter-key':
       return undefined;
     case 'retired':
       return 'Choose an active model.';
-    case 'provider-unavailable':
-      return 'Choose a supported provider route or another model.';
+    case 'unserved':
+      return 'Only OpenRouter serves this model, which TeXRA no longer supports: choose another model.';
     case 'subscription-access':
     case 'xai-subscription-access':
     case 'copilot-allowed':

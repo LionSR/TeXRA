@@ -146,12 +146,7 @@ for (const [entry, entryGraph] of entryGraphs) {
   const entryGraphText = (
     await Promise.all([...entryGraph].map(readDeclaration))
   ).join('\n');
-  for (const provider of [
-    '@anthropic-ai/sdk',
-    '@google/genai',
-    '@openrouter/sdk',
-    'openai',
-  ]) {
+  for (const provider of ['@anthropic-ai/sdk', '@google/genai', 'openai']) {
     const providerImport = new RegExp(
       `(?:from|import\\s*\\()\\s*['"]${provider.replaceAll('/', '\\/')}(?:/|['"])`,
     );

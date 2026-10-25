@@ -9,18 +9,19 @@
  * the Copilot preference, a resumed conversation's format) are the caller's.
  * The editor's Copilot route is the host's own type, `C`: the package carries
  * it on the decision and never reads it.
- * Precedence: validation, Copilot, the OpenRouter-unsupported gate, the
- * ChatGPT and Grok subscriptions, OpenRouter, then the direct provider key,
- * which may pay through Kimi Code or the GLM Coding Plan.
+ * Precedence: validation, the unserved gate (a model only OpenRouter serves
+ * has no route), Copilot, the ChatGPT and Grok subscriptions, then
+ * the direct provider key, which may pay through Kimi Code or the GLM Coding
+ * Plan.
  *
  * Kimi Code has two eligibility shapes:
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
  *    are served ONLY by the coding endpoint (llm-zoo pins their `baseUrl` to
  *    it), so they take the `kimiCode` key whatever the toggles say;
  *  - **dual-backend** models (`kimi3`) also exist on the Moonshot open
- *    platform; the coding endpoint serves them only with OpenRouter off,
- *    "Kimi Code subscription" on and a Kimi Code key stored, and their wire ID
- *    differs (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
+ *    platform; the coding endpoint serves them only with "Kimi Code
+ *    subscription" on and a Kimi Code key stored, and their wire ID differs
+ *    (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 import {
   lookup,
@@ -45,8 +46,6 @@ export interface RouteFacts<C = unknown> {
    * it, so nothing downstream re-reads the editor.
    */
   readonly copilotRoute: C | undefined;
-  /** The OpenRouter choice: the live toggle, or a resumed format's. */
-  readonly useOpenRouter: boolean;
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
   /** ChatGPT subscription preferred, signed in, and not declined. */
@@ -84,7 +83,6 @@ export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts<never> = {
   validation: false,
   prefersCopilot: false,
   copilotRoute: undefined,
-  useOpenRouter: false,
   chatgptSubscription: false,
   xaiSubscription: false,
   kimiCodeKey: false,
@@ -110,21 +108,21 @@ export type ModelRoute<C = unknown> =
       /** The discovered route; absent when the editor offers none now. */
       readonly route: C | undefined;
     }
-  | { readonly kind: 'openrouter-unsupported' }
   | {
       readonly kind: 'chatgpt-subscription';
       /** The input window the Codex backend grants this model. */
       readonly contextWindow: number;
     }
   | { readonly kind: 'xai-subscription' }
-  | { readonly kind: 'openrouter' }
   | {
       readonly kind: 'api-key';
       readonly provider: ApiKeyProviderId;
       readonly usageRoute: ApiKeyUsageRoute;
     }
   /** No provider key can serve the model directly. */
-  | { readonly kind: 'no-api-key' };
+  | { readonly kind: 'no-api-key' }
+  /** Only OpenRouter serves the model, and TeXRA does not call OpenRouter. */
+  | { readonly kind: 'unserved' };
 
 /**
  * How the Codex backend serves `model` on a ChatGPT subscription, or
@@ -136,9 +134,19 @@ export type ModelRoute<C = unknown> =
 function codexSubscriptionOf(
   model: ModelConfig,
 ): ModelConfig['codexSubscription'] {
-  return model.provider === ModelProvider.OPENAI && !model.openRouterOnly
+  return model.provider === ModelProvider.OPENAI
     ? model.codexSubscription
     : undefined;
+}
+
+/**
+ * Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
+ * or only OpenRouter serves it, which TeXRA does not call.
+ */
+export function isUnservedModel(
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
+): boolean {
+  return config.retired === true || config.openRouterOnly === true;
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
@@ -188,7 +196,7 @@ export function isKimiSubscriptionEligible(
 
 /**
  * Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
- * there, so no open-platform or OpenRouter route exists.
+ * there, so no open-platform route exists.
  */
 export function isKimiCodeExclusiveModel(
   model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
@@ -233,10 +241,11 @@ export function decideModelRoute<C>(
   facts: RouteDecisionFacts<C>,
 ): ModelRoute<C> {
   if (facts.validation) return { kind: 'validation' };
-  // Editor-supplied models cannot be proxied through OpenRouter, and a
-  // preference is a hard route choice for every request the editor
-  // can serve. The editor sends its own reasoning controls, so a provider
-  // mode (OpenAI `pro`) takes the model's own route, as the Codex
+  // Only OpenRouter serves this model, and TeXRA does not call OpenRouter.
+  if (config.openRouterOnly) return { kind: 'unserved' };
+  // A Copilot preference is a hard route choice for every request the
+  // editor can serve. The editor sends its own reasoning controls, so a
+  // provider mode (OpenAI `pro`) takes the model's own route, as the Codex
   // subscription preference below does.
   if (
     (facts.prefersCopilot && facts.mode === undefined) ||
@@ -244,46 +253,18 @@ export function decideModelRoute<C>(
   ) {
     return { kind: 'copilot', route: facts.copilotRoute };
   }
-  // OpenRouter is asked for (the model is OpenRouter-only, or the toggle is
-  // on) unless Kimi Code alone serves the model. It serves the request unless
-  // the model needs the Responses API or, for GLM, a per-model base URL
-  // outranks it (`./routeEndpoint.ts`).
-  const openRouterAsked =
-    !isKimiCodeExclusiveModel(config) &&
-    (config.openRouterOnly || facts.useOpenRouter);
-  const viaOpenRouter =
-    openRouterAsked &&
-    !config.requiresResponsesAPI &&
-    !(config.provider === ModelProvider.GLM && config.baseUrl);
-  // OpenRouter has no provider reasoning modes (OpenAI `pro`): an asked-for
-  // OpenRouter route would discard the mode.
-  if (
-    facts.mode !== undefined &&
-    (config.provider === ModelProvider.GLM ? viaOpenRouter : openRouterAsked)
-  ) {
-    return { kind: 'openrouter-unsupported' };
-  }
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
   const codex = codexSubscriptionOf(config);
   if (
     facts.chatgptSubscription &&
     facts.mode === undefined &&
-    !viaOpenRouter &&
     codex !== undefined
   ) {
     return { kind: 'chatgpt-subscription', contextWindow: codex.contextWindow };
   }
-  if (
-    facts.xaiSubscription &&
-    !facts.useOpenRouter &&
-    config.provider === ModelProvider.XAI &&
-    !config.openRouterOnly
-  ) {
+  if (facts.xaiSubscription && config.provider === ModelProvider.XAI) {
     return { kind: 'xai-subscription' };
-  }
-  if (viaOpenRouter) {
-    return { kind: 'openrouter' };
   }
   if (
     isKimiCodeExclusiveModel(config) ||

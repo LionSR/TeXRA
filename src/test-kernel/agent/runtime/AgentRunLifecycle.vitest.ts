@@ -568,14 +568,14 @@ describe('runWithLifecycle', () => {
                 // The retry-state flatten drops the Error and its Symbol marker;
                 // the canonical classification keeps the kind reachable here.
                 error: {
-                  message: 'Missing OpenRouter API key.',
+                  message: 'Missing API key.',
                   userRetryable: false,
                   classification: { kind: 'missing-api-key' as const },
                 },
               }),
             ),
           );
-          expect(error.message).toContain('Missing OpenRouter API key.');
+          expect(error.message).toContain('Missing API key.');
 
           expect(yield* runEnds(ctx.session, runId)).toMatchObject([
             {

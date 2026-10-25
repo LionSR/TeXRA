@@ -345,8 +345,8 @@ resumed run takes its first message at idle, not mid-turn.
 Verified in `packages/llm/src/api`: `PreparedHistorySchema`
 (`message.ts:316-351`) allows `assistant(local-call) → tool → user →
 assistant`. Google merges a user message into the previous `user_input` step
-(`googleInteractions.ts:213`); OpenAI Responses and OpenRouter take a user
-message after `function_call_output` / `tool` items with no adjacency rule;
+(`googleInteractions.ts:213`); OpenAI Responses takes a user
+message after `function_call_output` items with no adjacency rule;
 Anthropic emits `user(tool_result[])` then `user(text)`, which the API
 combines into one turn with the tool results first. No codec change.
 
