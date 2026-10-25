@@ -60,7 +60,8 @@ F1 and part of F2 and F3 landed in #14261 (`f5c5f063f3`), F5 in #14266
 
 - **F2, the rest.** `blocked` is still decided by the resume alone, so a
   message to a blocked run gives the user two notices; `refusalFor` and the
-  `Exclude` views of `FollowUpFailureReason` remain.
+  `Exclude` view of `FollowUpFailureReason` in `ResumeRunResult.failed`
+  remain.
 - **F3, the rest.** One shared `runEndFromEvents` for `needsWake`,
   `heldParks` and `sweepLeftoverRuns`.
 - **F4.** Not buildable as proposed; it needs the owner's pick among the three

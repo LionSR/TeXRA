@@ -496,8 +496,9 @@ What the fresh review (2026-10-23, read-only against `a20cc39310`) changed:
 
 Steps 1 to 7 of the plan below landed in #14261 (`f5c5f063f3`, 2026-10-24),
 with the review fixes listed in that PR. Finding F5 of the ownership audit,
-which this design's step 7 points to, landed in #14266 (`3e474178c5`). The
-audit's own leftovers are listed in that note, not here.
+the CLI's copies of a stop's reason and outside this design's steps, landed
+in #14266 (`3e474178c5`). The audit's own leftovers are listed in that note,
+not here.
 
 ## Still open
 
