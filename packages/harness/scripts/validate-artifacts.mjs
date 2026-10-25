@@ -163,20 +163,25 @@ for (const [entry, entryGraph] of entryGraphs) {
   }
 }
 
+// The packages the bundle imports, as esbuild resolves the emitted files'
+// import statements: text that only looks like an import (a string showing
+// `import('…')`) is not one.
 const externalPackages = new Set();
-const javascriptImport =
-  /(?:^\s*import(?:[^'"]*?\bfrom\s*)?|\bimport\s*\(\s*)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gmu;
-for (const javascript of allFiles.filter((file) => file.endsWith('.js'))) {
-  const source = await readFile(javascript, 'utf8');
-  for (const match of source.matchAll(javascriptImport)) {
-    const specifier = match.groups?.specifier;
-    if (
-      !specifier ||
-      specifier.startsWith('.') ||
-      specifier.startsWith('node:')
-    ) {
-      continue;
-    }
+const { metafile } = await build({
+  absWorkingDir: packageRoot,
+  bundle: true,
+  entryPoints: allFiles.filter((file) => file.endsWith('.js')),
+  format: 'esm',
+  logLevel: 'silent',
+  metafile: true,
+  outdir: path.join(packageRoot, '.validate-artifacts'),
+  packages: 'external',
+  platform: 'neutral',
+  write: false,
+});
+for (const { imports } of Object.values(metafile.inputs)) {
+  for (const { path: specifier, external } of imports) {
+    if (!external || specifier.startsWith('node:')) continue;
     externalPackages.add(packageName(specifier));
     importedPackages.add(packageName(specifier));
   }
