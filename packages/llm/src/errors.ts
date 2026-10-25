@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect, Result, Schema, Struct } from 'effect';
+import { Effect, Result, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -27,7 +27,7 @@ const ResponsesOperationSchema = Schema.Struct({
 export const RemoteOperationSchema = Schema.Union([
   ResponsesOperationSchema,
 
-  ResponsesOperationSchema /* TODO(effect-schema): unwrap; was `.unwrap()` */.mapFields(
+  ResponsesOperationSchema.mapFields(
     Struct.assign({
       origin: OriginSchema.mapFields(
         Struct.assign({
@@ -150,11 +150,13 @@ function retryableByDefault(
 /**
  * Typed provider failure. Fiber interruption remains outside this channel.
  * `retryable` and `scope` default from the kind and status; the binding that
- * read the vendor's reply states them where the reply says more.
+ * read the vendor's reply states them where the reply says more. The local
+ * `cause` rides as `Error.cause`, outside the wire fields.
  */
-export class ModelError extends Data.TaggedError(
-  'ModelError',
-)<ModelErrorFields> {
+export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
+  ...ModelErrorFieldsSchema.fields,
+  cause: Schema.optional(Schema.Defect()),
+}) {
   constructor(
     fields: Omit<ModelErrorFields, 'retryable'> & {
       readonly retryable?: boolean;

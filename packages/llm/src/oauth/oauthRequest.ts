@@ -10,37 +10,40 @@
  * render `message` at their run edge.
  */
 // Third-party imports
-import { Data, Duration, Effect, Result, Schema } from 'effect';
+import { Duration, Effect, Result, Schema } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
 import { toErrorMessage } from './support.js';
-
-import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError.js';
+import {
+  SubscriptionOAuthErrorKindSchema,
+  type SubscriptionOAuthErrorKind,
+} from './subscriptionOAuthError.js';
 
 /**
  * The endpoint could not be reached, or did not answer (headers and body)
  * within the timeout.
  */
-export class OAuthNetworkError extends Data.TaggedError('OAuthNetworkError')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class OAuthNetworkError extends Schema.TaggedError<OAuthNetworkError>()(
+  'OAuthNetworkError',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 /** The endpoint answered with a non-2xx status the flow does not recover from. */
-export class OAuthHttpError extends Data.TaggedError('OAuthHttpError')<{
-  readonly message: string;
-  readonly status: number;
-  readonly kind: SubscriptionOAuthErrorKind;
-}> {}
+export class OAuthHttpError extends Schema.TaggedError<OAuthHttpError>()(
+  'OAuthHttpError',
+  {
+    message: Schema.String,
+    status: Schema.Number,
+    kind: SubscriptionOAuthErrorKindSchema,
+  },
+) {}
 
 /** A 2xx body that did not match the expected schema. */
-export class OAuthUnexpectedResponse extends Data.TaggedError(
+export class OAuthUnexpectedResponse extends Schema.TaggedError<OAuthUnexpectedResponse>()(
   'OAuthUnexpectedResponse',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 /** Every failure one OAuth request can raise. */
 export type OAuthRequestError =
@@ -151,7 +154,7 @@ export const oauthHttpError = Effect.fn('oauthRequest.oauthHttpError')(
 export const parseOAuthJson = Effect.fn('oauthRequest.parseOAuthJson')(
   function* <T>(
     response: OAuthResponse,
-    schema: Schema.Codec<T>,
+    schema: Schema.Codec<T, unknown>,
     unexpectedMessage: string,
   ) {
     const raw = yield* Effect.try({

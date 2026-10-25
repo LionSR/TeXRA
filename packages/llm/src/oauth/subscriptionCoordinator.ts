@@ -4,7 +4,6 @@
  * {@link SubscriptionCoordinator} a caller holds. The implementation is
  * `SubscriptionOAuthCoordinator.ts`.
  */
-import { Schema } from 'effect';
 import type { SecretsFailed } from '../providers/credentials.js';
 import type { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { SubscriptionSessionBaseSchema } from './subscriptionSessionSchema.js';

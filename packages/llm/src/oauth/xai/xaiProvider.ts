@@ -110,18 +110,16 @@ export const XaiTokenResponseSchema = Schema.Struct({
   // Provider-boundary guard: absent or non-positive expires_in is not a
   // security decision — fall back to a short default and let JWT exp / 401
   // drive the real refresh. Prefer access JWT exp in buildSession when present.
-  expires_in:
-    Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
-      Schema.isGreaterThan(0),
-    )
-      .pipe(
-        Schema.catchDecoding(() =>
-          Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
-        ),
-      )
-      .pipe(
-        Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
+  expires_in: Schema.Union([Schema.Number, Schema.NumberFromString])
+    .check(Schema.isGreaterThan(0))
+    .pipe(
+      Schema.catchDecoding(() =>
+        Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
       ),
+    )
+    .pipe(
+      Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
+    ),
   token_type: Schema.optional(Schema.NullOr(Schema.String)),
   scope: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -145,14 +143,14 @@ export const XaiDeviceCodeSchema = Schema.Struct({
   ),
   expires_in: Schema.optional(
     Schema.NullOr(
-      Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
+      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),
   ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
   interval: Schema.optional(
     Schema.NullOr(
-      Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
+      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),
@@ -164,30 +162,29 @@ export const XaiDeviceCodeSchema = Schema.Struct({
 // proactive refresh (`exp`) — never as an authorization decision on their own.
 
 /** Account identity distilled from a JWT (any field may be absent). */
-interface XaiJwtClaims {
-  email?: string;
-  /** Absolute expiry (ms since epoch) when the JWT carries `exp`. */
-  expiresAtMs?: number;
-}
-
 const XaiJwtClaimsSchema = Schema.Struct({
+  email: Schema.optional(Schema.String),
+  /** Absolute expiry (ms since epoch) when the JWT carries `exp`. */
+  expiresAtMs: Schema.optional(Schema.Number),
+});
+type XaiJwtClaims = typeof XaiJwtClaimsSchema.Type;
+
+/** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
+const XaiJwtPayloadSchema = Schema.Struct({
   email: NonEmptyJwtClaim,
   preferred_username: NonEmptyJwtClaim,
   exp: Schema.optional(Schema.Finite).pipe(
     Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
   ),
 }).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((claims): XaiJwtClaims => ({ email: claims.email ?? claims.preferred_username, expiresAtMs: claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000, }))` */,
-    {
-      decode: SchemaGetter.transform((claims): XaiJwtClaims => ({
-        email: claims.email ?? claims.preferred_username,
-        expiresAtMs:
-          claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000,
-      })),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(XaiJwtClaimsSchema, {
+    decode: SchemaGetter.transform((claims) => ({
+      email: claims.email ?? claims.preferred_username,
+      expiresAtMs:
+        claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000,
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
 );
 
 const EMPTY_CLAIMS: XaiJwtClaims = {};
@@ -197,7 +194,7 @@ const EMPTY_CLAIMS: XaiJwtClaims = {};
  * claims on any structural error; never throws.
  */
 function decodeXaiJwtClaims(token: string): XaiJwtClaims {
-  return decodeJwtClaimsWithSchema(token, XaiJwtClaimsSchema, EMPTY_CLAIMS);
+  return decodeJwtClaimsWithSchema(token, XaiJwtPayloadSchema, EMPTY_CLAIMS);
 }
 
 /**

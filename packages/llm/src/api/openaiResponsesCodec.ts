@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, Result, Schema, Stream, Struct } from 'effect';
+import { Effect, Result, Schema, SchemaGetter, Stream, Struct } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -74,7 +74,12 @@ const OutputItemSchema = Schema.Union([
     content: Schema.optional(
       Schema.Union([
         Schema.Array(ReasoningTextSchema),
-        ReasoningTextSchema.transform((part) => [part]),
+        ReasoningTextSchema.pipe(
+          Schema.decodeTo(Schema.Array(ReasoningTextSchema), {
+            decode: SchemaGetter.transform((part) => [part]),
+            encode: SchemaGetter.forbidden(() => 'decode-only'),
+          }),
+        ),
       ]),
     ),
   }),
@@ -124,9 +129,9 @@ const decoded = <T>(
   result: Result.Result<T, Schema.SchemaError>,
   message: string,
 ) =>
-  result.success
-    ? Effect.succeed(result.data)
-    : Effect.fail(malformed(message, result.error));
+  Result.isSuccess(result)
+    ? Effect.succeed(result.success)
+    : Effect.fail(malformed(message, result.failure));
 
 /**
  * An item in canonical shape. An item still in progress opens a part whose

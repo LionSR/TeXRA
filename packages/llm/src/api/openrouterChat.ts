@@ -622,7 +622,7 @@ export function openrouterChatModel(
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'OpenRouter cannot prepare these controls.',
-          cause: prepared.failure,
+          cause: Result.isFailure(prepared) ? prepared.failure : undefined,
         });
       yield* requestBody(prepared.success, config);
       return prepared.success;
@@ -639,10 +639,11 @@ export function openrouterChatModel(
           requestId,
           model: config.requestedModel,
         });
-      // The SDK's parse of one streamed event throws a ZodError; anything else
-      // a body read raises is the connection.
+      // The SDK validates each streamed event with its own Zod and throws its
+      // ZodError, which this package does not import, so the error is known
+      // by name; anything else a body read raises is the connection.
       const streamFailure = (cause: unknown) =>
-        cause instanceof Schema.SchemaError
+        cause instanceof Error && cause.name === 'ZodError'
           ? new ModelError({
               kind: 'malformed-output',
               message:

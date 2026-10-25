@@ -17,12 +17,10 @@ const TextPartSchema = Schema.Struct({
 const MediaFieldsSchema = Schema.Struct({
   mimeType: Schema.String.check(Schema.isMinLength(1)),
   // Encoding validity is distinct from a provider accepting the captured bytes.
-  base64:
-    Schema.String /* TODO(effect-schema): z.base64: add the string check; was `z.base64()` */,
+  base64: Schema.String.check(Schema.isBase64()),
 });
 const InputPartSchema = Schema.Union([
   TextPartSchema,
-
   MediaFieldsSchema.mapFields(
     Struct.assign({
       kind: Schema.Literal('image'),
@@ -31,7 +29,6 @@ const InputPartSchema = Schema.Union([
       ),
     }),
   ),
-
   MediaFieldsSchema.mapFields(
     Struct.assign({
       kind: Schema.Literals(['audio', 'video', 'document']),
@@ -57,21 +54,18 @@ const OpenRouterReasoningSchema = Schema.Struct({
             signature: Schema.optional(Schema.NullOr(Schema.String)),
           }),
         ),
-
         OpenRouterDetailMetadataSchema.mapFields(
           Struct.assign({
             kind: Schema.Literal('summary'),
             summary: Schema.String,
           }),
         ),
-
         OpenRouterDetailMetadataSchema.mapFields(
           Struct.assign({
             kind: Schema.Literal('encrypted'),
             data: Schema.String,
           }),
         ),
-
         OpenRouterDetailMetadataSchema.mapFields(
           Struct.assign({
             kind: Schema.Literal('server-tool-call'),
@@ -166,7 +160,6 @@ const OutputPartSchema = Schema.Union([
       ]),
     ),
   }),
-
   LocalCallPartSchema,
 ]);
 
@@ -176,7 +169,6 @@ export const EditorContentSchema = Schema.Array(
     MessagePartSchema.mapFields(Struct.omit(['evidence'])).mapFields(
       Struct.assign({ content: Schema.Array(TextPartSchema) }),
     ),
-
     LocalCallPartSchema.mapFields(Struct.omit(['evidence'])),
   ]),
 );
@@ -196,11 +188,13 @@ export const EVIDENCE_PROTOCOL = {
   'openai-responses': 'openai-responses',
 } as const;
 
+/** The schema issues in a turn's content against its origin: foreign
+ *  evidence, malformed signed thinking, repeated item or call ids. */
 export function validateAssistantContent(
   origin: ModelOrigin | null,
   content: typeof ContentSchema.Type,
-  ctx: never /* TODO(effect-schema): RefinementCtx: the filter returns a FilterOutput instead; was `z.RefinementCtx` */,
-): void {
+): Schema.FilterIssue[] {
+  const issues: Schema.FilterIssue[] = [];
   const ids = new Set<string>();
   const itemIds = new Set<string>();
   for (const [index, part] of content.entries()) {
@@ -209,10 +203,9 @@ export function validateAssistantContent(
       evidence != null &&
       origin?.protocol !== EVIDENCE_PROTOCOL[evidence.kind]
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index],
-        message:
+        issue:
           'Provider content evidence requires its original protocol binding.',
       });
     }
@@ -224,10 +217,9 @@ export function validateAssistantContent(
           evidence?.kind === 'openrouter-reasoning') &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index],
-        message:
+        issue:
           'Signed thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
       });
     }
@@ -237,24 +229,23 @@ export function validateAssistantContent(
       evidence.itemId !== undefined
     ) {
       if (itemIds.has(evidence.itemId)) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: ['content', index, 'evidence', 'itemId'],
-          message: 'Provider item IDs must be distinct within one response.',
+          issue: 'Provider item IDs must be distinct within one response.',
         });
       }
       itemIds.add(evidence.itemId);
     }
     if (part.kind !== 'local-call') continue;
     if (ids.has(part.providerCallId)) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index, 'providerCallId'],
-        message: 'Provider call IDs must be distinct within one response.',
+        issue: 'Provider call IDs must be distinct within one response.',
       });
     }
     ids.add(part.providerCallId);
   }
+  return issues;
 }
 
 /** The assistant message: a turn's content with its origin. */
@@ -264,20 +255,17 @@ export const AssistantMessageSchema = Schema.Struct({
   origin: Schema.NullOr(ModelOriginSchema),
   content: ContentSchema,
 }).check(
-  Schema.makeFilter(
-    (message, ctx) => {
-      if (message.origin?.protocol === 'vscode-lm') {
-        const parsed = Schema.decodeUnknownResult(EditorContentSchema)(
-          message.content,
-        );
-        if (!Result.isSuccess(parsed)) {
-          for (const issue of parsed.failure.issues)
-            ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
-        }
-      }
-      validateAssistantContent(message.origin, message.content, ctx);
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((message, ctx) => { if (message.origin?.protocol === 'vscode-lm') { const parsed = EditorContentSchema.safeParse(message.content); if (!parsed.success) { for (const issue of parsed.error.issues) ctx.addIssue({ ...issue, path: ['content', ...issue.path] }); } } validateAssistantContent(message.origin, message.content, ctx); })` */,
-  ),
+  Schema.makeFilter((message) => {
+    const issues = validateAssistantContent(message.origin, message.content);
+    if (message.origin?.protocol === 'vscode-lm') {
+      const parsed = Schema.decodeUnknownResult(EditorContentSchema)(
+        message.content,
+      );
+      if (!Result.isSuccess(parsed))
+        issues.push({ path: ['content'], issue: parsed.failure.issue });
+    }
+    return issues;
+  }),
 );
 /** The content one turn produced, stamped with the turn's origin. */
 export type AssistantMessage = typeof AssistantMessageSchema.Type;
@@ -313,13 +301,10 @@ export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
 
 /** The history a turn sends, under the prepared-history rules. */
-export const PreparedHistorySchema = Schema.Array(MessageSchema)
-  .check(Schema.isMinLength(1))
-  .check(
-    Schema.makeFilter(
-      checkPreparedHistory /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine(checkPreparedHistory)` */,
-    ),
-  );
+export const PreparedHistorySchema = Schema.Array(MessageSchema).check(
+  Schema.isMinLength(1),
+  Schema.makeFilter(checkPreparedHistory),
+);
 type HistoryMessage = typeof MessageSchema.Type;
 
 /**

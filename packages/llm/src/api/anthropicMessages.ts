@@ -9,12 +9,12 @@ import Anthropic, {
 } from '@anthropic-ai/sdk';
 import {
   Clock,
+  DateTime,
   Effect,
   Result,
   Schema,
   SchemaGetter,
   Stream,
-  Struct,
 } from 'effect';
 
 // Local imports - canonical model contract
@@ -30,10 +30,20 @@ import {
 import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
-import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
+import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import { parseOutboundToolArguments, sdkStream } from './transport.js';
-import { filesApiUploads, type UploadCache } from './uploadCache.js';
+import {
+  filesApiUploads,
+  UploadedSchema,
+  type UploadCache,
+} from './uploadCache.js';
+import {
+  BlockSchema,
+  EventSchema,
+  StopSchema,
+  UsageSchema,
+} from './anthropicMessagesWire.js';
 import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
@@ -43,7 +53,6 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
-const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /**
  * What a Files API upload must return before its id is cached. The SDK's
  * type is not a check on the JSON, so a missing or empty id, or an expiry
@@ -52,160 +61,19 @@ const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
  */
 const UploadedFileSchema = Schema.Struct({
   id: Schema.String.check(Schema.isMinLength(1)),
-  expires_at: Schema.optional(
-    Schema.NullOr(
-      Schema.String /* TODO(effect-schema): z.iso.datetime; was `z.iso.datetime()` */,
-    ),
-  ),
+  expires_at: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
 }).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((file) => ({ fileId: file.id, expiresAtMs: file.expires_at == null ? null : Date.parse(file.expires_at), }))` */,
-    {
-      decode: SchemaGetter.transform((file) => ({
-        fileId: file.id,
-        expiresAtMs:
-          file.expires_at == null ? null : Date.parse(file.expires_at),
-      })),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(UploadedSchema, {
+    decode: SchemaGetter.transform((file) => ({
+      fileId: file.id,
+      expiresAtMs:
+        file.expires_at == null
+          ? null
+          : DateTime.toEpochMillis(file.expires_at),
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
 );
-const RefusalSchema = Schema.Struct({
-  type: Schema.Literal('refusal'),
-  category: Schema.NullOr(
-    Schema.Literals([
-      'cyber',
-      'bio',
-      'frontier_llm',
-      'reasoning_extraction',
-      'general_harms',
-    ]),
-  ),
-  explanation: Schema.NullOr(Schema.String),
-});
-const UsageSchema = Schema.Struct({
-  input_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-  output_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-  cache_creation_input_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-  cache_read_input_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-  cache_creation: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        ephemeral_5m_input_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-        ephemeral_1h_input_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-      }),
-    ),
-  ),
-  output_tokens_details: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        thinking_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-      }),
-    ),
-  ),
-  server_tool_use: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, CountSchema)),
-  ),
-});
-const StopSchema = Schema.Struct({
-  stop_reason: Schema.optional(
-    Schema.NullOr(
-      Schema.Literals([
-        'end_turn',
-        'max_tokens',
-        'stop_sequence',
-        'tool_use',
-        'pause_turn',
-        'refusal',
-        'model_context_window_exceeded',
-      ]),
-    ),
-  ),
-  stop_sequence: Schema.optional(Schema.NullOr(Schema.String)),
-  stop_details: Schema.optional(Schema.NullOr(RefusalSchema)),
-  container: Schema.optional(Schema.Unknown),
-});
-const BlockSchema = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal('text'),
-    text: Schema.String,
-    citations: Schema.optional(Schema.NullOr(Schema.Array(Schema.Unknown))),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('thinking'),
-    thinking: Schema.String,
-    signature: Schema.String,
-  }),
-  Schema.Struct({
-    type: Schema.Literal('redacted_thinking'),
-    data: Schema.String,
-  }),
-  Schema.Struct({
-    type: Schema.Literal('tool_use'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
-    input: JsonObjectSchema,
-    caller: Schema.optional(Schema.Struct({ type: Schema.Literal('direct') })),
-    toolset_name: Schema.optional(Schema.NullOr(Schema.String)),
-  }),
-]);
-// The SDK parses SSE JSON but does not validate its supported event/block fields.
-const EventSchema = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal('message_start'),
-    message: StopSchema.mapFields(
-      Struct.assign({
-        id: Schema.String.check(Schema.isMinLength(1)),
-        model: Schema.String.check(Schema.isMinLength(1)),
-        type: Schema.Literal('message'),
-        role: Schema.Literal('assistant'),
-        content: Schema.Array(Schema.Unknown).check(
-          Schema.isMinLength(0),
-          Schema.isMaxLength(0),
-        ),
-        usage: UsageSchema,
-      }),
-    ),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('message_delta'),
-    delta: StopSchema,
-    usage: UsageSchema,
-  }),
-  Schema.Struct({ type: Schema.Literal('message_stop') }),
-  Schema.Struct({
-    type: Schema.Literal('content_block_start'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    content_block: BlockSchema,
-  }),
-  Schema.Struct({
-    type: Schema.Literal('content_block_delta'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    delta: Schema.Union([
-      Schema.Struct({
-        type: Schema.Literal('text_delta'),
-        text: Schema.String,
-      }),
-      Schema.Struct({
-        type: Schema.Literal('thinking_delta'),
-        thinking: Schema.String,
-      }),
-      Schema.Struct({
-        type: Schema.Literal('signature_delta'),
-        signature: Schema.String,
-      }),
-      Schema.Struct({
-        type: Schema.Literal('input_json_delta'),
-        partial_json: Schema.String,
-      }),
-    ]),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('content_block_stop'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  }),
-]);
-
 function sdkFailure(cause: unknown): ModelError {
   return sdkModelError(
     cause,

@@ -1,15 +1,6 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import {
-  Cause,
-  Clock,
-  Effect,
-  Result,
-  Schema,
-  SchemaGetter,
-  Stream,
-  Struct,
-} from 'effect';
+import { Cause, Clock, Effect, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -27,8 +18,18 @@ import {
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest } from './turnInput.js';
+import {
+  COMPLETED_STATUSES,
+  IN_FLIGHT_STATUSES,
+  WireCompletedStepSchema,
+  WireEventSchema,
+  WireInteractionSchema,
+  WireSnapshotStepsSchema,
+  WireStreamInteractionSchema,
+  WireUsageSchema,
+} from './googleInteractionsWire.js';
 import { systemUpdateText } from '../message.js';
-import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
+import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
@@ -49,144 +50,6 @@ import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
-
-// SDK stream parsing does not validate the JSON values it returns.
-const WireTextSchema = Schema.Struct({
-  type: Schema.Literal('text'),
-  text: Schema.String,
-});
-const WireCompletedStepSchema = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal('thought'),
-    summary: Schema.optional(Schema.Array(WireTextSchema)),
-    signature: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('model_output'),
-    content: Schema.optional(Schema.Array(WireTextSchema)),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('function_call'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
-    arguments: Schema.optional(JsonObjectSchema),
-    // A replay needs only the thought's signature, so a call's is not kept.
-    signature: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-  }),
-]);
-// A GET echoes the input ahead of the output whatever `include_input` says,
-// and output holds no user input or function result, so those end the echo.
-const isInputEcho = ({ type }: { type: string }) =>
-  type === 'user_input' || type === 'function_result';
-const WireSnapshotStepsSchema = Schema.Array(
-  Schema.StructWithRest(Schema.Struct({ type: Schema.String }), [
-    Schema.Record(Schema.String, Schema.Unknown),
-  ]),
-)
-  .pipe(
-    Schema.decodeTo(
-      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((steps) => steps.slice(steps.findLastIndex(isInputEcho) + 1))` */,
-      {
-        decode: SchemaGetter.transform((steps) =>
-          steps.slice(steps.findLastIndex(isInputEcho) + 1),
-        ),
-        encode: SchemaGetter.forbidden(() => 'decode-only'),
-      },
-    ),
-  )
-  .pipe(Schema.decodeTo(Schema.Array(WireCompletedStepSchema)));
-// A stream start announces a call; its arguments arrive in subsequent deltas.
-const WireStepSchema = WireCompletedStepSchema.check(
-  Schema.makeFilter(
-    (step) =>
-      step.type !== 'function_call' ||
-      step.arguments === undefined ||
-      Object.keys(step.arguments).length === 0,
-  ),
-);
-const WireUsageSchema = Schema.Struct({
-  total_input_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  total_output_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  total_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  total_cached_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  total_thought_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  total_tool_use_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-});
-const WireInteractionSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
-  status: Schema.String,
-  model: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-  steps: Schema.optional(Schema.Unknown),
-  usage: Schema.optional(WireUsageSchema),
-});
-// Stateless streams can report no retrievable interaction ID.
-const WireStreamInteractionSchema = WireInteractionSchema.mapFields(
-  Struct.assign({
-    id: Schema.optional(Schema.String),
-  }),
-);
-const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
-const COMPLETED_STATUSES: readonly string[] = ['completed', 'requires_action'];
-const WireEventSchema = Schema.Union([
-  Schema.Struct({
-    event_type: Schema.Literal('interaction.created'),
-    interaction: WireStreamInteractionSchema.mapFields(Struct.omit(['status'])),
-  }),
-  Schema.Struct({
-    event_type: Schema.Literal('interaction.completed'),
-    interaction: WireStreamInteractionSchema,
-  }),
-  Schema.Struct({
-    event_type: Schema.Literal('interaction.status_update'),
-    interaction_id: WireStreamInteractionSchema.fields.id,
-    status: Schema.String,
-  }),
-  Schema.Struct({
-    event_type: Schema.Literal('step.start'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    step: WireStepSchema,
-  }),
-  Schema.Struct({
-    event_type: Schema.Literal('step.stop'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    usage: Schema.optional(WireUsageSchema),
-  }),
-  Schema.Struct({
-    event_type: Schema.Literal('step.delta'),
-    index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    metadata: Schema.optional(
-      Schema.Struct({ total_usage: Schema.optional(WireUsageSchema) }),
-    ),
-    delta: Schema.Union([
-      Schema.Struct({ type: Schema.Literal('text'), text: Schema.String }),
-      Schema.Struct({
-        type: Schema.Literal('thought_summary'),
-        content: WireTextSchema,
-      }),
-      Schema.Struct({
-        type: Schema.Literal('thought_signature'),
-        signature: Schema.String.check(Schema.isMinLength(1)),
-      }),
-      Schema.Struct({
-        type: Schema.Literal('arguments_delta'),
-        arguments: Schema.String,
-      }),
-    ]),
-  }),
-  Schema.Struct({ event_type: Schema.Literal('error'), error: Schema.Unknown }),
-]);
 
 const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   part: InputPart,
@@ -353,9 +216,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
 });
 
 const HttpFailureSchema = Schema.Struct({
-  status: Schema.Int.check(Schema.isGreaterThanOrEqualTo(400)).check(
-    Schema.isLessThanOrEqualTo(599),
-  ),
+  status: Schema.Int.check(Schema.isBetween({ minimum: 400, maximum: 599 })),
 });
 
 function sdkFailure(cause: unknown): ModelError {

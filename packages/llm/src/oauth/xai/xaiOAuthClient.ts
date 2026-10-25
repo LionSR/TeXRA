@@ -6,7 +6,7 @@
  * device-login flow runs on one fiber.
  */
 // Third-party imports
-import { Data, Effect, Option, Schema } from 'effect';
+import { Effect, Option, Schema } from 'effect';
 
 // Local imports
 import {
@@ -31,18 +31,16 @@ import {
 } from './xaiProvider.js';
 
 /** The user refused the device authorization (terminal, re-auth required). */
-class DeviceAuthorizationDenied extends Data.TaggedError(
+class DeviceAuthorizationDenied extends Schema.TaggedError<DeviceAuthorizationDenied>()(
   'DeviceAuthorizationDenied',
-)<{
-  readonly message: string;
-  readonly status: number;
-}> {}
+  { message: Schema.String, status: Schema.Number },
+) {}
 
 /** The server expired the device code before the user approved. */
-class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
-  readonly message: string;
-  readonly status: number;
-}> {}
+class DeviceCodeExpired extends Schema.TaggedError<DeviceCodeExpired>()(
+  'DeviceCodeExpired',
+  { message: Schema.String, status: Schema.Number },
+) {}
 
 /** Begin the RFC 8628 device-code flow. */
 export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(

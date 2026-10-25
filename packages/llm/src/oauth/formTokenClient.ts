@@ -26,7 +26,7 @@ export interface OAuthFormEndpoint<
 > {
   readonly tokenUrl: string;
   readonly clientId: string;
-  readonly tokenResponseSchema: Schema.Codec<TTokens>;
+  readonly tokenResponseSchema: Schema.Codec<TTokens, unknown>;
 }
 
 /** One token grant: form POST, ok-status check, schema parse. */

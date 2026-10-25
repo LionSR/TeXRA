@@ -40,7 +40,7 @@ import {
 } from '../errors.js';
 import { originOf } from '../protocol.js';
 import { admitObservation, ownedAbortSafeRequest } from './transport.js';
-import { filesApiUploads } from './uploadCache.js';
+import { filesApiUploads, UploadedSchema } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
@@ -74,16 +74,13 @@ const UploadedFileSchema = Schema.Struct({
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
   ),
 }).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((file) => ({ fileId: file.id, expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000, }))` */,
-    {
-      decode: SchemaGetter.transform((file) => ({
-        fileId: file.id,
-        expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
-      })),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(UploadedSchema, {
+    decode: SchemaGetter.transform((file) => ({
+      fileId: file.id,
+      expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
 );
 
 /** Direct Responses operations, with no application model adapter. */

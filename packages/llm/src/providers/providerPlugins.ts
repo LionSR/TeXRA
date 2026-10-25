@@ -22,7 +22,6 @@
  * derived names, so nothing here may pull in a Node or Effect module.
  */
 
-import { Schema } from 'effect';
 import type { ModelProvider } from 'llm-zoo';
 
 import type { TurnProtocolSchema } from '../protocol.js';

@@ -27,12 +27,14 @@ const EXPIRY_MARGIN_MS = 60_000;
  */
 const RELEASE_DEADLINE = '10 seconds';
 
-/** What one upload left on the provider. */
-interface Uploaded {
-  readonly fileId: string;
-  /** Epoch milliseconds; `null` when the provider stated no expiry. */
-  readonly expiresAtMs: number | null;
-}
+/** What one upload left on the provider: its id and, in epoch
+ *  milliseconds, when the provider will drop it (`null` for never). Each
+ *  files endpoint's own response schema decodes to this shape. */
+export const UploadedSchema = Schema.Struct({
+  fileId: Schema.String,
+  expiresAtMs: Schema.NullOr(Schema.Number),
+});
+type Uploaded = typeof UploadedSchema.Type;
 
 /**
  * One binding's uploads, held in memory and nowhere else. The key is a
@@ -81,14 +83,14 @@ export function filesApiUploads(provider: {
         catch: provider.failure,
       });
       const parsed = provider.parseUploaded(created);
-      if (!parsed.success)
+      if (!Result.isSuccess(parsed))
         return yield* new ModelError({
           kind: 'malformed-output',
           message: `${provider.providerName} returned an upload without a usable file id.`,
           model: provider.model,
-          cause: parsed.error,
+          cause: parsed.failure,
         });
-      return parsed.data;
+      return parsed.success;
     });
   const remove = (fileId: string) =>
     Effect.tryPromise({

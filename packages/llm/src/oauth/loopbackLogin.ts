@@ -13,7 +13,7 @@
  */
 import http from 'node:http';
 
-import { Data, Deferred, Duration, Effect, Fiber, Result } from 'effect';
+import { Deferred, Duration, Effect, Fiber, Result, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 import type {
@@ -39,12 +39,10 @@ const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
  * Distinct from every other sign-in failure because nothing was asked of the
  * user yet: a host with a device-code transport can retry on that instead.
  */
-export class LoopbackTransportUnavailableError extends Data.TaggedError(
+export class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTransportUnavailableError>()(
   'LoopbackTransportUnavailableError',
-)<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** What a provider's loopback sign-in takes from its host. */
 export interface LoopbackLoginOptions<S extends SubscriptionSession> {

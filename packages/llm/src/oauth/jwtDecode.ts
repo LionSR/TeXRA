@@ -3,7 +3,7 @@
  * proactive refresh only — never authorization decisions).
  *
  * Tokens are assumed to come from the provider token endpoint over TLS; we
- * decode the middle segment and validate through a Zod schema at the boundary.
+ * decode the middle segment and validate through a schema at the boundary.
  */
 import { Effect, Option, Result, Schema } from 'effect';
 
@@ -33,7 +33,7 @@ function decodeUnverifiedJwtPayload(token: string): unknown {
  */
 export function decodeJwtClaimsWithSchema<T>(
   token: string,
-  schema: Schema.Codec<T>,
+  schema: Schema.Codec<T, unknown>,
   empty: T,
 ): T {
   const parsed = Schema.decodeUnknownResult(schema)(

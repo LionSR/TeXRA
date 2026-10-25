@@ -1,23 +1,23 @@
 // Third-party imports
-import { Schema, SchemaGetter, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
 /**
  * Scheme, host and path only. The origin is written into durable rows that
- * are never scrubbed, and `z.url()` alone admits `user:key@host`,
+ * are never scrubbed, and a URL check alone admits `user:key@host`,
  * `?api-key=` and `#api-key=` alike.
  */
-const EndpointSchema =
-  Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */.check(
-    Schema.makeFilter(
-      (endpoint) => {
-        const url = new URL(endpoint);
-        return (
-          url.username === '' && url.password === '' && !/[?#]/.test(endpoint)
-        );
-      },
-      { message: 'Endpoints carry no userinfo, query string or fragment.' },
-    ),
-  );
+const EndpointSchema = Schema.String.check(
+  Schema.makeFilter(
+    (endpoint) => {
+      if (!URL.canParse(endpoint)) return 'Expected a URL';
+      const url = new URL(endpoint);
+      return (
+        url.username === '' && url.password === '' && !/[?#]/.test(endpoint)
+      );
+    },
+    { message: 'Endpoints carry no userinfo, query string or fragment.' },
+  ),
+);
 export const BackgroundCapabilitySchema = Schema.Literals([
   'supported',
   'unsupported',
@@ -29,21 +29,25 @@ export const BindingSchema = Schema.Struct({
     credentialScope: Schema.String.check(Schema.isMinLength(1)),
   }),
 });
+/** The protocols a wire model speaks; the editor's `vscode-lm` is the other. */
+const WIRE_PROTOCOLS = [
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
+  'openrouter-chat',
+] as const;
 /**
  * Every wire surface the package speaks. Usage is billed per surface, so a
  * usage record's provider is the protocol of the turn that produced it.
  */
 export const TurnProtocolSchema = Schema.Literals([
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-  'openrouter-chat',
+  ...WIRE_PROTOCOLS,
   'vscode-lm',
 ]);
 
 export const OriginSchema = BindingSchema.mapFields(
   Struct.assign({
-    protocol: TurnProtocolSchema.exclude(['vscode-lm']),
+    protocol: Schema.Literals(WIRE_PROTOCOLS),
     codecVersion: Schema.Literal(1),
   }),
 );
@@ -59,7 +63,7 @@ export const EditorBindingSchema = BindingSchema.mapFields(
 );
 export const EditorOriginSchema = EditorBindingSchema.mapFields(
   Struct.assign({
-    protocol: TurnProtocolSchema.extract(['vscode-lm']),
+    protocol: Schema.Literal('vscode-lm'),
     codecVersion: OriginSchema.fields.codecVersion,
   }),
 );
@@ -114,14 +118,6 @@ export function sameModelOrigin(
   );
 }
 
-function freezeJson(value: ReturnType<typeof z.json>['Type']): typeof value {
-  if (value !== null && typeof value === 'object') {
-    for (const nested of Object.values(value)) freezeJson(nested);
-    Object.freeze(value);
-  }
-  return value;
-}
-
 function hasSupportedJsonKeys(
   value: unknown,
   parents = new Set<object>(),
@@ -136,28 +132,13 @@ function hasSupportedJsonKeys(
   return valid;
 }
 
-/** Materialized JSON, including immutable nested containers. */
+/** Materialized JSON: a string-keyed object of JSON values. */
 export const JsonObjectSchema = Schema.Unknown.check(
-  Schema.makeFilter(hasSupportedJsonKeys, {
+  Schema.makeFilter((value) => hasSupportedJsonKeys(value), {
     message:
       'JSON cannot contain cycles or __proto__ keys, which this codec cannot preserve.',
   }),
-).pipe(
-  Schema.decodeTo(
-    Schema.Record(
-      Schema.String,
-      Schema.Json.pipe(
-        Schema.decodeTo(
-          Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform(freezeJson)` */,
-          {
-            decode: SchemaGetter.transform(freezeJson),
-            encode: SchemaGetter.forbidden(() => 'decode-only'),
-          },
-        ),
-      ),
-    ),
-  ),
-);
+).pipe(Schema.decodeTo(Schema.JsonObject));
 
 /** What the prepared-history rules read of an entry: its role, an
  *  assistant's local calls and a tool group's ordinals. Over any input-part
@@ -173,11 +154,12 @@ export type PreparedHistoryEntry =
       readonly results: readonly { readonly callOrdinal: number }[];
     };
 /** The history a turn sends: each assistant's local calls answered by the
- *  next message, in call order. Only the next request needs them settled. */
+ *  next message, in call order. Only the next request needs them settled.
+ *  Returns the schema issues found, one per offending message. */
 export function checkPreparedHistory(
   messages: readonly PreparedHistoryEntry[],
-  ctx: never /* TODO(effect-schema): RefinementCtx: the filter returns a FilterOutput instead; was `z.RefinementCtx` */,
-): void {
+): Schema.FilterIssue[] {
+  const issues: Schema.FilterIssue[] = [];
   for (const [index, message] of messages.entries()) {
     if (message.role === 'assistant') {
       const calls = message.content.filter(
@@ -192,10 +174,9 @@ export function checkPreparedHistory(
           (result, ordinal) => result.callOrdinal === ordinal,
         )
       ) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: [index],
-          message:
+          issue:
             'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
         });
       }
@@ -205,13 +186,13 @@ export function checkPreparedHistory(
         previous?.role !== 'assistant' ||
         !previous.content.some((part) => part.kind === 'local-call')
       ) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: [index],
-          message:
+          issue:
             'Tool results require an immediately preceding calling assistant.',
         });
       }
     }
   }
+  return issues;
 }

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports - canonical model contract
 import {
@@ -13,18 +13,12 @@ import { ModelError } from '../errors.js';
 export const decodeTurnRequest = (
   request: TurnRequest,
   message: string,
-): Effect.Effect<TurnRequest, ModelError> => {
-  const parsed = TurnRequestSchema.safeParse(request);
-  return parsed.success
-    ? Effect.succeed(parsed.data)
-    : Effect.fail(
-        new ModelError({
-          kind: 'invalid-request',
-          message,
-          cause: parsed.error,
-        }),
-      );
-};
+): Effect.Effect<TurnRequest, ModelError> =>
+  Schema.decodeUnknownEffect(TurnRequestSchema)(request).pipe(
+    Effect.mapError(
+      (cause) => new ModelError({ kind: 'invalid-request', message, cause }),
+    ),
+  );
 
 /**
  * An Anthropic request's output limit and the thinking that fits below it: a

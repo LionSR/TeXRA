@@ -43,6 +43,14 @@ const WebSocketEnvelopeSchema = Schema.Struct({
   // This acquisition owns the implicit lane, not a multiplexed connection.
   stream_id: Schema.optional(Schema.Never),
 });
+// An error event in the stream's own sequence, with no HTTP status.
+const SequencedWebSocketErrorSchema = Schema.Struct({
+  type: Schema.Literal('error'),
+  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  code: Schema.NullOr(Schema.String),
+  message: Schema.String,
+  param: Schema.NullOr(Schema.String),
+});
 const WebSocketErrorSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('error'),
@@ -54,21 +62,18 @@ const WebSocketErrorSchema = Schema.Union([
       param: Schema.optional(Schema.NullOr(Schema.String)),
     }),
   }),
-  Schema.Struct({
-    type: Schema.Literal('error'),
-    sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    code: Schema.NullOr(Schema.String),
-    message: Schema.String,
-    param: Schema.NullOr(Schema.String),
-  }).pipe(
+  SequencedWebSocketErrorSchema.pipe(
     Schema.decodeTo(
-      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((error) => ({ error, status: undefined }))` */,
+      Schema.Struct({
+        error: SequencedWebSocketErrorSchema,
+        status: Schema.Undefined,
+      }),
       {
         decode: SchemaGetter.transform((error) => ({
           error,
           status: undefined,
         })),
-        encode: SchemaGetter.forbidden(() => 'decode-only'),
+        encode: SchemaGetter.transform(({ error }) => error),
       },
     ),
   ),

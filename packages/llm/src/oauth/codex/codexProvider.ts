@@ -93,9 +93,9 @@ const CODEX_JWT_AUTH_CLAIM = 'https://api.openai.com/auth';
  */
 const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 
-// Schema-first per CLAUDE.md: define the Zod schemas, derive the TS types. The
-// stored bundle is the canonical camelCase shape; the raw token-endpoint
-// response is snake_case and transformed at the entry point.
+// Schema-first: define the schemas, derive the TS types. The stored bundle is
+// the canonical camelCase shape; the raw token-endpoint response is snake_case
+// and transformed at the entry point.
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 const CodexTokenResponseSchema = Schema.Struct({
@@ -135,18 +135,16 @@ export const CodexDeviceUserCodeSchema = Schema.Struct({
   // The endpoint sends the poll interval (seconds) as a string or a number, may
   // omit it, and could send junk. Normalize at the boundary to a positive
   // number, defaulting to 5 (matches Codex CLI / Zed).
-  interval:
-    Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
-      Schema.isGreaterThan(0),
-    )
-      .pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(5))))
-      .pipe(Schema.withDecodingDefault(Effect.succeed(5))),
+  interval: Schema.Union([Schema.Number, Schema.NumberFromString])
+    .check(Schema.isGreaterThan(0))
+    .pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(5))))
+    .pipe(Schema.withDecodingDefault(Effect.succeed(5))),
   // Lifetime of the user code (seconds), same normalization policy as
   // `interval`. RFC 8628 makes this authoritative when the endpoint sends it;
   // absent or unusable, the caller applies its own fallback deadline.
   expires_in: Schema.optional(
     Schema.NullOr(
-      Schema.Number /* TODO(effect-schema): z.coerce.number; was `z.coerce.number()` */.check(
+      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),
@@ -177,22 +175,24 @@ export const CodexDeviceTokenSchema = Schema.Struct({
 //   2. `["https://api.openai.com/auth"].chatgpt_account_id`
 //   3. `organizations[0].id`
 //
-// The decoded payload is UNTRUSTED, so it is validated through a Zod schema at
+// The decoded payload is UNTRUSTED, so it is validated through a schema at
 // the boundary instead of hand-walked with casts. Every claim self-heals
-// (`.catch`) so a single malformed field degrades to `undefined` rather than
-// dropping the whole payload — preserving the old per-location probing where a
-// valid account id survives garbage in a sibling claim. The same schema folds
-// the three locations into the canonical `{ accountId, email }` shape.
+// (`catchDecoding`) so a single malformed field degrades to `undefined` rather
+// than dropping the whole payload — preserving the old per-location probing
+// where a valid account id survives garbage in a sibling claim. The same
+// schema folds the three locations into the canonical `{ accountId, email }`
+// shape.
 
 /** Account id, email, and plan distilled from a JWT (each may be absent). */
-interface CodexJwtClaims {
-  accountId?: string;
-  email?: string;
-  planType?: string;
-}
+const CodexJwtClaimsSchema = Schema.Struct({
+  accountId: Schema.optional(Schema.String),
+  email: Schema.optional(Schema.String),
+  planType: Schema.optional(Schema.String),
+});
+type CodexJwtClaims = typeof CodexJwtClaimsSchema.Type;
 
 /** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
-const CodexJwtClaimsSchema = Schema.Struct({
+const CodexJwtPayloadSchema = Schema.Struct({
   chatgpt_account_id: NonEmptyJwtClaim,
   chatgpt_plan_type: NonEmptyJwtClaim,
   [CODEX_JWT_AUTH_CLAIM]: Schema.optional(
@@ -212,22 +212,19 @@ const CodexJwtClaimsSchema = Schema.Struct({
   ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
   email: NonEmptyJwtClaim,
 }).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((claims): CodexJwtClaims => ({ accountId: claims.chatgpt_account_id ?? claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ?? claims.organizations?.[0]?.id, email: claims.email, planType: claims.chatgpt_plan_type ?? claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type, }))` */,
-    {
-      decode: SchemaGetter.transform((claims): CodexJwtClaims => ({
-        accountId:
-          claims.chatgpt_account_id ??
-          claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
-          claims.organizations?.[0]?.id,
-        email: claims.email,
-        planType:
-          claims.chatgpt_plan_type ??
-          claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type,
-      })),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(CodexJwtClaimsSchema, {
+    decode: SchemaGetter.transform((claims) => ({
+      accountId:
+        claims.chatgpt_account_id ??
+        claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
+        claims.organizations?.[0]?.id,
+      email: claims.email,
+      planType:
+        claims.chatgpt_plan_type ??
+        claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type,
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
 );
 
 const EMPTY_CLAIMS: CodexJwtClaims = {};
@@ -241,7 +238,7 @@ function extractCodexClaims(
   accessToken: string | undefined,
 ): CodexJwtClaims {
   const decode = (token: string): CodexJwtClaims =>
-    decodeJwtClaimsWithSchema(token, CodexJwtClaimsSchema, EMPTY_CLAIMS);
+    decodeJwtClaimsWithSchema(token, CodexJwtPayloadSchema, EMPTY_CLAIMS);
   const id = idToken ? decode(idToken) : undefined;
   const access = accessToken ? decode(accessToken) : undefined;
   return {

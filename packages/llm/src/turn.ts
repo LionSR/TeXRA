@@ -39,6 +39,9 @@ import {
   type RemoteOperation,
 } from './errors.js';
 
+// Local imports - the usage record
+import { TurnUsageSchema } from './turnUsage.js';
+
 const ToolDefinitionSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)),
   description: Schema.String,
@@ -46,16 +49,13 @@ const ToolDefinitionSchema = Schema.Struct({
 });
 const ToolDefinitionsSchema = Schema.Array(ToolDefinitionSchema).check(
   Schema.makeFilter(
-    (tools, ctx) => {
-      if (new Set(tools.map((tool) => tool.name)).size !== tools.length) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'Tool definitions must have distinct names.',
-        });
-      }
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((tools, ctx) => { if (new Set(tools.map((tool) => tool.name)).size !== tools.length) { ctx.addIssue({ code: 'custom', message: 'Tool definitions must have distinct names.', }); } })` */,
+    (tools) => new Set(tools.map((tool) => tool.name)).size === tools.length,
+    { message: 'Tool definitions must have distinct names.' },
   ),
 );
+
+/** A non-negative integer: a token or item count. */
+const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 const ToolChoiceSchema = Schema.Union([
   Schema.Literal('auto'),
@@ -64,9 +64,16 @@ const ToolChoiceSchema = Schema.Union([
 // This package speaks its own protocol vocabulary and takes no llm-zoo
 // dependency; the registry's enum is checked against this one by assignment at
 // the harness's model-access call sites that feed it.
-const ReasoningEffortSchema = Schema.NullOr(
-  Schema.Literals(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
-);
+const ReasoningEffortLevelSchema = Schema.Literals([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+const ReasoningEffortSchema = Schema.NullOr(ReasoningEffortLevelSchema);
 const ResponsesReasoningSchema = Schema.NullOr(
   Schema.Struct({
     effort: ReasoningEffortSchema,
@@ -88,13 +95,11 @@ const BudgetedThinkingSchema = Schema.Struct({
 });
 const AnthropicThinkingSchema = Schema.Union([
   DisabledThinkingSchema,
-
   AdaptiveThinkingSchema,
-
   BudgetedThinkingSchema,
 ]);
 const EffortSchema = Schema.NullOr(
-  ReasoningEffortSchema /* TODO(effect-schema): unwrap; was `.unwrap()` */ /* TODO(effect-schema): exclude; was `.exclude(['none', 'minimal'])` */,
+  ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
 );
 const CacheSchema = Schema.Literals(['disabled', '5m']);
 const ThinkingLevelSchema = Schema.Literals([
@@ -130,9 +135,7 @@ const GoogleControlsSchema = Schema.Struct({
 const ResponsesControlsSchema = Schema.Struct({
   maxOutputTokens: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
   temperature: Schema.NullOr(
-    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
-      Schema.isLessThanOrEqualTo(2),
-    ),
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
   ),
   store: Schema.Boolean,
   parallelToolCalls: Schema.Boolean,
@@ -144,9 +147,7 @@ const ResponsesControlsSchema = Schema.Struct({
 const AnthropicControlsSchema = Schema.Struct({
   maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
   temperature: Schema.NullOr(
-    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
-      Schema.isLessThanOrEqualTo(1),
-    ),
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
   ),
   parallelToolCalls: Schema.Boolean,
   toolChoice: ToolChoiceSchema,
@@ -158,9 +159,7 @@ const AnthropicControlsSchema = Schema.Struct({
 const OpenRouterControlsSchema = Schema.Struct({
   maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
   temperature: Schema.NullOr(
-    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
-      Schema.isLessThanOrEqualTo(2),
-    ),
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
   ),
   effort: ReasoningEffortSchema,
   stopSequences: Schema.Array(Schema.String),
@@ -171,45 +170,37 @@ const EditorControlsSchema = Schema.Struct({
   toolChoice: Schema.Literal('auto'),
 });
 
-/** Refinement guard: a route without temperature support must default to null. */
-function validateTemperatureDefault(
-  configuration: {
-    readonly supportsTemperature: boolean;
-    readonly defaults: { readonly temperature: number | null };
-  },
-  ctx: never /* TODO(effect-schema): RefinementCtx: the filter returns a FilterOutput instead; was `z.RefinementCtx` */,
-): void {
-  if (
-    !configuration.supportsTemperature &&
+/** Schema check: a route without temperature support must default to null. */
+function validateTemperatureDefault(configuration: {
+  readonly supportsTemperature: boolean;
+  readonly defaults: { readonly temperature: number | null };
+}): Schema.FilterIssue[] {
+  return !configuration.supportsTemperature &&
     configuration.defaults.temperature !== null
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['defaults', 'temperature'],
-      message: 'A model without temperature support requires a null default.',
-    });
-  }
+    ? [
+        {
+          path: ['defaults', 'temperature'],
+          issue: 'A model without temperature support requires a null default.',
+        },
+      ]
+    : [];
 }
 
-/** Refinement guard: the default effort must be one the selected route supports. */
-function validateEffortDefault<E extends string>(
-  configuration: {
-    readonly supportedEfforts: readonly E[];
-    readonly defaults: { readonly effort: E | null };
-  },
-  ctx: never /* TODO(effect-schema): RefinementCtx: the filter returns a FilterOutput instead; was `z.RefinementCtx` */,
-): void {
-  if (
-    configuration.defaults.effort !== null &&
+/** Schema check: the default effort must be one the selected route supports. */
+function validateEffortDefault<E extends string>(configuration: {
+  readonly supportedEfforts: readonly E[];
+  readonly defaults: { readonly effort: E | null };
+}): Schema.FilterIssue[] {
+  return configuration.defaults.effort !== null &&
     !configuration.supportedEfforts.includes(configuration.defaults.effort)
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['defaults', 'effort'],
-      message:
-        'The default reasoning effort must be supported by the selected route.',
-    });
-  }
+    ? [
+        {
+          path: ['defaults', 'effort'],
+          issue:
+            'The default reasoning effort must be supported by the selected route.',
+        },
+      ]
+    : [];
 }
 
 /** The editor's model: its binding and defaults, which the editor host serves. */
@@ -226,7 +217,6 @@ export const VscodeLanguageModelConfigurationSchema =
 /** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
 export const ModelConfigurationSchema = Schema.Union([
   VscodeLanguageModelConfigurationSchema,
-
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('openrouter-chat'),
@@ -234,20 +224,15 @@ export const ModelConfigurationSchema = Schema.Union([
       supportsForcedToolChoice: Schema.Boolean,
       supportsImageInput: Schema.Boolean,
       supportsAudioInput: Schema.Boolean,
-      supportedEfforts: Schema.Array(
-        ReasoningEffortSchema /* TODO(effect-schema): unwrap; was `.unwrap()` */,
-      ),
+      supportedEfforts: Schema.Array(ReasoningEffortLevelSchema),
       defaults: OpenRouterControlsSchema.mapFields(Struct.omit(['toolChoice'])),
     }),
   ).check(
-    Schema.makeFilter(
-      (configuration, ctx) => {
-        validateTemperatureDefault(configuration, ctx);
-        validateEffortDefault(configuration, ctx);
-      } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((configuration, ctx) => { validateTemperatureDefault(configuration, ctx); validateEffortDefault(configuration, ctx); })` */,
-    ),
+    Schema.makeFilter((configuration) => [
+      ...validateTemperatureDefault(configuration),
+      ...validateEffortDefault(configuration),
+    ]),
   ),
-
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('google-interactions'),
@@ -255,7 +240,6 @@ export const ModelConfigurationSchema = Schema.Union([
       defaults: GoogleControlsSchema.mapFields(Struct.omit(['toolChoice'])),
     }),
   ),
-
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('openai-responses'),
@@ -266,10 +250,7 @@ export const ModelConfigurationSchema = Schema.Union([
       /** The route takes input files; a document is refused locally otherwise. */
       supportsDocumentInput: Schema.Boolean,
       webSocketStreamParameter: Schema.Literals(['implicit', 'required']),
-      allowedReasoningEfforts: Schema.Array(
-        ResponsesReasoningSchema /* TODO(effect-schema): unwrap; was `.unwrap()` */ /* TODO(effect-schema): unwrap; was `.unwrap()` */
-          .fields.effort /* TODO(effect-schema): unwrap; was `.unwrap()` */,
-      ),
+      allowedReasoningEfforts: Schema.Array(ReasoningEffortLevelSchema),
       instructions: Schema.Union([
         Schema.Struct({ kind: Schema.Literal('optional') }),
         Schema.Struct({
@@ -304,44 +285,37 @@ export const ModelConfigurationSchema = Schema.Union([
       ),
     }),
   ).check(
-    Schema.makeFilter(
-      (configuration, ctx) => {
-        validateTemperatureDefault(configuration, ctx);
-        if (
-          !configuration.supportsMaxOutputTokens &&
-          configuration.defaults.maxOutputTokens !== null
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['defaults', 'maxOutputTokens'],
-            message:
-              'A protocol without output-limit support requires a null default.',
-          });
-        }
-        if (!configuration.supportsStorage && configuration.defaults.store) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['defaults', 'store'],
-            message:
-              'A protocol without persistent storage requires store:false.',
-          });
-        }
-        const effort = configuration.defaults.reasoning?.effort;
-        if (
-          effort != null &&
-          !configuration.allowedReasoningEfforts.includes(effort)
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['defaults', 'reasoning', 'effort'],
-            message:
-              'The default reasoning effort must be allowed by the route.',
-          });
-        }
-      } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((configuration, ctx) => { validateTemperatureDefault(configuration, ctx); if ( !configuration.supportsMaxOutputTokens && configuration.defaults.maxOutputTokens !== null ) { ctx.addIssue({ code: 'custom', path: ['defaults', 'maxOutputTokens'], message: 'A protocol without output-limit support requires a null default.', }); } if (!configuration.supportsStorage && configuration.defaults.store) { ctx.addIssue({ code: 'custom', path: ['defaults', 'store'], message: 'A protocol without persistent storage requires store:false.', }); } const effort = configuration.defaults.reasoning?.effort; if ( effort != null && !configuration.allowedReasoningEfforts.includes(effort) ) { ctx.addIssue({ code: 'custom', path: ['defaults', 'reasoning', 'effort'], message: 'The default reasoning effort must be allowed by the route.', }); } })` */,
-    ),
+    Schema.makeFilter((configuration) => {
+      const issues = validateTemperatureDefault(configuration);
+      if (
+        !configuration.supportsMaxOutputTokens &&
+        configuration.defaults.maxOutputTokens !== null
+      ) {
+        issues.push({
+          path: ['defaults', 'maxOutputTokens'],
+          issue:
+            'A protocol without output-limit support requires a null default.',
+        });
+      }
+      if (!configuration.supportsStorage && configuration.defaults.store) {
+        issues.push({
+          path: ['defaults', 'store'],
+          issue: 'A protocol without persistent storage requires store:false.',
+        });
+      }
+      const effort = configuration.defaults.reasoning?.effort;
+      if (
+        effort != null &&
+        !configuration.allowedReasoningEfforts.includes(effort)
+      ) {
+        issues.push({
+          path: ['defaults', 'reasoning', 'effort'],
+          issue: 'The default reasoning effort must be allowed by the route.',
+        });
+      }
+      return issues;
+    }),
   ),
-
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('anthropic-messages'),
@@ -351,13 +325,7 @@ export const ModelConfigurationSchema = Schema.Union([
       supportsSystemMessages: Schema.Boolean,
       defaults: AnthropicControlsSchema.mapFields(Struct.omit(['toolChoice'])),
     }),
-  ).check(
-    Schema.makeFilter(
-      (configuration, ctx) => {
-        validateTemperatureDefault(configuration, ctx);
-      } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((configuration, ctx) => { validateTemperatureDefault(configuration, ctx); })` */,
-    ),
-  ),
+  ).check(Schema.makeFilter(validateTemperatureDefault)),
 ]);
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
 export type GoogleInteractionsConfiguration = Extract<
@@ -416,16 +384,13 @@ export const ResolvedTurnSchema = Schema.Union([
         controls: EditorControlsSchema,
       }),
     ),
-
     PreparedInputSchema.mapFields(
       Struct.assign({
         protocol: Schema.Literal('openrouter-chat'),
         controls: OpenRouterControlsSchema,
       }),
     ),
-
     GooglePreparedSchema,
-
     ResponsesPreparedSchema.mapFields(
       Struct.assign({
         transport: Schema.Union([
@@ -437,7 +402,6 @@ export const ResolvedTurnSchema = Schema.Union([
         ]),
       }),
     ),
-
     PreparedInputSchema.mapFields(
       Struct.assign({
         protocol: Schema.Literal('anthropic-messages'),
@@ -452,7 +416,6 @@ export const ResolvedTurnSchema = Schema.Union([
         transport: HttpTransportSchema,
       }),
     ),
-
     GooglePreparedSchema.mapFields(
       Struct.assign({ mode: Schema.Literal('background') }),
     ),
@@ -460,74 +423,6 @@ export const ResolvedTurnSchema = Schema.Union([
 ]);
 /** A prepared turn: the request with the binding's controls fixed. */
 export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
-
-const UsageSchema = Schema.Struct({
-  inputTokens: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  outputTokens: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  totalTokens: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  cachedInputTokens: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  reasoningTokens: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  providerUsage: Schema.optional(
-    Schema.Union([
-      Schema.Struct({
-        kind: Schema.Literal('google'),
-        /** Reported tool-use prompt count; absence does not mean zero. */
-        toolUsePromptTokens: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('xai'),
-        costInUsdTicks: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('anthropic'),
-        uncachedInputTokens: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-        cacheCreationTokens: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-        cacheCreation5mTokens: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-        cacheCreation1hTokens: Schema.NullOr(
-          Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-        ),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('openrouter'),
-        cost: Schema.optional(Schema.NullOr(Schema.Number)),
-        isByok: Schema.optional(Schema.Boolean),
-        inputDetails: Schema.optional(
-          Schema.NullOr(
-            Schema.Struct({
-              cacheWriteTokens: Schema.optional(
-                Schema.NullOr(
-                  Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-                ),
-              ),
-            }),
-          ),
-        ),
-      }),
-    ]),
-  ),
-});
-/** A turn's token counts as the provider reported them; unknown stays null. */
-export type TurnUsage = typeof UsageSchema.Type;
 
 const IdentitySchema = Schema.Struct({
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
@@ -598,73 +493,69 @@ const HttpTurnResultSchema = Schema.Struct({
     ),
   ),
   /** Unknown counts remain unknown, including within a partial receipt. */
-  usage: Schema.NullOr(UsageSchema),
+  usage: Schema.NullOr(TurnUsageSchema),
   continuation: Schema.optional(ContinuationSchema),
 }).check(
-  Schema.makeFilter(
-    (result, ctx) => {
-      validateAssistantContent(result.requestedOrigin, result.content, ctx);
-      if (
-        (result.finishReason === 'stop-sequence') !==
-        (result.stopSequence !== undefined)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['stopSequence'],
-          message:
-            'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
-        });
-      }
-      const usageKind = result.usage?.providerUsage?.kind;
-      const finishKind = result.finishEvidence?.kind;
-      if (
-        (result.providerResponseId === null &&
-          (result.requestedOrigin.protocol !== 'google-interactions' ||
-            result.continuation !== undefined)) ||
-        (result.refusalEvidence !== undefined &&
-          result.requestedOrigin.protocol !== 'anthropic-messages') ||
-        (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
-        (usageKind != null &&
-          result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) ||
-        (finishKind != null &&
-          result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          message:
-            'Provider identity and evidence require their original protocol and outcome.',
-        });
-      }
-      if (
-        result.finishReason !== 'length' &&
-        result.finishReason !== 'content-filter' &&
-        result.finishReason !== 'context-window-exceeded' &&
-        result.content.some(
-          (part) =>
-            part.evidence != null &&
-            'status' in part.evidence &&
-            part.evidence.status === 'incomplete',
-        )
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['content'],
-          message:
-            'Incomplete provider items require an incomplete turn outcome.',
-        });
-      }
-      if (
-        result.continuation &&
-        !sameModelOrigin(result.requestedOrigin, result.continuation.origin)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['continuation'],
-          message: 'Continuation belongs to another model origin.',
-        });
-      }
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((result, ctx) => { validateAssistantContent(result.requestedOrigin, result.content, ctx); if ( (result.finishReason === 'stop-sequence') !== (result.stopSequence !== undefined) ) { ctx.addIssue({ code: 'custom', path: ['stopSequence'], message: 'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.', }); } const usageKind = result.usage?.providerUsage?.kind; const finishKind = result.finishEvidence?.kind; if ( (result.providerResponseId === null && (result.requestedOrigin.protocol !== 'google-interactions' || result.continuation !== undefined)) || (result.refusalEvidence !== undefined && result.requestedOrigin.protocol !== 'anthropic-messages') || (result.refusalEvidence != null && result.finishReason !== 'refusal') || (usageKind != null && result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) || (finishKind != null && result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind]) ) { ctx.addIssue({ code: 'custom', message: 'Provider identity and evidence require their original protocol and outcome.', }); } if ( result.finishReason !== 'length' && result.finishReason !== 'content-filter' && result.finishReason !== 'context-window-exceeded' && result.content.some( (part) => part.evidence != null && 'status' in part.evidence && part.evidence.status === 'incomplete', ) ) { ctx.addIssue({ code: 'custom', path: ['content'], message: 'Incomplete provider items require an incomplete turn outcome.', }); } if ( result.continuation && !sameModelOrigin(result.requestedOrigin, result.continuation.origin) ) { ctx.addIssue({ code: 'custom', path: ['continuation'], message: 'Continuation belongs to another model origin.', }); } })` */,
-  ),
+  Schema.makeFilter((result) => {
+    const issues = validateAssistantContent(
+      result.requestedOrigin,
+      result.content,
+    );
+    if (
+      (result.finishReason === 'stop-sequence') !==
+      (result.stopSequence !== undefined)
+    ) {
+      issues.push({
+        path: ['stopSequence'],
+        issue:
+          'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
+      });
+    }
+    const usageKind = result.usage?.providerUsage?.kind;
+    const finishKind = result.finishEvidence?.kind;
+    if (
+      (result.providerResponseId === null &&
+        (result.requestedOrigin.protocol !== 'google-interactions' ||
+          result.continuation !== undefined)) ||
+      (result.refusalEvidence !== undefined &&
+        result.requestedOrigin.protocol !== 'anthropic-messages') ||
+      (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
+      (usageKind != null &&
+        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) ||
+      (finishKind != null &&
+        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
+    ) {
+      issues.push(
+        'Provider identity and evidence require their original protocol and outcome.',
+      );
+    }
+    if (
+      result.finishReason !== 'length' &&
+      result.finishReason !== 'content-filter' &&
+      result.finishReason !== 'context-window-exceeded' &&
+      result.content.some(
+        (part) =>
+          part.evidence != null &&
+          'status' in part.evidence &&
+          part.evidence.status === 'incomplete',
+      )
+    ) {
+      issues.push({
+        path: ['content'],
+        issue: 'Incomplete provider items require an incomplete turn outcome.',
+      });
+    }
+    if (
+      result.continuation &&
+      !sameModelOrigin(result.requestedOrigin, result.continuation.origin)
+    ) {
+      issues.push({
+        path: ['continuation'],
+        issue: 'Continuation belongs to another model origin.',
+      });
+    }
+    return issues;
+  }),
 );
 const EditorTurnResultSchema = Schema.Struct({
   kind: Schema.Literal('editor'),
@@ -677,13 +568,8 @@ const EditorTurnResultSchema = Schema.Struct({
   usage: Schema.Null,
   content: EditorContentSchema,
 }).check(
-  Schema.makeFilter(
-    (result, ctx) =>
-      validateAssistantContent(
-        result.requestedOrigin,
-        result.content,
-        ctx,
-      ) /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((result, ctx) => validateAssistantContent(result.requestedOrigin, result.content, ctx))` */,
+  Schema.makeFilter((result) =>
+    validateAssistantContent(result.requestedOrigin, result.content),
   ),
 );
 /** A completed provider turn, not a completed agent execution. */
@@ -728,9 +614,7 @@ const HttpCompletedEventSchema = CompletedEventSchema.mapFields(
 /** A streamed turn's event as data, as an editor's model sends it over. */
 export const TurnEventSchema = Schema.Union([
   IdentifiedEventSchema,
-
   DeltaEventSchema,
-
   CompletedEventSchema,
 ]);
 /** A streamed turn's event: its identity, a text delta, or the result. */
@@ -743,13 +627,12 @@ export const BackgroundSubmissionSchema = Schema.Union([
     operation: RemoteOperationSchema,
     returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   }),
-
   HttpCompletedEventSchema,
 ]);
 /** {@link BackgroundSubmissionSchema}'s value. */
 export type BackgroundSubmission = typeof BackgroundSubmissionSchema.Type;
 const SequenceSchema = Schema.Struct({
-  afterSequence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  afterSequence: CountSchema,
 });
 /** A delivered sequence is not a durable acknowledgement by its consumer. */
 const SequencedBackgroundEventSchema = Schema.Union([
@@ -763,9 +646,7 @@ const SequencedBackgroundEventSchema = Schema.Union([
       ),
     }),
   ),
-
   DeltaEventSchema.mapFields(Struct.assign(SequenceSchema.fields)),
-
   HttpCompletedEventSchema.mapFields(
     Struct.assign({
       ...SequenceSchema.fields,
@@ -776,13 +657,11 @@ const SequencedBackgroundEventSchema = Schema.Union([
       ),
     }),
   ),
-
   SequenceSchema.mapFields(Struct.assign({ kind: Schema.Literal('cursor') })),
 ]);
 /** Polling can report identity and completion, but cannot invent stream progress. */
 export const BackgroundEventSchema = Schema.Union([
   SequencedBackgroundEventSchema,
-
   IdentifiedEventSchema.mapFields(
     Struct.assign({
       afterSequence: Schema.Null,
@@ -793,7 +672,6 @@ export const BackgroundEventSchema = Schema.Union([
       ),
     }),
   ),
-
   HttpCompletedEventSchema.mapFields(
     Struct.assign({
       afterSequence: Schema.Null,
@@ -809,15 +687,14 @@ export const BackgroundEventSchema = Schema.Union([
 export type BackgroundEvent = typeof BackgroundEventSchema.Type;
 /** Absolute original deadline; reconnecting does not replenish it. */
 export const ObservationPolicySchema = Schema.Struct({
-  deadlineAtMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  deadlineAtMs: CountSchema,
 });
 
 /** The bytes an upload takes. */
 export const FileUploadSchema = Schema.Struct({
   mimeType: Schema.String.check(Schema.isMinLength(1)),
   filename: Schema.String.check(Schema.isMinLength(1)),
-  base64:
-    Schema.String /* TODO(effect-schema): z.base64: add the string check; was `z.base64()` */,
+  base64: Schema.String.check(Schema.isBase64()),
 });
 /** {@link FileUploadSchema}'s value. */
 export type FileUpload = typeof FileUploadSchema.Type;

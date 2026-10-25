@@ -65,8 +65,8 @@ export interface SubscriptionOAuthClient {
 
 /** Provider-specific policy: every magic URL/claim out of the machine. */
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
-  /** Zod schema for the persisted session bundle. */
-  readonly sessionSchema: Schema.Codec<S>;
+  /** The persisted session bundle's schema. */
+  readonly sessionSchema: Schema.Codec<S, unknown>;
   /** Form token endpoint the default client grants against. */
   readonly tokenEndpoint: OAuthFormEndpoint;
   readonly notSignedInMessage: string;
@@ -170,16 +170,16 @@ export class SubscriptionOAuthCoordinator<
     ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
       const raw = yield* this.storage.get();
       if (!raw) return null;
-      const parsedJson = Result.try({
-        try: () => JSON.parse(raw) as unknown,
-        catch: ensureError,
-      });
-      const parsed = Result.isFailure(parsedJson)
-        ? undefined
-        : this.policy.sessionSchema.safeParse(parsedJson.success);
-      if (parsed?.success) return parsed.data;
+      const parsed = Result.flatMap(
+        Result.try({
+          try: () => JSON.parse(raw) as unknown,
+          catch: ensureError,
+        }),
+        Schema.decodeUnknownResult(this.policy.sessionSchema),
+      );
+      if (Result.isSuccess(parsed)) return parsed.success;
       return yield* new SubscriptionOAuthError({
-        message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(Result.isFailure(parsedJson) ? parsedJson.failure : parsed?.error)}`,
+        message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(parsed.failure)}`,
         kind: 'fatal',
       });
     },

@@ -29,10 +29,10 @@ export type {
   TurnEvent,
   TurnRequest,
   TurnResult,
-  TurnUsage,
   UnreleasedUpload,
   VscodeLanguageModelConfiguration,
 } from './turn.js';
+export type { TurnUsage } from './turnUsage.js';
 export {
   checkPreparedHistory,
   JsonObjectSchema,
