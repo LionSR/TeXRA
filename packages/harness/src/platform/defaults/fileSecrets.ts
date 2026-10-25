@@ -15,19 +15,15 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import {
-  Cause,
-  Effect,
-  FileSystem,
-  type PlatformError,
-  Schedule,
-  Stream,
-} from 'effect';
+import { Cause, Effect, FileSystem, type PlatformError, Stream } from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import {
+  absentReason,
+  fileWatchRetrySchedule,
+} from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
@@ -150,15 +146,7 @@ export class FileSecrets implements PlatformSecrets {
         mode: DIRECTORY_MODE,
       });
       yield* fs.watch(directory).pipe(
-        Stream.retry(
-          Schedule.exponential('1 second').pipe(
-            Schedule.upTo({ times: 5 }),
-            Schedule.while(
-              ({ input }: { readonly input: PlatformError.PlatformError }) =>
-                input.reason._tag === 'Unknown',
-            ),
-          ),
-        ),
+        Stream.retry(fileWatchRetrySchedule),
         Stream.map((event) => path.basename(event.path)),
         // A staged file's rename is reported under either name: the key's
         // file says which key, a staged name (macOS) only that one changed.
