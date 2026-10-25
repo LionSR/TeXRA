@@ -51,6 +51,25 @@ requests that already pass through it, and `runActionGuard.resuming` restates
 `sweepLeftoverRuns.runningRuns` is a third liveness rule (phase-based) that
 keeps a crashed owner's shell forever.
 
+## Landed
+
+F1 and part of F2 and F3 landed in #14261 (`f5c5f063f3`), F5 in #14266
+(`3e474178c5`); each finding's section records what landed and what did not.
+
+## Still open
+
+- **F2, the rest.** `blocked` is still decided by the resume alone, so a
+  message to a blocked run gives the user two notices; `refusalFor` and the
+  `Exclude` views of `FollowUpFailureReason` remain.
+- **F3, the rest.** One shared `runEndFromEvents` for `needsWake`,
+  `heldParks` and `sweepLeftoverRuns`.
+- **F4.** Not buildable as proposed; it needs the owner's pick among the three
+  designs in its section.
+- **F6.** All five items, as listed: `Resumes.inFlight`, the host's re-gating
+  in `runActionGuard.require`, `runActionGuard.resuming` against `Resumes`,
+  `isChildResult`, and `sweepLeftoverRuns.runningRuns`.
+- **The ratchet proposals** in "Why the ratchets miss this".
+
 ## Findings
 
 ### F1. A stop in progress: four forms, two lifetimes, a sweep for the gap
@@ -208,6 +227,12 @@ Deleted: `heldParks`' inline `since` (~5), `needsWake`'s own `findLast` (~3),
 `sweepLeftoverRuns`' `ended` map (~6). About 15 lines; the gain is one scope
 rule rather than lines.
 
+**Landed in part in #14261 (2026-10-24):** `needsWake` reads the run's current
+lifecycle (`findLast(run.end | run.activate)`, the rule `runEndFromEvents`
+has), so the scenario above wakes R for its child's delivery. Not done: the
+rule is still spelled in `needsWake`, `heldParks` and `sweepLeftoverRuns`
+rather than called from one shared `runEndFromEvents`.
+
 ### F4. A held result was delivered: one fact, two rows, an observer in between
 
 **Verified 2026-10-24, not built:** the caveat below fails. The cold listing
@@ -269,7 +294,7 @@ resume already does. `deliverHeld` reads rows directly and is unaffected.
 
 ### F5. Stop-reason precedence: stated twice, oppositely, held three times
 
-**Built 2026-10-24 (PR from `refactor/stop-reason-one-owner`):** the CLI
+**Landed in #14266 (2026-10-24):** the CLI
 holds no reason; the registry entry's `stopReason` is the one holder and its
 precedence the one rule. The CLI keeps two booleans, each its own fact, not
 a copy: `RootRunClaim.stop` (a stop was asked of this claim's run; consumed
