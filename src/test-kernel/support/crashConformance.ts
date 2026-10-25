@@ -72,6 +72,7 @@ import {
   Effect,
   Fiber,
   RcMap,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -762,7 +763,7 @@ export function crashConformanceSuite(plugins: string): void {
                 testRuntime(),
                 session.runs.launch({
                   request: {
-                    config: AgentConfigSchema.parse({
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
                       agent: 'golden_crash',
                       model: 'gpt56',
                       instruction: 'Work through the crash task.',
@@ -967,7 +968,7 @@ export function crashConformanceSuite(plugins: string): void {
                   testRuntime(),
                   session.runs.launch({
                     request: {
-                      config: AgentConfigSchema.parse({
+                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
                         agent: 'golden_delivery',
                         model: 'gpt56',
                         instruction: 'Send the children off.',
@@ -1185,7 +1186,7 @@ export function crashConformanceSuite(plugins: string): void {
                   testRuntime(),
                   session.runs.launch({
                     request: {
-                      config: AgentConfigSchema.parse(
+                      config: Schema.decodeUnknownSync(AgentConfigSchema)(
                         asDocumentTask({
                           agent: 'polish',
                           agentSource: 'builtIn',

@@ -4,11 +4,10 @@ import { once } from 'node:events';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Fiber, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { z } from 'zod';
 import {
   type BackgroundEvent,
   completedTurn,
@@ -913,7 +912,9 @@ describe('native OpenAI Responses protocol', () => {
             {
               name: 'memory',
               description: 'Read memory.',
-              zodSchema: z.object({ view_range: ViewRangeSchema.nullish() }),
+              schema: Schema.Struct({
+                view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)),
+              }),
             },
           ]),
         });
@@ -1182,7 +1183,7 @@ describe('native OpenAI Responses protocol', () => {
         const resumed = yield* Stream.runCollect(
           model.background.observe(
             turn,
-            RemoteOperationSchema.parse({
+            Schema.decodeUnknownSync(RemoteOperationSchema)({
               ...accepted.operation,
               afterSequence: 3,
             }),
@@ -1264,7 +1265,7 @@ describe('native OpenAI Responses protocol', () => {
           { ...nextRequest, system: 'changed' },
           {
             ...nextRequest,
-            continuation: ContinuationSchema.parse({
+            continuation: Schema.decodeUnknownSync(ContinuationSchema)({
               ...continuation,
               anchor: { ...continuation.anchor, coveredItems: 4 },
             }),

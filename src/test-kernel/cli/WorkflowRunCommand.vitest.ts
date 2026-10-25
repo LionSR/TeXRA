@@ -11,7 +11,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Schema } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
@@ -295,7 +295,7 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         {
           type: 'run.config',
           aggregateId: qualifyAggregateId('run', runId as RunId),
-          config: RunRecordFieldsSchema.parse(
+          config: Schema.decodeUnknownSync(RunRecordFieldsSchema)(
             asDocumentTask({
               agent: 'polish',
               model: 'test-model',

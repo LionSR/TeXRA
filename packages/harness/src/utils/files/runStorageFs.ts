@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Path } from 'effect';
+import { Effect, FileSystem, Path, Result, Schema } from 'effect';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -96,13 +96,13 @@ export function runStorageLocationUnder(
   if (!runRelativePath) return undefined;
 
   const [rawRunId, ...entrySegments] = getPathSegments(runRelativePath);
-  const runId = RunIdSchema.safeParse(rawRunId);
-  if (!runId.success || entrySegments.length === 0) return undefined;
+  const runId = Schema.decodeUnknownResult(RunIdSchema)(rawRunId);
+  if (Result.isFailure(runId) || entrySegments.length === 0) return undefined;
 
   return createRunStorageLocation(
     path.resolve(root, runRelativePath),
     entrySegments.join('/'),
-    runId.data,
+    runId.success,
   );
 }
 

@@ -1,6 +1,5 @@
-import { Result } from 'effect';
+import { Result, Schema } from 'effect';
 import * as yaml from 'yaml';
-import { type ZodType } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -22,24 +21,24 @@ export function safeParseYaml(text: string): Result.Result<unknown, Error> {
 }
 
 /**
- * Parse YAML text and validate the result against a Zod schema, without
+ * Parse YAML text and decode the result with a schema, without
  * throwing. A parse failure or a schema mismatch both yield a
  * `Result.Failure<Error>`; on success the `Result.Success` value is the
  * validated, typed result.
  *
- * Prefer this over `yaml.parse(text) as T` / `Schema.parse(yaml.parse(text))`
+ * Prefer this over `yaml.parse(text) as T` / a sync decode of `yaml.parse(text)`
  * whenever the text comes from an untrusted source (disk, network, remote
  * config): the cast lies if the bytes don't match `T`, whereas this surfaces
  * the mismatch as an error with a uniform shape across call sites.
  */
 export function parseYamlWith<T>(
   text: string,
-  schema: ZodType<T>,
+  schema: Schema.Codec<T, unknown>,
 ): Result.Result<T, Error> {
   return Result.flatMap(safeParseYaml(text), (value) => {
-    const result = schema.safeParse(value);
-    return result.success
-      ? Result.succeed(result.data)
-      : Result.fail(result.error);
+    const result = Schema.decodeUnknownResult(schema)(value);
+    return Result.isSuccess(result)
+      ? Result.succeed(result.success)
+      : Result.fail(result.failure);
   });
 }

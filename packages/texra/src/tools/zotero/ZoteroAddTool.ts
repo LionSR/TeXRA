@@ -17,8 +17,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -37,25 +36,35 @@ import {
  * Schema for a single item to add to Zotero.
  * Supports a URL snapshot or manual metadata entry.
  */
-const ZoteroItemSchema = z
-  .strictObject({
-    url: z
-      .string()
-      .describe(
-        'URL of the item. Given alone, Zotero saves a snapshot of the page and extracts its metadata from it; given with any other field, the item is saved with exactly the metadata provided and this URL as its URL field.',
-      )
-      .nullish(),
-    title: z
-      .string()
-      .describe('Title of the item (required if URL is not provided).')
-      .nullish(),
-    authors: z
-      .array(z.string())
-      .describe('List of author names (e.g., ["John Smith", "Jane Doe"]).')
-      .nullish(),
-    year: z.string().describe('Publication year.').nullish(),
-    itemType: z
-      .enum([
+const ZoteroItemSchema = Schema.Struct({
+  url: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description:
+          'URL of the item. Given alone, Zotero saves a snapshot of the page and extracts its metadata from it; given with any other field, the item is saved with exactly the metadata provided and this URL as its URL field.',
+      }),
+    ),
+  ),
+  title: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description: 'Title of the item (required if URL is not provided).',
+      }),
+    ),
+  ),
+  authors: Schema.optional(
+    Schema.NullOr(
+      Schema.Array(Schema.String).annotate({
+        description: 'List of author names (e.g., ["John Smith", "Jane Doe"]).',
+      }),
+    ),
+  ),
+  year: Schema.optional(
+    Schema.NullOr(Schema.String.annotate({ description: 'Publication year.' })),
+  ),
+  itemType: Schema.optional(
+    Schema.NullOr(
+      Schema.Literals([
         'journalArticle',
         'book',
         'bookSection',
@@ -64,38 +73,54 @@ const ZoteroItemSchema = z
         'report',
         'webpage',
         'preprint',
-      ])
-      .describe(
-        'Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints: never use "webpage" for preprints.',
-      )
-      .nullish(),
-    abstract: z.string().describe('Abstract of the item.').nullish(),
-    publicationTitle: z
-      .string()
-      .describe('Journal or publication name.')
-      .nullish(),
-    volume: z.string().describe('Volume number.').nullish(),
-    issue: z.string().describe('Issue number.').nullish(),
-    pages: z.string().describe('Page range (e.g., "123-456").').nullish(),
-  })
-  .refine(
-    (data) => data.url || data.title,
-    'At least one of url or title must be provided.',
-  );
+      ]).annotate({
+        description:
+          'Type of the item. Defaults to journalArticle. Use "preprint" for arXiv papers and other preprints: never use "webpage" for preprints.',
+      }),
+    ),
+  ),
+  abstract: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({ description: 'Abstract of the item.' }),
+    ),
+  ),
+  publicationTitle: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({ description: 'Journal or publication name.' }),
+    ),
+  ),
+  volume: Schema.optional(
+    Schema.NullOr(Schema.String.annotate({ description: 'Volume number.' })),
+  ),
+  issue: Schema.optional(
+    Schema.NullOr(Schema.String.annotate({ description: 'Issue number.' })),
+  ),
+  pages: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({ description: 'Page range (e.g., "123-456").' }),
+    ),
+  ),
+}).check(
+  Schema.makeFilter((data) => Boolean(data.url || data.title), {
+    message: 'At least one of url or title must be provided.',
+  }),
+);
 
-const ZoteroAddInputSchema = z.strictObject({
-  items: z
-    .array(ZoteroItemSchema)
-    .min(1, 'At least one item must be provided.')
-    .max(10, 'Maximum 10 items can be added at once.')
-    .describe('List of items to add to Zotero.'),
-  collection: z
-    .string()
-    .describe('Optional collection key to add items to.')
-    .nullish(),
+const ZoteroAddInputSchema = Schema.Struct({
+  items: Schema.Array(ZoteroItemSchema)
+    .check(Schema.isMinLength(1))
+    .check(Schema.isMaxLength(10))
+    .annotate({ description: 'List of items to add to Zotero.' }),
+  collection: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description: 'Optional collection key to add items to.',
+      }),
+    ),
+  ),
 });
 
-type ZoteroAddInput = z.infer<typeof ZoteroAddInputSchema>;
+type ZoteroAddInput = typeof ZoteroAddInputSchema.Type;
 
 /** A Zotero Connector `saveItems` creator entry: a parsed given/family name,
  *  or a single opaque name for organizations and unparsed CSL literals. */
@@ -120,9 +145,7 @@ interface ZoteroConnectorItem {
 /**
  * Convert our item schema to Zotero Connector format.
  */
-function toZoteroItem(
-  item: z.infer<typeof ZoteroItemSchema>,
-): ZoteroConnectorItem {
+function toZoteroItem(item: typeof ZoteroItemSchema.Type): ZoteroConnectorItem {
   // Parse authors into Zotero creator format
   const creators: ZoteroCreator[] | undefined = item.authors?.length
     ? item.authors.map((name) => {
@@ -158,7 +181,7 @@ function toZoteroItem(
  * metadata, so sending one for an item that has some would drop it.
  */
 const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
-  item: z.infer<typeof ZoteroItemSchema>,
+  item: typeof ZoteroItemSchema.Type,
   port: number,
   collectionBody: object,
 ) {

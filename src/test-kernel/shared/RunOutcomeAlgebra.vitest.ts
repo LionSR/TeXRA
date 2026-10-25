@@ -3,12 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  RunPhaseSchema,
-  type RunPhase,
-} from '@shared/schemas';
+import { RUN_OUTCOME, RUN_PHASE, type RunPhase } from '@shared/schemas';
 import {
   deriveRunOutcome,
   isActivePhase,
@@ -87,7 +82,7 @@ describe('run phase membership predicates', () => {
   };
 
   it('classifies every phase, and treats absence as no-run-yet', () => {
-    for (const phase of RunPhaseSchema.options) {
+    for (const phase of Object.values(RUN_PHASE)) {
       expect(isActivePhase(phase)).toBe(membership[phase].active);
       expect(isInFlightPhase(phase)).toBe(membership[phase].inFlight);
       expect(isTerminalOutcomePhase(phase)).toBe(
@@ -101,7 +96,7 @@ describe('run phase membership predicates', () => {
   });
 
   it('makes every terminal outcome phase a RunOutcome', () => {
-    const terminalPhases = RunPhaseSchema.options.filter(
+    const terminalPhases = Object.values(RUN_PHASE).filter(
       isTerminalOutcomePhase,
     );
     expect(new Set<string>(terminalPhases)).toEqual(

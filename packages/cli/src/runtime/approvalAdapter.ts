@@ -83,7 +83,7 @@ const askHeadlessUserQuestion = Effect.fn(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ) {
-  const answers: UserQuestionAnswers = {};
+  const answers: Record<string, UserQuestionAnswers[string]> = {};
   const asked = yield* Effect.result(
     Effect.forEach(payload.questions, (question) =>
       Effect.gen(function* () {

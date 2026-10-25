@@ -91,8 +91,7 @@
     "@effect/platform-node": "catalog:peers",
     "@effect/sql-sqlite-node": "catalog:peers",
     "@texra-ai/llm": "workspace:^",
-    "effect": "catalog:peers",
-    "zod": "^4.4.3"
+    "effect": "catalog:peers"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
@@ -107,7 +106,6 @@
     "effect": "catalog:",
     "esbuild": "catalog:",
     "quickjs-emscripten-core": "catalog:",
-    "typescript": "catalog:",
-    "zod": "catalog:"
+    "typescript": "catalog:"
   }
 }

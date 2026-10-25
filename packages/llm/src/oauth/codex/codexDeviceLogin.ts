@@ -11,7 +11,7 @@
  * runs to completion once started.
  */
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports - oauth
 import {
@@ -36,9 +36,10 @@ import type { HttpClient } from 'effect/http';
 const DEVICE_TIMEOUT_FALLBACK_MS = 15 * 60 * 1000;
 
 /** The usercode endpoint answered without a code to show the user. */
-class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
-  readonly message: string;
-}> {}
+class DeviceCodeMissing extends Schema.TaggedError<DeviceCodeMissing>()(
+  'DeviceCodeMissing',
+  { message: Schema.String },
+) {}
 
 /**
  * Run the device-code flow end to end and persist the session. Succeeds with

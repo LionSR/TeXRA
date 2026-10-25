@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect } from 'effect';
+import { Clock, Effect, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -306,7 +306,7 @@ export const withResponsesContinuation = Effect.fn(
       content: result.content,
     },
   ];
-  const continuation = ContinuationSchema.parse({
+  const continuation = Schema.decodeUnknownSync(ContinuationSchema)({
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
     prefixFingerprint: prefixFingerprint(

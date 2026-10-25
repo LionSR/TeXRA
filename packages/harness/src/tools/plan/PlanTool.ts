@@ -7,8 +7,7 @@
  */
 
 // Third-party imports
-import { Effect, SubscriptionRef } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
@@ -43,7 +42,7 @@ const GOAL_TITLE = 'Goal';
 const PLAN = 'plan';
 
 /** The run a plan answered with a goal launched, on its result. */
-const LaunchedSchema = z.object({ runId: RunIdSchema });
+const LaunchedSchema = Schema.Struct({ runId: RunIdSchema });
 
 /** How long a goal's script may run: the longest a script may. */
 const GOAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -58,18 +57,16 @@ const GOAL_AUTO_APPROVALS: Record<
   allAgentWork: ['superYolo', 'toolEdit', 'bash'],
 };
 
-const PlanToolInputSchema = z.strictObject({
-  objective: z
-    .string()
-    .min(1)
-    .describe(
+const PlanToolInputSchema = Schema.Struct({
+  objective: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'The plan document: what to achieve, the intended approach, and a ' +
-        'verifiable stopping condition. Plain prose or markdown - no ' +
-        'structured steps.',
-    ),
+      'verifiable stopping condition. Plain prose or markdown - no ' +
+      'structured steps.',
+  }),
 });
 
-type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
+type PlanToolInput = typeof PlanToolInputSchema.Type;
 
 function buildApprovedResult(): ToolResult {
   return executed(
@@ -139,9 +136,13 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     .flatMap((row) => {
       if (row.type !== 'tool.result') return [];
       const { responseId, callId, result } = row.payload;
-      const goal =
+      const launched =
         result.status === 'executed'
-          ? LaunchedSchema.safeParse(result.value).data?.runId
+          ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)
+          : undefined;
+      const goal =
+        launched !== undefined && Result.isSuccess(launched)
+          ? launched.success.runId
           : undefined;
       return goal !== undefined && plans.has(`${responseId}/${callId}`)
         ? [goal]

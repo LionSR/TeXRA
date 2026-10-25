@@ -19,9 +19,8 @@
  * no tools, with a warning in the process log; the run that names it shows
  * the failure in its transcript.
  */
-import { Data, Duration, Effect, Exit, Fiber, Scope, Stream } from 'effect';
+import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
-import { z } from 'zod';
 
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import {
@@ -62,43 +61,50 @@ const NAME_HASH_LENGTH = 12;
 const SENSITIVE_ENV_NAME = /KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i;
 
 /** The server could not be spawned, initialized or listed. */
-class McpStartError extends Data.TaggedError('McpStartError')<{
-  readonly message: string;
-}> {}
+class McpStartError extends Schema.TaggedError<McpStartError>()(
+  'McpStartError',
+  { message: Schema.String },
+) {}
 
-const InitializeResultSchema = z.looseObject({
-  protocolVersion: z.string(),
-  capabilities: z.record(z.string(), z.unknown()),
+// Result shapes name only the fields read here; a struct drops the rest.
+const InitializeResultSchema = Schema.Struct({
+  protocolVersion: Schema.String,
+  capabilities: Schema.Record(Schema.String, Schema.Unknown),
 });
 
-const ListToolsResultSchema = z.looseObject({
-  tools: z.array(
-    z.looseObject({
-      name: z.string().min(1),
-      description: z.string().nullish(),
-      inputSchema: z.record(z.string(), z.unknown()),
+const ListToolsResultSchema = Schema.Struct({
+  tools: Schema.Array(
+    Schema.Struct({
+      name: Schema.String.check(Schema.isMinLength(1)),
+      description: Schema.optional(Schema.NullOr(Schema.String)),
+      inputSchema: Schema.Record(Schema.String, Schema.Unknown),
       /** MCP `ToolAnnotations`: hints only, each `false` when absent. */
-      annotations: z
-        .looseObject({
-          readOnlyHint: z.boolean().nullish(),
-          idempotentHint: z.boolean().nullish(),
-        })
-        .nullish(),
+      annotations: Schema.optional(
+        Schema.NullOr(
+          Schema.Struct({
+            readOnlyHint: Schema.optional(Schema.NullOr(Schema.Boolean)),
+            idempotentHint: Schema.optional(Schema.NullOr(Schema.Boolean)),
+          }),
+        ),
+      ),
     }),
   ),
-  nextCursor: z.string().nullish(),
+  nextCursor: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
-const CallToolResultSchema = z.looseObject({
-  content: z
-    .array(z.looseObject({ type: z.string(), text: z.string().nullish() }))
-    .prefault([]),
-  structuredContent: z.unknown().optional(),
-  isError: z.boolean().nullish(),
+const CallToolResultSchema = Schema.Struct({
+  content: Schema.Array(
+    Schema.Struct({
+      type: Schema.String,
+      text: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  structuredContent: Schema.optional(Schema.Unknown),
+  isError: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });
 
 /** A call's arguments: the JSON object the server's schema describes. */
-const McpArgumentsSchema = z.record(z.string(), z.unknown());
+const McpArgumentsSchema = Schema.Record(Schema.String, Schema.Unknown);
 
 /** The plugin id of the server named `server`. */
 export const mcpPluginId = (server: string): string => `mcp:${server}`;
@@ -149,24 +155,23 @@ const serverEnv = (config: McpServerConfig) =>
   });
 
 const decode = <T>(
-  schema: z.ZodType<T>,
+  schema: Schema.Codec<T>,
   value: unknown,
   what: string,
-): Effect.Effect<T, McpStartError> => {
-  const parsed = schema.safeParse(value);
-  return parsed.success
-    ? Effect.succeed(parsed.data)
-    : Effect.fail(
+): Effect.Effect<T, McpStartError> =>
+  Schema.decodeUnknownEffect(schema)(value).pipe(
+    Effect.mapError(
+      (error) =>
         new McpStartError({
-          message: `Malformed ${what} result: ${z.prettifyError(parsed.error)}`,
+          message: `Malformed ${what} result: ${error.message}`,
         }),
-      );
-};
+    ),
+  );
 
 /** The text a call result carries, cut head and tail past the cap a shell
  *  command's output takes, since a long result's summary or error sits at
  *  its end. */
-function resultText(result: z.infer<typeof CallToolResultSchema>): string {
+function resultText(result: typeof CallToolResultSchema.Type): string {
   const parts = result.content.map((item) =>
     item.type === 'text' && item.text != null
       ? item.text
@@ -187,7 +192,7 @@ function resultText(result: z.infer<typeof CallToolResultSchema>): string {
 function mcpTool(
   server: string,
   rpc: JsonRpcConnection,
-  listed: z.infer<typeof ListToolsResultSchema>['tools'][number],
+  listed: (typeof ListToolsResultSchema.Type)['tools'][number],
 ): RuntimeTool {
   const name = mcpToolName(server, listed.name);
   const describe = (input: unknown) =>
@@ -218,22 +223,17 @@ function mcpTool(
       cwd: 'unknown',
     },
     call: (rawInput) => {
-      const args = McpArgumentsSchema.safeParse(rawInput);
-      if (!args.success)
+      if (!Schema.is(McpArgumentsSchema)(rawInput))
         return Effect.succeed(
           errorResult('Invalid input: the arguments must be a JSON object.'),
         );
       return rpc
-        .request('tools/call', { name: listed.name, arguments: args.data })
+        .request('tools/call', { name: listed.name, arguments: rawInput })
         .pipe(
-          Effect.map((raw): ToolResult => {
-            const result = CallToolResultSchema.safeParse(raw);
-            if (!result.success)
-              return errorResult(
-                `MCP server "${server}" returned a malformed result: ${z.prettifyError(result.error)}`,
-              );
-            const text = resultText(result.data);
-            return result.data.isError === true
+          Effect.flatMap(Schema.decodeUnknownEffect(CallToolResultSchema)),
+          Effect.map((result): ToolResult => {
+            const text = resultText(result);
+            return result.isError === true
               ? errorResult(text || `${listed.name} failed.`)
               : executed(text, `${server}: ${listed.name}`);
           }),
@@ -246,14 +246,14 @@ function mcpTool(
                 ),
               ),
           }),
-          Effect.catchTag(
-            ['JsonRpcRequestError', 'JsonRpcConnectionDisposed'],
-            (error) =>
-              Effect.succeed(
-                errorResult(
-                  `MCP server "${server}" failed ${listed.name}: ${error.message}`,
-                ),
+          Effect.catch((error) =>
+            Effect.succeed(
+              errorResult(
+                error._tag === 'SchemaError'
+                  ? `MCP server "${server}" returned a malformed result: ${error.message}`
+                  : `MCP server "${server}" failed ${listed.name}: ${error.message}`,
               ),
+            ),
           ),
         );
     },

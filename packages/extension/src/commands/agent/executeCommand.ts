@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z, ZodError } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { AgentConfigSchema, ensureError } from '@texra-ai/harness/schemas';
@@ -13,11 +12,11 @@ const CHANNEL = 'ExecuteCommand';
  * The "wrapped" launch shape — `{ config, ... }` — as opposed to
  * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
  * comment). `config` is validated separately against `AgentConfigSchema`, so
- * it stays `z.unknown()` here.
+ * it stays `Schema.Unknown` here.
  */
-const WrappedExecuteInputSchema = z.object({
-  config: z.unknown(),
-  preferHelperModel: z.boolean().optional(),
+const WrappedExecuteInputSchema = Schema.Struct({
+  config: Schema.Unknown,
+  preferHelperModel: Schema.optional(Schema.Boolean),
 });
 
 /**
@@ -36,14 +35,16 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     try: () => {
       const wrapped =
         input !== null && typeof input === 'object' && 'config' in input
-          ? WrappedExecuteInputSchema.parse(input)
+          ? Schema.decodeUnknownSync(WrappedExecuteInputSchema)(input)
           : null;
-      const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
+      const config = Schema.decodeUnknownSync(AgentConfigSchema)(
+        wrapped ? wrapped.config : input,
+      );
       return { wrapped, config };
     },
     catch: (error) =>
-      error instanceof ZodError
-        ? new Error(`Invalid agent configuration. ${z.prettifyError(error)}`, {
+      error instanceof Schema.SchemaError
+        ? new Error(`Invalid agent configuration. ${error.message}`, {
             cause: error,
           })
         : ensureError(error),

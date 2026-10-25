@@ -1,26 +1,21 @@
 /**
- * The session's requests: the approval prompt lanes, the run's approval
- * grants, and the {@link SessionRequests} value they are reached through.
+ * The session's approvals: the prompt lanes, a run's grants, and how a
+ * request's session write or claim fails it.
  *
  * A run's grants have one owner, its `approval.policy` rows: a change is an
  * awaited commit of the run's next grants, read back from the rows, never a
  * value held here and published after. What a run's prompts bypass is read
  * from the session view on every check (`resolveBypass`), its own grants
  * first and then its ancestry's while the parent edge stands, so a toggle on
- * a parent reaches every descendant without a row of theirs.
- *
- * One value per session: two sessions queue and answer their
- * approvals independently. It is reached through the session itself
- * (`SessionHandle.approvals`), never from context.
+ * a parent reaches every descendant without a row of theirs. One value per
+ * session, reached through the session itself (`SessionHandle.approvals`),
+ * never from context.
  */
-
 import { Effect, SubscriptionRef } from 'effect';
-
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
-
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
@@ -37,29 +32,32 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
+import {
+  DatabaseClaimRefused,
+  heldElsewhereBy,
+  type DatabaseNotOwner,
+  type DatabaseReadFailed,
+  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
-  writeRejection,
+  NotOwner,
+  Rejected,
+  Unavailable,
+  type Outcome,
   type RequestError,
-} from '@shared/session/requestErrors';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+  type RuntimeRequest,
+} from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-
 import type { SessionHandle } from './SessionHandle';
 
 /**
- * One queued approval. `bypassed` exists because the queue can hold a request
- * behind another run prompt for arbitrarily long: if the user turns the
- * run's bypass on while this one waits (typically by answering the prompt
- * ahead of it with "approve and stop asking"), prompting anyway would ignore
- * the decision they just made.
+ * One queued approval. A request can wait behind another prompt for long:
+ * if the user turns the run's bypass on meanwhile (say by answering the one
+ * ahead with "approve and stop asking"), `bypassed` honours that decision
+ * instead of prompting anyway.
  */
 interface QueuedApproval<A, E, R> {
   /** Open the request and wait for its decision. */
@@ -70,10 +68,6 @@ interface QueuedApproval<A, E, R> {
 
 /** The kinds whose prompts queue one at a time per run. */
 type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
-
-/** A write of a run's grants refused: the store's own refusals. */
-type GrantWriteError =
-  DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
 /** A run's grants as its rows record them: the latest `approval.policy`,
  *  else the snapshot its `run.start` carried. */
@@ -115,6 +109,13 @@ const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
   JSON.stringify([a.own, [...a.goal].sort(), a.limit]) ===
   JSON.stringify([b.own, [...b.goal].sort(), b.limit]);
 
+/** The `approval.policy` row that records `snapshot` as a run's grants. */
+const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
+  type: 'approval.policy' as const,
+  aggregateId: qualifyAggregateId('run', runId),
+  snapshot,
+});
+
 /**
  * The session's approvals: prompt lanes and the run's grants. Enforcement
  * reads {@link bypass}; every change goes through {@link change}.
@@ -144,7 +145,10 @@ export interface SessionApprovals {
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
     rows?: readonly UnfoldedDraft[],
-  ): Effect.Effect<void, GrantWriteError>;
+  ): Effect.Effect<
+    void,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /**
    * The grants row a run's activation commits beside its `run.activate`, if
    * any (`afterActivation`), read from the rows of the run and its ancestry,
@@ -171,9 +175,8 @@ export function createSessionApprovals(
   session: () => Pick<SessionHandle, 'view' | 'log' | 'roots'>,
 ): SessionApprovals {
   const view = () => SubscriptionRef.getUnsafe(session().view.ref);
-  // One exclusive lane per kind and run: the queue a run's prompts take in
-  // turn. `withPerKeyLane` owns the entries, so a lane leaves its map once
-  // its last prompt settles.
+  // One lane per kind and run, which the run's prompts take in turn;
+  // `withPerKeyLane` drops a lane from its map once its last prompt settles.
   const lanes: Record<QueuedKind, Map<RunId | undefined, PerKeyLane>> = {
     bash: new Map(),
     toolEdit: new Map(),
@@ -214,15 +217,7 @@ export function createSessionApprovals(
           runId,
           policy.get(runId) ?? NO_APPROVAL_GRANTS,
         );
-        return next === null
-          ? []
-          : [
-              {
-                type: 'approval.policy' as const,
-                aggregateId: qualifyAggregateId('run', runId),
-                snapshot: next,
-              },
-            ];
+        return next === null ? [] : [policyRow(runId, next)];
       }),
     change: (runId, edit, rows = []) => {
       // The claim holder's own grants are folded by the time each change
@@ -238,17 +233,10 @@ export function createSessionApprovals(
         Effect.gen(function* () {
           const recorded = recordedGrants(yield* session().log.records(runId));
           const next = edit(recorded);
-          const policy: readonly UnfoldedDraft[] = sameGrants(recorded, next)
-            ? []
-            : [
-                {
-                  type: 'approval.policy',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  snapshot: next,
-                },
-              ];
-          if (rows.length + policy.length > 0)
-            yield* tx.append([...rows, ...policy]);
+          const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
+            ? rows
+            : [...rows, policyRow(runId, next)];
+          if (all.length > 0) yield* tx.append(all);
         }),
       );
     },
@@ -275,6 +263,26 @@ export const humanGrant =
 export const goalGrant =
   (kinds: readonly ApprovalBypassKind[]) =>
   (grants: ApprovalGrants): ApprovalGrants => ({ ...grants, goal: kinds });
+
+/** How a claim the request needed fails it: `Rejected`, in the claim's own
+ *  words, when its holder could not be proven to have exited; else
+ *  `NotOwner`, another owner holding the run. */
+export const claimRejection =
+  (runId: RunId) =>
+  (error: unknown): RequestError =>
+    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
+      ? new Rejected({ reason: error.message })
+      : new NotOwner({ runId });
+
+/** How a session write the request made fails it: {@link claimRejection}
+ *  when another owner holds the run ({@link heldElsewhereBy}), else the
+ *  `Unavailable` that `unavailable` describes, a closed run's included. */
+export const writeRejection =
+  (unavailable: ConstructorParameters<typeof Unavailable>[0]) =>
+  (error: unknown): RequestError =>
+    heldElsewhereBy(error) === null
+      ? new Unavailable(unavailable)
+      : claimRejection(unavailable.runId)(error);
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;

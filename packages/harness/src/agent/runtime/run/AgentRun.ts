@@ -188,7 +188,7 @@ export const agentRunLayer = (
 
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
-      // tools. The model finishes by calling it; its own Zod schema
+      // tools. The model finishes by calling it; its own input schema
       // validates the call, and its settled result is the run's structured
       // output (`RunState.structured`).
       const outputSchema = config.outputSchema ?? undefined;
@@ -274,7 +274,7 @@ export const agentRunLayer = (
       // writes the user's stored preferences.
       const declinedRoutes: readonly DeclinableUsageRoute[] =
         persisted?.declinedRoutes ??
-        (ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : []);
+        (ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.literals : []);
       // Each binding owns a scope forked from the run's; only the one in
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.

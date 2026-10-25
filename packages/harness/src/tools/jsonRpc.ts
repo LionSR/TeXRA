@@ -24,12 +24,12 @@ import { Buffer } from 'node:buffer';
 
 import {
   type Cause,
-  Data,
   Deferred,
   Effect,
   Predicate,
   Queue,
   Ref,
+  Schema,
   type Sink,
   Stream,
 } from 'effect';
@@ -42,27 +42,30 @@ const CHANNEL = 'JsonRpcConnection';
 const METHOD_NOT_FOUND = -32601;
 
 /** The connection was closed; `message` is the closer's reason. */
-export class JsonRpcConnectionDisposed extends Data.TaggedError(
+export class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisposed>()(
   'JsonRpcConnectionDisposed',
-)<{ readonly message: string }> {}
+  { message: Schema.String },
+) {}
 
 /**
  * The peer answered a request with a JSON-RPC error. `code` is the JSON-RPC
  * error code the peer sent.
  */
-export class JsonRpcRequestError extends Data.TaggedError(
+export class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
   'JsonRpcRequestError',
-)<{
-  readonly method: string;
-  readonly message: string;
-  readonly code?: number;
-  readonly cause: unknown;
-}> {}
+  {
+    method: Schema.String,
+    message: Schema.String,
+    code: Schema.optional(Schema.Number),
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The peer sent bytes that are not an LSP frame. Ends the reader. */
-class JsonRpcFrameError extends Data.TaggedError('JsonRpcFrameError')<{
-  readonly message: string;
-}> {}
+class JsonRpcFrameError extends Schema.TaggedError<JsonRpcFrameError>()(
+  'JsonRpcFrameError',
+  { message: Schema.String },
+) {}
 
 export interface JsonRpcConnection {
   readonly request: <T>(
@@ -123,6 +126,12 @@ const HEADER_END = '\r\n\r\n';
 /** The longest line a newline-framed peer may send before the reader gives up. */
 const MAX_LINE_BYTES = 16 * 1024 * 1024;
 
+/** The unconsumed tail of a buffer and the messages split off its front. */
+type Decoded = Effect.Effect<
+  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
+  JsonRpcFrameError
+>;
+
 function encodeFrame(message: object): Uint8Array {
   const body = Buffer.from(JSON.stringify(message), 'utf8');
   return Buffer.concat([
@@ -132,12 +141,7 @@ function encodeFrame(message: object): Uint8Array {
 }
 
 /** Split complete frames off the front of `buffer`, parsing their bodies. */
-const takeFrames = (
-  buffer: Buffer,
-): Effect.Effect<
-  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
-  JsonRpcFrameError
-> =>
+const takeFrames = (buffer: Buffer): Decoded =>
   Effect.gen(function* () {
     const messages: JsonRpcMessage[] = [];
     let rest = buffer;
@@ -189,12 +193,7 @@ const parseBody = (
   );
 
 /** Split complete lines off the front of `buffer`, parsing each non-blank one. */
-const takeLines = (
-  buffer: Buffer,
-): Effect.Effect<
-  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
-  JsonRpcFrameError
-> =>
+const takeLines = (buffer: Buffer): Decoded =>
   Effect.gen(function* () {
     const messages: JsonRpcMessage[] = [];
     let rest = buffer;

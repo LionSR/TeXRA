@@ -2,7 +2,7 @@
  * Tools as TypeScript, the way a `script` sees them: `name(args: T):
  * Promise<ToolOutput>` (or the type the tool declares it resolves to,
  * `scriptReturns`), with `T` rendered from the JSON Schema the tool's
- * Zod input converts to (`convertToolSchema` before the flattening a wire
+ * input schema converts to (`convertToolSchema` before the flattening a wire
  * declaration needs, so a discriminated union stays a union of its
  * branches, and a field with a default is an optional input). The short
  * form is the one the `script` description inlines: the description's first

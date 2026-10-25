@@ -1,9 +1,13 @@
-import { Data, Effect, Equal, Redacted } from 'effect';
+import { Effect, Equal, Redacted, Schema } from 'effect';
 
 // Local imports
+import {
+  isApiProvider,
+  type ApiKeyProviderId,
+  type SecretsFailed,
+} from '@texra-ai/llm';
 import type { RequestRefusal } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type { ApiKeyProviderId, SecretsFailed } from '@texra-ai/llm';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;
@@ -24,11 +28,14 @@ interface ProgressApiKeyRetryRequest {
  * without entering a key is not a failure — the controller re-reads the store
  * and answers `false`.
  */
-export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
-  readonly provider: ApiKeyProviderId;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class ApiKeyPromptFailed extends Schema.TaggedError<ApiKeyPromptFailed>()(
+  'ApiKeyPromptFailed',
+  {
+    provider: Schema.String.pipe(Schema.refine(isApiProvider)),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 interface ProgressApiKeyRetryControllerDeps {
   readKey(

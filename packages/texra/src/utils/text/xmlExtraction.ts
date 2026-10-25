@@ -4,7 +4,7 @@
  *
  * The extraction result shape (MultipleExtractionResult) is a plain type: it
  * describes an internal return value, not a parsed or validated boundary, so
- * no Zod schema backs it.
+ * no schema backs it.
  */
 
 // Local imports - utils

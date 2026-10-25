@@ -1,4 +1,5 @@
 // Local imports
+import { Schema } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
@@ -6,7 +7,7 @@ import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent: 'correct',
     model: 'google/gemini-3.1-pro-preview',
     inputFiles: ['input.tex'],
@@ -46,7 +47,7 @@ export function asDocumentTask<
         },
       },
     },
-    DocumentTaskOptionsSchema.parse({}),
+    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
   );
   if (patch === null) throw new Error('a task entry always patches');
   // The recipe only: the launch's outputs stay as the case wrote them.

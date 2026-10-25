@@ -11,8 +11,7 @@ import {
   categories as arxivCategories,
   type Category,
 } from 'arxiv-client/dist/defines/categories.js';
-import { Clock, Duration, Effect, Semaphore } from 'effect';
-import { z } from 'zod';
+import { Clock, Duration, Effect, Schema, Semaphore } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -44,18 +43,13 @@ const ARXIV_CATEGORIES: ReadonlySet<string> = new Set(
 const isArxivCategory = (value: string): value is Category =>
   ARXIV_CATEGORIES.has(value);
 
-const ArxivCategorySchema = z
-  .string()
-  .trim()
-  .transform((value, ctx): Category => {
-    if (isArxivCategory(value)) return value;
-    ctx.issues.push({
-      code: 'custom',
-      input: value,
-      message: `"${value}" is not an arXiv category: use one from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph".`,
-    });
-    return z.NEVER;
-  });
+/** The failure reads `Expected <this>, got "<the value>"`. */
+const ArxivCategorySchema = Schema.Trim.pipe(
+  Schema.refine(isArxivCategory, {
+    expected:
+      'an arXiv category from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph"',
+  }),
+);
 
 const MAX_RESULTS = 50;
 const DEFAULT_RESULTS = 10;
@@ -105,35 +99,55 @@ function createArxivClient(): typeof arxivClient {
   return new ClientCtor();
 }
 
-const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
-const SortOrderSchema = z.enum(['ascending', 'descending']);
-const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
+const SortBySchema = Schema.Literals([
+  'relevance',
+  'lastUpdatedDate',
+  'submittedDate',
+]);
+const SortOrderSchema = Schema.Literals(['ascending', 'descending']);
+const SearchFieldSchema = Schema.Literals([
+  'all',
+  'author',
+  'title',
+  'abstract',
+]);
 
-const ArxivSearchInputSchema = z.strictObject({
-  query: z
-    .string()
-    .describe('Search query terms, title text, or author names.'),
-  field: nullishWithDefault(SearchFieldSchema, 'all').describe(
+const ArxivSearchInputSchema = Schema.Struct({
+  query: Schema.String.annotate({
+    description: 'Search query terms, title text, or author names.',
+  }),
+  field: nullishWithDefault(
+    SearchFieldSchema,
+    'all',
     'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
   ),
-  categories: z
-    .array(ArxivCategorySchema)
-    .nullish()
-    .describe(
+  categories: Schema.optional(
+    Schema.NullOr(Schema.Array(ArxivCategorySchema)),
+  ).annotate({
+    description:
       'Optional arXiv category filters, exactly as arXiv spells them, such as "math.NT", "cs.AI" or "quant-ph". A paper matches when it is in all of them.',
-    ),
+  }),
   maxResults: nullishWithDefault(
-    z.int().positive().max(MAX_RESULTS),
+    Schema.Int.check(Schema.isGreaterThan(0)).check(
+      Schema.isLessThanOrEqualTo(MAX_RESULTS),
+    ),
     DEFAULT_RESULTS,
-  ).describe('Maximum number of papers to return.'),
-  start: nullishWithDefault(z.int().min(0), 0).describe(
+    'Maximum number of papers to return.',
+  ),
+  start: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    0,
     'Zero-based result offset for pagination.',
   ),
-  sortBy: SortBySchema.nullish().describe('arXiv sort field to use.'),
-  sortOrder: SortOrderSchema.nullish().describe('Sort direction for results.'),
+  sortBy: Schema.optional(Schema.NullOr(SortBySchema)).annotate({
+    description: 'arXiv sort field to use.',
+  }),
+  sortOrder: Schema.optional(Schema.NullOr(SortOrderSchema)).annotate({
+    description: 'Sort direction for results.',
+  }),
 });
 
-type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
+type ArxivSearchInput = typeof ArxivSearchInputSchema.Type;
 
 const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   input: ArxivSearchInput,

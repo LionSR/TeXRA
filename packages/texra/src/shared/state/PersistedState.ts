@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Result, Schema, SchemaIssue } from 'effect';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {
@@ -40,20 +40,24 @@ export function createWebviewStorage(hostBridge: {
 
 /**
  * Renderer UI state persisted under one key of a `KeyValueStore`, validated by a
- * Zod schema. Two renderers use it: the Progress-View surfaces over
+ * schema. Two renderers use it: the Progress-View surfaces over
  * `createWebviewStorage(hostBridge)`, and the desktop shell's collapsed-group
  * set over localStorage.
  *
- * The schema must parse `{}` into complete state (e.g. `.prefault()` on each
- * required field): the constructor resolves defaults with `schema.parse({})`
- * and throws otherwise. Never `.catch()`, which would swallow invalid stored data before the loud
- * warn-and-reset path can see it.
+ * The schema must decode `{}` into complete state (a decoding default on each
+ * required field): the constructor resolves defaults by decoding `{}` and
+ * throws otherwise. Never `catchDecoding`, which would swallow invalid stored
+ * data before the loud warn-and-reset path can see it.
  *
  * @example
  * const ui = new PersistedState(
  *   createWebviewStorage(hostBridge),
  *   'toggleStates',
- *   z.object({ expanded: z.array(z.string()).prefault([]) }),
+ *   Schema.Struct({
+ *     expanded: Schema.Array(Schema.String).pipe(
+ *       Schema.withDecodingDefault(Effect.succeed([])),
+ *     ),
+ *   }),
  * );
  * ui.setState({ expanded: [...ui.getState().expanded, id] });
  */
@@ -63,7 +67,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   constructor(
     private readonly storage: KeyValueStore,
     private readonly key: string,
-    private readonly schema: z.ZodType<T>,
+    private readonly schema: Schema.Codec<T, unknown>,
   ) {
     this.state = this.load();
   }
@@ -71,24 +75,24 @@ export class PersistedState<T extends Record<string, unknown>> {
   private load(): T {
     const stored = this.storage.get(this.key);
     if (stored === undefined) {
-      return this.schema.parse({});
+      return Schema.decodeUnknownSync(this.schema)({});
     }
-    const result = this.schema.safeParse(stored);
-    if (result.success) {
-      return result.data;
+    const result = Schema.decodeUnknownResult(this.schema)(stored);
+    if (Result.isSuccess(result)) {
+      return result.success;
     }
     // Reset invalid stored data to the schema defaults — a stale or malformed
     // key must never block renderer startup — and persist the reset so the
     // next load doesn't keep hitting this path. The schema itself must default
-    // every field: `parse({})` throws at construction when it doesn't.
+    // every field: decoding `{}` throws at construction when it doesn't.
     console.warn(
       `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
       {
         storedType: describeStored(stored),
-        issues: summarizeIssues(result.error),
+        issues: summarizeIssues(result.failure),
       },
     );
-    const defaults = this.schema.parse({});
+    const defaults = Schema.decodeUnknownSync(this.schema)({});
     this.storage.update(this.key, defaults);
     return defaults;
   }
@@ -124,11 +128,19 @@ function describeStored(value: unknown): string {
   return typeof value;
 }
 
-/** First few zod issues, trimmed so the console stays readable. */
-function summarizeIssues(error: z.ZodError): Record<string, unknown>[] {
-  return error.issues.slice(0, 5).map((issue) => ({
-    path: issue.path.join('.') || '(root)',
-    code: issue.code,
-    message: issue.message,
-  }));
+/** First few schema issues, trimmed so the console stays readable. */
+function summarizeIssues(error: Schema.SchemaError): Record<string, unknown>[] {
+  return formatIssues(error.issue)
+    .issues.slice(0, 5)
+    .map((issue) => ({
+      path:
+        issue.path
+          ?.map((segment) =>
+            String(typeof segment === 'object' ? segment.key : segment),
+          )
+          .join('.') || '(root)',
+      message: issue.message,
+    }));
 }
+
+const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();

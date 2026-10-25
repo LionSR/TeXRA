@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
@@ -46,7 +46,7 @@ const stoppedRunId = 'c11114' as RunId;
 const failedRunId = 'c11116' as RunId;
 const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
-const config = AgentConfigSchema.parse({
+const config = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: 'test-model',
   agent: 'test-agent',
 });

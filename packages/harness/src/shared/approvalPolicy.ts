@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import { Result, Schema, SchemaGetter } from 'effect';
 
 export const APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
-export const ApprovalPolicySchema = z.enum(APPROVAL_POLICIES);
-export type ApprovalPolicy = z.infer<typeof ApprovalPolicySchema>;
+export const ApprovalPolicySchema = Schema.Literals(APPROVAL_POLICIES);
+export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 /**
  * The tolerant input form of {@link ApprovalPolicySchema}: the one place
  * a hand-written spelling (` Yolo `) is trimmed and lowercased before the
@@ -11,11 +11,14 @@ export type ApprovalPolicy = z.infer<typeof ApprovalPolicySchema>;
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
  * strict enum: the `texra.approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the
- * dropdown's options are derived from that same `ZodEnum`.
+ * dropdown's options are derived from that same literal list.
  */
-const ApprovalPolicyInputSchema = z.preprocess(
-  (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
-  ApprovalPolicySchema,
+const ApprovalPolicyInputSchema = Schema.String.pipe(
+  Schema.decodeTo(Schema.String, {
+    decode: SchemaGetter.transform((raw) => raw.trim().toLowerCase()),
+    encode: SchemaGetter.passthrough(),
+  }),
+  Schema.decodeTo(ApprovalPolicySchema),
 );
 export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
 /**
@@ -34,8 +37,8 @@ const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
 
 export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
-  const parsed = ApprovalPolicyInputSchema.safeParse(input);
-  return parsed.success ? parsed.data : undefined;
+  const parsed = Schema.decodeUnknownResult(ApprovalPolicyInputSchema)(input);
+  return Result.isSuccess(parsed) ? parsed.success : undefined;
 }
 
 export type ApprovalPolicyDecision =

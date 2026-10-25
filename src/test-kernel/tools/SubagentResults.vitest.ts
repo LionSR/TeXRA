@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { Schema } from 'effect';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import {
   formatSubagentDelivery,
@@ -81,7 +82,7 @@ describe('formatSubagentDelivery', () => {
 
   it('delivers a recipe through its block, kind named by the block key', () => {
     const runId = 'abc123' as RunId;
-    const value = DocumentsResultSchema.parse({
+    const value = Schema.decodeUnknownSync(DocumentsResultSchema)({
       outputs: [
         {
           round: 0,

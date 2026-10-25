@@ -14,7 +14,7 @@ Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
 package is ESM only.
 
 ```bash
-npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node zod
+npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
 ```
 
 [`@texra-ai/llm`](https://www.npmjs.com/package/@texra-ai/llm), the model
@@ -22,7 +22,7 @@ package, is a peer too: the harness checks a model's failures with
 `instanceof ModelError`, so a model your program binds and the harness must
 share one copy of the package.
 
-`effect` and `zod` (v4) are peer dependencies of both packages, and the
+`effect` is a peer dependency of both packages, and the
 harness also takes `@effect/platform-node` and `@effect/sql-sqlite-node` as
 peers: the bundles import all of them at runtime. Two copies of `effect` in
 one process do not work at all: Streams, Fibers and Context built by one copy
@@ -42,7 +42,6 @@ past it fails at startup.
     "@texra-ai/harness": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
     "effect": "^4.0.6",
-    "zod": "^4.4.3",
   },
 }
 ```
@@ -381,13 +380,13 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, the tool-definition helper (`defineTool`) with its types, and `readSessionView`, a project's view read cold from its store                                  |
-| `@texra-ai/harness/schemas`    | Browser-safe: Zod schemas + inferred types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view folded over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them        |
-| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                          |
+| Entry                          | Contents                                                                                                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, the tool-definition helper (`defineTool`) with its types, and `readSessionView`, a project's view read cold from its store                                    |
+| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view folded over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them          |
+| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                  |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                            |
 
 Every entry needs the peers installed. See [Install](#install).
 
@@ -456,13 +455,12 @@ normalizes ordinary failures into tool feedback; `execute` implements the work.
 
 ```ts
 import { defineTool } from '@texra-ai/harness';
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 const EchoTool = defineTool({
   name: 'echo',
   description: 'Return the supplied text.',
-  schema: z.strictObject({ text: z.string() }),
+  schema: Schema.Struct({ text: Schema.String }),
   execute: ({ text }) =>
     Effect.succeed({ status: 'executed' as const, output: text }),
 });

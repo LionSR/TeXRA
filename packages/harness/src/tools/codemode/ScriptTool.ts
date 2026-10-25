@@ -8,8 +8,7 @@
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Cause, Data, Duration, Effect, Exit, Layer } from 'effect';
-import { z } from 'zod';
+import { Cause, Duration, Effect, Exit, Layer, Result, Schema } from 'effect';
 
 import {
   CodeSandbox,
@@ -26,6 +25,7 @@ import {
 } from '@agent/runtime/RunCall';
 import {
   JsonValueSchema,
+  SettledToolResultSchema,
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
@@ -41,33 +41,30 @@ const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
 /** How many guest stack frames a script failure keeps. */
 const FAULT_FRAMES = 3;
 
-const ScriptInputSchema = z.strictObject({
-  code: z
-    .string()
-    .min(1, 'code is required')
-    .describe(
+const ScriptInputSchema = Schema.Struct({
+  code: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'The body of an async JavaScript function: `await` at top level, `return` the result. Inputs are literals in the code.',
-    ),
-  title: z
-    .string()
-    .nullish()
-    .describe('A short title for the script, shown on its card.'),
-  run_in_background: z
-    .boolean()
-    .nullish()
-    .describe(
+  }),
+  title: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'A short title for the script, shown on its card.',
+  }),
+  run_in_background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
       'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
+  }),
+  timeoutMs: Schema.optional(
+    Schema.NullOr(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
+        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
+      ),
     ),
-  timeoutMs: z
-    .int()
-    .min(1000)
-    .max(24 * 60 * 60 * 1000)
-    .nullish()
-    .describe(
+  ).annotate({
+    description:
       'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',
-    ),
+  }),
 });
-type ScriptInput = z.infer<typeof ScriptInputSchema>;
+type ScriptInput = typeof ScriptInputSchema.Type;
 
 /** The script's own host functions, which read the pinned catalog: their
  *  ops are named `<global>()`, which no tool name can be. */
@@ -75,12 +72,24 @@ const SEARCH_TOOLS = 'searchTools';
 const DESCRIBE_TOOL = 'describeTool';
 const DEFAULT_SEARCH_LIMIT = 8;
 
-const SearchArgsSchema = z.tuple([
-  z.string().min(1, 'searchTools(query) takes a non-empty query'),
-  z.object({ limit: z.int().positive().max(50).nullish() }).nullish(),
+const SearchArgsSchema = Schema.Tuple([
+  Schema.String.check(Schema.isMinLength(1)),
+  Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        limit: Schema.optional(
+          Schema.NullOr(
+            Schema.Int.check(Schema.isGreaterThan(0)).check(
+              Schema.isLessThanOrEqualTo(50),
+            ),
+          ),
+        ),
+      }),
+    ),
+  ),
 ]);
-const DescribeArgsSchema = z.tuple([
-  z.string().min(1, 'describeTool(name) takes a tool name'),
+const DescribeArgsSchema = Schema.Tuple([
+  Schema.String.check(Schema.isMinLength(1)),
 ]);
 
 /** What one host-function op answers, as a settled call. */
@@ -90,9 +99,9 @@ const answerOf = (
 ): ToolResultPayload['result'] => {
   const failed = (error: string) => ({ status: 'error' as const, error });
   if (op.name === `${SEARCH_TOOLS}()`) {
-    const args = SearchArgsSchema.safeParse(op.input);
-    if (!args.success) return failed(z.prettifyError(args.error));
-    const [query, options] = args.data;
+    const args = Schema.decodeUnknownResult(SearchArgsSchema)(op.input);
+    if (!Result.isSuccess(args)) return failed(args.failure.message);
+    const [query, options] = args.success;
     const found = searchTools(
       catalog,
       query,
@@ -104,9 +113,9 @@ const answerOf = (
       summary: `${found.length} tools for "${query}"`,
     };
   }
-  const args = DescribeArgsSchema.safeParse(op.input);
-  if (!args.success) return failed(z.prettifyError(args.error));
-  const [name] = args.data;
+  const args = Schema.decodeUnknownResult(DescribeArgsSchema)(op.input);
+  if (!Result.isSuccess(args)) return failed(args.failure.message);
+  const [name] = args.success;
   const declaration = describeTool(catalog, name);
   return declaration === null
     ? failed(
@@ -116,9 +125,11 @@ const answerOf = (
 };
 
 /** A call's result ended the turn: the script ends with it. */
-class EndedTurn extends Data.TaggedError('EndedTurn')<{
-  readonly result: Extract<ToolResultPayload['result'], { status: 'executed' }>;
-}> {}
+class EndedTurn extends Schema.TaggedError<EndedTurn>()('EndedTurn', {
+  // The executed member of a settled result: only an executed result ends
+  // the turn.
+  result: SettledToolResultSchema.members[0],
+}) {}
 
 /** What the guest's `await` gets from a settled call: `{ output, summary }`
  *  of a tool, the list `searchTools` found, the text `describeTool` wrote. */
@@ -301,7 +312,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
-  const returned = JsonValueSchema.safeParse(value);
+  const returned = Schema.decodeUnknownResult(JsonValueSchema)(value);
   const log = logTail();
   const foreground =
     input.run_in_background === true
@@ -320,7 +331,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     ...(files.length > 0 && { files }),
     // Its return as data: what a script's run ends with (a task's
     // documents), journaled with the call.
-    ...(returned.success && { value: returned.data }),
+    ...(Result.isSuccess(returned) && { value: returned.success }),
   };
 });
 

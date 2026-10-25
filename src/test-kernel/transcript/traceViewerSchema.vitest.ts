@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -31,7 +31,7 @@ import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSche
 const tempDirs = useTempDirs();
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
@@ -76,18 +76,17 @@ describe('trace-viewer TraceDocumentSchema', () => {
       expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
 
-      const parsed = TraceDocumentSchema.safeParse(result.trace);
-      expect(parsed.success).toBe(true);
-      if (!parsed.success) return;
-      expect(parsed.data.runId).toBe(runId);
-      expect(parsed.data.events[0]?.type).toBe('run.start');
-      expect(parsed.data.events.some((event) => event.type === 'run.end')).toBe(
-        true,
+      const parsed = Schema.decodeUnknownResult(TraceDocumentSchema)(
+        result.trace,
       );
+      expect(Result.isSuccess(parsed)).toBe(true);
+      if (!Result.isSuccess(parsed)) return;
+      const trace = parsed.success;
+      expect(trace.runId).toBe(runId);
+      expect(trace.events[0]?.type).toBe('run.start');
+      expect(trace.events.some((event) => event.type === 'run.end')).toBe(true);
       // An export has no producer, so no row names one.
-      expect(parsed.data.events.every((event) => event.origin === null)).toBe(
-        true,
-      );
+      expect(trace.events.every((event) => event.origin === null)).toBe(true);
 
       // parseTraceData must accept the same real document without throwing.
       expect(() => parseTraceData(result.trace)).not.toThrow();

@@ -7,7 +7,7 @@
  * Code, Codex) goes through it, so the default, the handling of a level a
  * model lacks, and the report of what was changed are the same everywhere.
  */
-import { Data } from 'effect';
+import { Schema } from 'effect';
 import {
   EFFORT_SCALE,
   ReasoningEffort,
@@ -46,9 +46,10 @@ export interface ReasoningChoice {
 export type ReasoningRequest = Omit<ModelSelection, 'ref'>;
 
 /** A selection the model cannot run as asked. */
-export class ReasoningChoiceError extends Data.TaggedError(
+export class ReasoningChoiceError extends Schema.TaggedError<ReasoningChoiceError>()(
   'ReasoningChoiceError',
-)<{ readonly message: string }> {}
+  { message: Schema.String },
+) {}
 
 const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
 

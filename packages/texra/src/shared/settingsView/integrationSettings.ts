@@ -5,6 +5,9 @@
  * in a browser-safe module, because the settings view's webview renders them.
  */
 
+// Third-party imports
+import { Effect, Schema } from 'effect';
+
 // Local imports
 import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
@@ -62,7 +65,9 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
     label: 'Sandbox mode',
     row: agentCliSetting({
       key: CodexStateKey.SANDBOX_MODE,
-      schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
+      schema: CodexSandboxModeSchema.pipe(
+        Schema.withDecodingDefault(Effect.succeed(CODEX_SANDBOX_MODE_DEFAULT)),
+      ),
       title: 'Codex sandbox mode',
       description: 'Filesystem access mode used when TeXRA launches Codex.',
       enumLabels: ['Read-only', 'Workspace write', 'Full access'],
@@ -82,7 +87,11 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
     label: 'Approval policy',
     row: agentCliSetting({
       key: CodexStateKey.APPROVAL_POLICY,
-      schema: CodexApprovalPolicySchema.prefault(CODEX_APPROVAL_POLICY_DEFAULT),
+      schema: CodexApprovalPolicySchema.pipe(
+        Schema.withDecodingDefault(
+          Effect.succeed(CODEX_APPROVAL_POLICY_DEFAULT),
+        ),
+      ),
       title: 'Codex approval policy',
       description: 'When Codex should ask for approval before risky actions.',
       enumLabels: [
@@ -120,8 +129,10 @@ export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
     label: 'Permission mode',
     row: agentCliSetting({
       key: ClaudeAgentStateKey.PERMISSION_MODE,
-      schema: ClaudeAgentPermissionModeSchema.prefault(
-        CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+      schema: ClaudeAgentPermissionModeSchema.pipe(
+        Schema.withDecodingDefault(
+          Effect.succeed(CLAUDE_AGENT_DEFAULT_PERMISSION_MODE),
+        ),
       ),
       title: 'Claude Code permission mode',
       description: 'Permission policy used by Claude Code agent sessions.',

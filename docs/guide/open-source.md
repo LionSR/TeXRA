@@ -30,7 +30,7 @@ Keeping track of LLM pricing, context windows, and capabilities across providers
 - **140+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and others, with OpenRouter tracked as an access route rather than a provider
 - **Zero dependencies**, with full TypeScript support
 - **Tree-shakeable** for efficient bundling
-- **Zod schemas** for runtime validation (Zod v4)
+- **Effect Schema** for runtime validation and wire shapes
 - **Always current**: pricing and capabilities are updated regularly
 
 ### Quick start

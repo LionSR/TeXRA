@@ -9,8 +9,7 @@
  * edited through the regular host settings surface.
  */
 
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
 import {
@@ -53,20 +52,16 @@ const ALLOWLIST_TEXT = UPDATABLE_KEY_LIST.map((key) => `- \`${key}\``).join(
   '\n',
 );
 
-const ReadConfigInputSchema = z.strictObject({
-  key: z
-    .string()
-    .min(1)
-    .regex(
-      /^texra\./,
-      'Only TeXRA configuration keys are readable through this tool. Pass a key starting with "texra.".',
-    )
-    .describe(
-      'Configuration key starting with "texra." (e.g. texra.bib.defaultPath).',
-    ),
+const ReadConfigInputSchema = Schema.Struct({
+  key: Schema.String.check(Schema.isMinLength(1))
+    .check(Schema.isPattern(/^texra\./))
+    .annotate({
+      description:
+        'Configuration key starting with "texra." (e.g. texra.bib.defaultPath).',
+    }),
 });
 
-type ReadConfigInput = z.infer<typeof ReadConfigInputSchema>;
+type ReadConfigInput = typeof ReadConfigInputSchema.Type;
 
 export const ReadConfigTool = defineTool({
   name: 'read_config',
@@ -88,34 +83,34 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
     }),
 });
 
-const UpdateConfigInputSchema = z.strictObject({
-  key: z
-    .enum(UPDATABLE_KEY_LIST)
-    .describe(
-      `Configuration key to update. Must be on the setup allowlist:\n${ALLOWLIST_TEXT}`,
-    ),
-  value: z
-    .unknown()
-    .describe(
+const UpdateConfigInputSchema = Schema.Struct({
+  key: Schema.Literals(UPDATABLE_KEY_LIST).annotate({
+    description: `Configuration key to update. Must be on the setup allowlist:\n${ALLOWLIST_TEXT}`,
+  }),
+  value: Schema.Unknown.annotate({
+    description:
       "New value, validated against the setting's schema. Call read_config first to see what the setting controls.",
-    ),
-  target: nullishWithDefault(z.enum(['user', 'workspace']), 'user').describe(
+  }),
+  target: nullishWithDefault(
+    Schema.Literals(['user', 'workspace']),
+    'user',
     '"user" updates the global setting shared across workspaces; "workspace" scopes the change to the current workspace only.',
   ),
 });
 
-type UpdateConfigInput = z.infer<typeof UpdateConfigInputSchema>;
+type UpdateConfigInput = typeof UpdateConfigInputSchema.Type;
 
 const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   input: UpdateConfigInput,
 ) {
   const entry = catalogEntry(input.key);
-  const schema = settingSchemaWithoutPrefault(entry) as z.ZodType;
-  const parsed = schema.safeParse(input.value);
-  if (!parsed.success) {
+  const parsed = Schema.decodeUnknownResult(
+    settingSchemaWithoutPrefault(entry),
+  )(input.value);
+  if (!Result.isSuccess(parsed)) {
     return yield* Effect.fail(
       new ToolError(
-        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.description ?? ''}`,
+        `Value rejected for ${input.key}: ${parsed.failure.message}. ${entry.description ?? ''}`,
       ),
     );
   }
@@ -124,10 +119,10 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   const config = call.env.roots.config;
   const previous = config.get(input.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* config.update(input.key, parsed.data, target);
+  yield* config.update(input.key, parsed.success, target);
 
   const before = JSON.stringify(previous);
-  const after = JSON.stringify(parsed.data);
+  const after = JSON.stringify(parsed.success);
   return executed(
     `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
     `Updated ${input.key} (${input.target})`,

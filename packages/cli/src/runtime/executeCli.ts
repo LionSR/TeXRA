@@ -6,10 +6,10 @@ import {
   Fiber,
   Predicate,
   Result,
+  Schema,
   Scope,
   Stream,
 } from 'effect';
-import { z } from 'zod';
 
 import {
   AgentConfigSchema,
@@ -130,18 +130,16 @@ export function executeCliConfig(
 ): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     const runId = options.runId ?? generateRunId();
-    const parsed = AgentConfigSchema.safeParse(config);
-    if (!parsed.success) {
-      writeTextStderr(
-        `Invalid configuration: ${z.prettifyError(parsed.error)}`,
-      );
+    const parsed = Schema.decodeUnknownResult(AgentConfigSchema)(config);
+    if (!Result.isSuccess(parsed)) {
+      writeTextStderr(`Invalid configuration: ${parsed.failure.message}`);
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
     const plugins = yield* readCliPluginPins(
       (yield* options.services.session).roots,
     );
-    const request = { config: parsed.data, runId };
+    const request = { config: parsed.success, runId };
     const run = yield* executeCliRequest(request, runContext, options);
     if (!run.ok) {
       return run;

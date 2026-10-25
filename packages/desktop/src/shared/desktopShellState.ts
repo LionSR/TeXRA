@@ -1,6 +1,6 @@
 // Per-project document metadata. Dockview owns group positions, sizes and tabs.
+import { Effect, Schema } from 'effect';
 import { getBasename } from '@texra-ai/harness/schemas';
-import { z } from 'zod';
 
 import type { IconName } from '@ui/wa/iconNames';
 import type { SerializedDockview } from 'dockview';
@@ -24,36 +24,47 @@ export const WORKBENCH_KIND_META = {
 >;
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
-const WorkbenchTabSchema = z.object({
-  id: z.string(),
-  kind: z.enum(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
-  title: z.string(),
-  target: z.string().optional(),
-  dirty: z.boolean().optional(),
+const WorkbenchTabSchema = Schema.Struct({
+  id: Schema.String,
+  // cast: Object.keys forgets the literal keys of the const table.
+  kind: Schema.Literals(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
+  title: Schema.String,
+  target: Schema.optional(Schema.String),
+  dirty: Schema.optional(Schema.Boolean),
   /** A `pdf` tab's build: its frame reloads when a rebuild changes it. */
-  build: z.number().optional(),
+  build: Schema.optional(Schema.Number),
 });
-export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
+export type WorkbenchTab = typeof WorkbenchTabSchema.Type;
 
 // Dockview validates the complete grid when restoring it. Keep its interchange
 // format intact instead of maintaining a competing tree schema.
-const DockLayoutSchema = z.custom<SerializedDockview>(
-  (value) =>
+const DockLayoutSchema = Schema.declare<SerializedDockview>(
+  (value): value is SerializedDockview =>
     value !== null &&
     typeof value === 'object' &&
     'grid' in value &&
     'panels' in value,
 );
-export const DesktopShellStateSchema = z.object({
-  projectName: z.string().default(''),
-  sidebarCollapsed: z.boolean().default(false),
-  sidebarWidth: z.number().default(256),
-  workbenchTabs: z.array(WorkbenchTabSchema),
-  activeTabId: z.string().optional(),
-  dockLayout: DockLayoutSchema.nullable().default(null),
-  nextTerminalSerial: z.int().positive().default(1),
+export const DesktopShellStateSchema = Schema.Struct({
+  projectName: Schema.String.pipe(
+    Schema.withDecodingDefaultType(Effect.succeed('')),
+  ),
+  sidebarCollapsed: Schema.Boolean.pipe(
+    Schema.withDecodingDefaultType(Effect.succeed(false)),
+  ),
+  sidebarWidth: Schema.Number.pipe(
+    Schema.withDecodingDefaultType(Effect.succeed(256)),
+  ),
+  workbenchTabs: Schema.Array(WorkbenchTabSchema),
+  activeTabId: Schema.optional(Schema.String),
+  dockLayout: Schema.NullOr(DockLayoutSchema).pipe(
+    Schema.withDecodingDefaultType(Effect.succeed(null)),
+  ),
+  nextTerminalSerial: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+    Schema.withDecodingDefaultType(Effect.succeed(1)),
+  ),
 });
-export type DesktopShellState = z.infer<typeof DesktopShellStateSchema>;
+export type DesktopShellState = typeof DesktopShellStateSchema.Type;
 
 export function initialDesktopShellState(): DesktopShellState {
   return {

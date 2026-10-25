@@ -1,5 +1,5 @@
 // The desktop's `host.request` handler (PRD one-fold-three-renderers, 8.3):
-// every capability a surface asks its host for, one Zod-narrowed switch over
+// every capability a surface asks its host for, one schema-narrowed switch over
 // the arms, mapped onto the window's dialogs, the preview host, the file
 // pickers, and the paper's launch path. Each arm answers exactly once with
 // an outcome or a request error; an arm the desktop does not perform is

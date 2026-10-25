@@ -10,7 +10,7 @@
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.
  */
-import { Data, Effect, Fiber, LogLevel, Option, Stream } from 'effect';
+import { Effect, Fiber, LogLevel, Option, Schema, Stream } from 'effect';
 import stripAnsi from 'strip-ansi';
 
 import {
@@ -39,10 +39,13 @@ export interface TaskAttachOutput {
 }
 
 /** The service stopped sending the task before it ended. */
-export class TaskWatchEnded extends Data.TaggedError('TaskWatchEnded')<{
-  readonly runId: string;
-  readonly reason: string;
-}> {
+export class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
+  'TaskWatchEnded',
+  {
+    runId: Schema.String,
+    reason: Schema.String,
+  },
+) {
   override get message(): string {
     return `The TeXRA service stopped sending task ${this.runId}: ${this.reason}`;
   }

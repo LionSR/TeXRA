@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Cause, Data, Effect, Fiber, Result } from 'effect';
+import { Cause, Effect, Fiber, Result, Schema } from 'effect';
 
 import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -46,11 +46,14 @@ const CHANNEL = 'VscodeLeanIntegration';
  * "not registered" reason: the ids are the extension's own, and VS Code
  * reports an unregistered id the same way it reports a faulting one.
  */
-class VscodeCommandFailed extends Data.TaggedError('VscodeCommandFailed')<{
-  readonly message: string;
-  readonly commandId: string;
-  readonly cause: unknown;
-}> {}
+class VscodeCommandFailed extends Schema.TaggedError<VscodeCommandFailed>()(
+  'VscodeCommandFailed',
+  {
+    message: Schema.String,
+    commandId: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Why the Lean 4 extension could not answer: it is not installed (the user
@@ -58,20 +61,24 @@ class VscodeCommandFailed extends Data.TaggedError('VscodeCommandFailed')<{
  * promise rejected. The reasons carry different advice, which the old
  * single "not ready" message gave to both.
  */
-class LeanExtensionUnavailable extends Data.TaggedError(
+class LeanExtensionUnavailable extends Schema.TaggedError<LeanExtensionUnavailable>()(
   'LeanExtensionUnavailable',
-)<{
-  readonly reason: 'not-installed' | 'activation-failed';
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    reason: Schema.Literals(['not-installed', 'activation-failed']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** The Lean server rejected a request, or the extension's client faulted. */
-class LspRequestFailed extends Data.TaggedError('LspRequestFailed')<{
-  readonly method: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class LspRequestFailed extends Schema.TaggedError<LspRequestFailed>()(
+  'LspRequestFailed',
+  {
+    method: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const LEAN4_NOT_INSTALLED =
   'The Lean 4 extension is not installed. Install it, then try again.';

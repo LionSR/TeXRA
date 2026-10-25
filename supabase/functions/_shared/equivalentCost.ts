@@ -34,7 +34,8 @@ import {
 
 /**
  * Catalog entries keyed by the provider's API model id, the `model` every
- * client version sends (llm-zoo 2.0 covers every id 1.x priced). A fast
+ * client version sends. Each function pins its own llm-zoo (`log-usage` 2.0,
+ * `log-usage-v2` 4.0), and both cover every id 1.x priced. A fast
  * service tier is a rate table inside the entry, so the entry's own rates
  * are the standard tier. A short name is the fallback key.
  */

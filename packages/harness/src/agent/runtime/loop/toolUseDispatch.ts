@@ -32,11 +32,11 @@ import {
   Exit,
   FileSystem,
   Ref,
+  Schema,
   type Scope,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
-import { z } from 'zod';
 
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
@@ -64,7 +64,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { JsonValueSchema, toJsonValue } from '@shared/schemas';
+import { SettledToolResultSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
@@ -141,15 +141,13 @@ interface DispatchOutcome {
   readonly endTurn: boolean;
 }
 
-/** A sanitized result as the run history stores it: `diagnostics` narrowed
- *  to JSON. The sanitizer left the validation-error shape or nothing, so a
- *  non-JSON value here is a defect, refused rather than stored. */
-function storedResult(result: ToolResult): CallResult['result'] {
-  const { diagnostics, ...rest } = result;
-  if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
-  if (diagnostics === undefined) return rest;
-  return { ...rest, diagnostics: JsonValueSchema.parse(diagnostics) };
-}
+/** A sanitized result as the run history stores it: `consumedFollowUps`
+ *  (own rows) and `facts` dropped, `files` without their bytes and
+ *  `diagnostics` narrowed to JSON. The sanitizer left the validation-error
+ *  shape or nothing, so a non-JSON value here is a defect, refused rather
+ *  than stored. */
+const storedResult = (result: ToolResult): CallResult['result'] =>
+  Schema.decodeUnknownSync(SettledToolResultSchema)(result);
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
 const withoutEffects = (result: CallResult['result']): CallResult['result'] => {
@@ -321,7 +319,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const at = initial.input.instruction;
   const userInstruction =
     run.config.rootUserInstruction ??
-    (at ? stored(initial, at, z.string()) : run.config.instruction);
+    (at ? stored(initial, at, Schema.String) : run.config.instruction);
   // Concurrent results of one parallel partition commit one at a time under
   // the cell's lock, each onto the latest state.
   const { append } = cell;

@@ -1,7 +1,7 @@
 /**
  * The bridge between a session runtime and a renderer process (PRD
- * one-fold-three-renderers, 7.4, 8.1, 8.4, 8.5): the Zod wire, up and down,
- * and `SessionFrames`, the webview's source of session events.
+ * one-fold-three-renderers, 7.4, 8.1, 8.4, 8.5): the wire schemas, up and
+ * down, and `SessionFrames`, the webview's source of session events.
  *
  * Down: an `EventsFrame` carries the rows one `Subscribe` asked for, tagged
  * by the read that delivered them, then the tail; `cursor` is the commit
@@ -21,13 +21,14 @@ import {
   Effect,
   Layer,
   Queue,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 
 import {
   OutcomeSchema,
+  RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
@@ -46,161 +47,156 @@ import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
 
 /** The workspace root that keys the layer maps, on every message. */
-const SessionKeySchema = z.string().min(1);
-const GenerationSchema = z.int().nonnegative();
-const RequestIdSchema = z.string().min(1);
+const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
+const GenerationSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const RequestIdSchema = Schema.String.check(Schema.isMinLength(1));
 
-export type EventInput = z.infer<typeof EventInputSchema>;
+export type EventInput = typeof EventInputSchema.Type;
 
 /** A surface's request for one session's frames, up the wire. */
-export const SubscribeSchema = z.object({
-  kind: z.literal('subscribe'),
+export const SubscribeSchema = Schema.Struct({
+  kind: Schema.Literal('subscribe'),
   session: SessionKeySchema,
   /** Chosen by the surface, monotone per view instance. */
   generation: GenerationSchema,
   /** The policy of the surface's currently published view. */
-  debug: z.boolean(),
+  debug: Schema.Boolean,
   /** 0 on a cold mount; the view's cursor on a resubscribe. */
   cursor: CommitOrdinalSchema,
   /** The transcripts asked for: each `fromSeq` is the view's
    *  `transcriptSeq` entry, 0 when it holds none, never the cursor. */
-  aggregates: z.array(TranscriptSubscriptionSchema),
+  aggregates: Schema.Array(TranscriptSubscriptionSchema),
 });
-export type Subscribe = z.infer<typeof SubscribeSchema>;
+export type Subscribe = typeof SubscribeSchema.Type;
 
 /** One frame of a subscription's rows and text, down the wire. */
-export const EventsFrameSchema = z.object({
-  kind: z.literal('events'),
+export const EventsFrameSchema = Schema.Struct({
+  kind: Schema.Literal('events'),
   session: SessionKeySchema,
   generation: GenerationSchema,
   cursor: CommitOrdinalSchema,
-  events: z.array(EventInputSchema),
-  chunks: z.array(TextChunkSchema),
-  local: LocalRuntimeStateSchema.nullable(),
-  host: HostSnapshotSchema.nullable(),
+  events: Schema.Array(EventInputSchema),
+  chunks: Schema.Array(TextChunkSchema),
+  local: Schema.NullOr(LocalRuntimeStateSchema),
+  host: Schema.NullOr(HostSnapshotSchema),
   /** Fold policy sampled by the process reader for this replay. */
-  debug: z.boolean().nullable(),
+  debug: Schema.NullOr(Schema.Boolean),
   /** True on the frame that ends the reads this `Subscribe` started. */
-  replayComplete: z.boolean(),
+  replayComplete: Schema.Boolean,
   /** Only the final frame of a finite read carries its checked claims. */
-  existence: ExistenceReconciliationSchema.nullable(),
+  existence: Schema.NullOr(ExistenceReconciliationSchema),
 });
-export type EventsFrame = z.infer<typeof EventsFrameSchema>;
-
-/** The request errors `SessionRequests` answers, on the wire, plus the
- *  bridge's own `Invalid` for a message it could not parse. `Internal` is a
- *  handler defect: the message stays in the host log under `ref`, the
- *  request id, and never crosses to a renderer. */
-export const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
-  z.object({ _tag: z.literal('NotOwner'), runId: RunIdSchema }),
-  z.object({
-    _tag: z.literal('Unavailable'),
-    runId: RunIdSchema,
-    reason: z.string(),
-  }),
-  z.object({ _tag: z.literal('Cancelled') }),
-  z.object({
-    _tag: z.literal('Rejected'),
-    reason: z.string(),
-    docsPage: z.string().optional(),
-  }),
-  z.object({ _tag: z.literal('Invalid'), reason: z.string() }),
-  z.object({ _tag: z.literal('Internal'), ref: RequestIdSchema }),
-]);
-export type RequestErrorWire = z.infer<typeof RequestErrorWireSchema>;
+export type EventsFrame = typeof EventsFrameSchema.Type;
 
 /** What the host answers a `host.request` with (PRD 8.3): the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
  *  stored image its file name, the editor's file I/O a listing, a file's
  *  contents, or a write refused because the file changed since it was
  *  read; everything else is done. */
-const HostOutcomeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('done') }),
-  z.object({ kind: z.literal('files'), paths: z.array(z.string()) }),
-  z.object({ kind: z.literal('text'), text: z.string() }),
-  z.object({ kind: z.literal('savedImage'), fileName: z.string() }),
-  z.object({
-    kind: z.literal('entries'),
-    entries: z.array(z.object({ path: z.string(), isDirectory: z.boolean() })),
+const HostOutcomeSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('done') }),
+  Schema.Struct({
+    kind: Schema.Literal('files'),
+    paths: Schema.Array(Schema.String),
   }),
-  z.object({ kind: z.literal('contents'), contents: z.string() }),
-  z.object({ kind: z.literal('changedOnDisk') }),
+  Schema.Struct({ kind: Schema.Literal('text'), text: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal('savedImage'),
+    fileName: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('entries'),
+    entries: Schema.Array(
+      Schema.Struct({ path: Schema.String, isDirectory: Schema.Boolean }),
+    ),
+  }),
+  Schema.Struct({ kind: Schema.Literal('contents'), contents: Schema.String }),
+  Schema.Struct({ kind: Schema.Literal('changedOnDisk') }),
 ]);
-export type HostOutcome = z.infer<typeof HostOutcomeSchema>;
+export type HostOutcome = typeof HostOutcomeSchema.Type;
 
-const ResponseSchema = z.object({
-  kind: z.literal('response'),
+const ResponseSchema = Schema.Struct({
+  kind: Schema.Literal('response'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
-  result: z.discriminatedUnion('ok', [
-    z.object({
-      ok: z.literal(true),
-      outcome: z.union([OutcomeSchema, HostOutcomeSchema]),
+  result: Schema.Union([
+    Schema.Struct({
+      ok: Schema.Literal(true),
+      outcome: Schema.Union([OutcomeSchema, HostOutcomeSchema]),
     }),
-    z.object({ ok: z.literal(false), error: RequestErrorWireSchema }),
+    /** The request error the session answered with, as its fields: a
+     *  `postMessage` keeps no Error prototype, so the surface decodes the
+     *  class back with `RequestErrorSchema`. `Internal` is a handler defect
+     *  whose cause stays in the host log under `ref`, the request id. */
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      error: Schema.toEncoded(RequestErrorSchema),
+    }),
   ]),
 });
-export type Response = z.infer<typeof ResponseSchema>;
+export type Response = typeof ResponseSchema.Type;
 
 /** The host-initiated surface actions (PRD 8.5), and only these. */
-const SurfaceActionMessageSchema = z.object({
-  kind: z.literal('surface.action'),
+const SurfaceActionMessageSchema = Schema.Struct({
+  kind: Schema.Literal('surface.action'),
   session: SessionKeySchema,
-  action: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('selectNew') }),
-    z.object({ kind: z.literal('select'), runId: RunIdSchema }),
+  action: Schema.Union([
+    Schema.Struct({ kind: Schema.Literal('selectNew') }),
+    Schema.Struct({ kind: Schema.Literal('select'), runId: RunIdSchema }),
     /** Show Sessions (`texra.showProgressView`): a surface on the New-task
      *  state opens `runId`, the newest session; one already showing a
      *  session keeps it. The surface decides, since only it knows. */
-    z.object({ kind: z.literal('showSessions'), runId: RunIdSchema }),
+    Schema.Struct({ kind: Schema.Literal('showSessions'), runId: RunIdSchema }),
     /** The run accelerator: the composer's Send for the surface's resolved
      *  selection, a follow-up to the selected stream or a launch (PRD 12.4). */
-    z.object({ kind: z.literal('submit') }),
+    Schema.Struct({ kind: Schema.Literal('submit') }),
     /** A fork's composer holds the message "Fork from here" cut before,
      *  with the files it attached as the composer's images. */
-    z.object({
-      kind: z.literal('draft'),
+    Schema.Struct({
+      kind: Schema.Literal('draft'),
       runId: RunIdSchema,
-      text: z.string(),
-      images: z.array(z.object({ fileName: z.string(), path: z.string() })),
+      text: Schema.String,
+      images: Schema.Array(
+        Schema.Struct({ fileName: Schema.String, path: Schema.String }),
+      ),
     }),
     /** A workflow run of this session left running for finished or
      *  cancelled: the host decides the transition once and sends it to one
      *  port, which plays the completion chime (PRD 12.4). */
-    z.object({ kind: z.literal('chime') }),
+    Schema.Struct({ kind: Schema.Literal('chime') }),
     /** The setup agent selected by the onboarding funnel. */
-    z.object({ kind: z.literal('launch'), patch: LaunchPatchSchema }),
+    Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),
   ]),
 });
-export type SurfaceActionMessage = z.infer<typeof SurfaceActionMessageSchema>;
+export type SurfaceActionMessage = typeof SurfaceActionMessageSchema.Type;
 
-const RuntimeRequestMessageSchema = z.object({
-  kind: z.literal('runtime.request'),
+const RuntimeRequestMessageSchema = Schema.Struct({
+  kind: Schema.Literal('runtime.request'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
   request: RuntimeRequestSchema,
 });
 
-const HostRequestMessageSchema = z.object({
-  kind: z.literal('host.request'),
+const HostRequestMessageSchema = Schema.Struct({
+  kind: Schema.Literal('host.request'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
   request: HostRequestSchema,
 });
 
-export const UpMessageSchema = z.discriminatedUnion('kind', [
+export const UpMessageSchema = Schema.Union([
   SubscribeSchema,
   RuntimeRequestMessageSchema,
   HostRequestMessageSchema,
 ]);
-export type UpMessage = z.infer<typeof UpMessageSchema>;
+export type UpMessage = typeof UpMessageSchema.Type;
 
-export const DownMessageSchema = z.discriminatedUnion('kind', [
+export const DownMessageSchema = Schema.Union([
   EventsFrameSchema,
   ResponseSchema,
   SurfaceActionMessageSchema,
 ]);
-export type DownMessage = z.infer<typeof DownMessageSchema>;
+export type DownMessage = typeof DownMessageSchema.Type;
 
 /** One generation's ordered frames; replay is collected before publication. */
 interface FrameRead {

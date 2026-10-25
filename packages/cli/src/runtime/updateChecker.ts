@@ -1,8 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { z } from 'zod';
-
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
 import {
   canonicalizeWorkspacePath,
   executeCommand,
@@ -163,22 +161,29 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
  * malformed formula entry degrades to `null` (skipped) rather than failing the
  * whole parse, so one odd entry cannot hide an available upgrade. The per-entry
- * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
- * `effect`-importing file keeps no raw catch.
+ * recovery is the element schema's own decoding fallback, not a `.catch`, so
+ * this `effect`-importing file keeps no raw catch.
  */
-const HomebrewFormulaEntrySchema = z.object({
-  name: z.string(),
-  versions: z.object({ stable: z.string().nullish() }).nullish(),
+const HomebrewFormulaEntrySchema = Schema.Struct({
+  name: Schema.String,
+  versions: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({ stable: Schema.optional(Schema.NullOr(Schema.String)) }),
+    ),
+  ),
 });
-const HomebrewInfoSchema = z.object({
-  formulae: z
-    .array(
-      z.unknown().transform((entry) => {
-        const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry);
-        return parsed.success ? parsed.data : null;
-      }),
-    )
-    .nullish(),
+const HomebrewInfoSchema = Schema.Struct({
+  formulae: Schema.optional(
+    Schema.NullOr(
+      Schema.Array(
+        // A malformed entry decodes to null by policy: one odd formula must
+        // not hide an available upgrade.
+        Schema.NullOr(HomebrewFormulaEntrySchema).pipe(
+          Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
+        ),
+      ),
+    ),
+  ),
 });
 
 function parseHomebrewFormulaVersion(

@@ -40,7 +40,18 @@ export function coreEntries(rootDir) {
 }
 
 /** One export's line in a report. */
-const reportLine = (name, description) => `- \`${name}\` — \`${description}\``;
+/** A markdown code span for `text`: its fence is one backtick longer than
+ *  the longest backtick run inside (a type can carry a string literal that
+ *  quotes code), so Prettier reads it as one span and leaves it alone. */
+const codeSpan = (text) => {
+  const runs = text.match(/`+/g) ?? [];
+  if (runs.length === 0) return `\`${text}\``;
+  const fence = '`'.repeat(Math.max(...runs.map((run) => run.length)) + 1);
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+};
+const reportLine = (name, description) =>
+  `- ${codeSpan(name)} — ${codeSpan(description)}`;
 
 function kindOf(declaration) {
   if (ts.isInterfaceDeclaration(declaration)) return 'interface';

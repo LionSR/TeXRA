@@ -7,7 +7,7 @@
  * `oauthRequest.ts`.
  */
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -15,7 +15,6 @@ import {
   parseOAuthJson,
   postOAuthForm,
 } from './oauthRequest.js';
-import type { z } from 'zod';
 import type { SubscriptionTokenResponse } from './subscriptionCoordinator.js';
 
 /**
@@ -27,7 +26,7 @@ export interface OAuthFormEndpoint<
 > {
   readonly tokenUrl: string;
   readonly clientId: string;
-  readonly tokenResponseSchema: z.ZodType<TTokens>;
+  readonly tokenResponseSchema: Schema.Codec<TTokens, unknown>;
 }
 
 /** One token grant: form POST, ok-status check, schema parse. */

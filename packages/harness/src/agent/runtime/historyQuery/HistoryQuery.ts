@@ -12,11 +12,12 @@
  */
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Option,
   Queue,
+  Result,
+  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -24,9 +25,7 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { z } from 'zod';
 
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateTarget,
@@ -58,33 +57,39 @@ const APPEND_ROWS = 500;
 
 /** A statement the store will not run, or did not finish: the model's to
  *  correct, so its message is SQLite's own or names the limit it hit. */
-export class HistoryQueryRefused extends Data.TaggedError(
+export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
   'HistoryQueryRefused',
-)<{
-  readonly reason: 'not-a-read' | 'rejected' | 'timeout';
-  readonly message: string;
-}> {}
+  {
+    reason: Schema.Literals(['not-a-read', 'rejected', 'timeout']),
+    message: Schema.String,
+  },
+) {}
 
 /** The store itself failed: its process would not start, exited, or refused
  *  the rows it was fed. */
-export class HistoryQueryFailed extends Data.TaggedError('HistoryQueryFailed')<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()(
+  'HistoryQueryFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
-const CellSchema = z.union([z.string(), z.number(), z.null()]);
-export type HistoryCell = z.infer<typeof CellSchema>;
-const PageSchema = z.object({
-  columns: z.array(z.string()),
-  rows: z.array(z.array(CellSchema)),
-  more: z.boolean(),
+const CellSchema = Schema.Union([Schema.String, Schema.Number, Schema.Null]);
+export type HistoryCell = typeof CellSchema.Type;
+const PageSchema = Schema.Struct({
+  columns: Schema.Array(Schema.String),
+  rows: Schema.Array(Schema.Array(CellSchema)),
+  more: Schema.Boolean,
 });
-export type HistoryPage = z.infer<typeof PageSchema>;
-const ReplySchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), value: z.unknown() }),
-  z.object({ ok: z.literal(false), message: z.string() }),
+export type HistoryPage = typeof PageSchema.Type;
+const ReplySchema = Schema.Union([
+  Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
+  Schema.Struct({ ok: Schema.Literal(false), message: Schema.String }),
 ]);
-type Reply = z.infer<typeof ReplySchema>;
+type Reply = typeof ReplySchema.Type;
+/** One reply as the process writes it: a line of JSON. */
+const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
 /** The session a store reads: its display tail and its current commit. */
 type HistorySession = Pick<SessionHandle, 'log'>;
@@ -172,8 +177,8 @@ const request = Effect.fn('HistoryQuery.request')(function* (
         }),
     ),
   );
-  const reply = parseJsonWith(line, ReplySchema);
-  if (reply._tag === 'Failure') {
+  const reply = Schema.decodeUnknownResult(ReplyLineSchema)(line);
+  if (Result.isFailure(reply)) {
     return yield* new HistoryQueryFailed({
       message: 'The history query process sent an unreadable reply.',
       cause: reply.failure,
@@ -352,14 +357,14 @@ export class HistoryQuery {
           message: reply.value.message,
         });
       }
-      const page = PageSchema.safeParse(reply.value.value);
-      if (!page.success) {
+      const page = Schema.decodeUnknownResult(PageSchema)(reply.value.value);
+      if (!Result.isSuccess(page)) {
         return yield* new HistoryQueryFailed({
           message: 'The history query process sent an unreadable page.',
-          cause: page.error,
+          cause: page.failure,
         });
       }
-      return page.data;
+      return page.success;
     });
   }
 

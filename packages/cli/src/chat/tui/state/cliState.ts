@@ -3,6 +3,7 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import { Schema } from 'effect';
 import {
   APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
@@ -92,7 +93,8 @@ function defaultSessionMeta(): SessionMeta {
  * run ids are 12 hex (generated) or 24 (derived), so it can never collide,
  * and it is minted through the schema rather than forged with a cast.
  */
-export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
+export const CLI_LOCAL_RUN_ID =
+  Schema.decodeUnknownSync(RunIdSchema)('c1110ca1');
 
 /** The chat's interaction record: the shared `Surface`, written only through
  *  `actOnSurface`, the vocabulary the webview and desktop dispatch too. */

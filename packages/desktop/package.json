@@ -48,8 +48,7 @@
     "signal-polyfill": "^0.2.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.4",
-    "yaml": "catalog:",
-    "zod": "catalog:"
+    "yaml": "catalog:"
   },
   "dependencies": {
     "dockview": "8.6.1",

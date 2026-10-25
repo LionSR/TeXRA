@@ -1,13 +1,16 @@
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 import type { ToolFileAttachment } from '@shared/schemas';
 
 /** Canonical 1-based inclusive line range for tool view_range fields. */
-export const ViewRangeSchema = z
-  .tuple([z.int().min(1), z.int().min(1)])
-  .refine(([start, end]) => end >= start, {
+export const ViewRangeSchema = Schema.Tuple([
+  Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+]).check(
+  Schema.makeFilter(([start, end]) => end >= start, {
     error: 'view_range[1] must be greater than or equal to view_range[0]',
-  });
+  }),
+);
 
 /** Maximum lines returned in a single file view before truncation. */
 const READ_FILE_MAX_LINES = 2000;
@@ -43,7 +46,7 @@ interface FileViewOptions {
    * When omitted or nullish, the full file is shown.
    * Values are clamped to the file bounds automatically.
    */
-  viewRange?: [number, number] | null;
+  viewRange?: readonly [number, number] | null;
   /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
   maxLines?: number;
   /** Optional suffix appended to the summary (e.g., memory metadata). */

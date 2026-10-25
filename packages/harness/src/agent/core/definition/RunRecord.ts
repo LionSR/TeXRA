@@ -2,7 +2,6 @@ import type {
   NonAgentRunRecordSchema,
   RunRecordFieldsSchema,
 } from '@shared/schemas';
-import type { z } from 'zod';
 
 import type { AgentConfig } from './AgentConfig';
 
@@ -13,14 +12,14 @@ import type { AgentConfig } from './AgentConfig';
  * first: the agent arm's prefaults would fabricate an agent config out of
  * any object.
  */
-export type RunRecord = z.output<typeof RunRecordFieldsSchema>;
+export type RunRecord = typeof RunRecordFieldsSchema.Type;
 
 /** The key only an agent config carries (`agent` is prefaulted, so every
  *  parsed agent config has it; the strict non-agent arm cannot). Typed so a
  *  rename on either arm fails to compile instead of silently matching none. */
 const AGENT_RECORD_KEY: Exclude<
   keyof AgentConfig,
-  keyof z.infer<typeof NonAgentRunRecordSchema>
+  keyof typeof NonAgentRunRecordSchema.Type
 > = 'agent';
 
 /** Whether `record` is an agent run's config. */

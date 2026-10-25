@@ -229,8 +229,7 @@ export class SettingsModelSelectionController<R = never> {
           availability: option.availability,
         };
 
-        addReasoningLevelData(item, decided);
-        items.push(item);
+        items.push({ ...item, ...reasoningLevelData(decided) });
       }
 
       return items.sort((a, b) => a.name.localeCompare(b.name));
@@ -246,23 +245,26 @@ export class SettingsModelSelectionController<R = never> {
  * substitutes where the route cannot carry it. The row offers no choice
  * where the route carries one level or none (an editor-managed Copilot route).
  */
-function addReasoningLevelData(
-  item: ModelSelectionItem,
+function reasoningLevelData(
   decided: Extract<ModelOption, { config: ModelConfig }>,
-): void {
+): Pick<
+  ModelSelectionItem,
+  | 'supportsReasoningLevel'
+  | 'supportedReasoningLevels'
+  | 'defaultReasoningLevel'
+  | 'reasoningLevel'
+> {
   const { reasoning, savedEffort } = decided;
-  if (reasoning === undefined || reasoning.efforts.length <= 1) return;
-  item.supportsReasoningLevel = true;
-  item.supportedReasoningLevels = [...reasoning.efforts];
-  if (!('refused' in reasoning.fallback)) {
-    item.defaultReasoningLevel = reasoning.fallback.effort;
-  }
+  if (reasoning === undefined || reasoning.efforts.length <= 1) return {};
   const sent = 'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
-  if (
-    savedEffort !== undefined &&
-    sent !== undefined &&
-    reasoning.efforts.includes(sent)
-  ) {
-    item.reasoningLevel = sent;
-  }
+  return {
+    supportsReasoningLevel: true,
+    supportedReasoningLevels: [...reasoning.efforts],
+    ...(!('refused' in reasoning.fallback) && {
+      defaultReasoningLevel: reasoning.fallback.effort,
+    }),
+    ...(savedEffort !== undefined &&
+      sent !== undefined &&
+      reasoning.efforts.includes(sent) && { reasoningLevel: sent }),
+  };
 }

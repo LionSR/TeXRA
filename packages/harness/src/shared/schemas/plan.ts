@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /**
  * A plan is a plain objective document: what to achieve, the intended
@@ -10,15 +10,13 @@ import { z } from 'zod';
  * fail to parse and read back as "no plan", which is fine — a plan only
  * matters for the session it was approved in.
  */
-export const PlanSchema = z.strictObject({
-  objective: z
-    .string()
-    .min(1)
-    .describe(
+export const PlanSchema = Schema.Struct({
+  objective: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description:
       'The plan document: what to achieve, the approach, and a verifiable stopping condition',
-    ),
+  }),
 });
-export type Plan = z.infer<typeof PlanSchema>;
+export type Plan = typeof PlanSchema.Type;
 
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
 

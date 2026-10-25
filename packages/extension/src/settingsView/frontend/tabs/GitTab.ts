@@ -1,6 +1,7 @@
 /** Git commit author + GitHub token + PR subscription settings. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import { Schema } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -36,7 +37,7 @@ function defaultIdentity(key: WorkspaceStateKey): string {
   if (!entry) {
     throw new Error(`No settings-view catalog row for setting "${key}"`);
   }
-  return String(entry.schema.parse(undefined));
+  return String(Schema.decodeUnknownSync(entry.schema)(undefined));
 }
 
 const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(

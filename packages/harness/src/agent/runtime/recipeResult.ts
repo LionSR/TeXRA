@@ -5,7 +5,7 @@
  * reader of a recipe's `output.structured`; a run that is no recipe has
  * none.
  */
-import { Effect } from 'effect';
+import { Effect, Result, Schema, SchemaIssue } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { withLogChannel } from '@logger/effectLog';
@@ -45,10 +45,17 @@ export const readRecipeResult = Effect.fn('readRecipeResult')(function* (
     ).pipe(withLogChannel('RecipeResult'));
     return { key, delivery: [], changes: [] };
   }
-  const parsed = result.schema.safeParse(output.structured);
-  if (!parsed.success) {
-    const reason = parsed.error.issues
-      .map((issue) => `${issue.path.join('.') || 'value'}: ${issue.message}`)
+  const parsed = Schema.decodeUnknownResult(result.schema)(output.structured, {
+    errors: 'all',
+  });
+  if (Result.isFailure(parsed)) {
+    const reason = SchemaIssue.makeFormatterStandardSchemaV1()(
+      parsed.failure.issue,
+    )
+      .issues.map(
+        ({ path, message }) =>
+          `${(path ?? []).map(String).join('.') || 'value'}: ${message}`,
+      )
       .join('; ');
     yield* Effect.logWarning(
       `Recipe run ${runId} returned a value its '${key}' block refuses: ${reason}`,
@@ -61,7 +68,7 @@ export const readRecipeResult = Effect.fn('readRecipeResult')(function* (
   }
   return {
     key,
-    delivery: result.delivery(parsed.data, runId),
-    changes: result.changes(parsed.data, roots),
+    delivery: result.delivery(parsed.success, runId),
+    changes: result.changes(parsed.success, roots),
   };
 });

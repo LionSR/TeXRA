@@ -66,7 +66,7 @@ export class AgentSelectionPanel extends LitElement {
     catalogDetailStyles,
   ];
 
-  @property({ attribute: false }) agents: AgentSelectionItem[] = [];
+  @property({ attribute: false }) agents: readonly AgentSelectionItem[] = [];
 
   @state() private selectedKey: string | null = null;
 

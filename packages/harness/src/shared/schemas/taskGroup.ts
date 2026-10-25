@@ -1,17 +1,17 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { TaskGroupStatusSchema } from './run';
 
-export const StageKindSchema = z.enum(['run', 'session', 'script']);
+export const StageKindSchema = Schema.Literals(['run', 'session', 'script']);
 
-export const TaskGroupSchema = z.strictObject({
-  id: z.string().min(1),
-  name: z.string(),
-  startTime: z.number(),
-  endTime: z.number().optional(),
+export const TaskGroupSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.String,
+  startTime: Schema.Number,
+  endTime: Schema.optional(Schema.Number),
   status: TaskGroupStatusSchema,
-  parentGroupId: z.string().optional(),
-  kind: StageKindSchema.optional(),
+  parentGroupId: Schema.optional(Schema.String),
+  kind: Schema.optional(StageKindSchema),
 });
 
-export type TaskGroup = z.infer<typeof TaskGroupSchema>;
+export type TaskGroup = typeof TaskGroupSchema.Type;

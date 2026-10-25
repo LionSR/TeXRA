@@ -75,7 +75,8 @@ export class SubscriptionsTab extends LitElement {
     null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
-  @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
+  @property({ attribute: false }) copilotModels: readonly CopilotRouteInfo[] =
+    [];
 
   private readonly _ticker = new TickerController(this, 60_000);
 

@@ -4,23 +4,19 @@
  * runtime snapshot, the transcript subscription set, and the replay and
  * drain markers. None carries a seq.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
-import {
-  AggregateIdSchema,
-  CommitOrdinalSchema,
-  DisplaySessionEventSchema,
-  OwnerIdSchema,
-} from './sessionEvent';
+import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
+import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**
  * The read that delivered a durable row: the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */
-export const EventInputSchema = z.object({
-  _tag: z.literal('event'),
-  read: z.enum(['listing', 'aggregate', 'all']),
+export const EventInputSchema = Schema.Struct({
+  _tag: Schema.Literal('event'),
+  read: Schema.Literals(['listing', 'aggregate', 'all']),
   event: DisplaySessionEventSchema,
 });
 
@@ -32,15 +28,15 @@ export const EventInputSchema = z.object({
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
  * into one exactly. Never durable, never a seq.
  */
-export const TextChunkSchema = z.object({
-  _tag: z.literal('chunk'),
+export const TextChunkSchema = Schema.Struct({
+  _tag: Schema.Literal('chunk'),
   runId: RunIdSchema,
-  rowId: z.string(),
-  from: z.int().nonnegative(),
-  to: z.int().positive(),
-  text: z.string(),
+  rowId: Schema.String,
+  from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  to: Schema.Int.check(Schema.isGreaterThan(0)),
+  text: Schema.String,
 });
-export type TextChunk = z.infer<typeof TextChunkSchema>;
+export type TextChunk = typeof TextChunkSchema.Type;
 
 /**
  * Why this process cannot resume a run until something it needs is back:
@@ -48,16 +44,16 @@ export type TextChunk = z.infer<typeof TextChunkSchema>;
  * plugin is off or not trusted. A fact about this build and its catalog,
  * so it lives in the projection, never in a row.
  */
-export const ResumeBlockerSchema = z.object({
-  kind: z.enum(['agentMissing', 'pluginOff', 'pluginUntrusted']),
+export const ResumeBlockerSchema = Schema.Struct({
+  kind: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
   /** The agent or plugin it names. */
-  name: z.string().min(1),
+  name: Schema.String.check(Schema.isMinLength(1)),
 });
-export type ResumeBlocker = z.infer<typeof ResumeBlockerSchema>;
+export type ResumeBlocker = typeof ResumeBlockerSchema.Type;
 
 /** Why this build cannot open a run's rows: one does not decode
  *  (`damaged`), or an earlier build wrote one it has no upcaster for. */
-const RunUnreadableSchema = z.enum(['damaged', 'earlierBuild']);
+const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 
 /**
  * Why a run's banner speaks, as a key and the data its words need; the
@@ -65,17 +61,17 @@ const RunUnreadableSchema = z.enum(['damaged', 'earlierBuild']);
  * be read here, a resume found it blocked, its process stopped before it
  * finished, another process (by pid) holds it, its end lost its result.
  */
-export const RunNoticeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: RunUnreadableSchema }),
-  z.object({
-    kind: z.literal('resumeBlocked'),
+export const RunNoticeSchema = Schema.Union([
+  Schema.Struct({ kind: RunUnreadableSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('resumeBlocked'),
     reason: ResumeBlockerSchema,
     /** A resume was asked for: the run continues by itself once unblocked. */
-    retry: z.boolean(),
+    retry: Schema.Boolean,
   }),
-  z.object({ kind: z.literal('interrupted') }),
-  z.object({ kind: z.literal('held'), pid: z.int() }),
-  z.object({ kind: z.literal('lost'), message: z.string() }),
+  Schema.Struct({ kind: Schema.Literal('interrupted') }),
+  Schema.Struct({ kind: Schema.Literal('held'), pid: Schema.Int }),
+  Schema.Struct({ kind: Schema.Literal('lost'), message: Schema.String }),
 ]);
 
 /**
@@ -85,21 +81,21 @@ export const RunNoticeSchema = z.discriminatedUnion('kind', [
  * it, the runs a resume found blocked: `retry` when one was asked for, so
  * the run continues once what it needs is back.
  */
-export const LocalRuntimeStateSchema = z.object({
-  self: z.array(OwnerIdSchema),
-  dead: z.array(OwnerIdSchema),
-  unreadable: z.array(
-    z.object({ runId: RunIdSchema, reason: RunUnreadableSchema }),
+export const LocalRuntimeStateSchema = Schema.Struct({
+  self: Schema.Array(OwnerIdSchema),
+  dead: Schema.Array(OwnerIdSchema),
+  unreadable: Schema.Array(
+    Schema.Struct({ runId: RunIdSchema, reason: RunUnreadableSchema }),
   ),
-  resumeBlocked: z.array(
-    z.object({
+  resumeBlocked: Schema.Array(
+    Schema.Struct({
       runId: RunIdSchema,
       reason: ResumeBlockerSchema,
-      retry: z.boolean(),
+      retry: Schema.Boolean,
     }),
   ),
 });
-export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
+export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
 
 /**
  * The aggregates whose transcripts the view holds, each with the seq its
@@ -107,50 +103,51 @@ export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
  * aggregate entering it gets its `transcriptSeq` entry, one leaving it loses
  * its transcript.
  */
-export const TranscriptSubscriptionSchema = z.object({
+export const TranscriptSubscriptionSchema = Schema.Struct({
   id: AggregateIdSchema,
-  fromSeq: z.int().nonnegative(),
+  fromSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-export type TranscriptSubscription = z.infer<
-  typeof TranscriptSubscriptionSchema
->;
+export type TranscriptSubscription =
+  (typeof TranscriptSubscriptionSchema)['Type'];
 
 /**
  * Current ownership for exactly the scope a finite read checked: a checked
  * aggregate with no claim entry no longer exists.
  */
-export const ExistenceReconciliationSchema = z.object({
-  checkedAggregateIds: z.array(AggregateIdSchema),
-  claims: z.array(
-    z.object({
+export const ExistenceReconciliationSchema = Schema.Struct({
+  checkedAggregateIds: Schema.Array(AggregateIdSchema),
+  claims: Schema.Array(
+    Schema.Struct({
       aggregateId: AggregateIdSchema,
-      ownerId: OwnerIdSchema.nullable(),
+      ownerId: Schema.NullOr(OwnerIdSchema),
     }),
   ),
 });
-export type ExistenceReconciliation = z.infer<
-  typeof ExistenceReconciliationSchema
->;
+export type ExistenceReconciliation =
+  (typeof ExistenceReconciliationSchema)['Type'];
 
-const SessionViewInputSchema = z.discriminatedUnion('_tag', [
+const SessionViewInputSchema = Schema.Union([
   EventInputSchema,
   TextChunkSchema,
-  z.object({ _tag: z.literal('debug'), enabled: z.boolean() }),
-  z.object({ _tag: z.literal('local'), local: LocalRuntimeStateSchema }),
-  z.object({
-    _tag: z.literal('subscriptions'),
-    set: z.array(TranscriptSubscriptionSchema),
+  Schema.Struct({ _tag: Schema.Literal('debug'), enabled: Schema.Boolean }),
+  Schema.Struct({
+    _tag: Schema.Literal('local'),
+    local: LocalRuntimeStateSchema,
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal('subscriptions'),
+    set: Schema.Array(TranscriptSubscriptionSchema),
   }),
   /** Cold reads have completed; apply current claims without adopting a later cursor. */
-  z.object({
-    _tag: z.literal('replay.complete'),
+  Schema.Struct({
+    _tag: Schema.Literal('replay.complete'),
     existence: ExistenceReconciliationSchema,
   }),
   /** A finite tail read has completed, including rows no longer materialized. */
-  z.object({
-    _tag: z.literal('drained'),
+  Schema.Struct({
+    _tag: Schema.Literal('drained'),
     cursor: CommitOrdinalSchema,
     existence: ExistenceReconciliationSchema,
   }),
 ]);
-export type SessionViewInput = z.infer<typeof SessionViewInputSchema>;
+export type SessionViewInput = typeof SessionViewInputSchema.Type;

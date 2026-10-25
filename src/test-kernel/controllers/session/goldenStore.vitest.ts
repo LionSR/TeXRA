@@ -38,7 +38,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -97,30 +97,30 @@ const SELF = JSON.stringify([
 ]);
 
 /** The runs, by the ids the generator normalizes them to, in start order. */
-const PARENT = RunIdSchema.parse('a00000000001');
-const CHAT = RunIdSchema.parse('a00000000008');
+const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
+const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = RunIdSchema.parse('7c752d59004c85f4a0bda51f');
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('7c752d59004c85f4a0bda51f');
 const ROUND = '82f40cbccf0abfd6ee57cf6f';
 /** The chat's Codex child, detached by the user's stop. */
-const CODEX = RunIdSchema.parse('a0000000000b');
-const SCRIPTED = RunIdSchema.parse('a0000000000c');
+const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
+const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
 const DEFINED = '7636b556c2087511ca08dfde';
 /** A headless run, and the fork `texra resume --fork` made of it. */
-const FORK_SOURCE = RunIdSchema.parse('a0000000000e');
-const FORKED = RunIdSchema.parse('a0000000000f');
+const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
+const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = RunIdSchema.parse('a00000000010');
-const TOMBSTONED = RunIdSchema.parse('a00000000011');
+const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
+const TOMBSTONED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
-const SERVICE_TASK = RunIdSchema.parse('a00000000012');
-const BACKGROUND = RunIdSchema.parse('a00000000013');
+const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
+const BACKGROUND = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
-const DOCUMENT_TASK = RunIdSchema.parse('a00000000005');
+const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
 const REVISIONS = ['7c94c075941239282f97614c', 'ef9d49598e3ed47c0e6d1015'];
 
 const roots: string[] = [];
@@ -347,7 +347,10 @@ describe('the golden 1.0 store', () => {
         ]);
         // It asked for `executions`, and a child is offered what it declares,
         // whatever its parent was offered.
-        const defined = qualifyAggregateId('run', RunIdSchema.parse(DEFINED));
+        const defined = qualifyAggregateId(
+          'run',
+          Schema.decodeUnknownSync(RunIdSchema)(DEFINED),
+        );
         expect(
           events.flatMap((event) =>
             event.type === 'tools.offered' && event.aggregateId === defined

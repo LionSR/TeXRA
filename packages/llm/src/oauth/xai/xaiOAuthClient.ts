@@ -6,8 +6,7 @@
  * device-login flow runs on one fiber.
  */
 // Third-party imports
-import { Data, Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Option, Schema } from 'effect';
 
 // Local imports
 import {
@@ -32,18 +31,16 @@ import {
 } from './xaiProvider.js';
 
 /** The user refused the device authorization (terminal, re-auth required). */
-class DeviceAuthorizationDenied extends Data.TaggedError(
+class DeviceAuthorizationDenied extends Schema.TaggedError<DeviceAuthorizationDenied>()(
   'DeviceAuthorizationDenied',
-)<{
-  readonly message: string;
-  readonly status: number;
-}> {}
+  { message: Schema.String, status: Schema.Number },
+) {}
 
 /** The server expired the device code before the user approved. */
-class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
-  readonly message: string;
-  readonly status: number;
-}> {}
+class DeviceCodeExpired extends Schema.TaggedError<DeviceCodeExpired>()(
+  'DeviceCodeExpired',
+  { message: Schema.String, status: Schema.Number },
+) {}
 
 /** Begin the RFC 8628 device-code flow. */
 export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
@@ -67,9 +64,13 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
 );
 
 /** An RFC 6749 error body; a field of another shape reads as absent. */
-const DeviceErrorBodySchema = z.object({
-  error: z.string().optional().catch(undefined),
-  error_description: z.string().optional().catch(undefined),
+const DeviceErrorBodySchema = Schema.Struct({
+  error: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
+  error_description: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
 });
 
 /**

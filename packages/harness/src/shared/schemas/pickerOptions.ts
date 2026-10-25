@@ -3,7 +3,7 @@
  * Kept free of any IPC message wrappers so the message modules can compose
  * these without circular dependencies.
  */
-import { z } from 'zod';
+import { Effect, Schema, Struct } from 'effect';
 
 import { AgentSourceSchema } from '@shared/schemas/agent';
 import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
@@ -19,12 +19,12 @@ import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
  * keeps the two field names in lockstep — historically a typo in either schema
  * would have silently broken option matching in only one picker.
  */
-const PickerOptionBaseSchema = z.object({
-  value: z.string(),
-  label: z.string(),
+const PickerOptionBaseSchema = Schema.Struct({
+  value: Schema.String,
+  label: Schema.String,
 });
 
-const ModelAvailabilityKindSchema = z.enum([
+const ModelAvailabilityKindSchema = Schema.Literals([
   'provider-key',
   'openrouter-key',
   'missing-key',
@@ -51,7 +51,7 @@ const ModelAvailabilityKindSchema = z.enum([
   'unknown-model',
 ]);
 /** Why a model option can or cannot run. */
-export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
+export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
 
 /**
  * What a kind means: the label a surface shows for it, whether a run can use
@@ -139,21 +139,23 @@ Object.freeze(MODEL_AVAILABILITY_STATUS);
  * availability and routing are never re-derived at render time: the kind is
  * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
  */
-export const ModelAvailabilityFieldsSchema = z.object({
-  availability: ModelAvailabilityKindSchema.optional(),
+export const ModelAvailabilityFieldsSchema = Schema.Struct({
+  availability: Schema.optional(ModelAvailabilityKindSchema),
   /** Effective request route for a model that can use multiple backends. */
-  routeLabel: z.string().optional(),
+  routeLabel: Schema.optional(Schema.String),
 });
-export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
-  provider: z.string().optional(),
-  context: z.string().optional(),
-  cost: z.string().optional(),
-  hint: z.string().optional(),
-  /** Current reasoning setting, including default or fixed-mode context. */
-  reasoning: z.string().optional(),
-  ...ModelAvailabilityFieldsSchema.shape,
-});
-export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
+export const ModelOptionDataSchema = PickerOptionBaseSchema.mapFields(
+  Struct.assign({
+    provider: Schema.optional(Schema.String),
+    context: Schema.optional(Schema.String),
+    cost: Schema.optional(Schema.String),
+    hint: Schema.optional(Schema.String),
+    /** Current reasoning setting, including default or fixed-mode context. */
+    reasoning: Schema.optional(Schema.String),
+    ...ModelAvailabilityFieldsSchema.fields,
+  }),
+);
+export type ModelOptionData = typeof ModelOptionDataSchema.Type;
 
 /**
  * Whether an option row can be run as shipped: `readModelOptions`
@@ -168,12 +170,14 @@ export function isModelOptionAvailable(model: ModelOptionData): boolean {
   );
 }
 
-export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
-  isOrchestrator: z.boolean().optional(),
-  /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
-  source: AgentSourceSchema.optional(),
-});
-export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
+export const AgentOptionDataSchema = PickerOptionBaseSchema.mapFields(
+  Struct.assign({
+    isOrchestrator: Schema.optional(Schema.Boolean),
+    /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
+    source: Schema.optional(AgentSourceSchema),
+  }),
+);
+export type AgentOptionData = typeof AgentOptionDataSchema.Type;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -182,17 +186,23 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
  * ever sends team identity back. Availability is resolved against the full
  * live catalog, not just the workspace's enabled agents.
  */
-export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
-  /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
-  source: z.enum(['built-in', 'custom']),
-  /** The team's icon, a name the host's icon set draws. */
-  icon: z.string(),
-  /** Preset description, surfaced as the option `title`. */
-  description: z.string().prefault(''),
-  /** Catalog members that did not resolve; empty means fully runnable. */
-  unavailableMembers: z.array(z.string()).prefault([]),
-  /** Marks "no runnable team lead"; `disabledReason` carries the human explanation. */
-  disabled: z.boolean().optional(),
-  disabledReason: z.string().nullish(),
-});
-export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
+export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
+  Struct.assign({
+    /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
+    source: Schema.Literals(['built-in', 'custom']),
+    /** The team's icon, a name the host's icon set draws. */
+    icon: Schema.String,
+    /** Preset description, surfaced as the option `title`. */
+    description: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed('')),
+    ),
+    /** Catalog members that did not resolve; empty means fully runnable. */
+    unavailableMembers: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+    ),
+    /** Marks "no runnable team lead"; `disabledReason` carries the human explanation. */
+    disabled: Schema.optional(Schema.Boolean),
+    disabledReason: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+);
+export type TeamOptionData = typeof TeamOptionDataSchema.Type;

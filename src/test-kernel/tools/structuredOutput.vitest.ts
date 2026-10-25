@@ -1,8 +1,7 @@
 // Third-party imports
 import { describe, expect } from 'vitest';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema, SchemaGetter } from 'effect';
 
 // Local imports - tools
 import {
@@ -11,7 +10,7 @@ import {
 } from '@tools/structuredOutput';
 
 describe('normalizeStructuredOutputSchema', () => {
-  it.effect('normalizes a JSON Schema object through the pinned Zod API', () =>
+  it.effect('normalizes a JSON Schema object into a validating schema', () =>
     Effect.gen(function* () {
       const jsonSchema = {
         type: 'object',
@@ -26,7 +25,10 @@ describe('normalizeStructuredOutputSchema', () => {
       const normalized = normalizeStructuredOutputSchema(jsonSchema);
       const tool = buildTerminalTool(jsonSchema);
 
-      expect(normalized.jsonSchema).toMatchObject(jsonSchema);
+      // `additionalProperties` is the provider conversion's decision, not
+      // the author's: a compiled schema ignores undeclared keys.
+      const { additionalProperties: _closed, ...authored } = jsonSchema;
+      expect(normalized.jsonSchema).toMatchObject(authored);
       expect(yield* tool.call({ title: 'Lemma', count: 2 })).toMatchObject({
         status: 'executed',
       });
@@ -38,9 +40,9 @@ describe('normalizeStructuredOutputSchema', () => {
 
   it('rejects non-object and unconstrained roots at normalization time', () => {
     expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
-    expect(() => normalizeStructuredOutputSchema(z.array(z.string()))).toThrow(
-      /object.*root/,
-    );
+    expect(() =>
+      normalizeStructuredOutputSchema(Schema.Array(Schema.String)),
+    ).toThrow(/object.*root/);
   });
 
   it('rejects regex-bearing sandbox schemas before host compilation', () => {
@@ -128,21 +130,28 @@ describe('normalizeStructuredOutputSchema', () => {
 });
 
 describe('buildTerminalTool', () => {
-  const schema = z.strictObject({ title: z.string(), count: z.number() });
+  const schema = Schema.Struct({ title: Schema.String, count: Schema.Number });
 
   it('rejects a non-object root schema so provider tool inputs stay valid', () => {
-    expect(() => buildTerminalTool(z.array(z.string()))).toThrow(
+    expect(() => buildTerminalTool(Schema.Array(Schema.String))).toThrow(
       /object at the root/,
     );
   });
 
   it.effect(
-    'supports async Zod validation through the canonical tool boundary',
+    'supports effectful validation through the canonical tool boundary',
     () =>
       Effect.gen(function* () {
         const tool = buildTerminalTool(
-          z.strictObject({
-            title: z.string().refine(async (value) => value === 'accepted'),
+          Schema.Struct({
+            title: Schema.String.pipe(
+              Schema.decode({
+                decode: SchemaGetter.checkEffect((value) =>
+                  Effect.succeed(value === 'accepted' || 'must be accepted'),
+                ),
+                encode: SchemaGetter.passthrough(),
+              }),
+            ),
           }),
         );
 
@@ -160,7 +169,14 @@ describe('buildTerminalTool', () => {
     () =>
       Effect.gen(function* () {
         const tool = buildTerminalTool(
-          z.strictObject({ value: z.string().transform(() => 1n) }),
+          Schema.Struct({
+            value: Schema.String.pipe(
+              Schema.decodeTo(Schema.BigInt, {
+                decode: SchemaGetter.transform(() => 1n),
+                encode: SchemaGetter.forbidden(() => 'decode-only'),
+              }),
+            ),
+          }),
         );
 
         expect(yield* tool.call({ value: 'one' })).toMatchObject({

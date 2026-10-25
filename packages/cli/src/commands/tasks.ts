@@ -6,7 +6,7 @@
  * runs, so a task outlives the terminal that started it.
  */
 import { defineCommand } from 'citty';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 
 import {
   type RunId,
@@ -15,10 +15,10 @@ import {
   generateRunId,
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
+  type RequestError,
   ensureError,
 } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
-import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -90,7 +90,7 @@ function requestTask(
       request: request(task.runId),
     }).pipe(
       Effect.catchIf(
-        (error): error is RequestErrorWire => error._tag !== 'RpcClientError',
+        (error): error is RequestError => error._tag !== 'RpcClientError',
         (error) => Effect.fail(new CliUsageError(requestErrorText(error))),
       ),
     );
@@ -223,7 +223,7 @@ const startCommand = defineCliCommand({
         workingDirectory: context.cwd,
       };
       const config = yield* Effect.try({
-        try: () => AgentConfigSchema.parse(payload),
+        try: () => Schema.decodeUnknownSync(AgentConfigSchema)(payload),
         catch: ensureError,
       });
       const runId = yield* Effect.scoped(
@@ -240,11 +240,7 @@ const startCommand = defineCliCommand({
             approveDelegatedWork: approval.approveDelegatedWork,
           });
         }),
-      ).pipe(
-        Effect.mapError((error) =>
-          error instanceof Error ? error : new Error(error.message),
-        ),
-      );
+      ).pipe(Effect.mapError(ensureError));
       const notice = yield* Fiber.join(keys);
       if (notice !== null) writeTextStderr(notice);
       emitCliResult(context, {

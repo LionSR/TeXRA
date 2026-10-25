@@ -9,9 +9,8 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 
 // Local imports - shared contracts
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -75,16 +74,19 @@ export const envDigest = (key: string, env: Readonly<Record<string, string>>) =>
  * so it takes their characters, stays short enough to leave room for a tool
  * name, and never contains the `__` separator.
  */
-export const ServerNameSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9_-]{1,32}$/, 'use 1-32 letters, digits, _ or -')
-  .refine((name) => !name.includes('__'), 'must not contain "__"');
+export const ServerNameSchema = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9_-]{1,32}$/),
+).check(
+  Schema.makeFilter((name) => !name.includes('__'), {
+    message: 'must not contain "__"',
+  }),
+);
 
-const McpServerEntrySchema = z.strictObject({
-  type: z.literal('stdio').optional(),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
+const McpServerEntrySchema = Schema.Struct({
+  type: Schema.optional(Schema.Literal('stdio')),
+  command: Schema.String.check(Schema.isMinLength(1)),
+  args: Schema.optional(Schema.Array(Schema.String)),
+  env: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
 
 /**
@@ -99,20 +101,23 @@ export function parseMcpServers(
   const parsed: McpServerConfig[] = [];
   const warnings: string[] = [];
   for (const [name, raw] of Object.entries(servers)) {
-    const validName = ServerNameSchema.safeParse(name);
-    const entry = McpServerEntrySchema.safeParse(raw);
-    if (!validName.success || !entry.success) {
-      const error = validName.error ?? entry.error;
+    // The name is checked first, so a bad name is the failure reported.
+    const server = Result.all([
+      Schema.decodeUnknownResult(ServerNameSchema)(name),
+      Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
+    ]);
+    if (Result.isFailure(server)) {
       warnings.push(
-        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${error ? z.prettifyError(error) : ''}`,
+        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${server.failure.message}`,
       );
       continue;
     }
+    const [, entry] = server.success;
     parsed.push({
       name,
-      command: entry.data.command,
-      args: entry.data.args ?? [],
-      env: entry.data.env ?? {},
+      command: entry.command,
+      args: entry.args ?? [],
+      env: entry.env ?? {},
     });
   }
   return { servers: parsed, warnings };

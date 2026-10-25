@@ -1,5 +1,4 @@
-import { Predicate } from 'effect';
-import type { z } from 'zod';
+import { Predicate, Result, Schema } from 'effect';
 
 type CommandMessage = { command: string };
 
@@ -68,7 +67,7 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
 /**
  * Creates a type-safe message dispatcher for a given schema.
  *
- * @param schema - Zod schema for the message union (must output { command: string, ... })
+ * @param schema - schema for the message union (must output { command: string, ... })
  * @returns A dispatcher function that parses and routes messages to handlers
  *
  * @example
@@ -84,20 +83,20 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
  * ```
  */
 export function createDispatcher<TMessage extends CommandMessage>(
-  schema: z.ZodType<TMessage>,
+  schema: Schema.Codec<TMessage, unknown>,
 ): DispatcherFn<TMessage> {
   return (
     raw: unknown,
     handlers: HandlerRegistry<TMessage>,
     onError?: (error: unknown) => void,
   ): boolean => {
-    const parseResult = schema.safeParse(raw);
-    if (!parseResult.success) {
-      onError?.(parseResult.error);
+    const parseResult = Schema.decodeUnknownResult(schema)(raw);
+    if (!Result.isSuccess(parseResult)) {
+      onError?.(parseResult.failure);
       return false;
     }
 
-    const message = parseResult.data;
+    const message = parseResult.success;
     const entry = handlers[message.command as TMessage['command']] as
       MessageHandler<typeof message> | Unsupported;
 
@@ -131,38 +130,25 @@ export function createDispatcher<TMessage extends CommandMessage>(
   };
 }
 
-function isZodError(error: unknown): error is z.ZodError {
-  return (
-    Predicate.isObjectOrArray(error) &&
-    'issues' in error &&
-    Array.isArray(error.issues)
-  );
-}
-
 /**
- * True when a discriminated-union `safeParse` failure means "this message's
- * `command` doesn't belong to this schema at all" (Zod's "no matching
- * discriminator" case) rather than "the command matched but a field is
- * wrong". Only the top-level `command` discriminator counts — a nested
- * discriminated union inside a matched branch (e.g. `UpdatePermissionMessage
- * Schema`'s `action` field) reports its own `invalid_union` issue at a
- * different path, which is a real validation failure, not an unrecognized
- * command.
+ * True when a message-union decode failure means "this message's `command`
+ * doesn't belong to this schema at all" rather than "the command matched but
+ * a field is wrong". The union's members discriminate on their `command`
+ * literal, so a command no member declares fails at the root with no member
+ * issue at all, while a matched member that rejects a field reports that
+ * member's issue. A nested union inside a matched member (e.g.
+ * `UpdatePermissionMessageSchema`'s `action` field) is such a member issue,
+ * which is a real validation failure, not an unrecognized command.
  */
 export function isUnrecognizedCommand(error: unknown): boolean {
-  if (!isZodError(error)) return false;
-  const [issue, ...rest] = error.issues;
-  return (
-    rest.length === 0 &&
-    issue?.code === 'invalid_union' &&
-    issue.path.length === 1 &&
-    issue.path[0] === 'command'
-  );
+  if (!Schema.isSchemaError(error)) return false;
+  const { issue } = error;
+  return issue._tag === 'AnyOf' && issue.issues.length === 0;
 }
 
 // Dev/test-only outbound-message assertions. Mirror `createDispatcher`'s
 // inbound-side validation, but for the send side of the same schemas: a
-// webview/desktop IPC boundary that already has an outbound Zod schema but
+// webview/desktop IPC boundary that already has an outbound schema but
 // never runs the payload through it before posting.
 //
 // Both functions below are no-ops outside `isDevAssertionMode()` (true under
@@ -206,16 +192,16 @@ function isDevAssertionMode(): boolean {
  * real mismatch and throws immediately.
  */
 export function assertKnownOutboundMessage(
-  domains: readonly z.ZodType<CommandMessage>[],
+  domains: readonly Schema.Codec<CommandMessage, unknown>[],
   message: unknown,
 ): void {
   if (!isDevAssertionMode()) return;
   for (const schema of domains) {
-    const result = schema.safeParse(message);
-    if (result.success) return;
-    if (!isUnrecognizedCommand(result.error)) {
+    const result = Schema.decodeUnknownResult(schema)(message);
+    if (Result.isSuccess(result)) return;
+    if (!isUnrecognizedCommand(result.failure)) {
       throw new Error(
-        `Outbound message failed schema validation: ${result.error.message}`,
+        `Outbound message failed schema validation: ${result.failure.message}`,
       );
     }
   }

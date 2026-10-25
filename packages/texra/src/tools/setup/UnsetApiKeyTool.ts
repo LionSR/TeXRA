@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -15,14 +14,13 @@ import { executed, ToolError } from '@texra-ai/harness/plugins';
 
 // Local file imports
 
-const UnsetApiKeyInputSchema = z.strictObject({
-  provider: z
-    .string()
-    .min(1)
-    .describe('Provider name to remove the stored key for.'),
+const UnsetApiKeyInputSchema = Schema.Struct({
+  provider: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'Provider name to remove the stored key for.',
+  }),
 });
 
-type UnsetApiKeyInput = z.infer<typeof UnsetApiKeyInputSchema>;
+type UnsetApiKeyInput = typeof UnsetApiKeyInputSchema.Type;
 
 const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   input: UnsetApiKeyInput,

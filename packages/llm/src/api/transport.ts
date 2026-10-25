@@ -1,6 +1,14 @@
 // Third-party imports
-import { Cause, Clock, Effect, Exit, type Scope, Stream } from 'effect';
-import { z } from 'zod';
+import {
+  Cause,
+  Clock,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+} from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -38,7 +46,7 @@ export const admitObservation = Effect.fn('llm.admitObservation')(function* <
   origin: ModelOrigin,
   turn: ResolvedTurn,
   input: RemoteOperation,
-  policy: z.infer<typeof ObservationPolicySchema>,
+  policy: typeof ObservationPolicySchema.Type,
 ) {
   const operation = yield* boundOperation(input, origin);
   if (
@@ -50,15 +58,15 @@ export const admitObservation = Effect.fn('llm.admitObservation')(function* <
       message: 'The admitted turn belongs to another model binding.',
       operation,
     });
-  const parsed = ObservationPolicySchema.safeParse(policy);
-  if (!parsed.success)
+  const parsed = Schema.decodeUnknownResult(ObservationPolicySchema)(policy);
+  if (!Result.isSuccess(parsed))
     return yield* new ModelError({
       kind: 'invalid-request',
       message: 'The observation deadline is invalid.',
-      cause: parsed.error,
+      cause: parsed.failure,
       operation,
     });
-  const { deadlineAtMs } = parsed.data;
+  const { deadlineAtMs } = parsed.success;
   const deadline = new ModelError({
     kind: 'observation-deadline',
     message: 'The original observation deadline has expired.',
@@ -143,9 +151,10 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
  */
 export const parseOutboundToolArguments = (
   argumentsText: string,
-): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+): Effect.Effect<typeof JsonObjectSchema.Type, ModelError> =>
   Effect.try({
-    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    try: () =>
+      Schema.decodeUnknownSync(JsonObjectSchema)(JSON.parse(argumentsText)),
     catch: (cause) =>
       new ModelError({
         kind: 'invalid-request',
@@ -163,9 +172,10 @@ export const parseOutboundToolArguments = (
 export const parseInboundToolArguments = (
   argumentsText: string,
   provider: string,
-): Effect.Effect<z.infer<typeof JsonObjectSchema>, ModelError> =>
+): Effect.Effect<typeof JsonObjectSchema.Type, ModelError> =>
   Effect.try({
-    try: () => JsonObjectSchema.parse(JSON.parse(argumentsText)),
+    try: () =>
+      Schema.decodeUnknownSync(JsonObjectSchema)(JSON.parse(argumentsText)),
     catch: (cause) =>
       new ModelError({
         kind: 'malformed-output',

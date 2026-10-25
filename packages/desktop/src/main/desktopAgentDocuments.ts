@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import {
   AGENT_SOURCE,
   agentKey,
@@ -10,11 +10,12 @@ import {
   agentDocumentTarget,
 } from '../shared/desktopAgentDocument.js';
 
-export class AgentDocumentUnavailable extends Data.TaggedError(
+export class AgentDocumentUnavailable extends Schema.TaggedError<AgentDocumentUnavailable>()(
   'AgentDocumentUnavailable',
-)<{
-  readonly message: string;
-}> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 /** Resolve each read/save afresh, including after a renderer or app restart.
  * A removed definition cannot keep an old file grant alive. */

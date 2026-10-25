@@ -6,8 +6,7 @@
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { Cause, Effect, Array as Arr } from 'effect';
-import { z } from 'zod';
+import { Array as Arr, Cause, Effect, Result, Schema } from 'effect';
 
 import { defineTool, withLogChannel, ToolResult } from '@texra-ai/harness';
 import {
@@ -27,56 +26,77 @@ const LOOGLE_RETRIES = 2;
 // Schema
 // ============================================================================
 
-const LeanLoogleInputSchema = z.strictObject({
+const LeanLoogleInputSchema = Schema.Struct({
   /** Search query - single string or array for batched searches */
-  query: z
-    .union([z.string(), z.array(z.string()).min(1).max(10)])
-    .describe(
+  query: Schema.Union([
+    Schema.String,
+    Schema.Array(Schema.String)
+      .check(Schema.isMinLength(1))
+      .check(Schema.isMaxLength(10)),
+  ]).annotate({
+    description:
       'Search query (type signature or name pattern). Pass an array of strings to batch multiple searches in one call.',
-    ),
+  }),
   /** Maximum number of results to return per query */
-  limit: nullishWithDefault(z.int().min(1).max(20), 10).describe(
+  limit: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(20),
+    ),
+    10,
     'Max results per query (default: 10)',
   ),
 });
 
-type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
+type LeanLoogleInput = typeof LeanLoogleInputSchema.Type;
 
 // ============================================================================
 // Response schemas (Loogle is an external network boundary — validate it)
 // ============================================================================
 
-const LoogleHitSchema = z.looseObject({
-  name: z.string(),
-  type: z.string(),
-  // `.prefault()` only substitutes for `undefined`, not explicit `null` — and
-  // Loogle, like the sibling `doc` field below, may send either for `module`.
-  module: z
-    .string()
-    .nullish()
-    .transform((value) => value ?? ''),
-  // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
-  doc: z.string().nullish(),
-});
-type LoogleHit = z.infer<typeof LoogleHitSchema>;
+const LoogleHitSchema = Schema.StructWithRest(
+  Schema.Struct({
+    name: Schema.String,
+    type: Schema.String,
+    // Loogle, like the sibling `doc` field below, may omit `module` or send
+    // null for it; either reads as an empty module name.
+    module: nullishWithDefault(
+      Schema.String,
+      '',
+      'The declaring module, or empty when Loogle sends none.',
+    ),
+    // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
+    doc: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
+type LoogleHit = typeof LoogleHitSchema.Type;
 
-const LoogleSuccessSchema = z.looseObject({
-  hits: z.array(LoogleHitSchema),
-});
+const LoogleSuccessSchema = Schema.StructWithRest(
+  Schema.Struct({
+    hits: Schema.Array(LoogleHitSchema),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
-const LoogleErrorSchema = z.looseObject({
-  error: z.string(),
-  suggestions: z.array(z.string()).nullish(),
-});
+const LoogleErrorSchema = Schema.StructWithRest(
+  Schema.Struct({
+    error: Schema.String,
+    suggestions: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
 // Not a discriminatedUnion: success/error bodies share no tagged key. Try the
 // error arm first so an `{ error }` body is never mis-read as an empty success.
-const LoogleResponseSchema = z.union([LoogleErrorSchema, LoogleSuccessSchema]);
-type LoogleResponse = z.infer<typeof LoogleResponseSchema>;
+const LoogleResponseSchema = Schema.Union([
+  LoogleErrorSchema,
+  LoogleSuccessSchema,
+]);
+type LoogleResponse = typeof LoogleResponseSchema.Type;
 
 function isErrorResponse(
   response: LoogleResponse,
-): response is z.infer<typeof LoogleErrorSchema> {
+): response is typeof LoogleErrorSchema.Type {
   return 'error' in response;
 }
 
@@ -121,15 +141,15 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
       // Validate the body at the boundary. A malformed shape is not
       // transient, so it is not retried; searchOne surfaces it as a tool
       // error.
-      const parsed = LoogleResponseSchema.safeParse(raw);
-      if (!parsed.success) {
+      const parsed = Schema.decodeUnknownResult(LoogleResponseSchema)(raw);
+      if (!Result.isSuccess(parsed)) {
         return yield* Effect.fail(
           new Error(
-            `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+            `Unexpected Loogle response shape: ${parsed.failure.message}`,
           ),
         );
       }
-      return parsed.data;
+      return parsed.success;
     }),
     {
       retries: LOOGLE_RETRIES,

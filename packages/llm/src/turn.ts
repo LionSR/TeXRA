@@ -6,8 +6,7 @@
  * entry names what a caller reads from each.
  */
 // Third-party imports
-import { Effect, Stream } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema, Stream, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -40,258 +39,260 @@ import {
   type RemoteOperation,
 } from './errors.js';
 
-const ToolDefinitionSchema = z
-  .strictObject({
-    name: z.string().min(1),
-    description: z.string(),
-    parameters: JsonObjectSchema,
-  })
-  .readonly();
-const ToolDefinitionsSchema = z
-  .array(ToolDefinitionSchema)
-  .superRefine((tools, ctx) => {
-    if (new Set(tools.map((tool) => tool.name)).size !== tools.length) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Tool definitions must have distinct names.',
-      });
-    }
-  })
-  .readonly();
+const ToolDefinitionSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
+  description: Schema.String,
+  parameters: JsonObjectSchema,
+});
+const ToolDefinitionsSchema = Schema.Array(ToolDefinitionSchema).check(
+  Schema.makeFilter(
+    (tools) => new Set(tools.map((tool) => tool.name)).size === tools.length,
+    { message: 'Tool definitions must have distinct names.' },
+  ),
+);
 
-const ToolChoiceSchema = z.union([
-  z.literal('auto'),
-  z.strictObject({ name: z.string().min(1) }).readonly(),
+/** A non-negative integer: a token or item count. */
+const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
+const ToolChoiceSchema = Schema.Union([
+  Schema.Literal('auto'),
+  Schema.Struct({ name: Schema.String.check(Schema.isMinLength(1)) }),
 ]);
 // This package speaks its own protocol vocabulary and takes no llm-zoo
 // dependency; the registry's enum is checked against this one by assignment at
 // the harness's model-access call sites that feed it.
-const ReasoningEffortSchema = z
-  .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
-  .nullable();
-const ResponsesReasoningSchema = z
-  .strictObject({
-    effort: ReasoningEffortSchema,
-    mode: z.enum(['standard', 'pro']).nullable(),
-    summary: z.enum(['auto', 'concise', 'detailed']).nullable(),
-  })
-  .readonly()
-  .nullable();
-const DisabledThinkingSchema = z.strictObject({ mode: z.literal('disabled') });
-const AdaptiveThinkingSchema = z.strictObject({
-  mode: z.literal('adaptive'),
-  display: z.literal('summarized'),
-});
-const BudgetedThinkingSchema = z.strictObject({
-  mode: z.literal('enabled'),
-  budgetTokens: z.int().min(1024),
-  display: z.literal('summarized'),
-});
-const AnthropicThinkingSchema = z.discriminatedUnion('mode', [
-  DisabledThinkingSchema.readonly(),
-  AdaptiveThinkingSchema.readonly(),
-  BudgetedThinkingSchema.readonly(),
+const ReasoningEffortLevelSchema = Schema.Literals([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
 ]);
-const EffortSchema = ReasoningEffortSchema.unwrap()
-  .exclude(['none', 'minimal'])
-  .nullable();
-const CacheSchema = z.enum(['disabled', '5m']);
-const ThinkingLevelSchema = z.enum(['minimal', 'low', 'medium', 'high']);
+const ReasoningEffortSchema = Schema.NullOr(ReasoningEffortLevelSchema);
+const ResponsesReasoningSchema = Schema.NullOr(
+  Schema.Struct({
+    effort: ReasoningEffortSchema,
+    mode: Schema.NullOr(Schema.Literals(['standard', 'pro'])),
+    summary: Schema.NullOr(Schema.Literals(['auto', 'concise', 'detailed'])),
+  }),
+);
+const AnthropicThinkingSchema = Schema.Union([
+  Schema.Struct({ mode: Schema.Literal('disabled') }),
+  Schema.Struct({
+    mode: Schema.Literal('adaptive'),
+    display: Schema.Literal('summarized'),
+  }),
+  Schema.Struct({
+    mode: Schema.Literal('enabled'),
+    budgetTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1024)),
+    display: Schema.Literal('summarized'),
+  }),
+]);
+const EffortSchema = Schema.NullOr(
+  ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
+);
+const CacheSchema = Schema.Literals(['disabled', '5m']);
+const ThinkingLevelSchema = Schema.Literals([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+]);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
-export const TurnRequestSchema = z
-  .strictObject({
-    mode: z.enum(['foreground', 'background']).optional(),
-    system: z.string().optional(),
-    messages: PreparedHistorySchema,
-    tools: ToolDefinitionsSchema.optional(),
-    toolChoice: ToolChoiceSchema.optional(),
-    maxOutputTokens: z.int().positive().optional(),
-    store: z.boolean().optional(),
-    continuation: ContinuationSchema.optional(),
-    /** Groups the requests that share a prefix (a run's), for a provider
-     *  that routes its prompt cache by key. */
-    cacheKey: z.string().min(1).optional(),
-  })
-  .readonly();
+export const TurnRequestSchema = Schema.Struct({
+  mode: Schema.optional(Schema.Literals(['foreground', 'background'])),
+  system: Schema.optional(Schema.String),
+  messages: PreparedHistorySchema,
+  tools: Schema.optional(ToolDefinitionsSchema),
+  toolChoice: Schema.optional(ToolChoiceSchema),
+  maxOutputTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  store: Schema.optional(Schema.Boolean),
+  continuation: Schema.optional(ContinuationSchema),
+  /** Groups the requests that share a prefix (a run's), for a provider
+   *  that routes its prompt cache by key. */
+  cacheKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+});
 /** A turn as the caller asks for it, before the binding's defaults apply. */
-export type TurnRequest = z.infer<typeof TurnRequestSchema>;
+export type TurnRequest = typeof TurnRequestSchema.Type;
 
-const GoogleControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive(),
-  store: z.boolean(),
+const GoogleControlsSchema = Schema.Struct({
+  maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
+  store: Schema.Boolean,
   thinkingLevel: ThinkingLevelSchema,
   toolChoice: ToolChoiceSchema,
 });
-const ResponsesControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive().nullable(),
-  temperature: z.number().min(0).max(2).nullable(),
-  store: z.boolean(),
-  parallelToolCalls: z.boolean(),
+const ResponsesControlsSchema = Schema.Struct({
+  maxOutputTokens: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+  temperature: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
+  ),
+  store: Schema.Boolean,
+  parallelToolCalls: Schema.Boolean,
   toolChoice: ToolChoiceSchema,
   reasoning: ResponsesReasoningSchema,
-  serviceTier: z.literal('fast').nullable(),
-  promptCacheKey: z.string().min(1).optional(),
+  serviceTier: Schema.NullOr(Schema.Literal('fast')),
+  promptCacheKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
 });
-const AnthropicControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive(),
-  temperature: z.number().min(0).max(1).nullable(),
-  parallelToolCalls: z.boolean(),
+const AnthropicControlsSchema = Schema.Struct({
+  maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
+  temperature: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
+  ),
+  parallelToolCalls: Schema.Boolean,
   toolChoice: ToolChoiceSchema,
   thinking: AnthropicThinkingSchema,
   effort: EffortSchema,
   cache: CacheSchema,
-  stopSequences: z.array(z.string()).readonly(),
+  stopSequences: Schema.Array(Schema.String),
 });
-const OpenRouterControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive(),
-  temperature: z.number().min(0).max(2).nullable(),
+const OpenRouterControlsSchema = Schema.Struct({
+  maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
+  temperature: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
+  ),
   effort: ReasoningEffortSchema,
-  stopSequences: z.array(z.string()).readonly(),
+  stopSequences: Schema.Array(Schema.String),
   toolChoice: ToolChoiceSchema,
 });
-const EditorControlsSchema = z.strictObject({
-  justification: z.string(),
-  toolChoice: z.literal('auto'),
+const EditorControlsSchema = Schema.Struct({
+  justification: Schema.String,
+  toolChoice: Schema.Literal('auto'),
 });
 
-/** Refinement guard: a route without temperature support must default to null. */
-function validateTemperatureDefault(
-  configuration: {
-    readonly supportsTemperature: boolean;
-    readonly defaults: { readonly temperature: number | null };
-  },
-  ctx: z.RefinementCtx,
-): void {
-  if (
-    !configuration.supportsTemperature &&
+/** Schema check: a route without temperature support must default to null. */
+function validateTemperatureDefault(configuration: {
+  readonly supportsTemperature: boolean;
+  readonly defaults: { readonly temperature: number | null };
+}): Schema.FilterIssue[] {
+  return !configuration.supportsTemperature &&
     configuration.defaults.temperature !== null
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['defaults', 'temperature'],
-      message: 'A model without temperature support requires a null default.',
-    });
-  }
+    ? [
+        {
+          path: ['defaults', 'temperature'],
+          issue: 'A model without temperature support requires a null default.',
+        },
+      ]
+    : [];
 }
 
-/** Refinement guard: the default effort must be one the selected route supports. */
-function validateEffortDefault<E extends string>(
-  configuration: {
-    readonly supportedEfforts: readonly E[];
-    readonly defaults: { readonly effort: E | null };
-  },
-  ctx: z.RefinementCtx,
-): void {
-  if (
-    configuration.defaults.effort !== null &&
+/** Schema check: the default effort must be one the selected route supports. */
+function validateEffortDefault<E extends string>(configuration: {
+  readonly supportedEfforts: readonly E[];
+  readonly defaults: { readonly effort: E | null };
+}): Schema.FilterIssue[] {
+  return configuration.defaults.effort !== null &&
     !configuration.supportedEfforts.includes(configuration.defaults.effort)
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['defaults', 'effort'],
-      message:
-        'The default reasoning effort must be supported by the selected route.',
-    });
-  }
+    ? [
+        {
+          path: ['defaults', 'effort'],
+          issue:
+            'The default reasoning effort must be supported by the selected route.',
+        },
+      ]
+    : [];
 }
 
 /** The editor's model: its binding and defaults, which the editor host serves. */
 export const VscodeLanguageModelConfigurationSchema =
-  EditorBindingSchema.extend({
-    protocol: z.literal('vscode-lm'),
-    supportsImageInput: z.boolean(),
-    supportsToolCalling: z.boolean(),
-    defaults: EditorControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly();
+  EditorBindingSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('vscode-lm'),
+      supportsImageInput: Schema.Boolean,
+      supportsToolCalling: Schema.Boolean,
+      defaults: EditorControlsSchema.mapFields(Struct.omit(['toolChoice'])),
+    }),
+  );
 
 /** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
-export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+const ModelConfigurationSchema = Schema.Union([
   VscodeLanguageModelConfigurationSchema,
-  BindingSchema.extend({
-    protocol: z.literal('openrouter-chat'),
-    supportsTemperature: z.boolean(),
-    supportsForcedToolChoice: z.boolean(),
-    supportsImageInput: z.boolean(),
-    supportsAudioInput: z.boolean(),
-    supportedEfforts: z.array(ReasoningEffortSchema.unwrap()).readonly(),
-    defaults: OpenRouterControlsSchema.omit({ toolChoice: true }).readonly(),
-  })
-    .superRefine((configuration, ctx) => {
-      validateTemperatureDefault(configuration, ctx);
-      validateEffortDefault(configuration, ctx);
-    })
-    .readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('google-interactions'),
-    background: BackgroundCapabilitySchema,
-    defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('openai-responses'),
-    background: BackgroundCapabilitySchema,
-    supportsTemperature: z.boolean(),
-    supportsMaxOutputTokens: z.boolean(),
-    supportsStorage: z.boolean(),
-    /** The route takes input files; a document is refused locally otherwise. */
-    supportsDocumentInput: z.boolean(),
-    webSocketStreamParameter: z.enum(['implicit', 'required']),
-    allowedReasoningEfforts: z
-      .array(ResponsesReasoningSchema.unwrap().unwrap().shape.effort.unwrap())
-      .readonly(),
-    instructions: z.discriminatedUnion('kind', [
-      z.strictObject({ kind: z.literal('optional') }).readonly(),
-      z
-        .strictObject({
-          kind: z.literal('required'),
-          fallback: z.string().refine((value) => value.trim().length > 0, {
-            message: 'Required instructions need a nonblank fallback.',
-          }),
-        })
-        .readonly(),
+  BindingSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('openrouter-chat'),
+      supportsTemperature: Schema.Boolean,
+      supportsForcedToolChoice: Schema.Boolean,
+      supportsImageInput: Schema.Boolean,
+      supportsAudioInput: Schema.Boolean,
+      supportedEfforts: Schema.Array(ReasoningEffortLevelSchema),
+      defaults: OpenRouterControlsSchema.mapFields(Struct.omit(['toolChoice'])),
+    }),
+  ).check(
+    Schema.makeFilter((configuration) => [
+      ...validateTemperatureDefault(configuration),
+      ...validateEffortDefault(configuration),
     ]),
-    /**
-     * A chained request carries no `instructions`: the route reuses the
-     * stored response's own and refuses both together (xAI). The prefix
-     * fingerprint already pins the system prompt a continuation covers.
-     */
-    continuationInheritsInstructions: z.boolean(),
-    /** The route takes `tool_choice` naming one function, not only `auto`. */
-    supportsForcedToolChoice: z.boolean(),
-    /** OpenAI's own endpoint (the API or the ChatGPT subscription): it routes
-     *  its prompt cache by `prompt_cache_key` and takes mid-conversation
-     *  `developer` messages. */
-    openaiEndpoint: z.boolean(),
-    /**
-     * `openai` sends OpenAI's full request surface; `compatible` omits what
-     * the vendor Responses endpoints do not take: the encrypted-reasoning
-     * `include`, `strict` on tools, and a `store` that is only the default.
-     */
-    requestDialect: z.enum(['openai', 'compatible']),
-    defaults: ResponsesControlsSchema.omit({
-      toolChoice: true,
-      promptCacheKey: true,
-    }).readonly(),
-  })
-    .superRefine((configuration, ctx) => {
-      validateTemperatureDefault(configuration, ctx);
+  ),
+  BindingSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('google-interactions'),
+      background: BackgroundCapabilitySchema,
+      defaults: GoogleControlsSchema.mapFields(Struct.omit(['toolChoice'])),
+    }),
+  ),
+  BindingSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('openai-responses'),
+      background: BackgroundCapabilitySchema,
+      supportsTemperature: Schema.Boolean,
+      supportsMaxOutputTokens: Schema.Boolean,
+      supportsStorage: Schema.Boolean,
+      /** The route takes input files; a document is refused locally otherwise. */
+      supportsDocumentInput: Schema.Boolean,
+      webSocketStreamParameter: Schema.Literals(['implicit', 'required']),
+      allowedReasoningEfforts: Schema.Array(ReasoningEffortLevelSchema),
+      instructions: Schema.Union([
+        Schema.Struct({ kind: Schema.Literal('optional') }),
+        Schema.Struct({
+          kind: Schema.Literal('required'),
+          fallback: Schema.String.check(
+            Schema.makeFilter((value) => value.trim().length > 0, {
+              message: 'Required instructions need a nonblank fallback.',
+            }),
+          ),
+        }),
+      ]),
+      /**
+       * A chained request carries no `instructions`: the route reuses the
+       * stored response's own and refuses both together (xAI). The prefix
+       * fingerprint already pins the system prompt a continuation covers.
+       */
+      continuationInheritsInstructions: Schema.Boolean,
+      /** The route takes `tool_choice` naming one function, not only `auto`. */
+      supportsForcedToolChoice: Schema.Boolean,
+      /** OpenAI's own endpoint (the API or the ChatGPT subscription): it routes
+       *  its prompt cache by `prompt_cache_key` and takes mid-conversation
+       *  `developer` messages. */
+      openaiEndpoint: Schema.Boolean,
+      /**
+       * `openai` sends OpenAI's full request surface; `compatible` omits what
+       * the vendor Responses endpoints do not take: the encrypted-reasoning
+       * `include`, `strict` on tools, and a `store` that is only the default.
+       */
+      requestDialect: Schema.Literals(['openai', 'compatible']),
+      defaults: ResponsesControlsSchema.mapFields(
+        Struct.omit(['toolChoice', 'promptCacheKey']),
+      ),
+    }),
+  ).check(
+    Schema.makeFilter((configuration) => {
+      const issues = validateTemperatureDefault(configuration);
       if (
         !configuration.supportsMaxOutputTokens &&
         configuration.defaults.maxOutputTokens !== null
       ) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: ['defaults', 'maxOutputTokens'],
-          message:
+          issue:
             'A protocol without output-limit support requires a null default.',
         });
       }
       if (!configuration.supportsStorage && configuration.defaults.store) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: ['defaults', 'store'],
-          message:
-            'A protocol without persistent storage requires store:false.',
+          issue: 'A protocol without persistent storage requires store:false.',
         });
       }
       const effort = configuration.defaults.reasoning?.effort;
@@ -299,251 +300,245 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
         effort != null &&
         !configuration.allowedReasoningEfforts.includes(effort)
       ) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: ['defaults', 'reasoning', 'effort'],
-          message: 'The default reasoning effort must be allowed by the route.',
+          issue: 'The default reasoning effort must be allowed by the route.',
         });
       }
-    })
-    .readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('anthropic-messages'),
-    supportsTemperature: z.boolean(),
-    supportsForcedToolChoice: z.boolean(),
-    /** The model takes mid-conversation `role: "system"` messages. */
-    supportsSystemMessages: z.boolean(),
-    defaults: AnthropicControlsSchema.omit({ toolChoice: true }).readonly(),
-  })
-    .superRefine((configuration, ctx) => {
-      validateTemperatureDefault(configuration, ctx);
-    })
-    .readonly(),
+      return issues;
+    }),
+  ),
+  BindingSchema.mapFields(
+    Struct.assign({
+      protocol: Schema.Literal('anthropic-messages'),
+      supportsTemperature: Schema.Boolean,
+      supportsForcedToolChoice: Schema.Boolean,
+      /** The model takes mid-conversation `role: "system"` messages. */
+      supportsSystemMessages: Schema.Boolean,
+      defaults: AnthropicControlsSchema.mapFields(Struct.omit(['toolChoice'])),
+    }),
+  ).check(Schema.makeFilter(validateTemperatureDefault)),
 ]);
-export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
-export type GoogleInteractionsConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'google-interactions' }
->;
-export type OpenAIResponsesConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'openai-responses' }
->;
-export type AnthropicMessagesConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'anthropic-messages' }
->;
-export type OpenRouterConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'openrouter-chat' }
->;
+export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
+/** The configuration a binding was built with; a mismatch is a programming defect. */
+export const decodeModelConfiguration = Schema.decodeUnknownSync(
+  ModelConfigurationSchema,
+);
+type ConfigurationOf<P> = Extract<ModelConfiguration, { protocol: P }>;
+export type GoogleInteractionsConfiguration =
+  ConfigurationOf<'google-interactions'>;
+export type OpenAIResponsesConfiguration = ConfigurationOf<'openai-responses'>;
+export type AnthropicMessagesConfiguration =
+  ConfigurationOf<'anthropic-messages'>;
+export type OpenRouterConfiguration = ConfigurationOf<'openrouter-chat'>;
 /** The editor's model configuration, as the editor host serves it. */
-export type VscodeLanguageModelConfiguration = z.infer<
-  typeof VscodeLanguageModelConfigurationSchema
->;
+export type VscodeLanguageModelConfiguration =
+  (typeof VscodeLanguageModelConfigurationSchema)['Type'];
 
-const PreparedInputSchema = OriginSchema.extend({
-  mode: z.literal('foreground'),
-  system: z.string().optional(),
-  messages: PreparedHistorySchema,
-  tools: ToolDefinitionsSchema,
-});
-const ResponsesPreparedSchema = PreparedInputSchema.extend({
-  protocol: z.literal('openai-responses'),
-  controls: ResponsesControlsSchema.readonly(),
-  continuation: ResponsesContinuationSchema.optional(),
-});
-const GooglePreparedSchema = PreparedInputSchema.extend({
-  protocol: z.literal('google-interactions'),
-  controls: GoogleControlsSchema.readonly(),
-  continuation: GoogleContinuationSchema.optional(),
-});
-const HttpTransportSchema = z
-  .strictObject({ kind: z.literal('http') })
-  .readonly();
+const PreparedInputSchema = OriginSchema.mapFields(
+  Struct.assign({
+    mode: Schema.Literal('foreground'),
+    system: Schema.optional(Schema.String),
+    messages: PreparedHistorySchema,
+    tools: ToolDefinitionsSchema,
+  }),
+);
+const ResponsesPreparedSchema = PreparedInputSchema.mapFields(
+  Struct.assign({
+    protocol: Schema.Literal('openai-responses'),
+    controls: ResponsesControlsSchema,
+    continuation: Schema.optional(ResponsesContinuationSchema),
+  }),
+);
+const GooglePreparedSchema = PreparedInputSchema.mapFields(
+  Struct.assign({
+    protocol: Schema.Literal('google-interactions'),
+    controls: GoogleControlsSchema,
+    continuation: Schema.optional(GoogleContinuationSchema),
+  }),
+);
+const HttpTransportSchema = Schema.Struct({ kind: Schema.Literal('http') });
 /** Prepared semantic input; execution never reapplies current defaults. */
-export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
-  z.discriminatedUnion('protocol', [
-    EditorOriginSchema.extend({
-      ...PreparedInputSchema.pick({
-        mode: true,
-        system: true,
-        messages: true,
-        tools: true,
-      }).shape,
-      // An editor object acquisition is not an account or durable origin identity.
-      acquisitionId: z.uuid(),
-      controls: EditorControlsSchema.readonly(),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('openrouter-chat'),
-      controls: OpenRouterControlsSchema.readonly(),
-    }).readonly(),
-    GooglePreparedSchema.readonly(),
-    ResponsesPreparedSchema.extend({
-      transport: z.discriminatedUnion('kind', [
-        HttpTransportSchema,
-        z
-          .strictObject({
-            kind: z.literal('websocket'),
-            connectionId: z.uuid(),
-          })
-          .readonly(),
-      ]),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('anthropic-messages'),
-      controls: AnthropicControlsSchema.readonly(),
-    }).readonly(),
+export const ResolvedTurnSchema = Schema.Union([
+  Schema.Union([
+    EditorOriginSchema.mapFields(
+      Struct.assign({
+        ...PreparedInputSchema.mapFields(
+          Struct.pick(['mode', 'system', 'messages', 'tools']),
+        ).fields,
+        // An editor object acquisition is not an account or durable origin identity.
+        acquisitionId: Schema.String.check(Schema.isUUID()),
+        controls: EditorControlsSchema,
+      }),
+    ),
+    PreparedInputSchema.mapFields(
+      Struct.assign({
+        protocol: Schema.Literal('openrouter-chat'),
+        controls: OpenRouterControlsSchema,
+      }),
+    ),
+    GooglePreparedSchema,
+    ResponsesPreparedSchema.mapFields(
+      Struct.assign({
+        transport: Schema.Union([
+          HttpTransportSchema,
+          Schema.Struct({
+            kind: Schema.Literal('websocket'),
+            connectionId: Schema.String.check(Schema.isUUID()),
+          }),
+        ]),
+      }),
+    ),
+    PreparedInputSchema.mapFields(
+      Struct.assign({
+        protocol: Schema.Literal('anthropic-messages'),
+        controls: AnthropicControlsSchema,
+      }),
+    ),
   ]),
-  z.discriminatedUnion('protocol', [
-    ResponsesPreparedSchema.extend({
-      mode: z.literal('background'),
-      transport: HttpTransportSchema,
-    }).readonly(),
-    GooglePreparedSchema.extend({ mode: z.literal('background') }).readonly(),
+  Schema.Union([
+    ResponsesPreparedSchema.mapFields(
+      Struct.assign({
+        mode: Schema.Literal('background'),
+        transport: HttpTransportSchema,
+      }),
+    ),
+    GooglePreparedSchema.mapFields(
+      Struct.assign({ mode: Schema.Literal('background') }),
+    ),
   ]),
 ]);
 /** A prepared turn: the request with the binding's controls fixed. */
-export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
+export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
 
-const UsageSchema = z
-  .strictObject({
-    inputTokens: z.int().nonnegative().nullable(),
-    outputTokens: z.int().nonnegative().nullable(),
-    totalTokens: z.int().nonnegative().nullable(),
-    cachedInputTokens: z.int().nonnegative().nullable(),
-    reasoningTokens: z.int().nonnegative().nullable(),
-    providerUsage: z
-      .discriminatedUnion('kind', [
-        z
-          .strictObject({
-            kind: z.literal('google'),
-            /** Reported tool-use prompt count; absence does not mean zero. */
-            toolUsePromptTokens: z.int().nonnegative().nullable(),
-          })
-          .readonly(),
-        z
-          .strictObject({
-            kind: z.literal('xai'),
-            costInUsdTicks: z.int().nonnegative().nullable(),
-          })
-          .readonly(),
-        z
-          .strictObject({
-            kind: z.literal('anthropic'),
-            uncachedInputTokens: z.int().nonnegative().nullable(),
-            cacheCreationTokens: z.int().nonnegative().nullable(),
-            cacheCreation5mTokens: z.int().nonnegative().nullable(),
-            cacheCreation1hTokens: z.int().nonnegative().nullable(),
-          })
-          .readonly(),
-        z
-          .strictObject({
-            kind: z.literal('openrouter'),
-            cost: z.number().nullable().optional(),
-            isByok: z.boolean().optional(),
-            inputDetails: z
-              .strictObject({
-                cacheWriteTokens: z.int().nonnegative().nullable().optional(),
-              })
-              .readonly()
-              .nullable()
-              .optional(),
-          })
-          .readonly(),
-      ])
-      .optional(),
-  })
-  .readonly();
-/** A turn's token counts as the provider reported them; unknown stays null. */
-export type TurnUsage = z.infer<typeof UsageSchema>;
+/** A turn's token counts as the provider reported them, with the counts only
+ *  one provider reports kept under its own name; an unknown count stays null. */
+const TurnUsageSchema = Schema.Struct({
+  inputTokens: Schema.NullOr(CountSchema),
+  outputTokens: Schema.NullOr(CountSchema),
+  totalTokens: Schema.NullOr(CountSchema),
+  cachedInputTokens: Schema.NullOr(CountSchema),
+  reasoningTokens: Schema.NullOr(CountSchema),
+  providerUsage: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('google'),
+        /** Reported tool-use prompt count; absence does not mean zero. */
+        toolUsePromptTokens: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('xai'),
+        costInUsdTicks: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('anthropic'),
+        uncachedInputTokens: Schema.NullOr(CountSchema),
+        cacheCreationTokens: Schema.NullOr(CountSchema),
+        cacheCreation5mTokens: Schema.NullOr(CountSchema),
+        cacheCreation1hTokens: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('openrouter'),
+        cost: Schema.optional(Schema.NullOr(Schema.Number)),
+        isByok: Schema.optional(Schema.Boolean),
+        inputDetails: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              cacheWriteTokens: Schema.optional(Schema.NullOr(CountSchema)),
+            }),
+          ),
+        ),
+      }),
+    ]),
+  ),
+});
+/** {@link TurnUsageSchema}'s value. */
+export type TurnUsage = typeof TurnUsageSchema.Type;
 
-const IdentitySchema = z.strictObject({
-  providerResponseId: z.string().min(1),
-  requestedOrigin: OriginSchema.readonly(),
-  returnedModel: z.string().min(1).nullable(),
+const IdentitySchema = Schema.Struct({
+  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  requestedOrigin: OriginSchema,
+  returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
 
-const HttpTurnResultSchema = z
-  .strictObject({
-    kind: z.literal('http'),
-    ...IdentitySchema.shape,
-    /** Null for a stateless Google response with no retrievable ID. */
-    providerResponseId: IdentitySchema.shape.providerResponseId.nullable(),
-    modelFingerprint: z.string().nullable(),
-    content: ContentSchema,
-    finishReason: z.enum([
-      'stop',
-      'length',
-      'content-filter',
-      'tool-calls',
-      'stop-sequence',
-      'refusal',
-      'context-window-exceeded',
+const HttpTurnResultSchema = Schema.Struct({
+  kind: Schema.Literal('http'),
+  ...IdentitySchema.fields,
+  /** Null for a stateless Google response with no retrievable ID. */
+  providerResponseId: Schema.NullOr(IdentitySchema.fields.providerResponseId),
+  modelFingerprint: Schema.NullOr(Schema.String),
+  content: ContentSchema,
+  finishReason: Schema.Literals([
+    'stop',
+    'length',
+    'content-filter',
+    'tool-calls',
+    'stop-sequence',
+    'refusal',
+    'context-window-exceeded',
+  ]),
+  stopSequence: Schema.optional(Schema.String),
+  finishEvidence: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('google-interactions'),
+        // Preserve Google's open status vocabulary verbatim.
+        status: Schema.String.check(Schema.isMinLength(1)),
+        // Google currently reports no terminal reason.
+        terminalReason: Schema.NullOr(
+          Schema.String.check(Schema.isMinLength(1)),
+        ),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('openai-responses'),
+        status: Schema.Literals([
+          'queued',
+          'in_progress',
+          'completed',
+          'failed',
+          'cancelled',
+          'incomplete',
+        ]),
+        // Present only on an incomplete response.
+        incompleteReason: Schema.NullOr(
+          Schema.Literals(['max_output_tokens', 'content_filter']),
+        ),
+      }),
     ]),
-    stopSequence: z.string().optional(),
-    finishEvidence: z
-      .discriminatedUnion('kind', [
-        z
-          .strictObject({
-            kind: z.literal('google-interactions'),
-            // Preserve Google's open status vocabulary verbatim.
-            status: z.string().min(1),
-            // Google currently reports no terminal reason.
-            terminalReason: z.string().min(1).nullable(),
-          })
-          .readonly(),
-        z
-          .strictObject({
-            kind: z.literal('openai-responses'),
-            status: z.enum([
-              'queued',
-              'in_progress',
-              'completed',
-              'failed',
-              'cancelled',
-              'incomplete',
-            ]),
-            // Present only on an incomplete response.
-            incompleteReason: z
-              .enum(['max_output_tokens', 'content_filter'])
-              .nullable(),
-          })
-          .readonly(),
-      ])
-      .optional(),
-    refusalEvidence: z
-      .strictObject({
-        kind: z.literal('anthropic-refusal'),
-        category: z
-          .enum([
+  ),
+  refusalEvidence: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        kind: Schema.Literal('anthropic-refusal'),
+        category: Schema.NullOr(
+          Schema.Literals([
             'cyber',
             'bio',
             'frontier_llm',
             'reasoning_extraction',
             'general_harms',
-          ])
-          .nullable(),
-        explanation: z.string().nullable(),
-      })
-      .readonly()
-      .nullable()
-      .optional(),
-    /** Unknown counts remain unknown, including within a partial receipt. */
-    usage: UsageSchema.nullable(),
-    continuation: ContinuationSchema.optional(),
-  })
-  .superRefine((result, ctx) => {
-    validateAssistantContent(result.requestedOrigin, result.content, ctx);
+          ]),
+        ),
+        explanation: Schema.NullOr(Schema.String),
+      }),
+    ),
+  ),
+  /** Unknown counts remain unknown, including within a partial receipt. */
+  usage: Schema.NullOr(TurnUsageSchema),
+  continuation: Schema.optional(ContinuationSchema),
+}).check(
+  Schema.makeFilter((result) => {
+    const issues = validateAssistantContent(
+      result.requestedOrigin,
+      result.content,
+    );
     if (
       (result.finishReason === 'stop-sequence') !==
       (result.stopSequence !== undefined)
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['stopSequence'],
-        message:
+        issue:
           'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
       });
     }
@@ -561,11 +556,9 @@ const HttpTurnResultSchema = z
       (finishKind != null &&
         result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
     ) {
-      ctx.addIssue({
-        code: 'custom',
-        message:
-          'Provider identity and evidence require their original protocol and outcome.',
-      });
+      issues.push(
+        'Provider identity and evidence require their original protocol and outcome.',
+      );
     }
     if (
       result.finishReason !== 'length' &&
@@ -578,48 +571,45 @@ const HttpTurnResultSchema = z
           part.evidence.status === 'incomplete',
       )
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content'],
-        message:
-          'Incomplete provider items require an incomplete turn outcome.',
+        issue: 'Incomplete provider items require an incomplete turn outcome.',
       });
     }
     if (
       result.continuation &&
       !sameModelOrigin(result.requestedOrigin, result.continuation.origin)
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['continuation'],
-        message: 'Continuation belongs to another model origin.',
+        issue: 'Continuation belongs to another model origin.',
       });
     }
-  })
-  .readonly();
-const EditorTurnResultSchema = z
-  .strictObject({
-    kind: z.literal('editor'),
-    requestedOrigin: EditorOriginSchema.readonly(),
-    // Normal editor EOF reports none of these provider facts.
-    providerResponseId: z.null(),
-    returnedModel: z.null(),
-    modelFingerprint: z.null(),
-    finishReason: z.null(),
-    usage: z.null(),
-    content: EditorContentSchema,
-  })
-  .superRefine((result, ctx) =>
-    validateAssistantContent(result.requestedOrigin, result.content, ctx),
-  )
-  .readonly();
+    return issues;
+  }),
+);
+const EditorTurnResultSchema = Schema.Struct({
+  kind: Schema.Literal('editor'),
+  requestedOrigin: EditorOriginSchema,
+  // Normal editor EOF reports none of these provider facts.
+  providerResponseId: Schema.Null,
+  returnedModel: Schema.Null,
+  modelFingerprint: Schema.Null,
+  finishReason: Schema.Null,
+  usage: Schema.Null,
+  content: EditorContentSchema,
+}).check(
+  Schema.makeFilter((result) =>
+    validateAssistantContent(result.requestedOrigin, result.content),
+  ),
+);
 /** A completed provider turn, not a completed agent execution. */
-export const TurnResultSchema = z.discriminatedUnion('kind', [
+export const TurnResultSchema = Schema.Union([
   HttpTurnResultSchema,
   EditorTurnResultSchema,
 ]);
 /** A completed provider turn: its content, finish reason and usage. */
-export type TurnResult = z.infer<typeof TurnResultSchema>;
+export type TurnResult = typeof TurnResultSchema.Type;
 
 /** The assistant message a completed turn contributes to canonical history. */
 export function assistantMessageFromResult(
@@ -633,96 +623,104 @@ export function assistantMessageFromResult(
 }
 
 // Identity evidence is neither background acceptance nor cancellation.
-const IdentifiedEventSchema = IdentitySchema.extend({
-  kind: z.literal('identified'),
+const IdentifiedEventSchema = IdentitySchema.mapFields(
+  Struct.assign({ kind: Schema.Literal('identified') }),
+);
+const DeltaEventSchema = Schema.Struct({
+  kind: Schema.Literal('delta'),
+  part: Schema.Literals(['text', 'refusal', 'reasoning']),
+  text: Schema.String,
 });
-const DeltaEventSchema = z.strictObject({
-  kind: z.literal('delta'),
-  part: z.enum(['text', 'refusal', 'reasoning']),
-  text: z.string(),
-});
-const CompletedEventSchema = z.strictObject({
-  kind: z.literal('completed'),
+const CompletedEventSchema = Schema.Struct({
+  kind: Schema.Literal('completed'),
   result: TurnResultSchema,
 });
-const HttpCompletedEventSchema = CompletedEventSchema.extend({
-  result: HttpTurnResultSchema,
-});
+const HttpCompletedEventSchema = CompletedEventSchema.mapFields(
+  Struct.assign({ result: HttpTurnResultSchema }),
+);
 /** A streamed turn's event as data, as an editor's model sends it over. */
-export const TurnEventSchema = z.discriminatedUnion('kind', [
-  IdentifiedEventSchema.readonly(),
-  DeltaEventSchema.readonly(),
-  CompletedEventSchema.readonly(),
+export const TurnEventSchema = Schema.Union([
+  IdentifiedEventSchema,
+  DeltaEventSchema,
+  CompletedEventSchema,
 ]);
 /** A streamed turn's event: its identity, a text delta, or the result. */
-export type TurnEvent = z.infer<typeof TurnEventSchema>;
+export type TurnEvent = typeof TurnEventSchema.Type;
 
 /** A submission's answer: the accepted operation, or the finished turn. */
-export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
-  z
-    .strictObject({
-      kind: z.literal('accepted'),
-      operation: RemoteOperationSchema,
-      returnedModel: z.string().min(1).nullable(),
-    })
-    .readonly(),
-  HttpCompletedEventSchema.readonly(),
+export const BackgroundSubmissionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('accepted'),
+    operation: RemoteOperationSchema,
+    returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  }),
+  HttpCompletedEventSchema,
 ]);
 /** {@link BackgroundSubmissionSchema}'s value. */
-export type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;
-const SequenceSchema = z.strictObject({ afterSequence: z.int().nonnegative() });
+export type BackgroundSubmission = typeof BackgroundSubmissionSchema.Type;
+const SequenceSchema = Schema.Struct({
+  afterSequence: CountSchema,
+});
 /** A delivered sequence is not a durable acknowledgement by its consumer. */
-const SequencedBackgroundEventSchema = z.discriminatedUnion('kind', [
-  IdentifiedEventSchema.extend({
-    ...SequenceSchema.shape,
-    requestedOrigin: OriginSchema.extend({
-      protocol: z.literal('openai-responses'),
-    }).readonly(),
-  }).readonly(),
-  DeltaEventSchema.extend(SequenceSchema.shape).readonly(),
-  HttpCompletedEventSchema.extend({
-    ...SequenceSchema.shape,
-    result: HttpTurnResultSchema.refine(
-      (result) => result.requestedOrigin.protocol === 'openai-responses',
-    ),
-  }).readonly(),
-  SequenceSchema.extend({ kind: z.literal('cursor') }).readonly(),
+const SequencedBackgroundEventSchema = Schema.Union([
+  IdentifiedEventSchema.mapFields(
+    Struct.assign({
+      ...SequenceSchema.fields,
+      requestedOrigin: OriginSchema.mapFields(
+        Struct.assign({ protocol: Schema.Literal('openai-responses') }),
+      ),
+    }),
+  ),
+  DeltaEventSchema.mapFields(Struct.assign(SequenceSchema.fields)),
+  HttpCompletedEventSchema.mapFields(
+    Struct.assign({
+      ...SequenceSchema.fields,
+      result: HttpTurnResultSchema.check(
+        Schema.makeFilter(
+          (result) => result.requestedOrigin.protocol === 'openai-responses',
+        ),
+      ),
+    }),
+  ),
+  SequenceSchema.mapFields(Struct.assign({ kind: Schema.Literal('cursor') })),
 ]);
 /** Polling can report identity and completion, but cannot invent stream progress. */
-export const BackgroundEventSchema = z.union([
+export const BackgroundEventSchema = Schema.Union([
   SequencedBackgroundEventSchema,
-  IdentifiedEventSchema.extend({
-    afterSequence: z.null(),
-    requestedOrigin: OriginSchema.extend({
-      protocol: z.literal('google-interactions'),
-    }).readonly(),
-  }).readonly(),
-  HttpCompletedEventSchema.extend({
-    afterSequence: z.null(),
-    result: HttpTurnResultSchema.refine(
-      (result) => result.requestedOrigin.protocol === 'google-interactions',
-    ),
-  }).readonly(),
+  IdentifiedEventSchema.mapFields(
+    Struct.assign({
+      afterSequence: Schema.Null,
+      requestedOrigin: OriginSchema.mapFields(
+        Struct.assign({ protocol: Schema.Literal('google-interactions') }),
+      ),
+    }),
+  ),
+  HttpCompletedEventSchema.mapFields(
+    Struct.assign({
+      afterSequence: Schema.Null,
+      result: HttpTurnResultSchema.check(
+        Schema.makeFilter(
+          (result) => result.requestedOrigin.protocol === 'google-interactions',
+        ),
+      ),
+    }),
+  ),
 ]);
 /** An event of observed background work; polling reports no sequence. */
-export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
+export type BackgroundEvent = typeof BackgroundEventSchema.Type;
 /** Absolute original deadline; reconnecting does not replenish it. */
-export const ObservationPolicySchema = z
-  .strictObject({
-    deadlineAtMs: z.int().nonnegative(),
-  })
-  .readonly();
+export const ObservationPolicySchema = Schema.Struct({
+  deadlineAtMs: CountSchema,
+});
 
 /** The bytes an upload takes. */
-export const FileUploadSchema = z
-  .strictObject({
-    mimeType: z.string().min(1),
-    filename: z.string().min(1),
-    base64: z.base64(),
-  })
-  .readonly();
+export const FileUploadSchema = Schema.Struct({
+  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  filename: Schema.String.check(Schema.isMinLength(1)),
+  base64: Schema.String.check(Schema.isBase64()),
+});
 /** {@link FileUploadSchema}'s value. */
-export type FileUpload = z.infer<typeof FileUploadSchema>;
+export type FileUpload = typeof FileUploadSchema.Type;
 
 /**
  * The lifetime every upload asks its provider for, in seconds: one day, long
@@ -772,7 +770,7 @@ export interface Model {
     observe(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
       operation: RemoteOperation,
-      policy: z.infer<typeof ObservationPolicySchema>,
+      policy: typeof ObservationPolicySchema.Type,
     ): Stream.Stream<BackgroundEvent, ModelError>;
     /** Cancel the work; fails unless the provider confirms it stopped. */
     cancel(operation: RemoteOperation): Effect.Effect<void, ModelError>;

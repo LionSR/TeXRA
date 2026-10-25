@@ -316,7 +316,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
     `;
   }
 
-  private renderAttachFiles(files: string[]): TemplateResult {
+  private renderAttachFiles(files: readonly string[]): TemplateResult {
     return html`
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
@@ -364,7 +364,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
     `;
   }
 
-  private renderSessionLinks(sessionLinks: string[]): TemplateResult {
+  private renderSessionLinks(sessionLinks: readonly string[]): TemplateResult {
     return html`
       ${
         sessionLinks.length

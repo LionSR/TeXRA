@@ -42,7 +42,7 @@ import type {
   SessionOpenError,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';

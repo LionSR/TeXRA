@@ -2,6 +2,7 @@
 // and a Surface, never hand-built stream fixtures. Screenshots of these are
 // the verification for the extension boards (Real-ExtensionNew, -Session,
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
+import { Schema } from 'effect';
 import { html, type TemplateResult } from 'lit';
 
 import {
@@ -126,6 +127,13 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
 
 // ── frames ──────────────────────────────────────────────────────────────
 
+/** The view with two run grants on the child: the header's read-only chips. */
+function withChildGrants(view: SessionView): SessionView {
+  const policy = new Map(view.policy);
+  policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
+  return { ...view, policy };
+}
+
 function sidebar(
   view: SessionView,
   surfaceRecord: Surface,
@@ -214,8 +222,9 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
 /** Two tasks a TeXRA that has since closed left mid-turn, by title: the
  *  first with two agents (one done), the second's agent from a plugin that
  *  is off now. What the open-time notice lists. */
-const REVIEW_TASK = RunIdSchema.parse('a1a1a1a1a1a1');
-const ABSTRACT_TASK = RunIdSchema.parse('a2a2a2a2a2a2');
+const runId = Schema.decodeUnknownSync(RunIdSchema);
+const REVIEW_TASK = runId('a1a1a1a1a1a1');
+const ABSTRACT_TASK = runId('a2a2a2a2a2a2');
 function interruptedTasksView(): SessionView {
   const log = new Log();
   const tasks = [
@@ -244,10 +253,7 @@ function interruptedTasksView(): SessionView {
       OTHER_OWNER,
     );
   }
-  const referees = [
-    RunIdSchema.parse('a3a3a3a3a3a3'),
-    RunIdSchema.parse('a4a4a4a4a4a4'),
-  ];
+  const referees = [runId('a3a3a3a3a3a3'), runId('a4a4a4a4a4a4')];
   for (const [index, id] of referees.entries()) {
     log.emit(
       id,
@@ -292,8 +298,8 @@ function interruptedTasksView(): SessionView {
 
 /** A finished conversation of two turns, and a fork of it at the end of
  *  its first turn, which this window holds, waiting for a message. */
-const FORK_SOURCE = RunIdSchema.parse('f1f1f1f1f1f1');
-const FORK = RunIdSchema.parse('f2f2f2f2f2f2');
+const FORK_SOURCE = runId('f1f1f1f1f1f1');
+const FORK = runId('f2f2f2f2f2f2');
 function forkView(): SessionView {
   const log = new Log();
   const start = (
@@ -400,14 +406,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   },
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
-    const view = fanOutView();
-    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
+    const view = withChildGrants(fanOutView());
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The same grants in the desktop's wide column.
   'desktop-auto-approve': () => {
-    const view = fanOutView();
-    view.policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
+    const view = withChildGrants(fanOutView());
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionSession: inside the child, with the ancestor path (its
@@ -618,7 +622,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     });
     log.emit(ROOT, T.root, {
       type: 'run.config',
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'review',
         script: {
           code: 'return await tools.document_propose({});',

@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
@@ -48,7 +48,7 @@ function runConfig(
   agent: string,
   model = 'deepseek/deepseek-v4-pro',
 ): AgentConfig {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model,
   });

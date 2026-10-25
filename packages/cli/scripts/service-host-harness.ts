@@ -18,7 +18,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
 
 import { ModelError, TurnResultSchema, type Model } from '@texra-ai/llm';
 
@@ -153,7 +153,9 @@ await Effect.runPromise(
                                     Stream.concat(
                                       Stream.succeed({
                                         kind: 'completed' as const,
-                                        result: TurnResultSchema.parse({
+                                        result: Schema.decodeUnknownSync(
+                                          TurnResultSchema,
+                                        )({
                                           kind: 'editor',
                                           requestedOrigin: origin,
                                           providerResponseId: null,
@@ -205,7 +207,7 @@ await Effect.runPromise(
         const started = yield* client['task.start']({
           workspace,
           runId: generateRunId(),
-          config: AgentConfigSchema.parse({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'echo_validation',
             agentSource: 'custom',
             model,

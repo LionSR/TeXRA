@@ -8,7 +8,7 @@
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 import {
   ModelErrorFieldsSchema,
@@ -46,159 +46,183 @@ const HOST_CAPABILITIES = [
   'notices',
   'languageModel',
 ] as const;
-export const HostCapabilitySchema = z.enum(HOST_CAPABILITIES);
-export type HostCapability = z.infer<typeof HostCapabilitySchema>;
+export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
+export type HostCapability = typeof HostCapabilitySchema.Type;
 
-const position = z.object({ line: z.int(), character: z.int() });
-const GenericDiagnosticSchema = z.object({
-  severity: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
-  message: z.string(),
-  range: z.object({ start: position, end: position }),
-}) satisfies z.ZodType<GenericDiagnostic>;
+const position = Schema.Struct({ line: Schema.Int, character: Schema.Int });
+const GenericDiagnosticSchema = Schema.Struct({
+  severity: Schema.Union([
+    Schema.Literal(0),
+    Schema.Literal(1),
+    Schema.Literal(2),
+    Schema.Literal(3),
+  ]),
+  message: Schema.String,
+  range: Schema.Struct({ start: position, end: position }),
+}) satisfies Schema.Codec<GenericDiagnostic, unknown>;
 
-const ManualCriticismEntrySchema = z.object({
-  absolutePath: z.string(),
-  line: z.int(),
-  message: z.string(),
-  severity: z.int(),
-  confidence: z.int(),
-}) satisfies z.ZodType<ManualCriticismEntry>;
+const ManualCriticismEntrySchema = Schema.Struct({
+  absolutePath: Schema.String,
+  line: Schema.Int,
+  message: Schema.String,
+  severity: Schema.Int,
+  confidence: Schema.Int,
+}) satisfies Schema.Codec<ManualCriticismEntry, unknown>;
 
 /** The policy that closed a gate, as the window names it. */
 const policy = ApprovalPolicySchema;
-const ApprovalPolicyDenialSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('executable'), policy }),
-  z.object({ kind: z.literal('plan'), policy }),
-  z.object({ kind: z.literal('proposal'), policy }),
-  z.object({
-    kind: z.literal('withheldTools'),
-    tools: z.array(z.string()).readonly(),
+const ApprovalPolicyDenialSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('executable'), policy }),
+  Schema.Struct({ kind: Schema.Literal('plan'), policy }),
+  Schema.Struct({ kind: Schema.Literal('proposal'), policy }),
+  Schema.Struct({
+    kind: Schema.Literal('withheldTools'),
+    tools: Schema.Array(Schema.String),
     policy,
   }),
-  z.object({
-    kind: z.literal('retry'),
-    deny: z.enum(['yolo-retry', 'credential', 'policy', 'unpresentable']),
+  Schema.Struct({
+    kind: Schema.Literal('retry'),
+    deny: Schema.Literals([
+      'yolo-retry',
+      'credential',
+      'policy',
+      'unpresentable',
+    ]),
     policy,
   }),
-  z.object({
-    kind: z.literal('humanInput'),
-    deny: z.enum(['yolo-no-human', 'policy', 'unpresentable']),
+  Schema.Struct({
+    kind: Schema.Literal('humanInput'),
+    deny: Schema.Literals(['yolo-no-human', 'policy', 'unpresentable']),
     policy,
   }),
-]) satisfies z.ZodType<ApprovalPolicyDenial>;
+]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
 /** The runtime's notices, by event, as a window presents them. */
-const NoticeSchema = z.discriminatedUnion('event', [
-  z.object({
-    event: z.literal('requestOpenFile'),
-    payload: z.object({
+const NoticeSchema = Schema.Union([
+  Schema.Struct({
+    event: Schema.Literal('requestOpenFile'),
+    payload: Schema.Struct({
       location: FileLocationSchema,
-      preserveFocus: z.boolean(),
-    }) satisfies z.ZodType<RequestOpenFilePayload>,
+      preserveFocus: Schema.Boolean,
+    }) satisfies Schema.Codec<RequestOpenFilePayload, unknown>,
   }),
-  z.object({
-    event: z.literal('requestShowInstruction'),
-    payload: z.object({
-      key: z.string(),
-      message: z.string(),
-      actions: z.array(z.enum(Object.values(INSTRUCTION_ACTION))).optional(),
-      showSuppress: z.boolean().optional(),
-    }) satisfies z.ZodType<RequestShowInstructionPayload>,
+  Schema.Struct({
+    event: Schema.Literal('requestShowInstruction'),
+    payload: Schema.Struct({
+      key: Schema.String,
+      message: Schema.String,
+      actions: Schema.optional(Schema.Array(Schema.Enum(INSTRUCTION_ACTION))),
+      showSuppress: Schema.optional(Schema.Boolean),
+    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
   }),
-  z.object({
-    event: z.literal('showAgentConfigBanner'),
-    payload: z.object({
-      agentName: z.string(),
-    }) satisfies z.ZodType<ShowAgentConfigBannerPayload>,
+  Schema.Struct({
+    event: Schema.Literal('showAgentConfigBanner'),
+    payload: Schema.Struct({
+      agentName: Schema.String,
+    }) satisfies Schema.Codec<ShowAgentConfigBannerPayload, unknown>,
   }),
-  z.object({
-    event: z.literal('requestShowError'),
-    payload: z.object({
-      message: z.string(),
-      docsPage: z.string().optional(),
-    }) satisfies z.ZodType<RequestShowErrorPayload>,
+  Schema.Struct({
+    event: Schema.Literal('requestShowError'),
+    payload: Schema.Struct({
+      message: Schema.String,
+      docsPage: Schema.optional(Schema.String),
+    }) satisfies Schema.Codec<RequestShowErrorPayload, unknown>,
   }),
-  z.object({
-    event: z.literal('requestEnsureProgressView'),
-    payload: z.object({
-      fallbackNotification: z
-        .object({
-          agentName: z.string(),
-          modelName: z.string(),
-          inputName: z.string(),
-          outputInfo: z.string(),
-        })
-        .optional(),
-    }) satisfies z.ZodType<RequestEnsureProgressViewPayload>,
+  Schema.Struct({
+    event: Schema.Literal('requestEnsureProgressView'),
+    payload: Schema.Struct({
+      fallbackNotification: Schema.optional(
+        Schema.Struct({
+          agentName: Schema.String,
+          modelName: Schema.String,
+          inputName: Schema.String,
+          outputInfo: Schema.String,
+        }),
+      ),
+    }) satisfies Schema.Codec<RequestEnsureProgressViewPayload, unknown>,
   }),
 ]);
-export type Notice = z.infer<typeof NoticeSchema>;
+export type Notice = typeof NoticeSchema.Type;
 
 /** A tool edit's preview as a window stages it: the request without the
  *  service's workspace roots, which the window supplies itself. */
-const ToolEditStagingSchema = ToolEditContentSchema.extend({
-  path: z.string(),
-  sourceTool: z.string(),
-  runId: RunIdSchema.nullable(),
-  permission: ToolEditPermissionSchema,
-});
+const ToolEditStagingSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({
+    path: Schema.String,
+    sourceTool: Schema.String,
+    runId: Schema.NullOr(RunIdSchema),
+    permission: ToolEditPermissionSchema,
+  }),
+);
 
-const LanguageModelInfoSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  family: z.string(),
-  vendor: z.string(),
-  version: z.string(),
-  maxInputTokens: z.number(),
-  access: z.enum(['allowed', 'consent-required', 'unavailable']),
-}) satisfies z.ZodType<LanguageModelInfo>;
+const LanguageModelInfoSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  family: Schema.String,
+  vendor: Schema.String,
+  version: Schema.String,
+  maxInputTokens: Schema.Number,
+  access: Schema.Literals(['allowed', 'consent-required', 'unavailable']),
+}) satisfies Schema.Codec<LanguageModelInfo, unknown>;
 
 /** One call of the service on a window. */
-const HostCallSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('readDiagnostics'), path: z.string() }),
-  z.object({
-    kind: z.literal('addCriticism'),
+const HostCallSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('readDiagnostics'),
+    path: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('addCriticism'),
     entry: ManualCriticismEntrySchema,
   }),
-  z.object({
-    kind: z.literal('openPdf'),
+  Schema.Struct({
+    kind: Schema.Literal('openPdf'),
     location: FileLocationSchema,
-    preserveFocus: z.boolean(),
+    preserveFocus: Schema.Boolean,
   }),
-  z.object({
-    kind: z.literal('presentToolEdit'),
+  Schema.Struct({
+    kind: Schema.Literal('presentToolEdit'),
     request: ToolEditStagingSchema,
   }),
-  z.object({ kind: z.literal('releaseToolEdit'), requestId: z.string() }),
-  z.object({ kind: z.literal('approveToolEdit'), requestId: z.string() }),
-  z.object({ kind: z.literal('notice'), notice: NoticeSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('releaseToolEdit'),
+    requestId: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('approveToolEdit'),
+    requestId: Schema.String,
+  }),
+  Schema.Struct({ kind: Schema.Literal('notice'), notice: NoticeSchema }),
   // Files a task of the project wrote past the editor's own write path, as
   // the service's announcer heard them from the task's rows.
-  z.object({
-    kind: z.literal('filesWritten'),
-    absolutePaths: z.array(z.string()).readonly(),
+  Schema.Struct({
+    kind: Schema.Literal('filesWritten'),
+    absolutePaths: Schema.Array(Schema.String),
   }),
-  z.object({
-    kind: z.literal('approvalDenied'),
+  Schema.Struct({
+    kind: Schema.Literal('approvalDenied'),
     denial: ApprovalPolicyDenialSchema,
     runId: RunIdSchema,
   }),
   // The editor's language models: list them, prepare a turn, and stream
   // one (answered item by item, `more`), which `cancel` stops.
-  z.object({ kind: z.literal('lmModels'), vendor: z.string().nullable() }),
-  z.object({
-    kind: z.literal('lmPrepare'),
+  Schema.Struct({
+    kind: Schema.Literal('lmModels'),
+    vendor: Schema.NullOr(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('lmPrepare'),
     configuration: VscodeLanguageModelConfigurationSchema,
     request: TurnRequestSchema,
   }),
-  z.object({
-    kind: z.literal('lmStream'),
+  Schema.Struct({
+    kind: Schema.Literal('lmStream'),
     configuration: VscodeLanguageModelConfigurationSchema,
     turn: ResolvedTurnSchema,
   }),
-  z.object({ kind: z.literal('cancel'), call: z.string() }),
+  Schema.Struct({ kind: Schema.Literal('cancel'), call: Schema.String }),
 ]);
-export type HostCall = z.infer<typeof HostCallSchema>;
+export type HostCall = typeof HostCallSchema.Type;
 
 /** The capability each call needs of the window it goes to. */
 export const CALL_CAPABILITY: Readonly<
@@ -221,36 +245,43 @@ export const CALL_CAPABILITY: Readonly<
 
 /** What each call answers with, when it answers with a value. */
 export const CallResultSchemas = {
-  readDiagnostics: z.array(GenericDiagnosticSchema),
-  addCriticism: z.boolean(),
-  approveToolEdit: z.boolean(),
-  lmModels: z.array(LanguageModelInfoSchema),
+  readDiagnostics: Schema.Array(GenericDiagnosticSchema),
+  addCriticism: Schema.Boolean,
+  approveToolEdit: Schema.Boolean,
+  lmModels: Schema.Array(LanguageModelInfoSchema),
   lmPrepare: ResolvedTurnSchema,
   /** Each item of a streamed `lmStream`. */
   lmStream: TurnEventSchema,
 } as const;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
-export const HostFrameSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('attached'), attachment: z.string() }),
-  z.object({ kind: z.literal('call'), id: z.string(), call: HostCallSchema }),
+export const HostFrameSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('attached'),
+    attachment: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('call'),
+    id: Schema.String,
+    call: HostCallSchema,
+  }),
 ]);
-export type HostFrame = z.infer<typeof HostFrameSchema>;
+export type HostFrame = typeof HostFrameSchema.Type;
 
 /** A window's answer to one call. A failure says why in the window's
  *  words (a model's failure as its fields, rebuilt in the service); the
  *  service reports it as the capability's own failure. A streamed call
  *  answers each item with `more`, then once without. */
-export const HostAnswerSchema = z.discriminatedUnion('ok', [
-  z.object({
-    ok: z.literal(true),
-    value: z.json(),
-    more: z.boolean().optional(),
+export const HostAnswerSchema = Schema.Union([
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    value: Schema.Json,
+    more: Schema.optional(Schema.Boolean),
   }),
-  z.object({
-    ok: z.literal(false),
-    message: z.string(),
-    model: ModelErrorFieldsSchema.optional(),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    message: Schema.String,
+    model: Schema.optional(ModelErrorFieldsSchema),
   }),
 ]);
-export type HostAnswer = z.infer<typeof HostAnswerSchema>;
+export type HostAnswer = typeof HostAnswerSchema.Type;

@@ -276,7 +276,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
 
 /**
  * The file a latexdiff run compares against: the picked base file. It arrives
- * as a bare `z.string()` wire field and clearing the base picker writes `''`,
+ * as a bare `Schema.String` wire field and clearing the base picker writes `''`,
  * so emptiness — not `undefined` — is the unset case. Reports once and returns
  * undefined when it is unset.
  */

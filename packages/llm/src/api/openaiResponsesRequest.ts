@@ -2,9 +2,8 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import OpenAI from 'openai';
-import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
@@ -54,7 +53,7 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
           'The model does not support the requested controls or continuation.',
       });
     }
-    const turn = ResolvedTurnSchema.parse({
+    const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
       ...origin,
       mode: author.mode ?? 'foreground',
       transport,
@@ -221,35 +220,29 @@ export const openaiAbortMatch = (
   cause === signal.reason ||
   (cause instanceof OpenAI.APIUserAbortError && cause.cause === signal.reason);
 
-export const ResponseAuthenticationSchema = z.discriminatedUnion('kind', [
-  z
-    .strictObject({
-      kind: z.literal('api-key'),
-      apiKey: z
-        .string()
-        .min(1)
-        .regex(/^[^\r\n]+$/),
-    })
-    .readonly(),
-  z
-    .strictObject({
-      kind: z.literal('codex'),
-      accessToken: z
-        .string()
-        .min(1)
-        .regex(/^[^\r\n]+$/),
-      accountId: z
-        .string()
-        .min(1)
-        .regex(/^[^\r\n]+$/)
-        .nullable(),
-    })
-    .readonly(),
+export const ResponseAuthenticationSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('api-key'),
+    apiKey: Schema.String.check(Schema.isMinLength(1)).check(
+      Schema.isPattern(/^[^\r\n]+$/),
+    ),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('codex'),
+    accessToken: Schema.String.check(Schema.isMinLength(1)).check(
+      Schema.isPattern(/^[^\r\n]+$/),
+    ),
+    accountId: Schema.NullOr(
+      Schema.String.check(Schema.isMinLength(1)).check(
+        Schema.isPattern(/^[^\r\n]+$/),
+      ),
+    ),
+  }),
 ]);
 
 /** Secrets are captured together and never become prepared request controls. */
 export function responseAuthentication(
-  input: z.infer<typeof ResponseAuthenticationSchema>,
+  input: typeof ResponseAuthenticationSchema.Type,
 ) {
   if (process.env.OPENAI_CUSTOM_HEADERS)
     throw new ModelError({
@@ -257,7 +250,9 @@ export function responseAuthentication(
       message:
         'Ambient OpenAI headers cannot override the selected deployment.',
     });
-  const authentication = ResponseAuthenticationSchema.parse(input);
+  const authentication = Schema.decodeUnknownSync(ResponseAuthenticationSchema)(
+    input,
+  );
   return authentication.kind === 'api-key'
     ? { token: authentication.apiKey, headers: {} }
     : {

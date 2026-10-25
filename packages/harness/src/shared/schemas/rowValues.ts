@@ -9,7 +9,7 @@
  * that family's value schema. Corruption is refused where the bytes are
  * read, at the database's parse.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { PlanSchema } from './plan';
 
@@ -18,7 +18,7 @@ import { PlanSchema } from './plan';
  * row type, one aggregate kind (the run), one family today: the plan. `key`
  * is also what the cold listing groups by beside the row type.
  */
-export const RunFactSchema = z.object({
-  key: z.literal('plan'),
-  plan: PlanSchema.nullable(),
+export const RunFactSchema = Schema.Struct({
+  key: Schema.Literal('plan'),
+  plan: Schema.NullOr(PlanSchema),
 });

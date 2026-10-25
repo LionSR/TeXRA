@@ -96,10 +96,11 @@ export class AgentsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) agents: AgentSelectionItem[] = [];
+  @property({ attribute: false }) agents: readonly AgentSelectionItem[] = [];
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
-  @property({ attribute: false }) customAgentScanIssues: AgentScanIssue[] = [];
+  @property({ attribute: false })
+  customAgentScanIssues: readonly AgentScanIssue[] = [];
   @property({ attribute: false }) section: SettingsSectionName<'agents'> =
     'library';
   @property({ attribute: false }) compactionThresholdPercent =

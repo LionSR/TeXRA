@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -57,7 +56,9 @@ export type StoredSetting<T = unknown> =
   | { readonly kind: 'invalid'; readonly cause: string };
 
 /** A boolean state key that is off until something sets it. */
-export const StateFlagSchema = z.boolean().prefault(false);
+export const StateFlagSchema = Schema.Boolean.pipe(
+  Schema.withDecodingDefault(Effect.succeed(false)),
+);
 
 function entryOf(config: ConfigProvider, key: string): StateSettingEntry {
   const entry = config.catalog.byKey(key);
@@ -68,14 +69,20 @@ function entryOf(config: ConfigProvider, key: string): StateSettingEntry {
 }
 
 /** A stored value against the row's schema; absent resolves to its default. */
-function classifyStored(schema: z.ZodType, raw: unknown): StoredSetting {
+function classifyStored(
+  schema: Schema.Codec<unknown, unknown>,
+  raw: unknown,
+): StoredSetting {
   if (raw === undefined) {
-    return { kind: 'value', value: schema.parse(undefined) };
+    return {
+      kind: 'value',
+      value: Schema.decodeUnknownSync(schema)(undefined),
+    };
   }
-  const result = schema.safeParse(raw);
-  return result.success
-    ? { kind: 'value', value: result.data }
-    : { kind: 'invalid', cause: z.prettifyError(result.error) };
+  const result = Schema.decodeUnknownResult(schema)(raw);
+  return Result.isSuccess(result)
+    ? { kind: 'value', value: result.success }
+    : { kind: 'invalid', cause: result.failure.message };
 }
 
 /**
@@ -90,14 +97,14 @@ function invalidStoredMessage(key: string, cause: string): string {
 
 const valueOrDefault = (
   key: string,
-  schema: z.ZodType,
+  schema: Schema.Codec<unknown, unknown>,
   stored: StoredSetting,
 ): Effect.Effect<unknown> =>
   stored.kind === 'value'
     ? Effect.succeed(stored.value)
     : Effect.logWarning(invalidStoredMessage(key, stored.cause)).pipe(
         withLogChannel(CHANNEL),
-        Effect.map(() => schema.parse(undefined)),
+        Effect.map(() => Schema.decodeUnknownSync(schema)(undefined)),
       );
 
 /**
@@ -202,7 +209,7 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   // cast: the row's schema produced its own default.
-  return entry.schema.parse(undefined) as T;
+  return Schema.decodeUnknownSync(entry.schema)(undefined) as T;
 }
 
 /**
@@ -213,8 +220,8 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
  * A value the row's schema rejects is a defect of the program, not a member
  * of the `ConfigWriteFailed | Error` channel: it is thrown, so it will not
  * arrive as a catchable failure. Callers pass a value they already know is
- * valid; user input is validated upstream (a settings-UI write is
- * `safeParse`d by the app before it reaches here). A row
+ * valid; user input is validated upstream (a settings-UI write is decoded
+ * by the app before it reaches here). A row
  * that excludes a setting the catalog lacks is the same kind of defect.
  *
  * A config-slot row is written to `target` when given (the one caller that
@@ -238,7 +245,12 @@ function set(
   // A schema rejection is thrown rather than constructed as a typed failure:
   // `src/shared` may take only type imports from `src/platform`.
   return Effect.gen(function* () {
-    yield* writeSlot(entry, entry.schema.parse(value), stores, target);
+    yield* writeSlot(
+      entry,
+      Schema.decodeUnknownSync(entry.schema)(value),
+      stores,
+      target,
+    );
     if (value !== true) return;
     for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
       const excluded = stores.config.catalog.byKey(excludedKey);
@@ -275,15 +287,15 @@ function reset(
  * these keys, so no reader casts the store's `unknown` to the type it hopes
  * for.
  */
-function state<S extends z.ZodType>(
+function state<S extends Schema.Codec<unknown, unknown>>(
   store: Pick<StateStore, 'get'>,
   key: string,
   schema: S,
-): Effect.Effect<z.output<S>, StateReadFailed> {
+): Effect.Effect<S['Type'], StateReadFailed> {
   // cast: `valueOrDefault` returns the value `schema` parsed.
   return Effect.flatMap(store.get(key), (raw) =>
     valueOrDefault(key, schema, classifyStored(schema, raw)),
-  ) as Effect.Effect<z.output<S>, StateReadFailed>;
+  ) as Effect.Effect<S['Type'], StateReadFailed>;
 }
 
 /**
@@ -292,15 +304,15 @@ function state<S extends z.ZodType>(
  * with its cause. For a read-modify-write, where a write built from the
  * default would replace what is stored. Absence still reads as the default.
  */
-function inspectState<S extends z.ZodType>(
+function inspectState<S extends Schema.Codec<unknown, unknown>>(
   store: Pick<StateStore, 'get'>,
   key: string,
   schema: S,
-): Effect.Effect<StoredSetting<z.output<S>>, StateReadFailed> {
+): Effect.Effect<StoredSetting<S['Type']>, StateReadFailed> {
   // cast: a `value` is what `schema` parsed.
   return Effect.map(store.get(key), (raw) =>
     classifyStored(schema, raw),
-  ) as Effect.Effect<StoredSetting<z.output<S>>, StateReadFailed>;
+  ) as Effect.Effect<StoredSetting<S['Type']>, StateReadFailed>;
 }
 
 /** Every read and write of a setting; see the module comment. */

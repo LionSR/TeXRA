@@ -4,7 +4,7 @@
  * are a compile-time constant the renderer reads directly; the list each one
  * selects from comes from `LAUNCH_FILE_LISTS`.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   DocumentFileTypeSchema,
@@ -12,16 +12,18 @@ import {
 } from '@texra/shared/launcher/fileTypes';
 import { ICON_NAMES } from '@ui/wa/iconNames';
 
-const FileSelectConfigSchema = z.object({
+const FileSelectConfigSchema = Schema.Struct({
   type: DocumentFileTypeSchema,
-  label: z.string(),
-  icon: z.enum(ICON_NAMES),
-  addOpenedLabel: z.string(),
-  emptyListLabel: z.string(),
-  selectListLabel: z.string(),
-  toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
+  label: Schema.String,
+  icon: Schema.Literals(ICON_NAMES),
+  addOpenedLabel: Schema.String,
+  emptyListLabel: Schema.String,
+  selectListLabel: Schema.String,
+  toolConfig: Schema.optional(
+    Schema.NullOr(Schema.Literals(['tool', 'autoExtract'])),
+  ),
 });
-export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
+export type FileSelectConfig = typeof FileSelectConfigSchema.Type;
 
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {

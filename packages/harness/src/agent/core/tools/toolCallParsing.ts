@@ -1,9 +1,9 @@
+import { Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatZodIssuesForDiagnostics,
+  formatIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -75,7 +75,7 @@ export function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!(error instanceof z.ZodError)) {
+  if (!(error instanceof Schema.SchemaError)) {
     return { message: `${toolName}: ${toErrorMessage(error)}` };
   }
 
@@ -83,7 +83,7 @@ export function normalizeToolCallError(
     message: `${toolName}: Invalid parameters provided`,
     diagnostics: {
       type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-      formatted: formatZodIssuesForDiagnostics(error.issues),
+      formatted: formatIssuesForDiagnostics(error),
     },
   };
 }

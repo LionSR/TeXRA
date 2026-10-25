@@ -1,5 +1,5 @@
 /**
- * The runtime request protocol: one Zod
+ * The runtime request protocol: one
  * union of the requests a surface issues to its session's runtime and the
  * outcomes the runtime answers with. In process (the TUI, headless) the
  * Effect's own result is the response and no message exists; the envelope
@@ -12,7 +12,7 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -29,60 +29,67 @@ const runScoped = { runId: RunIdSchema };
  * hold on the run (an exit, a signal, a session close), leaving that
  * operation for a resume to observe.
  */
-const RunStopReasonSchema = z.enum(['user', 'shutdown']);
+const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
 /** Why a run stops: a `user` stop or this process's `shutdown`. */
-export type RunStopReason = z.infer<typeof RunStopReasonSchema>;
+export type RunStopReason = typeof RunStopReasonSchema.Type;
 
-export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('run.stop'),
+/** Every request a surface issues to its session's runtime, one arm per
+ *  `group.action` tag. */
+export const RuntimeRequestSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('run.stop'),
     ...runScoped,
-    detachActiveChildren: z.boolean().nullish(),
+    detachActiveChildren: Schema.optional(Schema.NullOr(Schema.Boolean)),
     reason: RunStopReasonSchema,
   }),
-  z.object({ kind: z.literal('run.delete'), ...runScoped }),
-  z.object({ kind: z.literal('run.compact'), ...runScoped }),
+  Schema.Struct({ kind: Schema.Literal('run.delete'), ...runScoped }),
+  Schema.Struct({ kind: Schema.Literal('run.compact'), ...runScoped }),
   /** The user's title for the run: a `run.description` row by the user,
    *  which a later model title does not replace. */
-  z.object({
-    kind: z.literal('run.rename'),
+  Schema.Struct({
+    kind: Schema.Literal('run.rename'),
     ...runScoped,
-    title: z.string().trim().min(1),
+    title: Schema.Trim.check(Schema.isMinLength(1)),
   }),
   /**
    * A new task holding this run's conversation up to `at`, the `seq` of a
    * settled position in its history (its latest when absent): answered with
    * the new run's id, which waits for its host to resume it.
    */
-  z.object({
-    kind: z.literal('run.fork'),
+  Schema.Struct({
+    kind: Schema.Literal('run.fork'),
     ...runScoped,
-    at: z.int().positive().nullish(),
+    at: Schema.optional(
+      Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+    ),
   }),
   /** Switch a live run to `model` from its next model boundary. */
-  z.object({
-    kind: z.literal('run.model'),
+  Schema.Struct({
+    kind: Schema.Literal('run.model'),
     ...runScoped,
-    model: z.string().min(1),
+    model: Schema.String.check(Schema.isMinLength(1)),
   }),
   /**
    * A stopped run's directory, copied to `to` (workspace-relative) or
    * removed, under its claim by the process that holds the run's session.
    */
-  z.object({
-    kind: z.literal('run.files'),
+  Schema.Struct({
+    kind: Schema.Literal('run.files'),
     ...runScoped,
-    files: z.discriminatedUnion('op', [
-      z.object({ op: z.literal('copy'), to: z.string().min(1) }),
-      z.object({ op: z.literal('remove') }),
+    files: Schema.Union([
+      Schema.Struct({
+        op: Schema.Literal('copy'),
+        to: Schema.String.check(Schema.isMinLength(1)),
+      }),
+      Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
   }),
-  z.object({
-    kind: z.literal('followUp.send'),
+  Schema.Struct({
+    kind: Schema.Literal('followUp.send'),
     ...runScoped,
-    text: z.string().min(1),
-    displayText: z.string().nullish(),
-    mediaFiles: z.array(z.string()).nullish(),
+    text: Schema.String.check(Schema.isMinLength(1)),
+    displayText: Schema.optional(Schema.NullOr(Schema.String)),
+    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   }),
   /**
    * The one answer to a `request.opened` (one run model, section 3.7): the
@@ -92,72 +99,73 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
    * `useOwnApiKey` is the host command that ends in
    * `{ action: 'retry', credentials: 'personal' }` here.
    */
-  z.object({
-    kind: z.literal('request.decide'),
+  Schema.Struct({
+    kind: Schema.Literal('request.decide'),
     ...runScoped,
-    requestId: z.string().min(1),
+    requestId: Schema.String.check(Schema.isMinLength(1)),
     decision: RequestDecisionSchema,
   }),
   /** A pending tool edit's preview, as the session's host staged it beside
    *  the request: answered `preview`, null when none is staged. */
-  z.object({
-    kind: z.literal('request.preview'),
+  Schema.Struct({
+    kind: Schema.Literal('request.preview'),
     ...runScoped,
-    requestId: z.string().min(1),
+    requestId: Schema.String.check(Schema.isMinLength(1)),
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */
-  z.object({
-    kind: z.literal('policy.set'),
-    change: z.discriminatedUnion('field', [
-      z.object({
-        field: z.literal('bypass'),
+  Schema.Struct({
+    kind: Schema.Literal('policy.set'),
+    change: Schema.Union([
+      Schema.Struct({
+        field: Schema.Literal('bypass'),
         ...runScoped,
-        bypass: z.enum(APPROVAL_BYPASS_KINDS),
-        enabled: z.boolean(),
+        bypass: Schema.Literals(APPROVAL_BYPASS_KINDS),
+        enabled: Schema.Boolean,
         /** Turning a bypass on also approves the run's requests already
          *  pending under it. This one is the surface's own, decided by the
          *  `request.decide` that follows, which may carry more than a plain
          *  approval. */
-        exceptRequestId: z.string().optional(),
+        exceptRequestId: Schema.optional(Schema.String),
       }),
       /** Narrow the run's limit at once (a chat's `/approval`): it only
        *  ever lowers, never raises, the run's own limit. */
-      z.object({
-        field: z.literal('limit'),
+      Schema.Struct({
+        field: Schema.Literal('limit'),
         ...runScoped,
-        limit: z.enum(APPROVAL_POLICY_LIMITS),
+        limit: Schema.Literals(APPROVAL_POLICY_LIMITS),
       }),
     ]),
   }),
 ]);
-export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
+/** One request a surface issues to its session's runtime. */
+export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
 /** One unified-diff hunk: the line ranges it spans on each side, and its
  *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
-const DiffHunkSchema = z
-  .object({
-    oldStart: z.int(),
-    oldLines: z.int(),
-    newStart: z.int(),
-    newLines: z.int(),
-    lines: z.array(z.string()).readonly(),
-  })
-  .readonly();
+const DiffHunkSchema = Schema.Struct({
+  oldStart: Schema.Int,
+  oldLines: Schema.Int,
+  newStart: Schema.Int,
+  newLines: Schema.Int,
+  lines: Schema.Array(Schema.String),
+});
 
 /** What a pending tool edit would change: the original and proposed
  *  content a host shows beside the request's path and line counts, and
  *  the diff between them, computed once where the request is built: its
  *  hunks and the 0-based line of the proposed text a diff view reveals
  *  first (null when nothing changed). */
-export const ToolEditContentSchema = z.object({
-  originalContent: z.string(),
-  proposedContent: z.string(),
-  hunks: z.array(DiffHunkSchema).readonly(),
-  firstChangedLine: z.int().nonnegative().nullable(),
+export const ToolEditContentSchema = Schema.Struct({
+  originalContent: Schema.String,
+  proposedContent: Schema.String,
+  hunks: Schema.Array(DiffHunkSchema),
+  firstChangedLine: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
 });
 /** A pending tool edit's staged content (`request.preview`). */
-export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;
+export type ToolEditContent = typeof ToolEditContentSchema.Type;
 
 /**
  * Hunks as unified-diff text lines, each preceded by its header. One header
@@ -174,28 +182,119 @@ export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
 
 /** What a `run.files` did: `done` (with the copy's folder), no directory
  *  to act on, or the failure that stopped it. */
-const RunFilesResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('done'), to: z.string().optional() }),
-  z.object({ status: z.literal('noFiles') }),
-  z.object({ status: z.literal('error'), error: z.string() }),
+const RunFilesResultSchema = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal('done'),
+    to: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({ status: Schema.Literal('noFiles') }),
+  Schema.Struct({ status: Schema.Literal('error'), error: Schema.String }),
 ]);
 /** What a `run.files` request did. */
-export type RunFilesResult = z.infer<typeof RunFilesResultSchema>;
+export type RunFilesResult = typeof RunFilesResultSchema.Type;
 
 /** What the runtime answers with: a typed value the host renders. */
-export const OutcomeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('done') }),
-  z.object({
-    kind: z.literal('followUp'),
-    status: z.enum(['sent', 'queued']),
+export const OutcomeSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('done') }),
+  Schema.Struct({
+    kind: Schema.Literal('followUp'),
+    status: Schema.Literals(['sent', 'queued']),
     /** A queued input whose recovery wake did not reach the run. */
-    wake: z.literal('failed').nullish(),
+    wake: Schema.optional(Schema.NullOr(Schema.Literal('failed'))),
   }),
-  z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
-  z.object({
-    kind: z.literal('preview'),
-    preview: ToolEditContentSchema.nullable(),
+  Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('preview'),
+    preview: Schema.NullOr(ToolEditContentSchema),
   }),
-  z.object({ kind: z.literal('runFiles'), result: RunFilesResultSchema }),
+  Schema.Struct({
+    kind: Schema.Literal('runFiles'),
+    result: RunFilesResultSchema,
+  }),
 ]);
-export type Outcome = z.infer<typeof OutcomeSchema>;
+/** What the runtime answers a request with. */
+export type Outcome = typeof OutcomeSchema.Type;
+
+// How a runtime request fails. Yieldable `Schema.TaggedError`s in the
+// runtime, carried over the RPC edge as themselves (`RequestErrorSchema`);
+// `Invalid` is the arm a bridge that parses requests answers with. A request
+// naming a stream the runtime no longer has is `Unavailable`, never a
+// defect: with two surfaces on one session, one can act from a view that has
+// not yet folded the other's `run.removed`, and a defect would bypass the
+// response path and leave the sender's latch pending forever.
+
+/** Another live owner holds the run this request would act on. */
+export class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
+  runId: RunIdSchema,
+}) {}
+
+/** The stream, request, or run the request names is gone or not in a state
+ *  that can take it. */
+export class Unavailable extends Schema.TaggedError<Unavailable>()(
+  'Unavailable',
+  { runId: RunIdSchema, reason: Schema.String },
+) {}
+
+/** The user cancelled the operation. No refusal notice is needed. */
+export class Cancelled extends Schema.TaggedError<Cancelled>()(
+  'Cancelled',
+  {},
+) {}
+
+/** The runtime refused the request for a worded reason. */
+export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
+  reason: Schema.String,
+  docsPage: Schema.optional(Schema.String),
+}) {}
+
+/** A handler died. The cause is in the host log under `ref` (the request
+ *  id); the surface hears that the request failed, never the text. */
+export class Internal extends Schema.TaggedError<Internal>()('Internal', {
+  ref: Schema.String,
+}) {}
+
+/** The request could not be parsed: a bridge's answer, never the runtime's. */
+export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
+  reason: Schema.String,
+}) {}
+
+/** The wire form of a request's failure: the classes themselves. */
+export const RequestErrorSchema = Schema.Union([
+  NotOwner,
+  Unavailable,
+  Cancelled,
+  Rejected,
+  Invalid,
+  Internal,
+]);
+/** How a runtime request fails: one of the tagged errors above. */
+export type RequestError = typeof RequestErrorSchema.Type;
+
+/**
+ * How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds
+ * onto the wire ({@link RequestRefusal}); every other tag is a defect it
+ * logs and answers `Internal` — but it is a *named* defect, so the log says
+ * which capability produced it. The bound is structural because the tags a
+ * host raises are its own (its lifted capabilities, its preview host, its
+ * housekeeping); what every host owes this channel is that each of them is
+ * a tag, so a bare `new Error(...)` can no longer reach the fold.
+ */
+export interface HostRequestFailure extends Error {
+  readonly _tag: string;
+}
+
+/**
+ * A request's refusal, as opposed to its defect: the three a handler may
+ * answer the surface with. The bridge folds these onto the wire; every other
+ * tag is `Internal`.
+ */
+export type RequestRefusal = Cancelled | Unavailable | Rejected;
+
+/** Whether a failure is one of the three the bridge answers on the wire. */
+export function isRequestRefusal(error: unknown): error is RequestRefusal {
+  return (
+    error instanceof Cancelled ||
+    error instanceof Unavailable ||
+    error instanceof Rejected
+  );
+}

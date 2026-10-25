@@ -9,15 +9,15 @@ import codeSandboxWorkerSource from 'virtual:code-sandbox-worker';
 import {
   Cause,
   Context,
-  Data,
   Duration,
   Effect,
   FiberSet,
   Layer,
   Queue,
+  Result,
+  Schema,
 } from 'effect';
 import * as Worker from 'effect/workers/Worker';
-import { z } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -30,47 +30,62 @@ import {
 } from './protocol';
 
 /** The script does not parse. */
-class ScriptSyntaxError extends Data.TaggedError('ScriptSyntaxError')<{
-  readonly message: string;
-}> {}
+class ScriptSyntaxError extends Schema.TaggedError<ScriptSyntaxError>()(
+  'ScriptSyntaxError',
+  {
+    message: Schema.String,
+  },
+) {}
 
 /** The script threw, or awaits a promise nothing will settle. */
-class ScriptFault extends Data.TaggedError('ScriptFault')<{
-  readonly name: string;
-  readonly message: string;
-  readonly stack?: string;
-}> {}
+class ScriptFault extends Schema.TaggedError<ScriptFault>()('ScriptFault', {
+  name: Schema.String,
+  message: Schema.String,
+  stack: Schema.optional(Schema.String),
+}) {}
 
-class ScriptCpuExhausted extends Data.TaggedError('ScriptCpuExhausted')<{
-  readonly budgetMs: number;
-}> {
+class ScriptCpuExhausted extends Schema.TaggedError<ScriptCpuExhausted>()(
+  'ScriptCpuExhausted',
+  {
+    budgetMs: Schema.Number,
+  },
+) {
   override get message(): string {
     return `The script used its ${this.budgetMs}ms CPU budget; look for a loop that never awaits.`;
   }
 }
 
-class ScriptMemoryExhausted extends Data.TaggedError('ScriptMemoryExhausted')<{
-  readonly limitBytes: number;
-}> {
+class ScriptMemoryExhausted extends Schema.TaggedError<ScriptMemoryExhausted>()(
+  'ScriptMemoryExhausted',
+  {
+    limitBytes: Schema.Number,
+  },
+) {
   override get message(): string {
     return `The script exceeded its ${this.limitBytes / (1024 * 1024)} MB heap.`;
   }
 }
 
-class ScriptTimedOut extends Data.TaggedError('ScriptTimedOut')<{
-  readonly timeout: Duration.Duration;
-}> {
+class ScriptTimedOut extends Schema.TaggedError<ScriptTimedOut>()(
+  'ScriptTimedOut',
+  {
+    timeout: Schema.Duration,
+  },
+) {
   override get message(): string {
     return `The script did not finish within ${Duration.format(this.timeout)}.`;
   }
 }
 
 /** The worker could not start, died, or sent a message that fails its decode. */
-class SandboxUnavailable extends Data.TaggedError('SandboxUnavailable')<{
-  readonly cause: Error;
-}> {
+class SandboxUnavailable extends Schema.TaggedError<SandboxUnavailable>()(
+  'SandboxUnavailable',
+  {
+    cause: Schema.Defect(),
+  },
+) {
   override get message(): string {
-    return `The code sandbox is unavailable: ${this.cause.message}`;
+    return `The code sandbox is unavailable: ${ensureError(this.cause).message}`;
   }
 }
 
@@ -226,7 +241,7 @@ const make = Effect.gen(function* () {
         interrupt,
       };
       const reports = yield* Queue.unbounded<
-        z.output<typeof StepReportSchema>,
+        typeof StepReportSchema.Type,
         SandboxUnavailable
       >();
       const worker = yield* platform.spawn<unknown, SettleMessage>(0).pipe(
@@ -244,12 +259,12 @@ const make = Effect.gen(function* () {
       // close and terminates it if it does not.
       yield* worker
         .run((raw) => {
-          const report = StepReportSchema.safeParse(raw);
-          return report.success
-            ? Queue.offer(reports, report.data)
+          const report = Schema.decodeUnknownResult(StepReportSchema)(raw);
+          return Result.isSuccess(report)
+            ? Queue.offer(reports, report.success)
             : Effect.fail(
                 new Error(
-                  `Code sandbox worker sent a malformed message: ${z.prettifyError(report.error)}`,
+                  `Code sandbox worker sent a malformed message: ${report.failure.message}`,
                 ),
               );
         })

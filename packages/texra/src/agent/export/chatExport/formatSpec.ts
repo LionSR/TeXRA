@@ -37,7 +37,7 @@ function collectFiles(
 ): Array<{ label: string; value: string }> {
   const files: Array<{ label: string; value: string }> = [];
 
-  const addFiles = (label: string, values: string[] | undefined) => {
+  const addFiles = (label: string, values: readonly string[] | undefined) => {
     if (values?.length) files.push({ label, value: values.join(', ') });
   };
 

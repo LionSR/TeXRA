@@ -2,11 +2,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
-  Data,
   Effect,
   FileSystem,
   type Path,
   type PlatformError,
+  Schema,
 } from 'effect';
 
 import {
@@ -84,9 +84,12 @@ interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
  * in its dialog and the rejection its caller sees. The message is the whole
  * sentence the user reads, never a prefix over another one.
  */
-export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
-  readonly message: string;
-}> {}
+export class PreviewUnavailable extends Schema.TaggedError<PreviewUnavailable>()(
+  'PreviewUnavailable',
+  {
+    message: Schema.String,
+  },
+) {}
 
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,

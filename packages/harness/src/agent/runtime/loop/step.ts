@@ -33,10 +33,9 @@
  * section whose text an update changed: nothing a request sends differs
  * from the latest record unrecorded.
  */
-import { Effect, Exit, Record, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Record, Schema, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 import stableStringify from 'safe-stable-stringify';
-import { z } from 'zod';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
@@ -144,7 +143,8 @@ function describedAtFreeze<T extends ResolvedTools>(
         : state.offeredTools?.find((tool) => tool.name === name)?.shown;
     return shown === undefined
       ? undefined
-      : stored(state, shown, z.object({ description: z.string() })).description;
+      : stored(state, shown, Schema.Struct({ description: Schema.String }))
+          .description;
   };
   const definitions = tools.definitions.map((definition) => {
     const describe = tools.registry.get(definition.name)?.describe;
@@ -244,7 +244,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? AgentSkillsEnabledSchema.parse(
+        ? Schema.decodeUnknownSync(AgentSkillsEnabledSchema)(
             roots.config.get(AGENT_SKILLS_CONFIG_KEY),
           )
         : recordedSkills.length > 0;
@@ -276,7 +276,7 @@ const openStep = Effect.fn('Step.open')(function* (
       held === null
         ? pinned.modules
         : Record.map(state.offeredWith.modules, (at) =>
-            stored(state, at, z.string()),
+            stored(state, at, Schema.String),
           );
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
@@ -343,7 +343,7 @@ const openStep = Effect.fn('Step.open')(function* (
   const base =
     state.input.system === undefined
       ? openingSystem
-      : stored(state, state.input.system, z.string());
+      : stored(state, state.input.system, Schema.String);
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);

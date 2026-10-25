@@ -8,7 +8,14 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Layer,
+  Schedule,
+  Schema,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -306,7 +313,7 @@ function textChunks(held: InflightText, next: InflightText): TextChunk[] {
     const slash = key.indexOf('/');
     chunks.push({
       _tag: 'chunk',
-      runId: RunIdSchema.parse(key.slice(0, slash)),
+      runId: Schema.decodeUnknownSync(RunIdSchema)(key.slice(0, slash)),
       rowId: key.slice(slash + 1),
       from,
       to: value.length,

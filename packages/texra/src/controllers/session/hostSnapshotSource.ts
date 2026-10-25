@@ -9,7 +9,7 @@
  * answer (a VS Code host knows its API-key status, its missing tools, and
  * how to start a project; the desktop keeps the first two in Settings).
  */
-import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
+import { Cause, Effect, Exit, type FileSystem, Schema } from 'effect';
 import {
   AgentDirectories,
   getEnabledModels,
@@ -46,13 +46,18 @@ type Banners = HostSnapshot['banners'];
  * `member` says which producer kept its last value: every read here is
  * guarded, so a failure never blanks the shell.
  */
-export class HostSnapshotReadFailed extends Data.TaggedError(
+export class HostSnapshotReadFailed extends Schema.TaggedError<HostSnapshotReadFailed>()(
   'HostSnapshotReadFailed',
-)<{
-  readonly member: 'fileOptions' | 'apiKeyBanner' | 'dependencyBanner';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    member: Schema.Literals([
+      'fileOptions',
+      'apiKeyBanner',
+      'dependencyBanner',
+    ]),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;

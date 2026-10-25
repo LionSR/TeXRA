@@ -56,7 +56,7 @@ export class MemoryList extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) items: MemoryViewItem[] = [];
+  @property({ attribute: false }) items: readonly MemoryViewItem[] = [];
 
   @state() private page = 0;
 

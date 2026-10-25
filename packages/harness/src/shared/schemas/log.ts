@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 export const LOG_LEVELS = {
   ERROR: 'error',
@@ -7,8 +7,8 @@ export const LOG_LEVELS = {
   DEBUG: 'debug',
 } as const;
 
-export const LogLevelSchema = z.enum(LOG_LEVELS);
-export type LogLevel = z.infer<typeof LogLevelSchema>;
+export const LogLevelSchema = Schema.Enum(LOG_LEVELS);
+export type LogLevel = typeof LogLevelSchema.Type;
 
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
@@ -25,37 +25,37 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
+export const MessageTypeSchema = Schema.Enum(MESSAGE_TYPES);
 
-export type MessageType = z.infer<typeof MessageTypeSchema>;
+export type MessageType = typeof MessageTypeSchema.Type;
 
-const LoadedMediaMetadataSchema = z.discriminatedUnion('kind', [
-  z.object({
+const LoadedMediaMetadataSchema = Schema.Union([
+  Schema.Struct({
     /**
      * Visual model input, including PDFs handled natively or rendered into
      * pages. The TUI's `[image]` label describes this model-facing category,
      * not merely an `image/*` filesystem MIME type.
      */
-    kind: z.literal('image'),
-    mimeType: z.string().min(1),
-    sizeBytes: z.int().nonnegative(),
+    kind: Schema.Literal('image'),
+    mimeType: Schema.String.check(Schema.isMinLength(1)),
+    sizeBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
-  z.object({
-    kind: z.literal('audio'),
-    mimeType: z.string().min(1),
-    sizeBytes: z.int().nonnegative(),
+  Schema.Struct({
+    kind: Schema.Literal('audio'),
+    mimeType: Schema.String.check(Schema.isMinLength(1)),
+    sizeBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
 ]);
-export type LoadedMediaMetadata = z.infer<typeof LoadedMediaMetadataSchema>;
+export type LoadedMediaMetadata = typeof LoadedMediaMetadataSchema.Type;
 
-export const FileListEntrySchema = z.object({
-  path: z.string(),
-  ok: z.boolean(),
-  source: z.string().optional(),
-  sourceDisplay: z.string().optional(),
-  varName: z.string().optional(),
+export const FileListEntrySchema = Schema.Struct({
+  path: Schema.String,
+  ok: Schema.Boolean,
+  source: Schema.optional(Schema.String),
+  sourceDisplay: Schema.optional(Schema.String),
+  varName: Schema.optional(Schema.String),
   /** Present only when this file was loaded through the media pipeline. */
-  media: LoadedMediaMetadataSchema.optional(),
+  media: Schema.optional(LoadedMediaMetadataSchema),
 });
 
-export type FileListEntry = z.infer<typeof FileListEntrySchema>;
+export type FileListEntry = typeof FileListEntrySchema.Type;

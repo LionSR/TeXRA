@@ -2,8 +2,7 @@
 import * as path from 'node:path';
 
 // External imports
-import { Data, Effect, FileSystem, Config, Option } from 'effect';
-import { z } from 'zod';
+import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel, WorkspaceFs, Settings } from '@texra-ai/harness';
@@ -27,12 +26,14 @@ const LOG_TAIL_LINES = 200;
 /**
  * Options for LaTeX compilation, used by {@link compileLatex2Pdf}.
  */
-const LaTeXCompileOptionsSchema = z.object({
-  channel: z.string().optional(),
-  outputDirectory: z.string().optional(),
-  compiler: z.enum(SUPPORTED_LATEX_COMPILERS).default('latexmk'),
+const LaTeXCompileOptionsSchema = Schema.Struct({
+  channel: Schema.optional(Schema.String),
+  outputDirectory: Schema.optional(Schema.String),
+  compiler: Schema.Literals(SUPPORTED_LATEX_COMPILERS).pipe(
+    Schema.withDecodingDefaultType(Effect.succeed('latexmk')),
+  ),
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
-  timeout: z.int().positive().optional(),
+  timeout: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   /**
    * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
    * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
@@ -41,11 +42,13 @@ const LaTeXCompileOptionsSchema = z.object({
    * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
    * source directory.
    */
-  extraInputDirs: z.array(z.string()).default([]),
+  extraInputDirs: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefaultType(Effect.succeed([])),
+  ),
 });
 
 /** Input type - compiler optional with default applied by schema.parse() */
-type LaTeXCompileOptions = z.input<typeof LaTeXCompileOptionsSchema>;
+type LaTeXCompileOptions = typeof LaTeXCompileOptionsSchema.Encoded;
 
 /**
  * Read the tail of the `.log` file a LaTeX engine drops next to its output.
@@ -67,9 +70,12 @@ const readCompileLogTail = Effect.fn('texTools.readCompileLogTail')(function* (
 });
 
 /** The compiler could not be run at all, as opposed to running and failing. */
-class LatexCompilerNotRun extends Data.TaggedError('LatexCompilerNotRun')<{
-  readonly cause: unknown;
-}> {}
+class LatexCompilerNotRun extends Schema.TaggedError<LatexCompilerNotRun>()(
+  'LatexCompilerNotRun',
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 // `path.delimiter` throughout, so the joined value is ':'-separated on POSIX
 // and ';'-separated on Windows, which is what kpathsea parses on each.
@@ -183,7 +189,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
   // Schema provides compiler default; channel defaults to module constant
-  const parsed = LaTeXCompileOptionsSchema.parse(options);
+  const parsed = Schema.decodeUnknownSync(LaTeXCompileOptionsSchema)(options);
   const channel = parsed.channel ?? CHANNEL;
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
   const fs = yield* FileSystem.FileSystem;

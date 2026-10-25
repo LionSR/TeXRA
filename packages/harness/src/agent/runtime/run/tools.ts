@@ -6,14 +6,13 @@
  * runs alone; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
-import { Effect, Predicate, Result } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** One local call of a pending response. */
 export interface LocalCall {
@@ -129,21 +128,20 @@ export const replayable = Effect.fn('toolUse.replayable')(function* (
 ) {
   const tool = registry.get(fact.toolName);
   if (fact.replay !== 'safe' || tool?.replay !== 'safe') return false;
-  const schema = tool.definition.zodSchema;
+  const schema = tool.definition.schema;
   if (schema === undefined) return Predicate.isObject(input);
-  const parsed = yield* Effect.tryPromise({
-    try: () => schema.safeParseAsync(input),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
+  return yield* Schema.decodeUnknownEffect(schema)(input).pipe(
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+    // A schema whose own check threw: the arguments are not known valid.
+    Effect.catchDefect((defect) =>
       Effect.sync(() => {
         logger.warn(
           `The stored arguments of ${fact.toolName} could not be checked; the call is asked about instead of re-run.`,
-          { data: error },
+          { data: defect },
         );
-        return null;
+        return false;
       }),
     ),
   );
-  return parsed?.success === true;
 });

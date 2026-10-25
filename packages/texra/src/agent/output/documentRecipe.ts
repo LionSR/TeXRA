@@ -10,7 +10,7 @@
  * one value the source takes; a run records the source it ran, so a resume
  * replays the same program.
  */
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   AgentCatalog,
@@ -126,9 +126,12 @@ export function documentTaskPatch(
 
 /** A launch as a document task that cannot be built: its agent is not in
  *  the catalog, or has no task block. */
-class DocumentTaskRefused extends Data.TaggedError('DocumentTaskRefused')<{
-  readonly message: string;
-}> {}
+class DocumentTaskRefused extends Schema.TaggedError<DocumentTaskRefused>()(
+  'DocumentTaskRefused',
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * `config` launched as its agent's document task. The agent resolves over a
@@ -159,7 +162,7 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
       outputFiles: config.outputFiles ?? [],
     },
     entry,
-    DocumentTaskOptionsSchema.parse(options),
+    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(options),
   );
   if (patch === null)
     return yield* new DocumentTaskRefused({

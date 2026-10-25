@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Schema } from 'effect';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
 import { RunIdSchema } from '@shared/schemas';
 import type { UserQuestionPrompt } from '@shared/schemas';
@@ -11,7 +12,7 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/UserQuestionPanel'),
 );
 
-const RUN_ID = RunIdSchema.parse('aaaaaaaaaaaa');
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 
 function createPermission(
   questions: UserQuestionPrompt[] = [

@@ -1,21 +1,25 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
-export const DocumentFileTypeSchema = z.enum(['input', 'context', 'media']);
-export type DocumentFileType = z.infer<typeof DocumentFileTypeSchema>;
+export const DocumentFileTypeSchema = Schema.Literals([
+  'input',
+  'context',
+  'media',
+]);
+export type DocumentFileType = typeof DocumentFileTypeSchema.Type;
 
-const MultipleDocumentFileTypeSchema = z.enum([
-  ...DocumentFileTypeSchema.options,
+const MultipleDocumentFileTypeSchema = Schema.Literals([
+  ...DocumentFileTypeSchema.literals,
   'output',
 ]);
-export type MultipleDocumentFileType = z.infer<
-  typeof MultipleDocumentFileTypeSchema
->;
-const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.options;
+export type MultipleDocumentFileType =
+  (typeof MultipleDocumentFileTypeSchema)['Type'];
+const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.literals;
 
 /** Narrows a broader file-type value to the `MultipleDocumentFileType` set. */
 export function isMultipleDocumentFileType(
   value: string,
 ): value is MultipleDocumentFileType {
+  // cast: widening the literal tuple to strings so `includes` takes any string.
   return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
 }
 
@@ -24,7 +28,7 @@ export function isMultipleDocumentFileType(
  * (`GET_CURRENT_FILE` / `SET_CURRENT_FILE`): a document file type, or the
  * diff-view pseudo-types 'base'/'edited', which aren't real file lists.
  */
-export const CurrentFileTypeSchema = z.union([
+export const CurrentFileTypeSchema = Schema.Union([
   DocumentFileTypeSchema,
-  z.enum(['base', 'edited']),
+  Schema.Literals(['base', 'edited']),
 ]);

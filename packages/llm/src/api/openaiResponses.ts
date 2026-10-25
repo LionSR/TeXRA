@@ -2,16 +2,25 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit, Stream, type Scope } from 'effect';
+import {
+  Cause,
+  Clock,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+  Struct,
+} from 'effect';
 import OpenAI from 'openai';
-import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
   BackgroundSubmissionSchema,
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Model,
@@ -34,13 +43,16 @@ import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
-  ResponseEventSchema,
-  ResponseSchema,
   responseEvents,
   responsesWire,
   sdkEvents,
   terminalParts,
 } from './openaiResponsesCodec.js';
+import {
+  decodeUploadedFile,
+  ResponseEventSchema,
+  ResponseSchema,
+} from './openaiResponsesWire.js';
 import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   ResponseAuthenticationSchema,
@@ -51,32 +63,15 @@ import {
   responseParameters,
 } from './openaiResponsesRequest.js';
 
-/**
- * What a Files API upload must return before its id is cached. The SDK's
- * type is not a check on the JSON, so a missing or empty id, or an expiry
- * that is not whole non-negative Unix seconds (absent means the file does
- * not expire), is a malformed response: the upload counts as failed and the
- * bytes are sent.
- */
-const UploadedFileSchema = z
-  .object({
-    id: z.string().min(1),
-    expires_at: z.int().nonnegative().nullish(),
-  })
-  .transform((file) => ({
-    fileId: file.id,
-    expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
-  }));
-
 /** Direct Responses operations, with no application model adapter. */
 export function openaiResponsesModel(
   configuration: OpenAIResponsesConfiguration,
   transport: {
-    readonly authentication: z.infer<typeof ResponseAuthenticationSchema>;
+    readonly authentication: typeof ResponseAuthenticationSchema.Type;
     readonly fetch?: typeof fetch;
   },
 ): Model {
-  const config = ModelConfigurationSchema.parse(configuration);
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'openai-responses') {
     throw new ModelError({
       kind: 'unsupported',
@@ -101,7 +96,7 @@ export function openaiResponsesModel(
             enrichModelError(openaiFailure(cause), {
               model: origin.requestedModel,
             }),
-          parseUploaded: (raw) => UploadedFileSchema.safeParse(raw),
+          parseUploaded: decodeUploadedFile,
           create: async (upload, signal) =>
             client.files.create(
               {
@@ -240,16 +235,18 @@ export function openaiResponsesModel(
             kind: 'malformed-output',
             message: 'Background submission ended without acceptance evidence.',
           });
-        const parsed = ResponseEventSchema.safeParse(first.value);
-        if (!parsed.success)
+        const parsed = Schema.decodeUnknownResult(ResponseEventSchema)(
+          first.value,
+        );
+        if (!Result.isSuccess(parsed))
           return yield* new ModelError({
             kind: 'malformed-output',
             message: 'Background acceptance is malformed.',
-            cause: parsed.error,
+            cause: parsed.failure,
           });
-        const { response, type, sequence_number } = parsed.data;
+        const { response, type, sequence_number } = parsed.success;
         returnedModel = response.model;
-        operation = RemoteOperationSchema.parse({
+        operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin,
           providerResponseId: response.id,
           afterSequence: sequence_number,
@@ -266,7 +263,7 @@ export function openaiResponsesModel(
                 withResponsesContinuation(config, turn, completed),
             }),
           );
-          return BackgroundSubmissionSchema.parse({
+          return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
             kind: 'completed',
             result,
           });
@@ -290,7 +287,7 @@ export function openaiResponsesModel(
             cause: response.error,
           });
         }
-        return BackgroundSubmissionSchema.parse({
+        return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
           kind: 'accepted',
           operation,
           returnedModel,
@@ -466,19 +463,21 @@ export function openaiResponsesModel(
         },
       );
       // Cancellation cannot request encrypted output includes. Report status only.
-      const parsed = ResponseSchema.pick({
-        id: true,
-        object: true,
-        model: true,
-        status: true,
-      }).safeParse(raw);
-      if (!parsed.success || parsed.data.id !== operation.providerResponseId)
+      const parsed = Schema.decodeUnknownResult(
+        ResponseSchema.mapFields(
+          Struct.pick(['id', 'object', 'model', 'status']),
+        ),
+      )(raw);
+      if (
+        !Result.isSuccess(parsed) ||
+        parsed.success.id !== operation.providerResponseId
+      )
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Cancellation returned invalid response identity or status.',
           requestId,
         });
-      return yield* confirmCancelled(operation, parsed.data.status);
+      return yield* confirmCancelled(operation, parsed.success.status);
     }).pipe(
       Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, enrich))),
     );

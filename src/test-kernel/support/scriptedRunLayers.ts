@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Layer, type Scope, SynchronizedRef } from 'effect';
+import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
@@ -277,12 +277,12 @@ export function testAgentRun(
 ): AgentRunShape {
   const { runId, session, logger, model } = base;
   return {
-    config: AgentConfigSchema.parse({
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'chat',
       model: 'test-model',
       instruction: 'Do the thing.',
     }),
-    persona: PersonaSchema.parse({}),
+    persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
     stores: hostStores(),
     toolPolicy: {},
@@ -351,13 +351,13 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       return testAgentRun(
         { runId: init.runId, session: init.session, logger, model, scope },
         {
-          config: AgentConfigSchema.parse({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'chat',
             model: 'test-model',
             instruction: 'Do the thing.',
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
           }),
-          persona: PersonaSchema.parse({
+          persona: Schema.decodeUnknownSync(PersonaSchema)({
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },

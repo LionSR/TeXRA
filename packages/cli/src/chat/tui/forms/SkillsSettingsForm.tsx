@@ -78,7 +78,7 @@ export function SkillsSettingsForm(
       }
       runtime={props.runtime}
       items={(data) => [
-        ...ActiveSkillSourceScopeSchema.options.map((scope) => ({
+        ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
           label: `Source: ${scope}`,
           description: data.disabledScopes.includes(scope)

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Scope, Stream } from 'effect';
+import { Effect, Fiber, Schema, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -157,7 +157,7 @@ function scriptedOrigin(model: string): HttpOrigin {
 
 /** The request as a Responses route prepares it: what the run records. */
 function preparedTurn(origin: ModelOrigin, request: TurnRequest): ResolvedTurn {
-  return ResolvedTurnSchema.parse({
+  return Schema.decodeUnknownSync(ResolvedTurnSchema)({
     ...origin,
     mode: 'foreground',
     system: request.system,
@@ -184,7 +184,7 @@ function scriptedResult(
   origin: ModelOrigin,
   { text, call }: ScriptedTurn,
 ): TurnResult {
-  return TurnResultSchema.parse({
+  return Schema.decodeUnknownSync(TurnResultSchema)({
     kind: 'http',
     providerResponseId: `resp-${origin.requestedModel}-${text.length}`,
     requestedOrigin: origin,
@@ -499,7 +499,7 @@ async function queueSecondAssertionFollowUp(
           run: {
             runId: parentContext.runId,
             session: parentContext.session,
-            config: AgentConfigSchema.parse({
+            config: Schema.decodeUnknownSync(AgentConfigSchema)({
               agent: 'chat',
               model: parentContext.model,
             }),
@@ -542,7 +542,7 @@ async function launchWaitingChild(options: {
       ),
   );
 
-  const parentConfig = AgentConfigSchema.parse({
+  const parentConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
     agent: PARENT_AGENT,
     agentSource: 'custom',
     model: PARENT_MODEL,
@@ -600,7 +600,7 @@ async function launchWaitingChild(options: {
       callbacks: {},
       fileService: new RunFileService(PARENT_RUN_ID, session.roots),
       scope: Scope.makeUnsafe(),
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'chat',
         model: PARENT_MODEL,
       }),
@@ -1296,7 +1296,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               return launched;
             }) as unknown as ReturnType<ITool['call']>,
         };
-        const parentConfig = AgentConfigSchema.parse({
+        const parentConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: PARENT_AGENT,
           agentSource: 'custom',
           model: PARENT_MODEL,
@@ -1423,7 +1423,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           }),
         );
         const run = yield* actions.runValidated({
-          config: AgentConfigSchema.parse(
+          config: Schema.decodeUnknownSync(AgentConfigSchema)(
             asDocumentTask({
               agent: WORKFLOW_CHILD_AGENT,
               agentSource: 'custom',

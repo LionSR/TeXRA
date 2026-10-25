@@ -10,8 +10,7 @@
  * tool opens a prompt and no tool writes a card. What a body itself asks a
  * person goes through its call's requests (`callRequests`), on the same run.
  */
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
 import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
@@ -28,7 +27,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
 
-const JSON_OBJECT_ARGUMENTS = z.record(z.string(), z.unknown());
+const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
 /** The tool whose calls the run's command bypass answers. */
 const SHELL_TOOL = 'bash';
@@ -52,7 +51,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // that is guarded but has no schema would have the guard quietly stop
   // gating it, so it is a defect, not a skip.
   const schema =
-    tool.definition.zodSchema ??
+    tool.definition.schema ??
     (tool.definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
   if (!schema)
     return yield* Effect.die(
@@ -62,9 +61,9 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     );
   // An input that schema refuses reaches no prompt and no path: the `call`
   // below re-reads it and returns the validation error, which is the report.
-  const parsed = schema.safeParse(rawInput);
-  if (!parsed.success) return undefined;
-  const input = parsed.data as never;
+  const parsed = Schema.decodeUnknownResult(schema)(rawInput);
+  if (!Result.isSuccess(parsed)) return undefined;
+  const input = parsed.success as never;
   const call = yield* ToolContext;
 
   // Resolution and the read-only-root check both reject with a `ToolError`

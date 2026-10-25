@@ -13,52 +13,68 @@
  * host with no person to ask (`reason`), and `cancel` is an automatic close
  * (the run ended, the session was disposed) with its `cause`.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { UserQuestionAnswersSchema } from './prompts';
 
-export const RequestDecisionSchema = z.discriminatedUnion('action', [
+export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
    *  changed in the launch form (its agent, model, instruction, files and
    *  plugin options); a tool edit's approve carries the proposed file as the
    *  user left it in the host's diff view. */
-  z.object({
-    action: z.literal('approve'),
-    model: z.string().nullish(),
-    agent: z.string().nullish(),
-    instruction: z.string().nullish(),
-    inputFiles: z.array(z.string()).nullish(),
-    contextFiles: z.array(z.string()).nullish(),
-    mediaFiles: z.array(z.string()).nullish(),
-    options: z.record(z.string(), JsonValueSchema).nullish(),
-    content: z.string().nullish(),
+  Schema.Struct({
+    action: Schema.Literal('approve'),
+    model: Schema.optional(Schema.NullOr(Schema.String)),
+    agent: Schema.optional(Schema.NullOr(Schema.String)),
+    instruction: Schema.optional(Schema.NullOr(Schema.String)),
+    inputFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    options: Schema.optional(
+      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+    ),
+    content: Schema.optional(Schema.NullOr(Schema.String)),
   }),
-  z.object({
-    action: z.literal('approve_and_goal'),
-    autoApproveAll: z.literal(true).nullish(),
+  Schema.Struct({
+    action: Schema.Literal('approve_and_goal'),
+    autoApproveAll: Schema.optional(Schema.NullOr(Schema.Literal(true))),
   }),
   /** A user question's answers, keyed by question text. */
-  z.object({ action: z.literal('submit'), answers: UserQuestionAnswersSchema }),
-  /** An inquiry's answer, pasted back from the external model. */
-  z.object({
-    action: z.literal('answer'),
-    answer: z.string(),
-    sessionLinks: z.array(z.string()).nullish(),
+  Schema.Struct({
+    action: Schema.Literal('submit'),
+    answers: UserQuestionAnswersSchema,
   }),
-  z.object({ action: z.literal('skip'), feedback: z.string().nullish() }),
+  /** An inquiry's answer, pasted back from the external model. */
+  Schema.Struct({
+    action: Schema.Literal('answer'),
+    answer: Schema.String,
+    sessionLinks: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  }),
+  Schema.Struct({
+    action: Schema.Literal('skip'),
+    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
   /** A retry, on the configured credentials or on the user's own key once
    *  the host has stored one (`credentials: 'personal'`). */
-  z.object({
-    action: z.literal('retry'),
-    feedback: z.string().nullish(),
-    credentials: z.enum(['configured', 'personal']).nullish(),
+  Schema.Struct({
+    action: Schema.Literal('retry'),
+    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+    credentials: Schema.optional(
+      Schema.NullOr(Schema.Literals(['configured', 'personal'])),
+    ),
   }),
-  z.object({ action: z.literal('reject'), feedback: z.string().nullish() }),
-  z.object({ action: z.literal('deny'), reason: z.string() }),
-  z.object({ action: z.literal('cancel'), cause: z.string().nullish() }),
+  Schema.Struct({
+    action: Schema.Literal('reject'),
+    feedback: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+  Schema.Struct({ action: Schema.Literal('deny'), reason: Schema.String }),
+  Schema.Struct({
+    action: Schema.Literal('cancel'),
+    cause: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
 ]);
-export type RequestDecision = z.infer<typeof RequestDecisionSchema>;
+export type RequestDecision = typeof RequestDecisionSchema.Type;
 
 /** The arms that decline a request, whatever the provenance. */
 export type RefusalDecision = Extract<

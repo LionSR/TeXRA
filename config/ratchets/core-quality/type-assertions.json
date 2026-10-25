@@ -1,5 +1,4 @@
 {
-  "packages/harness/src/agent/codeSandbox/protocol.ts": 1,
   "packages/harness/src/agent/core/tools/toolSchema.ts": 2,
   "packages/harness/src/agent/prompt/templateInputs.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,
@@ -14,7 +13,6 @@
   "packages/harness/src/platform/defaults/nodePlatform.ts": 1,
   "packages/harness/src/platform/defaults/workspaceStorage.ts": 1,
   "packages/harness/src/shared/schemas/logPayload.ts": 1,
-  "packages/harness/src/shared/schemas/sessionEvent.ts": 2,
   "packages/harness/src/shared/session/runRows.ts": 3,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 1,
@@ -22,7 +20,6 @@
   "packages/harness/src/tools/executions/runGeneratedFiles.ts": 2,
   "packages/harness/src/tools/jsonRpc.ts": 2,
   "packages/harness/src/tools/plugins.ts": 2,
-  "packages/harness/src/tools/structuredOutput.ts": 1,
   "packages/harness/src/tools/web/WebFetchTool.ts": 1,
   "packages/llm/src/api/openaiResponses.ts": 1,
   "packages/llm/src/api/openaiResponsesRequest.ts": 1,

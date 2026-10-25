@@ -1,7 +1,6 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect, type FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, type FileSystem, Schema } from 'effect';
 import {
   defineTool,
   ToolContext,
@@ -24,15 +23,18 @@ import {
 import type { WorkspaceFs } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-const ExtractTikzInputSchema = z.strictObject({
+const ExtractTikzInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file containing TikZ figures.'),
-  compile: z
-    .boolean()
-    .describe('Compile extracted TikZ pictures into standalone PDFs.')
-    .nullish(),
+  compile: Schema.optional(
+    Schema.NullOr(
+      Schema.Boolean.annotate({
+        description: 'Compile extracted TikZ pictures into standalone PDFs.',
+      }),
+    ),
+  ),
 });
 
-type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
+type ExtractTikzInput = typeof ExtractTikzInputSchema.Type;
 
 const DEFAULT_TIKZ_MAX_FILES = 12;
 

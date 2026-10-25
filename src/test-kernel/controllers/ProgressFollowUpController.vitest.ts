@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -57,7 +57,7 @@ function createExactInputsConfig(
   overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
   return asDocumentTask(
-    AgentConfigSchema.parse({
+    Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'writer',
       model: 'google/gemini-3.1-pro-preview',
       ...followUpWorkflowDefaults,

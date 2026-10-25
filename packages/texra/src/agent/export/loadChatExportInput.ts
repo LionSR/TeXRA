@@ -19,7 +19,7 @@
  *
  */
 
-import { Data, DateTime, Effect } from 'effect';
+import { DateTime, Effect, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
@@ -34,13 +34,14 @@ import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
  * unchanged, so a caller's dialog classifies and words what the read
  * produced, exactly as it did when the bare error reached it.
  */
-export class ChatExportInputUnreadable extends Data.TaggedError(
+export class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInputUnreadable>()(
   'ChatExportInputUnreadable',
-)<{
-  readonly part: 'config' | 'conversation';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    part: Schema.Literals(['config', 'conversation']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Facts read from the run store and the session's fold, plus the assembled

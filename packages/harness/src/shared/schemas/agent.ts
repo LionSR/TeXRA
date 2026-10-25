@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Effect, Result, Schema, SchemaGetter, Struct } from 'effect';
 
 import { ToolDefinitionSchema, type ToolDefinition } from './toolDefinition';
 
@@ -14,9 +14,9 @@ export const AGENT_SOURCE = {
 } as const;
 
 /** Single source of truth for agent source identifiers. */
-export const AgentSourceSchema = z.enum(AGENT_SOURCE);
+export const AgentSourceSchema = Schema.Enum(AGENT_SOURCE);
 
-export type AgentSource = z.infer<typeof AgentSourceSchema>;
+export type AgentSource = typeof AgentSourceSchema.Type;
 
 /**
  * True for the sources whose definitions are read in place and are not the
@@ -31,14 +31,9 @@ export function isPackagedAgentSource(source: AgentSource): boolean {
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
-export const AgentNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .regex(AGENT_NAME_IDENTIFIER, {
-    message:
-      'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
-  });
+export const AgentNameSchema = Schema.Trim.check(Schema.isMinLength(1)).check(
+  Schema.isPattern(AGENT_NAME_IDENTIFIER),
+);
 
 /** Canonical key format: disambiguates agents with same name across sources. */
 export function agentKey(source: string, name: string): string {
@@ -61,7 +56,10 @@ export function agentKeyOf(entry: { source: string; name: string }): string {
  */
 export function agentName(key: string): string {
   const idx = key.indexOf(':');
-  return idx >= 0 && AgentSourceSchema.safeParse(key.slice(0, idx)).success
+  return idx >= 0 &&
+    Result.isSuccess(
+      Schema.decodeUnknownResult(AgentSourceSchema)(key.slice(0, idx)),
+    )
     ? key.slice(idx + 1)
     : key;
 }
@@ -88,11 +86,11 @@ export function agentMatchesIdentifier(
 }
 
 /** A custom-agent YAML file the registry found but could not load. */
-export const AgentScanIssueSchema = z.object({
-  path: z.string(),
-  message: z.string(),
+export const AgentScanIssueSchema = Schema.Struct({
+  path: Schema.String,
+  message: Schema.String,
 });
-export type AgentScanIssue = z.infer<typeof AgentScanIssueSchema>;
+export type AgentScanIssue = typeof AgentScanIssueSchema.Type;
 
 // ------------------------------------------------- the definition format
 // An agent definition, the one format a persona is written in: a YAML file
@@ -106,49 +104,58 @@ export type AgentScanIssue = z.infer<typeof AgentScanIssueSchema>;
  * than YAML, a whole tool definition, which may carry runtime-only fields no
  * YAML can express.
  */
-const ToolsSchema = z.array(
-  z.union([
-    z.string().transform((name): ToolDefinition => ({ name })),
+const ToolsSchema = Schema.Array(
+  Schema.Union([
     ToolDefinitionSchema,
+    Schema.String.pipe(
+      Schema.decodeTo(ToolDefinitionSchema, {
+        decode: SchemaGetter.transform((name): ToolDefinition => ({ name })),
+        encode: SchemaGetter.transform((tool) => tool.name),
+      }),
+    ),
   ]),
 );
 
 /** A persona's sampling temperature; the model's own range is narrower. */
-const TemperatureSchema = z.number().min(0).max(1);
+const TemperatureSchema = Schema.Number.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).check(Schema.isLessThanOrEqualTo(1));
 
 /**
  * A persona: a model agent, its system prompt (Nunjucks) with the tools it
  * is offered. A persona that declares no tools works text-only. The user's
  * task is the user message, so a persona has no request template.
  */
-export const PersonaSchema = z.strictObject({
-  prompt: z.string().prefault(''),
-  tools: ToolsSchema.prefault([]),
-  temperature: TemperatureSchema.prefault(1.0),
+export const PersonaSchema = Schema.Struct({
+  prompt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  tools: ToolsSchema.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  temperature: TemperatureSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(1.0)),
+  ),
 });
 /** A persona with its defaults applied: what a run is offered and told. */
-export type Persona = z.infer<typeof PersonaSchema>;
+export type Persona = typeof PersonaSchema.Type;
 
 /**
  * An agent file as written: a flat persona. A plugin may own one more
  * top-level block (`AgentBlock`), which the catalog scan adds to this
  * schema; an agent carrying one is a task.
  */
-export const AgentDefinitionSchema = z.strictObject({
+export const AgentDefinitionSchema = Schema.Struct({
   name: AgentNameSchema,
-  description: z.string().optional(),
+  description: Schema.optional(Schema.String),
   /**
    * On a customized copy of a bundled agent: the digest of the bundled file it
    * was copied from, so an app update that changes the bundled agent can say
    * the copy is based on an older version.
    */
-  basedOn: z.string().optional(),
-  prompt: z.string().optional(),
-  tools: ToolsSchema.optional(),
-  temperature: TemperatureSchema.optional(),
+  basedOn: Schema.optional(Schema.String),
+  prompt: Schema.optional(Schema.String),
+  tools: Schema.optional(ToolsSchema),
+  temperature: Schema.optional(TemperatureSchema),
 });
 /** An agent definition as written, before defaults. */
-export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
+export type AgentDefinition = typeof AgentDefinitionSchema.Type;
 
 /**
  * A persona an embedder passes inline (`StartInput.agent`) instead of a
@@ -156,12 +163,16 @@ export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
  * bundled original and no plugin's block (a task is its plugin's recipe);
  * each is refused as an unrecognized key.
  */
-export const InlinePersonaSchema = AgentDefinitionSchema.omit({
-  basedOn: true,
-}).extend({
-  /** The tools it is offered, by name, as a file names them: what the run
-   *  records is plain data, never a runtime tool definition. */
-  tools: z.array(z.string().min(1)).optional(),
-});
+export const InlinePersonaSchema = AgentDefinitionSchema.mapFields(
+  Struct.omit(['basedOn']),
+).mapFields(
+  Struct.assign({
+    /** The tools it is offered, by name, as a file names them: what the run
+     *  records is plain data, never a runtime tool definition. */
+    tools: Schema.optional(
+      Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+    ),
+  }),
+);
 /** An inline persona as an embedder writes it (before defaults). */
-export type InlinePersona = z.input<typeof InlinePersonaSchema>;
+export type InlinePersona = typeof InlinePersonaSchema.Encoded;

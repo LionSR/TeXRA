@@ -40,7 +40,7 @@ export class MemoryTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) items: MemoryViewItem[] = [];
+  @property({ attribute: false }) items: readonly MemoryViewItem[] = [];
   @property({ attribute: false }) enabled = false;
 
   override render(): TemplateResult {

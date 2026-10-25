@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 import {
   Cause,
   Context,
@@ -12,6 +11,7 @@ import {
   Layer,
   ManagedRuntime,
   Result,
+  Schema,
   Scope,
 } from 'effect';
 
@@ -745,7 +745,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     !(yield* Settings.state(
       globalState,
       welcomeKey,
-      z.boolean().prefault(false),
+      Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
     ))
   ) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.

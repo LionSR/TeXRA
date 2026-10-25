@@ -1,13 +1,16 @@
-import { Data, Effect, Config, Option } from 'effect';
+import { Config, Effect, Option, Schema } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** The OS browser launcher could not open the URL. The message never
  *  carries the URL, which can be a sign-in link. */
-class BrowserLaunchFailed extends Data.TaggedError('BrowserLaunchFailed')<{
-  readonly message: string;
-}> {}
+class BrowserLaunchFailed extends Schema.TaggedError<BrowserLaunchFailed>()(
+  'BrowserLaunchFailed',
+  {
+    message: Schema.String,
+  },
+) {}
 
 interface BrowserLaunchCommand {
   readonly command: string;

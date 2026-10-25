@@ -14,8 +14,14 @@ import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentConfig, FileLocation } from '@texra-ai/harness/schemas';
 
+/** A round while a tool call works on it: the persisted `RoundOutput` with
+ *  its fields writable, since extraction, the disk check, the compile check
+ *  and the diff each set their part of the round in place before the call
+ *  commits the whole map as the fact's array. */
+export type RoundState = { -readonly [K in keyof RoundOutput]: RoundOutput[K] };
+
 export interface OutputState {
-  rounds: Map<number, RoundOutput>;
+  rounds: Map<number, RoundState>;
 }
 
 /** What the output pipeline reads of the workflow run. */
@@ -30,7 +36,7 @@ export interface OutputDependencies {
 }
 
 export function createOutputState(
-  rounds: Map<number, RoundOutput> = new Map(),
+  rounds: Map<number, RoundState> = new Map(),
 ): OutputState {
   return { rounds };
 }
@@ -41,9 +47,9 @@ export function createOutputState(
  * gaps still lands on the right round.
  */
 export function roundsFromPersisted(
-  rounds: RoundOutput[],
-): Map<number, RoundOutput> {
-  return new Map(rounds.map((round) => [round.round, round]));
+  rounds: readonly RoundOutput[],
+): Map<number, RoundState> {
+  return new Map(rounds.map((round) => [round.round, { ...round }]));
 }
 
 /** The complete round collection, ordered by its explicit round key. */
@@ -51,13 +57,10 @@ export function roundsToPersisted(state: OutputState): RoundOutput[] {
   return [...state.rounds.values()].sort((a, b) => a.round - b.round);
 }
 
-export function ensureRoundData(
-  state: OutputState,
-  round: number,
-): RoundOutput {
+export function ensureRoundData(state: OutputState, round: number): RoundState {
   const existing = state.rounds.get(round);
   if (existing) return existing;
-  const data: RoundOutput = {
+  const data: RoundState = {
     round,
     outputs: [],
     compileFailures: [],

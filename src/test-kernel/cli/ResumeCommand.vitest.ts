@@ -2,7 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -60,12 +60,12 @@ vi.mock('@cli/runtime/workflowOutput', async (importOriginal) => ({
 
 const RUN_ID = 'eec001' as RunId;
 
-const TOOL_USE_CONFIG = AgentConfigSchema.parse({
+const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'planner',
   model: 'gpt-5',
 });
 
-const WORKFLOW_CONFIG = AgentConfigSchema.parse(
+const WORKFLOW_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)(
   asDocumentTask({
     agent: 'correct',
     model: 'google/gemini-3.1-pro-preview',
@@ -206,7 +206,7 @@ describe('runResumeCommand', () => {
   it('restores an absolute persisted workflow output directory', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper ');
     const outputDirectory = path.join(workingDirectory, 'out');
-    const workflowConfig = AgentConfigSchema.parse({
+    const workflowConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
       ...WORKFLOW_CONFIG,
       workingDirectory,
       cli: {
@@ -231,7 +231,7 @@ describe('runResumeCommand', () => {
 
   it('validates a restored output directory before resuming the workflow', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper');
-    const workflowConfig = AgentConfigSchema.parse({
+    const workflowConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
       ...WORKFLOW_CONFIG,
       workingDirectory,
       cli: { outputDirectory: path.join(workingDirectory, 'out') },

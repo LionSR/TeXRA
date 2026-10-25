@@ -3,8 +3,7 @@ import * as nodePath from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import {
   defineTool,
   ToolContext,
@@ -33,18 +32,19 @@ import {
   texPathField,
 } from './figureExtractionShared';
 
-const ExtractBibliographyInputSchema = z.strictObject({
+const ExtractBibliographyInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file to scan for citations.'),
-  bibPath: z
-    .string()
-    .min(1, 'bibPath cannot be empty if provided.')
-    .describe(
-      'Optional path to a BibTeX file to include when resolving citations.',
-    )
-    .nullish(),
+  bibPath: Schema.optional(
+    Schema.NullOr(
+      Schema.String.check(Schema.isMinLength(1)).annotate({
+        description:
+          'Optional path to a BibTeX file to include when resolving citations.',
+      }),
+    ),
+  ),
 });
 
-type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
+type ExtractBibliographyInput = typeof ExtractBibliographyInputSchema.Type;
 
 const DEFAULT_MAX_ENTRIES = 25;
 

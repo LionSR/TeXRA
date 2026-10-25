@@ -15,7 +15,7 @@ import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-import { Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { SessionHostInteractions } from './HostInteractions';

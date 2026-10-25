@@ -9,9 +9,13 @@
  * function on the live path and on resume, and it keeps a session-root
  * service free of per-run mutable cache.
  */
-import { Cause, Context, Data, type Effect } from 'effect';
+import { Cause, Context, type Effect, Schema } from 'effect';
 
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import {
+  RunIdSchema,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
@@ -20,12 +24,12 @@ import {
   DatabaseRowEarlier,
   DatabaseWriteFailed,
 } from './database';
-import type { Alongside, Append } from './sessionEvents';
-import type {
-  RunHistoryDraft,
+import {
   RunHistoryInconsistent,
-  RunState,
+  type RunHistoryDraft,
+  type RunState,
 } from './runState';
+import type { Alongside, Append } from './sessionEvents';
 
 /**
  * A refusal the run history itself decided. Database failures are kept OUT of
@@ -55,13 +59,20 @@ import type {
  * A violated `RunCell.append` precondition is a caller defect
  * (`Effect.die`), not an arm: the loop must not handle it.
  */
-export class RunHistoryRefused extends Data.TaggedError('RunHistoryRefused')<{
-  readonly reason:
-    'not-owner' | 'unsafe-endpoint' | 'unprepared-history' | 'inconsistent';
-  readonly runId: RunId;
-  readonly detail: string;
-  readonly cause?: RunHistoryInconsistent;
-}> {
+export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
+  'RunHistoryRefused',
+  {
+    reason: Schema.Literals([
+      'not-owner',
+      'unsafe-endpoint',
+      'unprepared-history',
+      'inconsistent',
+    ]),
+    runId: RunIdSchema,
+    detail: Schema.String,
+    cause: Schema.optional(RunHistoryInconsistent),
+  },
+) {
   override get message(): string {
     return `The run history refused a write (${this.reason}): ${this.detail}`;
   }

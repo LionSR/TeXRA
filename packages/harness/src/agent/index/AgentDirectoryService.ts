@@ -2,8 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
@@ -39,7 +38,7 @@ export const readCustomAgentDir = (
   Settings.state(
     state,
     GlobalStateKey.CUSTOM_AGENT_DIR,
-    z.string().trim().prefault(''),
+    Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
   );
 
 /** What a host's agent directories are built from. */
@@ -294,13 +293,14 @@ export function agentSourceRoots(
  * a copy is already there (`exists`, at `path`), or a copy has no newer
  * bundled version to keep (`current`).
  */
-export class AgentCustomizeRefused extends Data.TaggedError(
+export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
   'AgentCustomizeRefused',
-)<{
-  readonly reason: 'noFile' | 'escapes' | 'exists' | 'current';
-  readonly path?: string;
-  readonly message: string;
-}> {}
+  {
+    reason: Schema.Literals(['noFile', 'escapes', 'exists', 'current']),
+    path: Schema.optional(Schema.String),
+    message: Schema.String,
+  },
+) {}
 
 /**
  * A change to a custom copy of a bundled agent: `copy` writes a new one

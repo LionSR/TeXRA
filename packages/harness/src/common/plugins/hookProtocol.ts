@@ -6,8 +6,7 @@
 // that names the hooks is `./hookConfig`'s.
 
 // Third-party imports
-import { Result } from 'effect';
-import { z } from 'zod';
+import { Result, Schema } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -16,140 +15,149 @@ import type { HookEvent, HookStatus } from '@shared/schemas';
 // --------------------------------------------------------------------- input
 
 const CommonInput = {
-  session_id: z.string(),
-  cwd: z.string(),
-  permission_mode: z.enum(['default', 'bypassPermissions']),
-  agent_id: z.string().optional(),
-  agent_type: z.string().optional(),
+  session_id: Schema.String,
+  cwd: Schema.String,
+  permission_mode: Schema.Literals(['default', 'bypassPermissions']),
+  agent_id: Schema.optional(Schema.String),
+  agent_type: Schema.optional(Schema.String),
 };
 
 /** Each event's stdin, as the reference names its fields. The harness keeps
  *  no transcript file, so `transcript_path` is not sent. */
-const HookInputSchema = z.discriminatedUnion('hook_event_name', [
-  z.object({
+const HookInputSchema = Schema.Union([
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('SessionStart'),
-    source: z.literal('startup'),
-    model: z.string().optional(),
+    hook_event_name: Schema.Literal('SessionStart'),
+    source: Schema.Literal('startup'),
+    model: Schema.optional(Schema.String),
   }),
-  z.object({
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('UserPromptSubmit'),
-    prompt: z.string(),
+    hook_event_name: Schema.Literal('UserPromptSubmit'),
+    prompt: Schema.String,
   }),
-  z.object({
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('PreToolUse'),
-    tool_name: z.string(),
-    tool_input: z.unknown(),
-    tool_use_id: z.string(),
+    hook_event_name: Schema.Literal('PreToolUse'),
+    tool_name: Schema.String,
+    tool_input: Schema.Unknown,
+    tool_use_id: Schema.String,
   }),
-  z.object({
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('PostToolUse'),
-    tool_name: z.string(),
-    tool_input: z.unknown(),
-    tool_response: z.unknown(),
-    tool_use_id: z.string(),
-    duration_ms: z.int().nonnegative().optional(),
+    hook_event_name: Schema.Literal('PostToolUse'),
+    tool_name: Schema.String,
+    tool_input: Schema.Unknown,
+    tool_response: Schema.Unknown,
+    tool_use_id: Schema.String,
+    duration_ms: Schema.optional(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    ),
   }),
-  z.object({
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('Stop'),
-    stop_hook_active: z.boolean(),
-    last_assistant_message: z.string(),
+    hook_event_name: Schema.Literal('Stop'),
+    stop_hook_active: Schema.Boolean,
+    last_assistant_message: Schema.String,
   }),
-  z.object({
+  Schema.Struct({
     ...CommonInput,
-    hook_event_name: z.literal('SubagentStop'),
-    stop_hook_active: z.boolean(),
-    agent_id: z.string(),
-    agent_type: z.string(),
-    last_assistant_message: z.string(),
+    hook_event_name: Schema.Literal('SubagentStop'),
+    stop_hook_active: Schema.Boolean,
+    agent_id: Schema.String,
+    agent_type: Schema.String,
+    last_assistant_message: Schema.String,
   }),
 ]);
-export type HookInput = z.input<typeof HookInputSchema>;
+export type HookInput = typeof HookInputSchema.Encoded;
 
 /** The JSON a hook reads on stdin. */
 export const encodeHookInput = (input: HookInput): string =>
-  JSON.stringify(HookInputSchema.parse(input));
+  JSON.stringify(Schema.decodeUnknownSync(HookInputSchema)(input));
 
 // -------------------------------------------------------------------- output
 
 const CommonOutput = {
-  continue: z.boolean().optional(),
-  stopReason: z.string().optional(),
-  suppressOutput: z.boolean().optional(),
-  systemMessage: z.string().optional(),
-  terminalSequence: z.string().optional(),
+  continue: Schema.optional(Schema.Boolean),
+  stopReason: Schema.optional(Schema.String),
+  suppressOutput: Schema.optional(Schema.Boolean),
+  systemMessage: Schema.optional(Schema.String),
+  terminalSequence: Schema.optional(Schema.String),
 };
 
-const specific = <E extends HookEvent, S extends z.ZodRawShape>(
+const specific = <E extends HookEvent, const F extends Schema.Struct.Fields>(
   event: E,
-  shape: S,
-) => z.object({ hookEventName: z.literal(event), ...shape }).optional();
+  fields: F,
+) =>
+  Schema.optional(
+    Schema.Struct({ hookEventName: Schema.Literal(event), ...fields }),
+  );
 
 const StopOutput = <E extends 'Stop' | 'SubagentStop'>(event: E) =>
-  z.object({
+  Schema.Struct({
     ...CommonOutput,
-    decision: z.literal('block').optional(),
-    reason: z.string().optional(),
+    decision: Schema.optional(Schema.Literal('block')),
+    reason: Schema.optional(Schema.String),
     hookSpecificOutput: specific(event, {
-      additionalContext: z.string().optional(),
+      additionalContext: Schema.optional(Schema.String),
     }),
   });
 
 /** Each event's stdout JSON. A field the reference defines and v1 does not
  *  act on is still validated, so it can be named as ignored. */
 const HookOutputSchemas = {
-  SessionStart: z.object({
+  SessionStart: Schema.Struct({
     ...CommonOutput,
     hookSpecificOutput: specific('SessionStart', {
-      additionalContext: z.string().optional(),
-      initialUserMessage: z.string().optional(),
-      sessionTitle: z.string().optional(),
-      watchPaths: z.array(z.string()).optional(),
-      reloadSkills: z.boolean().optional(),
+      additionalContext: Schema.optional(Schema.String),
+      initialUserMessage: Schema.optional(Schema.String),
+      sessionTitle: Schema.optional(Schema.String),
+      watchPaths: Schema.optional(Schema.Array(Schema.String)),
+      reloadSkills: Schema.optional(Schema.Boolean),
     }),
   }),
-  UserPromptSubmit: z.object({
+  UserPromptSubmit: Schema.Struct({
     ...CommonOutput,
-    decision: z.literal('block').optional(),
-    reason: z.string().optional(),
+    decision: Schema.optional(Schema.Literal('block')),
+    reason: Schema.optional(Schema.String),
     hookSpecificOutput: specific('UserPromptSubmit', {
-      additionalContext: z.string().optional(),
-      sessionTitle: z.string().optional(),
-      suppressOriginalPrompt: z.boolean().optional(),
+      additionalContext: Schema.optional(Schema.String),
+      sessionTitle: Schema.optional(Schema.String),
+      suppressOriginalPrompt: Schema.optional(Schema.Boolean),
     }),
   }),
-  PreToolUse: z.object({
+  PreToolUse: Schema.Struct({
     ...CommonOutput,
     // Deprecated for this event; `approve`/`block` read as allow/deny.
-    decision: z.enum(['approve', 'block']).optional(),
-    reason: z.string().optional(),
+    decision: Schema.optional(Schema.Literals(['approve', 'block'])),
+    reason: Schema.optional(Schema.String),
     hookSpecificOutput: specific('PreToolUse', {
-      permissionDecision: z.enum(['allow', 'deny', 'ask', 'defer']).optional(),
-      permissionDecisionReason: z.string().optional(),
-      updatedInput: z.record(z.string(), z.unknown()).optional(),
-      additionalContext: z.string().optional(),
+      permissionDecision: Schema.optional(
+        Schema.Literals(['allow', 'deny', 'ask', 'defer']),
+      ),
+      permissionDecisionReason: Schema.optional(Schema.String),
+      updatedInput: Schema.optional(
+        Schema.Record(Schema.String, Schema.Unknown),
+      ),
+      additionalContext: Schema.optional(Schema.String),
     }),
   }),
-  PostToolUse: z.object({
+  PostToolUse: Schema.Struct({
     ...CommonOutput,
-    decision: z.literal('block').optional(),
-    reason: z.string().optional(),
+    decision: Schema.optional(Schema.Literal('block')),
+    reason: Schema.optional(Schema.String),
     hookSpecificOutput: specific('PostToolUse', {
-      additionalContext: z.string().optional(),
-      classifierContext: z.string().optional(),
-      updatedToolOutput: z.unknown().optional(),
-      updatedMCPToolOutput: z.unknown().optional(),
+      additionalContext: Schema.optional(Schema.String),
+      classifierContext: Schema.optional(Schema.String),
+      updatedToolOutput: Schema.optional(Schema.Unknown),
+      updatedMCPToolOutput: Schema.optional(Schema.Unknown),
     }),
   }),
   Stop: StopOutput('Stop'),
   SubagentStop: StopOutput('SubagentStop'),
-} as const satisfies Record<HookEvent, z.ZodType>;
+} as const satisfies Record<HookEvent, Schema.Top>;
 
-type HookOutput = z.infer<(typeof HookOutputSchemas)[HookEvent]>;
+type HookOutput = (typeof HookOutputSchemas)[HookEvent]['Type'];
 
 /** How a hook process ended, as the runner saw it. */
 export type HookRun =
@@ -232,7 +240,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
   let context: string | null = null;
   switch (event) {
     case 'PreToolUse': {
-      const pre = HookOutputSchemas.PreToolUse.parse(output);
+      const pre = Schema.decodeUnknownSync(HookOutputSchemas.PreToolUse)(
+        output,
+      );
       const hso = pre.hookSpecificOutput;
       const decision =
         hso?.permissionDecision ??
@@ -251,7 +261,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'PostToolUse': {
-      const post = HookOutputSchemas.PostToolUse.parse(output);
+      const post = Schema.decodeUnknownSync(HookOutputSchemas.PostToolUse)(
+        output,
+      );
       const hso = post.hookSpecificOutput;
       context = joined([
         post.decision === 'block' ? post.reason : undefined,
@@ -266,7 +278,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'UserPromptSubmit': {
-      const prompt = HookOutputSchemas.UserPromptSubmit.parse(output);
+      const prompt = Schema.decodeUnknownSync(
+        HookOutputSchemas.UserPromptSubmit,
+      )(output);
       context = joined([prompt.hookSpecificOutput?.additionalContext]);
       if (prompt.decision === 'block')
         ignored.push('decision: "block" (blocking a prompt)');
@@ -276,7 +290,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'SessionStart': {
-      const start = HookOutputSchemas.SessionStart.parse(output);
+      const start = Schema.decodeUnknownSync(HookOutputSchemas.SessionStart)(
+        output,
+      );
       const hso = start.hookSpecificOutput;
       context = joined([hso?.additionalContext]);
       for (const field of [
@@ -290,7 +306,7 @@ function effectOf(asked: HookAsked, output: HookOutput) {
     }
     case 'Stop':
     case 'SubagentStop': {
-      const stop = HookOutputSchemas[event].parse(output);
+      const stop = Schema.decodeUnknownSync(HookOutputSchemas[event])(output);
       const extra = stop.hookSpecificOutput?.additionalContext;
       const reason = stop.reason ?? `A ${event} hook blocked the stop.`;
       if (stop.decision === 'block')
@@ -358,10 +374,12 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
     if (Result.isFailure(json)) {
       malformed = `its output is not valid JSON (${json.failure.message})`;
     } else {
-      const result = HookOutputSchemas[event].safeParse(json.success);
-      if (result.success) parsed = result.data;
+      const result = Schema.decodeUnknownResult(HookOutputSchemas[event])(
+        json.success,
+      );
+      if (Result.isSuccess(result)) parsed = result.success;
       else
-        malformed = `its output does not match the ${event} output: ${z.prettifyError(result.error)}`;
+        malformed = `its output does not match the ${event} output: ${result.failure.message}`;
     }
   }
   const effect = parsed === undefined ? null : effectOf(asked, parsed);

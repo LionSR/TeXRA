@@ -7,9 +7,8 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber, Result, Schema } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
-import { z } from 'zod';
 
 import { CopilotRoutes, Skills, hasExtension } from '@texra-ai/harness';
 import {
@@ -246,9 +245,11 @@ export class SettingsViewMessageHandler {
   ): Effect.Effect<void, never, ProcessServices> {
     return Effect.suspend(() => {
       this.activeView = webviewView;
-      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (parsed.success) {
-        return this.body.handleMessage(parsed.data, this.handlerRegistry);
+      const parsed = Schema.decodeUnknownResult(
+        SettingsViewInboundMessageSchema,
+      )(message);
+      if (Result.isSuccess(parsed)) {
+        return this.body.handleMessage(parsed.success, this.handlerRegistry);
       }
       // The webview's `postMessage` is untyped per command, so a malformed
       // request is a frontend bug the user just triggered with a click:
@@ -263,7 +264,7 @@ export class SettingsViewMessageHandler {
       return showLoggedErrorMessage(
         this.channel,
         `Settings could not handle the '${command}' request`,
-        z.prettifyError(parsed.error),
+        parsed.failure.message,
       ).pipe(Effect.asVoid);
     });
   }

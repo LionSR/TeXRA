@@ -13,7 +13,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
@@ -38,7 +38,11 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
 const config = (instruction: string) =>
-  AgentConfigSchema.parse({ agent: 'assistant', model: 'gpt56', instruction });
+  Schema.decodeUnknownSync(AgentConfigSchema)({
+    agent: 'assistant',
+    model: 'gpt56',
+    instruction,
+  });
 
 describe(
   'native agent launch activation',

@@ -2,7 +2,14 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Deferred, Effect, Exit, type FileSystem, type Path } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  type FileSystem,
+  type Path,
+  Schema,
+} from 'effect';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -25,7 +32,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-const RUN = RunIdSchema.parse('ab12cd');
+const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 
 /** The controller's verbs are Effects; this is the host wiring point's run. */
 function run<A, E>(

@@ -22,6 +22,7 @@ import {
   upsertRow,
   writableArray,
   type TranscriptIndexes,
+  type TranscriptDraft,
   type TranscriptWork,
 } from './transcriptState';
 import type { TranscriptView } from './sessionView';
@@ -62,7 +63,7 @@ export function applyLiveText(
   // The row paints when its event is applied, joined with this text.
   if (!cursor) return transcript;
   const slot = ix.slots.get(chunk.rowId);
-  const next = { ...transcript };
+  const next: TranscriptDraft = { ...transcript };
   if (slot?.kind === 'tool') {
     upsertRow(work, next, toolRow(slot.base, slot.log, text, runLabels));
     return next;
@@ -120,7 +121,7 @@ export function finishOpenCompactions(
     finishedAt,
   );
   if (changed.length === 0) return transcript;
-  const next = { ...transcript };
+  const next: TranscriptDraft = { ...transcript };
   upsertCompactionRows(work, next, changed);
   return next;
 }

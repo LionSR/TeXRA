@@ -13,7 +13,6 @@ import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
 import {
   Cause,
-  Data,
   Duration,
   Effect,
   Exit,
@@ -22,6 +21,7 @@ import {
   Path,
   PlatformError,
   Schedule,
+  Schema,
   Stream,
 } from 'effect';
 import { Headers, HttpClient } from 'effect/http';
@@ -54,9 +54,12 @@ const EXTRACT_TIMEOUT_MS = 30_000;
  * it for the non-download errors (invalid input, no open workspace,
  * extraction or placement failure), which never had a retry loop to abort.
  */
-class ArxivSourcePermanentError extends Data.TaggedError(
+class ArxivSourcePermanentError extends Schema.TaggedError<ArxivSourcePermanentError>()(
   'ArxivSourcePermanentError',
-)<{ readonly message: string }> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * A failed download attempt worth retrying: a network-level failure, the
@@ -64,9 +67,13 @@ class ArxivSourcePermanentError extends Data.TaggedError(
  * {@link isTransientHttpStatus}). Once the retries are exhausted it is the
  * program's failure.
  */
-class ArxivSourceTransientError extends Data.TaggedError(
+class ArxivSourceTransientError extends Schema.TaggedError<ArxivSourceTransientError>()(
   'ArxivSourceTransientError',
-)<{ readonly message: string; readonly cause: unknown }> {}
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The typed failures of an arXiv source download. */
 export type ArxivSourceError =

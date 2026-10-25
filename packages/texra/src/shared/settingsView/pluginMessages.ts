@@ -7,39 +7,39 @@
  * the user's MCP config file, which the page lists read-only.
  */
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { SkillNameSchema } from '@texra-ai/harness/schemas';
 // Local imports - shared contracts
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 /** One installed plugin as the Plugins page lists it. */
-export const PluginListItemSchema = z.object({
+export const PluginListItemSchema = Schema.Struct({
   name: SkillNameSchema,
-  source: z.string(),
-  commit: z.string().optional(),
-  version: z.string().optional(),
-  enabled: z.boolean(),
+  source: Schema.String,
+  commit: Schema.optional(Schema.String),
+  version: Schema.optional(Schema.String),
+  enabled: Schema.Boolean,
   /** Whether the user trusts it as it is now; enabled and untrusted, it
    *  loads nothing until it is reviewed again. */
-  trusted: z.boolean(),
+  trusted: Schema.Boolean,
   /** Code components TeXRA does not run (LSP servers), which keep it from
    *  being enabled. */
-  code: z.array(z.string()),
-  skillCount: z.number(),
-  commandCount: z.number(),
-  agentCount: z.number(),
-  mcpServers: z.array(z.string()),
+  code: Schema.Array(Schema.String),
+  skillCount: Schema.Number,
+  commandCount: Schema.Number,
+  agentCount: Schema.Number,
+  mcpServers: Schema.Array(Schema.String),
   /** Why it cannot be read now, when it cannot. */
-  problem: z.string().optional(),
+  problem: Schema.optional(Schema.String),
 });
 
 /** Inbound: one plugin action. `install` asks the host for a source and
  *  `openMcpConfig` opens the MCP config file, neither naming a plugin; every
  *  other action names one. */
-export const PluginActionMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION),
-  action: z.enum([
+export const PluginActionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION),
+  action: Schema.Literals([
     'install',
     'enable',
     'disable',
@@ -47,6 +47,6 @@ export const PluginActionMessageSchema = z.object({
     'remove',
     'openMcpConfig',
   ]),
-  name: SkillNameSchema.optional(),
+  name: Schema.optional(SkillNameSchema),
 });
-export type PluginActionMessage = z.infer<typeof PluginActionMessageSchema>;
+export type PluginActionMessage = typeof PluginActionMessageSchema.Type;

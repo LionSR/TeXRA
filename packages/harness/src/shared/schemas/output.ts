@@ -1,39 +1,38 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { getBasename } from '@utils/core';
 import { RunIdSchema } from './identifiers';
 
-const WorkspaceFileLocationSchema = z.strictObject({
-  kind: z.literal('workspace'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
+const WorkspaceFileLocationSchema = Schema.Struct({
+  kind: Schema.Literal('workspace'),
+  absolutePath: Schema.String,
+  relativePath: Schema.String,
 });
 
-const RunStorageFileLocationSchema = z.strictObject({
-  kind: z.literal('runStorage'),
-  absolutePath: z.string(),
-  relativePath: z.string(),
+const RunStorageFileLocationSchema = Schema.Struct({
+  kind: Schema.Literal('runStorage'),
+  absolutePath: Schema.String,
+  relativePath: Schema.String,
   runId: RunIdSchema,
 });
 
-const ExternalFileLocationSchema = z.strictObject({
-  kind: z.literal('external'),
-  absolutePath: z.string(),
+const ExternalFileLocationSchema = Schema.Struct({
+  kind: Schema.Literal('external'),
+  absolutePath: Schema.String,
 });
 
 /** Discriminated union of all file location types */
-export const FileLocationSchema = z.discriminatedUnion('kind', [
+export const FileLocationSchema = Schema.Union([
   WorkspaceFileLocationSchema,
   RunStorageFileLocationSchema,
   ExternalFileLocationSchema,
 ]);
 
-export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
-export type RunStorageFileLocation = z.infer<
-  typeof RunStorageFileLocationSchema
->;
-export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
-export type FileLocation = z.infer<typeof FileLocationSchema>;
+export type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
+export type RunStorageFileLocation =
+  (typeof RunStorageFileLocationSchema)['Type'];
+export type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
+export type FileLocation = typeof FileLocationSchema.Type;
 
 // ============================================================================
 // How a file location reads to a human

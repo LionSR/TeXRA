@@ -7,8 +7,7 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * The goal is this function in a loop (`goalScript`).
  */
-import { Effect, Result, SynchronizedRef } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema, SynchronizedRef } from 'effect';
 
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { forkSeed } from '@agent/runtime/forkRun';
@@ -39,23 +38,26 @@ import { describeSubagentProgress } from '@tools/delegation/subagentRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const SelfInputSchema = z.strictObject({
-  prompt: z
-    .string()
-    .min(1, 'prompt is required')
-    .describe('What this run of you works on.'),
-  fork: nullishWithDefault(z.boolean(), true).describe(
+const SelfInputSchema = Schema.Struct({
+  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'What this run of you works on.',
+  }),
+  fork: nullishWithDefault(
+    Schema.Boolean,
+    true,
     'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts from `prompt` alone.',
   ),
-  schema: z
-    .record(z.string(), z.unknown())
-    .nullish()
-    .describe(
+  schema: Schema.optional(
+    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
+  ).annotate({
+    description:
       'A JSON Schema object: the run finishes by submitting a value of it, returned as `structured`.',
-    ),
-  label: z.string().nullish().describe('A short title for the call’s card.'),
+  }),
+  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'A short title for the call’s card.',
+  }),
 });
-type SelfInput = z.infer<typeof SelfInputSchema>;
+type SelfInput = typeof SelfInputSchema.Type;
 
 /**
  * The agent `self()` runs again, the conversation its forks copy, and the
@@ -187,7 +189,7 @@ const runSelf = Effect.fn('self.call')(function* (
         session,
         runId,
         parentRunId,
-        configPayload: AgentConfigSchema.parse({
+        configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...(forked?.record ?? {
             ...launch,
             model: (yield* SynchronizedRef.get(run.model)).modelId,

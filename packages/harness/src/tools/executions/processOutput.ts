@@ -121,7 +121,7 @@ function projectProcessOutput(
 export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   session: SessionHandle,
   runId: RunId,
-  viewRange?: [number, number],
+  viewRange?: readonly [number, number],
 ) {
   const run = session.view.run(runId);
   if (run === undefined) {

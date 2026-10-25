@@ -18,8 +18,7 @@
  */
 
 // Third-party imports
-import { Effect, Stream, type FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, type FileSystem, Result, Schema, Stream } from 'effect';
 
 // Local imports
 import {
@@ -98,24 +97,24 @@ import type {
 // Schema
 // ============================================================================
 
-const CodexInputSchema = z.strictObject({
-  prompt: z
-    .string()
-    .describe(
+const CodexInputSchema = Schema.Struct({
+  prompt: Schema.String.annotate({
+    description:
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
-    ),
-  sandbox_mode: CodexSandboxModeSchema.nullish().describe(
-    'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
+  }),
+  sandbox_mode: Schema.optional(Schema.NullOr(CodexSandboxModeSchema)).annotate(
+    {
+      description:
+        'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
+    },
   ),
-  thread_id: z
-    .string()
-    .nullish()
-    .describe(
+  thread_id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'Resume an existing Codex thread with a follow-up instruction. The prompt is enqueued as the next turn; if the thread is currently processing, the prompt waits in its queue.',
-    ),
+  }),
 });
 
-type CodexInput = z.infer<typeof CodexInputSchema>;
+type CodexInput = typeof CodexInputSchema.Type;
 
 /**
  * Log a completed codex thread item that has no tool card, straight to the
@@ -464,8 +463,8 @@ export const CodexTool = defineTool({
     'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: CodexInputSchema,
   card: (raw) => {
-    const input = CodexInputSchema.safeParse(raw);
-    return input.success ? codexCallCard(input.data) : undefined;
+    const input = Schema.decodeUnknownResult(CodexInputSchema)(raw);
+    return Result.isSuccess(input) ? codexCallCard(input.success) : undefined;
   },
   guard: {
     bash: (input: CodexInput) =>

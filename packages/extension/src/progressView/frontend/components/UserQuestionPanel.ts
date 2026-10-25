@@ -233,7 +233,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     // id): two identically-worded questions answered independently above
     // will silently collapse into one entry here. Pre-existing limitation,
     // not introduced by the position-indexed state above.
-    const answers: UserQuestionAnswers = {};
+    const answers: Record<string, UserQuestionAnswers[string]> = {};
 
     for (const [index, question] of data.questions.entries()) {
       const custom = this.freeText[index]?.trim();

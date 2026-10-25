@@ -14,6 +14,8 @@ import {
   FiberMap,
   RcMap,
   Ref,
+  Result,
+  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -83,17 +85,19 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
 function failureAnswer(error: unknown): HostAnswer {
   const answer = { ok: false as const, message: toErrorMessage(error) };
   if (!(error instanceof ModelError)) return answer;
-  const fields = ModelErrorFieldsSchema.safeParse(
+  const fields = Schema.decodeUnknownResult(ModelErrorFieldsSchema)(
     toJsonValue(
       Object.fromEntries(
-        Object.keys(ModelErrorFieldsSchema.shape).map((name) => [
+        Object.keys(ModelErrorFieldsSchema.fields).map((name) => [
           name,
           Reflect.get(error, name),
         ]),
       ),
     ),
   );
-  return fields.success ? { ...answer, model: fields.data } : answer;
+  return Result.isSuccess(fields)
+    ? { ...answer, model: fields.success }
+    : answer;
 }
 
 /** The streamed call's items: a turn of the editor's model. */

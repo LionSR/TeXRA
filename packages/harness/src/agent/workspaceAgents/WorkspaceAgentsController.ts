@@ -1,5 +1,4 @@
-import { Data, Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
@@ -30,16 +29,17 @@ import {
 } from './workspaceAgentsState';
 
 const DEFAULT_TEAM = GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID;
-const TeamIdSchema = z.string().min(1).optional();
+const TeamIdSchema = Schema.optional(Schema.NonEmptyString);
 
 export interface WorkspaceAgentsEntry {
   readonly name: string;
   readonly source: AgentSource;
 }
 
-export class InvalidAgentTeamError extends Data.TaggedError(
+export class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
   'InvalidAgentTeamError',
-)<{ readonly message: string }> {}
+  { message: Schema.String },
+) {}
 
 export interface WorkspaceAgentsControllerDeps<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
@@ -241,10 +241,9 @@ export class WorkspaceAgentsController<
   private writeSelection(
     selection: WorkspaceAgentsSelection,
   ): Effect.Effect<void, StateWriteFailed> {
-    const parsed = WorkspaceAgentsSelectionSchema.parse(selection);
     return this.deps.repoState.update(
       WorkspaceStateKey.WORKSPACE_AGENTS,
-      parsed,
+      Schema.decodeSync(WorkspaceAgentsSelectionSchema)(selection),
     );
   }
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 export const DESKTOP_LOG_COMMANDS = {
   REQUEST_LOG: 'desktop:requestLog',
@@ -7,14 +7,14 @@ export const DESKTOP_LOG_COMMANDS = {
   EXPORT_LOG: 'desktop:exportLog',
 } as const;
 
-const DesktopLogSnapshotSchema = z.object({
-  text: z.string(),
-  truncated: z.boolean(),
-  path: z.string(),
+const DesktopLogSnapshotSchema = Schema.Struct({
+  text: Schema.String,
+  truncated: Schema.Boolean,
+  path: Schema.String,
 });
 
-export const DesktopSetLogMessageSchema = z.object({
-  command: z.literal(DESKTOP_LOG_COMMANDS.SET_LOG),
+export const DesktopSetLogMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_LOG_COMMANDS.SET_LOG),
   log: DesktopLogSnapshotSchema,
 });
 
@@ -24,17 +24,21 @@ export const DesktopSetLogMessageSchema = z.object({
  * severity, time, and identity as fields instead of recovering them from a
  * formatted line. Levels are Effect's own names (`WARN`, `ERROR`, ...).
  */
-export const DesktopLogLineSchema = z.object({
-  level: z.string(),
-  timestamp: z.string(),
-  message: z.unknown(),
-  cause: z.string().optional(),
-  annotations: z.record(z.string(), z.unknown()).prefault({}),
-  spans: z.record(z.string(), z.number()).prefault({}),
-  fiberId: z.string().prefault(''),
+export const DesktopLogLineSchema = Schema.Struct({
+  level: Schema.String,
+  timestamp: Schema.String,
+  message: Schema.Unknown,
+  cause: Schema.optional(Schema.String),
+  annotations: Schema.Record(Schema.String, Schema.Unknown).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  spans: Schema.Record(Schema.String, Schema.Number).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  fiberId: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
 });
 
-export type DesktopLogLine = z.infer<typeof DesktopLogLineSchema>;
+export type DesktopLogLine = typeof DesktopLogLineSchema.Type;
 
 /**
  * The display text for one line: its message, then whatever the entry carries
@@ -64,5 +68,5 @@ export function desktopLogLineText(line: DesktopLogLine): string {
     .join('\n');
 }
 
-export type DesktopLogSnapshot = z.infer<typeof DesktopLogSnapshotSchema>;
-export type DesktopSetLogMessage = z.infer<typeof DesktopSetLogMessageSchema>;
+export type DesktopLogSnapshot = typeof DesktopLogSnapshotSchema.Type;
+export type DesktopSetLogMessage = typeof DesktopSetLogMessageSchema.Type;

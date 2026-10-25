@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: schemas are Effect Schema; Zod is gone.** `@texra-ai/harness` and
+  `@texra-ai/llm` no longer depend on Zod. A plugin's tool input
+  (`defineTool({ schema })`), agent block and plugin row take an Effect
+  Schema (`Schema.Codec<T, unknown>`), and a tool definition's schema field
+  is `schema` (was `zodSchema`). The error classes are `Schema.TaggedError`
+  classes and validate their fields when constructed. A TeXRA window and a
+  TeXRA service from different builds no longer talk to each other: update
+  both together.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and

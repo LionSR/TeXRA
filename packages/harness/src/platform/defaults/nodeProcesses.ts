@@ -8,7 +8,7 @@
  */
 import { hostname } from 'node:os';
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -32,9 +32,13 @@ const CHANNEL = 'NodeProcesses';
 export type ProcessProbe = FileSystem.FileSystem | ChildProcessSpawner;
 
 /** A start identity that could not be read or parsed for `pid`. */
-class ProcessIdentityUnreadable extends Data.TaggedError(
+class ProcessIdentityUnreadable extends Schema.TaggedError<ProcessIdentityUnreadable>()(
   'ProcessIdentityUnreadable',
-)<{ readonly pid: number; readonly detail: string }> {}
+  {
+    pid: Schema.Number,
+    detail: Schema.String,
+  },
+) {}
 
 /** The one filesystem read of this module, worded by its errno text. */
 const readTextFile = (

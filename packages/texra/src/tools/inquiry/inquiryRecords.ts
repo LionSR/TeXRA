@@ -1,6 +1,6 @@
 /** Canonical global inquiry content; project events carry display notifications only. */
 import { randomBytes } from 'node:crypto';
-import { Context, DateTime, Effect, Layer, Result } from 'effect';
+import { Context, DateTime, Effect, Layer, Result, Schema } from 'effect';
 
 import {
   ensureError,
@@ -48,7 +48,7 @@ function inquiryOperations(
     });
 
   function normalizeSessionLinks(
-    links?: string[] | null,
+    links?: readonly string[] | null,
   ): string[] | undefined {
     if (!links?.length) return undefined;
 
@@ -225,10 +225,10 @@ function inquiryOperations(
 
   /** Read a canonical thread manifest. */
   function readExternalInquiryThread(threadId: string) {
-    const parsed = InquiryThreadIdSchema.safeParse(threadId);
-    if (!parsed.success) return Effect.succeed(null);
+    const parsed = Schema.decodeUnknownResult(InquiryThreadIdSchema)(threadId);
+    if (!Result.isSuccess(parsed)) return Effect.succeed(null);
     return Effect.map(
-      values.get(INQUIRY_THREADS, parsed.data),
+      values.get(INQUIRY_THREADS, parsed.success),
       (record) => record ?? null,
     );
   }

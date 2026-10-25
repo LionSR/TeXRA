@@ -29,32 +29,34 @@
  */
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Fiber,
+  Result,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 
 import {
   type HostRequestFailure,
   Internal,
   isRequestRefusal,
-  type RequestError,
   type Session,
   withLogChannel,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  Invalid,
+  RequestErrorSchema,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   UpMessageSchema,
   type DownMessage,
   type HostOutcome,
-  type RequestErrorWire,
   type Response,
   type Subscribe,
   type SurfaceActionMessage,
@@ -66,9 +68,9 @@ const CHANNEL = 'SessionBridge';
 
 /** Enough of any up message to answer it: a message that names a request
  *  id gets its `Invalid` response even when the rest did not parse. */
-const RequestEnvelopeSchema = z.object({
-  session: z.string(),
-  requestId: z.string().min(1),
+const RequestEnvelopeSchema = Schema.Struct({
+  session: Schema.String,
+  requestId: Schema.String.check(Schema.isMinLength(1)),
 });
 
 interface SessionBridgeOptions {
@@ -113,36 +115,18 @@ export interface AttachedPort {
 }
 
 /** Expected refusal when a host attaches after the bridge has closed. */
-class SessionBridgeClosedError extends Data.TaggedError(
+class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedError>()(
   'SessionBridgeClosedError',
+  {},
 ) {
   override get message(): string {
     return 'SessionBridge is closed; cannot attach a port';
   }
 }
 
-function wireError(error: RequestError): RequestErrorWire {
-  switch (error._tag) {
-    case 'NotOwner':
-      return { _tag: 'NotOwner', runId: error.runId };
-    case 'Unavailable':
-      return {
-        _tag: 'Unavailable',
-        runId: error.runId,
-        reason: error.reason,
-      };
-    case 'Cancelled':
-      return { _tag: 'Cancelled' };
-    case 'Rejected':
-      return {
-        _tag: 'Rejected',
-        reason: error.reason,
-        ...(error.docsPage && { docsPage: error.docsPage }),
-      };
-    case 'Internal':
-      return { _tag: 'Internal', ref: error.ref };
-  }
-}
+/** A request error as the wire carries it: the class's fields, which the
+ *  surface decodes back (a `postMessage` keeps no Error prototype). */
+const wireError = Schema.encodeSync(RequestErrorSchema);
 
 /** One attached port: its transport, its scopes, and the framer in flight. */
 interface PortEntry {
@@ -317,26 +301,31 @@ export class SessionBridge {
     return Effect.suspend(() => {
       const { port } = entry;
       if (this.ports.get(port.id) !== entry) return Effect.void;
-      const parsed = UpMessageSchema.safeParse(message);
-      if (!parsed.success) {
-        const envelope = RequestEnvelopeSchema.safeParse(message);
-        const reason = `Unparseable message from port ${port.id}: ${z.prettifyError(parsed.error)}`;
+      const parsed = Schema.decodeUnknownResult(UpMessageSchema)(message);
+      if (!Result.isSuccess(parsed)) {
+        const envelope = Schema.decodeUnknownResult(RequestEnvelopeSchema)(
+          message,
+        );
+        const reason = `Unparseable message from port ${port.id}: ${parsed.failure.message}`;
         return Effect.logWarning(reason).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
             Effect.sync(() => {
-              if (!envelope.success) return;
+              if (!Result.isSuccess(envelope)) return;
               port.send({
                 kind: 'response',
-                session: envelope.data.session,
-                requestId: envelope.data.requestId,
-                result: { ok: false, error: { _tag: 'Invalid', reason } },
+                session: envelope.success.session,
+                requestId: envelope.success.requestId,
+                result: {
+                  ok: false,
+                  error: wireError(new Invalid({ reason })),
+                },
               });
             }),
           ),
         );
       }
-      const up = parsed.data;
+      const up = parsed.success;
       if (up.session !== this.key) {
         return Effect.logWarning(
           `Port ${port.id} addressed session ${up.session}; this session is ${this.key}`,

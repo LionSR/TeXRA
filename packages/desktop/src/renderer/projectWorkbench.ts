@@ -1,6 +1,8 @@
 // The document resources of one project. Selection changes which owner is visible;
 // only tab closure, project closure, or document disposal releases its resources.
 
+import { Result, Schema, Struct } from 'effect';
+
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
@@ -63,11 +65,13 @@ export function createProjectWorkbench(options: {
   // rather than trusting a cast, but skip the reparse when the raw value is
   // still the one `updateState` last wrote.
   let cachedRaw: unknown = surface.surface$.get().workbench;
-  let cachedState: DesktopShellState = DesktopShellStateSchema.parse(cachedRaw);
+  let cachedState: DesktopShellState = Schema.decodeUnknownSync(
+    DesktopShellStateSchema,
+  )(cachedRaw);
   const getState = (): DesktopShellState => {
     const raw = surface.surface$.get().workbench;
     if (raw !== cachedRaw) {
-      cachedState = DesktopShellStateSchema.parse(raw);
+      cachedState = Schema.decodeUnknownSync(DesktopShellStateSchema)(raw);
       cachedRaw = raw;
     }
     return cachedState;
@@ -262,23 +266,26 @@ export function createProjectWorkbench(options: {
  */
 function restoredLayout(session: string, restored: unknown): DesktopShellState {
   if (restored === null) return initialDesktopShellState();
-  const parsed = DesktopShellStateSchema.safeParse(restored);
-  if (parsed.success) {
+  const parsed = Schema.decodeUnknownResult(DesktopShellStateSchema)(restored);
+  if (Result.isSuccess(parsed)) {
+    const state = parsed.success;
     if (
-      !parsed.data.dockLayout &&
-      !parsed.data.workbenchTabs.some((tab) => tab.kind === 'agent')
+      !state.dockLayout &&
+      !state.workbenchTabs.some((tab) => tab.kind === 'agent')
     )
-      return openWorkbenchTab(parsed.data, { kind: 'agent' });
-    return parsed.data;
+      return openWorkbenchTab(state, { kind: 'agent' });
+    return state;
   }
   console.warn(
-    `[desktop] resetting the unreadable workbench layout of ${session}: ${parsed.error.message}`,
+    `[desktop] resetting the unreadable workbench layout of ${session}: ${parsed.failure.message}`,
   );
-  const kept = DesktopShellStateSchema.pick({ projectName: true }).safeParse(
-    restored,
-  );
+  const kept = Schema.decodeUnknownResult(
+    DesktopShellStateSchema.mapFields(Struct.pick(['projectName'])),
+  )(restored);
   return {
     ...initialDesktopShellState(),
-    ...(kept.success ? { projectName: kept.data.projectName } : {}),
+    ...(Result.isSuccess(kept)
+      ? { projectName: kept.success.projectName }
+      : {}),
   };
 }

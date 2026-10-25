@@ -1,5 +1,5 @@
 /** Webview IPC command-name constants, grouped per view. */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
@@ -16,8 +16,8 @@ export const DESKTOP_THEME_KIND = {
 } as const satisfies Record<string, Theme>;
 
 /** The message a webview posts once it can receive its first snapshot. */
-export const WebviewReadyMessageSchema = z.object({
-  command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
+export const WebviewReadyMessageSchema = Schema.Struct({
+  command: Schema.Literal(COMMON_COMMANDS.WEBVIEW_READY),
 });
 
 /** Settings-view command literals, both directions. */

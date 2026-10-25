@@ -115,8 +115,8 @@ Steps, from a clean checkout of the commit on `main` whose CI is green:
    version is permanent once published (`npm deprecate` is the only way
    back), so a wrong publish costs a version number.
 4. **Verify from the registry.** In an empty directory, `npm install
-   @texra-ai/harness @effect/platform-node @effect/sql-sqlite-node effect
-   zod` and import `@texra-ai/harness`, `@texra-ai/harness/node` and
+   @texra-ai/harness @effect/platform-node @effect/sql-sqlite-node effect`
+   and import `@texra-ai/harness`, `@texra-ai/harness/node` and
    `@texra-ai/harness/plugins`.
 
 ## Preview releases

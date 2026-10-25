@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -48,7 +48,7 @@ async function appendLogEntry(runId: RunId, text: string): Promise<void> {
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',

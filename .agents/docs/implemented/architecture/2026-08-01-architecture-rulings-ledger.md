@@ -619,6 +619,32 @@ is its display mirror.
 
 ---
 
+## Schemas are Effect Schema (ruled 2026-10-24)
+
+**Question.** Keep Zod v4 as the schema library (CLAUDE.md "Schemas (Zod v4)",
+core-concepts "Errors are `Data.TaggedError`"), or move to Effect Schema?
+
+**Ruling.** Effect Schema, "wherever we can", and the intermediate layers the
+two-library state needed go with it: the RPC edge's `zodWire` adapter and its
+hand-written `_tag` error structs, the Zod-specific helpers, the
+`Data.TaggedError` classes (now `Schema.TaggedError`). Measured before the
+ruling: ~340 files, 273 exported schemas, 388 derived types; no external SDK
+exchanges Zod with us (providers and MCP take JSON Schema), so the only
+contracts that change are our own `@texra-ai/harness` plugin API and
+`llm-zoo`'s exported schemas. The reverse path, a model- or script-authored
+JSON Schema compiled to a validator, is `SchemaRepresentation.fromJsonSchemaDocument`.
+
+**Reverses.** The Zod-as-single-source rule in CLAUDE.md and AGENTS.md ("Zod
+v4 Schema Patterns", now "Effect Schema Patterns") and the core-concepts line
+"Errors are `Data.TaggedError`". `Data.TaggedError` itself is stable in effect
+4.x; the reversal is for one schema system, not a defect.
+
+**Forbids.** A new Zod schema anywhere, and a second schema library beside
+Effect Schema. The one-time codemod that converted the tree (#14271) was
+deleted once the migration landed.
+
+---
+
 ## A child run is not bounded by its parent's tools (ruled 2026-10-24)
 
 **Question.** Should a delegated child persona keep only the tools its

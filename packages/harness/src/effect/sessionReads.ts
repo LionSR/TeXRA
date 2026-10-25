@@ -31,7 +31,7 @@ import {
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import {
   assembleTrace,

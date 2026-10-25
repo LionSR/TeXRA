@@ -1,7 +1,7 @@
 // The window's onboarding surface: the funnel a settled launch recomputes and
 // the cards' actions.
 
-import { Data, Effect, Scope } from 'effect';
+import { Effect, Schema, Scope } from 'effect';
 
 import {
   withProcessServices,
@@ -30,12 +30,13 @@ import type { DesktopWindowHost } from './desktopWindowHost.js';
  * shows `toErrorMessage` of this failure, so the message is the rejection's
  * own text rather than an empty tail.
  */
-class OnboardingRefreshFailed extends Data.TaggedError(
+class OnboardingRefreshFailed extends Schema.TaggedError<OnboardingRefreshFailed>()(
   'OnboardingRefreshFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
   function* (options: {

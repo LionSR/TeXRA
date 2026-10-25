@@ -2,8 +2,7 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports - canonical model contract
 import {
@@ -28,12 +27,14 @@ const EXPIRY_MARGIN_MS = 60_000;
  */
 const RELEASE_DEADLINE = '10 seconds';
 
-/** What one upload left on the provider. */
-interface Uploaded {
-  readonly fileId: string;
-  /** Epoch milliseconds; `null` when the provider stated no expiry. */
-  readonly expiresAtMs: number | null;
-}
+/** What one upload left on the provider: its id and, in epoch
+ *  milliseconds, when the provider will drop it (`null` for never). Each
+ *  files endpoint's own response schema decodes to this shape. */
+export const UploadedSchema = Schema.Struct({
+  fileId: Schema.String,
+  expiresAtMs: Schema.NullOr(Schema.Number),
+});
+type Uploaded = typeof UploadedSchema.Type;
 
 /**
  * One binding's uploads, held in memory and nowhere else. The key is a
@@ -69,7 +70,9 @@ export function filesApiUploads(provider: {
    * states its expiry differently (RFC 3339 against whole Unix seconds), so
    * the schema that reads it is the binding's, not this helper's.
    */
-  readonly parseUploaded: (raw: unknown) => z.ZodSafeParseResult<Uploaded>;
+  readonly parseUploaded: (
+    raw: unknown,
+  ) => Result.Result<Uploaded, Schema.SchemaError>;
   readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
   readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
 }): UploadCache {
@@ -80,14 +83,14 @@ export function filesApiUploads(provider: {
         catch: provider.failure,
       });
       const parsed = provider.parseUploaded(created);
-      if (!parsed.success)
+      if (!Result.isSuccess(parsed))
         return yield* new ModelError({
           kind: 'malformed-output',
           message: `${provider.providerName} returned an upload without a usable file id.`,
           model: provider.model,
-          cause: parsed.error,
+          cause: parsed.failure,
         });
-      return parsed.data;
+      return parsed.success;
     });
   const remove = (fileId: string) =>
     Effect.tryPromise({
@@ -119,21 +122,21 @@ export function filesApiUploads(provider: {
   const uploadFile = Effect.fn('llm.uploads.uploadFile')(function* (
     file: FileUpload,
   ) {
-    const parsed = FileUploadSchema.safeParse(file);
-    if (!parsed.success)
+    const parsed = Schema.decodeUnknownResult(FileUploadSchema)(file);
+    if (!Result.isSuccess(parsed))
       return yield* new ModelError({
         kind: 'invalid-request',
         message: 'The file to upload is invalid.',
-        cause: parsed.error,
+        cause: parsed.failure,
       });
-    const digest = digestOf(parsed.data.base64);
+    const digest = digestOf(parsed.success.base64);
     if (released || live.has(digest) || inFlight.has(digest)) return;
     inFlight.add(digest);
     // Only the request is interruptible: once it answers, the id has one
     // owner at every instant, `owned` (a release reports it) or this fiber.
     yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        const uploaded = yield* restore(send(parsed.data)).pipe(
+        const uploaded = yield* restore(send(parsed.success)).pipe(
           Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
         );
         if (!released) {

@@ -174,11 +174,16 @@ function record(d: Draft, event: TranscriptEvent): void {
       // On a run with a run history, the card's output is projected from its
       // `tool.result` and names no tool, input or card: those are the ones
       // its `tool.start` opened.
+      const result: Record<PropertyKey, unknown> = Predicate.isObject(
+        event.result,
+      )
+        ? event.result
+        : {};
       slot.log = decodeToolUseLog({
         toolName: slot.log.toolName,
         input: slot.log.input,
         ...(slot.log.card ? { card: slot.log.card } : {}),
-        ...(Predicate.isObject(event.result) ? event.result : {}),
+        ...result,
         status: event.status,
       });
       if (!inProgress) {

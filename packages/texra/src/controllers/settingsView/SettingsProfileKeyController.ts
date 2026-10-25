@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
@@ -23,12 +23,13 @@ interface SettingsProfileKeyControllerDeps {
  * here: every host's secret store publishes `credentialChanged`, and each
  * credential surface follows that signal.
  */
-export class ProviderKeyActionFailed extends Data.TaggedError(
+export class ProviderKeyActionFailed extends Schema.TaggedError<ProviderKeyActionFailed>()(
   'ProviderKeyActionFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Shared provider-key policy; hosts present failures at their own entry. */
 export class SettingsProfileKeyController {

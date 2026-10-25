@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Schema } from 'effect';
 import {
   DesktopShellStateSchema,
   closeWorkbenchTab,
@@ -39,7 +40,9 @@ describe('desktop document identity', () => {
     });
     const closedId = state.activeTabId!;
     state = closeWorkbenchTab(state, closedId);
-    state = DesktopShellStateSchema.parse(JSON.parse(JSON.stringify(state)));
+    state = Schema.decodeUnknownSync(DesktopShellStateSchema)(
+      JSON.parse(JSON.stringify(state)),
+    );
     state = openWorkbenchTab(state, { kind: 'terminal' });
     expect(state.activeTabId).not.toBe(closedId);
     expect(state.workbenchTabs.some((tab) => tab.id === closedId)).toBe(false);

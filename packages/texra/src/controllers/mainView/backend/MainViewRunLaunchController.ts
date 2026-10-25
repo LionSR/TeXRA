@@ -1,4 +1,4 @@
-import { Effect, absurd } from 'effect';
+import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
 
 import {
   AgentCatalog,
@@ -35,7 +35,6 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
-import type { z } from 'zod';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -92,11 +91,18 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
 
   // A task's options are the form's switches; a chat takes none.
   const optionsResult = task
-    ? DocumentTaskOptionsSchema.safeParse(launch)
+    ? Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(launch)
     : undefined;
-  if (optionsResult !== undefined && !optionsResult.success) {
-    const issue = optionsResult.error.issues[0];
-    const path = issue?.path.join('.') || 'options';
+  if (optionsResult !== undefined && !Result.isSuccess(optionsResult)) {
+    const [issue] = SchemaIssue.makeFormatterStandardSchemaV1()(
+      optionsResult.failure.issue,
+    ).issues;
+    const path =
+      issue?.path
+        ?.map((segment) =>
+          String(typeof segment === 'object' ? segment.key : segment),
+        )
+        .join('.') || 'options';
     return {
       valid: false,
       message: `Invalid task options (${path}): ${issue?.message ?? 'validation failed'}`,
@@ -125,8 +131,8 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   };
   // A document task runs its agent's recipe over the files.
   const patch =
-    task && optionsResult?.success
-      ? documentTaskPatch(config, task, optionsResult.data)
+    task && optionsResult !== undefined && Result.isSuccess(optionsResult)
+      ? documentTaskPatch(config, task, optionsResult.success)
       : null;
   const validation = validateRunRequest({
     config: patch ? { ...config, ...patch } : config,
@@ -229,7 +235,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
  */
 export function launchFormOf(
   config: AgentConfig,
-): Effect.Effect<z.infer<typeof LaunchPatchSchema>, Rejected> {
+): Effect.Effect<typeof LaunchPatchSchema.Type, Rejected> {
   if (config.agentSource === AGENT_SOURCE.INLINE)
     return Effect.fail(
       new Rejected({

@@ -4,6 +4,7 @@
  * that identity is made of.
  */
 // Third-party imports
+import { Schema } from 'effect';
 import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 
 // Local imports - agent runtime
@@ -22,7 +23,7 @@ export function toolDefinitionsFor(
   return definitions.map((definition) => ({
     name: definition.name,
     description: definition.description ?? '',
-    parameters: JsonObjectSchema.parse(
+    parameters: Schema.decodeUnknownSync(JsonObjectSchema)(
       convertToolSchema(definition) ?? { type: 'object', properties: {} },
     ),
   }));

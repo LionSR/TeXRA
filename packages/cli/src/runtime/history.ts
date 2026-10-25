@@ -4,7 +4,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 
 import {
   toErrorMessage,
-  RunIdSchema,
+  isRunId,
   isTaskConfig,
   RUN_SUBSTATE,
   type RunId,
@@ -155,7 +155,7 @@ export type CliHistoryDeleteResult =
     };
 
 export function parseCliHistoryId(raw: string): RunId | undefined {
-  return RunIdSchema.safeParse(raw).data;
+  return isRunId(raw) ? raw : undefined;
 }
 
 /**

@@ -1,7 +1,6 @@
-import { Clock, Context, Duration, Effect, Predicate } from 'effect';
+import { Clock, Context, Duration, Effect, Predicate, Schema } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { gt as semverGt, valid as semverValid } from 'semver';
-import { z } from 'zod';
 
 import { withLogChannel } from '@texra-ai/harness';
 import type { ValueFamily } from '@texra-ai/harness';
@@ -13,11 +12,15 @@ import type { HttpClientError } from 'effect/http';
 export type UpdateCheckHost = 'cli' | 'desktop';
 
 /** Persisted update notification state, isolated by host and configured storage root. */
-const UpdateCheckRecordSchema = z.object({
-  lastCheckedAt: z.int().nonnegative().nullable(),
-  lastNotifiedVersion: z.string().min(1).nullable(),
+const UpdateCheckRecordSchema = Schema.Struct({
+  lastCheckedAt: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+  lastNotifiedVersion: Schema.NullOr(
+    Schema.String.check(Schema.isMinLength(1)),
+  ),
 });
-export type UpdateCheckRecord = z.infer<typeof UpdateCheckRecordSchema>;
+export type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
 
 /**
  * True when `latest` is strictly newer than `current`, using full semver

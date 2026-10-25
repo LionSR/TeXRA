@@ -21,6 +21,8 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
+import { Schema } from 'effect';
+
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -86,7 +88,7 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
  * The signal for one settings catalog row, created on first use and the same
  * signal on every later call.
  *
- * The row already owns the default (`schema.parse(undefined)` yields its
+ * The row already owns the default (decoding `undefined` yields its
  * `.prefault()`), so a declaration here restates neither the default nor the
  * wire field name; it names the key and the value type the tabs render. Being
  * keyed is what lets {@link applySettingsSnapshot} apply a whole
@@ -103,7 +105,10 @@ export function settingSignal<T>(key: string): Signal.State<T> {
   if (!entry) {
     throw new Error(`No settings-view catalog row for setting "${key}"`);
   }
-  const state = trackedSignal<T>(() => entry.schema.parse(undefined) as T);
+  const state = trackedSignal<T>(
+    // cast: the catalog row types its own default; the caller names T for it.
+    () => Schema.decodeUnknownSync(entry.schema)(undefined) as T,
+  );
   CATALOG_SIGNALS.set(key, state as Signal.State<unknown>);
   return state;
 }
@@ -146,7 +151,7 @@ export const selectedSections = trackedSignal<{
 // ---------------------------------------------------------------------------
 // Memory state
 // ---------------------------------------------------------------------------
-export const memoryItems = trackedSignal<MemoryViewItem[]>(() => []);
+export const memoryItems = trackedSignal<readonly MemoryViewItem[]>(() => []);
 export const memoryEnabled = settingSignal<boolean>(
   GlobalStateKey.MEMORY_ENABLED,
 );
@@ -156,36 +161,42 @@ export const memoryEnabled = settingSignal<boolean>(
 // ---------------------------------------------------------------------------
 /** Null until the host's first profile message: an unknown key state, never
  *  rendered as "not set". */
-export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[] | null>(
-  () => null,
-);
+export const providerKeyStatuses = trackedSignal<
+  readonly ProviderKeyStatus[] | null
+>(() => null);
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------
-export const modelSelectionItems = trackedSignal<ModelSelectionItem[]>(
+export const modelSelectionItems = trackedSignal<readonly ModelSelectionItem[]>(
   () => [],
 );
 export const helperModel = settingSignal<string>(GlobalStateKey.HELPER_MODEL);
 export const preferShortModelNames = settingSignal<boolean>(
   GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
 );
-export const copilotRouteInfos = trackedSignal<CopilotRouteInfo[]>(() => []);
+export const copilotRouteInfos = trackedSignal<readonly CopilotRouteInfo[]>(
+  () => [],
+);
 
 // ---------------------------------------------------------------------------
 // Agent selection state
 // ---------------------------------------------------------------------------
-export const agentSelectionItems = trackedSignal<AgentSelectionItem[]>(
+export const agentSelectionItems = trackedSignal<readonly AgentSelectionItem[]>(
   () => [],
 );
 export const customAgentDir = trackedSignal(() => '');
 export const customAgentDirIsDefault = trackedSignal(() => true);
-export const customAgentScanIssues = trackedSignal<AgentScanIssue[]>(() => []);
+export const customAgentScanIssues = trackedSignal<readonly AgentScanIssue[]>(
+  () => [],
+);
 
 // ---------------------------------------------------------------------------
 // Agent teams state
 // ---------------------------------------------------------------------------
-export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
-export const orchestratorAgents = trackedSignal<string[]>(() => []);
+export const customPresets = trackedSignal<readonly AgentModePreset[]>(
+  () => [],
+);
+export const orchestratorAgents = trackedSignal<readonly string[]>(() => []);
 /** Team the workspace agents resolve to; null when they run no team. */
 export const activePresetId = trackedSignal<string | null>(() => null);
 
@@ -250,8 +261,10 @@ export const disabledSkills = settingSignal<string[]>(
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
 );
-export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
-export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
+export const skillsList = trackedSignal<readonly SkillDisplayItem[]>(() => []);
+export const skillLoadIssues = trackedSignal<readonly SkillDisplayIssue[]>(
+  () => [],
+);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
 
 // ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ const AGGREGATE = qualifyAggregateId('run', 'abc123' as RunId);
  *  the session view does, and read the task groups it builds. */
 function project(
   events: readonly (readonly [StageEvent, number])[],
-): TaskGroup[] {
+): readonly TaskGroup[] {
   const work = { ix: emptyTranscriptIndexes(), owned: new WeakSet<object>() };
   const ctx = { debug: false, lifecycleToTaskGroups: true };
   let transcript = emptyTranscript();

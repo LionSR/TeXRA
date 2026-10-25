@@ -31,7 +31,7 @@ catalog:
   image-size: '^2.0.4'
   ipaddr.js: '^2.5.0'
   is-wsl: '^3.1.1'
-  llm-zoo: '^3.1.0'
+  llm-zoo: '^4.0.0'
   lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
   nanoid: '^6.0.2'
@@ -52,7 +52,6 @@ catalog:
   which: '^5.0.0'
   write-file-atomic: '^7.0.1'
   yaml: '^2.9.1'
-  zod: '^4.4.3'
 # The ranges the published packages (`@texra-ai/harness`, `@texra-ai/llm`)
 # declare as peers: the consumer's one install supplies a single coherent
 # Effect set. The floor is the patch the workspace builds against (the

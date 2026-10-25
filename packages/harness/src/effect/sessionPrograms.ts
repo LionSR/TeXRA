@@ -17,10 +17,10 @@
  */
 import {
   Context,
-  Data,
   Deferred,
   Effect,
   Exit,
+  Schema,
   type Scope,
   SubscriptionRef,
 } from 'effect';
@@ -39,6 +39,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
   InlinePersonaSchema,
+  RunIdSchema,
   type RunId,
 } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
@@ -98,10 +99,7 @@ function admitInput(
   input: StartInput,
   session: RuntimeSessionHandle,
   services: Context.Context<AgentCatalog>,
-): Effect.Effect<
-  ReturnType<typeof AgentConfigSchema.parse>,
-  LaunchError | RunFailure
-> {
+): Effect.Effect<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
   return Effect.gen(function* () {
     const canAsk = !session.interactions.approvalPromptsUnavailable;
     yield* admitTools(input.tools ?? [], canAsk);
@@ -126,8 +124,10 @@ function admitInput(
       try: () => {
         // The run is named as its persona's schema spells the name.
         const persona =
-          typeof agent === 'string' ? null : InlinePersonaSchema.parse(agent);
-        return AgentConfigSchema.parse({
+          typeof agent === 'string'
+            ? null
+            : Schema.decodeUnknownSync(InlinePersonaSchema)(agent);
+        return Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: persona?.name ?? resolved.name,
           agentSource: resolved.source,
           persona,
@@ -200,9 +200,12 @@ type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
 
 /** The run an open call of `parent` owns resumes with that parent: what
  *  the run's own resume job answers, under its claim. */
-class OwnedByParent extends Data.TaggedError('OwnedByParent')<{
-  readonly parent: RunId;
-}> {}
+class OwnedByParent extends Schema.TaggedError<OwnedByParent>()(
+  'OwnedByParent',
+  {
+    parent: RunIdSchema,
+  },
+) {}
 
 /**
  * Continue a persisted run of `session` through the one resume path every

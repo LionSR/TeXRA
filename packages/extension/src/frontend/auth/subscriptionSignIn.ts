@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Data, Effect } from 'effect';
+import { Cause, Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -35,14 +35,20 @@ class SubscriptionSignInCancelled extends Error {}
  * value reaches the same report. A dismissed browser-choice dialog arrives
  * here too, as a {@link SubscriptionSignInCancelled} cause.
  */
-class SubscriptionSignInFailed extends Data.TaggedError(
+class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFailed>()(
   'SubscriptionSignInFailed',
-)<{ readonly cause: unknown }> {}
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The preference write's failure, after a sign-in that already succeeded. */
-class SubscriptionPreferenceUpdateFailed extends Data.TaggedError(
+class SubscriptionPreferenceUpdateFailed extends Schema.TaggedError<SubscriptionPreferenceUpdateFailed>()(
   'SubscriptionPreferenceUpdateFailed',
-)<{ readonly cause: unknown }> {}
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 const externalOpener = new VscodeExternalOpener();
 

@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:534-547`).
+  `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-371`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -239,7 +239,7 @@ cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 
 ## 3. Row kinds
 
-The vocabulary is one Zod discriminated union, `SessionEventDraftSchema`, built
+The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:441-445`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts:343-472`,
@@ -374,7 +374,7 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:119-129`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:382-408`,
-  `:660-684`, `:1109-1113`).
+  `:660-684`, `:1107-1111`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:250`, `:279-281`, `:448`, `:502-513`;
@@ -428,7 +428,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:713-718`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1109-1113`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1107-1111`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:260-262`).
 
@@ -466,8 +466,8 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:534-547`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:491-495`). Each folded
+(`shared/session/runState.ts:533-546`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:495-499`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
 (`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an

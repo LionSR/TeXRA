@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Clock,
-  Data,
   DateTime,
   Duration,
   Effect,
@@ -10,10 +9,10 @@ import {
   Layer,
   Queue,
   Schedule,
+  Schema,
   Semaphore,
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
-import { z } from 'zod';
 
 import {
   UsageLog,
@@ -38,23 +37,23 @@ interface UsageLogBatch {
 }
 
 /** The edge function's answer to a batch. */
-const UsageLogResponseSchema = z.discriminatedUnion('success', [
-  z.object({
-    success: z.literal(true),
-    accepted: z.int().nonnegative(),
+const UsageLogResponseSchema = Schema.Union([
+  Schema.Struct({
+    success: Schema.Literal(true),
+    accepted: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
-  z.object({
-    success: z.literal(false),
-    accepted: z.literal(0),
-    error: z.string().optional(),
+  Schema.Struct({
+    success: Schema.Literal(false),
+    accepted: Schema.Literal(0),
+    error: Schema.optional(Schema.String),
     /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
-    errorCode: z.string().optional(),
+    errorCode: Schema.optional(Schema.String),
     /** Only an explicit false permits the client to discard instead of retry. */
-    retryable: z.boolean().optional(),
+    retryable: Schema.optional(Schema.Boolean),
   }),
 ]);
 
-type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
+type UsageLogResponse = typeof UsageLogResponseSchema.Type;
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
@@ -178,13 +177,13 @@ interface RetryBatch {
 /**
  * The batch could not be delivered or acknowledged and must be sent again:
  * the install-ID read, the request, its body, its parse, or an acknowledgement
- * that does not cover the batch. `requeue` is the batch to keep for the
- * retry, or null when it failed before a batch was taken.
+ * that does not cover the batch. The sender keeps the batch for the retry
+ * (`retryBatch`) before failing with this.
  */
-class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
-  readonly reason: string;
-  readonly requeue: RetryBatch | null;
-}> {}
+class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
+  'UsageBatchUndelivered',
+  { reason: Schema.String },
+) {}
 
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
@@ -314,8 +313,7 @@ class UsageLogServiceImpl {
       yield* this.sendNextBatch().pipe(
         Effect.tapError((error) =>
           Effect.suspend(() => {
-            const requeued = error.requeue?.entries.length ?? 0;
-            if (error.requeue) this.retryBatch = error.requeue;
+            const requeued = this.retryBatch?.entries.length ?? 0;
             const requeuedMessage =
               requeued > 0 ? `; requeued ${requeued} entries` : '';
             // The endpoint may reject anonymous batches until it accepts them:
@@ -415,18 +413,27 @@ class UsageLogServiceImpl {
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       ).pipe(withLogChannel(CHANNEL));
 
-      // The install ID is created only here, after every opt-out has passed.
+      // From here on a failure keeps the batch for the retry.
       const pending = batch;
+      const keepForRetry = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        Effect.tapError(effect, () =>
+          Effect.sync(() => {
+            this.retryBatch = pending;
+          }),
+        );
+      // The install ID is created only here, after every opt-out has passed.
       const installId = yield* readOrCreateInstallId().pipe(
         Effect.mapError(
           (error) =>
             new UsageBatchUndelivered({
               reason: `install ID unavailable: ${toErrorMessage(error)}`,
-              requeue: pending,
             }),
         ),
+        keepForRetry,
       );
-      const response = yield* this.sendBatch(batch, installId);
+      const response = yield* this.sendBatch(batch, installId).pipe(
+        keepForRetry,
+      );
       if (!response.success) {
         yield* this.reportPermanentRejection(batch, response);
         return;
@@ -471,7 +478,7 @@ class UsageLogServiceImpl {
   private readonly sendBatch = Effect.fn('UsageLogService.sendBatch')(
     function* (batch: RetryBatch, installId: string) {
       const undelivered = (reason: string) =>
-        new UsageBatchUndelivered({ reason, requeue: batch });
+        new UsageBatchUndelivered({ reason });
       const wire: UsageLogBatch = {
         batchId: batch.batchId,
         entries: batch.entries.map(({ entry }) => entry),
@@ -525,7 +532,7 @@ class UsageLogServiceImpl {
         }),
       );
       const response: UsageLogResponse = yield* Effect.try({
-        try: () => UsageLogResponseSchema.parse(data),
+        try: () => Schema.decodeUnknownSync(UsageLogResponseSchema)(data),
         catch: (error) => undelivered(toErrorMessage(error)),
       });
       if (!response.success) {

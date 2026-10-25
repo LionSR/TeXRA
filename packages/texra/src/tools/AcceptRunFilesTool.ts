@@ -11,8 +11,7 @@
 
 // Third-party imports
 import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
-import { z } from 'zod';
-import { Clock, Effect, FileSystem } from 'effect';
+import { Clock, Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
 import {
@@ -118,45 +117,39 @@ function summarizeRejections(
 // Schema
 // ============================================================================
 
-const FileMapping = z.strictObject({
+const FileMapping = Schema.Struct({
   /** Output file path (matches `path` attribute in subagent-result XML). */
-  path: z
-    .string()
-    .describe(
+  path: Schema.String.annotate({
+    description:
       'Output file path (matches the path attribute of an <output-files> file in the delivery)',
-    ),
+  }),
   /**
    * Original workspace path to restore to (matches `original` attribute in
    * subagent-result XML). If omitted, defaults to path.
    */
-  original: z
-    .string()
-    .nullish()
-    .describe(
+  original: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
-    ),
+  }),
 });
 
-const AcceptRunFilesInputSchema = z.strictObject({
+const AcceptRunFilesInputSchema = Schema.Struct({
   /** Run ID (matches `id` attribute in subagent-result XML). */
-  execution_id: RunIdSchema.describe(
-    'Run ID (matches id attribute in subagent-result delivery)',
-  ),
+  execution_id: RunIdSchema.annotate({
+    description: 'Run ID (matches id attribute in subagent-result delivery)',
+  }),
   /** Files to accept from run storage into the workspace. */
-  files: z
-    .array(FileMapping)
-    .min(1)
-    .describe('Files to copy from run storage to workspace'),
+  files: Schema.Array(FileMapping)
+    .check(Schema.isMinLength(1))
+    .annotate({ description: 'Files to copy from run storage to workspace' }),
   /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
-  strip_criticize: z
-    .boolean()
-    .nullish()
-    .describe(
+  strip_criticize: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
       'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
-    ),
+  }),
 });
 
-type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
+type AcceptRunFilesInput = typeof AcceptRunFilesInputSchema.Type;
 
 // ============================================================================
 // Tool Implementation

@@ -4,9 +4,16 @@
 // close is the window's teardown, awaited by whoever closes it (see
 // `desktopWindows.ts`). Finalizers run in the reverse of their registration.
 
-import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Result,
+  Schema,
+  Scope,
+  Semaphore,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
-import { z } from 'zod';
 
 import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -94,7 +101,7 @@ export interface DesktopWindowOptions {
 }
 
 /** The one field every session message carries: which project it names. */
-const SessionMessageEnvelopeSchema = z.object({ session: z.string() });
+const SessionMessageEnvelopeSchema = Schema.Struct({ session: Schema.String });
 
 /** Opening is synchronous, as Electron's window creation is: see
  *  {@link DesktopWindows.open}. */
@@ -356,12 +363,14 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         // A session message names its project: that project's port answers
         // it.
         onSession: (message) => {
-          const addressed = SessionMessageEnvelopeSchema.safeParse(message);
-          if (!addressed.success) {
+          const addressed = Schema.decodeUnknownResult(
+            SessionMessageEnvelopeSchema,
+          )(message);
+          if (!Result.isSuccess(addressed)) {
             console.warn('Dropped a session message with no session key');
             return;
           }
-          const { session } = addressed.data;
+          const { session } = addressed.success;
           const receive = Effect.suspend(() => {
             const binding = bindings.get(session);
             return binding

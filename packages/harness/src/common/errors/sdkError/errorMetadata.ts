@@ -1,4 +1,4 @@
-import { Predicate } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import { ProviderErrorSchema, type ProviderError } from '@shared/schemas';
 
 import { causeChain } from '@utils/errors/errorMessage';
@@ -55,8 +55,14 @@ export const hasErrorPresentationClaimed = (err: unknown): boolean =>
 export const attachProviderError = (err: unknown, value: ProviderError): void =>
   attach(err, PROVIDER_ERROR, value);
 
+/** Unknown fields are rejected, so a legacy or mixed record never enters the
+ *  runtime metadata cache. */
 const isProviderError = (value: unknown): value is ProviderError =>
-  ProviderErrorSchema.safeParse(value).success;
+  Result.isSuccess(
+    Schema.decodeUnknownResult(ProviderErrorSchema, {
+      onExcessProperty: 'error',
+    })(value),
+  );
 
 /** The ProviderError cached on `err` itself, if a valid one is there. */
 export const detectProviderError = (

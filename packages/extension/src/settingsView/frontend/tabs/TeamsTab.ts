@@ -172,9 +172,10 @@ export class TeamsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) customPresets: AgentModePreset[] = [];
+  @property({ attribute: false }) customPresets: readonly AgentModePreset[] =
+    [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
-  @property({ attribute: false }) orchestratorAgents: string[] = [];
+  @property({ attribute: false }) orchestratorAgents: readonly string[] = [];
   /**
    * The applied team, from the backend. Deliberately not local state:
    * an apply can be cancelled or blocked by unavailable members, and an

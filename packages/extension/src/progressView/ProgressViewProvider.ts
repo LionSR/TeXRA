@@ -5,11 +5,11 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Context,
-  Data,
   Effect,
   Exit,
   FileSystem,
   Queue,
+  Schema,
   Scope,
   Stream,
 } from 'effect';
@@ -114,13 +114,14 @@ type ProgressRunRevealResult = 'revealed' | 'missing';
  * attaching to a bridge that has closed. Tagged because these reach the
  * request channel, whose failures are tags without exception.
  */
-export class SurfacePlacementFailed extends Data.TaggedError(
+export class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
   'SurfacePlacementFailed',
-)<{
-  readonly member: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    member: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** One transport port: a VS Code webview attached to the bridge. */
 interface Port {

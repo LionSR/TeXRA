@@ -1,6 +1,5 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Cause, Effect, Scope } from 'effect';
-import { z } from 'zod';
+import { Cause, Effect, Schema, Scope } from 'effect';
 
 import {
   defineTool,
@@ -69,59 +68,62 @@ const PROJECT_COMMAND_GROUP_INDEX = [...PROJECT_COMMAND_GROUPS]
   .map(([group, entries]) => `${group}: ${entries.map(([n]) => n).join(', ')}`)
   .join('\n');
 
-const LeanDiagnosticsInputSchema = z.strictObject({
+const LeanDiagnosticsInputSchema = Schema.Struct({
   /** Command: list for full messages, count for summary */
-  command: nullishWithDefault(z.enum(['list', 'count']), 'list').describe(
+  command: nullishWithDefault(
+    Schema.Literals(['list', 'count']),
+    'list',
     'Use "list" for full messages or "count" for summary only',
   ),
   /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
+  file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
 
-type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
+type LeanDiagnosticsInput = typeof LeanDiagnosticsInputSchema.Type;
 
-const LeanFileInputSchema = z.strictObject({
+const LeanFileInputSchema = Schema.Struct({
   /** Command to execute on the file */
-  command: z
-    .enum(FILE_COMMAND_NAMES)
-    .describe(
-      `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
-    ),
+  command: Schema.Literals(FILE_COMMAND_NAMES).annotate({
+    description: `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
+  }),
   /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
+  file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
 
-type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
+type LeanFileInput = typeof LeanFileInputSchema.Type;
 
-const LeanProjectInputSchema = z.strictObject({
+const LeanProjectInputSchema = Schema.Struct({
   /** Command to execute */
-  command: z
-    .enum(PROJECT_COMMAND_NAMES)
-    .describe(`Global command to execute:\n${PROJECT_COMMAND_GROUP_INDEX}`),
+  command: Schema.Literals(PROJECT_COMMAND_NAMES).annotate({
+    description: `Global command to execute:\n${PROJECT_COMMAND_GROUP_INDEX}`,
+  }),
 });
 
-type LeanProjectInput = z.infer<typeof LeanProjectInputSchema>;
+type LeanProjectInput = typeof LeanProjectInputSchema.Type;
 
 const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
 
-const LeanInspectInputSchema = z.strictObject({
+const LeanInspectInputSchema = Schema.Struct({
   /** What to inspect: goal, term_goal, or hover */
-  type: z
-    .enum(INSPECT_TYPES)
-    .describe(
+  type: Schema.Literals(INSPECT_TYPES).annotate({
+    description:
       'What to inspect: "goal" for tactic proof state, "term_goal" for expected type in term mode, "hover" for type/docs',
-    ),
+  }),
   /** Path to the Lean file */
-  file: z.string().describe('Path to the .lean file'),
+  file: Schema.String.annotate({ description: 'Path to the .lean file' }),
   /** 1-indexed line number */
-  line: z.int().min(1).describe('Line number (1-indexed)'),
+  line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+    description: 'Line number (1-indexed)',
+  }),
   /** 1-indexed column number */
-  column: nullishWithDefault(z.int().min(1), 1).describe(
+  column: nullishWithDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+    1,
     'Column number (1-indexed, default: 1)',
   ),
 });
 
-type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
+type LeanInspectInput = typeof LeanInspectInputSchema.Type;
 
 /**
  * Setup guidance appended when Lean diagnostics fail for a reason that is

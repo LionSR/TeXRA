@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -60,7 +60,10 @@ const launchWithMissingAgent = (session: SessionHandle, agent = '') =>
   Effect.gen(function* () {
     const error = yield* Effect.flip(
       buildAgentLaunchContext({
-        config: AgentConfigSchema.parse({ agent, model: '' }),
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
+          agent,
+          model: '',
+        }),
         runId: EXECUTION_ID,
         session,
       }),
@@ -78,7 +81,7 @@ const triggerQueuedMissingAgentFailure = (session: SessionHandle) =>
   Effect.gen(function* () {
     const thrown = yield* Effect.flip(
       buildAgentLaunchContext({
-        config: AgentConfigSchema.parse({
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: '__queued_missing_agent_for_launch_context_test__',
           model: '',
         }),
@@ -231,7 +234,7 @@ describe('AgentLaunchContext', () => {
         // registered for the unknown model.
         const error = yield* Effect.flip(
           prepareAgentDefinition({
-            config: AgentConfigSchema.parse({
+            config: Schema.decodeUnknownSync(AgentConfigSchema)({
               agent: 'critic',
               model: '__unregistered_model_for_launch_context_test__',
             }),
@@ -270,7 +273,7 @@ describe('AgentLaunchContext', () => {
         const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const recording = recordSessionEvents(session);
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'critic',
           model: 'openai/gpt-5.5-2026-04-23',
         });
@@ -315,7 +318,7 @@ describe('AgentLaunchContext', () => {
         // on without a human re-arming it.
         const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
         });

@@ -7,12 +7,19 @@ import Anthropic, {
   APIConnectionError,
   toFile,
 } from '@anthropic-ai/sdk';
-import { Clock, Effect, Stream } from 'effect';
-import { z } from 'zod';
+import {
+  Clock,
+  DateTime,
+  Effect,
+  Result,
+  Schema,
+  SchemaGetter,
+  Stream,
+} from 'effect';
 
 // Local imports - canonical model contract
 import {
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ResolvedTurnSchema,
   type AnthropicMessagesConfiguration,
@@ -23,10 +30,20 @@ import {
 import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
-import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
+import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import { parseOutboundToolArguments, sdkStream } from './transport.js';
-import { filesApiUploads, type UploadCache } from './uploadCache.js';
+import {
+  filesApiUploads,
+  UploadedSchema,
+  type UploadCache,
+} from './uploadCache.js';
+import {
+  BlockSchema,
+  EventSchema,
+  StopSchema,
+  UsageSchema,
+} from './anthropicMessagesWire.js';
 import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
@@ -36,137 +53,27 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
-const CountSchema = z.int().nonnegative();
 /**
  * What a Files API upload must return before its id is cached. The SDK's
  * type is not a check on the JSON, so a missing or empty id, or an expiry
  * that is not an RFC 3339 time (null means the file does not expire), is a
  * malformed response: the upload counts as failed and the bytes are sent.
  */
-const UploadedFileSchema = z
-  .object({
-    id: z.string().min(1),
-    expires_at: z.iso.datetime({ offset: true }).nullish(),
-  })
-  .transform((file) => ({
-    fileId: file.id,
-    expiresAtMs: file.expires_at == null ? null : Date.parse(file.expires_at),
-  }));
-const RefusalSchema = z.strictObject({
-  type: z.literal('refusal'),
-  category: z
-    .enum([
-      'cyber',
-      'bio',
-      'frontier_llm',
-      'reasoning_extraction',
-      'general_harms',
-    ])
-    .nullable(),
-  explanation: z.string().nullable(),
-});
-const UsageSchema = z.object({
-  input_tokens: CountSchema.nullish(),
-  output_tokens: CountSchema.nullish(),
-  cache_creation_input_tokens: CountSchema.nullish(),
-  cache_read_input_tokens: CountSchema.nullish(),
-  cache_creation: z
-    .object({
-      ephemeral_5m_input_tokens: CountSchema.nullish(),
-      ephemeral_1h_input_tokens: CountSchema.nullish(),
-    })
-    .nullish(),
-  output_tokens_details: z
-    .object({ thinking_tokens: CountSchema.nullish() })
-    .nullish(),
-  server_tool_use: z.record(z.string(), CountSchema).nullish(),
-});
-const StopSchema = z.object({
-  stop_reason: z
-    .enum([
-      'end_turn',
-      'max_tokens',
-      'stop_sequence',
-      'tool_use',
-      'pause_turn',
-      'refusal',
-      'model_context_window_exceeded',
-    ])
-    .nullish(),
-  stop_sequence: z.string().nullish(),
-  stop_details: RefusalSchema.nullish(),
-  container: z.unknown().optional(),
-});
-const BlockSchema = z.discriminatedUnion('type', [
-  z.strictObject({
-    type: z.literal('text'),
-    text: z.string(),
-    citations: z.array(z.unknown()).nullish(),
+const UploadedFileSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isMinLength(1)),
+  expires_at: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
+}).pipe(
+  Schema.decodeTo(UploadedSchema, {
+    decode: SchemaGetter.transform((file) => ({
+      fileId: file.id,
+      expiresAtMs:
+        file.expires_at == null
+          ? null
+          : DateTime.toEpochMillis(file.expires_at),
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
   }),
-  z.strictObject({
-    type: z.literal('thinking'),
-    thinking: z.string(),
-    signature: z.string(),
-  }),
-  z.strictObject({ type: z.literal('redacted_thinking'), data: z.string() }),
-  z.strictObject({
-    type: z.literal('tool_use'),
-    id: z.string().min(1),
-    name: z.string().min(1),
-    input: JsonObjectSchema,
-    caller: z.strictObject({ type: z.literal('direct') }).optional(),
-    toolset_name: z.string().nullable().optional(),
-  }),
-]);
-// The SDK parses SSE JSON but does not validate its supported event/block fields.
-const EventSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('message_start'),
-    message: StopSchema.extend({
-      id: z.string().min(1),
-      model: z.string().min(1),
-      type: z.literal('message'),
-      role: z.literal('assistant'),
-      content: z.array(z.unknown()).length(0),
-      usage: UsageSchema,
-    }),
-  }),
-  z.object({
-    type: z.literal('message_delta'),
-    delta: StopSchema,
-    usage: UsageSchema,
-  }),
-  z.object({ type: z.literal('message_stop') }),
-  z.object({
-    type: z.literal('content_block_start'),
-    index: z.int().nonnegative(),
-    content_block: BlockSchema,
-  }),
-  z.object({
-    type: z.literal('content_block_delta'),
-    index: z.int().nonnegative(),
-    delta: z.discriminatedUnion('type', [
-      z.strictObject({ type: z.literal('text_delta'), text: z.string() }),
-      z.strictObject({
-        type: z.literal('thinking_delta'),
-        thinking: z.string(),
-      }),
-      z.strictObject({
-        type: z.literal('signature_delta'),
-        signature: z.string(),
-      }),
-      z.strictObject({
-        type: z.literal('input_json_delta'),
-        partial_json: z.string(),
-      }),
-    ]),
-  }),
-  z.object({
-    type: z.literal('content_block_stop'),
-    index: z.int().nonnegative(),
-  }),
-]);
-
+);
 function sdkFailure(cause: unknown): ModelError {
   return sdkModelError(
     cause,
@@ -188,13 +95,13 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
 ) {
   if (part.kind === 'text') return { type: 'text', text: part.text } as const;
   if (part.kind === 'image' && part.detail === undefined) {
-    const mime = z
-      .enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
-      .safeParse(part.mimeType);
-    if (mime.success)
+    const mime = Schema.decodeUnknownResult(
+      Schema.Literals(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+    )(part.mimeType);
+    if (Result.isSuccess(mime))
       return {
         type: 'image',
-        source: { type: 'base64', media_type: mime.data, data: part.base64 },
+        source: { type: 'base64', media_type: mime.success, data: part.base64 },
       } as const;
   }
   if (part.kind === 'document' && part.mimeType === 'application/pdf') {
@@ -441,7 +348,7 @@ const FINISH = {
 
 /** The canonical receipt of Anthropic's cumulative counters. */
 function canonicalUsage(
-  usage: z.infer<typeof UsageSchema>,
+  usage: typeof UsageSchema.Type,
 ): NonNullable<TurnResult['usage']> {
   const uncached = usage.input_tokens ?? null;
   const cached = usage.cache_read_input_tokens ?? null;
@@ -474,7 +381,7 @@ function canonicalUsage(
 
 /** The canonical part a content block opens. */
 function blockPart(
-  block: z.infer<typeof BlockSchema>,
+  block: typeof BlockSchema.Type,
 ): TurnResult['content'][number] {
   switch (block.type) {
     case 'text':
@@ -515,8 +422,8 @@ function anthropicWire() {
   let stopped = false;
   let next = 0;
   let open: { index: number; type: string; signed: boolean } | undefined;
-  let stop: z.infer<typeof StopSchema> = {};
-  let usage: z.infer<typeof UsageSchema> = {};
+  let stop: typeof StopSchema.Type = {};
+  let usage: typeof UsageSchema.Type = {};
   const fail = (
     message: string,
     kind: ModelError['kind'] = 'malformed-output',
@@ -524,15 +431,15 @@ function anthropicWire() {
 
   const parts = (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      const decoded = EventSchema.safeParse(raw);
-      if (!decoded.success)
+      const decoded = Schema.decodeUnknownResult(EventSchema)(raw);
+      if (!Result.isSuccess(decoded))
         return yield* new ModelError({
           kind: 'malformed-output',
           message:
             'Anthropic returned an unsupported or malformed stream event.',
-          cause: decoded.error,
+          cause: decoded.failure,
         });
-      const event = decoded.data;
+      const event = decoded.success;
       if (event.type === 'message_start') {
         const message = event.message;
         if (
@@ -703,7 +610,7 @@ export function anthropicMessagesModel(
   configuration: AnthropicMessagesConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = ModelConfigurationSchema.parse(configuration);
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
     throw new ModelError({
       kind: 'invalid-request',
@@ -734,7 +641,7 @@ export function anthropicMessagesModel(
     model: origin.requestedModel,
     failure: (cause) =>
       fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
-    parseUploaded: (raw) => UploadedFileSchema.safeParse(raw),
+    parseUploaded: (raw) => Schema.decodeUnknownResult(UploadedFileSchema)(raw),
     create: async (upload, signal) =>
       client.files.upload(
         {
@@ -766,7 +673,7 @@ export function anthropicMessagesModel(
         message:
           'The selected Anthropic model does not support these authored controls.',
       });
-    const prepared = ResolvedTurnSchema.safeParse({
+    const prepared = Schema.decodeUnknownResult(ResolvedTurnSchema)({
       ...origin,
       mode: 'foreground',
       system: input.system,
@@ -782,14 +689,14 @@ export function anthropicMessagesModel(
         stopSequences: config.defaults.stopSequences,
       },
     });
-    if (!prepared.success)
+    if (!Result.isSuccess(prepared))
       return yield* new ModelError({
         kind: 'invalid-request',
         message: 'Anthropic requires complete supported invocation controls.',
-        cause: prepared.error,
+        cause: prepared.failure,
       });
-    yield* invocationBody(prepared.data, origin, config, uploads);
-    return prepared.data;
+    yield* invocationBody(prepared.success, origin, config, uploads);
+    return prepared.success;
   });
 
   const streamTurn: Model['streamTurn'] = (input) =>

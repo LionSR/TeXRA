@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
@@ -15,8 +15,8 @@ export const RUN_OUTCOME = {
   FAILED: 'failed',
 } as const;
 
-export const RunOutcomeSchema = z.enum(RUN_OUTCOME);
-export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
+export const RunOutcomeSchema = Schema.Enum(RUN_OUTCOME);
+export type RunOutcome = typeof RunOutcomeSchema.Type;
 
 /** Runtime support declared by the launch source, independent of UI policy. */
 export const USER_FOLLOW_UP_SUPPORT = {
@@ -25,8 +25,8 @@ export const USER_FOLLOW_UP_SUPPORT = {
   TERMINAL_BACKED: 'terminalBacked',
 } as const;
 
-export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
-export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
+export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
+export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 
 /**
  * The live phase vocabulary. Membership questions are answered by the
@@ -41,8 +41,8 @@ export const RUN_PHASE = {
   FAILED: RUN_OUTCOME.FAILED,
 } as const;
 
-export const RunPhaseSchema = z.enum(RUN_PHASE);
-export type RunPhase = z.infer<typeof RunPhaseSchema>;
+export const RunPhaseSchema = Schema.Enum(RUN_PHASE);
+export type RunPhase = typeof RunPhaseSchema.Type;
 
 /**
  * Subset of `RunPhase` used for task groups (`TaskGroupSchema.status`,
@@ -52,13 +52,13 @@ export type RunPhase = z.infer<typeof RunPhaseSchema>;
  * completed/cancelled distinction the group-end row records visible in the
  * rendered value.
  */
-export const TaskGroupStatusSchema = z.enum([
+export const TaskGroupStatusSchema = Schema.Literals([
   RUN_PHASE.RUNNING,
   RUN_PHASE.COMPLETED,
   RUN_PHASE.CANCELLED,
   RUN_PHASE.FAILED,
 ]);
-export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
+export type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
 
 export const RUN_SUBSTATE = {
   STARTING: 'starting',
@@ -71,8 +71,8 @@ export const RUN_SUBSTATE = {
   RESULT_WAITING: 'resultWaiting',
 } as const;
 
-export const RunSubstateSchema = z.enum(RUN_SUBSTATE);
-export type RunSubstate = z.infer<typeof RunSubstateSchema>;
+export const RunSubstateSchema = Schema.Enum(RUN_SUBSTATE);
+export type RunSubstate = typeof RunSubstateSchema.Type;
 
 /** A child's park as its substate: a pause, a result held for its parent,
  *  else none. */
@@ -100,11 +100,11 @@ export const RUN_LIFECYCLE_READY = 'ready' as const;
 
 export type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 
-export const WorktreeInfoSchema = z.object({
+export const WorktreeInfoSchema = Schema.Struct({
   /** Absolute path of the worktree the agent is operating in. */
-  workingDirectory: z.string(),
+  workingDirectory: Schema.String,
 });
-export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
+export type WorktreeInfo = typeof WorktreeInfoSchema.Type;
 
 /**
  * The actions a host can offer on a run. The fold computes each run's set
@@ -135,5 +135,5 @@ const RUN_ACTIONS = [
   'export',
   'copy',
 ] as const;
-export const RunActionSchema = z.enum(RUN_ACTIONS);
-export type RunAction = z.infer<typeof RunActionSchema>;
+export const RunActionSchema = Schema.Literals(RUN_ACTIONS);
+export type RunAction = typeof RunActionSchema.Type;

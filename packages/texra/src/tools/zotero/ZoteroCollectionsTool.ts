@@ -11,8 +11,7 @@
 
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect, Predicate } from 'effect';
-import { z } from 'zod';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
@@ -26,22 +25,26 @@ import {
   type BbtCollection,
 } from './bbtClient';
 
-const ZoteroCollectionsInputSchema = z.strictObject({
-  query: z
-    .string()
-    .describe(
-      'Optional name to filter collections (case-insensitive partial match).',
-    )
-    .nullish(),
-  library: z
-    .string()
-    .describe(
-      'Optional library name to list collections from. Omit for all libraries.',
-    )
-    .nullish(),
+const ZoteroCollectionsInputSchema = Schema.Struct({
+  query: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description:
+          'Optional name to filter collections (case-insensitive partial match).',
+      }),
+    ),
+  ),
+  library: Schema.optional(
+    Schema.NullOr(
+      Schema.String.annotate({
+        description:
+          'Optional library name to list collections from. Omit for all libraries.',
+      }),
+    ),
+  ),
 });
 
-type ZoteroCollectionsInput = z.infer<typeof ZoteroCollectionsInputSchema>;
+type ZoteroCollectionsInput = typeof ZoteroCollectionsInputSchema.Type;
 
 /**
  * Build a tree from a flat list of collections using parentCollection references.
@@ -53,7 +56,7 @@ interface CollectionNode {
   children: CollectionNode[];
 }
 
-function buildTree(collections: BbtCollection[]): CollectionNode[] {
+function buildTree(collections: readonly BbtCollection[]): CollectionNode[] {
   const nodeMap = new Map<string, CollectionNode>();
   const roots: CollectionNode[] = [];
 
@@ -150,7 +153,7 @@ const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
     'user.groups',
     [true],
     port,
-    z.array(BbtLibrarySchema),
+    Schema.Array(BbtLibrarySchema),
   );
 
   if (libraries.length === 0) {

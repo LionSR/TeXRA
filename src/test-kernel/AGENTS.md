@@ -83,7 +83,7 @@ in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
   path-mirrored under `src/test-kernel/`) or for one named cross-module
   scenario, stated in the PR body. Collapse 4+ structurally identical cases
   into `test.each`.
-- Do not test what `npm run typecheck` or a Zod schema already guarantees, and
+- Do not test what `npm run typecheck` or a schema already guarantees, and
   do not create tests for speculative abstractions, trivial data plumbing,
   implementation details, or compatibility behavior that the product does not
   intend to preserve.

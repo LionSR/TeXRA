@@ -4,7 +4,7 @@
  * Host-neutral so the run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back.
  */
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { Sha256Schema } from './offeredTools';
@@ -32,34 +32,34 @@ import {
  * the authoritative names. Extending the full base instead would inherit
  * those dead fields and duplicate `cacheMissInputTokens`.
  */
-export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
-  inputTokens: true,
-  outputTokens: true,
-  cost: true,
-}).extend({
-  /** Response time in milliseconds */
-  responseTimeMs: z.number().nonnegative(),
-  /** Wire surface that produced this usage; usage is billed per surface. */
-  provider: StoredProtocolSchema,
+export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
+  Struct.pick(['inputTokens', 'outputTokens', 'cost']),
+).mapFields(
+  Struct.assign({
+    /** Response time in milliseconds */
+    responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+    /** Wire surface that produced this usage; usage is billed per surface. */
+    provider: StoredProtocolSchema,
 
-  // Optional metrics (when supported by provider)
-  /** Tokens served from cache (reduces cost) */
-  cachedInputTokens: TokenCountSchema.optional(),
-  /** Tokens that missed provider prompt cache and were billed at full input rate */
-  cacheMissInputTokens: TokenCountSchema.optional(),
-  /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
-  cacheCreationTokens: TokenCountSchema.optional(),
-  /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
-  reasoningTokens: TokenCountSchema.optional(),
-  /** Tokens consumed by tool use prompts (Google) */
-  toolUsePromptTokens: TokenCountSchema.optional(),
-  /** Canonical route used for usage display and telemetry. */
-  usageRoute: UsageRouteSchema.optional(),
-  /** The route's subscription plan, when it names one; display-only. */
-  usagePlan: z.string().optional(),
-});
+    // Optional metrics (when supported by provider)
+    /** Tokens served from cache (reduces cost) */
+    cachedInputTokens: Schema.optional(TokenCountSchema),
+    /** Tokens that missed provider prompt cache and were billed at full input rate */
+    cacheMissInputTokens: Schema.optional(TokenCountSchema),
+    /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
+    cacheCreationTokens: Schema.optional(TokenCountSchema),
+    /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
+    reasoningTokens: Schema.optional(TokenCountSchema),
+    /** Tokens consumed by tool use prompts (Google) */
+    toolUsePromptTokens: Schema.optional(TokenCountSchema),
+    /** Canonical route used for usage display and telemetry. */
+    usageRoute: Schema.optional(UsageRouteSchema),
+    /** The route's subscription plan, when it names one; display-only. */
+    usagePlan: Schema.optional(Schema.String),
+  }),
+);
 /** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
-export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
+export type NormalizedUsage = typeof NormalizedUsageSchema.Type;
 
 /**
  * The priced usage the writer stamped on one completed turn, summed into the
@@ -97,12 +97,12 @@ export function addTurnUsage(
 // ------------------------------------------------------------ launch facts
 
 /** An attached memory the opening could not read, and why. */
-export const AttachedMemoryMissSchema = z.object({
-  path: z.string(),
-  reason: z.string(),
+export const AttachedMemoryMissSchema = Schema.Struct({
+  path: Schema.String,
+  reason: Schema.String,
 });
 /** An attached memory the opening could not read ({@link AttachedMemoryMissSchema}). */
-export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
+export type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
 
 /** One skill in a step's catalog, as the prompt lists it, with the plugin
  *  that ships it (null for a core source) and the directory tools may read
@@ -125,7 +125,7 @@ export interface SkillCatalogEntry {
  * a resume or a model switch rebinds it, whatever the OpenRouter and Copilot
  * preferences say now.
  */
-export const ModelBackendSchema = z.enum([
+export const ModelBackendSchema = Schema.Literals([
   'validation',
   'openRouter',
   'copilot',
@@ -141,7 +141,7 @@ export const ModelBackendSchema = z.enum([
   'meta',
 ]);
 /** Who serves a run's conversation ({@link ModelBackendSchema}). */
-export type ModelBackend = z.infer<typeof ModelBackendSchema>;
+export type ModelBackend = typeof ModelBackendSchema.Type;
 
 // ------------------------------------------------------------ run input
 
@@ -151,25 +151,26 @@ export type ModelBackend = z.infer<typeof ModelBackendSchema>;
  * fork's seeding `context.edit`. The fold keeps the latest value of each
  * field (`RunState.input`); a row names only what it changes.
  */
-export const RunInputSchema = z.strictObject({
+export const RunInputSchema = Schema.Struct({
   /** The address of the run's system text, before what each step adds
    *  (`stepInstructions`): a `context.blob` of the run. */
-  system: Sha256Schema.optional(),
+  system: Schema.optional(Sha256Schema),
   /** The address of the instruction the run's latest turn answers, a
    *  `context.blob`; `null` returns to the launch's instruction. */
-  instruction: Sha256Schema.nullable().optional(),
+  instruction: Schema.optional(Schema.NullOr(Sha256Schema)),
   /** The names of the skills the run's user activated: each step resolves
    *  them against its own catalog, and grants one while its plugin, if any,
    *  still contributes. */
-  activated: z
-    .array(QualifiedSkillNameSchema)
-    .max(ACTIVATED_SKILLS_MAX)
-    .optional(),
+  activated: Schema.optional(
+    Schema.Array(QualifiedSkillNameSchema).check(
+      Schema.isMaxLength(ACTIVATED_SKILLS_MAX),
+    ),
+  ),
   /** The attached memories the opening could not read. */
-  memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
+  memoryMisses: Schema.optional(Schema.Array(AttachedMemoryMissSchema)),
 });
 /** What a run's turns answer besides their messages ({@link RunInputSchema}). */
-export type RunInput = z.infer<typeof RunInputSchema>;
+export type RunInput = typeof RunInputSchema.Type;
 
 /**
  * What a run is bound to beyond its model id, recorded on its `run.config`
@@ -178,9 +179,9 @@ export type RunInput = z.infer<typeof RunInputSchema>;
  * declined (an own-API-key fallback declines them all). Routes declined by a
  * later retry are folded from that retry's decision.
  */
-export const RunBindingSchema = z.strictObject({
+export const RunBindingSchema = Schema.Struct({
   backend: ModelBackendSchema,
-  declinedRoutes: z.array(DeclinableUsageRouteSchema).readonly(),
+  declinedRoutes: Schema.Array(DeclinableUsageRouteSchema),
 });
 /** What a run is bound to beyond its model id ({@link RunBindingSchema}). */
-export type RunBinding = z.infer<typeof RunBindingSchema>;
+export type RunBinding = typeof RunBindingSchema.Type;

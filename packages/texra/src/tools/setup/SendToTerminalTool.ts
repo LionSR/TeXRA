@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -17,31 +16,34 @@ import { SetupPlatform } from './platform';
 const DEFAULT_TIMEOUT_MS = 300_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
-const SendToTerminalInputSchema = z.strictObject({
+const SendToTerminalInputSchema = Schema.Struct({
   // The single non-cosmetic guard: VS Code normalizes \n / \r when typed
   // into a terminal, so a multi-line input would smuggle a second
   // command past the bash approval dialog. The agent must rewrite
   // multi-step work as a single line.
-  command: z
-    .string()
-    .refine((s) => !/[\r\n]/.test(s), {
-      error: 'command must not contain newline / carriage-return characters.',
-    })
-    .describe(
+  command: Schema.String.check(
+    Schema.makeFilter((s) => !/[\r\n]/.test(s), {
+      message: 'command must not contain newline / carriage-return characters.',
+    }),
+  ).annotate({
+    description:
       'The command to run inside the integrated terminal. One line; no embedded newlines.',
-    ),
-  label: nullishWithDefault(z.string(), 'setup').describe(
+  }),
+  label: nullishWithDefault(
+    Schema.String,
+    'setup',
     `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
   ),
   timeout: nullishWithDefault(
-    z.int().min(1_000).max(900_000),
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1_000)).check(
+      Schema.isLessThanOrEqualTo(900_000),
+    ),
     DEFAULT_TIMEOUT_MS,
-  ).describe(
     'Hard cap (ms) on how long to wait for the run. Defaults to 5 min.',
   ),
 });
 
-type SendToTerminalInput = z.infer<typeof SendToTerminalInputSchema>;
+type SendToTerminalInput = typeof SendToTerminalInputSchema.Type;
 
 const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   input: SendToTerminalInput,

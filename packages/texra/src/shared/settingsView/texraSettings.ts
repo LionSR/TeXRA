@@ -12,7 +12,7 @@
  */
 
 // Third-party imports
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -78,15 +78,19 @@ const DEFAULT_TIKZ_TEMPLATE =
 // resolve an agent and a model from their own surfaces.
 
 /** An agent key or name, as typed into `.texra/config.json`. */
-const CliAgentSchema = z.string().trim().min(1).optional();
+const CliAgentSchema = Schema.optional(
+  Schema.Trim.check(Schema.isMinLength(1)),
+);
 
 /** A model id, validated against the model registry where it is used. */
-const CliModelSchema = z.string().trim().min(1).optional();
+const CliModelSchema = Schema.optional(
+  Schema.Trim.check(Schema.isMinLength(1)),
+);
 
 /** Per-command overrides of the top-level `agent`/`model` rows. */
-const CliCommandDefaultsSchema = z
-  .object({ agent: CliAgentSchema, model: CliModelSchema })
-  .optional();
+const CliCommandDefaultsSchema = Schema.optional(
+  Schema.Struct({ agent: CliAgentSchema, model: CliModelSchema }),
+);
 
 /** TeXRA's config-file-backed rows, keyed by their dotted path under `texra.`. */
 const TEXRA_CONFIG_ROWS: Record<
@@ -119,75 +123,97 @@ const TEXRA_CONFIG_ROWS: Record<
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
   },
   'agentOutputs.autoOpenFinal': {
-    schema: z.boolean().prefault(true),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+    ),
     description:
       "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
   },
   'bib.defaultPath': {
-    schema: z.string().prefault(''),
+    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     description:
       'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
   },
   'bib.zoteroPort': {
-    schema: z.int().min(1).max(65535).prefault(23119),
+    schema: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
+      .check(Schema.isLessThanOrEqualTo(65535))
+      .pipe(Schema.withDecodingDefault(Effect.succeed(23119))),
     description:
       'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
   },
   'latex.latexindentConfig': {
-    schema: z.string().prefault(''),
+    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     description: 'Path to latexindent configuration file',
   },
   'latex.texfmtConfig': {
-    schema: z.string().prefault(''),
+    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     description: 'Path to tex-fmt configuration file',
   },
   'latex.tikzInputDirectory': {
-    schema: z.string().prefault(''),
+    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     description:
       'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
   },
   'latex.includeWorkspaceInTexinputs': {
-    schema: z.boolean().prefault(true),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+    ),
     description:
       'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
   },
   'latex.tikzTemplate': {
-    schema: z.string().prefault(DEFAULT_TIKZ_TEMPLATE),
+    schema: Schema.String.pipe(
+      Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIKZ_TEMPLATE)),
+    ),
     description:
       'Template used for generating standalone documents when extracting and compiling TikZ figures',
   },
   'latex.wrapCritiqueInAlign': {
-    schema: z.boolean().prefault(true),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+    ),
     description:
       'Wrap bare criticism and comment commands inside align environments with intertext.',
   },
   'latex.enabledReplacements': {
-    schema: z
-      .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
-      .prefault(DEFAULT_ENABLED_REPLACEMENTS),
+    schema: Schema.Array(
+      Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES),
+    ).pipe(
+      Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENABLED_REPLACEMENTS)),
+    ),
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
   },
   'latex.enabledReplacementsRegex': {
-    schema: z
-      .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
-      .prefault(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
+    schema: Schema.Array(Schema.Literals(REGEX_REPLACEMENT_CATEGORIES)).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
+      ),
+    ),
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
   },
   'latex.customReplacementsRegex': {
-    schema: z.record(z.string(), z.string()).prefault({}),
+    schema: Schema.Record(Schema.String, Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed({})),
+    ),
     description: 'Custom regular-expression replacements.',
   },
   'latex.customReplacements': {
-    schema: z.record(z.string(), z.string()).prefault({}),
+    schema: Schema.Record(Schema.String, Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed({})),
+    ),
     description: 'Custom direct text replacements.',
   },
   'latexdiff.tempFileLocation': {
-    schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
+    schema: Schema.Literals(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
+      Schema.withDecodingDefault(Effect.succeed('sameDirectory')),
+    ),
     description:
       'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
   },
   'telemetry.enabled': {
-    schema: z.boolean().prefault(true),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+    ),
     title: 'Share usage telemetry',
     description:
       'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
@@ -204,9 +230,11 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   // --- LaTeX formatter -------------------------------------------------------
   {
     key: TexraStateKey.LATEX_FORMATTER,
-    schema: z
-      .enum(LATEX_FORMATTER_VALUES)
-      .prefault(LATEX_CONFIG_DEFAULTS.latexFormatter),
+    schema: Schema.Literals(LATEX_FORMATTER_VALUES).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.latexFormatter),
+      ),
+    ),
     title: 'LaTeX formatter',
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
@@ -226,7 +254,9 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   // hides it.
   {
     key: TexraStateKey.INLINE_CRITICISM_ENABLED,
-    schema: z.boolean().prefault(false),
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+    ),
     title: 'Show criticism as editor diagnostics',
     description:
       'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',

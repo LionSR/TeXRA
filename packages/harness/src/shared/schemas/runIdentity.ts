@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // Local imports
 import { agentName } from './agent';
@@ -9,21 +9,27 @@ import { agentName } from './agent';
  * on child rows, and hosts add display fields beside it, never
  * re-encodings of it.
  */
-export const RunIdentitySchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('agent'),
+export const RunIdentitySchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('agent'),
     /** The run config's agent identifier, possibly source-qualified
      * ("custom:name") — the same value `AgentConfig.agent` carries. */
-    agent: z.string().min(1),
+    agent: Schema.String.check(Schema.isMinLength(1)),
     /** External CLI driving this agent ("codex", "claude_code"); absent for native. */
-    tool: z.string().min(1).optional(),
+    tool: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   }),
-  z.strictObject({ kind: z.literal('process'), tool: z.string().min(1) }),
+  Schema.Struct({
+    kind: Schema.Literal('process'),
+    tool: Schema.String.check(Schema.isMinLength(1)),
+  }),
   /** A `script` call sent to the background: one run that runs it. */
-  z.strictObject({ kind: z.literal('script'), title: z.string().min(1) }),
+  Schema.Struct({
+    kind: Schema.Literal('script'),
+    title: Schema.String.check(Schema.isMinLength(1)),
+  }),
 ]);
 
-export type RunIdentity = z.infer<typeof RunIdentitySchema>;
+export type RunIdentity = typeof RunIdentitySchema.Type;
 
 /** Whether an identity denotes a native agent rather than an external CLI. */
 export function isPlainAgentIdentity(

@@ -1,6 +1,6 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Data, Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, PlatformError, Schema } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
@@ -50,9 +50,12 @@ export interface DoctorReport {
  * caught the rejection. The two probes the CLI root supplies are programs
  * already and keep their own `Error` failure.
  */
-class DoctorProbeFailed extends Data.TaggedError('DoctorProbeFailed')<{
-  readonly cause: unknown;
-}> {}
+class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
+  'DoctorProbeFailed',
+  {
+    cause: Schema.Defect(),
+  },
+) {}
 
 const probeFailure = (cause: unknown): DoctorProbeFailed =>
   new DoctorProbeFailed({ cause });

@@ -7,7 +7,7 @@
  * value its arm's schema refuses. A fact whose plugin this build lacks is
  * left out, as the store leaves it out.
  */
-import { z } from 'zod';
+import { Result, Schema } from 'effect';
 
 import {
   readTraceFacts,
@@ -25,11 +25,11 @@ const APP_ARMS = Object.values(APP_PLUGIN_ARMS).flat();
 
 /** Parse an exported trace before replaying it through the trusted UI path. */
 export function parseTraceData(raw: unknown): TraceDocument {
-  const result = TraceDocumentSchema.safeParse(raw);
-  if (!result.success)
-    throw new Error(INCOMPATIBLE + z.prettifyError(result.error));
+  const result = Schema.decodeUnknownResult(TraceDocumentSchema)(raw);
+  if (!Result.isSuccess(result))
+    throw new Error(INCOMPATIBLE + result.failure.message);
   try {
-    return readTraceFacts(result.data, APP_ARMS);
+    return readTraceFacts(result.success, APP_ARMS);
   } catch (error) {
     throw new Error(INCOMPATIBLE + toErrorMessage(error), { cause: error });
   }

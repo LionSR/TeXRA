@@ -26,7 +26,15 @@ import * as os from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { type Cause, Deferred, Effect, RcMap, Ref, type Scope } from 'effect';
+import {
+  type Cause,
+  Deferred,
+  Effect,
+  RcMap,
+  Ref,
+  Schema,
+  type Scope,
+} from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
@@ -498,7 +506,7 @@ export const parkedRoot = (
       testRuntime(),
       session.runs.launch({
         request: {
-          config: AgentConfigSchema.parse({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'assistant',
             model: 'gpt56',
             instruction,

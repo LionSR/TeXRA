@@ -11,6 +11,7 @@ import {
   type FileSystem,
   type Layer,
   type Path,
+  Schema,
 } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -32,7 +33,6 @@ import {
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
-import type { z } from 'zod';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -156,7 +156,7 @@ export interface AgentBlock<A = unknown, R = unknown> {
    *  key of the persona itself. */
   readonly key: string;
   /** The block as written, to its value with defaults applied. */
-  readonly schema: z.ZodType<A>;
+  readonly schema: Schema.Codec<A, unknown>;
   /** How a run of this block's recipe reads to whoever launched it. */
   readonly result?: AgentBlockResult<R>;
 }
@@ -169,7 +169,7 @@ export interface AgentBlock<A = unknown, R = unknown> {
 export interface AgentBlockResult<R = unknown> {
   /** Checks the value where it is read; a value that fails it is delivered
    *  as an invalid result naming the issue, never shaped. */
-  readonly schema: z.ZodType<R>;
+  readonly schema: Schema.Codec<R, unknown>;
   /** The delivery body inside the harness's own result envelope. */
   delivery(value: R, runId: RunId): readonly string[];
   /** The files the recipe wrote, in the order it wrote them (a document
@@ -269,7 +269,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const blocks = new Map(owned.map((block) => [block.key, block] as const));
   if (
     blocks.size !== owned.length ||
-    owned.some(({ key }) => key in AgentDefinitionSchema.shape)
+    owned.some(({ key }) => key in AgentDefinitionSchema.fields)
   )
     refuse('an agent-file key is owned twice, or is a persona key.');
   const modules = plugins.flatMap(({ scriptModules = {} }) =>

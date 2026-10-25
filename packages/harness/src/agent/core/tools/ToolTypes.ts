@@ -58,7 +58,7 @@ export interface ToolGuard<T, R = never> {
 
 /**
  * Contract for tool implementations.
- * `defineTool` provides the canonical implementation with Zod validation. Expected
+ * `defineTool` provides the canonical implementation with schema validation. Expected
  * tool failures are returned as literal `{ status: 'error', error: ... }`
  * ToolResult values; unexpected/programmer failures should throw and let
  * `defineTool` convert them at the boundary.

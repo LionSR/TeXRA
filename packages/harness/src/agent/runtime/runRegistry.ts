@@ -14,14 +14,14 @@
 import {
   Cause,
   Context,
-  Data,
   Deferred,
   Effect,
   Fiber,
   Latch,
+  Schema,
+  type Scope,
   Semaphore,
   SubscriptionRef,
-  type Scope,
 } from 'effect';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -55,19 +55,18 @@ import type { resumeRun } from './resumeRun';
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
  *  to report the run unresumable, not failed. */
-export class RunLive extends Data.TaggedError('RunLive')<{
-  readonly runId: string;
-}> {
-  override get message(): string {
-    return `Run is already running: ${this.runId}`;
-  }
+export class RunLive extends Schema.TaggedError<RunLive>()('RunLive', {
+  runId: Schema.String,
+}) {
+  override readonly message = `Run is already running: ${this.runId}`;
 }
 const isRunLive = (e: unknown): e is RunLive => e instanceof RunLive;
 
 /** Run work refused because the session is disposed or closing. */
-class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
-  readonly message: string;
-}> {}
+class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
+  'RunAdmissionClosed',
+  { message: Schema.String },
+) {}
 
 /**
  * A child loop's stop target and lineage for the loop's whole life: from the

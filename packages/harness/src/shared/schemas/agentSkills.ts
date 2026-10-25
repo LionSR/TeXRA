@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { Sha256Schema } from './offeredTools';
 import { SkillNameSchema } from './skillName';
@@ -7,11 +7,10 @@ export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
 export const AGENT_SKILLS_ENABLED_DEFAULT = false;
 
 /** Whether agents receive the skills discovered from every source. */
-export const AgentSkillsEnabledSchema = z
-  .boolean()
-  .describe(
+export const AgentSkillsEnabledSchema = Schema.Boolean.annotate({
+  description:
     'Discover the skills of every source and expose them to agent prompts',
-  );
+});
 
 /**
  * The trust decision the user accepted for an installed plugin: the version
@@ -20,11 +19,11 @@ export const AgentSkillsEnabledSchema = z
  * commands and files they name). The plugin loads only while its current
  * version and digest match, so another version, or any edit, asks again.
  */
-const PluginTrustSchema = z.object({
-  version: z.string().nullable(),
+const PluginTrustSchema = Schema.Struct({
+  version: Schema.NullOr(Schema.String),
   digest: Sha256Schema,
 });
-export type PluginTrust = z.infer<typeof PluginTrustSchema>;
+export type PluginTrust = typeof PluginTrustSchema.Type;
 
 /**
  * One installed plugin, persisted as a row of the `texra.plugins.installed`
@@ -41,33 +40,32 @@ export type PluginTrust = z.infer<typeof PluginTrustSchema>;
  * when the harness fetched the plugin with git and owns its directory; a local
  * plugin is referenced in place and has none.
  */
-export const InstalledPluginSchema = z.object({
+export const InstalledPluginSchema = Schema.Struct({
   name: SkillNameSchema,
   /** The git URL fetched from, or the absolute path of a local plugin. */
-  source: z.string().min(1),
+  source: Schema.String.check(Schema.isMinLength(1)),
   /** The git ref asked for at install; absent means the remote's HEAD. */
-  ref: z.string().min(1).optional(),
+  ref: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** The commit the managed checkout is pinned to. */
-  commit: z
-    .string()
-    .regex(/^[0-9a-f]{40,64}$/)
-    .optional(),
+  commit: Schema.optional(
+    Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/)),
+  ),
   /** Absolute path of the plugin root, the directory holding its manifest. */
-  path: z.string().min(1),
+  path: Schema.String.check(Schema.isMinLength(1)),
   /** Absolute skill roots inside `path`, each holding `<skill>/SKILL.md`. */
-  skills: z.array(z.string().min(1)),
+  skills: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
   /** The marketplace entry's version and description, for a plugin with no
    *  manifest of its own. */
-  version: z.string().optional(),
-  description: z.string().optional(),
+  version: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
   /**
    * Whether the plugin loads. An install records it disabled; enabling it
    * asks the user to trust it as it is (`trust`). A disabled plugin stays
    * installed, pinned and trusted, and contributes nothing.
    */
-  enabled: z.boolean(),
+  enabled: Schema.Boolean,
   /** The last trust decision the user accepted; kept in the same row, so
    *  one write changes both, and removing the plugin removes its trust. */
-  trust: PluginTrustSchema.optional(),
+  trust: Schema.optional(PluginTrustSchema),
 });
-export type InstalledPlugin = z.infer<typeof InstalledPluginSchema>;
+export type InstalledPlugin = typeof InstalledPluginSchema.Type;

@@ -1,48 +1,58 @@
-import { z } from 'zod';
+import { Effect, Schema, Struct } from 'effect';
 
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
-export const BaseProposalFieldsSchema = z.object({
-  agent: z.string(),
+export const BaseProposalFieldsSchema = Schema.Struct({
+  agent: Schema.String,
   /**
    * Resolved source of `agent`, captured when the delegation is validated so
    * launch pins the exact `(source, name)` entry rather than re-resolving an
    * ambiguous bare name. Mirrors `agentSource` on the agent config payload.
    */
-  agentSource: AgentSourceSchema.nullish(),
+  agentSource: Schema.optional(Schema.NullOr(AgentSourceSchema)),
   /** An agent the call defines (`agentSource` inline): what it is told and
    *  the tools it asks for, shown to whoever approves it. */
-  persona: InlinePersonaSchema.nullish(),
-  model: z.string(),
-  instruction: z.string(),
+  persona: Schema.optional(Schema.NullOr(InlinePersonaSchema)),
+  model: Schema.String,
+  instruction: Schema.String,
   /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */
-  memories: z.array(z.string()).prefault([]),
+  memories: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /** Working directory override (e.g. a git worktree path). */
-  workingDirectory: z.string().nullish(),
+  workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
   /**
    * The script whose `agent` calls one request approves together: its
    * title, its source, and the calls it had issued when it asked. The
    * proposal's other fields are its first `agent` call's.
    */
-  script: z
-    .strictObject({
-      title: z.string().nullable(),
-      source: z.string(),
-      calls: z.array(
-        z.strictObject({ toolName: z.string(), preview: z.string() }),
-      ),
-    })
-    .nullish(),
+  script: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        title: Schema.NullOr(Schema.String),
+        source: Schema.String,
+        calls: Schema.Array(
+          Schema.Struct({ toolName: Schema.String, preview: Schema.String }),
+        ),
+      }),
+    ),
+  ),
 });
 
 /** A task's files and the options its launching plugin gives it (as the
  *  plugin reads them; the harness reads nothing inside); a chat delegation
  *  has no files and no options. */
-export const TaskProposalFieldsSchema = NullableFileFieldsSchema.omit({
-  editedFile: true,
-}).extend({ options: z.record(z.string(), JsonValueSchema).nullish() });
+export const TaskProposalFieldsSchema = NullableFileFieldsSchema.mapFields(
+  Struct.omit(['editedFile']),
+).mapFields(
+  Struct.assign({
+    options: Schema.optional(
+      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+    ),
+  }),
+);
 
 /** File fields shape consumed by {@link getProposalFileGroups} — the helper
  *  behind every proposal file list (tool-row model, ProposalRequestPanel,

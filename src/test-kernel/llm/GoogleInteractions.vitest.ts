@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Fiber, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
@@ -49,7 +49,7 @@ function backgroundFixture() {
       turn.mode === 'background' && turn.protocol === 'google-interactions',
     );
     assert(configured.background);
-    const operation = RemoteOperationSchema.parse({
+    const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
       origin: {
         protocol: turn.protocol,
         codecVersion: turn.codecVersion,
@@ -686,7 +686,7 @@ describe('canonical Google Interactions protocol', () => {
             }),
           )).kind,
         ).toBe('unsupported');
-        const other = RemoteOperationSchema.parse({
+        const other = Schema.decodeUnknownSync(RemoteOperationSchema)({
           ...operation,
           origin: {
             ...operation.origin,

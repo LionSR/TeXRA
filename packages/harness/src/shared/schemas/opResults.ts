@@ -2,36 +2,36 @@
  * Common result schemas used across utilities.
  */
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 
-const ExecResultSchema = z.strictObject({
+const ExecResultSchema = Schema.Struct({
   /** Indicates whether the command succeeded */
-  success: z.boolean(),
+  success: Schema.Boolean,
   /**
    * Standard output from the command. Empty or whitespace-only output is
    * normalized to the empty string by execUtils.normalizeOutput.
    */
-  stdout: z.string(),
+  stdout: Schema.String,
   /**
    * Standard error from the command. Empty or whitespace-only stderr is
    * normalized to the empty string, matching {@link ExecResult.stdout}.
    */
-  stderr: z.string(),
+  stderr: Schema.String,
   /** True if the command timed out */
-  timedOut: z.boolean(),
+  timedOut: Schema.Boolean,
   /** Exit code from the command */
-  exitCode: z.int(),
+  exitCode: Schema.Int,
   /** True when subprocess output exceeded the configured retained-output limit. */
-  outputLimitExceeded: z.boolean().optional(),
+  outputLimitExceeded: Schema.optional(Schema.Boolean),
   /**
    * True when the command has no exit code of its own: it could not start,
    * died by a signal, or its output could not be read. `exitCode` then holds
    * the conventional code executeCommand reports for that outcome.
    */
-  noExitCode: z.boolean().optional(),
+  noExitCode: Schema.optional(Schema.Boolean),
 });
 
-export type ExecResult = z.infer<typeof ExecResultSchema>;
+export type ExecResult = typeof ExecResultSchema.Type;
 
 /**
  * What closing a session settled, and what it did not: the answer of the
@@ -42,9 +42,9 @@ export type ExecResult = z.infer<typeof ExecResultSchema>;
  * session stays open, refusing new work, until they actually end, and the
  * caller must not treat the close as complete disposal.
  */
-const SessionCloseReportSchema = z.strictObject({
-  settled: z.boolean(),
-  abandoned: z.array(z.string()),
+const SessionCloseReportSchema = Schema.Struct({
+  settled: Schema.Boolean,
+  abandoned: Schema.Array(Schema.String),
 });
 
-export type SessionCloseReport = z.infer<typeof SessionCloseReportSchema>;
+export type SessionCloseReport = typeof SessionCloseReportSchema.Type;

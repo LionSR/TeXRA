@@ -93,7 +93,7 @@ export class SettingsAgentCatalogController {
    * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
    * a resolvable id keep custom-preset semantics.
    */
-  getPresetRoot(members: string[], presetId?: string) {
+  getPresetRoot(members: readonly string[], presetId?: string) {
     return Effect.gen({ self: this }, function* () {
       const knownPreset = presetId
         ? findTeamPreset(

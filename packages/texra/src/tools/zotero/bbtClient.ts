@@ -12,10 +12,9 @@
  */
 
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Result, Schema, SchemaGetter } from 'effect';
 import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
-import { z } from 'zod';
 
 // Local imports
 import { ToolContext, type ToolResult } from '@texra-ai/harness';
@@ -76,16 +75,20 @@ function zoteroUnreachableError(port: number): ToolError {
 // ============================================================================
 // Response schemas — Better BibTeX is an external network boundary, so its
 // JSON-RPC envelope and result shapes are the single source of truth here (the
-// types are derived via z.infer) and validated once in callBetterBibTeX. The
-// result schemas assert only the fields consumers read; z.object strips any
-// extra fields the API adds (it tolerates them rather than rejecting). Optional
-// fields use .nullish() (not .optional()) because the CSL-JSON BBT emits may send
-// an explicit null as well as omit a field — .optional() alone would reject null.
-// Consumers already guard every such field with truthiness / optional chaining.
+// types are derived from the schemas) and validated once in callBetterBibTeX.
+// The result schemas assert only the fields consumers read; a struct ignores
+// any extra fields the API adds (it tolerates them rather than rejecting).
+// Optional fields are `Schema.optional(Schema.NullOr(...))` because the
+// CSL-JSON BBT emits may send an explicit null as well as omit a field —
+// `Schema.optional` alone would reject null. Consumers already guard every
+// such field with truthiness / optional chaining.
 // ============================================================================
 
 /** JSON-RPC error object. */
-const JsonRpcErrorSchema = z.object({ code: z.number(), message: z.string() });
+const JsonRpcErrorSchema = Schema.Struct({
+  code: Schema.Number,
+  message: Schema.String,
+});
 
 /**
  * CSL JSON name/creator format.
@@ -93,36 +96,42 @@ const JsonRpcErrorSchema = z.object({ code: z.number(), message: z.string() });
  *
  * From BBT source: Zotero.Utilities.Item.itemToCSLJSON(item)
  */
-const CslCreatorSchema = z.object({
+const CslCreatorSchema = Schema.Struct({
   /** Family name (surname) in CSL format */
-  family: z.string().nullish(),
+  family: Schema.optional(Schema.NullOr(Schema.String)),
   /** Given name (first name) in CSL format */
-  given: z.string().nullish(),
+  given: Schema.optional(Schema.NullOr(Schema.String)),
   // Zotero native format (may appear in some responses)
-  lastName: z.string().nullish(),
-  firstName: z.string().nullish(),
-  name: z.string().nullish(),
+  lastName: Schema.optional(Schema.NullOr(Schema.String)),
+  firstName: Schema.optional(Schema.NullOr(Schema.String)),
+  name: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 /** CSL JSON date format. */
-const CslDateSchema = z.object({
+const CslDateSchema = Schema.Struct({
   /** Date parts as [[year, month?, day?]] */
-  'date-parts': z.array(z.array(z.number())).nullish(),
+  'date-parts': Schema.optional(
+    Schema.NullOr(Schema.Array(Schema.Array(Schema.Number))),
+  ),
 });
 
 /** Zotero collection metadata returned by `user.groups(true)`. */
-const BbtCollectionSchema = z.object({
-  key: z.string(),
-  name: z.string(),
-  parentCollection: z.union([z.string(), z.literal(false)]).nullish(),
+const BbtCollectionSchema = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  parentCollection: Schema.optional(
+    Schema.NullOr(Schema.Union([Schema.String, Schema.Literal(false)])),
+  ),
 });
-export type BbtCollection = z.infer<typeof BbtCollectionSchema>;
+export type BbtCollection = typeof BbtCollectionSchema.Type;
 
 /** Library (group) entry returned by `user.groups`. */
-export const BbtLibrarySchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  collections: z.array(BbtCollectionSchema).nullish(),
+export const BbtLibrarySchema = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  collections: Schema.optional(
+    Schema.NullOr(Schema.Array(BbtCollectionSchema)),
+  ),
 });
 
 /**
@@ -131,26 +140,26 @@ export const BbtLibrarySchema = z.object({
  * into a full object instead of a key string.
  *
  * The type is self-referential, so the interface is kept and the recursive
- * schema is annotated against it (z.lazy).
+ * schema is annotated against it (`Schema.suspend`).
  */
 export interface BbtCollectionChain {
   key: string;
   name: string;
   parentCollection?: BbtCollectionChain | false;
 }
-export const BbtCollectionChainSchema: z.ZodType<BbtCollectionChain> = z.lazy(
-  () =>
-    z.object({
-      key: z.string(),
-      name: z.string(),
-      parentCollection: z
-        .union([BbtCollectionChainSchema, z.literal(false)])
-        .optional(),
+export const BbtCollectionChainSchema: Schema.Codec<BbtCollectionChain> =
+  Schema.suspend(() =>
+    Schema.Struct({
+      key: Schema.String,
+      name: Schema.String,
+      parentCollection: Schema.optional(
+        Schema.Union([BbtCollectionChainSchema, Schema.Literal(false)]),
+      ),
     }),
-);
+  );
 
 /** A creator's display name, from whichever name fields the reply set. */
-const creatorName = (creator: z.infer<typeof CslCreatorSchema>): string => {
+const creatorName = (creator: typeof CslCreatorSchema.Type): string => {
   if (creator.family)
     return creator.given
       ? `${creator.family}, ${creator.given}`
@@ -173,33 +182,46 @@ const creatorName = (creator: z.infer<typeof CslCreatorSchema>): string => {
  * decided here and nowhere downstream. Reference:
  * https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
  */
-export const BbtSearchResultItemSchema = z
-  .object({
-    /** Citation key from Better BibTeX KeyManager */
-    citekey: z.string(),
-    /** CSL item type (article-journal, book, chapter, etc.) */
-    type: z.string().nullish(),
-    title: z.string().nullish(),
-    author: z.array(CslCreatorSchema).nullish(),
-    /** Publication/issue date */
-    issued: CslDateSchema.nullish(),
-    itemType: z.string().nullish(),
-    creators: z.array(CslCreatorSchema).nullish(),
-    date: z.string().nullish(),
-  })
-  .transform((item) => {
-    const year = item.issued?.['date-parts']?.[0]?.[0];
-    return {
-      citekey: item.citekey,
-      title: item.title || null,
-      creators: (item.author || item.creators || [])
-        .map(creatorName)
-        .filter(Boolean),
-      year: year === undefined ? item.date || null : String(year),
-      type: item.type || item.itemType || null,
-    };
-  });
-export type BbtSearchResultItem = z.output<typeof BbtSearchResultItemSchema>;
+export const BbtSearchResultItemSchema = Schema.Struct({
+  /** Citation key from Better BibTeX KeyManager */
+  citekey: Schema.String,
+  /** CSL item type (article-journal, book, chapter, etc.) */
+  type: Schema.optional(Schema.NullOr(Schema.String)),
+  title: Schema.optional(Schema.NullOr(Schema.String)),
+  author: Schema.optional(Schema.NullOr(Schema.Array(CslCreatorSchema))),
+  /** Publication/issue date */
+  issued: Schema.optional(Schema.NullOr(CslDateSchema)),
+  itemType: Schema.optional(Schema.NullOr(Schema.String)),
+  creators: Schema.optional(Schema.NullOr(Schema.Array(CslCreatorSchema))),
+  date: Schema.optional(Schema.NullOr(Schema.String)),
+}).pipe(
+  Schema.decodeTo(
+    Schema.Struct({
+      citekey: Schema.String,
+      title: Schema.NullOr(Schema.String),
+      creators: Schema.Array(Schema.String),
+      year: Schema.NullOr(Schema.String),
+      type: Schema.NullOr(Schema.String),
+    }),
+    {
+      decode: SchemaGetter.transform((item) => {
+        const year = item.issued?.['date-parts']?.[0]?.[0];
+        return {
+          citekey: item.citekey,
+          title: item.title || null,
+          creators: (item.author || item.creators || [])
+            .map(creatorName)
+            .filter(Boolean),
+          year: year === undefined ? item.date || null : String(year),
+          type: item.type || item.itemType || null,
+        };
+      }),
+      // A reply from Zotero is read one way; nothing encodes an item back.
+      encode: SchemaGetter.forbidden(() => 'decode-only'),
+    },
+  ),
+);
+export type BbtSearchResultItem = typeof BbtSearchResultItemSchema.Type;
 
 /**
  * The `ToolError` for a Better BibTeX request that did not produce a body:
@@ -240,7 +262,7 @@ function bbtRequestError(
  * @param method - JSON-RPC method name (e.g., 'item.search', 'item.export')
  * @param params - Method parameters
  * @param port - Zotero Connector port (default: 23119)
- * @param resultSchema - Zod schema for the method's `result`, validated at the boundary
+ * @param resultSchema - schema for the method's `result`, validated at the boundary
  * @param timeout - Request timeout in milliseconds
  * @returns The validated result; fails with a ToolError if Zotero is not
  *   running, BBT is not installed, or the response is malformed
@@ -250,7 +272,7 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     method: string,
     params: unknown[],
     port: number,
-    resultSchema: z.ZodType<T>,
+    resultSchema: Schema.Codec<T, unknown>,
     timeout: number = ZOTERO_BBT_TIMEOUT_MS,
   ) {
     const url = zoteroUrl(port, '/better-bibtex/json-rpc');
@@ -267,33 +289,35 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
       }),
     ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
 
-    const responseSchema = z.object({
-      jsonrpc: z.string(),
-      id: z.number().nullish(),
-      result: resultSchema.optional(),
-      error: JsonRpcErrorSchema.optional(),
+    const responseSchema = Schema.Struct({
+      jsonrpc: Schema.String,
+      id: Schema.optional(Schema.NullOr(Schema.Number)),
+      result: Schema.optional(resultSchema),
+      error: Schema.optional(JsonRpcErrorSchema),
     });
-    const parsed = responseSchema.safeParse(raw);
-    if (!parsed.success) {
+    const parsed = Schema.decodeUnknownResult(responseSchema)(raw);
+    if (!Result.isSuccess(parsed)) {
       return yield* Effect.fail(
         new ToolError(
-          `Better BibTeX returned an unexpected response for ${method}: ${z.prettifyError(parsed.error)}`,
+          `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
         ),
       );
     }
-    if (parsed.data.error) {
+    if (parsed.success.error) {
       return yield* Effect.fail(
-        new ToolError(`Better BibTeX API error: ${parsed.data.error.message}`),
+        new ToolError(
+          `Better BibTeX API error: ${parsed.success.error.message}`,
+        ),
       );
     }
-    if (parsed.data.result === undefined) {
+    if (parsed.success.result === undefined) {
       return yield* Effect.fail(
         new ToolError(
           `Better BibTeX returned an empty response for ${method}.`,
         ),
       );
     }
-    return parsed.data.result;
+    return parsed.success.result;
   },
 );
 

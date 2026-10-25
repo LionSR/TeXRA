@@ -43,7 +43,7 @@ import {
   type ChatExportInputUnreadable,
   type ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
-import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
+import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
@@ -103,7 +103,7 @@ export interface ChatExportRecords {
     runId: RunId,
   ) => Effect.Effect<
     Pick<ChatExportLoadResult, 'config' | 'exportInput'>,
-    ChatExportInputUnreadable | TaskRecordsUnavailable
+    ChatExportInputUnreadable | TaskRecordsFailed
   >;
   /** The run's static trace, for the HTML export. */
   readonly trace: (runId: RunId) => Effect.Effect<AssembleTraceResult, Error>;
@@ -147,7 +147,7 @@ export class ChatExportController {
     runId: RunId,
   ): Effect.fn.Return<
     ExportInputResult,
-    ChatExportInputUnreadable | TaskRecordsUnavailable
+    ChatExportInputUnreadable | TaskRecordsFailed
   > {
     const { config, exportInput } = yield* this.deps.records.input(runId);
 

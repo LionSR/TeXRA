@@ -8,7 +8,7 @@
  * rejection is tagged with the member it came from, so the bridge's
  * refusal-versus-defect fold and its log read what `await` handed over.
  */
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { isRequestRefusal, type RequestRefusal } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -19,11 +19,14 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
  * it failed or rejected with, so a host that classifies a failure still
  * reads the capability's own error rather than this wrapper.
  */
-export class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
-  readonly member: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class HostCallFailed extends Schema.TaggedError<HostCallFailed>()(
+  'HostCallFailed',
+  {
+    member: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** How a host call's failure is worded, whatever shape it arrived in. */
 export function hostFailure(

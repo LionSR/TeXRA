@@ -8,8 +8,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports - this module's neighbours
 import {
@@ -31,30 +30,32 @@ const MARKETPLACE_FILES = [
  * an object whose `source` names the kind. v1 installs `local`, `github` and
  * `url` kinds; any other kind is refused by name when it is selected.
  */
-const MarketplaceSourceSchema = z.union([
-  z.string(),
-  z.object({
-    source: z.string(),
-    path: z.string().optional(),
-    repo: z.string().optional(),
-    url: z.string().optional(),
-    ref: z.string().optional(),
+const MarketplaceSourceSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({
+    source: Schema.String,
+    path: Schema.optional(Schema.String),
+    repo: Schema.optional(Schema.String),
+    url: Schema.optional(Schema.String),
+    ref: Schema.optional(Schema.String),
   }),
 ]);
 
-const MarketplaceEntrySchema = z.object({
-  name: z.string(),
+const MarketplaceEntrySchema = Schema.Struct({
+  name: Schema.String,
   source: MarketplaceSourceSchema,
-  description: z.string().optional(),
-  version: z.string().optional(),
-  skills: ComponentPathsSchema.optional(),
+  description: Schema.optional(Schema.String),
+  version: Schema.optional(Schema.String),
+  skills: Schema.optional(ComponentPathsSchema),
 });
-type MarketplaceEntry = z.infer<typeof MarketplaceEntrySchema>;
+type MarketplaceEntry = typeof MarketplaceEntrySchema.Type;
 
-const MarketplaceSchema = z.object({
-  name: z.string(),
-  metadata: z.object({ pluginRoot: z.string().optional() }).optional(),
-  plugins: z.array(MarketplaceEntrySchema),
+const MarketplaceSchema = Schema.Struct({
+  name: Schema.String,
+  metadata: Schema.optional(
+    Schema.Struct({ pluginRoot: Schema.optional(Schema.String) }),
+  ),
+  plugins: Schema.Array(MarketplaceEntrySchema),
 });
 
 /** A plugin a source directory offers: in the directory, or fetched by git. */

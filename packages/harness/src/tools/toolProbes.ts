@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Data, Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, Schema } from 'effect';
 
 // Local imports
 import type { Secrets } from '@platform/secrets';
@@ -23,10 +23,13 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * failures to `false`; and a tool that is simply not installed is
  * `check` answering `false`.
  */
-export class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class ToolProbeFailed extends Schema.TaggedError<ToolProbeFailed>()(
+  'ToolProbeFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /** What a plugin's availability callbacks may fail with. */
 export type ToolProbeError = ToolProbeFailed | SecretsFailed;

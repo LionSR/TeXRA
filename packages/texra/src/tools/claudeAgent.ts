@@ -22,8 +22,7 @@
  */
 
 // Third-party imports
-import { Effect, Stream, type FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, type FileSystem, Schema, Stream } from 'effect';
 import {
   defineTool,
   Secrets,
@@ -98,47 +97,45 @@ import type {
 // Schema
 // ============================================================================
 
-const ClaudeAgentInputSchema = z
-  .strictObject({
-    prompt: z
-      .string()
-      .describe(
-        'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
-      ),
-    // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
-    // to the SDK and never offered here.
-    permission_mode: ClaudeAgentPermissionModeSchema.nullish().describe(
+const ClaudeAgentInputSchema = Schema.Struct({
+  prompt: Schema.String.annotate({
+    description:
+      'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
+  }),
+  // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
+  // to the SDK and never offered here.
+  permission_mode: Schema.optional(
+    Schema.NullOr(ClaudeAgentPermissionModeSchema),
+  ).annotate({
+    description:
       'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
-    ),
-    model: z
-      .string()
-      .nullish()
-      .describe(
-        `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.options.join(', ')}. Defaults to the user-configured model.`,
-      ),
-    effort: AgentCliEffortSchema.nullish().describe(
+  }),
+  model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
+  }),
+  effort: Schema.optional(Schema.NullOr(AgentCliEffortSchema)).annotate({
+    description:
       "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
-    ),
-    session_id: z
-      .string()
-      .min(1)
-      .nullish()
-      .describe(
-        'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
-      ),
-    fork_session: z
-      .boolean()
-      .nullish()
-      .describe(
-        'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
-      ),
-  })
-  .refine((input) => input.fork_session !== true || input.session_id != null, {
-    message: 'fork_session requires session_id',
-    path: ['fork_session'],
-  });
+  }),
+  session_id: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ).annotate({
+    description:
+      'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
+  }),
+  fork_session: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
+      'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
+  }),
+}).check(
+  Schema.makeFilter((input) =>
+    input.fork_session !== true || input.session_id != null
+      ? undefined
+      : { path: ['fork_session'], issue: 'fork_session requires session_id' },
+  ),
+);
 
-type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
+type ClaudeAgentInput = typeof ClaudeAgentInputSchema.Type;
 
 // ============================================================================
 // Result formatting

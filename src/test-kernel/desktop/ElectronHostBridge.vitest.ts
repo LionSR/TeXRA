@@ -218,7 +218,7 @@ describe('desktop Electron host bridge', () => {
     expect(ipcMain.off).toHaveBeenCalledTimes(2);
   });
 
-  // #8123: `postToRenderer` routes every message through the outbound Zod
+  // #8123: `postToRenderer` routes every message through the outbound
   // schemas (dev/test only) before `webContents.send`.
   it('throws on a malformed desktop-only command', async () => {
     const { installDesktopHostBridge } = await loadMainHostBridgeModule({

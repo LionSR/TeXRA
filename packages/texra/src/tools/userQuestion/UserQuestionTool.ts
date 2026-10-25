@@ -1,5 +1,4 @@
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { requireRun, executed, refusalOf } from '@texra-ai/harness/plugins';
@@ -16,21 +15,20 @@ function withDetail(base: string, detail: string | undefined): string {
   return detail ? `${base}: ${detail}` : `${base}.`;
 }
 
-const AskUserQuestionInputSchema = z.strictObject({
-  questions: z
-    .array(UserQuestionPromptSchema)
-    .min(1)
-    .max(3)
-    .describe(
-      'One to three questions for the user. Keep each question short and provide two to four clear options.',
-    ),
-  context: z
-    .string()
-    .nullish()
-    .describe('Optional short context explaining why the answer is needed.'),
+const AskUserQuestionInputSchema = Schema.Struct({
+  questions: Schema.Array(UserQuestionPromptSchema)
+    .check(Schema.isMinLength(1))
+    .check(Schema.isMaxLength(3))
+    .annotate({
+      description:
+        'One to three questions for the user. Keep each question short and provide two to four clear options.',
+    }),
+  context: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'Optional short context explaining why the answer is needed.',
+  }),
 });
 
-type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
+type AskUserQuestionInput = typeof AskUserQuestionInputSchema.Type;
 
 const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
@@ -89,7 +87,9 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     }
   }
 
-  const answers = UserQuestionAnswersSchema.parse(decision.answers);
+  const answers = Schema.decodeUnknownSync(UserQuestionAnswersSchema)(
+    decision.answers,
+  );
   const answerCount = Object.keys(answers).length;
   if (answerCount === 0) {
     return executed('The user submitted no answers.');

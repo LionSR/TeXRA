@@ -95,7 +95,7 @@ function formatOutputFile(
  * pointing to the diff file path (readable via /executions/{id}/files/...).
  */
 function formatWorkflowOutputs(
-  outputs: OutputFileSummary[],
+  outputs: readonly OutputFileSummary[],
   runId: RunId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {

@@ -7,9 +7,8 @@
  */
 
 import * as yaml from 'yaml';
-import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Result, Schema } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
@@ -21,23 +20,23 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
  * retired sidecar and the inline-frontmatter writer) has always emitted it,
  * so a block without it is not this metadata and stays ordinary content.
  */
-const MemoryFileMetaSchema = z.object({
+const MemoryFileMetaSchema = Schema.Struct({
   /** Agent name that last modified this file. */
-  modifiedBy: z.string().min(1),
+  modifiedBy: Schema.String.check(Schema.isMinLength(1)),
   /** Run ID of the run that last modified this file. */
-  runId: z.string().optional(),
+  runId: Schema.optional(Schema.String),
   /** ISO 8601 timestamp of last modification. */
-  modifiedAt: z.string(),
+  modifiedAt: Schema.String,
   /**
    * Whether this memory is pinned as a core long-term insight. A parsed
    * `false` is treated the same as absent everywhere it is read, and
    * {@link buildFrontmatter} only ever writes the flag when truthy.
    * This schema parses YAML frontmatter, not model-facing tool input.
    */
-  pinned: z.boolean().optional(),
+  pinned: Schema.optional(Schema.Boolean),
 });
 
-export type MemoryFileMeta = z.infer<typeof MemoryFileMetaSchema>;
+export type MemoryFileMeta = typeof MemoryFileMetaSchema.Type;
 
 const FRONTMATTER_FENCE = '---';
 

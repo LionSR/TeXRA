@@ -7,10 +7,17 @@
  * {@link resolveCredential}, the one secret-then-env ladder. The environment
  * is Effect's ambient `ConfigProvider`, which the host installs.
  */
-import { Config, Data, Effect, Option } from 'effect';
+import { Config, Effect, Option, Schema } from 'effect';
 
 /** Which member of a store failed. */
-export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
+const SecretsOperationSchema = Schema.Literals([
+  'get',
+  'set',
+  'delete',
+  'listStoredKeys',
+]);
+/** {@link SecretsOperationSchema}'s value. */
+export type SecretsOperation = typeof SecretsOperationSchema.Type;
 
 /**
  * The one failure of a credential store. Callers match on `reason` rather
@@ -18,19 +25,22 @@ export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
  * stored here" from "the store is broken" reads the tag, and a caller that
  * wants neither still sees a typed error instead of `unknown`.
  */
-export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
-  /**
-   * Why it failed, as the host stores can actually fail:
-   * `store-unavailable` — the host has no store to write to at all (an
-   * embedder that persists nothing; only {@link CredentialStore.set} raises
-   * it); `io` — the backing file or host API failed.
-   */
-  readonly reason: 'store-unavailable' | 'io';
-  readonly operation: SecretsOperation;
-  readonly message: string;
-  readonly key?: string;
-  readonly cause?: unknown;
-}> {}
+export class SecretsFailed extends Schema.TaggedError<SecretsFailed>()(
+  'SecretsFailed',
+  {
+    /**
+     * Why it failed, as the host stores can actually fail:
+     * `store-unavailable` — the host has no store to write to at all (an
+     * embedder that persists nothing; only {@link CredentialStore.set} raises
+     * it); `io` — the backing file or host API failed.
+     */
+    reason: Schema.Literals(['store-unavailable', 'io']),
+    operation: SecretsOperationSchema,
+    message: Schema.String,
+    key: Schema.optional(Schema.String),
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * A store of named secrets. Every member is an `Effect`, so a credential read

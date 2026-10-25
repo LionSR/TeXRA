@@ -2,7 +2,7 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Effect, type Context } from 'effect';
+import { Effect, Schema, type Context } from 'effect';
 
 // Local imports
 import {
@@ -191,7 +191,7 @@ export const launchAgentCliSession = Effect.fn(
       // Synthetic run metadata: the CLI runs outside the normal run loop, so
       // the tool-use category and the model's reference are stated here
       // rather than inherited from the generic AgentConfig defaults.
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: params.agentName,
         model: params.modelRef,
         instruction: params.prompt,

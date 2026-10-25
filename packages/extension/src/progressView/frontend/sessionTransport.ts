@@ -15,13 +15,20 @@ import {
   Effect,
   Exit,
   Queue,
+  Result,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import {
+  Cancelled,
+  Invalid,
+  Rejected,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -107,17 +114,17 @@ interface OpenSession extends WebviewSession {
 
 /** The routing fields of a down-message that failed its schema: enough to
  *  find the session, generation, or request it was for. */
-const DownEnvelopeSchema = z.object({
-  kind: z.string(),
-  session: z.string(),
-  generation: z.number().optional(),
-  requestId: z.string().optional(),
+const DownEnvelopeSchema = Schema.Struct({
+  kind: Schema.String,
+  session: Schema.String,
+  generation: Schema.optional(Schema.Number),
+  requestId: Schema.optional(Schema.String),
 });
 
 /** What a request answers when its session closed before the host did. */
 const CANCELLED: Response['result'] = {
   ok: false,
-  error: { _tag: 'Cancelled' },
+  error: new Cancelled(),
 };
 
 export function installWebviewTransport(
@@ -149,11 +156,11 @@ export function installWebviewTransport(
    *  settles its request `Invalid` rather than hang it; a frame of the live
    *  generation is said on the surface's notice, since its events are lost
    *  until the view reopens. */
-  const reportMalformed = (data: unknown, error: z.ZodError): void => {
+  const reportMalformed = (data: unknown, error: Schema.SchemaError): void => {
     console.error('[progress] malformed session message', data, error);
-    const envelope = DownEnvelopeSchema.safeParse(data);
-    if (!envelope.success) return;
-    const { kind, session: key, generation, requestId } = envelope.data;
+    const envelope = Schema.decodeUnknownResult(DownEnvelopeSchema)(data);
+    if (!Result.isSuccess(envelope)) return;
+    const { kind, session: key, generation, requestId } = envelope.success;
     const session = sessions.get(key);
     if (!session) return;
     if (kind === 'response' && requestId !== undefined) {
@@ -163,10 +170,9 @@ export function installWebviewTransport(
       runtime.runSync(
         Deferred.succeed(settle, {
           ok: false,
-          error: {
-            _tag: 'Invalid',
+          error: new Invalid({
             reason: 'The host sent a malformed response.',
-          },
+          }),
         }),
       );
     } else if (kind === 'events' && generation === session.generation) {
@@ -179,12 +185,12 @@ export function installWebviewTransport(
   };
 
   const receive = (data: unknown): void => {
-    const parsed = DownMessageSchema.safeParse(data);
-    if (!parsed.success) {
-      reportMalformed(data, parsed.error);
+    const parsed = Schema.decodeUnknownResult(DownMessageSchema)(data);
+    if (!Result.isSuccess(parsed)) {
+      reportMalformed(data, parsed.failure);
       return;
     }
-    const message = parsed.data;
+    const message = parsed.success;
     switch (message.kind) {
       case 'events':
         deliver(message);
@@ -242,10 +248,9 @@ export function installWebviewTransport(
                   session.pending.delete(message.requestId);
                   return {
                     ok: false,
-                    error: {
-                      _tag: 'Rejected',
+                    error: new Rejected({
                       reason: 'The host did not answer in time.',
-                    },
+                    }),
                   };
                 }),
             }),

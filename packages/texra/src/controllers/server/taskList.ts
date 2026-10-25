@@ -7,8 +7,7 @@
  */
 import * as path from 'node:path';
 
-import { Effect, Option } from 'effect';
-import { z } from 'zod';
+import { Effect, Option, Result, Schema } from 'effect';
 
 import { GlobalValues, readSessionView, type Session } from '@texra-ai/harness';
 import { type SessionView, isLiveRun } from '@texra-ai/harness/schemas';
@@ -23,7 +22,9 @@ import type { TaskSummary } from './protocol';
 const TASK_LIST_LIMIT = 200;
 
 /** A `workspace-store` record: the folder a storage directory serves. */
-const WorkspaceStoreSchema = z.object({ root: z.string().min(1) });
+const WorkspaceStoreSchema = Schema.Struct({
+  root: Schema.String.check(Schema.isMinLength(1)),
+});
 
 /** The top-level tasks one view holds, as the list states them. */
 function summaries(view: SessionView, workspace: string): TaskSummary[] {
@@ -59,14 +60,16 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
   );
   const tasks: TaskSummary[] = [];
   for (const record of records) {
-    const parsed = WorkspaceStoreSchema.safeParse(record.value);
-    if (!parsed.success) {
+    const parsed = Schema.decodeUnknownResult(WorkspaceStoreSchema)(
+      record.value,
+    );
+    if (!Result.isSuccess(parsed)) {
       yield* Effect.logWarning(
         `Skipping the workspace-store record ${record.key}: it names no folder`,
       );
       continue;
     }
-    const workspace = parsed.data.root;
+    const workspace = parsed.success.root;
     const storage = path.join(stores, record.key);
     const session = open.get(storage);
     if (session !== undefined) {

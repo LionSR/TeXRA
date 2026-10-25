@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -39,14 +38,20 @@ const ALLOWED_COMMAND_IDS = [
 
 const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(ALLOWED_COMMAND_IDS);
 
-const InvokeCommandInputSchema = z.strictObject({
-  command: z
-    .string()
-    .min(1)
-    .describe('VS Code command ID (must be in the setup allowlist).'),
+const InvokeCommandInputSchema = Schema.Struct({
+  command: Schema.String.check(Schema.isMinLength(1)).annotate({
+    description: 'VS Code command ID (must be in the setup allowlist).',
+  }),
+  // Declared so a value is refused: a struct drops an undeclared key before
+  // any check sees it, and no credential may reach the host through command
+  // arguments. `null` passes, as OpenAI-compatible providers send it for
+  // every advertised field.
+  args: Schema.optionalKey(Schema.Null).annotate({
+    description: 'Not accepted: this tool takes no arguments. Leave it out.',
+  }),
 });
 
-type InvokeCommandInput = z.infer<typeof InvokeCommandInputSchema>;
+type InvokeCommandInput = typeof InvokeCommandInputSchema.Type;
 
 const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   input: InvokeCommandInput,

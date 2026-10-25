@@ -18,8 +18,7 @@
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { Effect, Option, Stream } from 'effect';
-import { z } from 'zod';
+import { Effect, Option, Schema, Stream } from 'effect';
 
 import { defineTool, Sessions, type ApprovalHandler } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
@@ -58,7 +57,7 @@ const reportOnly: ApprovalHandler = (request) =>
 const recordApproval = defineTool({
   name: 'record_approval',
   description: 'Record a note once it is approved.',
-  schema: z.strictObject({ command: z.string() }),
+  schema: Schema.Struct({ command: Schema.String }),
   requiresApproval: true,
   execute: () =>
     Effect.sync(() => {

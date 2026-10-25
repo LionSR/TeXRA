@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { Schema } from 'effect';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
@@ -19,7 +20,7 @@ setupPlatform();
 // beforeEach and never restore it — they MUST stay the last describes in
 // this file.
 function buildVars(
-  agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
+  agentConfig: typeof AgentConfigSchema.Type,
 ): ReturnType<typeof buildOpening> {
   return buildOpening(agentConfig, false, noopTrace, {
     workspacePath: fakePath('workspace'),
@@ -42,7 +43,7 @@ describe('buildTemplateInputs with missing configured files', () => {
 
   it('keeps prompt file metadata in sync with readable prompt XML', async () => {
     const { inputs: vars } = await buildVars(
-      AgentConfigSchema.parse({
+      Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'generic',
         model: 'test-model',
         inputFiles: ['missing.tex', 'present.tex'],
@@ -69,7 +70,7 @@ describe('buildTemplateInputs with missing configured files', () => {
 
   it('records attached memory read misses from the prompt-load pass', async () => {
     const { attachedMemories, attachedMemoryMisses } = await buildVars(
-      AgentConfigSchema.parse({
+      Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'generic',
         model: 'test-model',
         memories: ['/memories/present.md', '/memories/missing.md'],

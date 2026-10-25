@@ -1,5 +1,4 @@
-import { Context, Effect, Layer } from 'effect';
-import { z } from 'zod';
+import { Context, Effect, Layer, Schema, Struct } from 'effect';
 
 import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -21,19 +20,19 @@ export function usageAgentName(
   return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
 }
 
-const UsageLogMetadataSchema = z.object({
-  model: z.string(),
+const UsageLogMetadataSchema = Schema.Struct({
+  model: Schema.String,
   /** Wire surface of the turn (`openai-responses`, `anthropic-messages`, ...).
    * The edge function stores it in the `provider` column; the column takes
    * protocol names under the same versioning rule as the rest of this wire. */
   provider: TurnProtocolSchema,
-  agentName: z.string().optional(),
+  agentName: Schema.optional(Schema.String),
   /** Canonical route used to account for API-key/subscription usage. */
-  usageRoute: UsageRouteSchema.optional(),
+  usageRoute: Schema.optional(UsageRouteSchema),
   /** Wire key of the usage-log edge function (`supabase/functions/log-usage-v2`), which
    * stores it as `stream_id`; the value is the run id. External contract, versioned
    * with the edge function, not with the run vocabulary. */
-  streamId: z.string().optional(),
+  streamId: Schema.optional(Schema.String),
 });
 
 /**
@@ -41,24 +40,36 @@ const UsageLogMetadataSchema = z.object({
  * `NormalizedUsage`'s — this is the persisted log contract, so
  * renaming fields isn't free.
  */
-const UsageLogStatsSchema = z.object({
-  inputTokens: z.int().nonnegative(),
-  outputTokens: z.int().nonnegative(),
-  cost: z.number().nonnegative(),
-  responseTimeMs: z.number().nonnegative().optional(),
-  cachedInputTokens: z.int().nonnegative().optional(),
-  reasoningTokens: z.int().nonnegative().optional(),
+const UsageLogStatsSchema = Schema.Struct({
+  inputTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  outputTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  responseTimeMs: Schema.optional(
+    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+  cachedInputTokens: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+  reasoningTokens: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
 });
 
-const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
-  UsageLogStatsSchema.shape,
-).extend({
-  timestamp: z.iso.datetime(),
-  extensionVersion: z.string().optional(),
-  editorType: z.string().optional(),
-});
+const UsageLogEntrySchema = UsageLogMetadataSchema.mapFields(
+  Struct.assign(UsageLogStatsSchema.fields),
+).mapFields(
+  Struct.assign({
+    timestamp: Schema.String.check(
+      Schema.makeFilter((value) => !Number.isNaN(Date.parse(value)), {
+        message: 'an ISO date-time',
+      }),
+    ),
+    extensionVersion: Schema.optional(Schema.String),
+    editorType: Schema.optional(Schema.String),
+  }),
+);
 
-export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+export type UsageLogEntry = typeof UsageLogEntrySchema.Type;
 
 /** The process-owned producer; telemetry supplies its scoped sender implementation. */
 export class UsageLog extends Context.Service<

@@ -16,7 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Context, Effect, Fiber, SubscriptionRef } from 'effect';
+import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -151,9 +151,10 @@ import {
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
 
-const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
+const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
+const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
 const HARNESS_MODEL = 'harness-model';
-const RUNNING_SCRIPT_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
+const RUNNING_SCRIPT_FIRST_AGENT_RUN_ID = harnessRunId('aaaa000af10e');
 const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_MULTI_AGENT_DISABLED =
@@ -544,7 +545,7 @@ function seedRun(
     publish({
       type: 'run.config',
       aggregateId: qualifyAggregateId('run', runId),
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: identity.agent,
         model: HARNESS_MODEL,
       }),
@@ -980,7 +981,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
 function makeAgentProposalPayload(): AgentProposalPermission {
   // A chat delegation: the schema fills the empty file fields a document
   // task would carry.
-  return AgentProposalPermissionSchema.parse({
+  return Schema.decodeUnknownSync(AgentProposalPermissionSchema)({
     requestId: 'harness-agent-proposal',
     runId: HARNESS_RUN_ID,
     task: false,
@@ -1222,7 +1223,7 @@ if (SHOW_AGENT_RESULT) {
 
 /** A background script run with two `agent` children still running. */
 function seedRunningScript(): void {
-  const scriptRunId = RunIdSchema.parse('aaaa0002f10e');
+  const scriptRunId = harnessRunId('aaaa0002f10e');
   seedRun(scriptRunId, {
     identity: { kind: 'script', title: 'live-script-validation' },
     parentRunId: HARNESS_RUN_ID,
@@ -1231,7 +1232,7 @@ function seedRunningScript(): void {
   seedPhase(scriptRunId, RUN_PHASE.RUNNING);
   for (const agentRunId of [
     RUNNING_SCRIPT_FIRST_AGENT_RUN_ID,
-    RunIdSchema.parse('aaaa000bf10e'),
+    harnessRunId('aaaa000bf10e'),
   ]) {
     seedRun(agentRunId, {
       identity: { kind: 'agent', agent: 'correct' },
@@ -1243,7 +1244,7 @@ function seedRunningScript(): void {
 }
 
 function seedRunningProcessChild(): void {
-  const childRunId = RunIdSchema.parse('aaaa0003f10e');
+  const childRunId = harnessRunId('aaaa0003f10e');
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
     parentRunId: HARNESS_RUN_ID,
@@ -1256,26 +1257,26 @@ function seedRunningProcessChild(): void {
 
 if (SHOW_CHILDREN) {
   const nestedStrategyChild = {
-    runId: RunIdSchema.parse('aaaa0004f10e'),
+    runId: harnessRunId('aaaa0004f10e'),
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     status: RUN_PHASE.RUNNING,
   };
   const childRuns = [
     {
-      runId: RunIdSchema.parse('aaaa0005f10e'),
+      runId: harnessRunId('aaaa0005f10e'),
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       status: RUN_PHASE.RUNNING,
     },
     {
-      runId: RunIdSchema.parse('aaaa0006f10e'),
+      runId: harnessRunId('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       status: RUN_PHASE.WAITING,
     },
     {
-      runId: RunIdSchema.parse('aaaa0007f10e'),
+      runId: harnessRunId('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       status: RUN_PHASE.RUNNING,
@@ -1311,7 +1312,7 @@ if (SHOW_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
     seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      parentRunId: RunIdSchema.parse('aaaa0005f10e'),
+      parentRunId: harnessRunId('aaaa0005f10e'),
     });
     seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(
@@ -1776,9 +1777,9 @@ function renderHarnessApp(): React.JSX.Element {
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
-  const waiting = RunIdSchema.parse('eeeeeeeeeeee');
-  const interrupted = RunIdSchema.parse('ffffffffffff');
-  const nested = RunIdSchema.parse('111111111111');
+  const waiting = harnessRunId('eeeeeeeeeeee');
+  const interrupted = harnessRunId('ffffffffffff');
+  const nested = harnessRunId('111111111111');
   log.emit(PROCESS, 10_000_000, { type: 'run.activate' });
   for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],

@@ -24,7 +24,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@utils/core';
 

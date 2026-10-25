@@ -14,7 +14,12 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
-import { narrows, setPolicy } from '@agent/runtime/runApprovalQueue';
+import {
+  claimRejection,
+  narrows,
+  setPolicy,
+  writeRejection,
+} from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { registryOf, RunLive, Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -37,13 +42,11 @@ import {
   type DeletionMode,
 } from '@shared/session/database';
 import {
-  claimRejection,
   NotOwner,
   Rejected,
   Unavailable,
-  writeRejection,
   type RequestError,
-} from '@shared/session/requestErrors';
+} from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
@@ -237,12 +240,10 @@ const decideRequest = (
     // recording a decision would clear the panel without doing what it says.
     // Resuming the run re-enters the call, which asks again and is answered then.
     if (!heldHere && requestParksItsCaller(pending.payload)) {
-      return yield* Effect.fail(
-        new Unavailable({
-          runId: req.runId,
-          reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
-        }),
-      );
+      return yield* new Unavailable({
+        runId: req.runId,
+        reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
+      });
     }
     const { log } = deps.session();
     const side = deps.plugins.decisions.get(pending.payload.kind)?.record({
@@ -308,12 +309,10 @@ const deleteAdmittedRun = (
   const aggregateId = qualifyAggregateId('run', runId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
-      return yield* Effect.fail(
-        new Unavailable({
-          runId,
-          reason: `The ${runNoun(deps.session(), runId)} has no recorded start.`,
-        }),
-      );
+      return yield* new Unavailable({
+        runId,
+        reason: `The ${runNoun(deps.session(), runId)} has no recorded start.`,
+      });
     }
     yield* registryOf(deps.session().runs)
       .withInactiveRunStep(
@@ -482,12 +481,10 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     // a run anything still holds; `actions` is not consulted, the claim suffices.
     const admitted = yield* admit(deps, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
-      return yield* Effect.fail(
-        new Unavailable({
-          runId,
-          reason: `The ${runNoun(deps.session(), runId)} changed after it was listed.`,
-        }),
-      );
+      return yield* new Unavailable({
+        runId,
+        reason: `The ${runNoun(deps.session(), runId)} changed after it was listed.`,
+      });
     }
     return yield* deleteAdmittedRun(deps, runId, admitted, mode);
   });

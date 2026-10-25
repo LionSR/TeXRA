@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Data, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 import {
   type ProcessRuntime,
@@ -36,10 +36,13 @@ const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
  * file-actions port takes tags, never a bare value, so the compare action
  * words that failure as this one.
  */
-class DiffViewUnavailable extends Data.TaggedError('DiffViewUnavailable')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class DiffViewUnavailable extends Schema.TaggedError<DiffViewUnavailable>()(
+  'DiffViewUnavailable',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 type DesktopProgressFileActionUi = Pick<
   DesktopAgentRunHost,

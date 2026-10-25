@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { describe, it } from 'vitest';
 
+import { Result, Schema, SchemaIssue } from 'effect';
 import { AgentConfigSchema } from '@shared/schemas';
 
 /**
@@ -10,17 +11,27 @@ import { AgentConfigSchema } from '@shared/schemas';
  */
 describe('AgentConfigSchema agentSource compatibility', () => {
   it('reads records persisted before the field existed', () => {
-    assert.strictEqual(AgentConfigSchema.parse({}).agentSource, undefined);
     assert.strictEqual(
-      AgentConfigSchema.parse({ agentSource: null }).agentSource,
+      Schema.decodeUnknownSync(AgentConfigSchema)({}).agentSource,
+      undefined,
+    );
+    assert.strictEqual(
+      Schema.decodeUnknownSync(AgentConfigSchema)({ agentSource: null })
+        .agentSource,
       null,
     );
   });
 
   it('rejects an unrecognized source loudly instead of defaulting it', () => {
-    const result = AgentConfigSchema.safeParse({ agentSource: 'notASource' });
+    const result = Schema.decodeUnknownResult(AgentConfigSchema)({
+      agentSource: 'notASource',
+    });
 
-    assert.strictEqual(result.success, false);
-    assert.deepStrictEqual(result.error?.issues[0]?.path, ['agentSource']);
+    assert.strictEqual(Result.isFailure(result), true);
+    if (!Result.isFailure(result)) return;
+    const [issue] = SchemaIssue.makeFormatterStandardSchemaV1()(
+      result.failure.issue,
+    ).issues;
+    assert.deepStrictEqual(issue?.path, ['agentSource']);
   });
 });

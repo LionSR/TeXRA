@@ -16,20 +16,19 @@
 import { randomUUID } from 'node:crypto';
 import { isPathWithin } from '@texra-ai/harness';
 
-import { ModelError, type ModelErrorFieldsSchema } from '@texra-ai/llm';
+import { ModelError, ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
   type Cause,
   Clock,
-  Data,
   Deferred,
   type Duration,
   Effect,
   Queue,
+  Result,
+  Schema,
   type Scope,
   Stream,
 } from 'effect';
-
-import { z } from 'zod';
 
 import {
   DiagnosticsReadFailed,
@@ -52,14 +51,18 @@ import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type { Session, SessionHost } from '@texra-ai/harness';
 
 /** Why a call a run waited on got no answer from a window. */
-export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
-  /** `detached`: the window went before it answered; `no-answer`: it did
-   *  not answer in time; `failed`: it answered with its own failure. */
-  readonly reason: 'detached' | 'no-answer' | 'failed';
-  readonly message: string;
-  /** A model's failure, as the window's model raised it. */
-  readonly model?: z.infer<typeof ModelErrorFieldsSchema>;
-}> {}
+export class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
+  'WindowCallFailed',
+  {
+    /** `detached`: the window went before it answered; `no-answer`: it did
+     *  not answer in time; `failed`: it answered with its own failure. */
+    reason: Schema.Literals(['detached', 'no-answer', 'failed']),
+    message: Schema.String,
+
+    /** A model's failure, as the window's model raised it. */
+    model: Schema.optional(ModelErrorFieldsSchema),
+  },
+) {}
 
 /** A model call's failure as the run's model binding sees it: the
  *  window's own, or the window's absence as a transport failure. */
@@ -203,7 +206,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const ask = <A>(
     key: string,
     call: AnsweredCall,
-    schema: z.ZodType<A>,
+    schema: Schema.Codec<A, unknown>,
     window = target(key, CALL_CAPABILITY[call.kind]),
   ): Effect.Effect<A, WindowCallFailed> =>
     Effect.gen(function* () {
@@ -246,13 +249,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           }),
         ),
       );
-      const parsed = schema.safeParse(value);
-      if (!parsed.success)
+      const parsed = Schema.decodeUnknownResult(schema)(value);
+      if (!Result.isSuccess(parsed))
         return yield* new WindowCallFailed({
           reason: 'failed',
           message: `The TeXRA window answered ${call.kind} with a value it does not take.`,
         });
-      return parsed.data;
+      return parsed.success;
     });
 
   /** Send a streamed call to the window `key`'s project routes it to: its
@@ -261,7 +264,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const askStream = <A>(
     key: string,
     call: Extract<HostCall, { kind: 'lmStream' }>,
-    schema: z.ZodType<A>,
+    schema: Schema.Codec<A, unknown>,
     window = target(key, CALL_CAPABILITY[call.kind]),
   ): Stream.Stream<A, WindowCallFailed> =>
     Stream.unwrap(
@@ -303,9 +306,9 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
               settled = true;
               return Queue.end(items).pipe(Effect.asVoid);
             }
-            const item = schema.safeParse(answer.value);
-            return item.success
-              ? Queue.offer(items, item.data).pipe(Effect.asVoid)
+            const item = Schema.decodeUnknownResult(schema)(answer.value);
+            return Result.isSuccess(item)
+              ? Queue.offer(items, item.success).pipe(Effect.asVoid)
               : Queue.fail(
                   items,
                   new WindowCallFailed({
@@ -505,7 +508,11 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
     get openPdf(): EditorCapabilities['openPdf'] {
       if (!offers(key, 'openPdf')) return undefined;
       return ({ location, preserveFocus }) =>
-        ask(key, { kind: 'openPdf', location, preserveFocus }, z.null()).pipe(
+        ask(
+          key,
+          { kind: 'openPdf', location, preserveFocus },
+          Schema.Null,
+        ).pipe(
           Effect.asVoid,
           Effect.mapError(
             (failure) =>

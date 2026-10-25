@@ -1,4 +1,4 @@
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Schema, Stream, SubscriptionRef } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
@@ -39,7 +39,7 @@ beforeEach(async () => {
 describe('canonical run records', () => {
   it('preserves private values while display readers drain past their commits', async () => {
     const records = getRunRecords(session, runId);
-    const config = AgentConfigSchema.parse({
+    const config = Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'worker',
       instruction: 'private instruction',
     });
@@ -67,7 +67,7 @@ describe('canonical run records', () => {
         yield* seedRunRecord(
           session,
           runId,
-          AgentConfigSchema.parse({
+          Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'worker',
           }),
         );

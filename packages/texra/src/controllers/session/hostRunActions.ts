@@ -28,7 +28,7 @@ import {
   type SessionHostInteractions,
 } from '@texra-ai/harness';
 import { entryTypeIn } from '@texra-ai/harness/node';
-import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import {
   type ApiKeyProviderId,
@@ -40,6 +40,7 @@ import {
   toErrorMessage,
   isTaskConfig,
   recipeBlockOf,
+  RunIdSchema,
   type RunId,
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
@@ -60,7 +61,7 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
-import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
 import {
   ApiKeyPromptFailed,
@@ -94,19 +95,25 @@ export interface WorkflowFileOperationResult {
  * The host's launcher could not start the run, or the run it started
  * failed: a bare `Error`, lifted here with that error as `cause`.
  */
-class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+class RunLaunchFailed extends Schema.TaggedError<RunLaunchFailed>()(
+  'RunLaunchFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** The run's saved setup could not be read: the database would not answer
  *  or refused the committed `run.config` row, or the service holding the
  *  run could not answer for it (`cause`). */
-class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
-  readonly runId: RunId;
-  readonly message: string;
-  readonly cause: DatabaseReadFailed | TaskRecordsUnavailable;
-}> {}
+class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
+  'RunConfigUnreadable',
+  {
+    runId: RunIdSchema,
+    message: Schema.String,
+    cause: Schema.Union([DatabaseReadFailed, TaskRecordsFailed]),
+  },
+) {}
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them. */
@@ -126,7 +133,7 @@ export interface RunActionRecordPorts {
     runId: RunId,
   ) => Effect.Effect<
     AgentConfig | null,
-    DatabaseReadFailed | TaskRecordsUnavailable
+    DatabaseReadFailed | TaskRecordsFailed
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;

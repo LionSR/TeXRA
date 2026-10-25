@@ -13,7 +13,7 @@
  * honored. Cancellation is fiber interruption from the host's run edge; there
  * is no signal threading here.
  */
-import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
+import { Clock, Duration, Effect, Ref, Schedule, Schema } from 'effect';
 
 import { toErrorMessage } from './support.js';
 import type {
@@ -45,37 +45,34 @@ export interface DeviceLoginOptions<S extends SubscriptionSession> {
 }
 
 /** The user has not approved yet; `slowDown` asks for a longer interval. */
-export class DeviceAuthorizationPending extends Data.TaggedError(
+export class DeviceAuthorizationPending extends Schema.TaggedError<DeviceAuthorizationPending>()(
   'DeviceAuthorizationPending',
-)<{
-  readonly slowDown: boolean;
-}> {}
+  { slowDown: Schema.Boolean },
+) {}
 
 /**
  * One poll failed in a way worth retrying. `error` is the failure the poll
  * raises once {@link MAX_CONSECUTIVE_TRANSIENTS} transients in a row have
  * exhausted the budget, or when the code's lifetime ends on one.
  */
-export class DeviceAuthorizationTransient<
-  Err extends Error = Error,
-> extends Data.TaggedError('DeviceAuthorizationTransient')<{
-  readonly error: Err;
-}> {}
+export class DeviceAuthorizationTransient extends Schema.TaggedError<DeviceAuthorizationTransient>()(
+  'DeviceAuthorizationTransient',
+  { error: Schema.instanceOf(Error) },
+) {}
 
 const MAX_CONSECUTIVE_TRANSIENTS = 3;
 
 /** The user code's lifetime elapsed before the user approved. */
-class DeviceCodeTimedOut extends Data.TaggedError('DeviceCodeTimedOut')<{
-  readonly message: string;
-}> {}
+class DeviceCodeTimedOut extends Schema.TaggedError<DeviceCodeTimedOut>()(
+  'DeviceCodeTimedOut',
+  { message: Schema.String },
+) {}
 
 /** The coordinator rejected while persisting the approved session. */
-class SessionCompletionFailed extends Data.TaggedError(
+class SessionCompletionFailed extends Schema.TaggedError<SessionCompletionFailed>()(
   'SessionCompletionFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 const DEVICE_CODE_TIMED_OUT_MESSAGE =
   'Device-code sign-in timed out. Run sign-in again.';
@@ -84,7 +81,7 @@ const DEVICE_CODE_TIMED_OUT_MESSAGE =
  *  carried error, or the code's expiry. */
 type DeviceAuthorizationFailure<E> =
   | Exclude<E, DeviceAuthorizationPending | DeviceAuthorizationTransient>
-  | (E extends DeviceAuthorizationTransient<infer Err> ? Err : never)
+  | (E extends DeviceAuthorizationTransient ? Error : never)
   | DeviceCodeTimedOut;
 
 const isPending = (error: unknown): error is DeviceAuthorizationPending =>

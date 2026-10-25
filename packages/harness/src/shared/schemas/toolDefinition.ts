@@ -1,41 +1,55 @@
-import { z, type ZodType } from 'zod';
+import { Schema } from 'effect';
 
 import type { ToolCard } from './progressView/data';
 
 /**
- * Zod schema for validating tool definition structure.
- * Single source of truth - type is derived via z.infer<>.
+ * The shape of a tool definition; the type is derived from it.
  *
- * Note: zodSchema uses z.custom<ZodType>() because ZodType instances can't be
- * validated by Zod itself. This field is runtime-only (added by defineTool(),
- * not present in YAML configs) but acknowledged in the schema for type safety.
+ * `schema` is declared with `Schema.isSchema` because a schema instance is not
+ * itself describable by a schema. The field is runtime-only (set by
+ * `defineTool()`, never present in YAML configs) but acknowledged here for
+ * type safety.
  *
- * Uses z.looseObject() to allow forward compatibility with future runtime
- * fields without breaking validation when tools flow through AgentSettingSchema.
+ * Keeps unknown keys so future runtime fields do not break validation when
+ * tools flow through `AgentSettingSchema`.
  */
-export const ToolDefinitionSchema = z.looseObject({
-  /** Name of the tool or function */
-  name: z.string(),
-  /** Optional description for the model */
-  description: z.string().optional(),
-  /** Parameter schema (JSON Schema format) */
-  parameters: z.record(z.string(), z.unknown()).optional(),
-  /** Runtime-only: original Zod schema for SDK-native conversion */
-  zodSchema: z.custom<ZodType>().optional(),
-  /**
-   * What a script's call of the tool resolves to, as a TypeScript type, when
-   * it is not `ToolOutput` (`{ output, summary }`): a tool whose result
-   * carries a `value` declares that value's type here.
-   */
-  scriptReturns: z.string().optional(),
-  /**
-   * Runtime-only, like `zodSchema`: the card a call states from its input
-   * (`ToolUseLog.card`), in place of the sections the transcript derives
-   * from the tool's name. What a plugin's tool shows that the harness
-   * knows nothing of.
-   */
-  card: z.custom<(input: unknown) => ToolCard | undefined>().optional(),
-});
+export const ToolDefinitionSchema = Schema.StructWithRest(
+  Schema.Struct({
+    /** Name of the tool or function */
+    name: Schema.String,
+    /** Optional description for the model */
+    description: Schema.optional(Schema.String),
+    /** Parameter schema (JSON Schema format) */
+    parameters: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+    /**
+     * Runtime-only: the tool's input schema, from which the provider
+     * converters derive JSON Schema per request.
+     */
+    schema: Schema.optionalKey(
+      Schema.declare((u): u is Schema.Codec<unknown, unknown> =>
+        Schema.isSchema(u),
+      ),
+    ),
+    /**
+     * What a script's call of the tool resolves to, as a TypeScript type, when
+     * it is not `ToolOutput` (`{ output, summary }`): a tool whose result
+     * carries a `value` declares that value's type here.
+     */
+    scriptReturns: Schema.optional(Schema.String),
+    /**
+     * Runtime-only, like `schema`: the card a call states from its input
+     * (`ToolUseLog.card`), in place of the sections the transcript derives
+     * from the tool's name. What a plugin's tool shows that the harness
+     * knows nothing of.
+     */
+    card: Schema.optional(
+      Schema.declare<(input: unknown) => ToolCard | undefined>(
+        (_u): _u is (input: unknown) => ToolCard | undefined => true,
+      ),
+    ),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
 /** Tool definition type - derived from schema */
-export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
+export type ToolDefinition = typeof ToolDefinitionSchema.Type;

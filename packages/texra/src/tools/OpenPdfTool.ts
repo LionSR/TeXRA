@@ -2,8 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import {
   createRunStorageLocation,
   defineTool,
@@ -31,14 +30,18 @@ import {
 // Local file imports
 import { EditorHost } from './editorHost';
 
-const OpenPdfInputSchema = z.strictObject({
-  path: z.string().describe('Path to the PDF file to open.'),
-  preserve_focus: nullishWithDefault(z.boolean(), false).describe(
+const OpenPdfInputSchema = Schema.Struct({
+  path: Schema.String.annotate({
+    description: 'Path to the PDF file to open.',
+  }),
+  preserve_focus: nullishWithDefault(
+    Schema.Boolean,
+    false,
     'Whether the editor should preserve focus after opening.',
   ),
 });
 
-type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
+type OpenPdfInput = typeof OpenPdfInputSchema.Type;
 
 export const OpenPdfTool = defineTool({
   name: 'open_pdf',

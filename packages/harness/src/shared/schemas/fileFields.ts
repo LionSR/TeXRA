@@ -1,15 +1,25 @@
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 /** The four canonical `*Files` list fields, defaulting to `[]` when absent. */
 const fileListFields = {
-  inputFiles: z.array(z.string()).prefault([]),
-  contextFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
+  inputFiles: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  contextFiles: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  mediaFiles: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  outputFiles: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
 };
 
 /** Used by AgentConfig where `editedFile` may be null. */
-export const NullableFileFieldsSchema = z.object({
+export const NullableFileFieldsSchema = Schema.Struct({
   ...fileListFields,
-  editedFile: z.string().nullable().prefault(null),
+  editedFile: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });

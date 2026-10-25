@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
@@ -17,14 +16,16 @@ import { countLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/definition';
 
-const WriteInputSchema = z.strictObject({
-  path: z
-    .string()
-    .describe('The file path to write, workspace-relative or absolute.'),
-  content: z.string().describe('The full file contents to write.'),
+const WriteInputSchema = Schema.Struct({
+  path: Schema.String.annotate({
+    description: 'The file path to write, workspace-relative or absolute.',
+  }),
+  content: Schema.String.annotate({
+    description: 'The full file contents to write.',
+  }),
 });
 
-type WriteInput = z.infer<typeof WriteInputSchema>;
+type WriteInput = typeof WriteInputSchema.Type;
 
 /**
  * What an app does to the content `write_file` is given before it proposes

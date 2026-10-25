@@ -1,6 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 
 // Internal imports
 import {
@@ -15,16 +14,20 @@ import { executed } from '@tools/core/result';
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
 
-const WebSearchInputSchema = z.strictObject({
-  query: z
-    .string()
-    .describe('Search query to send to the web search provider.'),
-  max_results: nullishWithDefault(z.number().min(1).max(5), 3).describe(
+const WebSearchInputSchema = Schema.Struct({
+  query: Schema.String.annotate({
+    description: 'Search query to send to the web search provider.',
+  }),
+  max_results: nullishWithDefault(
+    Schema.Finite.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(5),
+    ),
+    3,
     'Maximum number of search results to return, up to 5.',
   ),
 });
 
-type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
+type WebSearchInput = typeof WebSearchInputSchema.Type;
 
 // ============================================================================
 // Response schemas (DuckDuckGo is an external network boundary — validate it)
@@ -32,42 +35,63 @@ type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 
 /**
  * `RelatedTopics` entries are self-referential (a topic group nests further
- * `Topics`), so the interface is kept and the recursive schema is annotated
- * against it (z.lazy).
+ * `Topics`), so the interface is kept and the recursive schema is typed
+ * against it (`Schema.suspend`).
  */
 interface DuckDuckGoResult {
-  Text?: string | null;
-  FirstURL?: string | null;
-  Topics?: DuckDuckGoResult[] | null;
+  readonly Text?: string | null;
+  readonly FirstURL?: string | null;
+  readonly Topics?: readonly DuckDuckGoResult[] | null;
 }
 
-const DuckDuckGoResultSchema: z.ZodType<DuckDuckGoResult> = z.lazy(() =>
-  z.looseObject({
-    Text: z.string().nullish(),
-    FirstURL: z.string().nullish(),
-    Topics: z.array(DuckDuckGoResultSchema).nullish(),
-  }),
+const DuckDuckGoResultSchema: Schema.Codec<DuckDuckGoResult> = Schema.suspend(
+  () =>
+    Schema.StructWithRest(
+      Schema.Struct({
+        Text: Schema.optional(Schema.NullOr(Schema.String)),
+        FirstURL: Schema.optional(Schema.NullOr(Schema.String)),
+        Topics: Schema.optional(
+          Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
+        ),
+      }),
+      [Schema.Record(Schema.String, Schema.Unknown)],
+    ),
 );
 
-const DuckDuckGoInfoboxContentItemSchema = z.looseObject({
-  label: z.string().nullish(),
-  value: z.string().nullish(),
-});
+const DuckDuckGoInfoboxContentItemSchema = Schema.StructWithRest(
+  Schema.Struct({
+    label: Schema.optional(Schema.NullOr(Schema.String)),
+    value: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
-const DuckDuckGoResponseSchema = z.looseObject({
-  Abstract: z.string().nullish(),
-  AbstractText: z.string().nullish(),
-  AbstractURL: z.string().nullish(),
-  AbstractSource: z.string().nullish(),
-  RelatedTopics: z.array(DuckDuckGoResultSchema).nullish(),
-  Infobox: z
-    .looseObject({
-      content: z.array(DuckDuckGoInfoboxContentItemSchema).nullish(),
-    })
-    .nullish(),
-});
+const DuckDuckGoResponseSchema = Schema.StructWithRest(
+  Schema.Struct({
+    Abstract: Schema.optional(Schema.NullOr(Schema.String)),
+    AbstractText: Schema.optional(Schema.NullOr(Schema.String)),
+    AbstractURL: Schema.optional(Schema.NullOr(Schema.String)),
+    AbstractSource: Schema.optional(Schema.NullOr(Schema.String)),
+    RelatedTopics: Schema.optional(
+      Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
+    ),
+    Infobox: Schema.optional(
+      Schema.NullOr(
+        Schema.StructWithRest(
+          Schema.Struct({
+            content: Schema.optional(
+              Schema.NullOr(Schema.Array(DuckDuckGoInfoboxContentItemSchema)),
+            ),
+          }),
+          [Schema.Record(Schema.String, Schema.Unknown)],
+        ),
+      ),
+    ),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
-type DuckDuckGoResponse = z.infer<typeof DuckDuckGoResponseSchema>;
+type DuckDuckGoResponse = typeof DuckDuckGoResponseSchema.Type;
 
 /** Query the DuckDuckGo Instant Answers API with transient retries. */
 const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
@@ -88,15 +112,17 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
         // Validate the body at the boundary. A malformed shape is not
         // transient, so it is not retried; the classification below surfaces
         // it as a tool error.
-        const parsed = DuckDuckGoResponseSchema.safeParse(raw);
-        if (!parsed.success) {
+        const parsed = Schema.decodeUnknownResult(DuckDuckGoResponseSchema)(
+          raw,
+        );
+        if (!Result.isSuccess(parsed)) {
           return yield* Effect.fail(
             new Error(
-              `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+              `Unexpected DuckDuckGo response shape: ${parsed.failure.message}`,
             ),
           );
         }
-        return parsed.data;
+        return parsed.success;
       }),
       {
         retries: DDG_RETRIES,
@@ -133,7 +159,10 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
   }
 
   // Extract from RelatedTopics (including nested Topics)
-  function extractTopics(topics: DuckDuckGoResult[], limit: number): void {
+  function extractTopics(
+    topics: readonly DuckDuckGoResult[],
+    limit: number,
+  ): void {
     for (const item of topics) {
       if (results.length >= limit) break;
       if (item.Text && item.FirstURL) {

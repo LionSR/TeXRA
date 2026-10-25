@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Clock, Effect } from 'effect';
+import { Clock, Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -109,7 +109,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const agentName = childConfigPayload.agent;
     const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
-      config: AgentConfigSchema.parse(childConfigPayload),
+      config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
       session: parentSession,
       suppressErrorNotification: true,
     });

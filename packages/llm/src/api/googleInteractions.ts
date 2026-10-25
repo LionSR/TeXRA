@@ -1,7 +1,6 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import { Cause, Clock, Effect, Stream } from 'effect';
-import { z } from 'zod';
+import { Cause, Clock, Effect, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -9,7 +8,7 @@ import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
   completedTurn,
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   ResolvedTurnSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
@@ -19,8 +18,18 @@ import {
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { decodeTurnRequest } from './turnInput.js';
+import {
+  COMPLETED_STATUSES,
+  IN_FLIGHT_STATUSES,
+  WireCompletedStepSchema,
+  WireEventSchema,
+  WireInteractionSchema,
+  WireSnapshotStepsSchema,
+  WireStreamInteractionSchema,
+  WireUsageSchema,
+} from './googleInteractionsWire.js';
 import { systemUpdateText } from '../message.js';
-import { JsonObjectSchema, originOf, sameModelOrigin } from '../protocol.js';
+import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
@@ -41,113 +50,6 @@ import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
-
-// SDK stream parsing does not validate the JSON values it returns.
-const WireTextSchema = z.strictObject({
-  type: z.literal('text'),
-  text: z.string(),
-});
-const WireCompletedStepSchema = z.discriminatedUnion('type', [
-  z.strictObject({
-    type: z.literal('thought'),
-    summary: z.array(WireTextSchema).optional(),
-    signature: z.string().min(1).optional(),
-  }),
-  z.strictObject({
-    type: z.literal('model_output'),
-    content: z.array(WireTextSchema).optional(),
-  }),
-  z.strictObject({
-    type: z.literal('function_call'),
-    id: z.string().min(1),
-    name: z.string().min(1),
-    arguments: JsonObjectSchema.optional(),
-    // A replay needs only the thought's signature, so a call's is not kept.
-    signature: z.string().min(1).optional(),
-  }),
-]);
-// A GET echoes the input ahead of the output whatever `include_input` says,
-// and output holds no user input or function result, so those end the echo.
-const isInputEcho = ({ type }: { type: string }) =>
-  type === 'user_input' || type === 'function_result';
-const WireSnapshotStepsSchema = z
-  .array(z.looseObject({ type: z.string() }))
-  .transform((steps) => steps.slice(steps.findLastIndex(isInputEcho) + 1))
-  .pipe(z.array(WireCompletedStepSchema));
-// A stream start announces a call; its arguments arrive in subsequent deltas.
-const WireStepSchema = WireCompletedStepSchema.refine(
-  (step) =>
-    step.type !== 'function_call' ||
-    step.arguments === undefined ||
-    Object.keys(step.arguments).length === 0,
-);
-const WireUsageSchema = z.object({
-  total_input_tokens: z.int().nonnegative().optional(),
-  total_output_tokens: z.int().nonnegative().optional(),
-  total_tokens: z.int().nonnegative().optional(),
-  total_cached_tokens: z.int().nonnegative().optional(),
-  total_thought_tokens: z.int().nonnegative().optional(),
-  total_tool_use_tokens: z.int().nonnegative().optional(),
-});
-const WireInteractionSchema = z.object({
-  id: z.string().min(1),
-  status: z.string(),
-  model: z.string().min(1).optional(),
-  steps: z.unknown().optional(),
-  usage: WireUsageSchema.optional(),
-});
-// Stateless streams can report no retrievable interaction ID.
-const WireStreamInteractionSchema = WireInteractionSchema.extend({
-  id: z.string().optional(),
-});
-const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
-const COMPLETED_STATUSES: readonly string[] = ['completed', 'requires_action'];
-const WireEventSchema = z.discriminatedUnion('event_type', [
-  z.object({
-    event_type: z.literal('interaction.created'),
-    interaction: WireStreamInteractionSchema.omit({ status: true }),
-  }),
-  z.object({
-    event_type: z.literal('interaction.completed'),
-    interaction: WireStreamInteractionSchema,
-  }),
-  z.object({
-    event_type: z.literal('interaction.status_update'),
-    interaction_id: WireStreamInteractionSchema.shape.id,
-    status: z.string(),
-  }),
-  z.object({
-    event_type: z.literal('step.start'),
-    index: z.int().nonnegative(),
-    step: WireStepSchema,
-  }),
-  z.object({
-    event_type: z.literal('step.stop'),
-    index: z.int().nonnegative(),
-    usage: WireUsageSchema.optional(),
-  }),
-  z.object({
-    event_type: z.literal('step.delta'),
-    index: z.int().nonnegative(),
-    metadata: z.object({ total_usage: WireUsageSchema.optional() }).optional(),
-    delta: z.discriminatedUnion('type', [
-      z.strictObject({ type: z.literal('text'), text: z.string() }),
-      z.strictObject({
-        type: z.literal('thought_summary'),
-        content: WireTextSchema,
-      }),
-      z.strictObject({
-        type: z.literal('thought_signature'),
-        signature: z.string().min(1),
-      }),
-      z.strictObject({
-        type: z.literal('arguments_delta'),
-        arguments: z.string(),
-      }),
-    ]),
-  }),
-  z.object({ event_type: z.literal('error'), error: z.unknown() }),
-]);
 
 const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   part: InputPart,
@@ -313,14 +215,16 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   return steps;
 });
 
-const HttpFailureSchema = z.object({ status: z.int().min(400).max(599) });
+const HttpFailureSchema = Schema.Struct({
+  status: Schema.Int.check(Schema.isBetween({ minimum: 400, maximum: 599 })),
+});
 
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
-  const decoded = HttpFailureSchema.safeParse(cause);
+  const decoded = Schema.decodeUnknownResult(HttpFailureSchema)(cause);
   return sdkModelError(
     cause,
-    decoded.success ? { status: decoded.data.status } : undefined,
+    Result.isSuccess(decoded) ? { status: decoded.success.status } : undefined,
     'The Google transport failed.',
   );
 }
@@ -420,7 +324,7 @@ function createInput(
 
 /** Open a canonical part; re-encode snapshot arguments until streamed deltas replace them. */
 const stepPart = Effect.fn('llm.google.stepPart')(function* (
-  step: z.infer<typeof WireCompletedStepSchema>,
+  step: typeof WireCompletedStepSchema.Type,
 ): Effect.fn.Return<Part, ModelError> {
   switch (step.type) {
     case 'thought':
@@ -464,7 +368,7 @@ const stepPart = Effect.fn('llm.google.stepPart')(function* (
 
 /** A reported usage receipt; an absent one leaves the last in place. */
 const usageParts = (
-  usage: z.infer<typeof WireUsageSchema> | undefined,
+  usage: typeof WireUsageSchema.Type | undefined,
 ): PartEvent[] =>
   usage === undefined
     ? []
@@ -486,7 +390,7 @@ const usageParts = (
       ];
 
 const interactionEnd = (
-  interaction: z.infer<typeof WireStreamInteractionSchema>,
+  interaction: typeof WireStreamInteractionSchema.Type,
 ): PartEvent[] => [
   {
     kind: 'identity',
@@ -513,7 +417,7 @@ const interactionEnd = (
 function deltaPart(
   index: number,
   delta: Extract<
-    z.infer<typeof WireEventSchema>,
+    typeof WireEventSchema.Type,
     { event_type: 'step.delta' }
   >['delta'],
 ): PartEvent {
@@ -554,14 +458,14 @@ function googleWire(store: boolean) {
   ) => Effect.fail(new ModelError({ kind, message }));
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      const decoded = WireEventSchema.safeParse(raw);
-      if (!decoded.success)
+      const decoded = Schema.decodeUnknownResult(WireEventSchema)(raw);
+      if (!Result.isSuccess(decoded))
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Google returned malformed or unsupported stream data.',
-          cause: decoded.error,
+          cause: decoded.failure,
         });
-      const event = decoded.data;
+      const event = decoded.success;
       if (done)
         return yield* fail(
           'Google emitted data after its completed interaction.',
@@ -664,7 +568,7 @@ export function googleInteractionsModel(
   configuration: GoogleInteractionsConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = ModelConfigurationSchema.parse(configuration);
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'google-interactions' || !transport.apiKey) {
     throw new TypeError(
       'Google Interactions requires its configuration and an explicit API key.',
@@ -708,7 +612,7 @@ export function googleInteractionsModel(
             'Google background execution requires an enabled route and store:true.',
         });
       }
-      const turn = ResolvedTurnSchema.parse({
+      const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
         ...origin,
         mode,
         system: authored.system,
@@ -779,19 +683,22 @@ export function googleInteractionsModel(
     raw: unknown,
     operation: RemoteOperation,
   ) {
-    const parsed = WireInteractionSchema.safeParse(raw);
-    if (!parsed.success || parsed.data.id !== operation.providerResponseId) {
+    const parsed = Schema.decodeUnknownResult(WireInteractionSchema)(raw);
+    if (
+      !Result.isSuccess(parsed) ||
+      parsed.success.id !== operation.providerResponseId
+    ) {
       return yield* new ModelError({
         kind: 'malformed-output',
         message:
           'Google returned a malformed or mismatched interaction snapshot.',
-        cause: parsed.success ? undefined : parsed.error,
+        cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
       });
     }
-    return parsed.data;
+    return parsed.success;
   });
   const completedSnapshot = Effect.fn('llm.google.completedSnapshot')(
-    function* (interaction: z.infer<typeof WireInteractionSchema>) {
+    function* (interaction: typeof WireInteractionSchema.Type) {
       if (!COMPLETED_STATUSES.includes(interaction.status)) {
         return yield* new ModelError({
           kind: [
@@ -805,14 +712,16 @@ export function googleInteractionsModel(
           message: `Google background interaction ended with status ${interaction.status}.`,
         });
       }
-      const steps = WireSnapshotStepsSchema.safeParse(interaction.steps);
-      if (!steps.success)
+      const steps = Schema.decodeUnknownResult(WireSnapshotStepsSchema)(
+        interaction.steps,
+      );
+      if (!Result.isSuccess(steps))
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Google returned malformed or unsupported completed steps.',
-          cause: steps.error,
+          cause: steps.failure,
         });
-      const parts = yield* Effect.forEach(steps.data, (step, index) =>
+      const parts = yield* Effect.forEach(steps.success, (step, index) =>
         Effect.map(stepPart(step), (part): PartEvent[] => [
           { kind: 'open', index, part },
           { kind: 'close', index },
@@ -834,7 +743,10 @@ export function googleInteractionsModel(
     googleContinuation(turn, result, origin).pipe(
       Effect.map((continuation) =>
         continuation
-          ? TurnResultSchema.parse({ ...result, continuation })
+          ? Schema.decodeUnknownSync(TurnResultSchema)({
+              ...result,
+              continuation,
+            })
           : result,
       ),
     );
@@ -880,27 +792,29 @@ export function googleInteractionsModel(
         { isAbortMatch: googleAbortMatch },
       );
       // Retain a real accepted identifier even if later snapshot validation fails.
-      const identity = z.object({ id: z.string().min(1) }).safeParse(raw);
-      if (!identity.success)
+      const identity = Schema.decodeUnknownResult(
+        Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
+      )(raw);
+      if (!Result.isSuccess(identity))
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Google returned no background interaction identifier.',
-          cause: identity.error,
+          cause: identity.failure,
         });
-      operation = RemoteOperationSchema.parse({
+      operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
         origin,
-        providerResponseId: identity.data.id,
+        providerResponseId: identity.success.id,
         afterSequence: null,
       });
       const interaction = yield* snapshot(raw, operation);
       if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
-        return BackgroundSubmissionSchema.parse({
+        return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
           kind: 'accepted',
           operation,
           returnedModel: interaction.model ?? null,
         });
       }
-      return BackgroundSubmissionSchema.parse({
+      return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
         kind: 'completed',
         result: yield* withContinuation(
           turn,
@@ -971,7 +885,7 @@ export function googleInteractionsModel(
                 ...interaction,
                 model: returnedModel,
               });
-              return BackgroundEventSchema.parse({
+              return Schema.decodeUnknownSync(BackgroundEventSchema)({
                 kind: 'completed',
                 afterSequence: null,
                 result: yield* withContinuation(turn, result),
@@ -995,7 +909,7 @@ export function googleInteractionsModel(
         );
         return Stream.concat(
           Stream.succeed(
-            BackgroundEventSchema.parse({
+            Schema.decodeUnknownSync(BackgroundEventSchema)({
               kind: 'identified',
               afterSequence: null,
               providerResponseId: operation.providerResponseId,

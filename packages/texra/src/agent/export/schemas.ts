@@ -6,10 +6,10 @@
  * uses `assembleTrace` instead.
  *
  * The export input also crosses the service's RPC edge (`task.exportInput`),
- * so its shapes are Zod schemas and the types derive from them.
+ * so its shapes are schemas and the types derive from them.
  */
 
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { ExportNodeSchema } from '@texra-ai/harness';
 import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
@@ -18,16 +18,16 @@ import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
 // Export configuration (caller-supplied)
 // ============================================================
 
-const ExportConfigSchema = z.object({
-  agent: z.string().optional(),
-  model: z.string().optional(),
-  instruction: z.string().optional(),
-  inputFiles: z.array(z.string()).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-  contextFiles: z.array(z.string()).optional(),
-  outputFiles: z.array(z.string()).optional(),
+const ExportConfigSchema = Schema.Struct({
+  agent: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  instruction: Schema.optional(Schema.String),
+  inputFiles: Schema.optional(Schema.Array(Schema.String)),
+  mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+  contextFiles: Schema.optional(Schema.Array(Schema.String)),
+  outputFiles: Schema.optional(Schema.Array(Schema.String)),
 });
-export type ExportConfig = z.infer<typeof ExportConfigSchema>;
+export type ExportConfig = typeof ExportConfigSchema.Type;
 
 /**
  * Attachment kinds a renderer must be able to label: the canonical media
@@ -38,13 +38,13 @@ export type ExportConfig = z.infer<typeof ExportConfigSchema>;
 export type ExportAttachmentType = MediaAttachmentKind;
 
 /** A run's export input: its setup and its conversation's nodes. */
-export const ChatExportInputSchema = z.object({
-  timestamp: z.string(),
-  description: z.string().optional(),
+export const ChatExportInputSchema = Schema.Struct({
+  timestamp: Schema.String,
+  description: Schema.optional(Schema.String),
   config: ExportConfigSchema,
-  nodes: z.array(ExportNodeSchema).readonly(),
+  nodes: Schema.Array(ExportNodeSchema),
 });
-export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
+export type ChatExportInput = typeof ChatExportInputSchema.Type;
 
 // ============================================================
 // Document metadata

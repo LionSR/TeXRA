@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, type Effect } from 'effect';
+import { type Effect, Schema } from 'effect';
 
 export interface DiffSource {
   filePath: string;
@@ -47,12 +47,15 @@ export interface DiffViewHost {
  * failure rather than by lifting a promise. `kind` says whether a URL or a
  * local path was refused.
  */
-export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
-  readonly kind: 'url' | 'path';
-  readonly target: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class ExternalOpenFailed extends Schema.TaggedError<ExternalOpenFailed>()(
+  'ExternalOpenFailed',
+  {
+    kind: Schema.Literals(['url', 'path']),
+    target: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * Open a URL in the host's default browser. The member is an `Effect`, so a
@@ -93,13 +96,17 @@ export interface ExternalOpener {
  * prompt is open dismisses or detaches from the wait and the interruption
  * propagates, so no caller reads it as a host fault.
  */
-export class PromptFailed extends Data.TaggedError('PromptFailed')<{
-  readonly reason: 'host-unavailable' | 'presentation-failed';
-  /** The port member that could not present, for the caller's own report. */
-  readonly member: 'confirm' | 'input';
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class PromptFailed extends Schema.TaggedError<PromptFailed>()(
+  'PromptFailed',
+  {
+    reason: Schema.Literals(['host-unavailable', 'presentation-failed']),
+
+    /** The port member that could not present, for the caller's own report. */
+    member: Schema.Literals(['confirm', 'input']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * A message never reached the user: VS Code's `window.show*Message` or the
@@ -118,12 +125,18 @@ export class PromptFailed extends Data.TaggedError('PromptFailed')<{
  * `message` is the rejection's own text, so it survives being shown through a
  * reporting surface that renders only the message.
  */
-export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
-  readonly member:
-    'showInfoMessage' | 'showWarningMessage' | 'showErrorMessage';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+export class NotificationFailed extends Schema.TaggedError<NotificationFailed>()(
+  'NotificationFailed',
+  {
+    member: Schema.Literals([
+      'showInfoMessage',
+      'showWarningMessage',
+      'showErrorMessage',
+    ]),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * A host capable of surfacing simple, non-blocking notifications to the
@@ -242,7 +255,10 @@ export interface TerminalRunResult {
  * a timeout is a failure — both are reported in {@link TerminalRunResult},
  * as they were before this port was typed.
  */
-type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
+const TerminalRunFailureReasonSchema = Schema.Literals([
+  'terminal-unavailable',
+  'execution-failed',
+]);
 
 /**
  * The one failure of a terminal run. Callers match the tag and read
@@ -250,9 +266,12 @@ type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
  * terminal" and "the command's shell execution faulted" stay
  * distinguishable at the call site.
  */
-export class TerminalRunFailed extends Data.TaggedError('TerminalRunFailed')<{
-  readonly reason: TerminalRunFailureReason;
-  readonly message: string;
-  readonly command: string;
-  readonly cause?: unknown;
-}> {}
+export class TerminalRunFailed extends Schema.TaggedError<TerminalRunFailed>()(
+  'TerminalRunFailed',
+  {
+    reason: TerminalRunFailureReasonSchema,
+    message: Schema.String,
+    command: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}

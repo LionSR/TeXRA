@@ -34,7 +34,7 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { Effect, Exit } from 'effect';
+import { Effect, Exit, Result, Schema } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@texra/platform/disposable';
@@ -451,18 +451,18 @@ export class RepoPollingSource extends PollingSourceBase<
       const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
       const res = yield* ghGet<GhPullRequest>(path);
       if (res.status !== 200) return undefined;
-      const parsed = GhPullRequestSchema.safeParse(res.data);
-      if (!parsed.success) {
+      const parsed = Schema.decodeUnknownResult(GhPullRequestSchema)(res.data);
+      if (!Result.isSuccess(parsed)) {
         yield* this.logWarning(
           `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation`,
-          parsed.error,
+          parsed.failure,
         );
         return undefined;
       }
       return {
         number: pr.number,
         updatedAt: pr.updated_at,
-        mergeable: parsed.data.mergeable_state,
+        mergeable: parsed.success.mergeable_state,
       };
     },
   );

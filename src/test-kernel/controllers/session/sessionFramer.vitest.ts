@@ -14,6 +14,8 @@ import {
   Layer,
   Logger,
   Queue,
+  Result,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -253,12 +255,14 @@ describe('session framer', () => {
         at: 0,
       },
     };
-    expect(EventInputSchema.safeParse(input).success).toBe(false);
+    const accepts = (candidate: unknown) =>
+      Result.isSuccess(Schema.decodeUnknownResult(EventInputSchema)(candidate));
+    expect(accepts(input)).toBe(false);
     expect(
-      EventInputSchema.safeParse({
+      accepts({
         ...input,
         event: { ...input.event, aggregateId: runStart.aggregateId },
-      }).success,
+      }),
     ).toBe(true);
   });
 

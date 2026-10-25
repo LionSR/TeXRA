@@ -14,9 +14,8 @@
  * - OpenCode: packages/opencode/src/plugin/xai.ts (anomalyco/opencode)
  * - hermes-agent PR #26534 (Grok-CLI client id registration notes in OpenCode)
  */
-import { z } from 'zod';
 
-import { Effect } from 'effect';
+import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { createSecretBackedCoordinator } from '../sessionAccess.js';
@@ -100,37 +99,62 @@ export const XAI_DEVICE_DEFAULT_EXPIRES_SEC = 5 * 60;
 export const XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC = 5;
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
-export const XaiTokenResponseSchema = z.object({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1).nullish(),
-  id_token: z.string().min(1).nullish(),
+export const XaiTokenResponseSchema = Schema.Struct({
+  access_token: Schema.String.check(Schema.isMinLength(1)),
+  refresh_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  id_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
   // Provider-boundary guard: absent or non-positive expires_in is not a
   // security decision — fall back to a short default and let JWT exp / 401
   // drive the real refresh. Prefer access JWT exp in buildSession when present.
-  expires_in: z.coerce
-    .number()
-    .positive()
-    .catch(XAI_DEFAULT_EXPIRES_IN_SEC)
-    .prefault(XAI_DEFAULT_EXPIRES_IN_SEC),
-  token_type: z.string().nullish(),
-  scope: z.string().nullish(),
+  expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString])
+    .check(Schema.isGreaterThan(0))
+    .pipe(
+      Schema.catchDecoding(() =>
+        Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
+      ),
+    )
+    .pipe(
+      Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
+    ),
+  token_type: Schema.optional(Schema.NullOr(Schema.String)),
+  scope: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 /** The persisted OAuth session bundle. */
-const XaiSessionSchema = SubscriptionSessionBaseSchema.extend({
-  email: z.string().min(1).optional(),
-});
+const XaiSessionSchema = SubscriptionSessionBaseSchema.mapFields(
+  Struct.assign({
+    email: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  }),
+);
 /** A stored xAI (Grok) session. */
-export type XaiSession = z.infer<typeof XaiSessionSchema>;
+export type XaiSession = typeof XaiSessionSchema.Type;
 
 /** RFC 8628 device-code authorization response. */
-export const XaiDeviceCodeSchema = z.object({
-  device_code: z.string().min(1),
-  user_code: z.string().min(1),
-  verification_uri: z.string().min(1),
-  verification_uri_complete: z.string().min(1).nullish(),
-  expires_in: z.coerce.number().positive().nullish().catch(undefined),
-  interval: z.coerce.number().positive().nullish().catch(undefined),
+export const XaiDeviceCodeSchema = Schema.Struct({
+  device_code: Schema.String.check(Schema.isMinLength(1)),
+  user_code: Schema.String.check(Schema.isMinLength(1)),
+  verification_uri: Schema.String.check(Schema.isMinLength(1)),
+  verification_uri_complete: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  expires_in: Schema.optional(
+    Schema.NullOr(
+      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
+        Schema.isGreaterThan(0),
+      ),
+    ),
+  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
+  interval: Schema.optional(
+    Schema.NullOr(
+      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
+        Schema.isGreaterThan(0),
+      ),
+    ),
+  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
 });
 
 // JWT claim extraction. We never verify the signature (the token came from the
@@ -138,22 +162,30 @@ export const XaiDeviceCodeSchema = z.object({
 // proactive refresh (`exp`) — never as an authorization decision on their own.
 
 /** Account identity distilled from a JWT (any field may be absent). */
-interface XaiJwtClaims {
-  email?: string;
+const XaiJwtClaimsSchema = Schema.Struct({
+  email: Schema.optional(Schema.String),
   /** Absolute expiry (ms since epoch) when the JWT carries `exp`. */
-  expiresAtMs?: number;
-}
+  expiresAtMs: Schema.optional(Schema.Number),
+});
+type XaiJwtClaims = typeof XaiJwtClaimsSchema.Type;
 
-const XaiJwtClaimsSchema = z
-  .object({
-    email: NonEmptyJwtClaim,
-    preferred_username: NonEmptyJwtClaim,
-    exp: z.number().finite().optional().catch(undefined),
-  })
-  .transform((claims): XaiJwtClaims => ({
-    email: claims.email ?? claims.preferred_username,
-    expiresAtMs: claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000,
-  }));
+/** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
+const XaiJwtPayloadSchema = Schema.Struct({
+  email: NonEmptyJwtClaim,
+  preferred_username: NonEmptyJwtClaim,
+  exp: Schema.optional(Schema.Finite).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
+}).pipe(
+  Schema.decodeTo(XaiJwtClaimsSchema, {
+    decode: SchemaGetter.transform((claims) => ({
+      email: claims.email ?? claims.preferred_username,
+      expiresAtMs:
+        claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000,
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
+);
 
 const EMPTY_CLAIMS: XaiJwtClaims = {};
 
@@ -162,7 +194,7 @@ const EMPTY_CLAIMS: XaiJwtClaims = {};
  * claims on any structural error; never throws.
  */
 function decodeXaiJwtClaims(token: string): XaiJwtClaims {
-  return decodeJwtClaimsWithSchema(token, XaiJwtClaimsSchema, EMPTY_CLAIMS);
+  return decodeJwtClaimsWithSchema(token, XaiJwtPayloadSchema, EMPTY_CLAIMS);
 }
 
 /**

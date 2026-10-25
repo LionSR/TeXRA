@@ -1,5 +1,5 @@
 // Third-party imports
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
@@ -120,7 +120,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ...SETTINGS_TAB_COMMAND_HANDLERS,
   // An optional target (`'models/keys'`) lets a caller land on one section.
   'texra.showDashboard': definedHandler(
-    z.tuple([SettingsTargetSchema.optional()]),
+    Schema.Tuple([Schema.optional(SettingsTargetSchema)]),
     (actions: ExtensionCommandActions, target?: SettingsTarget) =>
       actions.showSettings(target),
   ),
@@ -137,7 +137,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
     actions.downloadArXivSource(),
   'texra.openProgressViewInTab': (actions) => actions.openProgressViewInTab(),
   'texra.openDoc': definedHandler(
-    z.tuple([z.string()]),
+    Schema.Tuple([Schema.String]),
     (actions: ExtensionCommandActions, page) => actions.openDoc(page),
   ),
   'texra.indentCurrentTeX': (actions) => actions.indentCurrentTeX(),
@@ -148,17 +148,21 @@ export const EXTENSION_COMMAND_HANDLERS = {
     actions.cloneOverleafProject(),
   'texra.removeApiKey': (actions) => actions.removeApiKey(),
   'texra.showProgressView': definedHandler(
-    z.tuple([z.strictObject({ inPlace: z.boolean().optional() }).optional()]),
+    Schema.Tuple([
+      Schema.optional(
+        Schema.Struct({ inPlace: Schema.optional(Schema.Boolean) }),
+      ),
+    ]),
     (actions: ExtensionCommandActions, options?: { inPlace?: boolean }) =>
       actions.showProgressView(options?.inPlace ?? false),
   ),
   'texra.setApiKey': definedHandler(
-    z.tuple([z.enum(API_KEY_PROVIDER_IDS).optional()]),
+    Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
     (actions: ExtensionCommandActions, provider?: ApiKeyProviderId) =>
       actions.setApiKey(provider),
   ),
   'texra.execute': definedHandler(
-    z.tuple([z.unknown().optional()]),
+    Schema.Tuple([Schema.optional(Schema.Unknown)]),
     (actions: ExtensionCommandActions, input?: unknown) =>
       actions.execute(input),
   ),

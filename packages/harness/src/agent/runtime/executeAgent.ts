@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Data, Deferred, Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Schema } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -9,6 +9,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   isTaskConfig,
+  RunIdSchema,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
@@ -42,9 +43,12 @@ import type { RunHandle } from './RunHandle';
 const CHANNEL = 'executeAgent';
 
 /** A claimed run no longer has the persisted state to resume. */
-export class ResumeSessionUnavailableError extends Data.TaggedError(
+export class ResumeSessionUnavailableError extends Schema.TaggedError<ResumeSessionUnavailableError>()(
   'ResumeSessionUnavailableError',
-)<{ readonly runId: RunId }> {
+  {
+    runId: RunIdSchema,
+  },
+) {
   override get message(): string {
     return 'This session can no longer be resumed. Start a new run instead.';
   }

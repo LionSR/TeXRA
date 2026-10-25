@@ -4,7 +4,7 @@
  * through the run's one writer so a resume reuses it instead of running the
  * hook again (`2026-09-28-code-plugins-hooks-v1.md`).
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 /** The hook events the harness runs in v1; the protocol module parses the
  *  rest of the reference's events and ignores them. */
@@ -16,13 +16,13 @@ export const SUPPORTED_HOOK_EVENTS = [
   'Stop',
   'SubagentStop',
 ] as const;
-const HookEventSchema = z.enum(SUPPORTED_HOOK_EVENTS);
-export type HookEvent = z.infer<typeof HookEventSchema>;
+const HookEventSchema = Schema.Literals(SUPPORTED_HOOK_EVENTS);
+export type HookEvent = typeof HookEventSchema.Type;
 
 /** How a hook invocation ended: `blocked` is exit code 2, `failed` any other
  *  non-zero exit whose output did not decide, `malformed` output that failed
  *  to parse or validate, `unstartable` a process that never ran. */
-const HookStatusSchema = z.enum([
+const HookStatusSchema = Schema.Literals([
   'ok',
   'blocked',
   'failed',
@@ -30,32 +30,32 @@ const HookStatusSchema = z.enum([
   'malformed',
   'unstartable',
 ]);
-export type HookStatus = z.infer<typeof HookStatusSchema>;
+export type HookStatus = typeof HookStatusSchema.Type;
 
-export const HookOutcomePayloadSchema = z.strictObject({
+export const HookOutcomePayloadSchema = Schema.Struct({
   /** The site the hook ran at (`PreToolUse:<call id>`, `Stop:<turn>`, …):
    *  every hook of one point commits in one batch, and a recorded point is
    *  never run again. */
-  point: z.string().min(1),
+  point: Schema.String.check(Schema.isMinLength(1)),
   event: HookEventSchema,
   /** The contributing installed plugin's id (`plugin:<name>`). */
-  plugin: z.string().min(1),
+  plugin: Schema.String.check(Schema.isMinLength(1)),
   /** The handler's position in the plugin's hook configuration. */
-  hook: z.string().min(1),
-  durationMs: z.int().nonnegative(),
+  hook: Schema.String.check(Schema.isMinLength(1)),
+  durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   status: HookStatusSchema,
-  exitCode: z.int().nullable(),
+  exitCode: Schema.NullOr(Schema.Int),
   /** A `PreToolUse` denial's reason, as the model reads it. */
-  deny: z.string().nullable(),
+  deny: Schema.NullOr(Schema.String),
   /** Text the model reads beside the prompt or the tool result; for a
    *  stop, the instruction its block continues the run with. */
-  context: z.string().nullable(),
+  context: Schema.NullOr(Schema.String),
   /** What the hook asked for that v1 parses and does not act on. */
-  ignored: z.array(z.string()).readonly(),
+  ignored: Schema.Array(Schema.String),
   /** The start of stderr, on a failure only. */
-  stderr: z.string().nullable(),
+  stderr: Schema.NullOr(Schema.String),
 });
-export type HookOutcomePayload = z.infer<typeof HookOutcomePayloadSchema>;
+export type HookOutcomePayload = typeof HookOutcomePayloadSchema.Type;
 
 /** A run's recorded hook outcomes by point, in commit order. */
 export type HookOutcomes = Readonly<

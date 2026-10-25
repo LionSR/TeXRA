@@ -5,6 +5,7 @@
 // `SessionView` the view test asserts on and the design harness renders, so
 // the two can never drift.
 
+import { Schema } from 'effect';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   qualifyAggregateId,
@@ -29,10 +30,10 @@ import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 /** A process identity, never a lease token. */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
-export const ROOT = RunIdSchema.parse('aaaaaaaaaaaa');
-export const CHILD = RunIdSchema.parse('bbbbbbbbbbbb');
-export const GRANDCHILD = RunIdSchema.parse('dddddddddddd');
-export const PROCESS = RunIdSchema.parse('cccccccccccc');
+export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
+export const CHILD = Schema.decodeUnknownSync(RunIdSchema)('bbbbbbbbbbbb');
+export const GRANDCHILD = Schema.decodeUnknownSync(RunIdSchema)('dddddddddddd');
+export const PROCESS = Schema.decodeUnknownSync(RunIdSchema)('cccccccccccc');
 
 /** The board's clock: what a host passes as `nowMs` to read elapsed. Every
  *  fixture timestamp is anchored to it so the harness reads minutes. */
@@ -204,7 +205,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
-    config: AgentConfigSchema.parse({
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
       model: 'claude-sonnet-4-5',
       instruction: 'review the draft',
       agent: 'review',
@@ -238,7 +239,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
-    config: AgentConfigSchema.parse({
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
       model: 'claude-sonnet-4-5',
       instruction: 'search',
     }),
@@ -341,7 +342,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',
-    config: AgentConfigSchema.parse({
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
       model: 'unused',
       instruction: 'npm test',
     }),

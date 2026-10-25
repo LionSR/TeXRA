@@ -46,8 +46,8 @@ const JSON_OPERATOR = /\w\s*->>?\s*'/;
 const SQL_WORD = /\b(?:SELECT|INSERT|UPDATE|DELETE|WHERE|CREATE)\b/;
 /** A stored `type.version` string of any row kind. */
 const STORED_TYPE = new RegExp(
-  `(?:^|[^\\w.])(?:${SessionEventDraftSchema.options
-    .map((schema) => schema.shape.type.value.replaceAll('.', '\\.'))
+  `(?:^|[^\\w.])(?:${SessionEventDraftSchema.members
+    .map((schema) => schema.fields.type.literal.replaceAll('.', '\\.'))
     .join('|')})\\.\\d+(?![\\w.])`,
 );
 /** The event's version column, selected or compared. */

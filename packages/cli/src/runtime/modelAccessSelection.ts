@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
@@ -38,14 +38,15 @@ interface CliModelAccessSelectionResult {
  * three members are the session read and the two preference writes, and both
  * writes go through the same settings store every host shares.
  */
-class ModelAccessPreferenceFailed extends Data.TaggedError(
+class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferenceFailed>()(
   'ModelAccessPreferenceFailed',
-)<{
-  readonly member: 'setPreferSubscription' | 'setEnabled';
-  readonly subscription: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    member: Schema.Literals(['setPreferSubscription', 'setEnabled']),
+    subscription: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /**
  * A program: each coding plan's key status is a credential read that types its

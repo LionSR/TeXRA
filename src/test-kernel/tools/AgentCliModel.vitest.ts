@@ -2,7 +2,7 @@
 // each CLI accepts, the settings' defaults, and what the reasoning policy
 // sends (default, @effort suffix, snapping, and the Codex CLI's own ceiling).
 import { describe, expect, it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import { ReasoningEffort } from 'llm-zoo';
 
 import { modelConfig } from '@texra-ai/llm';
@@ -28,11 +28,13 @@ import { makeFakeSettingsStores } from '../support/settingsStoresFake';
 
 const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
-const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
+// The setting's schema is the model list with its default applied; `to` is
+// the list itself.
+const CodexModelSchema = CODEX_MODEL_SETTING.schema.to;
 
 describe('agent CLI model settings', () => {
   it('offers every current Anthropic model, and only those, to Claude Code', () => {
-    const options = ClaudeAgentModelSchema.options;
+    const options = ClaudeAgentModelSchema.literals;
     expect(options).toContain(CLAUDE_AGENT_DEFAULT_MODEL);
     expect(options.length).toBe(CLAUDE_AGENT_MODEL_SETTING.enumLabels.length);
     for (const ref of options) {
@@ -43,7 +45,7 @@ describe('agent CLI model settings', () => {
   });
 
   it('offers current Codex-served models, with the default among them', () => {
-    const options = CodexModelSchema.options;
+    const options = CodexModelSchema.literals;
     expect(options).toContain(CODEX_DEFAULT_MODEL);
     expect(options.length).toBe(CODEX_MODEL_SETTING.enumLabels.length);
     for (const ref of options) {
@@ -52,7 +54,11 @@ describe('agent CLI model settings', () => {
       expect(config?.deprecated).not.toBe(true);
     }
     expect(
-      CodexModelSchema.safeParse('anthropic/claude-sonnet-5-5').success,
+      Result.isSuccess(
+        Schema.decodeUnknownResult(CodexModelSchema)(
+          'anthropic/claude-sonnet-5-5',
+        ),
+      ),
     ).toBe(false);
   });
 });

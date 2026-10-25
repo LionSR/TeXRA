@@ -1,10 +1,9 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Schema } from 'effect';
 import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
-import { z } from 'zod';
 
 // Local imports
 import { jsonResponse } from '@test/support/fetchTestUtils';
@@ -15,14 +14,18 @@ import {
 } from '../../../packages/llm/src/oauth/formTokenClient.js';
 import { postOAuth } from '../../../packages/llm/src/oauth/oauthRequest.js';
 
-const TokenSchema = z.object({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1).nullish(),
-  id_token: z.string().min(1).nullish(),
-  expires_in: z.number(),
+const TokenSchema = Schema.Struct({
+  access_token: Schema.String.check(Schema.isMinLength(1)),
+  refresh_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  id_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  expires_in: Schema.Number,
 });
 
-const ENDPOINT: OAuthFormEndpoint<z.infer<typeof TokenSchema>> = {
+const ENDPOINT: OAuthFormEndpoint<typeof TokenSchema.Type> = {
   tokenUrl: 'https://example.test/token',
   clientId: 'client-1',
   tokenResponseSchema: TokenSchema,

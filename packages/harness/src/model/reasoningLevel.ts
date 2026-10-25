@@ -1,7 +1,5 @@
-import { Effect, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
-
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
@@ -37,13 +35,15 @@ export function reasoningEffortOverrides(state: StateStore) {
     const stored = yield* Settings.state(
       state,
       GlobalStateKey.REASONING_LEVELS,
-      z.record(z.string(), z.unknown()).prefault({}),
+      Schema.Record(Schema.String, Schema.Unknown).pipe(
+        Schema.withDecodingDefault(Effect.succeed({})),
+      ),
     );
     const overrides: Record<string, ReasoningEffort> = {};
     for (const [model, value] of Object.entries(stored)) {
-      const parsed = ReasoningEffortSchema.safeParse(value);
-      if (parsed.success) {
-        overrides[model] = parsed.data;
+      const parsed = Schema.decodeUnknownResult(ReasoningEffortSchema)(value);
+      if (Result.isSuccess(parsed)) {
+        overrides[model] = parsed.success;
         continue;
       }
       // A stored value outside llm-zoo's vocabulary cannot route a request, so
@@ -51,7 +51,7 @@ export function reasoningEffortOverrides(state: StateStore) {
       // dropping the entry silently.
       yield* Effect.logWarning(
         `Stored reasoning level ${JSON.stringify(value)} for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
-        parsed.error,
+        parsed.failure,
       );
     }
     return overrides;
@@ -85,7 +85,9 @@ export function servingBackend(
     case 'openrouter':
       return 'openRouter';
     default:
-      return ModelBackendSchema.safeParse(config.provider).data;
+      return Result.getOrUndefined(
+        Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
+      );
   }
 }
 

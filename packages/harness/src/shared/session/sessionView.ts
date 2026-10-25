@@ -9,7 +9,7 @@
  * is never here.
  */
 // `sessionPresentationBoundary.vitest.ts` pins the interaction-state names.
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
@@ -53,7 +53,11 @@ import type {
 } from './readonlyViews';
 
 /** Which session (paper) a view is of: the session's storage root. */
-const SessionKeySchema = z.string().min(1);
+const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
+
+/** The integer fields' shapes: `Count` from zero, `Positive` from one. */
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The updater
@@ -64,82 +68,87 @@ const SessionKeySchema = z.string().min(1);
  * the update that produced it returns. Row and block elements are the shared
  * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
-const TranscriptViewSchema = z.object({
+const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
-  rows: z.array(z.custom<TranscriptRow>()),
+  rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
   /** One group per stage: opened by `stage.start`, closed by `stage.end`. */
-  taskGroups: z.array(TaskGroupSchema),
+  taskGroups: Schema.Array(TaskGroupSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */
-  settledRows: z.int().nonnegative(),
+  settledRows: Count,
 });
-export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
+export type TranscriptView = typeof TranscriptViewSchema.Type;
 
 /** The section a run sorts into. Its labels and section order are one
  *  table in the app's `@ui/copy/runStatus`, not a per-host switch. */
-const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
+const RunGroupSchema = Schema.Literals([
+  'running',
+  'waiting',
+  'interrupted',
+  'recent',
+]);
 
-const RunViewSchema = z.object({
+const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
   /** Current sequence-row owner; null when unclaimed. */
-  ownerId: OwnerIdSchema.nullable(),
+  ownerId: Schema.NullOr(OwnerIdSchema),
   /** The current claim belongs to this process, independently of parentage. */
-  ownedHere: z.boolean(),
+  ownedHere: Schema.Boolean,
   /** The run identity's display name: agent, tool, or workflow name. */
-  label: z.string(),
+  label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
-  description: z.string().nullable(),
+  description: Schema.NullOr(Schema.String),
   /** Who wrote `description`: a user title outlives later model ones. */
-  descriptionBy: z.enum(['model', 'user']).nullable(),
+  descriptionBy: Schema.NullOr(Schema.Literals(['model', 'user'])),
   /** What every surface names the run by: `description`, else `label`. */
-  title: z.string(),
-  model: z.string().nullable(),
-  modelLabel: z.string().nullable(),
+  title: Schema.String,
+  model: Schema.NullOr(Schema.String),
+  modelLabel: Schema.NullOr(Schema.String),
   /** Full, untruncated command that spawned a process run. */
-  command: z.string().nullable(),
+  command: Schema.NullOr(Schema.String),
   /** The run's input files, from `run.config`. */
-  inputFiles: z.array(z.string()),
+  inputFiles: Schema.Array(Schema.String),
   /** Its `delegationAgentScope` (a team's agents); null: any visible one. */
-  agentScope: z.array(z.string()).nullish(),
+  agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
-  facts: z.record(z.string(), JsonValueSchema),
-  worktree: WorktreeInfoSchema.nullable(),
+  facts: Schema.Record(Schema.String, JsonValueSchema),
+  worktree: Schema.NullOr(WorktreeInfoSchema),
   /** The durable phase, from `run.activate` (running), `run.position`
    *  (`waiting` waits, any other step runs), `child.park` (an agent-CLI
    *  child's own wait row, which has no loop to step), and `run.end` (the
    *  outcome); `ready` before the first activation. An interrupted run
    *  keeps it and reads as interrupted through the copy; unavailability is
    *  `readOnly`, never a status. */
-  status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
+  status: Schema.Union([RunPhaseSchema, Schema.Literal(RUN_LIFECYCLE_READY)]),
   /** Derived from the activation's position: a first activation is
    *  starting, a later one resuming, cleared by the first step. Only a run
    *  whose loop steps carries one. */
-  substate: RunSubstateSchema.nullable(),
+  substate: Schema.NullOr(RunSubstateSchema),
   /** The outcome `run.end` wrote; null until the run ends, and again once a
    *  follow-up's `run.activate` restarts it. Lets a host paint an open group
    *  as interrupted and the session release the run's sidecar record. */
-  durableOutcome: RunOutcomeSchema.nullable(),
+  durableOutcome: Schema.NullOr(RunOutcomeSchema),
   /** What the run's banner says (`RunNoticeSchema`); null: nothing. */
-  statusNotice: RunNoticeSchema.nullable(),
+  statusNotice: Schema.NullOr(RunNoticeSchema),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */
-  lost: z.string().nullable(),
+  lost: Schema.NullOr(Schema.String),
   // One table (`runStatusDisplay`) keys both, through the status and
   // substate or the interrupted reading; `@ui/copy/runStatus` words the key.
-  statusKey: z.enum(RUN_STATUS_KEYS),
-  tone: z.enum(RUN_STATUS_TONE),
+  statusKey: Schema.Literals(RUN_STATUS_KEYS),
+  tone: Schema.Enum(RUN_STATUS_TONE),
   /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */
   createdAt: CommitOrdinalSchema,
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
-  launchedAt: z.int().positive(),
-  runStartedAt: z.int().positive().nullable(),
-  lastTimestamp: z.number(),
+  launchedAt: Positive,
+  runStartedAt: Schema.NullOr(Positive),
+  lastTimestamp: Schema.Number,
   conversationProgress: ConversationProgressSchema,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls, so no
@@ -147,43 +156,41 @@ const RunViewSchema = z.object({
    *  activation, and null for the whole life of a run with no loop of its
    *  own — an agent-CLI child waits through `child.park`, which carries a
    *  phase and no position. */
-  turn: z.int().nonnegative().nullable(),
+  turn: Schema.NullOr(Count),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
-  context: ContextStateDataSchema.nullable(),
-  parentId: RunIdSchema.nullable(),
+  context: Schema.NullOr(ContextStateDataSchema),
+  parentId: Schema.NullOr(RunIdSchema),
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
-  forkedFrom: z.object({ id: RunIdSchema, at: z.int().positive() }).nullable(),
+  forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
   /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
    *  `halted`): the settled point a whole-task fork cuts at; null before
    *  its first turn ends, when there is nothing to fork. */
-  forkPoint: z.int().positive().nullable(),
+  forkPoint: Schema.NullOr(Positive),
   /** The parent's tool card that launched this run (`run.start.parentCard`). */
-  parentCard: z.string().nullable(),
+  parentCard: Schema.NullOr(Schema.String),
   /** Root first. */
-  ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
+  ancestors: Schema.Array(
+    Schema.Struct({ id: RunIdSchema, label: Schema.String }),
+  ),
   /** `runOrdering` rule. */
-  childIds: z.array(RunIdSchema),
+  childIds: Schema.Array(RunIdSchema),
   /** Descendants by status: `running` counts the live ones (`isLiveRun`)
    *  still working a turn, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
-  rollup: z.object({
-    total: z.int().nonnegative(),
-    running: z.int().nonnegative(),
-    finished: z.int().nonnegative(),
-  }),
-  approval: z.enum(['none', 'own', 'descendant']),
+  rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
+  approval: Schema.Literals(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable. */
-  readOnly: z.boolean(),
+  readOnly: Schema.Boolean,
   /** What a resume of this run waits for here; null: nothing blocks it. */
-  resumeBlocked: ResumeBlockerSchema.nullable(),
+  resumeBlocked: Schema.NullOr(ResumeBlockerSchema),
   /** What a host may offer on the run now (`runActions`). */
-  actions: z.array(RunActionSchema).readonly(),
+  actions: Schema.Array(RunActionSchema),
   /** This run or a descendant needs the user; outranks the surface's
    *  collapsed choice. */
-  forceExpanded: z.boolean(),
+  forceExpanded: Schema.Boolean,
   group: RunGroupSchema,
   /** The run's metered total. A `usage` row is one priced turn and the view
    *  sums them; a cold listing read delivers the store's per-run sum as one
@@ -196,19 +203,19 @@ const RunViewSchema = z.object({
    *  card, status line), so no host sums a tree. */
   treeUsage: TokenUsageStatsSchema,
   /** The newest thinking row is still streaming. */
-  thinkingActive: z.boolean(),
+  thinkingActive: Schema.Boolean,
   /** A context compaction is in progress. */
-  compactingActive: z.boolean(),
+  compactingActive: Schema.Boolean,
   /** The run's latest line: a workflow run's newest operational summary,
    *  any other run's newest user instruction or settled model reply. */
-  latestLine: z.string().nullable(),
+  latestLine: Schema.NullOr(Schema.String),
   transcript: TranscriptViewSchema,
   /** A task's run: the key of the plugin block whose recipe it opened on
    *  (`script.block`); null otherwise. A task takes no messages. */
-  recipe: z.string().nullable(),
-  plan: PlanSchema.nullable(),
+  recipe: Schema.NullOr(Schema.String),
+  plan: Schema.NullOr(PlanSchema),
 });
-export type RunView = z.infer<typeof RunViewSchema>;
+export type RunView = typeof RunViewSchema.Type;
 
 /**
  * The one reading of "live" every host shares: a run somebody holds that has
@@ -300,25 +307,24 @@ export function requestAnswerability(
 
 /** A pending request: which run asks and the payload the UI shows. The list
  *  is a set keyed by `requestId`: opened without decided. */
-const PendingRequestSchema = z.object({
+const PendingRequestSchema = Schema.Struct({
   runId: RunIdSchema,
-  requestId: z.string(),
+  requestId: Schema.String,
   payload: PermissionPayloadSchema,
 });
 
-/** A queued follow-up as a composer lists it (`displayText`, else `text`).
- *  Per run a set keyed by `followUpId`: queued, unconsumed, in order. */
-const QueuedFollowUpViewSchema = z.object({
-  followUpId: z.string(),
-  text: z.string(),
-});
+/** A run's queued follow-ups as a composer lists them (`displayText`, else
+ *  `text`): a set keyed by `followUpId`, queued, unconsumed, in order. */
+const QueuedFollowUpsSchema = Schema.Array(
+  Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
+);
 
 /** One session's view at one moment: its runs, requests and grants. */
-export const SessionViewSchema = z.object({
+export const SessionViewSchema = Schema.Struct({
   key: SessionKeySchema,
-  runs: z.map(RunIdSchema, RunViewSchema),
+  runs: Schema.ReadonlyMap(RunIdSchema, RunViewSchema),
   /** Top-level ids, `runOrdering` rule. */
-  order: z.array(RunIdSchema),
+  order: Schema.Array(RunIdSchema),
   /** The drained tail position, including rows no longer materialized.
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
@@ -328,25 +334,21 @@ export const SessionViewSchema = z.object({
    * view uses the replay's value, so a settings flip takes effect on the
    * next replay, not mid-batch.
    */
-  debug: z.boolean(),
+  debug: Schema.Boolean,
   /** One entry per subscribed aggregate: the highest seq its transcript has
    *  applied (the subscription's `fromSeq` until a row is applied). Created
    *  when the aggregate enters the subscription set, deleted with its
    *  transcript when it leaves; never a commit ordinal. */
-  transcriptSeq: z.map(AggregateIdSchema, z.int().nonnegative()),
+  transcriptSeq: Schema.ReadonlyMap(AggregateIdSchema, Count),
   /** Paper-level aggregate; a rail badge reads it and derives nothing. */
-  rollup: z.object({
-    running: z.int().nonnegative(),
-    waiting: z.int().nonnegative(),
-    interrupted: z.int().nonnegative(),
-  }),
-  requests: z.array(PendingRequestSchema),
+  rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
+  requests: Schema.Array(PendingRequestSchema),
   /** Latest snapshot per run. */
-  policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
-  pluginFacts: z.array(PluginFactDraftSchema),
-  queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
+  policy: Schema.ReadonlyMap(RunIdSchema, ApprovalPolicySnapshotSchema),
+  pluginFacts: Schema.Array(PluginFactDraftSchema),
+  queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
-export type SessionView = z.infer<typeof SessionViewSchema>;
+export type SessionView = typeof SessionViewSchema.Type;
 
 /** What wants this window: the requests it can answer, in view order (the
  *  badge), and those `previous` could not (none without it: history). */
@@ -380,9 +382,7 @@ export function attentionOf<View extends ReadSessionView>(
 ): Attention<View['requests'][number]> {
   const requests = answerableRequests(view);
   if (previous === undefined) return { requests, arrived: [] };
-  const known = new Set(
-    answerableRequests(previous).map((request) => request.requestId),
-  );
+  const known = new Set(answerableRequests(previous).map((r) => r.requestId));
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),

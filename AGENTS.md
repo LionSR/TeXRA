@@ -239,45 +239,129 @@ code or a historical format is retired, delete tests and fixtures that exist
 only for that retired behavior instead of rewriting them around the new
 implementation.
 
-### Zod v4 Schema Patterns
+### Effect Schema Patterns
 
-This project uses Zod v4. Follow these idiomatic patterns:
+Schemas are Effect Schema (`import { Schema } from 'effect'`, effect 4.x).
+Zod is not used; the owner ruled the move on 2026-10-24 (rulings ledger,
+"Schemas are Effect Schema").
 
 **Schemas as the single source of truth**
 
-- Define schemas first, then derive TypeScript types using `z.infer<typeof Schema>`
-- Use schema composition (`.extend()`, `.pick()`) instead of duplicating field definitions
-- Avoid `z.custom<T>()` when a proper schema exists; prefer `z.discriminatedUnion()` for union types
-- Co-locate types with schemas in the same file for maintainability
-- Add compile-time assertions (using `satisfies`) when schemas must stay synchronized with external types
+- Define the schema, then the type from it: `type X = typeof XSchema.Type`
+  (the decoded form) and `typeof XSchema.Encoded` (the stored or wire form).
+- Compose instead of repeating fields: `S.mapFields(Struct.assign({...}))`,
+  `S.mapFields(Struct.pick([...]))`, `Struct.omit`, `...S.fields` in a new
+  `Schema.Struct`. A union of structs is `Schema.Union([...])`; its members
+  discriminate on their literal fields (`kind: Schema.Literal('x')`), and
+  `Schema.TaggedUnion` is for `_tag` unions.
+- A schema's type crosses a function boundary as `Schema.Codec<T, unknown>`
+  when the schema decodes unknown input (a record's `schema:` field, a tool's
+  input, a stored or wire shape: its encoded form is not `T` once a field
+  has a default, a brand or a transformation), as `Schema.Codec<T>` only
+  when encoded and decoded forms are the same, and as a generic
+  `<S extends Schema.Top>` when the caller's type is wanted back. Never
+  `Schema.Top` for a value a caller decodes with: it has unknown decoding
+  services, so the decode functions reject it.
+- `Schema.declare<T>(guard)` only for an external SDK type a schema cannot
+  state, with the reason in a comment.
+- Decode with `Schema.decodeUnknownEffect(S)` inside Effect code (the error
+  channel is `SchemaError`), `Schema.decodeUnknownResult(S)` at a sync
+  boundary that handles the failure, `Schema.decodeUnknownSync(S)` where a
+  failure is a defect. The failure's `message` is the rendered issue tree;
+  there is no separate pretty-printer. Encode with the matching `encode*`.
 
 **Type and validation idioms**
 
-- `z.int()`, `z.uuid()`, `z.iso.datetime()`, `z.enum(MyEnum)`, `z.looseObject({...})`; `z.strictObject({...})` for tool input schemas, except discriminated-union branches (see "Tool input schemas")
-- `.describe('...')` on tool schema fields; `.nullable()` is distinct from `.nullish()` (null or undefined)
-- `.custom<T>()` only for external SDK types, with an explanatory comment
+- Primitives: `Schema.String`, `Schema.Number`, `Schema.Int`, `Schema.Finite`,
+  `Schema.Boolean`, `Schema.Literal('a')`, `Schema.Literals(['a', 'b'])`,
+  `Schema.Enum(CONST_OBJECT)` for a `{ KEY: 'value' } as const` table.
+- Checks are `.check(...)` with the built-in predicates: `Schema.isMinLength(n)`,
+  `Schema.isMaxLength(n)`, `Schema.isPattern(re)`, `Schema.isGreaterThan(n)`,
+  `Schema.isBetween({ minimum, maximum })` (an options object, not two
+  arguments), `Schema.isUUID()`, …; a custom one is
+  `Schema.makeFilter(predicate, { message })`. `makeFilter` calls the
+  predicate as `(input, ast, options)`, so a function with its own optional
+  parameters is wrapped: `(v) => pred(v)`. A filter either returns a boolean
+  and carries `{ message }`, or returns its own issues (a string, or
+  `{ path, issue }` records; an empty array is success) and carries no
+  `message`: an annotation message replaces whatever the predicate returned.
+- A subset of a `Schema.Literals` is `Lit.pick(['a', 'b'])`, not a second
+  list. A string-keyed JSON object is `Schema.JsonObject`; any JSON value is
+  `Schema.Json`.
+- `Schema.optional(S)` is absent or `undefined`; `Schema.optionalKey(S)` is
+  absent only; `Schema.NullOr(S)` is `S | null`; `Schema.optional(Schema.NullOr(S))`
+  is the tool-input form (below).
+- Describe a field for the model or a settings page with
+  `.annotate({ description: '...' })`; `Schema.resolveAnnotations(S)` reads it.
+- A struct ignores keys it does not declare. A shape that must refuse them
+  (the former `strictObject`: a security check, a metadata guard) decodes
+  with `{ onExcessProperty: 'error' }` at the one site that needs the
+  refusal, or carries a filter that names the forbidden key; a shape that
+  must keep them is
+  `Schema.StructWithRest(Schema.Struct({...}), [Schema.Record(Schema.String, Schema.Unknown)])`.
+- A transformation is `S.pipe(Schema.decodeTo(Target, { decode, encode }))`
+  with `SchemaGetter.transform` on each side; a decode-only transformation
+  names `SchemaGetter.forbidden` as its encode and is allowed only at a
+  provider boundary, never on a persisted or wire shape.
+  `SchemaGetter.transform` maps a present value only: a decoder that fills
+  an absent key (`?? fallback`) is `SchemaGetter.transformOptional`, and a
+  transformation that can fail is `transformEffect` /
+  `transformOptionalEffect` returning
+  `Effect.fail(new SchemaIssue.InvalidValue({ message }, input))`. An
+  `.annotate({ description })` on a `decodeTo` or `withDecodingDefault`
+  result lands on the decoded side and never reaches the JSON Schema;
+  annotate the encoded layer (`Schema.optional(...)`) before piping.
+- Reading a schema back: `S.fields` (Struct), `S.members` (Union),
+  `S.literals` (Literals), `S.literal` (Literal), `S.key` / `S.value`
+  (Record), `S.from` / `S.to` (a `decodeTo`), `S.ast` for anything else;
+  `Schema.is(S)` is the type guard and `Schema.isSchema(u)` tells a schema
+  from a value.
+- Errors are `Schema.TaggedError` classes with schema fields; a wrapped cause
+  is `cause: Schema.Defect()` (or the cause's own error schema). They are
+  yieldable, carry `Error.cause`, and cross the RPC edge as themselves.
 
 **Default values**
 
-- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented absent-input defaults
-- `.default(val)` - Returns a valid output default for `undefined` without parsing that default
-- `.catch(val)` - Substitutes after a validation error; use only where malformed present data may be discarded by policy
+- `S.pipe(Schema.withDecodingDefault(Effect.succeed(v)))` substitutes for an
+  absent or `undefined` field BEFORE decoding runs on it (the stored form);
+  use for documented absent-input defaults.
+- `S.pipe(Schema.withDecodingDefaultType(Effect.succeed(v)))` fills an absent
+  or `undefined` field with a decoded value, not decoded again.
+- `S.pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(v))))`
+  substitutes after a decoding failure; use only where malformed present
+  data may be discarded by policy.
 
 Preserve the distinction between absent and invalid present data. In security,
-accounting, lifecycle, and durable-state schemas, use `.prefault(...)` only for
-documented absent fields with explicit product or compatibility meaning, and let
-malformed present values fail validation. Do not use `.catch(...)` to turn
-corruption or contract drift into an ordinary default.
-An absent required field is also a validation error, so `.catch(...)` replaces
-missing required data as well as invalid present data.
+accounting, lifecycle, and durable-state schemas, use a decoding default only
+for documented absent fields with explicit product meaning, and let malformed
+present values fail. Do not use `catchDecoding` to turn corruption or contract
+drift into an ordinary default. An absent required field is also a decoding
+failure, so `catchDecoding` replaces missing required data as well as invalid
+present data.
 
-Examples: `.prefault(0)` / `.prefault([])` when loading saved state; `.catch('comfortable')` on a non-authoritative view-state field, or `Schema.catch(DEFAULT).parse(data)` for an all-or-nothing view-state fallback (never `safeParse` plus a ternary).
+Examples: a decoding default of `0` or `[]` when loading saved state;
+`catchDecoding` on a non-authoritative view-state field, or on the whole
+view-state schema for an all-or-nothing fallback (never a `Result` check plus a
+ternary).
 
-**Null handling from databases**: accept null with `z.string().nullish()` and normalize to undefined.
+**Null handling from databases**: accept null with
+`Schema.optional(Schema.NullOr(Schema.String))` and normalize to undefined.
 
 **Tool input schemas (IMPORTANT)**
 
-Use `.nullish()` instead of `.optional()` for optional fields in tool input schemas (`z.strictObject({ required: z.string(), optional: z.string().nullish() })`). OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require optional fields to also be nullable for structured output compatibility. Check for missing optional values with `== null` (not `=== undefined`), and coalesce with `?? undefined` when passing a nullish tool value to a function expecting `T | undefined`.
+An optional tool-input field is `Schema.optional(Schema.NullOr(S))`, not
+`Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require
+optional fields to also be nullable for structured output. Check for a missing
+value with `== null` (not `=== undefined`), and coalesce with `?? undefined`
+when passing it to a function expecting `T | undefined`. A tool-input number
+is `Schema.Finite` or `Schema.Int`, never `Schema.Number`: the JSON Schema
+for `Schema.Number` is an `anyOf` that admits the strings `"Infinity"` and
+`"NaN"` and loses the field's checks. The model's JSON Schema comes from
+`Schema.toJsonSchemaDocument` through
+`packages/harness/src/agent/core/tools/toolSchema.ts`, which flattens a
+top-level union, drops the `additionalProperties: true` and duplicate null
+members Effect emits, and strips the dialect URI for the providers. Decode a
+tool's input with `{ errors: 'all' }` so the model sees every issue at once.
 
 Union branches, `nullishWithDefault`, and designing for the model's first call:
 `packages/harness/AGENTS.md` "Tool input schemas".

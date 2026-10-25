@@ -1,7 +1,6 @@
 // Node and third-party imports
 import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
-import { z } from 'zod';
 
 // Local imports
 import { Runs } from '@agent/runtime/runRegistry';
@@ -44,95 +43,20 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/definition';
-import { nullishWithDefault } from '../core/inputSchema';
+import {
+  LISTING_DEFAULT_LIMIT,
+  LISTING_DEFAULT_OFFSET,
+  MemoryToolInputSchema,
+  type MemoryToolInput,
+} from './memoryInput';
 import {
   formatFileView,
   formatLinesWithNumbers,
   formatPaginationHint,
   paginateToolListing,
-  ViewRangeSchema,
 } from '../formatting';
 
 const CHANNEL = 'MemoryTool';
-
-const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
-
-// The directory-listing pagination window, stated once: the schema defaults,
-// the advertised descriptions and the tool description all read these.
-const LISTING_DEFAULT_OFFSET = 0;
-const LISTING_DEFAULT_LIMIT = 100;
-const LISTING_MAX_LIMIT = 200;
-
-const MemoryToolInputSchema = z.discriminatedUnion('command', [
-  z.looseObject({
-    command: z.literal('view'),
-    path: z
-      .string()
-      .nullish()
-      .describe(
-        `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
-      ),
-    view_range: ViewRangeSchema.nullish(),
-    /** Zero-based offset for paginating directory listings (path points to a directory). */
-    offset: nullishWithDefault(z.int().min(0), LISTING_DEFAULT_OFFSET).describe(
-      `Zero-based offset into the directory listing. Use with limit for pagination. Default: ${LISTING_DEFAULT_OFFSET}.`,
-    ),
-    /** Maximum entries to return from a directory listing (path points to a directory). */
-    limit: nullishWithDefault(
-      z.int().min(1).max(LISTING_MAX_LIMIT),
-      LISTING_DEFAULT_LIMIT,
-    ).describe(
-      `Max entries to return from directory listing. Default: ${LISTING_DEFAULT_LIMIT}, max: ${LISTING_MAX_LIMIT}.`,
-    ),
-  }),
-  z.looseObject({
-    command: z.literal('create'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    file_text: z.string(),
-  }),
-  z.looseObject({
-    command: z.literal('str_replace'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    old_str: z.string(),
-    new_str: z.string(),
-  }),
-  // Built here, not passed as a shape: the branch carries a cross-field check.
-  z
-    .looseObject({
-      command: z.literal('insert'),
-      path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-      insert_line: z.int().min(0),
-      insert_text: z
-        .string()
-        .nullish()
-        .describe('Text to insert. Aliased by `new_str` if omitted.'),
-      new_str: z.string().nullish(),
-    })
-    .refine((data) => data.insert_text != null || data.new_str != null, {
-      message: 'insert_text is required for command="insert".',
-      path: ['insert_text'],
-    }),
-  z.looseObject({
-    command: z.literal('delete'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('rename'),
-    old_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    new_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('pin'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z.literal('unpin'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-]);
-
-/** Derived from MemoryToolInputSchema - single source of truth */
-type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };
@@ -303,7 +227,7 @@ const requireEditableFile = Effect.fn('MemoryTool.requireEditableFile')(
 
 const view = Effect.fn('MemoryTool.view')(function* (
   loc: MemoryLocation,
-  viewRange: [number, number] | undefined,
+  viewRange: readonly [number, number] | undefined,
   offset: number,
   limit: number,
 ) {

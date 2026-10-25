@@ -2,8 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
-import { z } from 'zod';
+import { Effect, Result, Schema, Stream } from 'effect';
 import { OpenRouterCore } from '@openrouter/sdk/core';
 import { chatSend } from '@openrouter/sdk/funcs/chatSend';
 import { HTTPClient } from '@openrouter/sdk/lib/http';
@@ -14,7 +13,7 @@ import { SDKValidationError } from '@openrouter/sdk/models/errors/sdkvalidatione
 // Local imports - canonical model contract
 import { assembleTurn } from './assembleTurn.js';
 import {
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   ResolvedTurnSchema,
   type Model,
   type OpenRouterConfiguration,
@@ -62,9 +61,9 @@ const FINISH = {
 } as const;
 
 /** An HTTP rejection body, read from the raw text the SDK kept. */
-const ErrorSchema = z.looseObject({
-  code: z.union([z.string(), z.number()]).optional(),
-  message: z.string(),
+const ErrorSchema = Schema.Struct({
+  code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
+  message: Schema.String,
 });
 
 /** One SDK reasoning detail as canonical evidence; an unknown one is malformed. */
@@ -572,7 +571,7 @@ export function openrouterChatModel(
   configuration: OpenRouterConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = ModelConfigurationSchema.parse(configuration);
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'openrouter-chat')
     throw new ModelError({
       kind: 'unsupported',
@@ -596,7 +595,7 @@ export function openrouterChatModel(
           message:
             'OpenRouter does not support these authored operation or provider controls.',
         });
-      const prepared = ResolvedTurnSchema.safeParse({
+      const prepared = Schema.decodeUnknownResult(ResolvedTurnSchema)({
         ...origin,
         mode: 'foreground',
         system: authored.system,
@@ -611,14 +610,15 @@ export function openrouterChatModel(
           toolChoice: authored.toolChoice ?? 'auto',
         },
       });
-      if (!prepared.success || prepared.data.protocol !== 'openrouter-chat')
+      const resolved = Result.getOrUndefined(prepared);
+      if (resolved?.protocol !== 'openrouter-chat')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'OpenRouter cannot prepare these controls.',
-          cause: prepared.error,
+          cause: Result.isFailure(prepared) ? prepared.failure : undefined,
         });
-      yield* requestBody(prepared.data, config);
-      return prepared.data;
+      yield* requestBody(resolved, config);
+      return resolved;
     },
   );
 
@@ -632,10 +632,10 @@ export function openrouterChatModel(
           requestId,
           model: config.requestedModel,
         });
-      // The SDK's parse of one streamed event throws a ZodError; anything else
-      // a body read raises is the connection.
+      // A malformed event throws the SDK's own ZodError, matched by name since
+      // this package imports no Zod; any other read failure is the connection.
       const streamFailure = (cause: unknown) =>
-        cause instanceof z.ZodError
+        cause instanceof Error && cause.name === 'ZodError'
           ? new ModelError({
               kind: 'malformed-output',
               message:
@@ -689,11 +689,11 @@ export function openrouterChatModel(
             }),
           );
           const payload = hasErrorField(raw) ? raw.error : raw;
-          const parsed = ErrorSchema.safeParse(payload);
-          return yield* parsed.success
+          const parsed = Schema.decodeUnknownResult(ErrorSchema)(payload);
+          return yield* Result.isSuccess(parsed)
             ? enrichModelError(rejection, {
-                kind: authOrRejectionKind(status, parsed.data.code),
-                message: parsed.data.message,
+                kind: authOrRejectionKind(status, parsed.success.code),
+                message: parsed.success.message,
                 cause: payload,
               })
             : enrichModelError(rejection, {
@@ -753,7 +753,6 @@ export function openrouterChatModel(
             });
           reader = result.value.getReader();
           const body = reader;
-
           const wire = chatWire(responseId);
           return assembleTurn(
             Stream.concat(

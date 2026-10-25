@@ -24,7 +24,7 @@
  */
 
 // Third-party imports
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 import {
   InstalledPluginSchema,
@@ -38,9 +38,9 @@ import {
  * appended by the NDJSON sink. Declared here so the wire shape of a line is
  * this stamp over one member of the `kind` union below.
  */
-const CliNdjsonLineStampSchema = z.object({
-  contract: z.literal(2),
-  ts: z.string(),
+const CliNdjsonLineStampSchema = Schema.Struct({
+  contract: Schema.Literal(2),
+  ts: Schema.String,
 });
 
 /**
@@ -51,22 +51,19 @@ const CliNdjsonLineStampSchema = z.object({
  * `CliRunStatus` is the only renamed vocabulary.
  */
 export const CLI_NDJSON_CONTRACT =
-  CliNdjsonLineStampSchema.shape.contract.value;
+  CliNdjsonLineStampSchema.fields.contract.literal;
 
 /** A payload field carried verbatim from the command (already shaped upstream). */
-const payload = z.unknown();
+const payload = Schema.Unknown;
 
 /**
  * An installed plugin as a run result names it: where it came from and, for
  * a fetched plugin, the commit it is pinned to.
  */
-const CliPluginPinSchema = InstalledPluginSchema.pick({
-  name: true,
-  source: true,
-  ref: true,
-  commit: true,
-});
-export type CliPluginPin = z.infer<typeof CliPluginPinSchema>;
+const CliPluginPinSchema = InstalledPluginSchema.mapFields(
+  Struct.pick(['name', 'source', 'ref', 'commit']),
+);
+export type CliPluginPin = typeof CliPluginPinSchema.Type;
 
 /**
  * The provenance an agent run's result carries beside its own fields: the
@@ -74,54 +71,156 @@ export type CliPluginPin = z.infer<typeof CliPluginPinSchema>;
  * not a run's; the tools each step offered are the run's `tools.offered`
  * rows.
  */
-const runResultPayload = z.looseObject({
-  plugins: z.array(CliPluginPinSchema).readonly().optional(),
-});
+const runResultPayload = Schema.StructWithRest(
+  Schema.Struct({
+    plugins: Schema.optional(Schema.Array(CliPluginPinSchema)),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
 
-const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
-  z.looseObject({ kind: z.literal('agent'), agent: payload }),
-  z.looseObject({ kind: z.literal('agent-copy'), copy: payload }),
-  z.looseObject({ kind: z.literal('workspace-agents'), agents: payload }),
-  z.looseObject({ kind: z.literal('config'), config: payload }),
-  z.looseObject({ kind: z.literal('version'), version: z.string() }),
-  z.looseObject({ kind: z.literal('service'), service: payload }),
-  z.looseObject({ kind: z.literal('task'), task: payload }),
-  z.looseObject({ kind: z.literal('model'), model: payload }),
-  z.looseObject({ kind: z.literal('model-catalog'), model: payload }),
-  z.looseObject({ kind: z.literal('models-enabled'), models: payload }),
-  z.looseObject({ kind: z.literal('model-enabled'), model: payload }),
-  z.looseObject({ kind: z.literal('memory'), memory: payload }),
-  z.looseObject({ kind: z.literal('memory-detail') }),
-  z.looseObject({ kind: z.literal('init-config'), init: payload }),
-  z.looseObject({ kind: z.literal('chatgpt-auth') }),
-  z.looseObject({ kind: z.literal('chatgpt-auth-status') }),
-  z.looseObject({ kind: z.literal('grok-auth') }),
-  z.looseObject({ kind: z.literal('grok-auth-status') }),
-  z.looseObject({ kind: z.literal('history-entry'), entry: payload }),
-  z.looseObject({ kind: z.literal('history-detail'), detail: payload }),
-  z.looseObject({ kind: z.literal('history-delete'), result: payload }),
-  z.looseObject({ kind: z.literal('team-result') }),
-  z.looseObject({ kind: z.literal('team'), preset: payload }),
-  z.looseObject({
-    kind: z.literal('team-inspection'),
-    plan: payload,
-  }),
-  z.looseObject({
-    kind: z.literal('agent-result'),
-    result: runResultPayload,
-  }),
-  z.looseObject({ kind: z.literal('result'), result: runResultPayload }),
-  z.looseObject({ kind: z.literal('skill'), skill: payload }),
-  z.looseObject({ kind: z.literal('skill-issue'), issue: payload }),
-  z.looseObject({ kind: z.literal('plugin'), plugin: payload }),
-  z.looseObject({ kind: z.literal('doctor-check') }),
-  z.looseObject({ kind: z.literal('doctor-summary') }),
-  z.looseObject({ kind: z.literal('progress') }),
-  z.looseObject({ kind: z.literal('log') }),
+const CliNdjsonRecordSchema = Schema.Union([
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('agent'), agent: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('agent-copy'), copy: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      kind: Schema.Literal('workspace-agents'),
+      agents: payload,
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('config'), config: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('version'), version: Schema.String }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('service'), service: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('task'), task: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('model'), model: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('model-catalog'), model: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('models-enabled'), models: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('model-enabled'), model: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('memory'), memory: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('memory-detail') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('init-config'), init: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('chatgpt-auth') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('chatgpt-auth-status') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(Schema.Struct({ kind: Schema.Literal('grok-auth') }), [
+    Schema.Record(Schema.String, Schema.Unknown),
+  ]),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('grok-auth-status') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('history-entry'), entry: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('history-detail'), detail: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('history-delete'), result: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('team-result') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('team'), preset: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      kind: Schema.Literal('team-inspection'),
+      plan: payload,
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      kind: Schema.Literal('agent-result'),
+      result: runResultPayload,
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('result'), result: runResultPayload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('skill'), skill: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('skill-issue'), issue: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('plugin'), plugin: payload }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('doctor-check') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({ kind: Schema.Literal('doctor-summary') }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(Schema.Struct({ kind: Schema.Literal('progress') }), [
+    Schema.Record(Schema.String, Schema.Unknown),
+  ]),
+  Schema.StructWithRest(Schema.Struct({ kind: Schema.Literal('log') }), [
+    Schema.Record(Schema.String, Schema.Unknown),
+  ]),
 ]);
 
 /** A single `--output-format ndjson` line record. */
-export type CliNdjsonRecord = z.infer<typeof CliNdjsonRecordSchema>;
+export type CliNdjsonRecord = typeof CliNdjsonRecordSchema.Type;
 
 /** The run-status vocabulary the CLI prints and its history records. */
 const CLI_RUN_STATUS = {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { z } from 'zod';
+import { Result, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -10,98 +10,108 @@ import {
   checkPreparedHistory,
 } from './protocol.js';
 
-const TextPartSchema = z
-  .strictObject({ kind: z.literal('text'), text: z.string() })
-  .readonly();
-const MediaFieldsSchema = z.strictObject({
-  mimeType: z.string().min(1),
-  // Encoding validity is distinct from a provider accepting the captured bytes.
-  base64: z.base64(),
+const TextPartSchema = Schema.Struct({
+  kind: Schema.Literal('text'),
+  text: Schema.String,
 });
-const InputPartSchema = z.discriminatedUnion('kind', [
+const MediaFieldsSchema = Schema.Struct({
+  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  // Encoding validity is distinct from a provider accepting the captured bytes.
+  base64: Schema.String.check(Schema.isBase64()),
+});
+const InputPartSchema = Schema.Union([
   TextPartSchema,
-  MediaFieldsSchema.extend({
-    kind: z.literal('image'),
-    detail: z.enum(['low', 'medium', 'high', 'ultra-high']).optional(),
-  }).readonly(),
-  MediaFieldsSchema.extend({
-    kind: z.enum(['audio', 'video', 'document']),
-  }).readonly(),
+  MediaFieldsSchema.mapFields(
+    Struct.assign({
+      kind: Schema.Literal('image'),
+      detail: Schema.optional(
+        Schema.Literals(['low', 'medium', 'high', 'ultra-high']),
+      ),
+    }),
+  ),
+  MediaFieldsSchema.mapFields(
+    Struct.assign({
+      kind: Schema.Literals(['audio', 'video', 'document']),
+    }),
+  ),
 ]);
 
-const OpenRouterDetailMetadataSchema = z.strictObject({
-  format: z.string().nullable().optional(),
-  id: z.string().nullable().optional(),
-  index: z.number().optional(),
+const OpenRouterDetailMetadataSchema = Schema.Struct({
+  format: Schema.optional(Schema.NullOr(Schema.String)),
+  id: Schema.optional(Schema.NullOr(Schema.String)),
+  index: Schema.optional(Schema.Number),
 });
-const OpenRouterReasoningSchema = z
-  .strictObject({
-    kind: z.literal('openrouter-reasoning'),
-    plain: z.string().nullable().optional(),
-    details: z
-      .array(
-        z.discriminatedUnion('kind', [
-          OpenRouterDetailMetadataSchema.extend({
-            kind: z.literal('text'),
-            text: z.string().nullable().optional(),
-            signature: z.string().nullable().optional(),
-          }).readonly(),
-          OpenRouterDetailMetadataSchema.extend({
-            kind: z.literal('summary'),
-            summary: z.string(),
-          }).readonly(),
-          OpenRouterDetailMetadataSchema.extend({
-            kind: z.literal('encrypted'),
-            data: z.string(),
-          }).readonly(),
-          OpenRouterDetailMetadataSchema.extend({
-            kind: z.literal('server-tool-call'),
-            toolName: z.string(),
-            toolCallId: z.string().nullable().optional(),
-            arguments: z.string(),
-            result: z.string(),
-          }).readonly(),
-        ]),
-      )
-      .readonly()
-      .optional(),
-  })
-  .refine(
+const OpenRouterReasoningSchema = Schema.Struct({
+  kind: Schema.Literal('openrouter-reasoning'),
+  plain: Schema.optional(Schema.NullOr(Schema.String)),
+  details: Schema.optional(
+    Schema.Array(
+      Schema.Union([
+        OpenRouterDetailMetadataSchema.mapFields(
+          Struct.assign({
+            kind: Schema.Literal('text'),
+            text: Schema.optional(Schema.NullOr(Schema.String)),
+            signature: Schema.optional(Schema.NullOr(Schema.String)),
+          }),
+        ),
+        OpenRouterDetailMetadataSchema.mapFields(
+          Struct.assign({
+            kind: Schema.Literal('summary'),
+            summary: Schema.String,
+          }),
+        ),
+        OpenRouterDetailMetadataSchema.mapFields(
+          Struct.assign({
+            kind: Schema.Literal('encrypted'),
+            data: Schema.String,
+          }),
+        ),
+        OpenRouterDetailMetadataSchema.mapFields(
+          Struct.assign({
+            kind: Schema.Literal('server-tool-call'),
+            toolName: Schema.String,
+            toolCallId: Schema.optional(Schema.NullOr(Schema.String)),
+            arguments: Schema.String,
+            result: Schema.String,
+          }),
+        ),
+      ]),
+    ),
+  ),
+}).check(
+  Schema.makeFilter(
     (evidence) =>
       evidence.plain !== undefined || evidence.details !== undefined,
     {
       message:
         'OpenRouter reasoning preserves a reported plain or details field.',
     },
-  )
-  .readonly();
-const EvidenceStatusSchema = z.enum(['completed', 'incomplete']);
-const MessagePartSchema = z.strictObject({
-  kind: z.literal('message'),
-  content: z
-    .array(
-      z.discriminatedUnion('kind', [
-        TextPartSchema,
-        z
-          .strictObject({ kind: z.literal('refusal'), text: z.string() })
-          .readonly(),
-      ]),
-    )
-    .readonly(),
-  evidence: z
-    .strictObject({
-      kind: z.literal('openai-responses-message'),
-      itemId: z.string().min(1),
+  ),
+);
+const EvidenceStatusSchema = Schema.Literals(['completed', 'incomplete']);
+const MessagePartSchema = Schema.Struct({
+  kind: Schema.Literal('message'),
+  content: Schema.Array(
+    Schema.Union([
+      TextPartSchema,
+      Schema.Struct({ kind: Schema.Literal('refusal'), text: Schema.String }),
+    ]),
+  ),
+  evidence: Schema.optional(
+    Schema.Struct({
+      kind: Schema.Literal('openai-responses-message'),
+      itemId: Schema.String.check(Schema.isMinLength(1)),
       status: EvidenceStatusSchema,
-      phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
-    })
-    .readonly()
-    .optional(),
+      phase: Schema.optional(
+        Schema.NullOr(Schema.Literals(['commentary', 'final_answer'])),
+      ),
+    }),
+  ),
 });
-const LocalCallPartSchema = z.strictObject({
-  kind: z.literal('local-call'),
-  providerCallId: z.string().min(1),
-  name: z.string().min(1),
+const LocalCallPartSchema = Schema.Struct({
+  kind: Schema.Literal('local-call'),
+  providerCallId: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.String.check(Schema.isMinLength(1)),
   /**
    * The provider's exact returned bytes, the one carrier of the arguments.
    * A JSON.parse then JSON.stringify round trip is not byte exact (it
@@ -109,72 +119,59 @@ const LocalCallPartSchema = z.strictObject({
    * keys and reorders integer-like keys), so the parse is never stored;
    * codecs parse these bytes where a request is lowered.
    */
-  argumentsText: z.string(),
-  evidence: z
-    .strictObject({
-      kind: z.literal('openai-responses-function-call'),
-      itemId: z.string().min(1).optional(),
-      status: z.literal('completed').optional(),
-    })
-    .readonly()
-    .optional(),
+  argumentsText: Schema.String,
+  evidence: Schema.optional(
+    Schema.Struct({
+      kind: Schema.Literal('openai-responses-function-call'),
+      itemId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+      status: Schema.optional(Schema.Literal('completed')),
+    }),
+  ),
 });
 
-const OutputPartSchema = z.discriminatedUnion('kind', [
-  MessagePartSchema.readonly(),
-  z
-    .strictObject({
-      kind: z.literal('reasoning'),
-      summary: z.array(TextPartSchema).readonly(),
-      content: z.array(TextPartSchema).readonly().optional(),
-      evidence: z
-        .discriminatedUnion('kind', [
-          OpenRouterReasoningSchema,
-          z
-            .strictObject({
-              kind: z.literal('google-interactions-thought-signature'),
-              signature: z.string().min(1),
-            })
-            .readonly(),
-          z
-            .strictObject({
-              kind: z.literal('openai-responses-reasoning'),
-              itemId: z.string().min(1),
-              // Missing, null and exact opaque bytes have distinct wire meanings.
-              encryptedContent: z.string().nullable().optional(),
-              status: EvidenceStatusSchema.optional(),
-            })
-            .readonly(),
-          z
-            .strictObject({
-              kind: z.literal('anthropic-thinking-signature'),
-              signature: z.string(),
-            })
-            .readonly(),
-          z
-            .strictObject({
-              kind: z.literal('anthropic-redacted-thinking'),
-              data: z.string(),
-            })
-            .readonly(),
-        ])
-        .nullable(),
-    })
-    .readonly(),
-  LocalCallPartSchema.readonly(),
+const OutputPartSchema = Schema.Union([
+  MessagePartSchema,
+  Schema.Struct({
+    kind: Schema.Literal('reasoning'),
+    summary: Schema.Array(TextPartSchema),
+    content: Schema.optional(Schema.Array(TextPartSchema)),
+    evidence: Schema.NullOr(
+      Schema.Union([
+        OpenRouterReasoningSchema,
+        Schema.Struct({
+          kind: Schema.Literal('google-interactions-thought-signature'),
+          signature: Schema.String.check(Schema.isMinLength(1)),
+        }),
+        Schema.Struct({
+          kind: Schema.Literal('openai-responses-reasoning'),
+          itemId: Schema.String.check(Schema.isMinLength(1)),
+          // Missing, null and exact opaque bytes have distinct wire meanings.
+          encryptedContent: Schema.optional(Schema.NullOr(Schema.String)),
+          status: Schema.optional(EvidenceStatusSchema),
+        }),
+        Schema.Struct({
+          kind: Schema.Literal('anthropic-thinking-signature'),
+          signature: Schema.String,
+        }),
+        Schema.Struct({
+          kind: Schema.Literal('anthropic-redacted-thinking'),
+          data: Schema.String,
+        }),
+      ]),
+    ),
+  }),
+  LocalCallPartSchema,
 ]);
 
-export const ContentSchema = z.array(OutputPartSchema).readonly();
-export const EditorContentSchema = z
-  .array(
-    z.discriminatedUnion('kind', [
-      MessagePartSchema.omit({ evidence: true })
-        .extend({ content: z.array(TextPartSchema).readonly() })
-        .readonly(),
-      LocalCallPartSchema.omit({ evidence: true }).readonly(),
-    ]),
-  )
-  .readonly();
+export const ContentSchema = Schema.Array(OutputPartSchema);
+export const EditorContentSchema = Schema.Array(
+  Schema.Union([
+    MessagePartSchema.mapFields(Struct.omit(['evidence'])).mapFields(
+      Struct.assign({ content: Schema.Array(TextPartSchema) }),
+    ),
+    LocalCallPartSchema.mapFields(Struct.omit(['evidence'])),
+  ]),
+);
 export const EVIDENCE_PROTOCOL = {
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
@@ -191,11 +188,13 @@ export const EVIDENCE_PROTOCOL = {
   'openai-responses': 'openai-responses',
 } as const;
 
+/** The schema issues in a turn's content against its origin: foreign
+ *  evidence, malformed signed thinking, repeated item or call ids. */
 export function validateAssistantContent(
   origin: ModelOrigin | null,
-  content: z.infer<typeof ContentSchema>,
-  ctx: z.RefinementCtx,
-): void {
+  content: typeof ContentSchema.Type,
+): Schema.FilterIssue[] {
+  const issues: Schema.FilterIssue[] = [];
   const ids = new Set<string>();
   const itemIds = new Set<string>();
   for (const [index, part] of content.entries()) {
@@ -204,10 +203,9 @@ export function validateAssistantContent(
       evidence != null &&
       origin?.protocol !== EVIDENCE_PROTOCOL[evidence.kind]
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index],
-        message:
+        issue:
           'Provider content evidence requires its original protocol binding.',
       });
     }
@@ -219,10 +217,9 @@ export function validateAssistantContent(
           evidence?.kind === 'openrouter-reasoning') &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index],
-        message:
+        issue:
           'Signed thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
       });
     }
@@ -232,80 +229,71 @@ export function validateAssistantContent(
       evidence.itemId !== undefined
     ) {
       if (itemIds.has(evidence.itemId)) {
-        ctx.addIssue({
-          code: 'custom',
+        issues.push({
           path: ['content', index, 'evidence', 'itemId'],
-          message: 'Provider item IDs must be distinct within one response.',
+          issue: 'Provider item IDs must be distinct within one response.',
         });
       }
       itemIds.add(evidence.itemId);
     }
     if (part.kind !== 'local-call') continue;
     if (ids.has(part.providerCallId)) {
-      ctx.addIssue({
-        code: 'custom',
+      issues.push({
         path: ['content', index, 'providerCallId'],
-        message: 'Provider call IDs must be distinct within one response.',
+        issue: 'Provider call IDs must be distinct within one response.',
       });
     }
     ids.add(part.providerCallId);
   }
+  return issues;
 }
 
 /** The assistant message: a turn's content with its origin. */
-export const AssistantMessageSchema = z
-  .strictObject({
-    role: z.literal('assistant'),
-    /** `null` when no model produced the content (a handed-down call). */
-    origin: ModelOriginSchema.nullable(),
-    content: ContentSchema,
-  })
-  .superRefine((message, ctx) => {
+export const AssistantMessageSchema = Schema.Struct({
+  role: Schema.Literal('assistant'),
+  /** `null` when no model produced the content (a handed-down call). */
+  origin: Schema.NullOr(ModelOriginSchema),
+  content: ContentSchema,
+}).check(
+  Schema.makeFilter((message) => {
+    const issues = validateAssistantContent(message.origin, message.content);
     if (message.origin?.protocol === 'vscode-lm') {
-      const parsed = EditorContentSchema.safeParse(message.content);
-      if (!parsed.success) {
-        for (const issue of parsed.error.issues)
-          ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
-      }
+      const parsed = Schema.decodeUnknownResult(EditorContentSchema)(
+        message.content,
+      );
+      if (!Result.isSuccess(parsed))
+        issues.push({ path: ['content'], issue: parsed.failure.issue });
     }
-    validateAssistantContent(message.origin, message.content, ctx);
-  })
-  .readonly();
+    return issues;
+  }),
+);
 /** The content one turn produced, stamped with the turn's origin. */
-export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
+export type AssistantMessage = typeof AssistantMessageSchema.Type;
 
 /** One message of the history a turn sends (user, assistant, tool, system). */
-export const MessageSchema = z.discriminatedUnion('role', [
-  z
-    .strictObject({
-      role: z.literal('user'),
-      content: z.array(InputPartSchema).min(1).readonly(),
-    })
-    .readonly(),
+export const MessageSchema = Schema.Union([
+  Schema.Struct({
+    role: Schema.Literal('user'),
+    content: Schema.Array(InputPartSchema).check(Schema.isMinLength(1)),
+  }),
   AssistantMessageSchema,
-  z
-    .strictObject({
-      role: z.literal('tool'),
-      results: z
-        .array(
-          z
-            .strictObject({
-              callOrdinal: z.int().nonnegative(),
-              status: z.enum(['success', 'error']),
-              content: z.array(InputPartSchema).readonly(),
-            })
-            .readonly(),
-        )
-        .min(1)
-        .readonly(),
-    })
-    .readonly(),
+  Schema.Struct({
+    role: Schema.Literal('tool'),
+    results: Schema.Array(
+      Schema.Struct({
+        callOrdinal: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        status: Schema.Literals(['success', 'error']),
+        content: Schema.Array(InputPartSchema),
+      }),
+    ).check(Schema.isMinLength(1)),
+  }),
   /** An instruction the run's context adds mid-conversation, after the
    *  system text its requests freeze: sent as the protocol's own system
    *  message where the binding takes one, otherwise as `systemUpdateText`. */
-  z
-    .strictObject({ role: z.literal('system'), text: z.string().min(1) })
-    .readonly(),
+  Schema.Struct({
+    role: Schema.Literal('system'),
+    text: Schema.String.check(Schema.isMinLength(1)),
+  }),
 ]);
 
 /** A mid-conversation system message as the user text any protocol takes. */
@@ -313,12 +301,11 @@ export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
 
 /** The history a turn sends, under the prepared-history rules. */
-export const PreparedHistorySchema = z
-  .array(MessageSchema)
-  .min(1)
-  .superRefine(checkPreparedHistory)
-  .readonly();
-type HistoryMessage = z.infer<typeof MessageSchema>;
+export const PreparedHistorySchema = Schema.Array(MessageSchema).check(
+  Schema.isMinLength(1),
+  Schema.makeFilter(checkPreparedHistory),
+);
+type HistoryMessage = typeof MessageSchema.Type;
 
 /**
  * The history every codec lowers for a turn bound to `turn`: what another
@@ -376,39 +363,47 @@ export function replayableHistory(
   }
   return out;
 }
-const PrefixSchema = z.strictObject({
-  coveredMessages: z.int().positive(),
-  prefixFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+const PrefixSchema = Schema.Struct({
+  coveredMessages: Schema.Int.check(Schema.isGreaterThan(0)),
+  prefixFingerprint: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
 });
-export const GoogleContinuationSchema = PrefixSchema.extend({
-  origin: OriginSchema.extend({
-    protocol: z.literal('google-interactions'),
-  }).readonly(),
-  anchor: z
-    .strictObject({
-      interactionId: z.string().min(1),
-      coveredSteps: z.int().positive(),
-    })
-    .readonly(),
-}).readonly();
-const ResponsesAnchorSchema = z.strictObject({
-  responseId: z.string().min(1),
-  coveredItems: z.int().nonnegative(),
+export const GoogleContinuationSchema = PrefixSchema.mapFields(
+  Struct.assign({
+    origin: OriginSchema.mapFields(
+      Struct.assign({
+        protocol: Schema.Literal('google-interactions'),
+      }),
+    ),
+    anchor: Schema.Struct({
+      interactionId: Schema.String.check(Schema.isMinLength(1)),
+      coveredSteps: Schema.Int.check(Schema.isGreaterThan(0)),
+    }),
+  }),
+);
+const ResponsesAnchorSchema = Schema.Struct({
+  responseId: Schema.String.check(Schema.isMinLength(1)),
+  coveredItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-export const ResponsesContinuationSchema = PrefixSchema.extend({
-  origin: OriginSchema.extend({
-    protocol: z.literal('openai-responses'),
-  }).readonly(),
-  // Only a stored anchor is durable: a connection-scoped one dies with its
-  // socket, so a persisted value must not be able to carry one.
-  anchor: ResponsesAnchorSchema.extend({
-    kind: z.literal('stored'),
-  }).readonly(),
-}).readonly();
+export const ResponsesContinuationSchema = PrefixSchema.mapFields(
+  Struct.assign({
+    origin: OriginSchema.mapFields(
+      Struct.assign({
+        protocol: Schema.Literal('openai-responses'),
+      }),
+    ),
+    // Only a stored anchor is durable: a connection-scoped one dies with its
+    // socket, so a persisted value must not be able to carry one.
+    anchor: ResponsesAnchorSchema.mapFields(
+      Struct.assign({
+        kind: Schema.Literal('stored'),
+      }),
+    ),
+  }),
+);
 /** Provider acceleration of an exact prefix, never the conversation authority. */
-export const ContinuationSchema = z.union([
+export const ContinuationSchema = Schema.Union([
   GoogleContinuationSchema,
   ResponsesContinuationSchema,
 ]);
 /** {@link ContinuationSchema}'s value. */
-export type Continuation = z.infer<typeof ContinuationSchema>;
+export type Continuation = typeof ContinuationSchema.Type;

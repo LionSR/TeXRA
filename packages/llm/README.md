@@ -10,7 +10,7 @@ package is pure: no `platform()`, no `Effect.run*`, no `AbortController`, no
 `vscode`. It reads no settings and imports nothing else in the repo: the host
 passes configuration in (`RouteFacts`) and credentials through one port,
 `CredentialStore`. Its only dependencies are `llm-zoo`, the provider SDKs,
-`ws`, and `effect` and `zod` as peers.
+`ws`, and `effect` as a peer.
 
 > **0.x: the API may change in any minor release.** The package is versioned
 > on its own, not with the TeXRA app.
@@ -18,11 +18,11 @@ passes configuration in (`RouteFacts`) and credentials through one port,
 ## Install
 
 Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
-package is ESM only. `effect` (^4.0.6) and `zod` (^4.4.3) are peer
-dependencies, so your install supplies the one copy of each:
+package is ESM only. `effect` (^4.0.6) is a peer dependency, so your install
+supplies the one copy of it:
 
 ```bash
-npm install @texra-ai/llm effect zod
+npm install @texra-ai/llm effect
 ```
 
 `llm-zoo` (the catalog) and the Anthropic, Google and OpenRouter SDKs come in

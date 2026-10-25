@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Context, Data, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
@@ -32,11 +32,14 @@ import type { SettingsStores } from '@texra-ai/harness';
  * `executeCommand`). A host with no command surface leaves `commands`
  * undefined instead of raising, and the tool reports that absence itself.
  */
-export class SetupCommandFailed extends Data.TaggedError('SetupCommandFailed')<{
-  readonly message: string;
-  readonly commandId: string;
-  readonly cause?: unknown;
-}> {}
+export class SetupCommandFailed extends Schema.TaggedError<SetupCommandFailed>()(
+  'SetupCommandFailed',
+  {
+    message: Schema.String,
+    commandId: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * The one failure of {@link SetupExtensionAdapter.install}: the host refused
@@ -44,13 +47,14 @@ export class SetupCommandFailed extends Data.TaggedError('SetupCommandFailed')<{
  * extension surface leaves `extensions` undefined rather than raising —
  * the caller already reports that absence itself.
  */
-export class SetupExtensionInstallFailed extends Data.TaggedError(
+export class SetupExtensionInstallFailed extends Schema.TaggedError<SetupExtensionInstallFailed>()(
   'SetupExtensionInstallFailed',
-)<{
-  readonly message: string;
-  readonly extensionId: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    message: Schema.String,
+    extensionId: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * Per-command surface. The member is an `Effect`: a host fault reaches the
@@ -141,13 +145,14 @@ export function assertInSetupAllowlist(
  * subscription" this way, which is a value. It stays `Promise`-shaped with
  * the rest of the account group.
  */
-class SubscriptionProbeFailed extends Data.TaggedError(
+class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
   'SubscriptionProbeFailed',
-)<{
-  readonly member: 'getCodexStatus' | 'readModelOptions';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    member: Schema.Literals(['getCodexStatus', 'readModelOptions']),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Subscription access reported separately from provider API keys. */
 export const getChatGptSubscriptionStatus = Effect.fn(

@@ -7,10 +7,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import { Schema } from 'effect';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
@@ -54,7 +54,7 @@ interface Versioned {
   readonly version: number;
   /** The upcasters from version 1, `upcast[i]` taking `i + 1` to `i + 2`. */
   readonly upcasts: number;
-  readonly schema: z.ZodType;
+  readonly schema: Schema.Top;
 }
 
 /** Every current-value family, each declared by its owner; the first case
@@ -70,10 +70,10 @@ const VALUE_FAMILIES = [
 ];
 
 const VERSIONED: readonly Versioned[] = [
-  ...SessionEventDraftSchema.options.map((arm) => {
-    const kind = ROW_KINDS[arm.shape.type.value];
+  ...SessionEventDraftSchema.members.map((arm) => {
+    const kind = ROW_KINDS[arm.fields.type.literal];
     return {
-      name: arm.shape.type.value,
+      name: arm.fields.type.literal,
       version: kind.version,
       upcasts: kind.upcast.length,
       schema: arm,
@@ -94,12 +94,8 @@ const VERSIONED: readonly Versioned[] = [
 ];
 
 /** A version's fingerprint: its schema as JSON Schema, as the store reads it. */
-const fingerprint = (schema: z.ZodType): string =>
-  `${JSON.stringify(
-    z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }),
-    null,
-    2,
-  )}\n`;
+const fingerprint = (schema: Schema.Top): string =>
+  `${JSON.stringify(Schema.toJsonSchemaDocument(schema), null, 2)}\n`;
 
 const released = (name: string): number | null => {
   if (!existsSync(FROZEN)) return null;
@@ -133,16 +129,16 @@ describe('row versions', () => {
     // A kind deleted without a retirement would make every store that holds
     // it refuse to open. The list only grows: check-ratchet-baselines fails a
     // name the base branch lists and the tree does not.
-    const { kinds } = z
-      .object({ kinds: z.array(z.string()) })
-      .parse(
-        JSON.parse(
-          readFileSync(
-            resolve(REPO_ROOT, 'config/storage/row-kinds-ever.json'),
-            'utf8',
-          ),
+    const { kinds } = Schema.decodeUnknownSync(
+      Schema.Struct({ kinds: Schema.Array(Schema.String) }),
+    )(
+      JSON.parse(
+        readFileSync(
+          resolve(REPO_ROOT, 'config/storage/row-kinds-ever.json'),
+          'utf8',
         ),
-      );
+      ),
+    );
     expect(kinds, 'kept sorted and unique').toEqual(
       [...new Set(kinds)].toSorted(),
     );

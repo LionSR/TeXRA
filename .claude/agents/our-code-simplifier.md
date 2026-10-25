@@ -107,7 +107,7 @@ big.
   handles — the one reversal in repo history (#8091) was a "dead" fallback
   that a live writer still hit.
 - **Silent degradation is a blocker**: no bare `catch {}`, no `??` over a
-  failed read, no Zod `.catch(default)` on persisted/security/accounting/
+  failed read, no `catchDecoding` default on persisted/security/accounting/
   lifecycle data, no `default: return` dropping unknown events.
 - **try/catch lives in exactly seven planes** (the catch budget,
   error-pipeline proposal, implemented 2026-08-01): host entry boundaries,
@@ -120,7 +120,7 @@ big.
   throw boundary, define-errors-out-of-existence, loud read, single
   classifier, delete-the-guard. A catch outside the planes needs an L1–L5
   classification; masking shapes (M1 catch-and-continue in core logic, M2
-  silent swallow, M3 Zod silent default on persisted data, M4 ownerless
+  silent swallow, M3 silent decoding default on persisted data, M4 ownerless
   fallback chain, M5 re-derive resolver, M6 wrapper around code that cannot
   throw) are review-blockers. Blanket defensive-check removal gets closed
   (#1376); type-provable removal merges (#2088).
@@ -141,8 +141,9 @@ big.
   always-4-args is runtime-identical but breaks `toHaveBeenCalledWith`.
   Skip the edit; never touch the test assertion.
 - Never smuggle UI/UX behavior changes into a "behavior-preserving" pass.
-- Batch schema/registry migrations SMALL — the only regressions in the Zod
-  waves (#3784) came from big-batch conversions changing async semantics.
+- Batch schema/registry migrations SMALL — the only regressions in the
+  earlier schema waves (#3784) came from big-batch conversions changing
+  async semantics.
 
 ## Extraction discipline
 
@@ -152,7 +153,7 @@ big.
   divergence → decline, record why.
 - **No single-caller extractions** (grep caller count first); the reverse —
   inlining single-caller pass-throughs — is your highest-hit-rate edit.
-- **No abstraction owning no boundary**: no Zod schema that isn't a parse
+- **No abstraction owning no boundary**: no schema that isn't a decode
   boundary, no generic "for future use", no config layer ending in a cast.
 - **No bundling** unrelated refactors into one unit — "cannot be reviewed or
   reverted as one coherent behavioral unit" closes the PR regardless of
@@ -237,9 +238,11 @@ the same POLICY implemented per host, the simplification is to hoist it:
 
 - VS Code-free zones (`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`) never
   gain `vscode` imports; host capabilities arrive as typed services the process runtime serves.
-- Zod v4: tool-input optionals use `.nullish()` (check `== null` at use
-  sites); `.prefault()`/`.default()`/`.catch()` are not interchangeable.
-  Schemas are SSOT — derive types, never hand-write parallel ones.
+- Effect Schema: tool-input optionals use `Schema.optional(Schema.NullOr(S))`
+  (check `== null` at use sites); `withDecodingDefault` /
+  `withDecodingDefaultType` / `catchDecoding` are not interchangeable.
+  Schemas are SSOT — derive types (`typeof S.Type`), never hand-write
+  parallel ones.
 - Run-scoped facts extend `AgentEvent`; session-authored facts extend the
   `SessionEvent` schema and commit via the session log's `transact`.
   No new `bus.emit` from a VS Code-free zone.

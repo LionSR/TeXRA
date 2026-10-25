@@ -18,7 +18,6 @@
   "packages/harness/src/controllers/session/storeSchema.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 1,
   "packages/harness/src/tools/approval/approvedWrite.ts": 1,
-  "packages/harness/src/tools/delegation/AgentTool.ts": 1,
   "packages/harness/src/tools/pluginCatalog.ts": 1,
   "packages/harness/src/tools/plugins.ts": 1,
   "packages/harness/src/tools/WriteTool.ts": 1,

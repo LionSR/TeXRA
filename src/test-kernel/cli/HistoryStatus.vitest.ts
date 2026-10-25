@@ -2,7 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -33,13 +33,17 @@ import {
 } from '@test/support/sessionEnd';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
-const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
+const TOOL_USE_CONFIG: AgentConfig = Schema.decodeUnknownSync(
+  AgentConfigSchema,
+)({
   agent: 'orchestrator',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Continue the session.',
   workingDirectory: '/workspace',
 });
-const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse(
+const WORKFLOW_CONFIG: AgentConfig = Schema.decodeUnknownSync(
+  AgentConfigSchema,
+)(
   asDocumentTask({
     ...TOOL_USE_CONFIG,
     agent: 'correct',

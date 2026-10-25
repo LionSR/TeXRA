@@ -27,10 +27,10 @@ import {
   FileSystem,
   Layer,
   Option,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { z } from 'zod';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
@@ -51,7 +51,6 @@ import {
 import { committing, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
-  DeletionModeSchema,
   type DeletionMode,
   type AggregateState,
   Database,
@@ -154,6 +153,10 @@ WHERE s.id IN (${AGGREGATE_LIST})
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
+/** A run's aggregate `logical_id` column as the `RunId` it is. */
+const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
+/** The `event` table's autoincrement sequence: a non-negative integer. */
+const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /** Where a display page after a commit ends: 2,000 stored rows on, run to
  *  the end of the batch the last one is in, as a card's `tool.end` and the
  *  settlement it projects from share one batch (`settleCards`) and a batch's
@@ -232,10 +235,10 @@ export const databaseLayer = (
       const observe = (commit: number) =>
         SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
-      const commitFromRows = (rows: readonly SqlRow[]) => {
-        const row = rows[0];
-        return row === undefined ? 0 : z.int().nonnegative().parse(row.seq);
-      };
+      const commitFromRows = ([row]: readonly SqlRow[]) =>
+        row === undefined
+          ? 0
+          : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
       const writeFailed = (cause: unknown): DatabaseWriteFailed =>
         new DatabaseWriteFailed({ path, cause });
       const readFailed = (cause: unknown): DatabaseReadFailed =>
@@ -477,7 +480,7 @@ export const databaseLayer = (
       const readState = (ids: readonly AggregateId[]) =>
         Effect.gen(function* () {
           return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
-            AggregateStateSchema.parse({
+            Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
               aggregateId: aggregateOf(row.kind, row.logicalId),
               parentId:
@@ -678,7 +681,7 @@ export const databaseLayer = (
               );
             }
             parent = {
-              id: RunIdSchema.parse(aggregateTarget(edges.parent).id),
+              id: runIdOf(aggregateTarget(edges.parent).id),
               uid: parentState.uid,
               callId:
                 draft.type === 'run.start'
@@ -691,10 +694,7 @@ export const databaseLayer = (
           const committedDraft = yield* Effect.gen(function* () {
             if (draft.type === 'run.removed') {
               const owned = yield* exec(deletionRuns, columns);
-              return {
-                ...draft,
-                runIds: owned.map((owned) => RunIdSchema.parse(owned.runId)),
-              };
+              return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
             }
             if (draft.type === 'run.start') return { ...draft, parent };
             return draft;
@@ -915,7 +915,7 @@ export const databaseLayer = (
                 return yield* Effect.fail(
                   new Error(`Deletion target changed since admission: ${id}`),
                 );
-              yield* claimAll(observed, DeletionModeSchema.parse(mode));
+              yield* claimAll(observed, mode);
               const removal = prepareEventDraft({
                 type: 'run.removed',
                 aggregateId: id,

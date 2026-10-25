@@ -6,17 +6,17 @@
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
-import { Predicate } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import yaml from 'yaml';
 
 import {
   TOOL_CALL_STATUS,
   ToolUseLogSchema,
+  formatIssuesForDiagnostics,
   type NormalizedToolUse,
   type ToolUseLog,
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
-import type { z } from 'zod';
 
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -113,13 +113,11 @@ const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
  * report only the invalid field *paths*, never field values, so a partially
  * valid `read`/`bash` row cannot leak its full output into the diagnostic.
  */
-function malformedToolUseDiagnostic(
-  issues: readonly z.core.$ZodIssue[],
-): string {
+function malformedToolUseDiagnostic(error: Schema.SchemaError): string {
   const fields = [
     ...new Set(
-      issues
-        .map((issue) => issue.path.join('.'))
+      formatIssuesForDiagnostics(error)
+        .map((row) => row.path)
         .filter((path) => path.length > 0),
     ),
   ];
@@ -139,12 +137,16 @@ function malformedToolUseDiagnostic(
  * rather than as a quiet success.
  */
 export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
-  const parsed = ToolUseLogSchema.loose().safeParse(data);
-  if (parsed.success) return parsed.data;
+  const parsed = Schema.decodeUnknownResult(
+    Schema.StructWithRest(ToolUseLogSchema, [
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  )(data);
+  if (Result.isSuccess(parsed)) return parsed.success;
   return {
     ...(typeof data.toolName === 'string' ? { toolName: data.toolName } : {}),
     ...('input' in data ? { input: data.input } : {}),
-    error: malformedToolUseDiagnostic(parsed.error.issues),
+    error: malformedToolUseDiagnostic(parsed.failure),
     status:
       data.status === TOOL_CALL_STATUS.IN_PROGRESS
         ? TOOL_CALL_STATUS.IN_PROGRESS

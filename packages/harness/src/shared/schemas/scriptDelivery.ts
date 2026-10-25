@@ -1,38 +1,38 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { LineCountSchema } from './lineChanges';
 
 /** How a background script's calls ended. */
-const ScriptTallySchema = z.strictObject({
-  total: z.int().nonnegative(),
-  ok: z.int().nonnegative(),
-  failed: z.int().nonnegative(),
-  cancelled: z.int().nonnegative(),
+const ScriptTallySchema = Schema.Struct({
+  total: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ok: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  failed: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  cancelled: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   /** Skipped by the user. */
-  skipped: z.int().nonnegative(),
+  skipped: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-export type ScriptTally = z.infer<typeof ScriptTallySchema>;
+export type ScriptTally = typeof ScriptTallySchema.Type;
 
 /** A file the script's calls wrote, by the workspace path it replaces, with
  *  its line counts summed over the calls that wrote it (null once a call
  *  reported none). */
-const ScriptDeliveryFileSchema = z.strictObject({
-  path: z.string(),
-  added: LineCountSchema.nullable(),
-  removed: LineCountSchema.nullable(),
+const ScriptDeliveryFileSchema = Schema.Struct({
+  path: Schema.String,
+  added: Schema.NullOr(LineCountSchema),
+  removed: Schema.NullOr(LineCountSchema),
 });
 
 /** Compact, host-neutral facts used to present a background script's
  *  delivery. */
-export const ScriptDeliverySummarySchema = z.strictObject({
-  name: z.string(),
-  outcome: z.enum(['completed', 'failed', 'stopped']),
-  phaseCount: z.int().nonnegative(),
+export const ScriptDeliverySummarySchema = Schema.Struct({
+  name: Schema.String,
+  outcome: Schema.Literals(['completed', 'failed', 'stopped']),
+  phaseCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   tally: ScriptTallySchema,
-  costUsd: z.number().nonnegative(),
-  durationMs: z.int().nonnegative(),
-  files: z.array(ScriptDeliveryFileSchema),
-  errorCause: z.string().nullable(),
+  costUsd: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  files: Schema.Array(ScriptDeliveryFileSchema),
+  errorCause: Schema.NullOr(Schema.String),
 });
 
-export type ScriptDeliverySummary = z.infer<typeof ScriptDeliverySummarySchema>;
+export type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;

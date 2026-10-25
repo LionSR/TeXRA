@@ -23,7 +23,6 @@
  */
 
 import type { ModelProvider } from 'llm-zoo';
-import type { z } from 'zod';
 
 import type { TurnProtocolSchema } from '../protocol.js';
 
@@ -199,7 +198,7 @@ export const BACKEND_PROTOCOLS = Object.freeze({
   openRouter: 'openrouter-chat',
   copilot: 'vscode-lm',
 } satisfies Partial<
-  Record<(typeof MANIFEST)[number]['id'], z.infer<typeof TurnProtocolSchema>>
+  Record<(typeof MANIFEST)[number]['id'], typeof TurnProtocolSchema.Type>
 >);
 
 /** A provider a run's conversation can be bound to: its backend. */

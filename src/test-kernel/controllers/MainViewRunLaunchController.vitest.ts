@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -81,7 +81,7 @@ function launchRequest(
 ): Extract<HostRequest, { kind: 'launch' }> {
   return {
     kind: 'launch',
-    launch: LaunchSurfaceSchema.parse(patch),
+    launch: Schema.decodeUnknownSync(LaunchSurfaceSchema)(patch),
     instruction: 'Improve the draft.',
   };
 }

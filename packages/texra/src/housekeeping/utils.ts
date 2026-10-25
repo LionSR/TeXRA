@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
-import { Data, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
 import { relativeToRoot } from '@texra-ai/harness/node';
@@ -17,10 +17,10 @@ import type { RootedFileSystem } from '@texra-ai/harness';
  * a housekeeping command reports that as an error result rather than as a
  * defect, so the rejection is typed here instead of caught raw.
  */
-export class GlobFailed extends Data.TaggedError('GlobFailed')<{
-  readonly pattern: string;
-  readonly cause: unknown;
-}> {
+export class GlobFailed extends Schema.TaggedError<GlobFailed>()('GlobFailed', {
+  pattern: Schema.String,
+  cause: Schema.Defect(),
+}) {
   override get message(): string {
     return `Failed to list ${this.pattern}: ${String(this.cause)}`;
   }

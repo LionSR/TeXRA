@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, Layer, Result } from 'effect';
+import { Effect, Layer, Result, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -14,8 +14,8 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { InquiryRecords } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 
-const RUN_A = RunIdSchema.parse('1a1a1a1a1a1a');
-const RUN_B = RunIdSchema.parse('1b1b1b1b1b1b');
+const RUN_A = Schema.decodeUnknownSync(RunIdSchema)('1a1a1a1a1a1a');
+const RUN_B = Schema.decodeUnknownSync(RunIdSchema)('1b1b1b1b1b1b');
 
 describe('InquiryStorage', () => {
   let storage: string;

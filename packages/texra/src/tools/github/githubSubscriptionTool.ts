@@ -17,8 +17,7 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 import {
   defineTool,
@@ -80,51 +79,69 @@ const SUBSCRIPTION_PATH_DESCRIPTION =
 // Branches stay `looseObject`: provider schema flattening advertises one
 // object across commands, and OpenAI-compatible providers null-fill the other
 // branches' fields.
-const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
-  z.looseObject({
-    command: z.literal('subscribe').describe('Start watching the path.'),
-    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
-    /**
-     * Lowest inline check-annotation level to send for PR subscriptions.
-     * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
-     * warnings, or "notice" to include every annotation GitHub reports.
-     */
-    min_annotation_level: nullishWithDefault(
-      z.enum(['failure', 'warning', 'notice']),
-      DEFAULT_CHECK_ANNOTATION_LEVEL,
-    ).describe(
-      `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
-    ),
-  }),
-  z.looseObject({
-    command: z.literal('unsubscribe').describe('Stop watching the path.'),
-    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
-    command: z
-      .literal('list')
-      .describe('List active subscriptions on this run.'),
-  }),
-  z.looseObject({
-    command: z
-      .literal('find_current')
-      .describe(
-        'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
+const GitHubSubscriptionInputSchema = Schema.Union([
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('subscribe').annotate({
+        description: 'Start watching the path.',
+      }),
+      path: Schema.String.annotate({
+        description: SUBSCRIPTION_PATH_DESCRIPTION,
+      }),
+      /**
+       * Lowest inline check-annotation level to send for PR subscriptions.
+       * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
+       * warnings, or "notice" to include every annotation GitHub reports.
+       */
+      min_annotation_level: nullishWithDefault(
+        Schema.Literals(['failure', 'warning', 'notice']),
+        DEFAULT_CHECK_ANNOTATION_LEVEL,
+        `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
       ),
-    /**
-     * Working directory for `find_current` to resolve the current branch's PR.
-     * Defaults to the agent's working directory.
-     */
-    working_directory: z
-      .string()
-      .nullish()
-      .describe(
-        "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('unsubscribe').annotate({
+        description: 'Stop watching the path.',
+      }),
+      path: Schema.String.annotate({
+        description: SUBSCRIPTION_PATH_DESCRIPTION,
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('list').annotate({
+        description: 'List active subscriptions on this run.',
+      }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
+  Schema.StructWithRest(
+    Schema.Struct({
+      command: Schema.Literal('find_current').annotate({
+        description:
+          'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
+      }),
+      /**
+       * Working directory for `find_current` to resolve the current branch's PR.
+       * Defaults to the agent's working directory.
+       */
+      working_directory: Schema.optional(Schema.NullOr(Schema.String)).annotate(
+        {
+          description:
+            "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+        },
       ),
-  }),
+    }),
+    [Schema.Record(Schema.String, Schema.Unknown)],
+  ),
 ]);
 
-type GitHubSubscriptionInput = z.infer<typeof GitHubSubscriptionInputSchema>;
+type GitHubSubscriptionInput = typeof GitHubSubscriptionInputSchema.Type;
 type SubscribeInput = Extract<
   GitHubSubscriptionInput,
   { command: 'subscribe' }

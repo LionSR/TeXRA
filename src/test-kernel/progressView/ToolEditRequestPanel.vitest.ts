@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { Schema } from 'effect';
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
 import { RunIdSchema } from '@shared/schemas';
 import type { ToolEditPermission } from '@shared/schemas';
@@ -13,7 +14,7 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-const RUN_ID = RunIdSchema.parse('aaaaaaaaaaaa');
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 
 function createPermission(
   data: Partial<ToolEditPermission> = {},

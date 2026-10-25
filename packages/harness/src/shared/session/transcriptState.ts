@@ -11,6 +11,7 @@ import {
   TOOL_CALL_STATUS,
   type LogLevel,
   type MessageType,
+  type TaskGroup,
   type ToolUseLog,
 } from '@shared/schemas';
 import {
@@ -156,6 +157,17 @@ export function emptyTranscript(): TranscriptView {
   return { rows: [], taskGroups: [], settledRows: 0 };
 }
 
+/** A transcript one update call is building: a fresh envelope over the
+ *  previous transcript's arrays, written field by field until published. */
+export type TranscriptDraft = {
+  -readonly [K in keyof TranscriptView]: TranscriptView[K];
+};
+/** The arrays of a draft this call owns, as it writes them. */
+type DraftArrays = {
+  readonly rows: TranscriptRow[];
+  readonly taskGroups: TaskGroup[];
+};
+
 // ---------------------------------------------------------------------------
 // Copy on first write
 // ---------------------------------------------------------------------------
@@ -173,16 +185,19 @@ export interface TranscriptWork {
 
 /** `transcript[key]`, writable: copied into `transcript` unless this call
  *  created it. */
-export function writableArray<K extends 'rows' | 'taskGroups'>(
+export function writableArray<K extends keyof DraftArrays>(
   work: TranscriptWork,
-  transcript: TranscriptView,
+  transcript: TranscriptDraft,
   key: K,
-): TranscriptView[K] {
+): DraftArrays[K] {
   const current = transcript[key];
-  if (work.owned.has(current)) return current;
-  const copy = [...current] as TranscriptView[K];
+  // cast: an array in `owned` is the copy this function made for the current
+  // call, so writing it reaches no published transcript.
+  if (work.owned.has(current)) return current as DraftArrays[K];
+  // cast: a spread of `transcript[key]` is that key's array, writable.
+  const copy = [...current] as DraftArrays[K];
   work.owned.add(copy);
-  transcript[key] = copy;
+  Object.assign(transcript, { [key]: copy });
   return copy;
 }
 
@@ -198,7 +213,7 @@ export function rowById(
 /** The one writer of `rows`: in place by id, else inserted in `seqNo` order. */
 export function upsertRow(
   work: TranscriptWork,
-  transcript: TranscriptView,
+  transcript: TranscriptDraft,
   row: TranscriptRow,
 ): void {
   const rows = writableArray(work, transcript, 'rows');
@@ -228,7 +243,7 @@ export function upsertRow(
 
 export function upsertCompactionRows(
   work: TranscriptWork,
-  transcript: TranscriptView,
+  transcript: TranscriptDraft,
   changedIndices: readonly number[],
 ): void {
   for (const blockIndex of changedIndices) {
@@ -258,7 +273,7 @@ export function isStreamingTextRow(
 
 /** One event's working copy: the next value and the slots it wrote. */
 export interface Draft extends TranscriptWork {
-  readonly next: TranscriptView;
+  readonly next: TranscriptDraft;
   readonly ctx: TranscriptContext;
   readonly at: number;
   /** The event's durable coordinates: the id of a row it appends. */

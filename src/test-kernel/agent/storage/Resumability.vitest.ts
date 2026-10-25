@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { deriveResumability } from '@agent/storage/resumability';
@@ -85,7 +85,7 @@ describe('deriveResumability', () => {
         {
           type: 'run.config',
           aggregateId: qualifyAggregateId('run', runId),
-          config: AgentConfigSchema.parse(
+          config: Schema.decodeUnknownSync(AgentConfigSchema)(
             asDocumentTask({ agent: 'polish', model: 'test-model' }),
           ),
         },

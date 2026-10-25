@@ -139,8 +139,10 @@ describe('CLI approval surface', () => {
     const view = viewOfRequests(held);
     const run = view.runs.get(RUN_A);
     if (!run) throw new Error('fixture lost its run');
-    view.runs.set(RUN_A, { ...run, readOnly: true });
-    seedView(view);
+    seedView({
+      ...view,
+      runs: new Map(view.runs).set(RUN_A, { ...run, readOnly: true }),
+    });
 
     expect(currentApproval.get()).toBeUndefined();
     expect(attentionRequests.get()).toEqual([]);

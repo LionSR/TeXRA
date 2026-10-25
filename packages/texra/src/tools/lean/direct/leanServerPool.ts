@@ -19,7 +19,6 @@ import * as path from 'node:path';
 
 import {
   Context,
-  Data,
   Deferred,
   type Duration,
   Effect,
@@ -29,6 +28,7 @@ import {
   RcMap,
   Ref,
   Result,
+  Schema,
 } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process';
@@ -63,19 +63,28 @@ const LAKE_PROJECT_ARGS = {
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
 /** The pool was disposed before or while this call ran. */
-export class LeanAdapterStopped extends Data.TaggedError('LeanAdapterStopped') {
+export class LeanAdapterStopped extends Schema.TaggedError<LeanAdapterStopped>()(
+  'LeanAdapterStopped',
+  {},
+) {
   override readonly message = 'Lean adapter was stopped.';
 }
 
 /** No `lakefile.lean` / `lakefile.toml` above the file. */
-class LeanProjectNotFound extends Data.TaggedError('LeanProjectNotFound')<{
-  readonly message: string;
-}> {}
+class LeanProjectNotFound extends Schema.TaggedError<LeanProjectNotFound>()(
+  'LeanProjectNotFound',
+  {
+    message: Schema.String,
+  },
+) {}
 
 /** A project command could not run or reported failure. */
-export class LeanProjectCommandError extends Data.TaggedError(
+export class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
   'LeanProjectCommandError',
-)<{ readonly message: string }> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 export interface LeanServerPoolOptions {
   readonly lakeCommand: string;

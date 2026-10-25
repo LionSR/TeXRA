@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 /**
  * Output formats every `texra` command can emit: human text, one JSON result,
@@ -10,8 +10,8 @@ export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
 /** Canonical config key for the CLI's output format. */
 export const CLI_OUTPUT_FORMAT_CONFIG_KEY = 'texra.outputFormat';
 
-export const CliOutputFormatSchema = z
-  .enum(CLI_OUTPUT_FORMATS)
-  .prefault('text');
+export const CliOutputFormatSchema = Schema.Literals(CLI_OUTPUT_FORMATS).pipe(
+  Schema.withDecodingDefault(Effect.succeed('text')),
+);
 
-export type CliOutputFormat = z.infer<typeof CliOutputFormatSchema>;
+export type CliOutputFormat = typeof CliOutputFormatSchema.Type;

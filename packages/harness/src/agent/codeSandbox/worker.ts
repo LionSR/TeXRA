@@ -15,7 +15,7 @@ import { workerData } from 'node:worker_threads';
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime';
 import * as NodeWorkerRunner from '@effect/platform-node/NodeWorkerRunner';
 import quickJsReleaseVariant from '@jitl/quickjs-wasmfile-release-sync';
-import { Deferred, Effect, type Scope } from 'effect';
+import { Deferred, Effect, Result, Schema, type Scope } from 'effect';
 import { WorkerRunnerPlatform } from 'effect/workers/WorkerRunner';
 import {
   type QuickJSContext,
@@ -23,7 +23,6 @@ import {
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
-import { z } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -45,10 +44,10 @@ import {
 
 type ScriptEndWire = NonNullable<StepReportWire['end']>;
 
-const ThrownSchema = z.object({
-  name: z.string(),
-  message: z.string(),
-  stack: z.string().optional(),
+const ThrownSchema = Schema.Struct({
+  name: Schema.String,
+  message: Schema.String,
+  stack: Schema.optional(Schema.String),
 });
 
 /** What the script's source is wrapped in; it shares the first line. */
@@ -81,9 +80,9 @@ function withLocation(
  * an `Error` carrying its text.
  */
 function endFromThrown(thrown: unknown): ScriptEndWire {
-  const parsed = ThrownSchema.safeParse(thrown);
-  const error = parsed.success
-    ? parsed.data
+  const parsed = Schema.decodeUnknownResult(ThrownSchema)(thrown);
+  const error = Result.isSuccess(parsed)
+    ? parsed.success
     : { name: 'Error', message: String(thrown) };
   return isOutOfMemory(error)
     ? { _tag: 'MemoryExhausted' }
@@ -99,9 +98,7 @@ interface Realm {
   /** Evaluate the script and run it to its first wait. */
   readonly begin: () => StepReportWire;
   /** Deliver one settlement and run the realm to its next wait. */
-  readonly settle: (
-    message: z.infer<typeof SettleMessageSchema>,
-  ) => StepReportWire;
+  readonly settle: (message: typeof SettleMessageSchema.Type) => StepReportWire;
 }
 
 const openRealm = (
@@ -159,7 +156,7 @@ const openRealm = (
     );
 
     // What the current step collects; reset as each report is taken.
-    let ops: StepReportWire['ops'] = [];
+    let ops: StepReportWire['ops'][number][] = [];
     let logs: string[] = [];
     let logsDropped = 0;
     let end: ScriptEndWire | undefined;
@@ -348,7 +345,7 @@ function evaluate(
 
 const program = Effect.gen(function* () {
   const input = yield* Effect.try({
-    try: () => WorkerInputSchema.parse(workerData),
+    try: () => Schema.decodeUnknownSync(WorkerInputSchema)(workerData),
     catch: ensureError,
   });
   const realm = yield* openRealm(input);
@@ -362,13 +359,13 @@ const program = Effect.gen(function* () {
   yield* runner.send(0, realm.begin());
   yield* Effect.raceFirst(
     runner.run((_port, raw) => {
-      const message = SettleMessageSchema.safeParse(raw);
-      return message.success
-        ? runner.send(0, realm.settle(message.data))
+      const message = Schema.decodeUnknownResult(SettleMessageSchema)(raw);
+      return Result.isSuccess(message)
+        ? runner.send(0, realm.settle(message.success))
         : Deferred.fail(
             fatal,
             new Error(
-              `Code sandbox worker received a malformed message: ${z.prettifyError(message.error)}`,
+              `Code sandbox worker received a malformed message: ${message.failure.message}`,
             ),
           );
     }),

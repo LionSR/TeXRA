@@ -1,6 +1,5 @@
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness';
-import type { z } from 'zod';
 
 export type DesktopCommandMessage = { command: string } & Record<
   string,
@@ -21,17 +20,17 @@ export type DesktopCommandRoutes = Readonly<
 
 /** A route whose message must match `schema`. One that does not is renderer
  *  drift: logged, and no program runs. */
-export function parsedRoute<S extends z.ZodType>(
-  schema: S,
-  handle: (message: z.output<S>) => Effect.Effect<void, Error, ProcessServices>,
+export function parsedRoute<T>(
+  schema: Schema.Codec<T, unknown>,
+  handle: (message: T) => Effect.Effect<void, Error, ProcessServices>,
 ): DesktopCommandRoute {
   return (message) => {
-    const parsed = schema.safeParse(message);
-    return parsed.success
-      ? handle(parsed.data)
+    const parsed = Schema.decodeUnknownResult(schema)(message);
+    return Result.isSuccess(parsed)
+      ? handle(parsed.success)
       : Effect.sync(() =>
           console.warn(
-            `Dropped a malformed ${message.command} message: ${parsed.error.message}`,
+            `Dropped a malformed ${message.command} message: ${parsed.failure.message}`,
           ),
         );
   };

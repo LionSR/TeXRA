@@ -13,19 +13,19 @@
  * another protocol's evidence there. `RunHistory` converts between these
  * shapes and the package's.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './offeredTools';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
-const ProviderEvidenceSchema = z.strictObject({
-  kind: z.string().min(1),
-  data: z.record(z.string(), JsonValueSchema),
+const ProviderEvidenceSchema = Schema.Struct({
+  kind: Schema.String.check(Schema.isMinLength(1)),
+  data: Schema.Record(Schema.String, JsonValueSchema),
 });
 
 /** Every wire surface a stored turn or usage record names. */
-export const StoredProtocolSchema = z.enum([
+export const StoredProtocolSchema = Schema.Literals([
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
@@ -34,22 +34,22 @@ export const StoredProtocolSchema = z.enum([
 ]);
 
 /** The selected binding: protocol, deployment and model, never a secret. */
-export const StoredOriginSchema = z.strictObject({
+export const StoredOriginSchema = Schema.Struct({
   protocol: StoredProtocolSchema,
-  requestedModel: z.string().min(1),
-  deployment: z.union([
-    z.strictObject({
-      endpoint: z.string().min(1),
-      credentialScope: z.string().min(1),
+  requestedModel: Schema.String.check(Schema.isMinLength(1)),
+  deployment: Schema.Union([
+    Schema.Struct({
+      endpoint: Schema.String.check(Schema.isMinLength(1)),
+      credentialScope: Schema.String.check(Schema.isMinLength(1)),
     }),
-    z.strictObject({ vendor: z.string(), version: z.string() }),
+    Schema.Struct({ vendor: Schema.String, version: Schema.String }),
   ]),
-  codecVersion: z.int().positive(),
+  codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
 });
 
-const TextPartSchema = z.strictObject({
-  kind: z.literal('text'),
-  text: z.string(),
+const TextPartSchema = Schema.Struct({
+  kind: Schema.Literal('text'),
+  text: Schema.String,
 });
 /**
  * A media part as history holds it: its bytes by address, never inline.
@@ -58,69 +58,72 @@ const TextPartSchema = z.strictObject({
  * the address, and only the invocation resolves it, right before the
  * provider call (`agent/runtime/storedTurn.ts`).
  */
-const MediaAddress = { mimeType: z.string().min(1), digest: Sha256Schema };
-const StoredInputPartSchema = z.discriminatedUnion('kind', [
+const MediaAddress = {
+  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  digest: Sha256Schema,
+};
+const StoredInputPartSchema = Schema.Union([
   TextPartSchema,
-  z.strictObject({
-    kind: z.literal('image'),
+  Schema.Struct({
+    kind: Schema.Literal('image'),
     ...MediaAddress,
-    detail: z.string().min(1).optional(),
+    detail: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   }),
-  z.strictObject({
-    kind: z.enum(['audio', 'video', 'document']),
+  Schema.Struct({
+    kind: Schema.Literals(['audio', 'video', 'document']),
     ...MediaAddress,
   }),
 ]);
 /** One part of a stored user or tool-result message. */
-export type StoredInputPart = z.infer<typeof StoredInputPartSchema>;
+export type StoredInputPart = typeof StoredInputPartSchema.Type;
 /** A media part: its bytes by address. */
 export type StoredMediaPart = Exclude<StoredInputPart, { kind: 'text' }>;
 
-const StoredContentSchema = z
-  .array(
-    z.discriminatedUnion('kind', [
-      z.strictObject({
-        kind: z.literal('message'),
-        content: z
-          .array(
-            z.strictObject({
-              kind: z.enum(['text', 'refusal']),
-              text: z.string(),
-            }),
-          )
-          .readonly(),
-        evidence: ProviderEvidenceSchema.optional(),
-      }),
-      z.strictObject({
-        kind: z.literal('reasoning'),
-        summary: z.array(TextPartSchema).readonly(),
-        content: z.array(TextPartSchema).readonly().optional(),
-        evidence: ProviderEvidenceSchema.nullable(),
-      }),
-      z.strictObject({
-        kind: z.literal('local-call'),
-        providerCallId: z.string().min(1),
-        name: z.string().min(1),
-        /** The provider's exact returned bytes, never a parse of them. */
-        argumentsText: z.string(),
-        evidence: ProviderEvidenceSchema.optional(),
-      }),
-    ]),
-  )
-  .readonly();
+const StoredContentSchema = Schema.Array(
+  Schema.Union([
+    Schema.Struct({
+      kind: Schema.Literal('message'),
+      content: Schema.Array(
+        Schema.Struct({
+          kind: Schema.Literals(['text', 'refusal']),
+          text: Schema.String,
+        }),
+      ),
+      evidence: Schema.optional(ProviderEvidenceSchema),
+    }),
+    Schema.Struct({
+      kind: Schema.Literal('reasoning'),
+      summary: Schema.Array(TextPartSchema),
+      content: Schema.optional(Schema.Array(TextPartSchema)),
+      evidence: Schema.NullOr(ProviderEvidenceSchema),
+    }),
+    Schema.Struct({
+      kind: Schema.Literal('local-call'),
+      providerCallId: Schema.String.check(Schema.isMinLength(1)),
+      name: Schema.String.check(Schema.isMinLength(1)),
+      /** The provider's exact returned bytes, never a parse of them. */
+      argumentsText: Schema.String,
+      evidence: Schema.optional(ProviderEvidenceSchema),
+    }),
+  ]),
+);
 
-const TokenCount = z.int().nonnegative().nullable();
+const TokenCount = Schema.NullOr(
+  Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+);
 
 /** One completed provider turn. An editor turn reports no provider facts. */
-export const StoredTurnSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('http'),
-    providerResponseId: z.string().min(1).nullable(),
+export const StoredTurnSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('http'),
+    providerResponseId: Schema.NullOr(
+      Schema.String.check(Schema.isMinLength(1)),
+    ),
     requestedOrigin: StoredOriginSchema,
-    returnedModel: z.string().min(1).nullable(),
-    modelFingerprint: z.string().nullable(),
+    returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+    modelFingerprint: Schema.NullOr(Schema.String),
     content: StoredContentSchema,
-    finishReason: z.enum([
+    finishReason: Schema.Literals([
       'stop',
       'length',
       'content-filter',
@@ -129,68 +132,68 @@ export const StoredTurnSchema = z.discriminatedUnion('kind', [
       'refusal',
       'context-window-exceeded',
     ]),
-    stopSequence: z.string().optional(),
-    finishEvidence: ProviderEvidenceSchema.optional(),
-    refusalEvidence: ProviderEvidenceSchema.nullable().optional(),
-    usage: z
-      .strictObject({
+    stopSequence: Schema.optional(Schema.String),
+    finishEvidence: Schema.optional(ProviderEvidenceSchema),
+    refusalEvidence: Schema.optional(Schema.NullOr(ProviderEvidenceSchema)),
+    usage: Schema.NullOr(
+      Schema.Struct({
         inputTokens: TokenCount,
         outputTokens: TokenCount,
         totalTokens: TokenCount,
         cachedInputTokens: TokenCount,
         reasoningTokens: TokenCount,
-        providerUsage: ProviderEvidenceSchema.optional(),
-      })
-      .nullable(),
-    continuation: ProviderEvidenceSchema.optional(),
+        providerUsage: Schema.optional(ProviderEvidenceSchema),
+      }),
+    ),
+    continuation: Schema.optional(ProviderEvidenceSchema),
   }),
-  z.strictObject({
-    kind: z.literal('editor'),
+  Schema.Struct({
+    kind: Schema.Literal('editor'),
     requestedOrigin: StoredOriginSchema,
-    providerResponseId: z.null(),
-    returnedModel: z.null(),
-    modelFingerprint: z.null(),
-    finishReason: z.null(),
-    usage: z.null(),
+    providerResponseId: Schema.Null,
+    returnedModel: Schema.Null,
+    modelFingerprint: Schema.Null,
+    finishReason: Schema.Null,
+    usage: Schema.Null,
     content: StoredContentSchema,
   }),
 ]);
 
 /** One entry of canonical history. */
-export const StoredMessageSchema = z.discriminatedUnion('role', [
-  z.strictObject({
-    role: z.literal('user'),
-    content: z.array(StoredInputPartSchema).min(1).readonly(),
+export const StoredMessageSchema = Schema.Union([
+  Schema.Struct({
+    role: Schema.Literal('user'),
+    content: Schema.Array(StoredInputPartSchema).check(Schema.isMinLength(1)),
   }),
-  z.strictObject({
-    role: z.literal('assistant'),
+  Schema.Struct({
+    role: Schema.Literal('assistant'),
     /** `null`: no model produced it (a call the application handed down). */
-    origin: StoredOriginSchema.nullable(),
+    origin: Schema.NullOr(StoredOriginSchema),
     content: StoredContentSchema,
   }),
-  z.strictObject({
-    role: z.literal('tool'),
-    results: z
-      .array(
-        z.strictObject({
-          callOrdinal: z.int().nonnegative(),
-          status: z.enum(['success', 'error']),
-          content: z.array(StoredInputPartSchema).readonly(),
-        }),
-      )
-      .min(1)
-      .readonly(),
+  Schema.Struct({
+    role: Schema.Literal('tool'),
+    results: Schema.Array(
+      Schema.Struct({
+        callOrdinal: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        status: Schema.Literals(['success', 'error']),
+        content: Schema.Array(StoredInputPartSchema),
+      }),
+    ).check(Schema.isMinLength(1)),
   }),
   /** A context update the run appended mid-conversation. */
-  z.strictObject({ role: z.literal('system'), text: z.string().min(1) }),
+  Schema.Struct({
+    role: Schema.Literal('system'),
+    text: Schema.String.check(Schema.isMinLength(1)),
+  }),
 ]);
 /** One entry of canonical history, as a committed row holds it. */
-export type StoredMessage = z.infer<typeof StoredMessageSchema>;
+export type StoredMessage = typeof StoredMessageSchema.Type;
 
 /** Accepted remote work: its identity, and the cursor the adapter observes
  *  it by. */
-export const StoredOperationSchema = z.strictObject({
+export const StoredOperationSchema = Schema.Struct({
   origin: StoredOriginSchema,
-  providerResponseId: z.string().min(1),
+  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
   evidence: ProviderEvidenceSchema,
 });

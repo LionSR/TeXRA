@@ -3,8 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as os from 'node:os';
-import { Effect } from 'effect';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -40,16 +39,14 @@ import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { locateTool, missingCoreTools } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
-const ProbeEnvironmentInputSchema = z.strictObject({
-  tool: z
-    .string()
-    .nullish()
-    .describe(
+const ProbeEnvironmentInputSchema = Schema.Struct({
+  tool: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
       'If provided, re-checks just this one tool on PATH (e.g. "pdflatex") and answers in one line. Otherwise returns the full JSON report.',
-    ),
+  }),
 });
 
-type ProbeInput = z.infer<typeof ProbeEnvironmentInputSchema>;
+type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 

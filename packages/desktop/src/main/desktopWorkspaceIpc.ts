@@ -1,7 +1,7 @@
 // Main-process IPC for the workspace shell surfaces: editor file I/O, terminal
 // pty sessions, and embedded browser tabs. All three are renderer-driven, and
 // the sandboxed renderer has no node integration, so every request lands here.
-// Requests are Zod-validated at the boundary and, for file I/O, confined to the
+// Requests are schema-validated at the boundary and, for file I/O, confined to the
 // workspace root before touching disk: a renderer path is untrusted input, and
 // `../` traversal would otherwise reach anything the user can.
 //
@@ -14,7 +14,7 @@
 import { basename, dirname, join } from 'node:path';
 import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 
-import { Data, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 import {
   Rejected,
@@ -104,24 +104,26 @@ interface DesktopWorkspaceIpc {
  * A workspace request the editor refused, carrying the whole sentence the
  * renderer shows for it — never a prefix over another message.
  */
-class WorkspaceRequestRefused extends Data.TaggedError(
+class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused>()(
   'WorkspaceRequestRefused',
-)<{
-  readonly message: string;
-}> {}
+  {
+    message: Schema.String,
+  },
+) {}
 
 /**
  * A host promise this handler awaited rejected. `member` names which, so the
  * report says what actually failed, and `message` is the rejection's own text
  * so the sentence the renderer shows is unchanged.
  */
-class WorkspaceHostCallFailed extends Data.TaggedError(
+class WorkspaceHostCallFailed extends Schema.TaggedError<WorkspaceHostCallFailed>()(
   'WorkspaceHostCallFailed',
-)<{
-  readonly member: 'ptyHost.create';
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    member: Schema.Literal('ptyHost.create'),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 /** Everything a file-I/O program here can fail with. */
 type WorkspaceFileFailure =

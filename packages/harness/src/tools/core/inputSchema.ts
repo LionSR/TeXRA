@@ -3,23 +3,39 @@
  */
 
 // Third-party imports
-import type { z } from 'zod';
+import { Option, Schema, SchemaGetter } from 'effect';
 
 /**
  * An optional tool-input field whose absence resolves to `fallback` before
  * `execute` ever sees it.
  *
- * The wrapping is `.nullish()`, deliberately not `.optional()` and not
- * `.prefault()`. OpenAI-compatible providers (DeepSeek, Kimi, …) represent an
- * omitted optional field as an explicit `null` in structured output, so the
- * field must be nullable as well as optional; `.prefault()` substitutes only
- * for `undefined` and would hand `null` straight through. The `?? fallback`
- * covers both, which is why the resulting field's output type is not nullable
- * and use sites need no `== null` check of their own.
+ * The encoded side is `Schema.optional(Schema.NullOr(schema))`, deliberately
+ * not `Schema.optional(schema)` with a decoding default. OpenAI-compatible
+ * providers (DeepSeek, Kimi, …) represent an omitted optional field as an
+ * explicit `null` in structured output, so the field must be nullable as well
+ * as optional; `withDecodingDefault` substitutes only for an absent or
+ * `undefined` field and would hand `null` straight through. The `?? fallback`
+ * covers absent, `undefined` and `null` alike, which is why the decoded field
+ * is required and not nullable, and use sites need no `== null` check of
+ * their own.
+ *
+ * `description` is written on the encoded side: that is the side the model's
+ * JSON Schema is generated from, and an annotation on the decoded side of a
+ * transformation never reaches it.
  */
-export function nullishWithDefault<Schema extends z.ZodType>(
-  schema: Schema,
-  fallback: z.output<Schema>,
-): z.ZodType<z.output<Schema>, z.input<Schema> | null | undefined> {
-  return schema.nullish().transform((value) => value ?? fallback);
+export function nullishWithDefault<S extends Schema.Top>(
+  schema: S,
+  fallback: S['Type'],
+  description: string,
+): Schema.decodeTo<Schema.toType<S>, Schema.optional<Schema.NullOr<S>>> {
+  return Schema.optional(Schema.NullOr(schema))
+    .annotate({ description })
+    .pipe(
+      Schema.decodeTo(Schema.toType(schema), {
+        decode: SchemaGetter.transformOptional((value) =>
+          Option.some(Option.getOrUndefined(value) ?? fallback),
+        ),
+        encode: SchemaGetter.passthrough(),
+      }),
+    );
 }

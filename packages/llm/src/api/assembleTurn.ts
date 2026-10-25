@@ -2,7 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { TurnResultSchema, type TurnEvent, type TurnResult } from '../turn.js';
@@ -276,7 +276,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     calls !== (reason === 'tool-calls')
   )
     return yield* fail(turn, 'returned inconsistent tool calls and finish');
-  const result = TurnResultSchema.safeParse({
+  const result = Schema.decodeUnknownResult(TurnResultSchema)({
     kind: 'http',
     providerResponseId: turn.id,
     requestedOrigin: turn.options.origin,
@@ -287,13 +287,13 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     finishReason: reason,
     usage: turn.usage,
   });
-  if (!result.success || result.data.kind !== 'http')
+  if (!Result.isSuccess(result) || result.success.kind !== 'http')
     return yield* new ModelError({
       kind: 'malformed-output',
       message: `${turn.options.provider} returned inconsistent completed content.`,
-      cause: result.success ? undefined : result.error,
+      cause: Result.isFailure(result) ? result.failure : undefined,
     });
-  return result.data;
+  return result.success;
 });
 
 /**

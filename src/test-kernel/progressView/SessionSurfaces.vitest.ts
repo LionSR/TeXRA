@@ -1,11 +1,12 @@
 // Third-party imports
+import { Schema } from 'effect';
 import { signal } from '@lit-labs/signals';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { WebviewTransport } from '@progressView/frontend/sessionTransport';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { Rejected, type RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
@@ -62,7 +63,7 @@ beforeEach(() => {
   // Effect-shaped store: returning an Effect where `void` is expected is
   // assignable, which would let a discarded write look correct here.
   webviewState = {
-    [`surface:${KEY}`]: PersistedSurfaceSchema.parse({
+    [`surface:${KEY}`]: Schema.decodeUnknownSync(PersistedSurfaceSchema)({
       selected: ROOT,
       drafts: [[ROOT, 'Saved text']],
     }),
@@ -113,7 +114,9 @@ describe('session Surface ownership', () => {
     } as const;
     refuse({ ok: false, error });
     await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toBe(error);
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
+      new Rejected({ reason: error.reason }),
+    );
     expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
     surfaces.act(KEY, { kind: 'dismissRequestError' });
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
@@ -149,7 +152,9 @@ describe('session Surface ownership', () => {
 
   it('parses a host launch patch without defaulting the fields it omits', () => {
     // A host naming one field must not reset the agent, draft or files.
-    expect(LaunchPatchSchema.parse({ commit: 'a1f3c2' })).toEqual({
+    expect(
+      Schema.decodeUnknownSync(LaunchPatchSchema)({ commit: 'a1f3c2' }),
+    ).toEqual({
       commit: 'a1f3c2',
     });
   });
@@ -196,9 +201,7 @@ describe('session Surface ownership', () => {
       'Saved text',
     );
     expect(
-      storage.get<ReturnType<typeof PersistedSurfaceSchema.parse>>(
-        `surface:${KEY}`,
-      ).drafts,
+      storage.get<typeof PersistedSurfaceSchema.Type>(`surface:${KEY}`).drafts,
     ).toEqual([[ROOT, 'Saved text']]);
 
     view.set(viewOf(buildScenario().events));
@@ -208,9 +211,9 @@ describe('session Surface ownership', () => {
     );
     view.set(emptySessionView(KEY));
     await Promise.resolve();
-    const persisted = storage.get<
-      ReturnType<typeof PersistedSurfaceSchema.parse>
-    >(`surface:${KEY}`);
+    const persisted = storage.get<typeof PersistedSurfaceSchema.Type>(
+      `surface:${KEY}`,
+    );
     expect(persisted.drafts).toEqual([]);
     // The selection is decided by the same prune, so a raw read of the
     // field never names a run the view no longer holds.
@@ -242,10 +245,9 @@ describe('session Surface ownership', () => {
     });
     reject({ ok: false, error: { _tag: 'Rejected', reason: 'Unavailable' } });
     await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual({
-      _tag: 'Rejected',
-      reason: 'Unavailable',
-    });
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
+      new Rejected({ reason: 'Unavailable' }),
+    );
     expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
       text: 'New text',
       images: [image],

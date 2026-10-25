@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { Data, Result } from 'effect';
+import { Result, Schema } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
@@ -13,12 +13,13 @@ interface ExtractedFrontmatter {
  * plain read/IO errors so consumers can classify malformed frontmatter by
  * type instead of string-matching error messages.
  */
-export class SkillFrontmatterError extends Data.TaggedError(
+export class SkillFrontmatterError extends Schema.TaggedError<SkillFrontmatterError>()(
   'SkillFrontmatterError',
-)<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 /**
  * Extract strict YAML frontmatter from a SKILL.md file.

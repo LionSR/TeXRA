@@ -1,26 +1,26 @@
-import { z } from 'zod';
+import { Schema } from 'effect';
 
 import { ActiveSkillSourceScopeSchema } from './activeSkills';
 import { QualifiedSkillNameSchema } from './skillName';
 
 /** One discovered skill projected for host settings displays. */
-export const SkillDisplayItemSchema = z.strictObject({
+export const SkillDisplayItemSchema = Schema.Struct({
   name: QualifiedSkillNameSchema,
-  description: z.string(),
+  description: Schema.String,
   scope: ActiveSkillSourceScopeSchema,
-  label: z.string(),
-  path: z.string(),
+  label: Schema.String,
+  path: Schema.String,
   /** The directory the skill was discovered under, i.e. its source's path. */
-  sourcePath: z.string(),
-  enabled: z.boolean(),
+  sourcePath: Schema.String,
+  enabled: Schema.Boolean,
 });
 
-export type SkillDisplayItem = z.infer<typeof SkillDisplayItemSchema>;
+export type SkillDisplayItem = typeof SkillDisplayItemSchema.Type;
 
 /** Discovery problem safe to carry to settings UIs. */
-export const SkillDisplayIssueSchema = z.strictObject({
-  message: z.string(),
-  path: z.string().optional(),
+export const SkillDisplayIssueSchema = Schema.Struct({
+  message: Schema.String,
+  path: Schema.optional(Schema.String),
 });
 
-export type SkillDisplayIssue = z.infer<typeof SkillDisplayIssueSchema>;
+export type SkillDisplayIssue = typeof SkillDisplayIssueSchema.Type;

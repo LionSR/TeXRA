@@ -9,7 +9,7 @@
  * Split out of the old `@shared/constants/latex` dumping ground.
  */
 
-/** Numeric range for a setting (used by Zod schemas and UI inputs). */
+/** Numeric range for a setting (used by the setting schemas and UI inputs). */
 interface NumericRange {
   readonly min: number;
   readonly max?: number;
@@ -46,7 +46,7 @@ export const LATEX_CONFIG_DEFAULTS = {
   latexFormatter: 'latexindent' as LatexFormatterValue,
 } as const;
 
-/** Numeric ranges (used by Zod schemas and UI inputs). */
+/** Numeric ranges (used by the setting schemas and UI inputs). */
 export const LATEX_CONFIG_RANGES = {
   workflowAutoCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
   latexdiffTimeoutMs: { min: 1000, max: 80000 } satisfies NumericRange,

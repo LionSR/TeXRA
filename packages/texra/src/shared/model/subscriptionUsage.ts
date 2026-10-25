@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { Schema, Struct } from 'effect';
 
 /**
  * The subscriptions whose usage is reported. Storage owns the enum, so a
@@ -12,53 +12,64 @@ export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
   'glmCodingPlan',
 ] as const);
 
-const SubscriptionUsageProviderSchema = z.enum(SUBSCRIPTION_USAGE_PROVIDERS);
-export type SubscriptionUsageProvider = z.infer<
-  typeof SubscriptionUsageProviderSchema
->;
+const SubscriptionUsageProviderSchema = Schema.Literals(
+  SUBSCRIPTION_USAGE_PROVIDERS,
+);
+export type SubscriptionUsageProvider =
+  (typeof SubscriptionUsageProviderSchema)['Type'];
 
-const SubscriptionUsageWindowSchema = z.object({
-  name: z.string().min(1),
-  percentUsed: z.number().min(0).max(100),
-  percentRemaining: z.number().min(0).max(100),
-  resetAt: z.int().nonnegative().optional(),
-  limitWindowSeconds: z.int().positive().optional(),
+const SubscriptionUsageWindowSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
+  percentUsed: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
+    Schema.isLessThanOrEqualTo(100),
+  ),
+  percentRemaining: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
+    Schema.isLessThanOrEqualTo(100),
+  ),
+  resetAt: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  limitWindowSeconds: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThan(0)),
+  ),
 });
-export type SubscriptionUsageWindow = z.infer<
-  typeof SubscriptionUsageWindowSchema
->;
+export type SubscriptionUsageWindow =
+  (typeof SubscriptionUsageWindowSchema)['Type'];
 
-const SubscriptionUsageSnapshotBaseSchema = z.object({
+const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
   provider: SubscriptionUsageProviderSchema,
-  providerName: z.string().min(1),
-  planName: z.string().min(1),
-  fetchedAt: z.int().nonnegative(),
+  providerName: Schema.String.check(Schema.isMinLength(1)),
+  planName: Schema.String.check(Schema.isMinLength(1)),
+  fetchedAt: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
-const SubscriptionUsageSnapshotSchema = z.discriminatedUnion('state', [
-  SubscriptionUsageSnapshotBaseSchema.extend({
-    state: z.literal('available'),
-    windows: z.array(SubscriptionUsageWindowSchema).min(1),
-  }),
-  SubscriptionUsageSnapshotBaseSchema.extend({
-    state: z.literal('unavailable'),
-    windows: z.tuple([]),
-    reason: z.enum([
-      'missing_credentials',
-      'invalid_credentials',
-      'request_failed',
-      'malformed_response',
-    ]),
-  }),
-]);
-export type SubscriptionUsageSnapshot = z.infer<
-  typeof SubscriptionUsageSnapshotSchema
->;
+const SubscriptionUsageSnapshotSchema = Schema.Union([
+  SubscriptionUsageSnapshotBaseSchema.mapFields(
+    Struct.assign({
+      state: Schema.Literal('available'),
+      windows: Schema.Array(SubscriptionUsageWindowSchema).check(
+        Schema.isMinLength(1),
+      ),
+    }),
+  ),
 
-export const SubscriptionUsageSnapshotsSchema = z.record(
+  SubscriptionUsageSnapshotBaseSchema.mapFields(
+    Struct.assign({
+      state: Schema.Literal('unavailable'),
+      windows: Schema.Tuple([]),
+      reason: Schema.Literals([
+        'missing_credentials',
+        'invalid_credentials',
+        'request_failed',
+        'malformed_response',
+      ]),
+    }),
+  ),
+]);
+export type SubscriptionUsageSnapshot =
+  (typeof SubscriptionUsageSnapshotSchema)['Type'];
+
+export const SubscriptionUsageSnapshotsSchema = Schema.Record(
   SubscriptionUsageProviderSchema,
   SubscriptionUsageSnapshotSchema,
 );
-export type SubscriptionUsageSnapshots = z.infer<
-  typeof SubscriptionUsageSnapshotsSchema
->;
+export type SubscriptionUsageSnapshots =
+  (typeof SubscriptionUsageSnapshotsSchema)['Type'];

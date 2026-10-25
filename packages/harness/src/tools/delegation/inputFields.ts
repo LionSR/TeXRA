@@ -6,8 +6,15 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
-import { z } from 'zod';
+import {
+  Effect,
+  FileSystem,
+  Option,
+  Result,
+  Schema,
+  SchemaGetter,
+  SchemaIssue,
+} from 'effect';
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
@@ -33,28 +40,32 @@ import {
 import { escapesRoot } from '@utils/core/pathCore';
 
 /**
- * Shared Zod field for the `memories` parameter on delegation tools.
+ * Shared field for the `memories` parameter on delegation tools.
  * Validates that all paths are within /memories using displayToStoragePath
  * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
  * handles read failures gracefully, avoiding a TOCTOU race.
  */
-export const memoriesField = nullishWithDefault(z.array(z.string()), [])
-  .describe(
-    'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
-  )
-  .superRefine((memories, ctx) => {
-    for (const [i, memory] of memories.entries()) {
+export const memoriesField = nullishWithDefault(
+  Schema.Array(Schema.String),
+  [],
+  'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
+).check(
+  Schema.makeFilter((memories) =>
+    memories.flatMap((memory, i) => {
       const parsed = Result.try(() => displayToStoragePath(memory));
-      if (Result.isFailure(parsed)) {
-        const e = parsed.failure;
-        ctx.addIssue({
-          code: 'custom',
-          path: [i],
-          message: extractErrorMessage(e) ?? `Invalid memory path: ${memory}`,
-        });
-      }
-    }
-  });
+      return Result.isSuccess(parsed)
+        ? []
+        : [
+            {
+              path: [i],
+              issue:
+                extractErrorMessage(parsed.failure) ??
+                `Invalid memory path: ${memory}`,
+            },
+          ];
+    }),
+  ),
+);
 
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
@@ -118,49 +129,60 @@ export function withToolUseSubagentHandoffInstruction(
 
 /** An agent an `agent` call defines instead of naming one from the
  *  catalog, named by its `agentName`. */
-export const personaField = z
-  .strictObject({
-    prompt: z
-      .string()
-      .min(1)
-      .describe('Its system prompt: who it is and how it works.'),
-    tools: z
-      .array(z.string().min(1))
-      .nullish()
-      .describe(
-        'The tools it gets, by name; omitted, none. It gets only those you have.',
-      ),
-  })
-  .nullish()
-  .describe(
+export const personaField = Schema.optional(
+  Schema.NullOr(
+    Schema.Struct({
+      prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+        description: 'Its system prompt: who it is and how it works.',
+      }),
+      tools: Schema.optional(
+        Schema.NullOr(Schema.Array(Schema.String.check(Schema.isMinLength(1)))),
+      ).annotate({
+        description:
+          'The tools it gets, by name; omitted, none. It gets only those you have.',
+      }),
+    }),
+  ),
+).annotate({
+  description:
     'Define the agent here, named `agentName`, instead of naming one from the catalog: for this call alone.',
-  );
+});
 
 /**
- * Shared Zod field for the `working_directory` parameter on delegation tools.
+ * Shared field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the
  * canonical `string | undefined` value — no trimming or absolute-path checks
  * needed at the call site.
  */
-export const workingDirectoryField = z
-  .string()
-  .nullish()
-  .describe(
-    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
-  )
-  .transform((value, ctx): string | undefined => {
-    const fail = (message: string): typeof z.NEVER => {
-      ctx.addIssue({ code: 'custom', message });
-      return z.NEVER;
-    };
-    const parsed = Result.try(() => parseWorkingDirectory(value));
-    if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
-    // Neither the worktree opt-in nor the path's existence is checked here:
-    // this transform runs on the tool facade's one parse of a static schema,
-    // before any call exists. Both run in `execute`, through
-    // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
-    return parsed.success;
-  });
+export const workingDirectoryField = Schema.optional(
+  Schema.NullOr(Schema.String),
+)
+  .annotate({
+    description:
+      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
+  })
+  .pipe(
+    Schema.decodeTo(Schema.optional(Schema.String), {
+      decode: SchemaGetter.transformOptionalEffect((value) => {
+        // Neither the worktree opt-in nor the path's existence is checked here:
+        // this runs on the tool facade's one decode of a static schema, before
+        // any call exists. Both run in `execute`, through
+        // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
+        const parsed = Result.try(() =>
+          parseWorkingDirectory(Option.getOrUndefined(value)),
+        );
+        return Result.isSuccess(parsed)
+          ? Effect.succeed(Option.some(parsed.success))
+          : Effect.fail(
+              new SchemaIssue.InvalidValue(
+                { message: toErrorMessage(parsed.failure) },
+                value,
+              ),
+            );
+      }),
+      encode: SchemaGetter.passthrough(),
+    }),
+  );
 
 /**
  * `workspaceAbsolutePath` validates the path it resolved and throws when the

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -23,7 +23,7 @@ function config(
   agent: string,
   inputFiles: readonly string[] = [],
 ): AgentConfig {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Test run listing.',

@@ -38,7 +38,7 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
 
 /**
  * Enum values for a catalog key, paired with the catalog's display metadata.
- * The allowed values come from the entry's `z.enum(...)` schema, so a settings
+ * The allowed values come from the entry's `Schema.Literals` schema, so a settings
  * UI never hand-lists them. Non-enum keys yield an empty list; a key with no
  * settings-view catalog row is a defect and throws, like
  * {@link renderStateSettingToggleRow}.

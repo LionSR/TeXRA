@@ -9,8 +9,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
-import { z } from 'zod';
+import { Effect, FileSystem, Result, Schema } from 'effect';
 
 // Local imports - common
 import {
@@ -19,7 +18,7 @@ import {
 } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import {
@@ -34,10 +33,12 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
 
 /** A subagent's frontmatter; `tools` is a comma-separated list or a list. */
-const SubagentFrontmatterSchema = z.object({
-  name: AgentNameSchema.optional(),
-  description: z.string().optional(),
-  tools: z.union([z.string(), z.array(z.string())]).optional(),
+const SubagentFrontmatterSchema = Schema.Struct({
+  name: Schema.optional(AgentNameSchema),
+  description: Schema.optional(Schema.String),
+  tools: Schema.optional(
+    Schema.Union([Schema.String, Schema.Array(Schema.String)]),
+  ),
 });
 
 /** One plugin agent as its file defines it. */
@@ -66,9 +67,9 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     return yield* Effect.fail(
       new Error(`${file} must start with YAML frontmatter (---).`),
     );
-  const parsed = parseYamlWith(
-    split.frontmatterText,
-    SubagentFrontmatterSchema,
+  const parsed = Result.flatMap(
+    safeParseYaml(split.frontmatterText),
+    Schema.decodeUnknownResult(SubagentFrontmatterSchema),
   );
   if (Result.isFailure(parsed))
     return yield* Effect.fail(
@@ -145,7 +146,7 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
     tools: agent.tools === undefined ? undefined : [...agent.tools],
     // None named: `AgentRun` gives it what it inherits. The task arrives as
     // the user message, as a Claude Code subagent's does.
-    persona: PersonaSchema.parse({
+    persona: Schema.decodeUnknownSync(PersonaSchema)({
       prompt: agent.systemPrompt,
       tools: agent.tools ?? [],
     }),

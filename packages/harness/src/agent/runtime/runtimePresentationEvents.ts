@@ -1,4 +1,4 @@
-import { Data, type Effect } from 'effect';
+import { type Effect, Schema } from 'effect';
 
 import type {
   RequestEnsureProgressViewPayload,
@@ -26,6 +26,15 @@ export interface RuntimePresentationEventPayloads {
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
+
+/** Every event name, as {@link HostPresentationFailed} records it. */
+const RuntimePresentationEventSchema = Schema.Literals([
+  'requestOpenFile',
+  'requestShowInstruction',
+  'showAgentConfigBanner',
+  'requestShowError',
+  'requestEnsureProgressView',
+] as const satisfies readonly RuntimePresentationEvent[]);
 
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
@@ -72,9 +81,10 @@ export type PresentationEventHandlers<
  * nothing waits on a presentation, so `presentOn` warn-logs it on the
  * detached fiber that runs it and no `fallbackMessage` follows.
  */
-export class HostPresentationFailed extends Data.TaggedError(
+export class HostPresentationFailed extends Schema.TaggedError<HostPresentationFailed>()(
   'HostPresentationFailed',
-)<{
-  readonly event: RuntimePresentationEvent;
-  readonly cause: unknown;
-}> {}
+  {
+    event: RuntimePresentationEventSchema,
+    cause: Schema.Defect(),
+  },
+) {}

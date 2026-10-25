@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Schema } from 'effect';
 
 // Local imports
 import {
@@ -14,6 +14,7 @@ import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type RunId,
+  RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
@@ -59,13 +60,14 @@ interface ProgressFollowUpWorkspace {
  * answer. Named rather than widened to `Error`, so the host arm that shows it
  * sees what it is; `cause` is the filesystem error itself.
  */
-export class CompileFixerPlanFailed extends Data.TaggedError(
+export class CompileFixerPlanFailed extends Schema.TaggedError<CompileFixerPlanFailed>()(
   'CompileFixerPlanFailed',
-)<{
-  readonly runId: RunId;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
+  {
+    runId: RunIdSchema,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 interface ProgressFollowUpControllerDeps {
   loadModelOptions(): Effect.Effect<

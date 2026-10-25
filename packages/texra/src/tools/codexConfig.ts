@@ -1,6 +1,5 @@
-import { Effect, Predicate } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
-import { z } from 'zod';
 
 // Local imports - agent config
 import { codexBackendModelId } from '@texra-ai/llm';
@@ -136,8 +135,8 @@ type BundledCodexModel = {
  *  entries stay `unknown` here and are duck-typed below, so one malformed
  *  entry elsewhere in the catalog can't take down a lookup for a model it
  *  doesn't concern. */
-const BundledCodexCatalogSchema = z.object({
-  models: z.array(z.unknown()),
+const BundledCodexCatalogSchema = Schema.Struct({
+  models: Schema.Array(Schema.Unknown),
 });
 
 const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
@@ -158,9 +157,9 @@ function catalogEfforts(
     // The caller warns on `undefined`.
     return undefined;
   }
-  const catalog = BundledCodexCatalogSchema.safeParse(parsed);
-  if (!catalog.success) return undefined;
-  const entry = catalog.data.models.find(
+  const catalog = Schema.decodeUnknownResult(BundledCodexCatalogSchema)(parsed);
+  if (!Result.isSuccess(catalog)) return undefined;
+  const entry = catalog.success.models.find(
     (item): item is BundledCodexModel =>
       Predicate.hasProperty(item, 'slug') && item.slug === slug,
   );
