@@ -28,6 +28,11 @@ export interface LiveRun {
   readonly controls: RunControls | undefined;
   /** A generation of it is live here: its fiber, a hold, or a launch. */
   readonly live: boolean;
+  /** Whether the generation live here reads a message: a one-shot loop
+   *  (headless, or an in-band child) ends after its turn and reads none,
+   *  and a run with no loop of its own (a background command) reads what
+   *  its launch said it takes. */
+  readonly readsMessages: boolean;
   /** Its parent edge (`RunRegistry.parentOf`). */
   readonly parent: RunId | null;
   /** Why it was stopped here, while it unwinds from that stop. */

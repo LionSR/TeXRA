@@ -35,12 +35,14 @@ import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
 
-/**
- * Prefix prepended to a compaction summary when it is folded back into the
- * conversation as a synthetic user message, so the resumed-conversation
- * marker stays identical across providers.
- */
+/** Prepended to a summary folded back into the conversation as a user
+ *  message: the same marker for every provider. */
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
+
+/** The message a `/compact` on an idle run wakes it with (`RunInput.next`);
+ *  the compaction at that turn's request boundary consumes the request. */
+export const COMPACTION_REQUEST =
+  'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 /** System prompt used for conversation compaction. */
 export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
@@ -108,19 +110,14 @@ interface CompactionInput {
   readonly answers?: readonly RunHistoryDraft[];
 }
 
-/** Why a compaction runs, as its `context.edit` records it. */
-const COMPACTION_TRIGGER = {
-  request: 'user',
-  threshold: 'context-limit',
+/** Why a compaction runs: as its `context.edit` records it (`trigger`), and
+ *  as its debug line names it. */
+const COMPACTION_REASONS = {
+  request: { trigger: 'user', debug: 'manually requested' },
+  threshold: { trigger: 'context-limit', debug: 'token threshold exceeded' },
 } as const;
 
-/** Why a compaction runs, as its debug line names it. */
-const COMPACTION_REASON = {
-  request: 'manually requested',
-  threshold: 'token threshold exceeded',
-} as const;
-
-type Reason = keyof typeof COMPACTION_REASON;
+type Reason = keyof typeof COMPACTION_REASONS;
 
 /** A summary the bound model produced of messages `[0, to)`. */
 interface Summary {
@@ -170,16 +167,19 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   }
   const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
-  logger.debug(`Compacting conversation (${COMPACTION_REASON[reason]})`, {
-    data: {
-      inputTokens: tokensBefore,
-      utilizationPercent: roundedUtilizationPercent(
-        tokensBefore,
+  logger.debug(
+    `Compacting conversation (${COMPACTION_REASONS[reason].debug})`,
+    {
+      data: {
+        inputTokens: tokensBefore,
+        utilizationPercent: roundedUtilizationPercent(
+          tokensBefore,
+          contextWindow,
+        ),
         contextWindow,
-      ),
-      contextWindow,
+      },
     },
-  });
+  );
   const activity = startCompactionActivity(logger);
   // The summary is a model call like any other: the invoker gates, prices
   // and reports it, and its usage rides the edit that lands it. It leaves
@@ -263,7 +263,7 @@ const land = Effect.fn('compaction.land')(function* (
       aggregateId: rowAggregate(input.runId),
       payload: {
         cause: 'compaction',
-        trigger: COMPACTION_TRIGGER[reason],
+        trigger: COMPACTION_REASONS[reason].trigger,
         base,
         range: { from: 0, to: summary.to },
         messages: [summary.replacement],

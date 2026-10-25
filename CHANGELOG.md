@@ -671,6 +671,16 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **A message typed while a run works is answered at its next model
+  request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
+  model inside the turn; since then it waited for the turn to end. A message
+  typed mid-turn now lands after the tool results the run is waiting on, so
+  the model answers it in the same turn; a turn with no tool calls reads it
+  at the end as before, and a message typed with Stop is answered by the
+  request after the stopped step's results. A message to a run that ends
+  after its one turn is refused with that reason instead of queuing unread,
+  and a run written by an earlier build refuses a resume as such instead of
+  failing it.
 - **Check an agent's launch in the New task form, and run a task again
   with changes.** An agent's proposal card has **Edit** (`e`): it opens the
   New task form filled with what the agent would start, its agent, model,

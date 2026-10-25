@@ -170,7 +170,7 @@ const POSITION_VOCABULARY_SOURCES = [
     /const PositionAtSchema = z\.enum\(\[([^\]]*)\]\)/u,
   ],
   [
-    'packages/harness/src/shared/session/runRows.ts',
+    'packages/harness/src/shared/runs/runStatus.ts',
     /type RunLoopPhase =([^;]*);/u,
   ],
 ];

@@ -356,15 +356,22 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 /** Dispatch the pending response of an opened run; `definitions` are the
  *  tools a script run in it may call. */
 const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
-  dispatchPendingResponse(kit.cell, {
-    definitions,
-    registry: kit.tools,
-    offered: [],
-    services: Context.empty() as PluginContext,
-    stepRoots: [],
-    hooks: [],
-    modules: {},
-  }).pipe(Effect.provide(kit.layer));
+  dispatchPendingResponse(
+    kit.cell,
+    {
+      definitions,
+      registry: kit.tools,
+      offered: [],
+      services: Context.empty() as PluginContext,
+      stepRoots: [],
+      hooks: [],
+      modules: {},
+    },
+    // The run's pending requests, as its `FollowUps.controls` reads them.
+    Effect.map(kit.session.followUps.read(kit.runId), ({ followUps }) =>
+      followUps.filter((f) => f.control !== undefined),
+    ).pipe(Effect.orDie),
+  ).pipe(Effect.provide(kit.layer));
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(

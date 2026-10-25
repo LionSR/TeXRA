@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { registryOf } from '@agent/runtime/runRegistry';
+import * as toast from '@agent/runtime/terminalResultToast';
 
 import type { ResultEvent } from '@agent/trace';
 import {
@@ -16,6 +16,9 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+
+/** The presenter as written, before any test's spy stands in front of it. */
+const presentReal = toast.presentTerminalResult;
 
 function result(over: Partial<ResultEvent>): ResultEvent {
   return {
@@ -41,11 +44,12 @@ async function toastsFor(
     emitted.push({ event: name, payload });
   });
   const detachHost = Effect.runSync(session.interactions.use({ emit }));
-  // The folded tail presents the row, then sweeps the run's children.
-  const swept = new Promise<void>((resolve) =>
-    vi
-      .spyOn(registryOf(session.runs), 'sweepChildrenOfFoldedStop')
-      .mockImplementation(() => resolve()),
+  // The folded tail presents the row: its return says the tail got there.
+  const spy = vi.spyOn(toast, 'presentTerminalResult');
+  const presented = new Promise<void>((resolve) =>
+    spy.mockImplementation((...args) =>
+      presentReal(...args).pipe(Effect.ensuring(Effect.sync(resolve))),
+    ),
   );
   try {
     if (parent !== null) publishTestRunStart(session, parent);
@@ -54,8 +58,9 @@ async function toastsFor(
     publishTestRows(session, [
       { ...row, aggregateId: qualifyAggregateId('run', runId) },
     ]);
-    await swept;
+    await presented;
   } finally {
+    spy.mockRestore();
     detachHost();
     await Effect.runPromise(closeSessionOf(session));
   }

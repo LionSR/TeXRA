@@ -1564,6 +1564,175 @@ async function validateTuiFork() {
 }
 
 /**
+ * Delivery at the next request: a message typed while the chat's turn runs
+ * a command is read by the model request that follows the command's result,
+ * inside the same turn, not after the turn ends. The agent's one command
+ * waits for a release file; the message is typed while it waits; the file
+ * is written once the message is queued. The chat's rows are the artifact:
+ * the `followup.consumed` row sits between the command's `tool.result` and
+ * the turn's second model attempt, and the turn is the run's only one.
+ */
+async function validateMidTurnDelivery() {
+  const cwd = makeScratch('texra-cli-mid-turn-');
+  try {
+    const project = echoProject(cwd);
+    writeFileSync(
+      path.join(
+        cwd,
+        'home',
+        '.texra',
+        'v1',
+        'global-storage',
+        'custom_agents',
+        'mid-turn-validation.yaml',
+      ),
+      `name: midturn_validation
+description: Run one command, held until released, once it is approved.
+tools: [bash]
+
+prompt: |
+  GOLDEN-APPROVAL bash until [ -e midturn.release ]; do sleep 0.05; done; echo released
+`,
+    );
+    const message = 'Typed while the command ran.';
+    const release = path.join(project.work, 'midturn.release');
+    const rowsOf = (sql) => {
+      try {
+        return project.readStore(sql);
+      } catch {
+        return [];
+      }
+    };
+    const chatRun = () =>
+      rowsOf(
+        `SELECT s.logical_id AS run FROM event e
+         JOIN event_sequence s ON s.id = e.aggregate
+         WHERE e.type = 'run.start'
+           AND json_extract(e.data, '$.identity.agent') = 'midturn_validation'`,
+      )[0]?.run;
+    const chatRows = (where) => {
+      const run = chatRun();
+      return run === undefined
+        ? []
+        : rowsOf(
+            `SELECT e."commit" AS "commit", e.type AS type,
+               json_extract(e.data, '$.payload.at') AS at,
+               json_extract(e.data, '$.payload.kind') AS kind,
+               json_extract(e.data, '$.followUpId') AS followUpId,
+               json_extract(e.data, '$.content.text') AS text
+             FROM event e JOIN event_sequence s ON s.id = e.aggregate
+             WHERE s.logical_id = '${run}' AND ${where}
+             ORDER BY e."commit"`,
+          );
+    };
+    let phase = 'opening';
+    let from = 0;
+    const chat = await runTexraPty(
+      [
+        'chat',
+        '--agent',
+        'midturn_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+      ],
+      {
+        label: 'texra chat, a message typed mid-turn',
+        cwd: project.work,
+        cols: 160,
+        rows: 40,
+        timeoutMs: 120_000,
+        env: {
+          ...project.ptyEnv,
+          TEXRA_NO_SERVICE: '1',
+          TEXRA_NO_TELEMETRY: '1',
+          TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+        },
+        onData: (_data, pty) => {
+          const plain = stripVTControlCharacters(pty.output).slice(from);
+          const advance = (needle, next) => {
+            from += plain.indexOf(needle) + needle.length;
+            phase = next;
+          };
+          if (phase === 'opening' && plain.includes('/ commands')) {
+            advance('/ commands', 'asked');
+            pty.setTimer(() => pty.write('Run the held command.'), 500);
+            pty.setTimer(() => pty.write('\r'), 900);
+          } else if (phase === 'asked' && plain.includes('Run command?')) {
+            advance('Run command?', 'running');
+            pty.write('y');
+            // The command runs once its approval is recorded; the message
+            // is typed while it waits, and released once its row is queued.
+            const typeOnceRunning = () => {
+              if (chatRows(`e.type = 'request.decided'`).length === 0)
+                return pty.setTimer(typeOnceRunning, 250);
+              pty.write(message);
+              pty.setTimer(() => pty.write('\r'), 300);
+              const releaseOnceQueued = () => {
+                if (
+                  chatRows(
+                    `e.type = 'followup.queued' AND json_extract(e.data, '$.content.text') = '${message}'`,
+                  ).length === 0
+                )
+                  return pty.setTimer(releaseOnceQueued, 250);
+                phase = 'released';
+                writeFileSync(release, '');
+              };
+              pty.setTimer(releaseOnceQueued, 250);
+            };
+            pty.setTimer(typeOnceRunning, 250);
+          } else if (
+            phase === 'released' &&
+            plain.includes('The approved command ran.')
+          ) {
+            advance('The approved command ran.', 'answered');
+          } else if (phase === 'answered' && plain.includes('Idle')) {
+            phase = 'exiting';
+            pty.setTimer(() => pty.write(ETX), 800);
+            pty.setTimer(() => pty.write(ETX), 2_000);
+          }
+        },
+      },
+    );
+    const rows = chatRows('1 = 1');
+    const artifactPath = writeArtifact('mid-turn-delivery.json', {
+      run: chatRun(),
+      phase,
+      rows,
+    });
+    const result = rows.find((row) => row.type === 'tool.result');
+    const queued = rows.find(
+      (row) => row.type === 'followup.queued' && row.text === message,
+    );
+    const consumed = rows.find(
+      (row) =>
+        row.type === 'followup.consumed' &&
+        row.followUpId === queued?.followUpId,
+    );
+    const attempts = rows.filter(
+      (row) => row.type === 'model.message' && row.kind === 'attempt',
+    );
+    const turns = rows.filter(
+      (row) => row.type === 'run.position' && row.at === 'turn.begin',
+    );
+    assert(
+      chat.exit.exitCode === 0 && phase === 'exiting',
+      `the chat should answer the held command's turn and exit cleanly (exit ${chat.exit.exitCode}, phase ${phase}; artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
+    );
+    assert(
+      result !== undefined &&
+        consumed !== undefined &&
+        attempts.length === 2 &&
+        consumed.commit > result.commit &&
+        consumed.commit < attempts[1].commit &&
+        turns.length === 1,
+      `the message typed while the command ran should be consumed after its result and before the turn's second request, in the run's one turn (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
+/**
  * Background compaction end to end (durable harness H5, gap 4): at a 1%
  * threshold, a long first message puts the conversation over it. The
  * resumed chat's next turn starts the summary off the loop and still sends
@@ -3540,6 +3709,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateSdkResumeApproval();
   await validateFork();
   await validateTuiFork();
+  await validateMidTurnDelivery();
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
   await validateOpenTimePrompt();

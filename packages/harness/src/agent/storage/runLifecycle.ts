@@ -372,7 +372,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         .admission(to, { text, from, deliveryId }, {})
         .pipe(Effect.catch((e) => Effect.succeed({ rows: [], sent: e })));
       if ('kind' in sent && sent.kind !== 'refused') return { rows };
-      const note = `parent not told (${'kind' in sent ? (sent.reason ?? 'closed') : sent.message})`;
+      const note = `parent not told (${'kind' in sent ? sent.reason : sent.message})`;
       yield* session.log.afterCommit(Effect.logWarning(`${runId}: ${note}`));
       return { rows, note };
     });

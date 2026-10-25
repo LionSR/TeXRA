@@ -21,15 +21,14 @@
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
 
+/** A stored row's data, as plain JSON. */
+type RowData = { readonly [field: string]: JsonValue };
+
 interface RowKind {
   /** The version this build writes. */
   readonly version: number;
   /** `upcast[i]` maps stored version `i + 1` to `i + 2`, over plain JSON. */
-  readonly upcast: readonly ((data: {
-    readonly [field: string]: JsonValue;
-  }) => {
-    readonly [field: string]: JsonValue;
-  })[];
+  readonly upcast: readonly ((data: RowData) => RowData)[];
 }
 
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
@@ -92,7 +91,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.removed': V1,
   'run.description': V1,
   'plugin.fact': V1,
-  'followup.queued': V1,
+  // v2: `holdUntil` gained `turn` and `generation`, and a child's progress
+  // notice is known by `holdUntil: 'generation'`, no longer by its text: a
+  // v1 notice would read as an ordinary message (no upcaster, as
+  // `run.config`).
+  'followup.queued': { version: 2, upcast: [] },
   'followup.consumed': V1,
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).

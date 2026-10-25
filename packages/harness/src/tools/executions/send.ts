@@ -12,13 +12,12 @@ import { Effect } from 'effect';
 
 // Local imports
 import {
-  describeFollowUpFailure,
-  FOLLOW_UP_WAKE_FAILED_MESSAGE,
+  presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { senderOf } from '@agent/followUp/followUpSender';
+import { senderOf } from '@agent/followUp/followUpMessages';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ToolError, USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
+import { ToolError, type RunId } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { executed } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -67,24 +66,6 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
         `Run '${target}' not found. Use the executions tool to list runs.`,
       ),
     );
-  if (recipient.followUpSupport === USER_FOLLOW_UP_SUPPORT.UNSUPPORTED) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Run '${target}' takes no messages: only a conversation does.`,
-      ),
-    );
-  }
-  // A one-shot loop (headless, or an in-band child) ends after its current
-  // turn and has no next boundary to read a message at: one queued here would
-  // sit unread under a "sent" acknowledgement. The live loop decides, not
-  // the launch: a resumed headless run is no longer one-shot.
-  if (session.runs.get(target)?.controls?.oneShot === true) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Run '${target}' is a one-shot run: it ends after its current turn and reads no messages. Put what it needs in your own result instead.`,
-      ),
-    );
-  }
   const sender =
     caller === undefined
       ? 'the user'
@@ -104,22 +85,21 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
     { session },
   );
   const name = `'${recipient.label}' (${target})`;
-  if (result.status === 'failed') {
+  const shown = presentFollowUpResult(result);
+  if (shown.severity === 'warning') {
     return yield* Effect.fail(
-      new ToolError(
-        `${name} did not accept the message (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
-      ),
+      new ToolError(`${name} did not accept the message: ${shown.message}`),
     );
   }
-  if (result.status === 'queued' && result.wake === 'failed') {
+  if (shown.severity === 'info') {
     return executed(
-      `Message queued for ${name}, but the run could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+      `Message queued for ${name}. ${shown.message}`,
       `Message queued for '${recipient.label}' (resume failed)`,
     );
   }
   const verb = result.status === 'sent' ? 'Sent' : 'Queued';
   return executed(
-    `${verb} to ${name}. It reads the message at its next turn boundary. A reply, if any, arrives as your own follow-up; use action: "wait" to block on it.`,
+    `${verb} to ${name}. It reads the message before its next model request, or at its next turn boundary. A reply, if any, arrives as your own follow-up; use action: "wait" to block on it.`,
     `${verb} message to '${recipient.label}'`,
   );
 });
