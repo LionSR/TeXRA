@@ -77,13 +77,12 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
   'RunHistoryInconsistent',
   {
     reason: Schema.Literals([
-      'out-of-order',
-      'orphan-settlement',
-      'unknown-run-row',
-      'mismatched-delivery',
-      'unreadable-turn',
+      'out-of-order', // commits not strictly increasing, or a row before the row it needs
+      'orphan-settlement', // a tool.result for no pending call
+      'unknown-run-row', // an unrecognized type on the run aggregate
+      'mismatched-delivery', // a delivering append does not match its response's results
+      'unreadable-turn', // a stored turn this build of the package cannot parse
     ]),
-    // a stored turn this build of the package cannot parse
     detail: Schema.String,
     commit: Schema.NullOr(CommitOrdinalSchema),
   },
@@ -490,8 +489,10 @@ function applyRow(
   copies: BatchCopies,
 ): Result.Result<RunState, RunHistoryInconsistent> | null {
   const { commit } = row;
+  const inconsistent = ({ reason, detail }: RowRejection) =>
+    new RunHistoryInconsistent({ reason, detail, commit });
   const rejected = (reason: RowRejection['reason'], detail: string) =>
-    Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
+    Result.fail(inconsistent({ reason, detail }));
   if (current !== null && commit <= current.commit)
     return rejected(
       'out-of-order',
@@ -517,13 +518,7 @@ function applyRow(
   const state = current ?? freshRunState(commit);
   const hasHistoryRows = state.hasHistoryRows || requires !== 'existing';
   const next = handler.apply({ ...state, commit, hasHistoryRows }, row, copies);
-  return next === null
-    ? null
-    : Result.mapError(
-        next,
-        ({ reason, detail }) =>
-          new RunHistoryInconsistent({ reason, detail, commit }),
-      );
+  return next === null ? null : Result.mapError(next, inconsistent);
 }
 
 /**

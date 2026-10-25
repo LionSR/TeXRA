@@ -61,9 +61,7 @@ import type { resumeRun } from './resumeRun';
 export class RunLive extends Schema.TaggedError<RunLive>()('RunLive', {
   runId: Schema.String,
 }) {
-  override get message(): string {
-    return `Run is already running: ${this.runId}`;
-  }
+  override readonly message = `Run is already running: ${this.runId}`;
 }
 const isRunLive = (e: unknown): e is RunLive => e instanceof RunLive;
 

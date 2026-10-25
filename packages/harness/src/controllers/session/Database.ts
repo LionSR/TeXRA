@@ -235,12 +235,10 @@ export const databaseLayer = (
       const observe = (commit: number) =>
         SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
-      const commitFromRows = (rows: readonly SqlRow[]) => {
-        const row = rows[0];
-        return row === undefined
+      const commitFromRows = ([row]: readonly SqlRow[]) =>
+        row === undefined
           ? 0
           : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
-      };
       const writeFailed = (cause: unknown): DatabaseWriteFailed =>
         new DatabaseWriteFailed({ path, cause });
       const readFailed = (cause: unknown): DatabaseReadFailed =>
@@ -696,10 +694,7 @@ export const databaseLayer = (
           const committedDraft = yield* Effect.gen(function* () {
             if (draft.type === 'run.removed') {
               const owned = yield* exec(deletionRuns, columns);
-              return {
-                ...draft,
-                runIds: owned.map((owned) => runIdOf(owned.runId)),
-              };
+              return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
             }
             if (draft.type === 'run.start') return { ...draft, parent };
             return draft;

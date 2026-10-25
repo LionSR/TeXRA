@@ -55,6 +55,10 @@ import type {
 /** Which session (paper) a view is of: the session's storage root. */
 const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
 
+/** The integer fields' shapes: `Count` from zero, `Positive` from one. */
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Positive = Schema.Int.check(Schema.isGreaterThan(0));
+
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The updater
  * keeps the run's working state (row and group positions, the compaction
@@ -67,14 +71,12 @@ const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
 const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
-  rows: Schema.Array(
-    Schema.declare<TranscriptRow>((_u): _u is TranscriptRow => true),
-  ),
+  rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
   /** One group per stage: opened by `stage.start`, closed by `stage.end`. */
   taskGroups: Schema.Array(TaskGroupSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */
-  settledRows: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  settledRows: Count,
 });
 export type TranscriptView = typeof TranscriptViewSchema.Type;
 
@@ -144,8 +146,8 @@ const RunViewSchema = Schema.Struct({
   createdAt: CommitOrdinalSchema,
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
-  launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
-  runStartedAt: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+  launchedAt: Positive,
+  runStartedAt: Schema.NullOr(Positive),
   lastTimestamp: Schema.Number,
   conversationProgress: ConversationProgressSchema,
   /** The run's one-based turn, from its latest `run.position` (the loop
@@ -154,23 +156,18 @@ const RunViewSchema = Schema.Struct({
    *  activation, and null for the whole life of a run with no loop of its
    *  own — an agent-CLI child waits through `child.park`, which carries a
    *  phase and no position. */
-  turn: Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  turn: Schema.NullOr(Count),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   parentId: Schema.NullOr(RunIdSchema),
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
-  forkedFrom: Schema.NullOr(
-    Schema.Struct({
-      id: RunIdSchema,
-      at: Schema.Int.check(Schema.isGreaterThan(0)),
-    }),
-  ),
+  forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
   /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
    *  `halted`): the settled point a whole-task fork cuts at; null before
    *  its first turn ends, when there is nothing to fork. */
-  forkPoint: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+  forkPoint: Schema.NullOr(Positive),
   /** The parent's tool card that launched this run (`run.start.parentCard`). */
   parentCard: Schema.NullOr(Schema.String),
   /** Root first. */
@@ -183,11 +180,7 @@ const RunViewSchema = Schema.Struct({
    *  still working a turn, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
-  rollup: Schema.Struct({
-    total: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    running: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    finished: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  }),
+  rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable. */
   readOnly: Schema.Boolean,
@@ -320,12 +313,11 @@ const PendingRequestSchema = Schema.Struct({
   payload: PermissionPayloadSchema,
 });
 
-/** A queued follow-up as a composer lists it (`displayText`, else `text`).
- *  Per run a set keyed by `followUpId`: queued, unconsumed, in order. */
-const QueuedFollowUpViewSchema = Schema.Struct({
-  followUpId: Schema.String,
-  text: Schema.String,
-});
+/** A run's queued follow-ups as a composer lists them (`displayText`, else
+ *  `text`): a set keyed by `followUpId`, queued, unconsumed, in order. */
+const QueuedFollowUpsSchema = Schema.Array(
+  Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
+);
 
 /** One session's view at one moment: its runs, requests and grants. */
 export const SessionViewSchema = Schema.Struct({
@@ -347,24 +339,14 @@ export const SessionViewSchema = Schema.Struct({
    *  applied (the subscription's `fromSeq` until a row is applied). Created
    *  when the aggregate enters the subscription set, deleted with its
    *  transcript when it leaves; never a commit ordinal. */
-  transcriptSeq: Schema.ReadonlyMap(
-    AggregateIdSchema,
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  transcriptSeq: Schema.ReadonlyMap(AggregateIdSchema, Count),
   /** Paper-level aggregate; a rail badge reads it and derives nothing. */
-  rollup: Schema.Struct({
-    running: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    waiting: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    interrupted: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  }),
+  rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
   requests: Schema.Array(PendingRequestSchema),
   /** Latest snapshot per run. */
   policy: Schema.ReadonlyMap(RunIdSchema, ApprovalPolicySnapshotSchema),
   pluginFacts: Schema.Array(PluginFactDraftSchema),
-  queuedFollowUps: Schema.ReadonlyMap(
-    RunIdSchema,
-    Schema.Array(QueuedFollowUpViewSchema),
-  ),
+  queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
 export type SessionView = typeof SessionViewSchema.Type;
 
@@ -400,9 +382,7 @@ export function attentionOf<View extends ReadSessionView>(
 ): Attention<View['requests'][number]> {
   const requests = answerableRequests(view);
   if (previous === undefined) return { requests, arrived: [] };
-  const known = new Set(
-    answerableRequests(previous).map((request) => request.requestId),
-  );
+  const known = new Set(answerableRequests(previous).map((r) => r.requestId));
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),

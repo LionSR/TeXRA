@@ -33,6 +33,8 @@ const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
 /** Why a run stops: a `user` stop or this process's `shutdown`. */
 export type RunStopReason = typeof RunStopReasonSchema.Type;
 
+/** Every request a surface issues to its session's runtime, one arm per
+ *  `group.action` tag. */
 export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
@@ -136,6 +138,7 @@ export const RuntimeRequestSchema = Schema.Union([
     ]),
   }),
 ]);
+/** One request a surface issues to its session's runtime. */
 export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
 /** One unified-diff hunk: the line ranges it spans on each side, and its
@@ -209,6 +212,7 @@ export const OutcomeSchema = Schema.Union([
     result: RunFilesResultSchema,
   }),
 ]);
+/** What the runtime answers a request with. */
 export type Outcome = typeof OutcomeSchema.Type;
 
 // How a runtime request fails. Yieldable `Schema.TaggedError`s in the
@@ -263,6 +267,7 @@ export const RequestErrorSchema = Schema.Union([
   Invalid,
   Internal,
 ]);
+/** How a runtime request fails: one of the tagged errors above. */
 export type RequestError = typeof RequestErrorSchema.Type;
 
 /**

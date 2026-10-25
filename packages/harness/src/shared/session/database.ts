@@ -17,7 +17,6 @@ import {
   type RcMap,
   type Result,
   Schema,
-  SchemaGetter,
   type Stream,
   type SubscriptionRef,
 } from 'effect';
@@ -35,12 +34,6 @@ import type {
   LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  NotOwner,
-  Rejected,
-  Unavailable,
-  type RequestError,
-} from './runtimeRequest';
 import type { WithBlobs } from './historyTurns';
 import type { ValueFamily } from './valueFamily';
 
@@ -66,12 +59,7 @@ export const AggregateStateSchema = Schema.Struct({
   /** The incarnation's durable identity, minted with its first row. */
   uid: Schema.String.check(Schema.isUUID()),
   ownerId: Schema.NullOr(OwnerIdSchema),
-  closed: Schema.Literals([0, 1]).pipe(
-    Schema.decodeTo(Schema.Boolean, {
-      decode: SchemaGetter.transform((value) => value === 1),
-      encode: SchemaGetter.transform((closed) => (closed ? 1 : 0)),
-    }),
-  ),
+  closed: Schema.BooleanFromBit,
   parentId: Schema.NullOr(AggregateIdSchema),
   startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
 });
@@ -90,8 +78,7 @@ export interface AggregateClaim {
 /**
  * Who holds a claim relative to this process: itself, an owner alive or not
  * proven dead, or nobody (a provably dead owner frees it). The one reading the
- * run listing, the run classification and the resume gate all share.
- */
+ * run listing, the run classification and the resume gate all share. */
 type ClaimStanding =
   | { readonly kind: 'self' }
   | { readonly kind: 'held'; readonly owner: OwnerId }
@@ -104,8 +91,9 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
   return { kind: 'free' };
 }
 
-/** A store failure's text: a `SqlError`'s generic message, and the SQLite
- *  error that says why (`database is locked`), its reason's cause. */
+/** A store failure's fields, and its text: a `SqlError`'s message and the
+ *  SQLite error that says why (`database is locked`), its reason's cause. */
+const storeFailure = { path: Schema.String, cause: Schema.Defect() };
 const storeFailureMessage = (cause: unknown): string =>
   isSqlError(cause) && cause.reason.cause != null
     ? `${cause.message}: ${toErrorMessage(cause.reason.cause)}`
@@ -114,10 +102,7 @@ const storeFailureMessage = (cause: unknown): string =>
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()(
   'DatabaseOpenFailed',
-  {
-    path: Schema.String,
-    cause: Schema.Defect(),
-  },
+  storeFailure,
 ) {
   override readonly message = storeFailureMessage(this.cause);
 }
@@ -125,10 +110,7 @@ export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()
 /** A batch was rejected whole: no member, sequence or wake level moved. */
 export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>()(
   'DatabaseWriteFailed',
-  {
-    path: Schema.String,
-    cause: Schema.Defect(),
-  },
+  storeFailure,
 ) {
   override readonly message = storeFailureMessage(this.cause);
 }
@@ -140,7 +122,6 @@ export class DatabaseNotOwner extends Schema.TaggedError<DatabaseNotOwner>()(
   'DatabaseNotOwner',
   {
     aggregateId: AggregateIdSchema,
-
     /** The holder and closure at refusal time, read in the refusing transaction. */
     ownerId: Schema.NullOr(OwnerIdSchema),
     closed: Schema.Boolean,
@@ -173,39 +154,10 @@ export const heldElsewhereBy = (error: unknown): OwnerId | null => {
     : null;
 };
 
-/**
- * How a session write the request made fails it: `NotOwner` when another
- * owner holds the run ({@link heldElsewhereBy}); `Rejected`, in the claim's
- * own words, when an owner could not be proven to have exited (as a
- * deletion rejects it); else the `Unavailable` that `unavailable`
- * describes, a closed run's included.
- */
-export function writeRejection(
-  unavailable: ConstructorParameters<typeof Unavailable>[0],
-): (error: unknown) => RequestError {
-  return (error) =>
-    heldElsewhereBy(error) === null
-      ? new Unavailable(unavailable)
-      : claimRejection(unavailable.runId)(error);
-}
-
-/** How a claim the request needed fails it: `Rejected`, in the claim's own
- *  words, when its holder could not be proven to have exited; else
- *  `NotOwner`, another owner holding the run. */
-export const claimRejection =
-  (runId: RunId) =>
-  (error: unknown): RequestError =>
-    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
-      ? new Rejected({ reason: error.message })
-      : new NotOwner({ runId });
-
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(
   'DatabaseReadFailed',
-  {
-    path: Schema.String,
-    cause: Schema.Defect(),
-  },
+  storeFailure,
 ) {
   override readonly message = storeFailureMessage(this.cause);
 }
@@ -224,10 +176,7 @@ export interface SessionStoreMovedAside {
  *  this build does not read, so it is refused whole. */
 export class DatabaseStoreNewer extends Schema.TaggedError<DatabaseStoreNewer>()(
   'DatabaseStoreNewer',
-  {
-    type: Schema.String,
-    version: Schema.Number,
-  },
+  { type: Schema.String, version: Schema.Number },
 ) {
   override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer build wrote them, or a pre-release of a different format. Update to a newer build, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
@@ -235,11 +184,7 @@ export class DatabaseStoreNewer extends Schema.TaggedError<DatabaseStoreNewer>()
 /** A stored row that does not decode as its kind's shape. */
 export class DatabaseRowCorrupt extends Schema.TaggedError<DatabaseRowCorrupt>()(
   'DatabaseRowCorrupt',
-  {
-    commit: Schema.Number,
-    type: Schema.String,
-    detail: Schema.String,
-  },
+  { commit: Schema.Number, type: Schema.String, detail: Schema.String },
 ) {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
 }
@@ -247,10 +192,7 @@ export class DatabaseRowCorrupt extends Schema.TaggedError<DatabaseRowCorrupt>()
 /** A row an earlier build wrote below the version this one reads: its run cannot open. */
 export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()(
   'DatabaseRowEarlier',
-  {
-    commit: Schema.Number,
-    type: Schema.String,
-  },
+  { commit: Schema.Number, type: Schema.String },
 ) {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build; it can't be opened by this one.`;
 }
@@ -306,10 +248,7 @@ export interface CurrentValues {
  *  in memory), which it keeps: an open asking for the other is refused. */
 export class SessionOptionsConflict extends Schema.TaggedError<SessionOptionsConflict>()(
   'SessionOptionsConflict',
-  {
-    storage: Schema.String,
-    message: Schema.String,
-  },
+  { storage: Schema.String, message: Schema.String },
 ) {}
 
 /** Why a session's root could not be opened: its database or its reads
