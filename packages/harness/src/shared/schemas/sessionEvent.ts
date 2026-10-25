@@ -29,7 +29,7 @@ import {
   qualifyAggregateId,
   type AggregateId,
   type AggregateKind,
-} from './aggregateId';
+} from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,

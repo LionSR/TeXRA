@@ -36,7 +36,7 @@ import type {
   DatabaseReadFailed,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,

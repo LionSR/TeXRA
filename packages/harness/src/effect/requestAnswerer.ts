@@ -25,7 +25,7 @@ import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/Sessi
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
 import type { PendingRequest } from '@shared/session/readonlyViews';
-import type { RequestError } from '@shared/session/requestErrors';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

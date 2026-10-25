@@ -51,7 +51,6 @@ import {
 import { committing, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
-  DeletionModeSchema,
   type DeletionMode,
   type AggregateState,
   Database,

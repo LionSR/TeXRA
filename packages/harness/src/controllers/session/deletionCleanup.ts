@@ -22,7 +22,7 @@ import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { Rejected, type RequestError } from '@shared/session/requestErrors';
+import { Rejected, type RequestError } from '@shared/session/runtimeRequest';
 import type {
   Outcome,
   RunFilesResult,

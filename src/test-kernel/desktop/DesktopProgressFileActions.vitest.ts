@@ -8,7 +8,7 @@ import { DesktopProgressFileActions } from '@desktop/main/desktopProgressFileAct
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/runtimeRequest';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 import type { Session } from '@texra-ai/harness';

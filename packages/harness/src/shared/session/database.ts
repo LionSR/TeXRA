@@ -40,7 +40,7 @@ import {
   Rejected,
   Unavailable,
   type RequestError,
-} from './requestErrors';
+} from './runtimeRequest';
 import type { WithBlobs } from './historyTurns';
 import type { ValueFamily } from './valueFamily';
 

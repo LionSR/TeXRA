@@ -43,7 +43,7 @@ import {
   Rejected,
   Unavailable,
   type RequestError,
-} from '@shared/session/requestErrors';
+} from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';

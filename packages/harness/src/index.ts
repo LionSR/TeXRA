@@ -177,7 +177,7 @@ export {
   Unavailable,
   type RequestError,
   type RequestRefusal,
-} from '@shared/session/requestErrors';
+} from '@shared/session/runtimeRequest';
 export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';
 
 // The platform's ports, their stores' failures, and the services plugins read.

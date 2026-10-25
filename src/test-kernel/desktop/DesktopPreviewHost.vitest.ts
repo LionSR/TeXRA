@@ -10,7 +10,7 @@ import { createDesktopHostRequests } from '@desktop/main/desktopHostRequests';
 import { createDesktopFileSelection } from '@desktop/main/desktopFileSelection';
 import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/runtimeRequest';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';

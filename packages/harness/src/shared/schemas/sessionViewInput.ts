@@ -7,7 +7,7 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
-import { AggregateIdSchema, OwnerIdSchema } from './aggregateId';
+import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
 import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**

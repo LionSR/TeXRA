@@ -43,7 +43,7 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/requestErrors';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';

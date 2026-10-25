@@ -26,7 +26,7 @@
  */
 import { constants, zstdCompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
-import { Effect, Predicate, Result, Schema, Struct } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 import {
   AggregateIdSchema,
   aggregateTarget,

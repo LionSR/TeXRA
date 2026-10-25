@@ -31,8 +31,7 @@ export {
   RUN_OUTCOME,
   RunOutcomeSchema,
 } from '@shared/schemas';
-// A fresh run id, for a caller that names a run before a session launches
-// it (a service's task start).
+// A fresh run id, for a caller that names a run before a session launches it.
 export { generateRunId } from '@utils/core';
 export type {
   AgentConfigInput,
@@ -73,8 +72,8 @@ export {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
-// Reads of a `SessionView` for a renderer: what needs a person, how
-// busy the session is, and where each run stands.
+// Reads of a `SessionView` for a renderer: what needs a person, how busy
+// the session is, where each run stands, what `acceptsFollowUp` reads.
 export {
   acceptsFollowUp,
   attentionOf,
@@ -84,21 +83,19 @@ export {
   requestAnswerability,
   rollupOf,
   sessionActivity,
+  type Attention,
+  type FollowUpHost,
+  type RequestAnswerability,
+  type SessionTitleState,
 } from '@shared/session/sessionView';
-export type {
-  Attention,
-  RequestAnswerability,
-  SessionTitleState,
-} from '@shared/session/sessionView';
-// The views themselves, read-only all the way down, the request a run
-// waits on, and what a host brings to `acceptsFollowUp`.
+// The views themselves, read-only all the way down, and the request a run
+// waits on.
 export type {
   PendingRequest,
   RunView,
   SessionView,
   TranscriptView,
 } from '@shared/session/readonlyViews';
-export type { FollowUpHost } from '@shared/session/sessionView';
 // Why a run no longer takes an action its `actions` once listed.
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
@@ -116,17 +113,6 @@ export type {
   InputHistoryRecord,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-// How a runtime request fails, as the classes cross the RPC edge.
-export {
-  Cancelled,
-  Internal,
-  Invalid,
-  NotOwner,
-  Rejected,
-  Unavailable,
-  RequestErrorSchema,
-  type RequestError,
-} from '@shared/session/requestErrors';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).
@@ -225,17 +211,23 @@ export {
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
-// A request a host sends a session and the outcome it answers with, and a
-// tool edit's hunks as unified-diff lines.
+// A request a host sends a session, the outcome or the error class it is
+// answered with, and a tool edit's hunks as unified-diff lines.
 export {
+  Cancelled,
   formatHunkLines,
+  Internal,
+  Invalid,
+  NotOwner,
   OutcomeSchema,
+  Rejected,
+  RequestErrorSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
-} from '@shared/session/runtimeRequest';
-export type {
-  RuntimeRequest,
-  ToolEditContent,
+  Unavailable,
+  type RequestError,
+  type RuntimeRequest,
+  type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {
