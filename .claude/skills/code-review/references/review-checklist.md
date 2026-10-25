@@ -22,7 +22,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as the single source of truth"; compat rules in "Compatibility and format retirement"; summary in `CLAUDE.md` → "Schemas (Effect Schema)"). Greps for the diff:
 
 - **Tool input schemas using `Schema.optional(S)`** instead of `Schema.optional(Schema.NullOr(S))` (breaks DeepSeek/Kimi/etc. structured output). At use sites, check for `=== undefined` (should be `== null`).
-- **A second schema library**: any `zod` import, `z.`, or `Data.TaggedError` (errors are `Schema.TaggedError`); a `TODO(effect-schema)` marker left by the codemod.
+- **A second schema library**: any `zod` import, `z.`, or `Data.TaggedError` (errors are `Schema.TaggedError`).
 - **`Result` read by hand** (`Result.isSuccess(r) ? r.success : fallback` for a display default) → `catchDecoding` on the field, or on the whole view-state schema for an all-or-nothing fallback; on persisted data see §15. Inside Effect code, `decodeUnknownEffect` and the typed `SchemaError`, never `decodeUnknownSync` in a `try`.
 - **`Schema.declare<T>()` without a comment** justifying why a real schema isn't possible; `Schema.Top` as a public parameter type where the value type is known (use `Schema.Codec<T>` or a generic).
 - **`withDecodingDefault` vs `withDecodingDefaultType` vs `catchDecoding`** misuse: the first substitutes _before_ decoding (the stored form); the second fills a missing field with a decoded value; the third recovers from a decoding failure. Wrong choice silently corrupts state.

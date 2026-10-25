@@ -243,9 +243,7 @@ implementation.
 
 Schemas are Effect Schema (`import { Schema } from 'effect'`, effect 4.x).
 Zod is not used; the owner ruled the move on 2026-10-24 (rulings ledger,
-"Schemas are Effect Schema"). The codemod that converted the tree is
-`scripts/codemods/zod-to-effect-schema.mjs`; a `TODO(effect-schema)` marker
-is a site it could not finish and is never committed.
+"Schemas are Effect Schema").
 
 **Schemas as the single source of truth**
 

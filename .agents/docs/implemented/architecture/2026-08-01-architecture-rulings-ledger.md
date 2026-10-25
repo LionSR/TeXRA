@@ -639,9 +639,9 @@ v4 Schema Patterns", now "Effect Schema Patterns") and the core-concepts line
 "Errors are `Data.TaggedError`". `Data.TaggedError` itself is stable in effect
 4.x; the reversal is for one schema system, not a defect.
 
-**Forbids.** A new Zod schema anywhere, a second schema library beside Effect
-Schema, and a `TODO(effect-schema)` marker (the codemod's unfinished-site
-mark, `scripts/codemods/zod-to-effect-schema.mjs`) left in a commit.
+**Forbids.** A new Zod schema anywhere, and a second schema library beside
+Effect Schema. The one-time codemod that converted the tree (#14271) was
+deleted once the migration landed.
 
 ---
 
