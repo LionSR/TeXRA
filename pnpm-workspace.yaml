@@ -7,7 +7,7 @@ packages:
 # its own patch), so `effect` and every @effect/* move together, here and in
 # the `peers` catalog below.
 catalog:
-  '@anthropic-ai/claude-agent-sdk': '^0.3.306'
+  '@anthropic-ai/claude-agent-sdk': '^0.3.309'
   '@effect/platform-node': '4.0.6'
   '@effect/sql-sqlite-node': '4.0.6'
   '@effect/vitest': '4.0.6'
@@ -37,7 +37,7 @@ catalog:
   nunjucks: '^3.2.4'
   openai: '^7.20.0'
   pathe: '^2.0.3'
-  postal-mime: '^4.0.11'
+  postal-mime: '^4.1.4'
   pretty-bytes: '7.2.0'
   pretty-ms: '^10.0.0'
   quickjs-emscripten-core: '0.32.0'
