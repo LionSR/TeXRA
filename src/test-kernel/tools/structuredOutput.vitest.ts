@@ -10,7 +10,7 @@ import {
 } from '@tools/structuredOutput';
 
 describe('normalizeStructuredOutputSchema', () => {
-  it.effect('normalizes a JSON Schema object through the pinned Zod API', () =>
+  it.effect('normalizes a JSON Schema object into a validating schema', () =>
     Effect.gen(function* () {
       const jsonSchema = {
         type: 'object',
@@ -25,7 +25,10 @@ describe('normalizeStructuredOutputSchema', () => {
       const normalized = normalizeStructuredOutputSchema(jsonSchema);
       const tool = buildTerminalTool(jsonSchema);
 
-      expect(normalized.jsonSchema).toMatchObject(jsonSchema);
+      // `additionalProperties` is the provider conversion's decision, not
+      // the author's: a compiled schema ignores undeclared keys.
+      const { additionalProperties: _closed, ...authored } = jsonSchema;
+      expect(normalized.jsonSchema).toMatchObject(authored);
       expect(yield* tool.call({ title: 'Lemma', count: 2 })).toMatchObject({
         status: 'executed',
       });
@@ -136,13 +139,18 @@ describe('buildTerminalTool', () => {
   });
 
   it.effect(
-    'supports async Zod validation through the canonical tool boundary',
+    'supports effectful validation through the canonical tool boundary',
     () =>
       Effect.gen(function* () {
         const tool = buildTerminalTool(
           Schema.Struct({
-            title: Schema.String.check(
-              Schema.makeFilter(async (value) => value === 'accepted'),
+            title: Schema.String.pipe(
+              Schema.decode({
+                decode: SchemaGetter.checkEffect((value) =>
+                  Effect.succeed(value === 'accepted' || 'must be accepted'),
+                ),
+                encode: SchemaGetter.passthrough(),
+              }),
             ),
           }),
         );
@@ -163,13 +171,10 @@ describe('buildTerminalTool', () => {
         const tool = buildTerminalTool(
           Schema.Struct({
             value: Schema.String.pipe(
-              Schema.decodeTo(
-                Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform(() => 1n)` */,
-                {
-                  decode: SchemaGetter.transform(() => 1n),
-                  encode: SchemaGetter.forbidden(() => 'decode-only'),
-                },
-              ),
+              Schema.decodeTo(Schema.BigInt, {
+                decode: SchemaGetter.transform(() => 1n),
+                encode: SchemaGetter.forbidden(() => 'decode-only'),
+              }),
             ),
           }),
         );

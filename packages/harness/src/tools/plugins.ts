@@ -73,7 +73,7 @@ export interface PluginArm {
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;
-  readonly schema: Schema.Top;
+  readonly schema: Schema.Codec<unknown, unknown>;
   readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
   /** The kind's own transition rule, checked by the store in the writing
    *  transaction against the aggregate's latest row of the kind (none
@@ -204,7 +204,7 @@ export function storedDisabledTools(
     : Result.fail(
         new StateReadFailed({
           key: GlobalStateKey.DISABLED_TOOLS,
-          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${parsed.error.message}`,
+          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${parsed.failure.message}`,
           cause: parsed.failure,
         }),
       );
@@ -324,7 +324,7 @@ export function checkOwnFacts(
       throw new Error(`${arm.plugin}/${kind} names another plugin's aggregate`);
     if (version !== arm.version)
       throw new Error(`${arm.plugin}/${kind} is at version ${arm.version}`);
-    arm.schema.parse(value);
+    Schema.decodeUnknownSync(arm.schema)(value);
   }
 }
 

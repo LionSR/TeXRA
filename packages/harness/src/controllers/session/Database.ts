@@ -154,6 +154,10 @@ WHERE s.id IN (${AGGREGATE_LIST})
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
+/** A run's aggregate `logical_id` column as the `RunId` it is. */
+const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
+/** The `event` table's autoincrement sequence: a non-negative integer. */
+const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /** Where a display page after a commit ends: 2,000 stored rows on, run to
  *  the end of the batch the last one is in, as a card's `tool.end` and the
  *  settlement it projects from share one batch (`settleCards`) and a batch's
@@ -236,9 +240,7 @@ export const databaseLayer = (
         const row = rows[0];
         return row === undefined
           ? 0
-          : Schema.decodeUnknownSync(
-              Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-            )(row.seq);
+          : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
       };
       const writeFailed = (cause: unknown): DatabaseWriteFailed =>
         new DatabaseWriteFailed({ path, cause });
@@ -682,9 +684,7 @@ export const databaseLayer = (
               );
             }
             parent = {
-              id: Schema.decodeUnknownSync(RunIdSchema)(
-                aggregateTarget(edges.parent).id,
-              ),
+              id: runIdOf(aggregateTarget(edges.parent).id),
               uid: parentState.uid,
               callId:
                 draft.type === 'run.start'
@@ -699,9 +699,7 @@ export const databaseLayer = (
               const owned = yield* exec(deletionRuns, columns);
               return {
                 ...draft,
-                runIds: owned.map((owned) =>
-                  Schema.decodeUnknownSync(RunIdSchema)(owned.runId),
-                ),
+                runIds: owned.map((owned) => runIdOf(owned.runId)),
               };
             }
             if (draft.type === 'run.start') return { ...draft, parent };
@@ -923,10 +921,7 @@ export const databaseLayer = (
                 return yield* Effect.fail(
                   new Error(`Deletion target changed since admission: ${id}`),
                 );
-              yield* claimAll(
-                observed,
-                Schema.decodeUnknownSync(DeletionModeSchema)(mode),
-              );
+              yield* claimAll(observed, mode);
               const removal = prepareEventDraft({
                 type: 'run.removed',
                 aggregateId: id,

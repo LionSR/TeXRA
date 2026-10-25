@@ -19,18 +19,24 @@
  * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
  * shared-to-agent allowlist empty).
  */
-import { Result, Schema, Struct } from 'effect';
-
-import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { Schema, Struct, Tuple } from 'effect';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
+import {
+  AggregateIdSchema,
+  OwnerIdSchema,
+  aggregateTarget,
+  qualifyAggregateId,
+  type AggregateId,
+  type AggregateKind,
+} from './aggregateId';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
   ResultMetaSchema,
 } from './runRecords';
-import { RunIdSchema, type RunId } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunFactSchema } from './rowValues';
@@ -49,126 +55,7 @@ import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ConversationProgressSchema } from './runState';
-import { TranscriptEventSchemas } from './traceEvent';
-
-/** The complete process identity, encoded canonically without losing null. */
-const OwnerIdentitySchema = Schema.Tuple([
-  Schema.String.check(Schema.isMinLength(1)),
-  Schema.Int.check(Schema.isGreaterThan(0)),
-  Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-]);
-
-/**
- * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
- * is necessary: a missing local pid cannot prove a foreign process dead.
- */
-export const OwnerIdSchema = Schema.String.check(
-  Schema.makeFilter(
-    (value) =>
-      Result.match(parseJsonWith(value, OwnerIdentitySchema), {
-        onSuccess: (identity) =>
-          identity[0] === identity[0].toLowerCase() &&
-          JSON.stringify(identity) === value,
-        onFailure: () => false,
-      }),
-    {
-      message:
-        'Expected a canonical [hostname, pid, processStart] process identity',
-    },
-  ),
-);
-export type OwnerId = typeof OwnerIdSchema.Type;
-
-/** Decode an owner already validated at the event or transport boundary. */
-export function ownerIdentity(ownerId: OwnerId): {
-  hostname: string;
-  pid: number;
-  processStart: string | null;
-} {
-  const [hostname, pid, processStart] = JSON.parse(
-    ownerId,
-  ) as (typeof OwnerIdentitySchema)['Type'];
-  return { hostname, pid, processStart };
-}
-
-/** The recorded pid shown when another process holds a run. */
-export function ownerPid(ownerId: OwnerId): number {
-  return ownerIdentity(ownerId).pid;
-}
-
-/**
- * A verdict about an owner is a proof or an admission that no proof exists.
- * `unprovable` means "do not touch automatically": every acquire path treats
- * it exactly like `alive`, and the user sees the aggregate as held. The
- * user's explicit deletion of the run is the one path that reaps it.
- */
-export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
-
-const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
-/** The kind separates lifecycles even when their logical ids coincide:
- *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
-export type AggregateKind = typeof AggregateKindSchema.Type;
-const AggregateKeySchema = Schema.Tuple([
-  AggregateKindSchema,
-  Schema.String.check(Schema.isMinLength(1)),
-]).check(
-  Schema.makeFilter(
-    ([kind, id]) =>
-      kind !== 'run' || Schema.decodeUnknownResult(RunIdSchema)(id).success,
-    { message: 'A run aggregate is keyed by a run id' },
-  ),
-);
-
-/** The canonical JSON encoding of an aggregate kind and its logical id. */
-export const AggregateIdSchema = Schema.String.check(
-  Schema.makeFilter(
-    (value) =>
-      Result.match(parseJsonWith(value, AggregateKeySchema), {
-        onSuccess: (key) => JSON.stringify(key) === value,
-        onFailure: () => false,
-      }),
-    {
-      error: 'Expected a canonical [kind, logicalId] aggregate key',
-      abort: true,
-    },
-  ),
-).pipe(Schema.brand('AggregateId'));
-export type AggregateId = typeof AggregateIdSchema.Type;
-
-/** A logical id that is not itself an already-qualified aggregate key. */
-export type LogicalId = string & {
-  readonly [Schema.Unknown /* TODO(effect-schema): z.$brand; was `z.$brand()` */]?: {
-    readonly AggregateId?: never;
-  };
-};
-
-/** Qualify a logical id once. An already-qualified key is not an input. */
-export function qualifyAggregateId(kind: 'run', logicalId: RunId): AggregateId;
-export function qualifyAggregateId(
-  kind: Exclude<AggregateKind, 'run'>,
-  logicalId: LogicalId,
-): AggregateId;
-export function qualifyAggregateId(
-  kind: AggregateKind,
-  logicalId: string,
-): AggregateId {
-  return Schema.decodeUnknownSync(AggregateIdSchema)(
-    JSON.stringify([kind, logicalId]),
-  );
-}
-
-/** A decoded aggregate key: the `run` arm carries its logical id as a `RunId`. */
-export type AggregateTarget =
-  | { readonly kind: 'run'; readonly id: RunId }
-  | { readonly kind: Exclude<AggregateKind, 'run'>; readonly id: string };
-
-/** Decode a validated aggregate key at a logical-id boundary. */
-export function aggregateTarget(key: AggregateId): AggregateTarget {
-  const [kind, id] = JSON.parse(key) as typeof AggregateKeySchema.Type;
-  return kind === 'run'
-    ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
-    : { kind, id };
-}
+import { TranscriptEventSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
  *  1, assigned by the substrate's publisher and by nothing else. */
@@ -201,23 +88,52 @@ const envelope = {
   at: Schema.Int,
 };
 
-function durable<
-  T extends string,
-  S extends
-    unknown /* TODO(effect-schema): type z.ZodRawShape; was `z.ZodRawShape` */,
->(type: T, shape: S, kind: AggregateKind = 'run') {
+/** The aggregate column of a `type` row, checked to be of the given kind. */
+function aggregateIdOf(type: string, kind: AggregateKind) {
+  return AggregateIdSchema.check(
+    Schema.makeFilter((key) => aggregateTarget(key).kind === kind, {
+      message: `Expected a ${kind} aggregate for ${type}`,
+    }),
+  );
+}
+
+function durable<T extends string, const F extends Schema.Struct.Fields>(
+  type: T,
+  fields: F,
+  kind: AggregateKind = 'run',
+) {
   return Schema.Struct({
-    aggregateId: AggregateIdSchema.check(
-      Schema.makeFilter(
-        (key) => aggregateTarget(key).kind === kind,
-        `Expected a ${kind} aggregate for ${type}`,
-      ),
-    ),
+    aggregateId: aggregateIdOf(type, kind),
     stageId: Schema.optional(Schema.String),
     type: Schema.Literal(type),
     ...fields,
   });
 }
+
+type TranscriptFields = Schema.Struct.Fields & {
+  readonly type: Schema.Literal<string>;
+};
+type RunAggregateField = {
+  readonly aggregateId: ReturnType<typeof aggregateIdOf>;
+};
+/** A transcript arm (`traceEvent.ts`) as a durable row on its run's aggregate. */
+interface OnRunAggregate extends Struct.Lambda {
+  <F extends TranscriptFields>(
+    schema: Schema.Struct<F>,
+  ): Schema.Struct<Struct.Assign<F, RunAggregateField>>;
+  readonly '~lambda.out': this['~lambda.in'] extends Schema.Struct<
+    infer F extends TranscriptFields
+  >
+    ? Schema.Struct<Struct.Assign<F, RunAggregateField>>
+    : never;
+}
+const onRunAggregate = Struct.lambda<OnRunAggregate>((schema) =>
+  schema.mapFields(
+    Struct.assign({
+      aggregateId: aggregateIdOf(schema.fields.type.literal, 'run'),
+    }),
+  ),
+);
 
 /**
  * The parent edge (one run model, section 3.2): the whole of it. `id` is the
@@ -312,7 +228,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
   parent: Schema.NullOr(RunIdSchema),
-}).extend({ aggregateId: AggregateIdSchema });
+}).mapFields(Struct.assign({ aggregateId: AggregateIdSchema }));
 
 /**
  * The durable arms every renderer folds. This is the one declaration of the
@@ -321,8 +237,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
  * arms carry the session facts with the payload flattened. `run.removed` is
  * the tombstone: the last row of its aggregate, final (PRD 5.2, "Existence").
  */
-const DisplaySessionEventDraftSchema = Schema.Union([
-  RunStartDraftSchema,
+const DisplayRowDraftSchema = Schema.Union([
   /** Every activation of a run, the first launch and each resume (PRD 6,
    *  item 8); `run.start` is the creation fact and happens once. */
   durable('run.activate', {}),
@@ -362,7 +277,6 @@ const DisplaySessionEventDraftSchema = Schema.Union([
     heldFor: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
     ends: Schema.optional(Schema.Literals(['completed', 'failed'])),
   }),
-  RunRemovedDraftSchema,
   /** A run's title, and who gave it: the model's summary, or the user's
    *  rename, which a later model title does not replace. */
   durable('run.description', {
@@ -420,18 +334,14 @@ const DisplaySessionEventDraftSchema = Schema.Union([
    * carries its coordinates; its five siblings below are run-history-private.
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),
-  ...Object.values(TranscriptEventSchemas).map((schema) =>
-    schema.mapFields(
-      Struct.assign({
-        aggregateId: AggregateIdSchema.check(
-          Schema.makeFilter(
-            (key) => aggregateTarget(key).kind === 'run',
-            `Expected a run aggregate for ${schema.fields.type.value}`,
-          ),
-        ),
-      }),
-    ),
-  ),
+  ...TranscriptEventSchema.mapMembers(Tuple.map(onRunAggregate)).members,
+]);
+/** Every display arm: the lifecycle pair (`run.start`, `run.removed`) and
+ *  the rows between them. */
+const DisplaySessionEventDraftSchema = Schema.Union([
+  RunStartDraftSchema,
+  RunRemovedDraftSchema,
+  ...DisplayRowDraftSchema.members,
 ]);
 /** The run's private records, read by the runtime and never by a renderer
  *  (`isDisplaySessionEvent`). `followup.closed`: its input is closed until a
@@ -475,17 +385,18 @@ export const SessionEventDraftSchema = Schema.Union([
   ...RunRecordEventDraftSchema.members,
   ...RunHistoryEventDraftSchema.members,
 ]);
+/** Every member of a draft union with the envelope columns added. */
+const withEnvelope = Tuple.map(Schema.fieldsAssign(envelope));
 export const DisplaySessionEventSchema = Schema.Union([
   RunStartEventSchema.mapFields(Struct.assign(envelope)),
-
   RunRemovedEventSchema.mapFields(Struct.assign(envelope)),
-  ...DisplaySessionEventDraftSchema.members /* TODO(effect-schema): filter; was `.filter(( schema, ): schema is Exclude< typeof schema, typeof RunStartDraftSchema | typeof RunRemovedDraftSchema > => schema.shape.type.value !== 'run.start' && schema.shape.type.value !== 'run.removed')` */ /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
+  ...DisplayRowDraftSchema.mapMembers(withEnvelope).members,
 ]);
 export type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
 export const SessionEventSchema = Schema.Union([
   ...DisplaySessionEventSchema.members,
-  ...RunRecordEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
-  ...RunHistoryEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.extend(envelope))` */,
+  ...RunRecordEventDraftSchema.mapMembers(withEnvelope).members,
+  ...RunHistoryEventDraftSchema.mapMembers(withEnvelope).members,
 ]);
 export type SessionEvent = typeof SessionEventSchema.Type;
 
@@ -645,7 +556,9 @@ export function pendingKeyOf(
 }
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
-  DisplaySessionEventDraftSchema.members /* TODO(effect-schema): map; was `.map((schema) => schema.shape.type.value)` */,
+  DisplaySessionEventDraftSchema.members.map(
+    (schema) => schema.fields.type.literal,
+  ),
 );
 
 /** A run's private records and the profile-state rows never enter display transport. */

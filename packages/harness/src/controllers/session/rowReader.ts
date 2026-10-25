@@ -143,13 +143,10 @@ const PluginFactHeaderSchema = Schema.Struct({
   version: Schema.Int,
 });
 const factHeader = (data: unknown) => {
-  try {
-    return Schema.decodeUnknownResult(PluginFactHeaderSchema)(
-      JSON.parse(String(data)),
-    ).data;
-  } catch {
-    return undefined;
-  }
+  const header = Schema.decodeUnknownResult(
+    Schema.fromJsonString(PluginFactHeaderSchema),
+  )(String(data));
+  return Result.isSuccess(header) ? header.success : undefined;
 };
 
 /** A statement runner over the reader's connection. */

@@ -153,8 +153,8 @@ function setCopilotRoutePreference(
   return state
     .modify(GlobalStateKey.COPILOT_ROUTE_MODELS, (stored) => {
       const parsed = Schema.decodeUnknownResult(RouteModelsSchema)(stored);
-      invalid = parsed.failure;
-      const current = liveRouteModels(parsed.success ?? []);
+      invalid = Result.isFailure(parsed) ? parsed.failure : undefined;
+      const current = liveRouteModels(Result.getOrElse(parsed, () => []));
       return Result.succeed(
         preferred
           ? [...new Set([...current, model])]

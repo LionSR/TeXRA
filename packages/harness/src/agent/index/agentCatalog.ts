@@ -53,19 +53,13 @@ const CHANNEL = 'agentRegistry';
 /** No agent of that name in the catalog, with what the last load said. */
 export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
   'AgentNotFound',
-  {
-    agent: Schema.String,
-    message: Schema.String,
-  },
+  { agent: Schema.String, message: Schema.String },
 ) {}
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
 export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadError>()(
   'AgentCatalogLoadError',
-  {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}
 
 /**

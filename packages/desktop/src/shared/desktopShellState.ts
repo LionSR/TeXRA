@@ -26,7 +26,8 @@ export const WORKBENCH_KIND_META = {
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
 const WorkbenchTabSchema = Schema.Struct({
   id: Schema.String,
-  kind: Schema.Enum(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
+  // cast: Object.keys forgets the literal keys of the const table.
+  kind: Schema.Literals(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
   title: Schema.String,
   target: Schema.optional(Schema.String),
   dirty: Schema.optional(Schema.Boolean),
@@ -38,7 +39,7 @@ export type WorkbenchTab = typeof WorkbenchTabSchema.Type;
 // Dockview validates the complete grid when restoring it. Keep its interchange
 // format intact instead of maintaining a competing tree schema.
 const DockLayoutSchema = Schema.declare<SerializedDockview>(
-  (value) =>
+  (value): value is SerializedDockview =>
     value !== null &&
     typeof value === 'object' &&
     'grid' in value &&

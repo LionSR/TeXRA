@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 
 import {
   CompactionActivityDataSchema,
@@ -55,8 +55,12 @@ export function decodeLogPayload(
   messageType: MessageType,
   data: unknown,
 ): { readonly payload: LogPayload } | { readonly issue: string } {
-  const parsed = LOG_PAYLOAD_SCHEMAS[messageType].safeParse(data);
-  return parsed.success
-    ? { payload: { messageType, data: parsed.data } as LogPayload }
-    : { issue: parsed.error.message };
+  const parsed = Schema.decodeUnknownResult(LOG_PAYLOAD_SCHEMAS[messageType])(
+    data,
+  );
+  return Result.isSuccess(parsed)
+    ? // cast: the indexed schema's decoded type is `LogPayload`'s arm for
+      // `messageType`, which TypeScript cannot correlate across the lookup.
+      { payload: { messageType, data: parsed.success } as LogPayload }
+    : { issue: parsed.failure.message };
 }

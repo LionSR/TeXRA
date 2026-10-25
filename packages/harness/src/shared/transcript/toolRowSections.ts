@@ -5,7 +5,7 @@
  * keeps the section type definitions, the header preview, output suppression,
  * and the fold itself — the dispatch table is the only seam between them.
  */
-import { Predicate } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import {
   McpToolOutputSchema,
   getProposalFileGroups,
@@ -392,7 +392,7 @@ function isMcpTextBlock(block: unknown): block is { text: string } {
 
 /** The output fields the structured MCP sections render. */
 const MCP_STRUCTURED_FIELDS: ReadonlySet<string> = new Set(
-  Object.keys(McpToolOutputSchema.shape),
+  Object.keys(McpToolOutputSchema.fields),
 );
 
 /**
@@ -416,9 +416,12 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
     });
   }
 
-  const parsed = McpToolOutputSchema.nullable()
-    .catch(null)
-    .parse(ctx.parsedOutput);
+  const parsed = Result.getOrElse(
+    Schema.decodeUnknownResult(Schema.NullOr(McpToolOutputSchema))(
+      ctx.parsedOutput,
+    ),
+    () => null,
+  );
   const blocks = Array.isArray(parsed?.contentBlocks)
     ? parsed.contentBlocks
     : [];

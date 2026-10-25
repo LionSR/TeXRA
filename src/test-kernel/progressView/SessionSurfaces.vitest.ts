@@ -1,4 +1,5 @@
 // Third-party imports
+import { Schema } from 'effect';
 import { signal } from '@lit-labs/signals';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,7 +63,7 @@ beforeEach(() => {
   // Effect-shaped store: returning an Effect where `void` is expected is
   // assignable, which would let a discarded write look correct here.
   webviewState = {
-    [`surface:${KEY}`]: PersistedSurfaceSchema.parse({
+    [`surface:${KEY}`]: Schema.decodeUnknownSync(PersistedSurfaceSchema)({
       selected: ROOT,
       drafts: [[ROOT, 'Saved text']],
     }),
@@ -149,7 +150,9 @@ describe('session Surface ownership', () => {
 
   it('parses a host launch patch without defaulting the fields it omits', () => {
     // A host naming one field must not reset the agent, draft or files.
-    expect(LaunchPatchSchema.parse({ commit: 'a1f3c2' })).toEqual({
+    expect(
+      Schema.decodeUnknownSync(LaunchPatchSchema)({ commit: 'a1f3c2' }),
+    ).toEqual({
       commit: 'a1f3c2',
     });
   });
@@ -196,9 +199,7 @@ describe('session Surface ownership', () => {
       'Saved text',
     );
     expect(
-      storage.get<ReturnType<typeof PersistedSurfaceSchema.parse>>(
-        `surface:${KEY}`,
-      ).drafts,
+      storage.get<typeof PersistedSurfaceSchema.Type>(`surface:${KEY}`).drafts,
     ).toEqual([[ROOT, 'Saved text']]);
 
     view.set(viewOf(buildScenario().events));
@@ -208,9 +209,9 @@ describe('session Surface ownership', () => {
     );
     view.set(emptySessionView(KEY));
     await Promise.resolve();
-    const persisted = storage.get<
-      ReturnType<typeof PersistedSurfaceSchema.parse>
-    >(`surface:${KEY}`);
+    const persisted = storage.get<typeof PersistedSurfaceSchema.Type>(
+      `surface:${KEY}`,
+    );
     expect(persisted.drafts).toEqual([]);
     // The selection is decided by the same prune, so a raw read of the
     // field never names a run the view no longer holds.

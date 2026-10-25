@@ -60,8 +60,8 @@ import {
 import {
   BUILD_VERSION,
   PROTOCOL_VERSION,
+  ServiceInfoSchema,
   TexraRpcs,
-  type ServiceInfo,
   type ServiceRecord,
 } from './protocol';
 
@@ -69,7 +69,7 @@ import {
 export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
   'ServiceAlreadyRunning',
   {
-    info: Schema.Unknown /* TODO(effect-schema): error field type ServiceInfo; was `ServiceInfo` */,
+    info: ServiceInfoSchema,
   },
 ) {
   override get message(): string {

@@ -91,9 +91,6 @@ interface Projector {
   ) => readonly ProjectionOp[];
 }
 
-const ALL_TYPES =
-  SessionEventDraftSchema.members; /* TODO(effect-schema): map; was `.map((schema) => schema.shape.type.value)` */
-
 /** A priced row's spend as the `usage` display row carries it; an absent
  *  field stays absent, as `JSON.stringify` and `sumUsageStats` read it. */
 function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
@@ -120,7 +117,9 @@ function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
 const PROJECTORS = {
   listing: {
     version: 1,
-    inputs: ALL_TYPES.filter((type) => listingTypeOf({ type }) !== null),
+    inputs: SessionEventDraftSchema.members
+      .map((schema) => schema.fields.type.literal)
+      .filter((type) => listingTypeOf({ type }) !== null),
     prior: null,
     table: 'listing_entry',
     projects: [],
@@ -291,9 +290,9 @@ export function projectionUpkeep<E>(
     ),
     (rows) =>
       new Map(
-        ProjectionStateSchema.array()
-          .parse(rows)
-          .map((s) => [s.name, s]),
+        Schema.decodeUnknownSync(Schema.Array(ProjectionStateSchema))(rows).map(
+          (s) => [s.name, s],
+        ),
       ),
   );
   const setState = (name: ProjectionName, through: number) =>

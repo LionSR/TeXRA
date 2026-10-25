@@ -210,7 +210,7 @@ function getAgentDirectoryVars(): AgentDirectoryVars {
     custom: 'CUSTOM_AGENTS_DIR',
     agentDocs: 'AGENT_DOCS_DIR',
   };
-  const vars: AgentDirectoryVars = {
+  const vars: Record<keyof AgentDirectoryVars, string> = {
     BUILTIN_AGENTS_DIR: '',
     CUSTOM_AGENTS_DIR: '',
     AGENT_DOCS_DIR: '',
@@ -265,7 +265,9 @@ type FileCategoryVars = {
 };
 
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
-type FileVars = FileCategoryVars & Pick<TemplateInputs, 'MEDIA_FILE'>;
+type FileVars = FileCategoryVars & {
+  MEDIA_FILE: TemplateInputs['MEDIA_FILE'];
+};
 
 const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   agentConfig: AgentConfig,
@@ -340,7 +342,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
  */
 const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
   function* (
-    memoryPaths: string[],
+    memoryPaths: readonly string[],
     storageRoot: string,
   ): Effect.fn.Return<AttachedMemoriesResult, never, FileSystem.FileSystem> {
     if (memoryPaths.length === 0) return { xml: null, misses: [] };

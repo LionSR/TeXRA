@@ -1,17 +1,17 @@
-// Type imports
+// Third-party imports
 import { Cause, Effect, Schema, type Scope } from 'effect';
+
+// Local imports
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatZodIssuesForDiagnostics,
+  formatIssuesForDiagnostics,
   ToolError,
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-// Third-party imports
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A defined tool: plain data plus a `call` that validates and normalizes
@@ -43,7 +43,8 @@ export type DefineToolOptions<T, R = never> = Required<
     | 'slow'
     | 'describe'
   > & {
-    schema: ZodType<T, unknown>;
+    /** Decodes the model's input into `T`. */
+    schema: Schema.Codec<T, unknown>;
     /**
      * What the run loop checks before this tool's body runs: the paths the
      * call writes and the command it must get approved. Declared here,
@@ -74,21 +75,9 @@ export function defineTool<T, R = never>(
     execute,
     ...declared
   } = def;
-  const validate = (rawInput: unknown) =>
-    Effect.try({
-      try: () => Schema.decodeUnknownSync(schema)(rawInput),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((error) =>
-        error instanceof
-        SchemaIssue /* TODO(effect-schema): z.core; was `z.core()` */.$ZodAsyncError
-          ? Effect.tryPromise({
-              try: () => Schema.decodeUnknownPromise(schema)(rawInput),
-              catch: ensureError,
-            })
-          : Effect.fail(error),
-      ),
-    );
+  // Every issue, not the first: the model corrects its call in one go.
+  const decode = Schema.decodeUnknownEffect(schema);
+  const validate = (rawInput: unknown) => decode(rawInput, { errors: 'all' });
   return {
     // First, so a caller's stray `definition` or `call` cannot replace the
     // ones built here.
@@ -96,9 +85,9 @@ export function defineTool<T, R = never>(
     definition: {
       name,
       description,
-      // The Zod schema is the tool's only parameter representation; the
+      // The schema is the tool's only parameter representation; the
       // provider converters derive JSON Schema from it per request.
-      zodSchema: schema,
+      schema,
       ...(scriptReturns !== undefined && { scriptReturns }),
       ...(card !== undefined && { card }),
     },
@@ -112,13 +101,13 @@ export function defineTool<T, R = never>(
             if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
             if (findStorageRefusal(cause)) return Effect.failCause(cause);
             const error = Cause.squash(cause);
-            if (error instanceof ZodError) {
+            if (error instanceof Schema.SchemaError) {
               return Effect.succeed<ToolResult>({
                 status: 'error',
                 error: `Invalid input:\n${error.message}`,
                 diagnostics: {
                   type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-                  formatted: formatZodIssuesForDiagnostics(error.issues),
+                  formatted: formatIssuesForDiagnostics(error),
                 },
               });
             }

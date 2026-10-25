@@ -37,15 +37,13 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
 import {
   writeRejection,
-  type RequestError,
-} from '@shared/session/requestErrors';
+  type DatabaseNotOwner,
+  type DatabaseReadFailed,
+  type DatabaseWriteFailed,
+} from '@shared/session/database';
+import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';

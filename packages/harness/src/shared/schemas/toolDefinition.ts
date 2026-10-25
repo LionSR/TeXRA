@@ -3,15 +3,15 @@ import { Schema } from 'effect';
 import type { ToolCard } from './progressView/data';
 
 /**
- * Zod schema for validating tool definition structure.
- * Single source of truth - type is derived via z.infer<>.
+ * The shape of a tool definition; the type is derived from it.
  *
- * Note: zodSchema uses z.custom<ZodType>() because ZodType instances can't be
- * validated by Zod itself. This field is runtime-only (added by defineTool(),
- * not present in YAML configs) but acknowledged in the schema for type safety.
+ * `schema` is declared with `Schema.isSchema` because a schema instance is not
+ * itself describable by a schema. The field is runtime-only (set by
+ * `defineTool()`, never present in YAML configs) but acknowledged here for
+ * type safety.
  *
- * Uses z.looseObject() to allow forward compatibility with future runtime
- * fields without breaking validation when tools flow through AgentSettingSchema.
+ * Keeps unknown keys so future runtime fields do not break validation when
+ * tools flow through `AgentSettingSchema`.
  */
 export const ToolDefinitionSchema = Schema.StructWithRest(
   Schema.Struct({
@@ -21,9 +21,14 @@ export const ToolDefinitionSchema = Schema.StructWithRest(
     description: Schema.optional(Schema.String),
     /** Parameter schema (JSON Schema format) */
     parameters: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-    /** Runtime-only: original Zod schema for SDK-native conversion */
-    zodSchema: Schema.optional(
-      Schema.declare<ZodType>((_u): _u is ZodType => true),
+    /**
+     * Runtime-only: the tool's input schema, from which the provider
+     * converters derive JSON Schema per request.
+     */
+    schema: Schema.optionalKey(
+      Schema.declare((u): u is Schema.Codec<unknown, unknown> =>
+        Schema.isSchema(u),
+      ),
     ),
     /**
      * What a script's call of the tool resolves to, as a TypeScript type, when
@@ -32,7 +37,7 @@ export const ToolDefinitionSchema = Schema.StructWithRest(
      */
     scriptReturns: Schema.optional(Schema.String),
     /**
-     * Runtime-only, like `zodSchema`: the card a call states from its input
+     * Runtime-only, like `schema`: the card a call states from its input
      * (`ToolUseLog.card`), in place of the sections the transcript derives
      * from the tool's name. What a plugin's tool shows that the harness
      * knows nothing of.

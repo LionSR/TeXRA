@@ -1,7 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Scope } from 'effect';
+import { Effect, Exit, Result, Schema, Scope } from 'effect';
 import {
   afterEach,
   beforeAll,
@@ -158,7 +158,11 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         // rejects runs a warning and nothing else.
         handleMessage(message: Parameters<typeof ipc.route>[0]) {
           testRuntime().runFork(ipc.route(message));
-          return SettingsViewInboundMessageSchema.safeParse(message).success;
+          return Result.isSuccess(
+            Schema.decodeUnknownResult(SettingsViewInboundMessageSchema)(
+              message,
+            ),
+          );
         },
       })),
       Scope.provide(scope),

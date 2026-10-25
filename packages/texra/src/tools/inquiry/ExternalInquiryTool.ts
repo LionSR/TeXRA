@@ -113,7 +113,6 @@ const InquiryInputSchema = Schema.Union([
       status: nullishWithDefault(
         Schema.Literals(['open', 'answered', 'dropped', 'any']),
         'open',
-      ).describe(
         '"open" → awaiting user answer (default: matches the most common need). ' +
           '"answered" → user has submitted an answer. ' +
           '"dropped" → user rejected the inquiry. ' +
@@ -122,7 +121,6 @@ const InquiryInputSchema = Schema.Union([
       scope: nullishWithDefault(
         Schema.Literals(['run', 'all']),
         'run',
-      ).describe(
         '"run" → only threads belonging to this run; "all" → every run\'s threads.',
       ),
     }),

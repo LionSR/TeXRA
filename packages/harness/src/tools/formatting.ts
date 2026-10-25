@@ -46,7 +46,7 @@ interface FileViewOptions {
    * When omitted or nullish, the full file is shown.
    * Values are clamped to the file bounds automatically.
    */
-  viewRange?: [number, number] | null;
+  viewRange?: readonly [number, number] | null;
   /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
   maxLines?: number;
   /** Optional suffix appended to the summary (e.g., memory metadata). */

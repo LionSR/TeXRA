@@ -12,13 +12,9 @@ import {
   formatToolOutput,
 } from '@texra-ai/harness/plugins';
 
-/** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
-export function texPathField(
-  description: string,
-): unknown /* TODO(effect-schema): type z.ZodString; was `z.ZodString` */ {
-  return Schema.String.check(Schema.isMinLength(1)).annotate({
-    description: description,
-  });
+/** Shared `texPath` field for LaTeX extraction tools, with a per-tool description. */
+export function texPathField(description: string): Schema.String {
+  return Schema.String.check(Schema.isMinLength(1)).annotate({ description });
 }
 
 interface LatexFileResolution {

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, afterEach, beforeEach, expect } from 'vitest';
 
@@ -86,7 +86,10 @@ describe('documentTask', () => {
 
   describe('task.files custom variables', () => {
     const task = (files: Record<string, string>) =>
-      DOCUMENT_TASK_BLOCK.schema.parse({ files, requests: ['Revise.'] });
+      Schema.decodeUnknownSync(DOCUMENT_TASK_BLOCK.schema)({
+        files,
+        requests: ['Revise.'],
+      });
     const agentPath = () => path.join(workspaceRoot, 'agents', 'generic.yaml');
 
     beforeEach(async () => {

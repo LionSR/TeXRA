@@ -49,7 +49,7 @@ export class ProviderKeyList extends LitElement {
 
   /** Null until the profile state arrives. */
   @property({ attribute: false }) providerKeyStatuses:
-    ProviderKeyStatus[] | null = null;
+    readonly ProviderKeyStatus[] | null = null;
 
   /** Plan usage for the coding-plan providers (Kimi Code, GLM Coding Plan). */
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =

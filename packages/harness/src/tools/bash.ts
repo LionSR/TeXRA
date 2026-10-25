@@ -203,10 +203,11 @@ const BashInputSchema = Schema.Struct({
       Schema.isLessThanOrEqualTo(600_000),
     ),
     BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  ).describe(
     'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
   ),
-  run_in_background: nullishWithDefault(Schema.Boolean, false).describe(
+  run_in_background: nullishWithDefault(
+    Schema.Boolean,
+    false,
     'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete.',
   ),
 });

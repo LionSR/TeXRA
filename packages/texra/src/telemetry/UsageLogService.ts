@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Clock,
-  Data,
   DateTime,
   Duration,
   Effect,
@@ -178,17 +177,12 @@ interface RetryBatch {
 /**
  * The batch could not be delivered or acknowledged and must be sent again:
  * the install-ID read, the request, its body, its parse, or an acknowledgement
- * that does not cover the batch. `requeue` is the batch to keep for the
- * retry, or null when it failed before a batch was taken.
+ * that does not cover the batch. The sender keeps the batch for the retry
+ * (`retryBatch`) before failing with this.
  */
 class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
   'UsageBatchUndelivered',
-  {
-    reason: Schema.String,
-    requeue: Schema.NullOr(
-      Schema.Unknown /* TODO(effect-schema): error field type RetryBatch; was `RetryBatch` */,
-    ),
-  },
+  { reason: Schema.String },
 ) {}
 
 class UsageLogServiceImpl {
@@ -319,8 +313,7 @@ class UsageLogServiceImpl {
       yield* this.sendNextBatch().pipe(
         Effect.tapError((error) =>
           Effect.suspend(() => {
-            const requeued = error.requeue?.entries.length ?? 0;
-            if (error.requeue) this.retryBatch = error.requeue;
+            const requeued = this.retryBatch?.entries.length ?? 0;
             const requeuedMessage =
               requeued > 0 ? `; requeued ${requeued} entries` : '';
             // The endpoint may reject anonymous batches until it accepts them:
@@ -420,18 +413,27 @@ class UsageLogServiceImpl {
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       ).pipe(withLogChannel(CHANNEL));
 
-      // The install ID is created only here, after every opt-out has passed.
+      // From here on a failure keeps the batch for the retry.
       const pending = batch;
+      const keepForRetry = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        Effect.tapError(effect, () =>
+          Effect.sync(() => {
+            this.retryBatch = pending;
+          }),
+        );
+      // The install ID is created only here, after every opt-out has passed.
       const installId = yield* readOrCreateInstallId().pipe(
         Effect.mapError(
           (error) =>
             new UsageBatchUndelivered({
               reason: `install ID unavailable: ${toErrorMessage(error)}`,
-              requeue: pending,
             }),
         ),
+        keepForRetry,
       );
-      const response = yield* this.sendBatch(batch, installId);
+      const response = yield* this.sendBatch(batch, installId).pipe(
+        keepForRetry,
+      );
       if (!response.success) {
         yield* this.reportPermanentRejection(batch, response);
         return;
@@ -476,7 +478,7 @@ class UsageLogServiceImpl {
   private readonly sendBatch = Effect.fn('UsageLogService.sendBatch')(
     function* (batch: RetryBatch, installId: string) {
       const undelivered = (reason: string) =>
-        new UsageBatchUndelivered({ reason, requeue: batch });
+        new UsageBatchUndelivered({ reason });
       const wire: UsageLogBatch = {
         batchId: batch.batchId,
         entries: batch.entries.map(({ entry }) => entry),

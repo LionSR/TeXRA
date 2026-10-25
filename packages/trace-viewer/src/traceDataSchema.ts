@@ -27,7 +27,7 @@ const APP_ARMS = Object.values(APP_PLUGIN_ARMS).flat();
 export function parseTraceData(raw: unknown): TraceDocument {
   const result = Schema.decodeUnknownResult(TraceDocumentSchema)(raw);
   if (!Result.isSuccess(result))
-    throw new Error(INCOMPATIBLE + result.error.message);
+    throw new Error(INCOMPATIBLE + result.failure.message);
   try {
     return readTraceFacts(result.success, APP_ARMS);
   } catch (error) {

@@ -10,6 +10,9 @@
  * the host bridge for a session.
  */
 import { signal, type Signal } from '@lit-labs/signals';
+import { Schema } from 'effect';
+
+import { RequestErrorSchema } from '@texra-ai/harness/schemas';
 
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -100,9 +103,7 @@ export function createSessionSurfaces(options: {
   const transport = installWebviewTransport(options.post);
   interface Held extends SessionSurface {
     readonly session: WebviewSession;
-    readonly persisted: PersistedState<
-      ReturnType<typeof PersistedSurfaceSchema.parse>
-    >;
+    readonly persisted: PersistedState<typeof PersistedSurfaceSchema.Type>;
     subscribedTranscript: string;
     unsubscribe(): void;
   }
@@ -217,12 +218,19 @@ export function createSessionSurfaces(options: {
     act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
+  /** A refused request's error as its class; null for success and for a
+   *  cancellation, which needs no notice. The message was decoded whole, so
+   *  the error's wire form always decodes: a failure here is a defect. */
+  function refusal(result: Response['result']): Surface['requestError'] {
+    if (result.ok) return null;
+    const error = Schema.decodeUnknownSync(RequestErrorSchema)(result.error);
+    return error._tag === 'Cancelled' ? null : error;
+  }
+
   function presentResult(entry: Held, result: Response['result']): void {
-    if (!result.ok && result.error._tag !== 'Cancelled') {
-      setSurface(entry, {
-        ...entry.surface$.get(),
-        requestError: result.error,
-      });
+    const error = refusal(result);
+    if (error !== null) {
+      setSurface(entry, { ...entry.surface$.get(), requestError: error });
     }
   }
 
@@ -412,11 +420,12 @@ export function createSessionSurfaces(options: {
     // The runtime's refusal also reaches the run it was made on
     // (7.6): that run's controls paint it, and nothing here
     // swallows it.
-    if (!result.ok && result.error._tag !== 'Cancelled' && runId !== null) {
+    const error = refusal(result);
+    if (error !== null && runId !== null) {
       const current = entry.surface$.get();
       setSurface(entry, {
         ...current,
-        rejected: new Map(current.rejected).set(runId, result.error),
+        rejected: new Map(current.rejected).set(runId, error),
       });
     }
     // The form's approval went through: back to the run that asked, where

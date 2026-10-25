@@ -1,4 +1,4 @@
-import { Data, Effect, Result, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 import {
@@ -447,9 +447,10 @@ function selectionOf(stored: unknown) {
     stored === undefined
       ? undefined
       : Schema.decodeUnknownResult(ModelSelectionSchema)(stored);
-  return parsed?.success === false
-    ? { selection: EMPTY_MODEL_SELECTION, invalid: parsed.error }
-    : { selection: parsed?.data ?? EMPTY_MODEL_SELECTION };
+  if (parsed === undefined) return { selection: EMPTY_MODEL_SELECTION };
+  return Result.isSuccess(parsed)
+    ? { selection: parsed.success }
+    : { selection: EMPTY_MODEL_SELECTION, invalid: parsed.failure };
 }
 
 const reportInvalid = (invalid: Schema.SchemaError | undefined) =>

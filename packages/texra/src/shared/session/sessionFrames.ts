@@ -1,7 +1,7 @@
 /**
  * The bridge between a session runtime and a renderer process (PRD
- * one-fold-three-renderers, 7.4, 8.1, 8.4, 8.5): the Zod wire, up and down,
- * and `SessionFrames`, the webview's source of session events.
+ * one-fold-three-renderers, 7.4, 8.1, 8.4, 8.5): the wire schemas, up and
+ * down, and `SessionFrames`, the webview's source of session events.
  *
  * Down: an `EventsFrame` carries the rows one `Subscribe` asked for, tagged
  * by the read that delivered them, then the tail; `cursor` is the commit
@@ -28,6 +28,7 @@ import {
 
 import {
   OutcomeSchema,
+  RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
@@ -87,28 +88,6 @@ export const EventsFrameSchema = Schema.Struct({
 });
 export type EventsFrame = typeof EventsFrameSchema.Type;
 
-/** The request errors `SessionRequests` answers, on the wire, plus the
- *  bridge's own `Invalid` for a message it could not parse. `Internal` is a
- *  handler defect: the message stays in the host log under `ref`, the
- *  request id, and never crosses to a renderer. */
-export const RequestErrorWireSchema = Schema.Union([
-  Schema.Struct({ _tag: Schema.Literal('NotOwner'), runId: RunIdSchema }),
-  Schema.Struct({
-    _tag: Schema.Literal('Unavailable'),
-    runId: RunIdSchema,
-    reason: Schema.String,
-  }),
-  Schema.Struct({ _tag: Schema.Literal('Cancelled') }),
-  Schema.Struct({
-    _tag: Schema.Literal('Rejected'),
-    reason: Schema.String,
-    docsPage: Schema.optional(Schema.String),
-  }),
-  Schema.Struct({ _tag: Schema.Literal('Invalid'), reason: Schema.String }),
-  Schema.Struct({ _tag: Schema.Literal('Internal'), ref: RequestIdSchema }),
-]);
-export type RequestErrorWire = typeof RequestErrorWireSchema.Type;
-
 /** What the host answers a `host.request` with (PRD 8.3): the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
  *  stored image its file name, the editor's file I/O a listing, a file's
@@ -145,7 +124,14 @@ const ResponseSchema = Schema.Struct({
       ok: Schema.Literal(true),
       outcome: Schema.Union([OutcomeSchema, HostOutcomeSchema]),
     }),
-    Schema.Struct({ ok: Schema.Literal(false), error: RequestErrorWireSchema }),
+    /** The request error the session answered with, as its fields: a
+     *  `postMessage` keeps no Error prototype, so the surface decodes the
+     *  class back with `RequestErrorSchema`. `Internal` is a handler defect
+     *  whose cause stays in the host log under `ref`, the request id. */
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      error: Schema.toEncoded(RequestErrorSchema),
+    }),
   ]),
 });
 export type Response = typeof ResponseSchema.Type;

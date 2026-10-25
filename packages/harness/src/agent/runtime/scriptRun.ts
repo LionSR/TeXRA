@@ -200,30 +200,25 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   const { calls } = yield* scriptRunCalls(session, runId);
   const view = yield* session.view.read([]);
   const now = yield* Clock.currentTimeMillis;
-  const tally: ScriptTally = {
-    total: calls.length,
-    ok: 0,
-    failed: 0,
-    cancelled: 0,
-    skipped: 0,
-  };
+  const counts = { ok: 0, failed: 0, cancelled: 0, skipped: 0 };
   for (const call of calls) {
     switch (call.status) {
       case 'completed':
-        tally.ok += 1;
+        counts.ok += 1;
         break;
       case 'unsettled':
-        tally.cancelled += 1;
+        counts.cancelled += 1;
         break;
       case 'failed':
       case 'skipped':
       case 'cancelled':
-        tally[call.status] += 1;
+        counts[call.status] += 1;
         break;
       default:
         call.status satisfies never;
     }
   }
+  const tally: ScriptTally = { total: calls.length, ...counts };
   return {
     name,
     outcome,

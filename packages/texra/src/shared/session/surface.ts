@@ -8,10 +8,10 @@
  * `applySurfaceAction`.
  *
  * The signal record holds `Map`s. Webview state crosses `JSON.stringify`,
- * where a `Map` serializes to `{}`, so the persisted form beside it is a Zod
+ * where a `Map` serializes to `{}`, so the persisted form beside it is a
  * schema whose maps are entry arrays, rebuilt into `Map`s at load.
  */
-import { Effect, Schema, SchemaGetter, Struct } from 'effect';
+import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 
 import { modelRefOf } from '@texra-ai/llm';
 
@@ -23,6 +23,8 @@ import {
   type RunId,
   acceptsFollowUp,
   type FollowUpHost,
+  Rejected,
+  type RequestError,
   type SessionView,
   type RunView,
 } from '@texra-ai/harness/schemas';
@@ -34,7 +36,6 @@ import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
 import type { SessionView as ReadSessionView } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from './hostSnapshot';
-import type { RequestErrorWire } from './sessionFrames';
 
 /** Who runs a main-view request: a single agent or a team. */
 const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
@@ -43,13 +44,13 @@ const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
 const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
   Struct.assign({
     editedFile: Schema.optional(Schema.NullOr(Schema.String)).pipe(
-      Schema.decodeTo(
-        Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((v) => v ?? '')` */,
-        {
-          decode: SchemaGetter.transform((v) => v ?? ''),
-          encode: SchemaGetter.forbidden(() => 'decode-only'),
-        },
-      ),
+      Schema.decodeTo(Schema.String, {
+        // An absent key reads '' too, not only a present null.
+        decode: SchemaGetter.transformOptional((v) =>
+          Option.some(Option.getOrUndefined(v) ?? ''),
+        ),
+        encode: SchemaGetter.transform((v) => v),
+      }),
     ),
   }),
 );
@@ -95,27 +96,25 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   }),
 );
 type LaunchSurface = typeof LaunchSurfaceSchema.Type;
-type LaunchShape = typeof LaunchSurfaceSchema.shape;
+
+/** Each launcher field as an optional field of its decoded value alone:
+ *  a field's decoding default would otherwise fill an absent key. */
+interface OptionalValueLambda extends Struct.Lambda {
+  <S extends Schema.Top>(field: S): Schema.optional<Schema.toType<S>>;
+  readonly '~lambda.out': this['~lambda.in'] extends Schema.Top
+    ? Schema.optional<Schema.toType<this['~lambda.in']>>
+    : never;
+}
+const optionalValue = Struct.lambda<OptionalValueLambda>((field) =>
+  Schema.optional(Schema.toType(field)),
+);
 
 /** A change to the launcher, carried by the host's `surface.action`: every
- *  field optional with its `.prefault` unwrapped, since `.partial()` keeps
- *  prefaults that Zod runs for an absent key, so `{ commit }` would reset
- *  the agent, the draft and the file lists. */
-export const LaunchPatchSchema = Schema.Struct(
-  Object.fromEntries(
-    Object.entries(LaunchSurfaceSchema.fields).map(([key, field]) => [
-      key,
-      (field instanceof
-      Schema.Unknown /* TODO(effect-schema): z.ZodPrefault; was `z.ZodPrefault()` */
-        ? field.unwrap()
-        : field
-      ).optional(),
-    ]),
-  ) as {
-    [
-      K in keyof LaunchShape
-    ]: unknown /* TODO(effect-schema): type z.ZodOptional; was `z.ZodOptional< LaunchShape[K] extends z.ZodPrefault<infer Inner> ? Inner : LaunchShape[K] >` */;
-  },
+ *  field optional, without the decoding default the full record gives an
+ *  absent key, so `{ commit }` leaves the agent, the draft and the file
+ *  lists as they are. */
+export const LaunchPatchSchema = LaunchSurfaceSchema.mapFields(
+  Struct.map(optionalValue),
 );
 type LaunchPatch = typeof LaunchPatchSchema.Type;
 
@@ -154,7 +153,7 @@ type WorkbenchLayout = Readonly<Record<string, unknown>>;
  * A failed request a surface paints. Cancellation is the user's own
  * doing, so it stays quiet and never reaches a surface field.
  */
-type SurfaceRejection = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
+type SurfaceRejection = Exclude<RequestError, { _tag: 'Cancelled' }>;
 
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
@@ -399,7 +398,7 @@ export function pruneSurface(
  */
 export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const { launch } = surface;
-  const patch: Partial<LaunchSurface> = {};
+  const patch: { model?: string; workingDirectory?: string } = {};
   // A saved effort or mode on an enabled model stays (Run again… fills the
   // run's own), and so does a proposal's model while the form is open on it:
   // the asking run's model access decides it, not the picker.
@@ -511,7 +510,7 @@ export function applySurfaceAction(
     case 'reportError':
       return {
         ...surface,
-        requestError: { _tag: 'Rejected', reason: action.reason },
+        requestError: new Rejected({ reason: action.reason }),
       };
     case 'select':
       return {

@@ -27,6 +27,7 @@ export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
   AgentSourceSchema,
   RunIdSchema,
+  isRunId,
   RUN_OUTCOME,
   RunOutcomeSchema,
 } from '@shared/schemas';
@@ -115,6 +116,17 @@ export type {
   InputHistoryRecord,
   SessionStoreMovedAside,
 } from '@shared/session/database';
+// How a runtime request fails, as the classes cross the RPC edge.
+export {
+  Cancelled,
+  Internal,
+  Invalid,
+  NotOwner,
+  Rejected,
+  Unavailable,
+  RequestErrorSchema,
+  type RequestError,
+} from '@shared/session/requestErrors';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).

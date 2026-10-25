@@ -114,10 +114,7 @@ export function aggregateLists(
 /** The `AggregateId` two columns name. */
 export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
   return Schema.decodeUnknownSync(AggregateIdSchema)(
-    JSON.stringify([
-      Schema.decodeUnknownSync(Schema.String)(kind),
-      Schema.decodeUnknownSync(Schema.String)(logicalId),
-    ]),
+    JSON.stringify([kind, logicalId]),
   );
 }
 
@@ -133,9 +130,7 @@ const readableFrom = (type: SessionEventDraft['type']): number =>
 /** Whether `decodeRow` parses this row's data (a kind and version this
  *  build reads): another build's row is refused before its blobs are read. */
 export function decodable(row: SqlRow): boolean {
-  const { type, version } = Schema.decodeUnknownSync(
-    RowSchema.mapFields(Struct.pick(['type', 'version'])),
-  )(row);
+  const { type, version } = Schema.decodeUnknownSync(RowSchema)(row);
   if (!hasKind(type)) return false;
   const stored = version ?? ROW_KINDS[type].version;
   return stored >= readableFrom(type) && stored <= ROW_KINDS[type].version;
@@ -220,9 +215,10 @@ export function encodeDraft(
 /** Where a row failed, never its stored text (a JSON parse error quotes it). */
 function causeOf(error: unknown): string {
   if (error instanceof SyntaxError) return 'not JSON';
-  const issue =
-    error instanceof Schema.SchemaError ? error.issues[0] : undefined;
-  return issue ? `${issue.code} at "${issue.path.join('.')}"` : String(error);
+  // The rendered issue names what was expected and where, never the value.
+  if (error instanceof Schema.SchemaError)
+    return error.message.replaceAll(/\s*\n\s*/g, ' ');
+  return String(error);
 }
 
 /** A selected row's columns, as `EVENT_COLUMNS` names them. */
@@ -241,7 +237,7 @@ export const RowSchema = Schema.Struct({
 /** A batch's blobs, inflated and verified by the reader, by digest. */
 export type Blobs = ReadonlyMap<string, string>;
 
-const JsonObjectSchema = Schema.Record(Schema.String, Schema.Json);
+const jsonObject = Schema.decodeUnknownSync(Schema.JsonObject);
 
 /** `data`, its references inflated from `blobs` (one missing throws) and
  *  its escaped keys restored. */
@@ -299,13 +295,11 @@ export function decodeRow(
     );
   let data: Record<string, JsonValue>;
   try {
-    data = Schema.decodeUnknownSync(JsonObjectSchema)(
-      parseData(row.data, blobs),
-    );
+    data = jsonObject(parseData(row.data, blobs));
     for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
       data = { ...step(data) };
     if (row.type === 'context.blob') {
-      const field = Schema.decodeUnknownSync(JsonObjectSchema)(data.payload);
+      const field = jsonObject(data.payload);
       // The value is stored canonical, so its text hashes to its address.
       const text = Schema.decodeUnknownSync(Schema.String)(field.value);
       if (sha256Hex(text) !== field.digest) throw new Error('digest mismatch');
@@ -334,8 +328,9 @@ export function decodeRow(
   let value = event.value;
   for (const step of arm.success.upcasters.slice(event.version - 1))
     value = step(value);
-  const { error } = arm.success.schema.safeParse(value);
-  if (error) return corrupt(error, `plugin.fact/${name}`);
+  const checked = Schema.decodeUnknownResult(arm.success.schema)(value);
+  if (Result.isFailure(checked))
+    return corrupt(checked.failure, `plugin.fact/${name}`);
   return Result.succeed({ ...event, version: arm.success.version, value });
 }
 

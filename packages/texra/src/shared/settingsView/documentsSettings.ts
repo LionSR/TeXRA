@@ -131,7 +131,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-    schema: Schema.Enum(LATEXDIFF_MATH_MARKUP_VALUES).pipe(
+    schema: Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
       ),

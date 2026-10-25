@@ -18,7 +18,6 @@
 import { Schema } from 'effect';
 
 import type { AgentNotFound } from '@agent/index/agentCatalog';
-import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 
 /**
  * The plugin list cannot be composed, for a defect `toolTable` refuses: an
@@ -65,8 +64,14 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
   'ResumeRefused',
   {
     runId: Schema.String,
-    reason:
-      Schema.Unknown /* TODO(effect-schema): error field type Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>; was `Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>` */,
+    reason: Schema.Literals([
+      'finished',
+      'owned_elsewhere',
+      'blocked',
+      'unusable_checkpoint',
+      'earlier_build',
+      'not_resumable',
+    ]),
     message: Schema.String,
   },
 ) {}

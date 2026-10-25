@@ -12,7 +12,6 @@
  */
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Option,
@@ -27,7 +26,6 @@ import {
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateTarget,
@@ -90,6 +88,8 @@ const ReplySchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(false), message: Schema.String }),
 ]);
 type Reply = typeof ReplySchema.Type;
+/** One reply as the process writes it: a line of JSON. */
+const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
 /** The session a store reads: its display tail and its current commit. */
 type HistorySession = Pick<SessionHandle, 'log'>;
@@ -177,8 +177,8 @@ const request = Effect.fn('HistoryQuery.request')(function* (
         }),
     ),
   );
-  const reply = parseJsonWith(line, ReplySchema);
-  if (reply._tag === 'Failure') {
+  const reply = Schema.decodeUnknownResult(ReplyLineSchema)(line);
+  if (Result.isFailure(reply)) {
     return yield* new HistoryQueryFailed({
       message: 'The history query process sent an unreadable reply.',
       cause: reply.failure,

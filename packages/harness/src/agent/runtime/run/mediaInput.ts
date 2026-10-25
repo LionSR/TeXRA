@@ -10,7 +10,7 @@
  * and a follow-up batch is restored to its queue with the failure
  * reported. Nothing drops an attachment silently.
  */
-import { Cause, Effect, Exit, FileSystem, Schema } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';

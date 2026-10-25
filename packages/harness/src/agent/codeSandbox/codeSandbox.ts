@@ -9,7 +9,6 @@ import codeSandboxWorkerSource from 'virtual:code-sandbox-worker';
 import {
   Cause,
   Context,
-  Data,
   Duration,
   Effect,
   FiberSet,
@@ -86,7 +85,7 @@ class SandboxUnavailable extends Schema.TaggedError<SandboxUnavailable>()(
   },
 ) {
   override get message(): string {
-    return `The code sandbox is unavailable: ${this.cause.message}`;
+    return `The code sandbox is unavailable: ${ensureError(this.cause).message}`;
   }
 }
 
@@ -261,7 +260,7 @@ const make = Effect.gen(function* () {
             ? Queue.offer(reports, report.success)
             : Effect.fail(
                 new Error(
-                  `Code sandbox worker sent a malformed message: ${report.error.message}`,
+                  `Code sandbox worker sent a malformed message: ${report.failure.message}`,
                 ),
               );
         })

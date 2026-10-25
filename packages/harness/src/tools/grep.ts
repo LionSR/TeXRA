@@ -32,9 +32,8 @@ const GrepInputSchema = Schema.Struct({
     description: 'Glob filter for file names (e.g. "*.tex").',
   }),
   output_mode: nullishWithDefault(
-    Schema.Enum(OUTPUT_MODES),
+    Schema.Literals(OUTPUT_MODES),
     'content',
-  ).describe(
     'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
   ),
   '-B': Schema.optional(
@@ -64,7 +63,8 @@ const GrepInputSchema = Schema.Struct({
   offset: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
     0,
-  ).describe('Skip first N results.'),
+    'Skip first N results.',
+  ),
   head_limit: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   ).annotate({ description: 'Limit to first N results.' }),

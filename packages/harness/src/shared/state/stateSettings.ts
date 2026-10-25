@@ -137,10 +137,10 @@ export interface StateSettingEntry {
    */
   readonly key: string;
   /**
-   * Zod schema carrying both validation and the `.prefault()` default applied
-   * when the key is absent. `schema.parse(undefined)` yields that default.
+   * The row's schema, carrying both validation and the decoding default
+   * applied when the key is absent: decoding `undefined` yields that default.
    */
-  readonly schema: Schema.Top;
+  readonly schema: Schema.Codec<unknown, unknown>;
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
@@ -277,7 +277,7 @@ const HARNESS_CONFIG_ROWS: Record<
   },
   // Global: how one person wants their windows to open.
   resumeOnOpen: {
-    schema: Schema.Enum(RESUME_ON_OPEN_SETTING.values).pipe(
+    schema: Schema.Literals(RESUME_ON_OPEN_SETTING.values).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(RESUME_ON_OPEN_SETTING.defaultValue),
       ),
@@ -509,7 +509,7 @@ export function configTreeRows(
 const APPROVAL_POLICY_SETTING = {
   key: APPROVAL_POLICY_CONFIG_KEY,
   // Strict on purpose: `settingEnumOptions` derives the dropdown from a
-  // `ZodEnum` row, and the tolerant spelling belongs to
+  // literal-list row, and the tolerant spelling belongs to
   // `parseApprovalPolicy`, which every reader of typed-in text (the
   // env var, `--approval-policy`, `/approval`, the dropdown) calls before
   // a value ever reaches this row.
@@ -882,7 +882,7 @@ export interface SettingsCatalog {
   ) => SettingsViewStateSettingEntry | undefined;
   /**
    * The rows one settings-view snapshot carries, in catalog order: the
-   * outbound payload's Zod shape, the backend's read loop and the webview's
+   * outbound payload's schema, the backend's read loop and the webview's
    * apply step each iterate this list, so adding
    * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
    */
@@ -961,7 +961,10 @@ export function settingsCatalog(
       const entry = byKey.get(canonicalKey);
       if (entry?.slot !== 'config') return undefined;
       if (!defaults.has(canonicalKey)) {
-        defaults.set(canonicalKey, entry.schema.parse(undefined));
+        defaults.set(
+          canonicalKey,
+          Schema.decodeUnknownSync(entry.schema)(undefined),
+        );
       }
       const value = defaults.get(canonicalKey);
       return value !== null && typeof value === 'object'

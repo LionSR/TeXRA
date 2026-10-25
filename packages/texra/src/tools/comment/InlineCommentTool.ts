@@ -124,12 +124,13 @@ const InlineCommentInputSchema = Schema.Union([
     }),
     [Schema.Record(Schema.String, Schema.Unknown)],
   ).check(
-    Schema.makeFilter(
-      (data) => data.endLine == null || data.endLine >= data.line,
-      {
-        message: 'endLine must be greater than or equal to line.',
-        path: ['endLine'],
-      },
+    Schema.makeFilter((data) =>
+      data.endLine == null || data.endLine >= data.line
+        ? undefined
+        : {
+            path: ['endLine'],
+            issue: 'endLine must be greater than or equal to line.',
+          },
     ),
   ),
   Schema.StructWithRest(

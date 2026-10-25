@@ -7,6 +7,7 @@ import {
   type AgentProposalPermission,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
+import { Result, Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -258,9 +259,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     // Options the documents plugin cannot read show no flags.
-    const options = DocumentTaskOptionsSchema.safeParse(
-      data.options ?? {},
-    ).data;
+    const options = Result.getOrUndefined(
+      Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
+    );
     const flags: string[] = [];
     if (options?.autoExtractFigure) flags.push('Extract figures');
     if (options?.autoExtractTikzFigure) flags.push('Extract TikZ');

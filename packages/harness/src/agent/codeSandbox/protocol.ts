@@ -3,8 +3,7 @@
 // guest value crosses as JSON text, so neither side ever holds the other's
 // objects.
 
-import { Schema, SchemaGetter } from 'effect';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { Schema } from 'effect';
 
 /** What the worker is started with: one script and the limits it runs under. */
 export const WorkerInputSchema = Schema.Struct({
@@ -40,26 +39,7 @@ export const SettleMessageSchema = Schema.Union([
 export type SettleMessage = typeof SettleMessageSchema.Type;
 
 /** JSON text from the realm, parsed into the value it encodes. */
-const JsonText = Schema.String.pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((text, ctx): unknown => { try { return JSON.parse(text) as unknown; } catch (error) { ctx.issues.push({ code: 'custom', input: text, message: `not JSON text: ${toErrorMessage(error)}`, }); return z.NEVER; } })` */,
-    {
-      decode: SchemaGetter.transform((text, ctx): unknown => {
-        try {
-          return JSON.parse(text) as unknown;
-        } catch (error) {
-          ctx.issues.push({
-            code: 'custom',
-            input: text,
-            message: `not JSON text: ${toErrorMessage(error)}`,
-          });
-          return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
-        }
-      }),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
-);
+const JsonText = Schema.fromJsonString(Schema.Unknown);
 
 const IssuedOpSchema = Schema.Struct({
   /** Issue order inside the realm, from 0. */

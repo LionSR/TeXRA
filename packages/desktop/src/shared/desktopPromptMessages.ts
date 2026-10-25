@@ -5,7 +5,7 @@ export const DESKTOP_PROMPT_COMMANDS = {
   SETTLE: 'desktop:settlePrompt',
 } as const;
 
-// These schemas deliberately use `z.object` (not `z.strictObject`) for parity
+// These schemas deliberately ignore undeclared keys (a `Schema.Struct` does) for parity
 // with every other desktop IPC schema: all of them validate the same
 // renderer<->main channel, and unknown-key drift is dev-caught by
 // `DesktopOutboundMessageSchema`'s discriminated union plus the route table,

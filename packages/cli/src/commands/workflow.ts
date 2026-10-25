@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result, Schema } from 'effect';
 import { hasMagic } from 'glob';
 
 import {
@@ -229,7 +229,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           ...documentTaskPatch(
             launch,
             agent,
-            DocumentTaskOptionsSchema.parse({ reflect: init.reflect }),
+            Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({
+              reflect: init.reflect,
+            }),
           ),
         };
 

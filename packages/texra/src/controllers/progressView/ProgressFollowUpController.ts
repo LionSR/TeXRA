@@ -14,6 +14,7 @@ import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type RunId,
+  RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
@@ -62,8 +63,7 @@ interface ProgressFollowUpWorkspace {
 export class CompileFixerPlanFailed extends Schema.TaggedError<CompileFixerPlanFailed>()(
   'CompileFixerPlanFailed',
   {
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    runId: RunIdSchema,
     message: Schema.String,
     cause: Schema.Defect(),
   },

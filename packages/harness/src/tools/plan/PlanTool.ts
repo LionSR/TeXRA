@@ -7,7 +7,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema, SubscriptionRef } from 'effect';
+import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
@@ -136,9 +136,13 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     .flatMap((row) => {
       if (row.type !== 'tool.result') return [];
       const { responseId, callId, result } = row.payload;
-      const goal =
+      const launched =
         result.status === 'executed'
-          ? Schema.decodeUnknownResult(LaunchedSchema)(result.value).data.runId
+          ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)
+          : undefined;
+      const goal =
+        launched !== undefined && Result.isSuccess(launched)
+          ? launched.success.runId
           : undefined;
       return goal !== undefined && plans.has(`${responseId}/${callId}`)
         ? [goal]

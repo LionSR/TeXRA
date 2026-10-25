@@ -1,5 +1,5 @@
 /**
- * Where a settings link lands. A leaf over `zod` alone, so the session
+ * Where a settings link lands. A leaf over `effect` alone, so the session
  * shell's `openSettings` request can carry a target without pulling the
  * settings-view wire format into the conversation webview.
  */
@@ -58,7 +58,9 @@ export type SettingsTarget =
       [P in SettingsTabPanelName]: `${P}/${SettingsSectionName<P>}`;
     }[SettingsTabPanelName];
 
-export const SettingsTargetSchema = Schema.Enum(
+export const SettingsTargetSchema = Schema.Literals(
+  // cast: `flatMap` over the page table yields `string[]`; every element is a
+  // page or one of its `page/section` pairs, which is exactly `SettingsTarget`.
   SETTINGS_TAB_ORDER.flatMap((page) => [
     page,
     ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),

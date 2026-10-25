@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -236,7 +236,7 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
       name,
       source,
       path: '',
-      persona: PersonaSchema.parse({}),
+      persona: Schema.decodeUnknownSync(PersonaSchema)({}),
       blocks: {},
     };
   }

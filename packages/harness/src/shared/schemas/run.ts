@@ -135,5 +135,5 @@ const RUN_ACTIONS = [
   'export',
   'copy',
 ] as const;
-export const RunActionSchema = Schema.Enum(RUN_ACTIONS);
+export const RunActionSchema = Schema.Literals(RUN_ACTIONS);
 export type RunAction = typeof RunActionSchema.Type;

@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -34,7 +34,7 @@ import { BashTool } from '@tools/bash';
 import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
-const PARENT_RUN_ID = RunIdSchema.parse('ba5e00000001');
+const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ba5e00000001');
 
 type ExecChunkSink = Pick<
   Parameters<typeof execUtils.executeCommand>[1] & object,
@@ -95,7 +95,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     yield* testDefaultSession().log.settled;
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
-    const runId = RunIdSchema.parse(reported);
+    const runId = Schema.decodeUnknownSync(RunIdSchema)(reported);
 
     return {
       runId,
@@ -135,7 +135,7 @@ function registerProcessRun(instruction: string) {
     yield* registerRun(
       testDefaultSession(),
       runId,
-      AgentConfigSchema.parse({
+      Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'bash',
         instruction,
       }),
@@ -169,7 +169,7 @@ function registerScriptRun(name: string, model?: string) {
         {
           type: 'run.config',
           aggregateId: qualifyAggregateId('run', runId),
-          config: AgentConfigSchema.parse({
+          config: Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: name,
             model,
             instruction: `Script '${name}'`,

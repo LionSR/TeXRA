@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';

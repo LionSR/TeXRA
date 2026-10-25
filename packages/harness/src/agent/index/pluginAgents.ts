@@ -18,7 +18,7 @@ import {
 } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import {
@@ -67,9 +67,9 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     return yield* Effect.fail(
       new Error(`${file} must start with YAML frontmatter (---).`),
     );
-  const parsed = parseYamlWith(
-    split.frontmatterText,
-    SubagentFrontmatterSchema,
+  const parsed = Result.flatMap(
+    safeParseYaml(split.frontmatterText),
+    Schema.decodeUnknownResult(SubagentFrontmatterSchema),
   );
   if (Result.isFailure(parsed))
     return yield* Effect.fail(

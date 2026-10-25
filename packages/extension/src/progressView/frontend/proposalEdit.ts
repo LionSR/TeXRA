@@ -4,6 +4,8 @@
  * to), what it opens with (the proposal as it would launch), and what its
  * Send answers (an approval carrying the form's changes).
  */
+import { Result, Schema } from 'effect';
+
 import {
   agentKey,
   agentName,
@@ -119,8 +121,9 @@ export function proposalLaunchPatch(
     )?.value ?? data.agent;
   // Options the documents plugin cannot read open as its defaults.
   const options =
-    DocumentTaskOptionsSchema.safeParse(data.options ?? {}).data ??
-    DocumentTaskOptionsSchema.parse({});
+    Result.getOrUndefined(
+      Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
+    ) ?? Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({});
   return {
     ...options,
     agent,
@@ -149,6 +152,8 @@ export function proposalApproval(
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],
     mediaFiles: [...launch.mediaFiles],
-    options: data.task ? DocumentTaskOptionsSchema.parse(launch) : null,
+    options: data.task
+      ? Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(launch)
+      : null,
   };
 }

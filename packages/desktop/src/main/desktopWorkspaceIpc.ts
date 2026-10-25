@@ -1,7 +1,7 @@
 // Main-process IPC for the workspace shell surfaces: editor file I/O, terminal
 // pty sessions, and embedded browser tabs. All three are renderer-driven, and
 // the sandboxed renderer has no node integration, so every request lands here.
-// Requests are Zod-validated at the boundary and, for file I/O, confined to the
+// Requests are schema-validated at the boundary and, for file I/O, confined to the
 // workspace root before touching disk: a renderer path is untrusted input, and
 // `../` traversal would otherwise reach anything the user can.
 //

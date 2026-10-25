@@ -156,7 +156,7 @@ export interface AgentBlock<A = unknown, R = unknown> {
    *  key of the persona itself. */
   readonly key: string;
   /** The block as written, to its value with defaults applied. */
-  readonly schema: Schema.Codec<A>;
+  readonly schema: Schema.Codec<A, unknown>;
   /** How a run of this block's recipe reads to whoever launched it. */
   readonly result?: AgentBlockResult<R>;
 }
@@ -169,7 +169,7 @@ export interface AgentBlock<A = unknown, R = unknown> {
 export interface AgentBlockResult<R = unknown> {
   /** Checks the value where it is read; a value that fails it is delivered
    *  as an invalid result naming the issue, never shaped. */
-  readonly schema: Schema.Codec<R>;
+  readonly schema: Schema.Codec<R, unknown>;
   /** The delivery body inside the harness's own result envelope. */
   delivery(value: R, runId: RunId): readonly string[];
   /** The files the recipe wrote, in the order it wrote them (a document

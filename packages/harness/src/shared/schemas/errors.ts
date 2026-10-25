@@ -72,8 +72,9 @@ const ProviderErrorObjectSchema = Schema.Struct({
    *  parsed at runtime, so size enforcement stays the producer's. */
   partialText: Schema.optional(Schema.String),
 });
-/** Canonical current ProviderError metadata. Unknown fields are rejected so
- * legacy or mixed records cannot enter the runtime metadata cache. */
+/** Canonical current ProviderError metadata. The metadata cache decodes it
+ *  with `onExcessProperty: 'error'`, so a legacy or mixed record never
+ *  enters it. */
 export const ProviderErrorSchema = ProviderErrorObjectSchema;
 export type ProviderError = typeof ProviderErrorSchema.Type;
 

@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 
 import {
   DisplaySessionEventSchema,
@@ -28,7 +28,7 @@ export interface TraceFactArm {
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;
-  readonly schema: Schema.Top;
+  readonly schema: Schema.Codec<unknown, unknown>;
   readonly upcasters: readonly unknown[];
 }
 
@@ -68,10 +68,10 @@ export function readTraceFacts(
       throw new Error(
         `the plugin fact ${name} is at version ${event.version}; this build reads ${pluginFactFloor(arm)} to ${arm.version}.`,
       );
-    const parsed = arm.schema.safeParse(event.value);
-    if (!parsed.success)
+    const parsed = Schema.decodeUnknownResult(arm.schema)(event.value);
+    if (Result.isFailure(parsed))
       throw new Error(
-        `the plugin fact ${name} does not match its schema:\n${parsed.error.message}`,
+        `the plugin fact ${name} does not match its schema:\n${parsed.failure.message}`,
       );
     return true;
   });

@@ -75,12 +75,13 @@ function zoteroUnreachableError(port: number): ToolError {
 // ============================================================================
 // Response schemas — Better BibTeX is an external network boundary, so its
 // JSON-RPC envelope and result shapes are the single source of truth here (the
-// types are derived via z.infer) and validated once in callBetterBibTeX. The
-// result schemas assert only the fields consumers read; z.object strips any
-// extra fields the API adds (it tolerates them rather than rejecting). Optional
-// fields use .nullish() (not .optional()) because the CSL-JSON BBT emits may send
-// an explicit null as well as omit a field — .optional() alone would reject null.
-// Consumers already guard every such field with truthiness / optional chaining.
+// types are derived from the schemas) and validated once in callBetterBibTeX.
+// The result schemas assert only the fields consumers read; a struct ignores
+// any extra fields the API adds (it tolerates them rather than rejecting).
+// Optional fields are `Schema.optional(Schema.NullOr(...))` because the
+// CSL-JSON BBT emits may send an explicit null as well as omit a field —
+// `Schema.optional` alone would reject null. Consumers already guard every
+// such field with truthiness / optional chaining.
 // ============================================================================
 
 /** JSON-RPC error object. */
@@ -139,7 +140,7 @@ export const BbtLibrarySchema = Schema.Struct({
  * into a full object instead of a key string.
  *
  * The type is self-referential, so the interface is kept and the recursive
- * schema is annotated against it (z.lazy).
+ * schema is annotated against it (`Schema.suspend`).
  */
 export interface BbtCollectionChain {
   key: string;
@@ -195,7 +196,13 @@ export const BbtSearchResultItemSchema = Schema.Struct({
   date: Schema.optional(Schema.NullOr(Schema.String)),
 }).pipe(
   Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((item) => { const year = item.issued?.['date-parts']?.[0]?.[0]; return { citekey: item.citekey, title: item.title || null, creators: (item.author || item.creators || []) .map(creatorName) .filter(Boolean), year: year === undefined ? item.date || null : String(year), type: item.type || item.itemType || null, }; })` */,
+    Schema.Struct({
+      citekey: Schema.String,
+      title: Schema.NullOr(Schema.String),
+      creators: Schema.Array(Schema.String),
+      year: Schema.NullOr(Schema.String),
+      type: Schema.NullOr(Schema.String),
+    }),
     {
       decode: SchemaGetter.transform((item) => {
         const year = item.issued?.['date-parts']?.[0]?.[0];
@@ -209,6 +216,7 @@ export const BbtSearchResultItemSchema = Schema.Struct({
           type: item.type || item.itemType || null,
         };
       }),
+      // A reply from Zotero is read one way; nothing encodes an item back.
       encode: SchemaGetter.forbidden(() => 'decode-only'),
     },
   ),
@@ -254,7 +262,7 @@ function bbtRequestError(
  * @param method - JSON-RPC method name (e.g., 'item.search', 'item.export')
  * @param params - Method parameters
  * @param port - Zotero Connector port (default: 23119)
- * @param resultSchema - Zod schema for the method's `result`, validated at the boundary
+ * @param resultSchema - schema for the method's `result`, validated at the boundary
  * @param timeout - Request timeout in milliseconds
  * @returns The validated result; fails with a ToolError if Zotero is not
  *   running, BBT is not installed, or the response is malformed
@@ -264,7 +272,7 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     method: string,
     params: unknown[],
     port: number,
-    resultSchema: Schema.Codec<T>,
+    resultSchema: Schema.Codec<T, unknown>,
     timeout: number = ZOTERO_BBT_TIMEOUT_MS,
   ) {
     const url = zoteroUrl(port, '/better-bibtex/json-rpc');
@@ -291,7 +299,7 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     if (!Result.isSuccess(parsed)) {
       return yield* Effect.fail(
         new ToolError(
-          `Better BibTeX returned an unexpected response for ${method}: ${parsed.error.message}`,
+          `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
         ),
       );
     }

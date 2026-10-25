@@ -65,7 +65,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { JsonValueSchema, toJsonValue } from '@shared/schemas';
+import { SettledToolResultSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
@@ -141,18 +141,13 @@ interface DispatchOutcome {
   readonly endTurn: boolean;
 }
 
-/** A sanitized result as the run history stores it: `diagnostics` narrowed
- *  to JSON. The sanitizer left the validation-error shape or nothing, so a
- *  non-JSON value here is a defect, refused rather than stored. */
-function storedResult(result: ToolResult): CallResult['result'] {
-  const { diagnostics, ...rest } = result;
-  if (rest.status === 'executed') delete rest.consumedFollowUps; // own rows
-  if (diagnostics === undefined) return rest;
-  return {
-    ...rest,
-    diagnostics: Schema.decodeUnknownSync(JsonValueSchema)(diagnostics),
-  };
-}
+/** A sanitized result as the run history stores it: `consumedFollowUps`
+ *  (own rows) and `facts` dropped, `files` without their bytes and
+ *  `diagnostics` narrowed to JSON. The sanitizer left the validation-error
+ *  shape or nothing, so a non-JSON value here is a defect, refused rather
+ *  than stored. */
+const storedResult = (result: ToolResult): CallResult['result'] =>
+  Schema.decodeUnknownSync(SettledToolResultSchema)(result);
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
 const withoutEffects = (result: CallResult['result']): CallResult['result'] => {

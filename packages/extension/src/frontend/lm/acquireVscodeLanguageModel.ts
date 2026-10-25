@@ -17,7 +17,15 @@ import {
   type TurnResult,
   type VscodeLanguageModelConfiguration,
 } from '@texra-ai/llm';
-import { Cause, Effect, Exit, Stream, type Scope } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  Stream,
+  type Scope,
+} from 'effect';
 import * as vscode from 'vscode';
 
 type EditorOrigin = Extract<ModelOrigin, { protocol: 'vscode-lm' }>;
@@ -95,7 +103,9 @@ function lowerMessages(
                 part.name,
                 yield* Effect.try({
                   try: () =>
-                    JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
+                    Schema.decodeUnknownSync(JsonObjectSchema)(
+                      JSON.parse(part.argumentsText),
+                    ),
                   catch: (cause) =>
                     new ModelError({
                       kind: 'invalid-request',
@@ -223,16 +233,17 @@ export const acquireVscodeLanguageModel = Effect.fn(
   configuration: VscodeLanguageModelConfiguration,
   consentMode: 'require-granted' | 'request-on-send' = 'require-granted',
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const parsed =
-    VscodeLanguageModelConfigurationSchema.safeParse(configuration);
-  if (!parsed.success) {
+  const parsed = Schema.decodeUnknownResult(
+    VscodeLanguageModelConfigurationSchema,
+  )(configuration);
+  if (Result.isFailure(parsed)) {
     return yield* new ModelError({
       kind: 'invalid-request',
       message: 'The editor model configuration is invalid.',
-      cause: parsed.error,
+      cause: parsed.failure,
     });
   }
-  const config = parsed.data;
+  const config = parsed.success;
   const origin: EditorOrigin = Object.freeze({
     protocol: config.protocol,
     codecVersion: 1,
@@ -302,15 +313,15 @@ export const acquireVscodeLanguageModel = Effect.fn(
           message: 'The editor model acquisition has retired.',
         });
       }
-      const input = TurnRequestSchema.safeParse(request);
-      if (!input.success) {
+      const input = Schema.decodeUnknownResult(TurnRequestSchema)(request);
+      if (Result.isFailure(input)) {
         return yield* new ModelError({
           kind: 'invalid-request',
           message: 'The model request is invalid.',
-          cause: input.error,
+          cause: input.failure,
         });
       }
-      const authored = input.data;
+      const authored = input.success;
       if (
         (authored.mode !== undefined && authored.mode !== 'foreground') ||
         (authored.toolChoice !== undefined && authored.toolChoice !== 'auto') ||
@@ -470,7 +481,7 @@ export const acquireVscodeLanguageModel = Effect.fn(
                 const events: TurnEvent[] = [];
                 if (next.done) {
                   flushText();
-                  const result = TurnResultSchema.safeParse({
+                  const result = Schema.decodeUnknownResult(TurnResultSchema)({
                     kind: 'editor',
                     requestedOrigin: origin,
                     providerResponseId: null,
@@ -480,14 +491,14 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     finishReason: null,
                     usage: null,
                   });
-                  if (!result.success)
+                  if (Result.isFailure(result))
                     return yield* new ModelError({
                       kind: 'malformed-output',
                       message:
                         'The editor returned an invalid completed response.',
-                      cause: result.error,
+                      cause: result.failure,
                     });
-                  events.push({ kind: 'completed', result: result.data });
+                  events.push({ kind: 'completed', result: result.success });
                   completed = true;
                 } else if (next.value instanceof vscode.LanguageModelTextPart) {
                   const text = next.value.value;
@@ -503,7 +514,9 @@ export const acquireVscodeLanguageModel = Effect.fn(
                   next.value instanceof vscode.LanguageModelToolCallPart
                 ) {
                   const call = next.value;
-                  const args = JsonObjectSchema.safeParse(call.input);
+                  const args = Schema.decodeUnknownResult(JsonObjectSchema)(
+                    call.input,
+                  );
                   if (
                     !config.supportsToolCalling ||
                     turn.tools.length === 0 ||
@@ -512,7 +525,7 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     callIds.has(call.callId) ||
                     typeof call.name !== 'string' ||
                     call.name.length === 0 ||
-                    !args.success
+                    Result.isFailure(args)
                   ) {
                     return yield* new ModelError({
                       kind: 'malformed-output',
@@ -531,7 +544,7 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     // provider bytes to retain here. This serialization is not
                     // a re-encode of a parse whose original was dropped: the
                     // object is the only representation this source ever had.
-                    argumentsText: JSON.stringify(args.data),
+                    argumentsText: JSON.stringify(args.success),
                   });
                 } else {
                   return yield* new ModelError({

@@ -58,7 +58,7 @@ import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatZodIssuesForDiagnostics,
+  formatIssuesForDiagnostics,
   qualifyAggregateId,
   type RunId,
   type ToolDefinition,
@@ -517,9 +517,9 @@ describe('tool-use dispatch', () => {
             error: 'Invalid input',
             diagnostics: {
               type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-              formatted: formatZodIssuesForDiagnostics(
-                parsed.failure?.issues ?? [],
-              ),
+              formatted: Result.isFailure(parsed)
+                ? formatIssuesForDiagnostics(parsed.failure)
+                : [],
             },
           }),
       };

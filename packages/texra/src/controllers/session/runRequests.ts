@@ -23,12 +23,14 @@ export function validateRunRequest(request: RunRequest): RunValidationResult {
     request.config,
   );
   if (!Result.isSuccess(parseResult)) {
-    const issue = parseResult.failure.issues[0];
-    const errorPath = issue?.path.join('.') || 'unknown';
+    const [issue] = SchemaIssue.makeFormatterStandardSchemaV1()(
+      parseResult.failure.issue,
+    ).issues;
+    const errorPath = issue?.path?.map(String).join('.') || 'unknown';
     return {
       valid: false,
       message: `Invalid configuration (${errorPath}): ${issue?.message ?? 'validation failed'}`,
-      issue,
+      issue: parseResult.failure.issue,
     };
   }
 

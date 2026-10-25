@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -244,14 +244,16 @@ describe('subscription usage parsers', () => {
       // default (`available()` applies `?? DEFAULT_PLAN_NAMES`), so the
       // snapshot is built with that default's literal value here.
       expect(
-        SubscriptionUsageSnapshotsSchema.valueType.safeParse({
-          state: 'available',
-          provider: 'chatgpt',
-          providerName: 'ChatGPT',
-          planName: parsed.planName ?? 'ChatGPT Coding Plan',
-          fetchedAt: 1,
-          windows: parsed.windows,
-        }).success,
+        Result.isSuccess(
+          Schema.decodeUnknownResult(SubscriptionUsageSnapshotsSchema.value)({
+            state: 'available',
+            provider: 'chatgpt',
+            providerName: 'ChatGPT',
+            planName: parsed.planName ?? 'ChatGPT Coding Plan',
+            fetchedAt: 1,
+            windows: parsed.windows,
+          }),
+        ),
       ).toBe(true);
     },
   );
@@ -507,7 +509,9 @@ describe('SubscriptionUsageService', () => {
 
       expect(snapshot.state).toBe('available');
       expect(
-        SubscriptionUsageSnapshotsSchema.valueType.parse(snapshot),
+        Schema.decodeUnknownSync(SubscriptionUsageSnapshotsSchema.value)(
+          snapshot,
+        ),
       ).toStrictEqual(snapshot);
       expect(http).toHaveBeenCalledTimes(1);
       const [calledUrl, init] = http.mock.calls[0];

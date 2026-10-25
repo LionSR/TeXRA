@@ -12,7 +12,7 @@ const CHANNEL = 'ExecuteCommand';
  * The "wrapped" launch shape — `{ config, ... }` — as opposed to
  * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
  * comment). `config` is validated separately against `AgentConfigSchema`, so
- * it stays `z.unknown()` here.
+ * it stays `Schema.Unknown` here.
  */
 const WrappedExecuteInputSchema = Schema.Struct({
   config: Schema.Unknown,
@@ -43,7 +43,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
       return { wrapped, config };
     },
     catch: (error) =>
-      error instanceof ZodError
+      error instanceof Schema.SchemaError
         ? new Error(`Invalid agent configuration. ${error.message}`, {
             cause: error,
           })

@@ -29,7 +29,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
@@ -492,7 +492,7 @@ describe(
             testRuntime(),
             session.runs.launch({
               request: {
-                config: AgentConfigSchema.parse(
+                config: Schema.decodeUnknownSync(AgentConfigSchema)(
                   asDocumentTask({
                     agent: 'polish',
                     agentSource: 'builtIn',

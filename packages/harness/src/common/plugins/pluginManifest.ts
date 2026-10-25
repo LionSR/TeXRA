@@ -2,7 +2,7 @@
 // plugin manifest (`.claude-plugin/plugin.json`) and the Codex plugin
 // manifest (`.codex-plugin/plugin.json`), with the conventional component
 // locations beside them (`skills/`, `commands/`, `agents/`, `.mcp.json`).
-// The harness defines no manifest of its own. Each file is validated with Zod
+// The harness defines no manifest of its own. Each file is validated with a schema
 // here, at the boundary; fields the harness does not read are stripped. The
 // marketplace files that list plugins are read by `./marketplace`.
 
@@ -11,10 +11,10 @@ import * as path from 'node:path';
 
 // Third-party imports
 import {
-  Data,
   Effect,
   FileSystem,
   type PlatformError,
+  Predicate,
   Result,
   Schema,
 } from 'effect';
@@ -151,7 +151,7 @@ export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
     const parsed = Schema.decodeUnknownResult(schema)(json);
     if (!Result.isSuccess(parsed)) {
       return yield* failPlugin(
-        `${file} does not match the expected shape: ${parsed.error.message}`,
+        `${file} does not match the expected shape: ${parsed.failure.message}`,
       );
     }
     return parsed.success;
@@ -292,7 +292,7 @@ function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
       typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
     );
     for (const entry of declared) {
-      if (typeof entry !== 'string' && !Array.isArray(entry))
+      if (Predicate.isObject(entry))
         maps.push({ where: `the manifest of ${name}`, servers: entry });
     }
     if (declared.length === 0 && (yield* exists(path.join(dir, '.mcp.json'))))
@@ -400,7 +400,7 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
       );
       if (!Result.isSuccess(config))
         return yield* failPlugin(
-          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${config.error.message}`,
+          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${config.failure.message}`,
         );
       add('manifest', config.success);
     }
@@ -456,12 +456,16 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
     const name = Schema.decodeUnknownResult(SkillNameSchema)(primary.name);
     if (!Result.isSuccess(name)) {
       return yield* failPlugin(
-        `Plugin name "${primary.name}" is not usable: ${name.failure.issues[0]?.message ?? 'invalid name'}.`,
+        `Plugin name "${primary.name}" is not usable: ${name.failure.message}.`,
       );
     }
     // A plugin's MCP servers are named plugin_<plugin>_<server>: the plugin
     // name must fit a server name on its own.
-    if (!Schema.decodeUnknownResult(ServerNameSchema)(name.data).success) {
+    if (
+      !Result.isSuccess(
+        Schema.decodeUnknownResult(ServerNameSchema)(name.success),
+      )
+    ) {
       return yield* failPlugin(
         `Plugin name "${name.success}" is too long: use at most 32 characters.`,
       );

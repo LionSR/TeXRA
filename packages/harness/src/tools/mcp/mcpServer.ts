@@ -20,7 +20,6 @@
  * the failure in its transcript.
  */
 import {
-  Data,
   Duration,
   Effect,
   Exit,
@@ -195,7 +194,7 @@ const decode = <T>(
     ? Effect.succeed(parsed.success)
     : Effect.fail(
         new McpStartError({
-          message: `Malformed ${what} result: ${parsed.error.message}`,
+          message: `Malformed ${what} result: ${parsed.failure.message}`,
         }),
       );
 };
@@ -268,7 +267,7 @@ function mcpTool(
               Schema.decodeUnknownResult(CallToolResultSchema)(raw);
             if (!Result.isSuccess(result))
               return errorResult(
-                `MCP server "${server}" returned a malformed result: ${result.error.message}`,
+                `MCP server "${server}" returned a malformed result: ${result.failure.message}`,
               );
             const text = resultText(result.success);
             return result.success.isError === true

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema, SchemaGetter } from 'effect';
 
 // Local imports
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -28,24 +28,42 @@ import {
 // Local file imports
 import { defineTool } from './core/definition';
 
-/**
- * Schema for range parameter with preprocessing to handle array format.
- * Some models (e.g., DeepSeek) may provide range as [start, end] array
- * instead of {start, end} object. This preprocessor normalizes both formats.
- */
-const RangeSchema = Schema.Struct({
-  start: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+const LineNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+
+const RangeObjectSchema = Schema.Struct({
+  start: LineNumberSchema.annotate({
     description: 'First line to read, 1-indexed.',
   }),
-  end: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-  ).annotate({ description: 'Last line to read, inclusive and 1-indexed.' }),
-}).check(
-  Schema.makeFilter((value) => value.end == null || value.end >= value.start, {
-    path: ['end'],
-    error: 'range.end must be greater than or equal to range.start',
+  end: Schema.optional(Schema.NullOr(LineNumberSchema)).annotate({
+    description: 'Last line to read, inclusive and 1-indexed.',
   }),
-); /* TODO(effect-schema): preprocess; was `z.preprocess((val) => { // Convert array format [start, end] to object format {start, end} if (Array.isArray(val) && val.length >= 1) { return { start: val[0], end: val[1] }; } return val; }, z .strictObject({ start: z.int().min(1).describe('First line to read, 1-indexed.'), end: z .int() .min(1) .nullish() .describe('Last line to read, inclusive and 1-indexed.'), }) .refine((value) => value.end == null || value.end >= value.start, { path: ['end'], error: 'range.end must be greater than or equal to range.start', }))` */
+}).check(
+  Schema.makeFilter(
+    (value) =>
+      value.end == null ||
+      value.end >= value.start || {
+        path: ['end'],
+        issue: 'range.end must be greater than or equal to range.start',
+      },
+  ),
+);
+
+/**
+ * The range parameter: `{start, end}`, or the `[start, end]` array some
+ * models (e.g. DeepSeek) send instead, decoded to the same object.
+ */
+const RangeSchema = Schema.Union([
+  RangeObjectSchema,
+  Schema.Tuple([
+    LineNumberSchema,
+    Schema.optionalKey(Schema.NullOr(LineNumberSchema)),
+  ]).pipe(
+    Schema.decodeTo(RangeObjectSchema, {
+      decode: SchemaGetter.transform(([start, end]) => ({ start, end })),
+      encode: SchemaGetter.transform(({ start, end }) => [start, end]),
+    }),
+  ),
+]);
 
 const ReadInputSchema = Schema.Struct({
   path: Schema.String.annotate({

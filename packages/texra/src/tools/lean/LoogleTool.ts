@@ -50,7 +50,8 @@ const LeanLoogleInputSchema = Schema.Struct({
       Schema.isLessThanOrEqualTo(20),
     ),
     10,
-  ).describe('Max results per query (default: 10)'),
+    'Max results per query (default: 10)',
+  ),
 });
 
 type LeanLoogleInput = typeof LeanLoogleInputSchema.Type;
@@ -63,16 +64,14 @@ const LoogleHitSchema = Schema.StructWithRest(
   Schema.Struct({
     name: Schema.String,
     type: Schema.String,
-    // `.prefault()` only substitutes for `undefined`, not explicit `null` — and
-    // Loogle, like the sibling `doc` field below, may send either for `module`.
+    // Loogle, like the sibling `doc` field below, may omit `module` or send
+    // null for it; either reads as an empty module name.
     module: Schema.optional(Schema.NullOr(Schema.String)).pipe(
-      Schema.decodeTo(
-        Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value) => value ?? '')` */,
-        {
-          decode: SchemaGetter.transform((value) => value ?? ''),
-          encode: SchemaGetter.forbidden(() => 'decode-only'),
-        },
-      ),
+      Schema.decodeTo(Schema.String, {
+        decode: SchemaGetter.transform((value) => value ?? ''),
+        // A provider response is read one way; nothing encodes a hit back.
+        encode: SchemaGetter.forbidden(() => 'decode-only'),
+      }),
     ),
     // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
     doc: Schema.optional(Schema.NullOr(Schema.String)),
@@ -155,7 +154,7 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
       if (!Result.isSuccess(parsed)) {
         return yield* Effect.fail(
           new Error(
-            `Unexpected Loogle response shape: ${parsed.error.message}`,
+            `Unexpected Loogle response shape: ${parsed.failure.message}`,
           ),
         );
       }

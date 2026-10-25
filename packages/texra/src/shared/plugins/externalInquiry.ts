@@ -6,7 +6,7 @@
  * global database (`InquiryRecords`); this row only displays it. Core folds
  * the row without reading it (`SessionView.pluginFacts`); this module is its
  * schema, its writer and its one reader, beside the service over the
- * thread records. Browser-safe: it imports only schemas, `zod` and `effect`.
+ * thread records. Browser-safe: it imports only schemas and `effect`.
  */
 import { Context, type Effect, Result, Schema, Struct } from 'effect';
 
@@ -37,8 +37,11 @@ const InquiryThreadSummarySchema = Schema.Struct({
   parentRunId: Schema.NullOr(RunIdSchema),
   status: InquiryThreadStatusSchema,
   lastQuestionPreview: Schema.String,
-  lastActivityIso:
-    Schema.String /* TODO(effect-schema): z.iso.datetime; was `z.iso.datetime()` */,
+  lastActivityIso: Schema.String.check(
+    Schema.makeFilter((value) => !Number.isNaN(Date.parse(value)), {
+      expected: 'an ISO date-time',
+    }),
+  ),
   turnCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 /** A thread as a list shows it. */
@@ -198,13 +201,13 @@ export class InquiryRecords extends Context.Service<
       question: string;
       context?: string;
       suggestSearch?: boolean;
-      attachFiles?: string[];
+      attachFiles?: readonly string[];
     }) => Effect.Effect<InquiryThreadRecord, Error>;
     readonly recordAnswerForOpenTurn: (params: {
       threadId: InquiryThreadId;
       turnIndex: number;
       answer: string;
-      sessionLinks?: string[] | null;
+      sessionLinks?: readonly string[] | null;
     }) => Effect.Effect<InquiryThreadRecord | null, Error>;
     readonly markDropped: (params: {
       threadId: InquiryThreadId;

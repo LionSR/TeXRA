@@ -2,7 +2,7 @@
 import * as assert from 'node:assert';
 import { afterEach, beforeEach, describe, vi } from 'vitest';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -21,7 +21,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 
-const RUN_ID = RunIdSchema.parse('ec1000000001');
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ec1000000001');
 
 // Local imports
 import { formatConversation } from '@tools/executions/conversationFormat';

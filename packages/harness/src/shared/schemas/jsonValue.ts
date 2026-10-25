@@ -1,7 +1,7 @@
 import { Schema } from 'effect';
 
 /**
- * Any JSON-serializable value. Shared home for `z.json()` so structured tool
+ * Any JSON-serializable value. Shared home for `Schema.Json` so structured tool
  * output, script results, and agent run results validate the
  * same contract instead of re-declaring it per module.
  */

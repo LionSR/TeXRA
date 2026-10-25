@@ -18,6 +18,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Schema,
   Scope,
   Stream,
   SynchronizedRef,
@@ -130,7 +131,7 @@ const ORIGIN = {
   },
 } satisfies ModelOrigin;
 
-const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
+const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
   ...ORIGIN,
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
@@ -148,16 +149,16 @@ const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
 });
 
 const BACKGROUND_PREPARED: Extract<ResolvedTurn, { mode: 'background' }> =
-  ResolvedTurnSchema.parse({ ...PREPARED, mode: 'background' }) as Extract<
-    ResolvedTurn,
-    { mode: 'background' }
-  >;
+  Schema.decodeUnknownSync(ResolvedTurnSchema)({
+    ...PREPARED,
+    mode: 'background',
+  }) as Extract<ResolvedTurn, { mode: 'background' }>;
 
 const PROVIDER_RESPONSE_ID = 'resp-1';
 
 /** A completed turn with one assistant message and no tool calls. */
 function completedTurn(text: string): TurnResult {
-  return TurnResultSchema.parse({
+  return Schema.decodeUnknownSync(TurnResultSchema)({
     kind: 'http',
     providerResponseId: PROVIDER_RESPONSE_ID,
     requestedOrigin: ORIGIN,
@@ -274,7 +275,7 @@ function retryRunId(): RunId {
   return `ac${(retryRunCounter++).toString(16).padStart(4, '0')}` as RunId;
 }
 
-const CONFIG = AgentConfigSchema.parse({
+const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'assistant',
   model: GPT54,
 });
@@ -1009,7 +1010,7 @@ describe('ModelInvoker retry', () => {
         const pump = yield* pumpClock;
         const chained: boolean[] = [];
         // The first response is stored and anchors the next request to it.
-        const anchored = TurnResultSchema.parse({
+        const anchored = Schema.decodeUnknownSync(TurnResultSchema)({
           ...completedTurn('first'),
           continuation: {
             origin: { ...ORIGIN, protocol: 'openai-responses' },
@@ -1025,7 +1026,7 @@ describe('ModelInvoker retry', () => {
         const model: Model = {
           prepareTurn: (request) =>
             Effect.succeed(
-              ResolvedTurnSchema.parse({
+              Schema.decodeUnknownSync(ResolvedTurnSchema)({
                 ...PREPARED,
                 messages: request.messages,
                 ...(request.continuation === undefined
@@ -1109,7 +1110,7 @@ describe('ModelInvoker retry', () => {
           };
         }) as typeof session.runs.get);
         const background = BACKGROUND_PREPARED;
-        const operation = RemoteOperationSchema.parse({
+        const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin: ORIGIN,
           providerResponseId: PROVIDER_RESPONSE_ID,
           afterSequence: 0,
@@ -1126,7 +1127,7 @@ describe('ModelInvoker retry', () => {
               submit: () =>
                 Effect.sync(() => {
                   calls.submit += 1;
-                  return BackgroundSubmissionSchema.parse(
+                  return Schema.decodeUnknownSync(BackgroundSubmissionSchema)(
                     calls.submit === 1
                       ? { kind: 'accepted', operation, returnedModel: null }
                       : { kind: 'completed', result: completedTurn('fresh') },
@@ -1139,7 +1140,7 @@ describe('ModelInvoker retry', () => {
                       Deferred.succeed(observing, undefined),
                     ).pipe(Stream.drain, Stream.concat(Stream.never))
                   : Stream.make(
-                      BackgroundEventSchema.parse({
+                      Schema.decodeUnknownSync(BackgroundEventSchema)({
                         kind: 'completed',
                         afterSequence: 1,
                         result: completedTurn('observed'),

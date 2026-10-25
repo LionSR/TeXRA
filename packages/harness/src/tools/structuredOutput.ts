@@ -1,11 +1,5 @@
 // Third-party imports
-import {
-  Effect,
-  JsonSchema,
-  Result,
-  Schema,
-  SchemaRepresentation,
-} from 'effect';
+import { Effect, JsonSchema, Schema, SchemaRepresentation } from 'effect';
 
 // Internal imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -25,22 +19,22 @@ import { defineTool } from './core/definition';
 
 type StructuredOutputSchema = {
   readonly jsonSchema: JSONSchemaObject;
-  readonly zodSchema: Schema.Top;
+  readonly schema: Schema.Codec<unknown, unknown>;
 };
 
-// A sandbox schema crosses into host Zod compilation via z.fromJSONSchema, so
-// an unbounded tree is a host DoS. These caps keep compilation cheap; 12 levels
-// / 1000 nodes comfortably cover real structured-output shapes while refusing
-// pathological input.
+// A sandbox schema is compiled on the host (`SchemaRepresentation.fromJsonSchemaDocument`),
+// so an unbounded tree is a host DoS. These caps keep compilation cheap; 12
+// levels / 1000 nodes comfortably cover real structured-output shapes while
+// refusing pathological input.
 const MAX_SANDBOX_SCHEMA_DEPTH = 12;
 const MAX_SANDBOX_SCHEMA_NODES = 1000;
 // The node/depth caps count object nodes only, so scalar-heavy keywords the
 // walker does not recurse into (a million-element `enum`, huge `required` /
-// `examples` / `description`) would still reach z.fromJSONSchema unbounded. A
+// `examples` / `description`) would still reach the compiler unbounded. A
 // serialized-size cap bounds the whole payload; 128 KiB dwarfs any real schema.
 const MAX_SANDBOX_SCHEMA_BYTES = 128 * 1024;
 
-// Property names that could reach Object.prototype when z.fromJSONSchema builds
+// Property names that could reach Object.prototype when the compiler builds
 // the schema object.
 const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
   '__proto__',
@@ -74,9 +68,9 @@ const SUBSCHEMA_RECORD_KEYS = [
 
 /**
  * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
- * crosses into host Zod compilation via z.fromJSONSchema. Walking the schema it
- * rejects: `pattern`/`patternProperties`/`format` (Zod compiles these to host
- * RegExps, a catastrophic-backtracking ReDoS vector); `$ref`/`$dynamicRef`
+ * is compiled on the host. Walking the schema it rejects:
+ * `pattern`/`patternProperties`/`format` (compiled to host RegExps, a
+ * catastrophic-backtracking ReDoS vector); `$ref`/`$dynamicRef`
  * (external/recursive resolution surprises; inline the definition instead);
  * prototype-polluting property keys; and trees past the node/depth caps.
  */
@@ -146,25 +140,28 @@ function assertSafeSandboxSchema(schema: unknown): void {
 }
 
 /**
- * Normalize a structured-output schema at its boundary. Both live Zod schemas
- * and sandbox JSON Schema land on the same Zod validation path and the same
- * provider-facing object schema conversion.
+ * Normalize a structured-output schema at its boundary. Both live schemas and
+ * sandbox JSON Schema land on the same validation path and the same
+ * provider-facing object schema conversion. A sandbox schema is authored as
+ * draft 2020-12, the dialect the provider-facing conversion emits.
  */
 export function normalizeStructuredOutputSchema(
-  input: Schema.Top | Record<string, unknown>,
+  input: Schema.Codec<unknown, unknown> | Record<string, unknown>,
 ): StructuredOutputSchema {
-  const fromZod =
-    input instanceof
-    Schema.Unknown; /* TODO(effect-schema): z.ZodType; was `z.ZodType()` */
-  if (!fromZod) assertSafeSandboxSchema(input);
-  const zodSchema = fromZod
-    ? input
-    : SchemaRepresentation.fromJsonSchemaDocument(
-        JsonSchema.fromSchemaDraft2020_12(input),
-      ); /* TODO(effect-schema): fromJSONSchema; was `z.fromJSONSchema(input)` */
+  let schema: Schema.Codec<unknown, unknown>;
+  if (Schema.isSchema(input)) {
+    schema = input;
+  } else {
+    assertSafeSandboxSchema(input);
+    // cast: a schema compiled from JSON Schema decodes plain JSON and needs
+    // no services; `fromJsonSchemaDocument` only states `Schema.Top`.
+    schema = SchemaRepresentation.fromJsonSchemaDocument(
+      JsonSchema.fromSchemaDraft2020_12(input),
+    ) as Schema.Codec<unknown, unknown>;
+  }
   const jsonSchema = convertToolSchema({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
-    zodSchema,
+    schema,
   });
   if (jsonSchema?.type !== 'object') {
     const got =
@@ -175,7 +172,7 @@ export function normalizeStructuredOutputSchema(
       `Structured output schema must be an object at the root (got ${got}). Wrap a scalar or array result in an object property.`,
     );
   }
-  return { jsonSchema, zodSchema };
+  return { jsonSchema, schema };
 }
 
 /**
@@ -183,14 +180,14 @@ export function normalizeStructuredOutputSchema(
  *
  * The guarantee is the tool layer's own spine: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
- * `ZodError` the model self-corrects. `execute` then enforces the persisted
+ * `SchemaError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and returns it as the result's `value`: the settled
  * result is the run's structured output (`RunState.structured`).
  */
 export function buildTerminalTool(
-  input: Schema.Top | Record<string, unknown>,
+  input: Schema.Codec<unknown, unknown> | Record<string, unknown>,
 ): ITool<Error, never> {
-  const { zodSchema } = normalizeStructuredOutputSchema(input);
+  const { schema } = normalizeStructuredOutputSchema(input);
 
   // Built per run, so `captured` belongs to this run's loop alone.
   let captured = false;
@@ -198,26 +195,25 @@ export function buildTerminalTool(
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
-    schema: zodSchema,
+    schema,
     // A repeated call and a malformed payload are the call's own failures,
-    // the latter keeping its Zod issues for the model's diagnostics.
+    // the latter keeping its schema issues for the model's diagnostics.
     execute: (input) =>
-      Effect.suspend(() => {
+      Effect.gen(function* () {
         if (captured) {
-          return Effect.fail(
+          return yield* Effect.fail(
             new ToolError('submit_output can only be accepted once per run.'),
           );
         }
-        const parsed = Schema.decodeUnknownResult(JsonValueSchema)(input);
-        if (!Result.isSuccess(parsed)) return Effect.fail(parsed.failure);
+        const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
         captured = true;
-        return Effect.succeed<ToolResult>({
+        return {
           status: 'executed',
           endTurn: true,
-          value: parsed.success,
+          value,
           summary: 'Structured output captured.',
           output: 'Structured output captured.',
-        });
+        } satisfies ToolResult;
       }),
   });
 }

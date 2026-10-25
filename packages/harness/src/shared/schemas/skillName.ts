@@ -1,18 +1,15 @@
-import { Schema, SchemaGetter } from 'effect';
+import { Result, Schema, SchemaGetter } from 'effect';
 
 const SKILL_NAME_MAX_LENGTH = 64;
 
 /** Canonical grammar for discovered and persisted skill names. */
 export const SkillNameSchema = Schema.String.pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((name) => name.replaceAll(/\s+/g, ' ').trim())` */,
-    {
-      decode: SchemaGetter.transform((name) =>
-        name.replaceAll(/\s+/g, ' ').trim(),
-      ),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(Schema.String, {
+    decode: SchemaGetter.transform((name) =>
+      name.replaceAll(/\s+/g, ' ').trim(),
+    ),
+    encode: SchemaGetter.passthrough(),
+  }),
 )
   .check(
     Schema.makeFilter((name) => name.length > 0, {
@@ -20,10 +17,9 @@ export const SkillNameSchema = Schema.String.pipe(
     }),
   )
   .check(
-    Schema.makeFilter(
-      (name) => name.length <= SKILL_NAME_MAX_LENGTH,
-      `Skill name must be at most ${SKILL_NAME_MAX_LENGTH} characters`,
-    ),
+    Schema.makeFilter((name) => name.length <= SKILL_NAME_MAX_LENGTH, {
+      message: `Skill name must be at most ${SKILL_NAME_MAX_LENGTH} characters`,
+    }),
   )
   .check(
     Schema.makeFilter((name) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name), {
@@ -49,10 +45,10 @@ export const QualifiedSkillNameSchema = Schema.String.check(
       const parts = name.split(':');
       return (
         parts.length <= 2 &&
-        parts.every(
-          (part) =>
-            Schema.decodeUnknownResult(SkillNameSchema)(part).data === part,
-        )
+        parts.every((part) => {
+          const name = Schema.decodeUnknownResult(SkillNameSchema)(part);
+          return Result.isSuccess(name) && name.success === part;
+        })
       );
     },
     { message: 'Skill name must be a skill name, or <plugin>:<skill name>' },

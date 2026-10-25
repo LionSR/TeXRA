@@ -1,5 +1,5 @@
 /** Completed-run display reads, keyed by run id. */
-import { Effect, Predicate, absurd } from 'effect';
+import { Effect, Predicate, Result, Schema, absurd } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
@@ -28,11 +28,11 @@ function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
   if (typeof tool.output === 'string') return tool.output;
   if (Predicate.isObject(tool.output)) {
-    const result = ToolResultSchema.safeParse({
+    const result = Schema.decodeUnknownResult(ToolResultSchema)({
       ...tool.output,
       status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',
     });
-    if (result.success) return formatToolResultAsText(result.data);
+    if (Result.isSuccess(result)) return formatToolResultAsText(result.success);
   }
   if (tool.output !== undefined) return stringifyConversationValue(tool.output);
   return tool.summary;

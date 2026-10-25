@@ -6,7 +6,7 @@
  * uses `assembleTrace` instead.
  *
  * The export input also crosses the service's RPC edge (`task.exportInput`),
- * so its shapes are Zod schemas and the types derive from them.
+ * so its shapes are schemas and the types derive from them.
  */
 
 import { Schema } from 'effect';

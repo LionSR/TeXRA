@@ -1,5 +1,5 @@
 /**
- * The runtime request protocol: one Zod
+ * The runtime request protocol: one
  * union of the requests a surface issues to its session's runtime and the
  * outcomes the runtime answers with. In process (the TUI, headless) the
  * Effect's own result is the response and no message exists; the envelope
@@ -118,7 +118,7 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.Struct({
         field: Schema.Literal('bypass'),
         ...runScoped,
-        bypass: Schema.Enum(APPROVAL_BYPASS_KINDS),
+        bypass: Schema.Literals(APPROVAL_BYPASS_KINDS),
         enabled: Schema.Boolean,
         /** Turning a bypass on also approves the run's requests already
          *  pending under it. This one is the surface's own, decided by the
@@ -131,7 +131,7 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.Struct({
         field: Schema.Literal('limit'),
         ...runScoped,
-        limit: Schema.Enum(APPROVAL_POLICY_LIMITS),
+        limit: Schema.Literals(APPROVAL_POLICY_LIMITS),
       }),
     ]),
   }),

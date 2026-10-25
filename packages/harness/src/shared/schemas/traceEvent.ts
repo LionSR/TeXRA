@@ -10,11 +10,10 @@ import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 
-function trace<
-  T extends string,
-  S extends
-    unknown /* TODO(effect-schema): type z.ZodRawShape; was `z.ZodRawShape` */,
->(type: T, shape: S) {
+function trace<T extends string, const F extends Schema.Struct.Fields>(
+  type: T,
+  fields: F,
+) {
   return Schema.Struct({
     type: Schema.Literal(type),
     stageId: Schema.optional(Schema.String),
@@ -23,21 +22,21 @@ function trace<
 }
 
 /** Durable transcript vocabulary; session events extend each arm. */
-export const TranscriptEventSchemas = {
-  log: trace('log', {
+export const TranscriptEventSchema = Schema.Union([
+  trace('log', {
     level: LogLevelSchema,
     message: Schema.String,
     data: Schema.optional(JsonValueSchema),
     messageType: Schema.optional(MessageTypeSchema),
   }),
-  stageStart: trace('stage.start', {
+  trace('stage.start', {
     id: Schema.String,
     label: Schema.String,
     parentId: Schema.optional(Schema.NullOr(Schema.String)),
     kind: Schema.optional(Schema.NullOr(StageKindSchema)),
   }),
-  stageEnd: trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
-  toolStart: trace('tool.start', {
+  trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
+  trace('tool.start', {
     logId: Schema.String,
     toolName: Schema.String,
     input: JsonValueSchema,
@@ -57,7 +56,7 @@ export const TranscriptEventSchemas = {
    * input (`rowCodec.ts`), and `files` names what the call edited. A run
    * without a run history (an agent-CLI child) stores `result` here.
    */
-  toolEnd: trace('tool.end', {
+  trace('tool.end', {
     logId: Schema.String,
     status: ToolCallStatusSchema,
     result: Schema.optional(JsonValueSchema),
@@ -72,16 +71,16 @@ export const TranscriptEventSchemas = {
    * agent-CLI child, which has no run history, stores one per turn. `elapsedTime`
    * is the turn's response time in seconds.
    */
-  usage: trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
-  context: trace('context.state', {
+  trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
+  trace('context.state', {
     inputTokens: ContextStateDataSchema.fields.inputTokens,
     contextWindow: ContextStateDataSchema.fields.contextWindow,
   }),
-  streamStart: trace('stream.start', {
+  trace('stream.start', {
     id: Schema.String,
     kind: MessageTypeSchema,
   }),
-  streamEnd: trace('stream.end', {
+  trace('stream.end', {
     id: Schema.String,
     finalText: Schema.optional(Schema.String),
   }),
@@ -91,16 +90,13 @@ export const TranscriptEventSchemas = {
    *  boundary, not only the terminal round. The round's MODEL_RESPONSE stream carries raw
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
-  response: trace('response.finalized', { text: Schema.String }),
-};
+  trace('response.finalized', { text: Schema.String }),
+]);
 
-export type TranscriptEvent =
-  (typeof TranscriptEventSchemas)[keyof typeof TranscriptEventSchemas]['Type'];
+export type TranscriptEvent = typeof TranscriptEventSchema.Type;
 
 const TRANSCRIPT_EVENT_TYPES = new Set<string>(
-  Object.values(TranscriptEventSchemas).map(
-    (schema) => schema.fields.type.value,
-  ),
+  TranscriptEventSchema.members.map((schema) => schema.fields.type.literal),
 );
 
 /** Trace rows consumed by the transcript projection, including listing arms. */

@@ -1,4 +1,6 @@
 // Local imports - tool result schemas
+import { Result, Schema } from 'effect';
+
 import {
   type FileReference,
   type ToolFact,
@@ -12,19 +14,21 @@ import {
 /**
  * Sanitize the shared `diagnostics` field. Sanitized results only carry the
  * validation-error diagnostics shape (see `ToolResultSharedFields.diagnostics`
- * for why the source field is `z.unknown()`); any other tool's diagnostics
+ * for why the source field is `Schema.Unknown`); any other tool's diagnostics
  * payload — or a validation-error payload whose `formatted` doesn't actually
- * match `FormattedZodIssueSchema` — is dropped rather than passed through
+ * match the formatted-issue shape — is dropped rather than passed through
  * untyped.
  */
 function sanitizeDiagnostics(
   diagnostics: unknown,
 ): ValidationErrorDiagnostics | undefined {
   if (diagnostics === undefined) return undefined;
-  const validationError =
-    ValidationErrorDiagnosticsSchema.safeParse(diagnostics);
-  if (!validationError.success) return undefined;
-  return validationError.data;
+  const validationError = Schema.decodeUnknownResult(
+    ValidationErrorDiagnosticsSchema,
+  )(diagnostics);
+  return Result.isSuccess(validationError)
+    ? validationError.success
+    : undefined;
 }
 
 /**
@@ -33,7 +37,7 @@ function sanitizeDiagnostics(
  */
 interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data. */
-  attachments: ToolFileAttachment[];
+  attachments: readonly ToolFileAttachment[];
   /** Sanitized result payload without binary data or facts. */
   sanitizedResult: ToolResult;
   /** The facts an executed result states about its run, which commit as
@@ -56,15 +60,15 @@ export function extractToolAttachments(
   result: ToolResult,
   checkFacts: (facts: readonly ToolFact[]) => void = () => undefined,
 ): ExtractedToolAttachments {
-  // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
-  // every undeclared key is already stripped here. Re-listing the declared
+  // The decode IS the field whitelist: `ToolResultSchema` keeps no unknown
+  // keys, so every undeclared key is already stripped here. Re-listing the declared
   // fields by hand would only add a place for a newly declared field to go
   // missing before it reaches `formatToolResultAsText`.
-  const parsed = ToolResultSchema.parse(result);
+  const parsed = Schema.decodeUnknownSync(ToolResultSchema)(result);
 
   if (parsed.status === 'error') {
     // No binary-bearing field exists on this branch of the schema
-    // (output/edits/files are all `z.undefined()` here), so the parsed value
+    // (output/edits/files are all `Schema.Undefined` here), so the parsed value
     // needs nothing but its sanitized diagnostics.
     const { diagnostics: rawDiagnostics, ...rest } = parsed;
     const diagnostics = sanitizeDiagnostics(rawDiagnostics);
@@ -81,7 +85,7 @@ export function extractToolAttachments(
   const { files, facts = [], diagnostics: rawDiagnostics, ...rest } = parsed;
   checkFacts(facts);
   const diagnostics = sanitizeDiagnostics(rawDiagnostics);
-  const attachments: ToolFileAttachment[] = files ?? [];
+  const attachments: readonly ToolFileAttachment[] = files ?? [];
 
   return {
     attachments,

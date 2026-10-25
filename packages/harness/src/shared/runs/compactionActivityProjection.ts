@@ -1,3 +1,5 @@
+import { Result, Schema } from 'effect';
+
 import {
   CompactionActivityDataSchema,
   ContextManagementDataSchema,
@@ -81,13 +83,16 @@ function applyFreed(
 ): readonly number[] {
   // A payload its schema rejects moves nothing here; the transcript fold
   // writes it as an error row (`transcriptLogRows.ts`).
-  const parsed = ContextManagementDataSchema.safeParse(payload);
-  if (!parsed.success || parsed.data.action !== 'compaction') return [];
+  const parsed = Schema.decodeUnknownResult(ContextManagementDataSchema)(
+    payload,
+  );
+  if (!Result.isSuccess(parsed) || parsed.success.action !== 'compaction')
+    return [];
   const index = projection.blocks.findLastIndex(
     (block) => block.status === 'running',
   );
   if (index === -1) return [];
-  const { data } = parsed;
+  const data = parsed.success;
   projection.blocks[index] = {
     ...projection.blocks[index],
     freed: {
@@ -127,9 +132,11 @@ export function applyCompactionActivityEvent(
     default:
       return [];
   }
-  const activity = CompactionActivityDataSchema.safeParse(event.data);
-  if (!activity.success) return []; // an error row, like applyFreed
-  const { operationId, state } = activity.data;
+  const activity = Schema.decodeUnknownResult(CompactionActivityDataSchema)(
+    event.data,
+  );
+  if (!Result.isSuccess(activity)) return []; // an error row, like applyFreed
+  const { operationId, state } = activity.success;
   const existingIndex = projection.indexByOperationId.get(operationId);
 
   if (state === 'started') {

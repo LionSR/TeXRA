@@ -101,7 +101,7 @@ const ZoteroItemSchema = Schema.Struct({
     ),
   ),
 }).check(
-  Schema.makeFilter((data) => data.url || data.title, {
+  Schema.makeFilter((data) => Boolean(data.url || data.title), {
     message: 'At least one of url or title must be provided.',
   }),
 );

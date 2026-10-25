@@ -8,17 +8,18 @@ export const DocumentFileTypeSchema = Schema.Literals([
 export type DocumentFileType = typeof DocumentFileTypeSchema.Type;
 
 const MultipleDocumentFileTypeSchema = Schema.Literals([
-  ...DocumentFileTypeSchema.members,
+  ...DocumentFileTypeSchema.literals,
   'output',
 ]);
 export type MultipleDocumentFileType =
   (typeof MultipleDocumentFileTypeSchema)['Type'];
-const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.members;
+const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.literals;
 
 /** Narrows a broader file-type value to the `MultipleDocumentFileType` set. */
 export function isMultipleDocumentFileType(
   value: string,
 ): value is MultipleDocumentFileType {
+  // cast: widening the literal tuple to strings so `includes` takes any string.
   return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
 }
 

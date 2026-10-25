@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // External imports
-import { Config, Data, Effect, FileSystem, Option, Schema } from 'effect';
+import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel, WorkspaceFs, Settings } from '@texra-ai/harness';
@@ -29,7 +29,7 @@ const LOG_TAIL_LINES = 200;
 const LaTeXCompileOptionsSchema = Schema.Struct({
   channel: Schema.optional(Schema.String),
   outputDirectory: Schema.optional(Schema.String),
-  compiler: Schema.Enum(SUPPORTED_LATEX_COMPILERS).pipe(
+  compiler: Schema.Literals(SUPPORTED_LATEX_COMPILERS).pipe(
     Schema.withDecodingDefaultType(Effect.succeed('latexmk')),
   ),
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */

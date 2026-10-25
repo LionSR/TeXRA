@@ -255,7 +255,10 @@ export interface TerminalRunResult {
  * a timeout is a failure — both are reported in {@link TerminalRunResult},
  * as they were before this port was typed.
  */
-type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
+const TerminalRunFailureReasonSchema = Schema.Literals([
+  'terminal-unavailable',
+  'execution-failed',
+]);
 
 /**
  * The one failure of a terminal run. Callers match the tag and read
@@ -266,8 +269,7 @@ type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
 export class TerminalRunFailed extends Schema.TaggedError<TerminalRunFailed>()(
   'TerminalRunFailed',
   {
-    reason:
-      Schema.Unknown /* TODO(effect-schema): error field type TerminalRunFailureReason; was `TerminalRunFailureReason` */,
+    reason: TerminalRunFailureReasonSchema,
     message: Schema.String,
     command: Schema.String,
     cause: Schema.optional(Schema.Defect()),

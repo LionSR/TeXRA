@@ -11,14 +11,7 @@ import {
   categories as arxivCategories,
   type Category,
 } from 'arxiv-client/dist/defines/categories.js';
-import {
-  Clock,
-  Duration,
-  Effect,
-  Schema,
-  SchemaGetter,
-  Semaphore,
-} from 'effect';
+import { Clock, Duration, Effect, Schema, Semaphore } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -50,22 +43,12 @@ const ARXIV_CATEGORIES: ReadonlySet<string> = new Set(
 const isArxivCategory = (value: string): value is Category =>
   ARXIV_CATEGORIES.has(value);
 
+/** The failure reads `Expected <this>, got "<the value>"`. */
 const ArxivCategorySchema = Schema.Trim.pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value, ctx): Category => { if (isArxivCategory(value)) return value; ctx.issues.push({ code: 'custom', input: value, message: `"${value}" is not an arXiv category: use one from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph".`, }); return z.NEVER; })` */,
-    {
-      decode: SchemaGetter.transform((value, ctx): Category => {
-        if (isArxivCategory(value)) return value;
-        ctx.issues.push({
-          code: 'custom',
-          input: value,
-          message: `"${value}" is not an arXiv category: use one from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph".`,
-        });
-        return Schema.Unknown; /* TODO(effect-schema): z.NEVER; was `z.NEVER()` */
-      }),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.refine(isArxivCategory, {
+    expected:
+      'an arXiv category from https://arxiv.org/category_taxonomy, spelled exactly (case matters), such as "math.NT", "cs.AI", "cond-mat.str-el" or "quant-ph"',
+  }),
 );
 
 const MAX_RESULTS = 50;
@@ -133,7 +116,9 @@ const ArxivSearchInputSchema = Schema.Struct({
   query: Schema.String.annotate({
     description: 'Search query terms, title text, or author names.',
   }),
-  field: nullishWithDefault(SearchFieldSchema, 'all').describe(
+  field: nullishWithDefault(
+    SearchFieldSchema,
+    'all',
     'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
   ),
   categories: Schema.optional(
@@ -147,11 +132,13 @@ const ArxivSearchInputSchema = Schema.Struct({
       Schema.isLessThanOrEqualTo(MAX_RESULTS),
     ),
     DEFAULT_RESULTS,
-  ).describe('Maximum number of papers to return.'),
+    'Maximum number of papers to return.',
+  ),
   start: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
     0,
-  ).describe('Zero-based result offset for pagination.'),
+    'Zero-based result offset for pagination.',
+  ),
   sortBy: Schema.optional(Schema.NullOr(SortBySchema)).annotate({
     description: 'arXiv sort field to use.',
   }),

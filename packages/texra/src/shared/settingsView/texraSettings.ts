@@ -176,13 +176,15 @@ const TEXRA_CONFIG_ROWS: Record<
       'Wrap bare criticism and comment commands inside align environments with intertext.',
   },
   'latex.enabledReplacements': {
-    schema: Schema.Array(Schema.Enum(NON_REGEX_REPLACEMENT_CATEGORIES)).pipe(
+    schema: Schema.Array(
+      Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES),
+    ).pipe(
       Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENABLED_REPLACEMENTS)),
     ),
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
   },
   'latex.enabledReplacementsRegex': {
-    schema: Schema.Array(Schema.Enum(REGEX_REPLACEMENT_CATEGORIES)).pipe(
+    schema: Schema.Array(Schema.Literals(REGEX_REPLACEMENT_CATEGORIES)).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
       ),
@@ -202,7 +204,7 @@ const TEXRA_CONFIG_ROWS: Record<
     description: 'Custom direct text replacements.',
   },
   'latexdiff.tempFileLocation': {
-    schema: Schema.Enum(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
+    schema: Schema.Literals(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
       Schema.withDecodingDefault(Effect.succeed('sameDirectory')),
     ),
     description:
@@ -228,7 +230,7 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   // --- LaTeX formatter -------------------------------------------------------
   {
     key: TexraStateKey.LATEX_FORMATTER,
-    schema: Schema.Enum(LATEX_FORMATTER_VALUES).pipe(
+    schema: Schema.Literals(LATEX_FORMATTER_VALUES).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(LATEX_CONFIG_DEFAULTS.latexFormatter),
       ),

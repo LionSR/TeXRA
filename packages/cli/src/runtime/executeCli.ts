@@ -132,7 +132,7 @@ export function executeCliConfig(
     const runId = options.runId ?? generateRunId();
     const parsed = Schema.decodeUnknownResult(AgentConfigSchema)(config);
     if (!Result.isSuccess(parsed)) {
-      writeTextStderr(`Invalid configuration: ${parsed.error.message}`);
+      writeTextStderr(`Invalid configuration: ${parsed.failure.message}`);
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 

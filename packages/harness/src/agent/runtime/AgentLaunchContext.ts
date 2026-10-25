@@ -239,7 +239,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           const error = Cause.squash(cause);
           if (
             input.suppressErrorNotification ||
-            error instanceof ZodError ||
+            error instanceof Schema.SchemaError ||
             hasErrorPresentationClaimed(error)
           ) {
             return Effect.void;

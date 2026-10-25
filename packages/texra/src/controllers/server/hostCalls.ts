@@ -46,7 +46,7 @@ const HOST_CAPABILITIES = [
   'notices',
   'languageModel',
 ] as const;
-export const HostCapabilitySchema = Schema.Enum(HOST_CAPABILITIES);
+export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
 export type HostCapability = typeof HostCapabilitySchema.Type;
 
 const position = Schema.Struct({ line: Schema.Int, character: Schema.Int });
@@ -59,7 +59,7 @@ const GenericDiagnosticSchema = Schema.Struct({
   ]),
   message: Schema.String,
   range: Schema.Struct({ start: position, end: position }),
-}) satisfies Schema.Codec<GenericDiagnostic>;
+}) satisfies Schema.Codec<GenericDiagnostic, unknown>;
 
 const ManualCriticismEntrySchema = Schema.Struct({
   absolutePath: Schema.String,
@@ -67,7 +67,7 @@ const ManualCriticismEntrySchema = Schema.Struct({
   message: Schema.String,
   severity: Schema.Int,
   confidence: Schema.Int,
-}) satisfies Schema.Codec<ManualCriticismEntry>;
+}) satisfies Schema.Codec<ManualCriticismEntry, unknown>;
 
 /** The policy that closed a gate, as the window names it. */
 const policy = ApprovalPolicySchema;
@@ -95,7 +95,7 @@ const ApprovalPolicyDenialSchema = Schema.Union([
     deny: Schema.Literals(['yolo-no-human', 'policy', 'unpresentable']),
     policy,
   }),
-]) satisfies Schema.Codec<ApprovalPolicyDenial>;
+]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
 /** The runtime's notices, by event, as a window presents them. */
 const NoticeSchema = Schema.Union([
@@ -104,31 +104,29 @@ const NoticeSchema = Schema.Union([
     payload: Schema.Struct({
       location: FileLocationSchema,
       preserveFocus: Schema.Boolean,
-    }) satisfies Schema.Codec<RequestOpenFilePayload>,
+    }) satisfies Schema.Codec<RequestOpenFilePayload, unknown>,
   }),
   Schema.Struct({
     event: Schema.Literal('requestShowInstruction'),
     payload: Schema.Struct({
       key: Schema.String,
       message: Schema.String,
-      actions: Schema.optional(
-        Schema.Array(Schema.Enum(Object.values(INSTRUCTION_ACTION))),
-      ),
+      actions: Schema.optional(Schema.Array(Schema.Enum(INSTRUCTION_ACTION))),
       showSuppress: Schema.optional(Schema.Boolean),
-    }) satisfies Schema.Codec<RequestShowInstructionPayload>,
+    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
   }),
   Schema.Struct({
     event: Schema.Literal('showAgentConfigBanner'),
     payload: Schema.Struct({
       agentName: Schema.String,
-    }) satisfies Schema.Codec<ShowAgentConfigBannerPayload>,
+    }) satisfies Schema.Codec<ShowAgentConfigBannerPayload, unknown>,
   }),
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
     payload: Schema.Struct({
       message: Schema.String,
       docsPage: Schema.optional(Schema.String),
-    }) satisfies Schema.Codec<RequestShowErrorPayload>,
+    }) satisfies Schema.Codec<RequestShowErrorPayload, unknown>,
   }),
   Schema.Struct({
     event: Schema.Literal('requestEnsureProgressView'),
@@ -141,7 +139,7 @@ const NoticeSchema = Schema.Union([
           outputInfo: Schema.String,
         }),
       ),
-    }) satisfies Schema.Codec<RequestEnsureProgressViewPayload>,
+    }) satisfies Schema.Codec<RequestEnsureProgressViewPayload, unknown>,
   }),
 ]);
 export type Notice = typeof NoticeSchema.Type;
@@ -165,7 +163,7 @@ const LanguageModelInfoSchema = Schema.Struct({
   version: Schema.String,
   maxInputTokens: Schema.Number,
   access: Schema.Literals(['allowed', 'consent-required', 'unavailable']),
-}) satisfies Schema.Codec<LanguageModelInfo>;
+}) satisfies Schema.Codec<LanguageModelInfo, unknown>;
 
 /** One call of the service on a window. */
 const HostCallSchema = Schema.Union([

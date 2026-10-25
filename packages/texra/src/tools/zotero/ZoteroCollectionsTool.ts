@@ -56,7 +56,7 @@ interface CollectionNode {
   children: CollectionNode[];
 }
 
-function buildTree(collections: BbtCollection[]): CollectionNode[] {
+function buildTree(collections: readonly BbtCollection[]): CollectionNode[] {
   const nodeMap = new Map<string, CollectionNode>();
   const roots: CollectionNode[] = [];
 

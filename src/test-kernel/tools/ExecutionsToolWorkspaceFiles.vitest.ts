@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 
 import { beforeEach, describe, expect } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
@@ -184,9 +184,12 @@ describe('ExecutionsTool', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const parentRunId = RunIdSchema.parse('ba5e0000000a');
-          const childRunId = RunIdSchema.parse('c41d0000000a');
-          const otherRunId = RunIdSchema.parse('0f1e0000000a');
+          const parentRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('ba5e0000000a');
+          const childRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('c41d0000000a');
+          const otherRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('0f1e0000000a');
           const handle = testRunHandle({
             runId: childRunId,
             parent: parentRunId,
@@ -267,8 +270,10 @@ describe('ExecutionsTool', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const parentRunId = RunIdSchema.parse('ba5e0000000d');
-          const childRunId = RunIdSchema.parse('c41d0000000d');
+          const parentRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('ba5e0000000d');
+          const childRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
           registryOf(session.runs).track(
@@ -333,8 +338,10 @@ describe('ExecutionsTool', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const parentRunId = RunIdSchema.parse('ba5e0000000c');
-          const childRunId = RunIdSchema.parse('c41d0000000c');
+          const parentRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('ba5e0000000c');
+          const childRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('c41d0000000c');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
           registryOf(session.runs).track(
@@ -382,8 +389,10 @@ describe('ExecutionsTool', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const parentRunId = RunIdSchema.parse('ba5e0000000d');
-          const childRunId = RunIdSchema.parse('c41d0000000d');
+          const parentRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('ba5e0000000d');
+          const childRunId =
+            Schema.decodeUnknownSync(RunIdSchema)('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
           registryOf(session.runs).track(
@@ -442,7 +451,8 @@ describe('ExecutionsTool', () => {
         withSession((session) =>
           Effect.gen(function* () {
             const runId = 'abc123' as RunId;
-            const callerRunId = RunIdSchema.parse('ca11e0000001');
+            const callerRunId =
+              Schema.decodeUnknownSync(RunIdSchema)('ca11e0000001');
 
             publishTestRunStart(session, runId);
             yield* session.log.settled;

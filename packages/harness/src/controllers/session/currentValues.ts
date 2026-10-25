@@ -17,7 +17,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
@@ -63,10 +62,9 @@ function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
   const version = Schema.decodeUnknownSync(Schema.Int)(row.version);
   if (version > VALUE_VERSION)
     throw new DatabaseStoreNewer({ type: CURRENT_VALUE_KIND, version });
-  const parsed = parseJsonWith(
-    Schema.decodeUnknownSync(Schema.String)(row.value),
-    family.schema,
-  );
+  const parsed = Schema.decodeUnknownResult(
+    Schema.fromJsonString(family.schema),
+  )(Schema.decodeUnknownSync(Schema.String)(row.value));
   if (Result.isSuccess(parsed)) return parsed.success;
   throw new Error(
     `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
@@ -130,7 +128,9 @@ export function currentValues(store: {
             );
             return result;
           }
-          const value = JSON.stringify(family.schema.parse(next));
+          const value = JSON.stringify(
+            Schema.decodeUnknownSync(family.schema)(next),
+          );
           if (row?.value !== value) {
             yield* exec(UPSERT_VALUE, [
               family.name,

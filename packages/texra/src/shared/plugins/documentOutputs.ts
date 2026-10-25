@@ -31,9 +31,7 @@ const FileLineageSchema = Schema.Struct({
 const OutputFileInfoSchema = Schema.Struct({
   source: Schema.String,
   location: FileLocationSchema,
-  round: RoundNumberSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(() => 0)),
-  ),
+  round: RoundNumberSchema.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
   lineage: Schema.NullOr(FileLineageSchema),
   diff: Schema.NullOr(DiffStatsSchema),
 });
@@ -231,14 +229,16 @@ export function latexdiffDisplayName(entry: LatexdiffEntry): string {
 
 export const RoundOutputSchema = Schema.Struct({
   round: RoundNumberSchema,
-  outputs: OutputFileInfoSchema.array(),
-  compileFailures: CompileFailureSchema.array().prefault(() => []),
+  outputs: Schema.Array(OutputFileInfoSchema),
+  compileFailures: Schema.Array(CompileFailureSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /** What this round should have written and did not: the expected output
    *  files it lacks (the disk check owns those) and the documents its reply
    *  held that did not extract. Persisted with all round outputs in the
    *  documents plugin's output fact. */
   missingOutputs: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed(() => [])),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   /** The round's latexdiffs, as its last `document_diff` wrote them. */
   latexdiffs: Schema.Array(LatexdiffEntrySchema),
@@ -248,48 +248,34 @@ export const RoundOutputSchema = Schema.Struct({
 });
 export type RoundOutput = typeof RoundOutputSchema.Type;
 
-const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
-  (output) => ({
-    round: output.round,
-    relativePath: fileLocationDisplayPath(output.location),
-    absolutePath: output.location.absolutePath,
-    location: output.location.kind,
-    originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
-    added: output.diff?.added ?? null,
-    removed: output.diff?.removed ?? null,
-  }),
-).pipe(OutputFileSummarySchema);
-
-const CompileFailureSummaryFromFailureSchema = CompileFailureSchema.transform(
-  (failure) => ({
-    round: failure.round,
-    displayName: failure.displayName,
-    outputPath: fileLocationDisplayPath(failure.output),
-    logPath: failure.logRelativePath,
-    logAbsolutePath: failure.log.absolutePath,
-  }),
-).pipe(CompileFailureSummarySchema);
-
+/** Every round's outputs flattened, each at the round that wrote it. */
 export function roundOutputsToOutputSummaries(
-  roundOutputs: RoundOutput[],
+  roundOutputs: readonly RoundOutput[],
 ): OutputFileSummary[] {
   return roundOutputs.flatMap((roundOutput) =>
-    roundOutput.outputs.map((output) =>
-      Schema.decodeUnknownSync(OutputFileSummaryFromInfoSchema)({
-        ...output,
-        round: roundOutput.round,
-      }),
-    ),
+    roundOutput.outputs.map((output): OutputFileSummary => ({
+      round: roundOutput.round,
+      relativePath: fileLocationDisplayPath(output.location),
+      absolutePath: output.location.absolutePath,
+      location: output.location.kind,
+      originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
+      added: output.diff?.added ?? null,
+      removed: output.diff?.removed ?? null,
+    })),
   );
 }
 
 export function roundOutputsToCompileFailureSummaries(
-  roundOutputs: RoundOutput[],
+  roundOutputs: readonly RoundOutput[],
 ): CompileFailureSummary[] {
   return roundOutputs.flatMap((roundOutput) =>
-    roundOutput.compileFailures.map((failure) =>
-      Schema.decodeUnknownSync(CompileFailureSummaryFromFailureSchema)(failure),
-    ),
+    roundOutput.compileFailures.map((failure): CompileFailureSummary => ({
+      round: failure.round,
+      displayName: failure.displayName,
+      outputPath: fileLocationDisplayPath(failure.output),
+      logPath: failure.logRelativePath,
+      logAbsolutePath: failure.log.absolutePath,
+    })),
   );
 }
 
@@ -322,10 +308,10 @@ export type DocumentDiffs = typeof DocumentDiffsSchema.Type;
 export const DocumentsResultSchema = Schema.Struct({
   outputs: Schema.Array(OutputFileSummarySchema),
   compileFailures: Schema.Array(CompileFailureSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed(() => [])),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   diffs: Schema.Array(ResultDiffSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed(() => [])),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   diffsUnavailable: Schema.optional(Schema.String),
 });

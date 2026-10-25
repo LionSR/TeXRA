@@ -69,6 +69,7 @@ export * from './storedTurn';
 export * from './offeredTools';
 export * from './hookOutcome';
 export * from './followUp';
+export * from './aggregateId';
 export * from './sessionEvent';
 export * from './sessionViewInput';
 export * from './rowVersions';

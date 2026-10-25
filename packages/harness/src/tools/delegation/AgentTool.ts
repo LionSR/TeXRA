@@ -16,15 +16,7 @@
  */
 
 // Third-party imports
-import {
-  Cause,
-  Data,
-  Effect,
-  Exit,
-  Result,
-  Schema,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Effect, Exit, Result, Schema, SynchronizedRef } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -94,11 +86,8 @@ class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
 ) {}
 
 /** A list of file paths, empty when the call names none. */
-export const fileList = (
-  description: string,
-): ReturnType<
-  typeof nullishWithDefault<unknown /* TODO(effect-schema): type z.ZodArray; was `z.ZodArray<z.ZodString>` */>
-> => nullishWithDefault(Schema.Array(Schema.String), []).describe(description);
+export const fileList = (description: string) =>
+  nullishWithDefault(Schema.Array(Schema.String), [], description);
 
 /** The fields that name what an `agent` call runs and with which model. */
 const LAUNCH_FIELDS = {

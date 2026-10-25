@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -95,7 +95,10 @@ function cliWorkflowResult(
   } = workflowResult(outputs, outcome);
   return {
     ...result,
-    output: { ...output, documents: DocumentsResultSchema.parse(structured) },
+    output: {
+      ...output,
+      documents: Schema.decodeUnknownSync(DocumentsResultSchema)(structured),
+    },
   };
 }
 

@@ -12,7 +12,7 @@ export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
   'glmCodingPlan',
 ] as const);
 
-const SubscriptionUsageProviderSchema = Schema.Enum(
+const SubscriptionUsageProviderSchema = Schema.Literals(
   SUBSCRIPTION_USAGE_PROVIDERS,
 );
 export type SubscriptionUsageProvider =

@@ -53,7 +53,7 @@ const ZoteroSearchInputSchema = Schema.Struct({
   ),
   year: Schema.optional(
     Schema.NullOr(
-      Schema.Union([Schema.String, Schema.Number]).annotate({
+      Schema.Union([Schema.String, Schema.Finite]).annotate({
         description: YEAR_DESCRIPTION,
       }),
     ),
@@ -77,7 +77,7 @@ const ZoteroSearchInputSchema = Schema.Struct({
   ),
 }).check(
   Schema.makeFilter(
-    (data) => data.query || data.title || data.author || data.year,
+    (data) => Boolean(data.query || data.title || data.author || data.year),
     {
       message:
         'At least one of query, title, author, or year must be provided.',

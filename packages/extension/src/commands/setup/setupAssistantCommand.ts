@@ -1,6 +1,6 @@
 // Third-party imports
 import { Settings, withLogChannel } from '@texra-ai/harness';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -186,7 +186,7 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    const config = AgentConfigSchema.parse({
+    const config = Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'setup',
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,

@@ -59,8 +59,11 @@ const UsageLogEntrySchema = UsageLogMetadataSchema.mapFields(
   Struct.assign(UsageLogStatsSchema.fields),
 ).mapFields(
   Struct.assign({
-    timestamp:
-      Schema.String /* TODO(effect-schema): z.iso.datetime; was `z.iso.datetime()` */,
+    timestamp: Schema.String.check(
+      Schema.makeFilter((value) => !Number.isNaN(Date.parse(value)), {
+        message: 'an ISO date-time',
+      }),
+    ),
     extensionVersion: Schema.optional(Schema.String),
     editorType: Schema.optional(Schema.String),
   }),

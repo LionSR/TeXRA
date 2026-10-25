@@ -4,7 +4,7 @@
  * This is the agent-general SDK contract. Adding a new event type yields
  * an exhaustive-switch error in every subscriber until handled.
  *
- * The vocabulary is declared once, as Zod, in
+ * The vocabulary is declared once, as Effect Schema, in
  * the session event schema (the trace arms are spliced in there). Every arm below is that
  * declaration minus the aggregate qualification: the aggregate is the run,
  * and `runEventDraft` adds it back at publication. The one arm the session

@@ -42,7 +42,9 @@ const SelfInputSchema = Schema.Struct({
   prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
     description: 'What this run of you works on.',
   }),
-  fork: nullishWithDefault(Schema.Boolean, true).describe(
+  fork: nullishWithDefault(
+    Schema.Boolean,
+    true,
     'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts from `prompt` alone.',
   ),
   schema: Schema.optional(

@@ -10,6 +10,8 @@ export const RunIdSchema = Schema.String.check(Schema.isMinLength(6))
   .check(Schema.isPattern(/^[0-9a-f][-0-9a-f]*$/i))
   .pipe(Schema.brand('RunId'));
 export type RunId = typeof RunIdSchema.Type;
+/** Whether a string is a run id, as {@link RunIdSchema} reads it. */
+export const isRunId = Schema.is(RunIdSchema);
 
 /** A run id, or the empty-string sentinel meaning "no active run". */
 export const RunSelectionSchema = Schema.Union([

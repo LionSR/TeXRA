@@ -1,9 +1,10 @@
 /**
  * Minimal subset of GitHub REST response shapes used by the PR poller.
  * Only the fields we consume are declared; extra fields are tolerated
- * (z.looseObject). The schemas are the single source of truth — the types are
- * derived via z.infer. Always-present-but-nullable fields use .nullable();
- * fields GitHub may omit or send as explicit null use .nullish(); `state`
+ * (`Schema.StructWithRest`). The schemas are the single source of truth — the
+ * types are derived from them. Always-present-but-nullable fields use
+ * `Schema.NullOr`; fields GitHub may omit or send as explicit null use
+ * `Schema.optional(Schema.NullOr(...))`; `state`
  * is a permissive transform, never a strict enum, so a novel value coerces
  * instead of throwing on the 200 path (a throw there would risk the pollers'
  * 24h detach).
@@ -123,15 +124,13 @@ export type GhCheckAnnotation = typeof GhCheckAnnotationSchema.Type;
  * 'closed' is treated as open.
  */
 const OpenClosedStateSchema = Schema.String.pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open'))` */,
-    {
-      decode: SchemaGetter.transform((s): 'open' | 'closed' =>
-        s === 'closed' ? 'closed' : 'open',
-      ),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(Schema.Literals(['open', 'closed']), {
+    decode: SchemaGetter.transform((s): 'open' | 'closed' =>
+      s === 'closed' ? 'closed' : 'open',
+    ),
+    // A GitHub response is read one way; nothing encodes a state back.
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
 );
 
 export const GhPullRequestSchema = Schema.StructWithRest(

@@ -9,7 +9,6 @@
 import {
   Cause,
   Clock,
-  Data,
   Deferred,
   Duration,
   Effect,
@@ -351,17 +350,17 @@ export abstract class PollingSourceBase<
    */
   protected validateOrSkip<T>(
     res: SuccessfulConditionalResponse<unknown>,
-    schema: ZodType<T>,
+    schema: Schema.Codec<T, unknown>,
     label: string,
   ): Effect.Effect<SuccessfulConditionalResponse<T> | undefined>;
   protected validateOrSkip<T>(
     res: ConditionalResponse<unknown>,
-    schema: ZodType<T>,
+    schema: Schema.Codec<T, unknown>,
     label: string,
   ): Effect.Effect<ConditionalResponse<T> | undefined>;
   protected validateOrSkip<T>(
     res: ConditionalResponse<unknown>,
-    schema: ZodType<T>,
+    schema: Schema.Codec<T, unknown>,
     label: string,
   ): Effect.Effect<ConditionalResponse<T> | undefined> {
     if (res.status === 304) return Effect.succeed(res);

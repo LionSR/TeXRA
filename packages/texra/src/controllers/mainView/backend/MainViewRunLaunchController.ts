@@ -1,4 +1,4 @@
-import { absurd, Effect, Schema } from 'effect';
+import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
 
 import {
   AgentCatalog,
@@ -87,9 +87,16 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   const optionsResult = task
     ? Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(launch)
     : undefined;
-  if (optionsResult !== undefined && !optionsResult.success) {
-    const issue = optionsResult.error.issues[0];
-    const path = issue?.path.join('.') || 'options';
+  if (optionsResult !== undefined && !Result.isSuccess(optionsResult)) {
+    const [issue] = SchemaIssue.makeFormatterStandardSchemaV1()(
+      optionsResult.failure.issue,
+    ).issues;
+    const path =
+      issue?.path
+        ?.map((segment) =>
+          String(typeof segment === 'object' ? segment.key : segment),
+        )
+        .join('.') || 'options';
     return {
       valid: false,
       message: `Invalid task options (${path}): ${issue?.message ?? 'validation failed'}`,
@@ -118,8 +125,8 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   };
   // A document task runs its agent's recipe over the files.
   const patch =
-    task && optionsResult?.success
-      ? documentTaskPatch(config, task, optionsResult.data)
+    task && optionsResult !== undefined && Result.isSuccess(optionsResult)
+      ? documentTaskPatch(config, task, optionsResult.success)
       : null;
   const validation = validateRunRequest({
     config: patch ? { ...config, ...patch } : config,

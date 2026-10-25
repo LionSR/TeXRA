@@ -11,7 +11,7 @@ import {
   Schema,
   Stream,
 } from 'effect';
-import type { AgentSource } from '@shared/schemas';
+import { AgentSourceSchema } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 
 import type { GlobalStorageFs } from './rootedFs';
@@ -47,8 +47,7 @@ export class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
   'ConfigWriteFailed',
   {
     key: Schema.String,
-    target:
-      Schema.Unknown /* TODO(effect-schema): error field type ConfigTarget; was `ConfigTarget` */,
+    target: Schema.Literals(['global', 'workspace', 'local']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -191,8 +190,7 @@ export class AgentDirectoriesFailed extends Schema.TaggedError<AgentDirectoriesF
   'AgentDirectoriesFailed',
   {
     /** Which of the port's readers failed. */
-    source:
-      Schema.Unknown /* TODO(effect-schema): error field type AgentSource; was `AgentSource` */,
+    source: AgentSourceSchema,
     message: Schema.String,
     cause: Schema.Defect(),
   },

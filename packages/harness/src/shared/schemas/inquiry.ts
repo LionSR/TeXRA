@@ -20,13 +20,10 @@ export const InquirySessionLinksSchema = Schema.Array(
 export const InquiryThreadIdSchema = Schema.String.check(
   Schema.isPattern(/^ei_[0-9a-f]{12}$/i),
 ).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value) => value.toLowerCase())` */,
-    {
-      decode: SchemaGetter.transform((value) => value.toLowerCase()),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(Schema.String, {
+    decode: SchemaGetter.transform((value) => value.toLowerCase()),
+    encode: SchemaGetter.passthrough(),
+  }),
 );
 export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 

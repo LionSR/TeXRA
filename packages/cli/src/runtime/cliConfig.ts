@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -244,7 +244,10 @@ function configFileWarnings(
       }
       const value = store.get<unknown>(key);
       const entry = TEXRA_SETTINGS.byKey(key);
-      if (entry && !entry.schema.safeParse(value).success) {
+      if (
+        entry &&
+        Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))
+      ) {
         warnings.push(
           `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
         );
@@ -300,7 +303,7 @@ export function loadCliStartupConfig(
           const entry = TEXRA_SETTINGS.byKey(key);
           return value !== undefined &&
             entry &&
-            !entry.schema.safeParse(value).success
+            Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))
             ? undefined
             : value;
         },

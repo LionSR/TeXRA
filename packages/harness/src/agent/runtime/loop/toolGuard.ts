@@ -51,7 +51,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // that is guarded but has no schema would have the guard quietly stop
   // gating it, so it is a defect, not a skip.
   const schema =
-    tool.definition.zodSchema ??
+    tool.definition.schema ??
     (tool.definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
   if (!schema)
     return yield* Effect.die(

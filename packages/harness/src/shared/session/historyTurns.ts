@@ -6,7 +6,6 @@
  * the two, so nothing above it sees a
  * stored turn and nothing below it sees a package type.
  */
-import { Schema } from 'effect';
 import type {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,

@@ -7,7 +7,7 @@
  * else the user's saved level, else the policy default, snapped to a level
  * the model (and the route, when it reports one) accepts.
  */
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   chooseReasoning,
@@ -71,11 +71,11 @@ export function agentCliReasoning(
   const request =
     effort === undefined ? selection.request : { ...selection.request, effort };
   const choice = chooseReasoning(selection.config, request, options);
-  const sent = AgentCliEffortSchema.safeParse(choice.effort);
+  const sent = Schema.decodeUnknownResult(AgentCliEffortSchema)(choice.effort);
   return {
     selection,
     choice,
-    effort: sent.success ? sent.data : undefined,
+    effort: Result.isSuccess(sent) ? sent.success : undefined,
   };
 }
 

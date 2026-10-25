@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Result } from 'effect';
+import { Result, Schema } from 'effect';
 
 import { ModelOriginSchema } from '@texra-ai/llm';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
@@ -146,7 +146,7 @@ describe('session view update', () => {
     const history = viewOf([subscribe(ROOT), ...log.events.map(tail)], updater);
     const surface = loadSurface(
       'paper',
-      PersistedSurfaceSchema.parse({ selected: ROOT }),
+      Schema.decodeUnknownSync(PersistedSurfaceSchema)({ selected: ROOT }),
     );
     const read = markShownRunSeen(surface, history);
     const restarted = loadSurface('paper', persistSurface(read));
@@ -1350,7 +1350,7 @@ describe('session view update', () => {
 // carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
-const RUN_HISTORY_RUN = RunIdSchema.parse('ab12cd');
+const RUN_HISTORY_RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const RUN_HISTORY_AGGREGATE = qualifyAggregateId('run', RUN_HISTORY_RUN);
 const ORIGIN = {
   protocol: 'openai-responses',
@@ -1486,7 +1486,7 @@ const runHistoryRow = (
 ): RunHistoryRow =>
   Result.getOrThrow(
     runHistoryRows([
-      SessionEventSchema.parse({
+      Schema.decodeUnknownSync(SessionEventSchema)({
         ...storedDraft({
           aggregateId: RUN_HISTORY_AGGREGATE,
           ...draft,
@@ -1501,14 +1501,16 @@ const runHistoryRow = (
 
 /** The same boundary, asked whether it accepts the draft at all. */
 const rowAccepted = (draft: Record<string, unknown>): boolean =>
-  SessionEventSchema.safeParse({
-    aggregateId: RUN_HISTORY_AGGREGATE,
-    ...draft,
-    seq: 1,
-    commit: 1,
-    origin: null,
-    at: 0,
-  }).success;
+  Result.isSuccess(
+    Schema.decodeUnknownResult(SessionEventSchema)({
+      aggregateId: RUN_HISTORY_AGGREGATE,
+      ...draft,
+      seq: 1,
+      commit: 1,
+      origin: null,
+      at: 0,
+    }),
+  );
 
 /** The whole life of one tool-use turn, commit by commit. */
 const TURN_ROWS: readonly RunHistoryRow[] = [
@@ -2051,10 +2053,10 @@ describe('applyRunRows', () => {
     }
     // The day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
-    expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);
-    expect(
-      ModelOriginSchema.safeParse({ ...ORIGIN, codecVersion: 2 }).success,
-    ).toBe(false);
+    const accepts = (origin: unknown) =>
+      Result.isSuccess(Schema.decodeUnknownResult(ModelOriginSchema)(origin));
+    expect(accepts(ORIGIN)).toBe(true);
+    expect(accepts({ ...ORIGIN, codecVersion: 2 })).toBe(false);
   });
 
   it('binds every row to the turn it describes', () => {

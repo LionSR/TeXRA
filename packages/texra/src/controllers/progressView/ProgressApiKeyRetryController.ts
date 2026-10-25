@@ -1,9 +1,13 @@
 import { Effect, Equal, Redacted, Schema } from 'effect';
 
 // Local imports
+import {
+  isApiProvider,
+  type ApiKeyProviderId,
+  type SecretsFailed,
+} from '@texra-ai/llm';
 import type { RequestRefusal } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type { ApiKeyProviderId, SecretsFailed } from '@texra-ai/llm';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;
@@ -27,8 +31,7 @@ interface ProgressApiKeyRetryRequest {
 export class ApiKeyPromptFailed extends Schema.TaggedError<ApiKeyPromptFailed>()(
   'ApiKeyPromptFailed',
   {
-    provider:
-      Schema.Unknown /* TODO(effect-schema): error field type ApiKeyProviderId; was `ApiKeyProviderId` */,
+    provider: Schema.String.pipe(Schema.refine(isApiProvider)),
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),
   },

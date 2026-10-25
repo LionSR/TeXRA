@@ -70,9 +70,7 @@ const isRunLive = (e: unknown): e is RunLive => e instanceof RunLive;
 /** Run work refused because the session is disposed or closing. */
 class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
   'RunAdmissionClosed',
-  {
-    message: Schema.String,
-  },
+  { message: Schema.String },
 ) {}
 
 /**

@@ -27,6 +27,15 @@ export interface RuntimePresentationEventPayloads {
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
+/** Every event name, as {@link HostPresentationFailed} records it. */
+const RuntimePresentationEventSchema = Schema.Literals([
+  'requestOpenFile',
+  'requestShowInstruction',
+  'showAgentConfigBanner',
+  'requestShowError',
+  'requestEnsureProgressView',
+] as const satisfies readonly RuntimePresentationEvent[]);
+
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
   readonly replayWhenAttached?: boolean;
@@ -75,8 +84,7 @@ export type PresentationEventHandlers<
 export class HostPresentationFailed extends Schema.TaggedError<HostPresentationFailed>()(
   'HostPresentationFailed',
   {
-    event:
-      Schema.Unknown /* TODO(effect-schema): error field type RuntimePresentationEvent; was `RuntimePresentationEvent` */,
+    event: RuntimePresentationEventSchema,
     cause: Schema.Defect(),
   },
 ) {}

@@ -11,7 +11,7 @@ import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
  * of the command doing it.
  */
 export const SubscriptionAuthStatusSchema = Schema.Struct({
-  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  provider: Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
   signedIn: Schema.Boolean,
   email: Schema.optional(Schema.NullOr(Schema.String)),
   accountId: Schema.optional(Schema.NullOr(Schema.String)),

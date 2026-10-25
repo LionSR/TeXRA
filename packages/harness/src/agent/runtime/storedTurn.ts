@@ -126,7 +126,14 @@ export function storedDraft(
  *  messages (media by address), the assistant message in the package's. */
 const HistoryMessageSchema = Schema.Union([
   AssistantMessageSchema,
-  ...StoredMessageSchema.members /* TODO(effect-schema): filter; was `.filter(( option, ): option is Exclude< (typeof StoredMessageSchema.options)[number], { shape: { role: z.ZodLiteral<'assistant'> } } > => option.shape.role.value !== 'assistant')` */,
+  ...StoredMessageSchema.members.filter(
+    (
+      member,
+    ): member is Exclude<
+      (typeof StoredMessageSchema.members)[number],
+      { fields: { role: Schema.Literal<'assistant'> } }
+    > => member.fields.role.literal !== 'assistant',
+  ),
 ]);
 const liveMessages = (messages: readonly unknown[]): HistoryMessage[] =>
   messages.map((message) =>
@@ -134,11 +141,7 @@ const liveMessages = (messages: readonly unknown[]): HistoryMessage[] =>
   );
 const PreparedRunHistorySchema = Schema.Array(HistoryMessageSchema)
   .check(Schema.isMinLength(1))
-  .check(
-    Schema.makeFilter(
-      checkPreparedHistory /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine(checkPreparedHistory)` */,
-    ),
-  );
+  .check(Schema.makeFilter(checkPreparedHistory));
 /** Why `history` breaks the package's prepared-history rules, or null. */
 export function unpreparedHistory(
   history: readonly HistoryMessage[],

@@ -9,7 +9,6 @@
  * surface never resolves liveness, parentage or a task list a second time.
  */
 
-// Node imports
 // Third-party imports
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
@@ -27,7 +26,7 @@ import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
 import {
-  RunIdSchema,
+  isRunId,
   ToolError,
   type RunId,
   type ToolResult,
@@ -339,13 +338,10 @@ function resolveRunId(
   id: string,
 ): Effect.Effect<RunId, ToolError> {
   if (id === 'current') return Effect.succeed(context.runId);
-  const result = RunIdSchema.safeParse(id);
-  if (!result.success) {
-    return Effect.fail(
-      new ToolError(`Invalid run ID format: ${id}. Expected hex string.`),
-    );
-  }
-  return Effect.succeed(result.data);
+  if (isRunId(id)) return Effect.succeed(id);
+  return Effect.fail(
+    new ToolError(`Invalid run ID format: ${id}. Expected hex string.`),
+  );
 }
 
 /** Wait for runs to change status, with timeout. */
@@ -623,7 +619,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   context: RunToolContext,
   runId: RunId,
   filePath: string,
-  viewRange?: [number, number],
+  viewRange?: readonly [number, number],
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
@@ -672,7 +668,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
     context: RunToolContext,
     runId: RunId,
     filePath: string,
-    viewRange?: [number, number],
+    viewRange?: readonly [number, number],
   ) {
     const records = getRunRecords(context.session, runId);
     const [record, paths] = yield* Effect.all(
@@ -764,7 +760,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   }: {
     directoryErrorPath: string;
     resultPath: string;
-    viewRange: [number, number] | undefined;
+    viewRange: readonly [number, number] | undefined;
   },
 ) {
   // A recorded file the user since deleted is an outcome the model reads, not

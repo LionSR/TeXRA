@@ -111,7 +111,7 @@ const ClaudeAgentInputSchema = Schema.Struct({
       'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
   }),
   model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.members /* TODO(effect-schema): join; was `.join(', ')` */}. Defaults to the user-configured model.`,
+    description: `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
   }),
   effort: Schema.optional(Schema.NullOr(AgentCliEffortSchema)).annotate({
     description:
@@ -128,12 +128,10 @@ const ClaudeAgentInputSchema = Schema.Struct({
       'When true, branch from session_id into a new Claude session and leave the original session unchanged. Defaults to false.',
   }),
 }).check(
-  Schema.makeFilter(
-    (input) => input.fork_session !== true || input.session_id != null,
-    {
-      message: 'fork_session requires session_id',
-      path: ['fork_session'],
-    },
+  Schema.makeFilter((input) =>
+    input.fork_session !== true || input.session_id != null
+      ? undefined
+      : { path: ['fork_session'], issue: 'fork_session requires session_id' },
   ),
 );
 

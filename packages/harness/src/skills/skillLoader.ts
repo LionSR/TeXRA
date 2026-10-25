@@ -54,10 +54,6 @@ export function issue(
   return { severity, code, message, ...options };
 }
 
-function firstZodMessage(error: ZodError): string {
-  return error.issues[0]?.message ?? 'Invalid skill metadata';
-}
-
 function normalizeSkillName(
   rawName: unknown,
   directoryName: string,
@@ -87,7 +83,7 @@ function normalizeSkillName(
       issue(
         'warning',
         'invalid_name',
-        `Ignoring invalid skill name: ${firstZodMessage(parsed.failure)}`,
+        `Ignoring invalid skill name: ${parsed.failure.message}`,
         { path: skillPath },
       ),
     );
@@ -102,9 +98,7 @@ function normalizeSkillName(
     issue(
       'error',
       'invalid_name',
-      `Directory name cannot be used as a skill name: ${firstZodMessage(
-        fallback.failure,
-      )}`,
+      `Directory name cannot be used as a skill name: ${fallback.failure.message}`,
       { path: skillPath },
     ),
   );

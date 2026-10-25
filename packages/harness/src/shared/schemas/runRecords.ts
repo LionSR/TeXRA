@@ -70,7 +70,7 @@ const RunEndOutputSchema = Schema.Struct({
   response: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
   /** Workspace-relative paths of files edited by tool calls during the run. */
   files: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed(() => [])),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   /** Value captured by the `submit_output` terminal tool, or the value a
    *  recipe's script returned (its plugin's block reads it:
@@ -132,19 +132,14 @@ export type ResultMeta = typeof ResultMetaSchema.Type;
 
 /** Canonical workspace paths at the record boundary. */
 export const RunWorkspaceFilesSchema = Schema.Array(Schema.String).pipe(
-  Schema.decodeTo(
-    Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((paths) => [ ...new Set( paths.map((value) => normalizeFilePath(value.trim())).filter(Boolean), ), ].sort((a, b) => a.localeCompare(b)))` */,
-    {
-      decode: SchemaGetter.transform((paths) =>
-        [
-          ...new Set(
-            paths
-              .map((value) => normalizeFilePath(value.trim()))
-              .filter(Boolean),
-          ),
-        ].sort((a, b) => a.localeCompare(b)),
-      ),
-      encode: SchemaGetter.forbidden(() => 'decode-only'),
-    },
-  ),
+  Schema.decodeTo(Schema.Array(Schema.String), {
+    decode: SchemaGetter.transform((paths) =>
+      [
+        ...new Set(
+          paths.map((value) => normalizeFilePath(value.trim())).filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    ),
+    encode: SchemaGetter.passthrough(),
+  }),
 );

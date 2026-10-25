@@ -101,20 +101,23 @@ export function parseMcpServers(
   const parsed: McpServerConfig[] = [];
   const warnings: string[] = [];
   for (const [name, raw] of Object.entries(servers)) {
-    const validName = Schema.decodeUnknownResult(ServerNameSchema)(name);
-    const entry = Schema.decodeUnknownResult(McpServerEntrySchema)(raw);
-    if (!Result.isSuccess(validName) || !Result.isSuccess(entry)) {
-      const error = validName.failure ?? entry.failure;
+    // The name is checked first, so a bad name is the failure reported.
+    const server = Result.all([
+      Schema.decodeUnknownResult(ServerNameSchema)(name),
+      Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
+    ]);
+    if (Result.isFailure(server)) {
       warnings.push(
-        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${error ? error.message : ''}`,
+        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${server.failure.message}`,
       );
       continue;
     }
+    const [, entry] = server.success;
     parsed.push({
       name,
-      command: entry.success.command,
-      args: entry.success.args ?? [],
-      env: entry.success.env ?? {},
+      command: entry.command,
+      args: entry.args ?? [],
+      env: entry.env ?? {},
     });
   }
   return { servers: parsed, warnings };

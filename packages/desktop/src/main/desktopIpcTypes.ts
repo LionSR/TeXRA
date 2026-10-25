@@ -20,9 +20,9 @@ export type DesktopCommandRoutes = Readonly<
 
 /** A route whose message must match `schema`. One that does not is renderer
  *  drift: logged, and no program runs. */
-export function parsedRoute<S extends Schema.Top>(
-  schema: S,
-  handle: (message: S['Type']) => Effect.Effect<void, Error, ProcessServices>,
+export function parsedRoute<T>(
+  schema: Schema.Codec<T, unknown>,
+  handle: (message: T) => Effect.Effect<void, Error, ProcessServices>,
 ): DesktopCommandRoute {
   return (message) => {
     const parsed = Schema.decodeUnknownResult(schema)(message);

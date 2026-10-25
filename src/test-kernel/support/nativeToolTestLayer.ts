@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -84,7 +84,10 @@ export function nativeToolTestLayer(
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
   const toolRun: RunCallShape['run'] | undefined = run && {
-    config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      agent: 'test',
+      model: 'test-model',
+    }),
     model: testModelCell('test-model'),
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: test'),

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { Cause, Effect, Exit, Result, Schema, SchemaGetter } from 'effect';
+import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
 import {
   canonicalizeWorkspacePath,
   executeCommand,
@@ -161,8 +161,8 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
  * malformed formula entry degrades to `null` (skipped) rather than failing the
  * whole parse, so one odd entry cannot hide an available upgrade. The per-entry
- * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
- * `effect`-importing file keeps no raw catch.
+ * recovery is the element schema's own decoding fallback, not a `.catch`, so
+ * this `effect`-importing file keeps no raw catch.
  */
 const HomebrewFormulaEntrySchema = Schema.Struct({
   name: Schema.String,
@@ -176,19 +176,10 @@ const HomebrewInfoSchema = Schema.Struct({
   formulae: Schema.optional(
     Schema.NullOr(
       Schema.Array(
-        Schema.Unknown.pipe(
-          Schema.decodeTo(
-            Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((entry) => { const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry); return parsed.success ? parsed.data : null; })` */,
-            {
-              decode: SchemaGetter.transform((entry) => {
-                const parsed = Schema.decodeUnknownResult(
-                  Schema.NullOr(HomebrewFormulaEntrySchema),
-                )(entry);
-                return Result.isSuccess(parsed) ? parsed.success : null;
-              }),
-              encode: SchemaGetter.forbidden(() => 'decode-only'),
-            },
-          ),
+        // A malformed entry decodes to null by policy: one odd formula must
+        // not hide an available upgrade.
+        Schema.NullOr(HomebrewFormulaEntrySchema).pipe(
+          Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
         ),
       ),
     ),

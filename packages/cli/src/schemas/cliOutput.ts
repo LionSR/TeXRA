@@ -51,7 +51,7 @@ const CliNdjsonLineStampSchema = Schema.Struct({
  * `CliRunStatus` is the only renamed vocabulary.
  */
 export const CLI_NDJSON_CONTRACT =
-  CliNdjsonLineStampSchema.fields.contract.value;
+  CliNdjsonLineStampSchema.fields.contract.literal;
 
 /** A payload field carried verbatim from the command (already shaped upstream). */
 const payload = Schema.Unknown;

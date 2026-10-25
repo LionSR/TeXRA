@@ -1,5 +1,13 @@
 import { it } from '@effect/vitest';
-import { Clock, Effect, Exit, Queue, Scope, SubscriptionRef } from 'effect';
+import {
+  Clock,
+  Effect,
+  Exit,
+  Queue,
+  Schema,
+  Scope,
+  SubscriptionRef,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect } from 'vitest';
 import type {
@@ -324,7 +332,7 @@ function publishRun(
     {
       type: 'run.config',
       aggregateId: qualifyAggregateId('run', runId),
-      config: AgentConfigSchema.parse({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent,
         model: 'deepseek/deepseek-v4-flash',
         inputFiles: overrides.inputFiles ?? ['paper.tex'],

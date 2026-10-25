@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -29,7 +29,7 @@ export const seedRunRecord = (
       {
         type: 'run.config',
         aggregateId: qualifyAggregateId('run', runId),
-        config: RunRecordFieldsSchema.parse(record),
+        config: Schema.decodeUnknownSync(RunRecordFieldsSchema)(record),
       },
     ]),
   ).pipe(Effect.asVoid);

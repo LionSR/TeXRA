@@ -40,6 +40,7 @@ import {
   toErrorMessage,
   isTaskConfig,
   recipeBlockOf,
+  RunIdSchema,
   type RunId,
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
@@ -60,7 +61,7 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
-import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
 import {
   ApiKeyPromptFailed,
@@ -108,13 +109,9 @@ class RunLaunchFailed extends Schema.TaggedError<RunLaunchFailed>()(
 class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
   'RunConfigUnreadable',
   {
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    runId: RunIdSchema,
     message: Schema.String,
-    cause: Schema.Union([
-      Schema.Unknown /* TODO(effect-schema): error field type DatabaseReadFailed; was `DatabaseReadFailed` */,
-      Schema.Unknown /* TODO(effect-schema): error field type TaskRecordsUnavailable; was `TaskRecordsUnavailable` */,
-    ]),
+    cause: Schema.Union([DatabaseReadFailed, TaskRecordsFailed]),
   },
 ) {}
 
@@ -136,7 +133,7 @@ export interface RunActionRecordPorts {
     runId: RunId,
   ) => Effect.Effect<
     AgentConfig | null,
-    DatabaseReadFailed | TaskRecordsUnavailable
+    DatabaseReadFailed | TaskRecordsFailed
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;

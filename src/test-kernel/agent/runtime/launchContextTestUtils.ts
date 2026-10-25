@@ -1,6 +1,6 @@
 // Third-party imports
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -31,7 +31,7 @@ export function createTestLaunchContext({
   agent = 'assistant',
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
-  const config = AgentConfigSchema.parse({
+  const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model: 'test-model',
   });
@@ -39,7 +39,7 @@ export function createTestLaunchContext({
   const { stores, secrets } = makeFakeSettingsStores();
   return {
     config,
-    persona: PersonaSchema.parse({}),
+    persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { ...stores, secrets },

@@ -13,7 +13,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
@@ -34,7 +34,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
-const CONFIG = AgentConfigSchema.parse({
+const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'assistant',
   model: 'gpt56',
   instruction: 'One answer.',

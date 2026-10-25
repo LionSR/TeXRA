@@ -1,4 +1,4 @@
-import { Result, Schema, Struct } from 'effect';
+import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
@@ -8,16 +8,19 @@ import { Sha256Schema } from './offeredTools';
  * Base schema for file references (metadata only, no binary data).
  * Used when binary data has been stripped for serialization/logging.
  */
+const FileReferenceFieldsSchema = Schema.Struct({
+  /** Workspace-relative or descriptive path for the file */
+  path: Schema.String,
+  /** MIME type for the file */
+  mimeType: Schema.String,
+  /** Optional human readable description */
+  description: Schema.optional(Schema.String),
+});
+/** Whatever else a tool attached rides along as unknown keys. */
+const anyExtraKeys = [Schema.Record(Schema.String, Schema.Unknown)] as const;
 const FileReferenceSchema = Schema.StructWithRest(
-  Schema.Struct({
-    /** Workspace-relative or descriptive path for the file */
-    path: Schema.String,
-    /** MIME type for the file */
-    mimeType: Schema.String,
-    /** Optional human readable description */
-    description: Schema.optional(Schema.String),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
+  FileReferenceFieldsSchema,
+  anyExtraKeys,
 );
 export type FileReference = typeof FileReferenceSchema.Type;
 
@@ -25,7 +28,7 @@ export type FileReference = typeof FileReferenceSchema.Type;
  * Schema for file attachments with optional binary data.
  * Extends FileReferenceSchema with binary payload fields.
  */
-const ToolFileAttachmentSchema = FileReferenceSchema.mapFields(
+const ToolFileAttachmentFieldsSchema = FileReferenceFieldsSchema.mapFields(
   Struct.assign({
     /** Base64 encoded payload when inline transport is supported */
     base64Data: Schema.optional(Schema.String),
@@ -35,6 +38,10 @@ const ToolFileAttachmentSchema = FileReferenceSchema.mapFields(
      *  script relays from one of its calls' settled attachments. */
     digest: Schema.optional(Sha256Schema),
   }),
+);
+const ToolFileAttachmentSchema = Schema.StructWithRest(
+  ToolFileAttachmentFieldsSchema,
+  anyExtraKeys,
 );
 export type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
@@ -50,55 +57,56 @@ const EditRecordSchema = Schema.Struct({
 export type EditRecord = typeof EditRecordSchema.Type;
 
 // ============================================================================
-// Diagnostics Types (not Zod - these are complex unions with external types)
+// Diagnostics
 // ============================================================================
 
 /**
  * Diagnostic type identifier for tool parameter validation errors.
- * Used when Zod validation fails on tool input parameters.
+ * Used when a tool's input fails its schema.
  */
 export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
 
 /**
- * Formatted Zod issue for model consumption.
- * Provides structured information that helps models self-correct. Every field
- * is JSON by construction: the settled tool result is stored as a JSON value,
- * and a present-but-undefined key there is a refused row, not a dropped key.
+ * One schema issue formatted for model consumption: the dotted path of the
+ * field and the issue's message. Every field is JSON by construction: the
+ * settled tool result is stored as a JSON value, and a present-but-undefined
+ * key there is a refused row, not a dropped key.
  */
-const FormattedZodIssueSchema = Schema.Struct({
+const FormattedIssueSchema = Schema.Struct({
   path: Schema.String,
   message: Schema.String,
-  expected: Schema.optional(Schema.String),
-  code: Schema.optional(Schema.String),
 });
-type FormattedZodIssue = typeof FormattedZodIssueSchema.Type;
+type FormattedIssue = typeof FormattedIssueSchema.Type;
 
 /**
  * Structured validation error diagnostics. One of several shapes a tool's
  * `ToolResult.diagnostics` may carry (see that field's own comment) — this is
- * the one produced for Zod input-validation failures, used to provide rich
+ * the one produced for input-validation failures, used to provide rich
  * error information to models for self-correction.
  */
 export const ValidationErrorDiagnosticsSchema = Schema.Struct({
   type: Schema.Literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
-  formatted: Schema.Array(FormattedZodIssueSchema),
+  formatted: Schema.Array(FormattedIssueSchema),
 });
 export type ValidationErrorDiagnostics =
   (typeof ValidationErrorDiagnosticsSchema)['Type'];
 
+const flattenIssue = SchemaIssue.makeFormatterStandardSchemaV1();
+
 /**
- * Format Zod issues into structured diagnostics for model consumption.
- * Only an `invalid_type` issue names an `expected` type, so only that issue
- * carries the key; Zod 4 issues report no `received` value at all.
+ * Flatten a schema failure's issue tree into one row per leaf issue, for
+ * model consumption: the dotted path of the field and the message.
  */
-export function formatZodIssuesForDiagnostics(
-  issues: ZodIssue[],
-): FormattedZodIssue[] {
-  return issues.map((issue) => ({
-    path: issue.path.join('.'),
-    message: issue.message,
-    ...(issue.code === 'invalid_type' ? { expected: issue.expected } : {}),
-    code: issue.code,
+export function formatIssuesForDiagnostics(
+  error: Schema.SchemaError,
+): FormattedIssue[] {
+  return flattenIssue(error.issue).issues.map((leaf) => ({
+    path: (leaf.path ?? [])
+      .map((segment) =>
+        String(typeof segment === 'object' ? segment.key : segment),
+      )
+      .join('.'),
+    message: leaf.message,
   }));
 }
 
@@ -116,7 +124,7 @@ const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: Schema.optional(Schema.String),
   /**
-   * Additional diagnostic information. Deliberately `z.unknown()`: every tool
+   * Additional diagnostic information. Deliberately `Schema.Unknown`: every tool
    * shapes its own payload here (validation issues, severity counts, an
    * unread-file reason, an error name, …), so there is no single schema to
    * validate against. Consumers that care about one specific shape — e.g.
@@ -236,33 +244,32 @@ export const SettledAttachmentSchema = Schema.Struct({
 /**
  * The follow-up builder's input. Derived from the exported members, never
  * re-declared: `files` loses its binary payload and `diagnostics` is narrowed
- * from `z.unknown()` to JSON, because an arbitrary value in a durable payload
- * is a `JSON.stringify` throw waiting for a cycle or a BigInt.
+ * from `Schema.Unknown` to JSON, because an arbitrary value in a durable
+ * payload is a `JSON.stringify` throw waiting for a cycle or a BigInt.
  *
- * `SettledFileSchema` is derived from `ToolFileAttachmentSchema`, NOT rebuilt
- * as a `strictObject`: its base `FileReferenceSchema` is a `z.looseObject`
- * and real attachments carry `base64Data`/`bytes` plus whatever extra keys a
- * tool attached, so a strict rebuild would refuse every executed result that
- * has an attachment. That same looseness is why the two binary fields go
- * through a transform rather than `.omit()`: on a loose object an omitted key
- * is only undeclared, so `base64Data` and the `Uint8Array` in `bytes` would
- * pass through as unknown keys and land in the row anyway. What the transform
- * leaves is then validated as JSON, exactly as `diagnostics` is: the loose
- * keys a tool attached are `unknown`, and a third byte buffer or a cyclic
- * object among them is the same `JSON.stringify` throw, on a row that is
- * already committed. The check runs after the transform rather than as a
- * `.pipe`, so the accepted input stays the real attachment a tool produced.
+ * A settled file is the attachment a tool produced, decoded as such, with
+ * `base64Data` and `bytes` dropped: real attachments carry them plus whatever
+ * extra keys a tool attached, and those extra keys stay. What the drop leaves
+ * is then validated as JSON, exactly as `diagnostics` is: a third byte buffer
+ * or a cyclic object among the extra keys is the same `JSON.stringify` throw,
+ * on a row that is already committed. Encoding is the identity: a settled
+ * file is an attachment without its bytes.
  */
-const SettledFileMetadataSchema = ToolFileAttachmentSchema.mapFields(
-  Struct.omit(['base64Data', 'bytes']),
-); /* TODO(effect-schema): catchall; was `.catchall(JsonValueSchema)` */
-const SettledFileSchema = ToolFileAttachmentSchema.transform(
-  ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
-).superRefine((file, ctx) => {
-  const metadata = Schema.decodeUnknownResult(SettledFileMetadataSchema)(file);
-  if (Result.isSuccess(metadata)) return;
-  for (const issue of metadata.failure.issues) ctx.addIssue({ ...issue });
-});
+const SettledFileMetadataSchema = Schema.StructWithRest(
+  ToolFileAttachmentFieldsSchema.mapFields(
+    Struct.omit(['base64Data', 'bytes']),
+  ),
+  [Schema.Record(Schema.String, JsonValueSchema)],
+);
+const SettledFileSchema = ToolFileAttachmentSchema.pipe(
+  Schema.decodeTo(Schema.Unknown, {
+    decode: SchemaGetter.transform(
+      ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
+    ),
+    encode: SchemaGetter.passthrough({ strict: false }),
+  }),
+  Schema.decodeTo(SettledFileMetadataSchema),
+);
 export const SettledToolResultSchema = Schema.Union([
   ExecutedToolResultSchema.mapFields(
     Struct.omit(['files', 'consumedFollowUps', 'facts']),

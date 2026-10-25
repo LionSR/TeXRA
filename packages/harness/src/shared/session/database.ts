@@ -13,7 +13,6 @@
  */
 import {
   Context,
-  Data,
   type Effect,
   type RcMap,
   type Result,
@@ -36,6 +35,12 @@ import type {
   LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  NotOwner,
+  Rejected,
+  Unavailable,
+  type RequestError,
+} from './requestErrors';
 import type { WithBlobs } from './historyTurns';
 import type { ValueFamily } from './valueFamily';
 
@@ -61,14 +66,11 @@ export const AggregateStateSchema = Schema.Struct({
   /** The incarnation's durable identity, minted with its first row. */
   uid: Schema.String.check(Schema.isUUID()),
   ownerId: Schema.NullOr(OwnerIdSchema),
-  closed: Schema.Union([Schema.Literal(0), Schema.Literal(1)]).pipe(
-    Schema.decodeTo(
-      Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((value) => value === 1)` */,
-      {
-        decode: SchemaGetter.transform((value) => value === 1),
-        encode: SchemaGetter.forbidden(() => 'decode-only'),
-      },
-    ),
+  closed: Schema.Literals([0, 1]).pipe(
+    Schema.decodeTo(Schema.Boolean, {
+      decode: SchemaGetter.transform((value) => value === 1),
+      encode: SchemaGetter.transform((closed) => (closed ? 1 : 0)),
+    }),
   ),
   parentId: Schema.NullOr(AggregateIdSchema),
   startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
@@ -170,6 +172,32 @@ export const heldElsewhereBy = (error: unknown): OwnerId | null => {
     ? error.ownerId
     : null;
 };
+
+/**
+ * How a session write the request made fails it: `NotOwner` when another
+ * owner holds the run ({@link heldElsewhereBy}); `Rejected`, in the claim's
+ * own words, when an owner could not be proven to have exited (as a
+ * deletion rejects it); else the `Unavailable` that `unavailable`
+ * describes, a closed run's included.
+ */
+export function writeRejection(
+  unavailable: ConstructorParameters<typeof Unavailable>[0],
+): (error: unknown) => RequestError {
+  return (error) =>
+    heldElsewhereBy(error) === null
+      ? new Unavailable(unavailable)
+      : claimRejection(unavailable.runId)(error);
+}
+
+/** How a claim the request needed fails it: `Rejected`, in the claim's own
+ *  words, when its holder could not be proven to have exited; else
+ *  `NotOwner`, another owner holding the run. */
+export const claimRejection =
+  (runId: RunId) =>
+  (error: unknown): RequestError =>
+    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
+      ? new Rejected({ reason: error.message })
+      : new NotOwner({ runId });
 
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(

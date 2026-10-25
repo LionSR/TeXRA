@@ -96,7 +96,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
      * submit through the synthetic `submit_output` terminal tool. Serializable by
-     * design: a live Zod schema or ITool must never travel through config. Absent
+     * design: a live schema or ITool must never travel through config. Absent
      * for ordinary runs.
      */
     outputSchema: Schema.optional(
@@ -113,15 +113,9 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
         Schema.Union([
           /** The parent's model wrote it and sent it to the background; the run
            *  is that script, and its `agent` calls propose themselves. */
-
-          /** The parent's model wrote it and sent it to the background; the run
-           *  is that script, and its `agent` calls propose themselves. */
           ScriptFieldsSchema.mapFields(
             Struct.assign({ kind: Schema.Literal('background') }),
           ),
-          /** A plugin wrote it: a task's recipe. The run is its agent's, and its
-           *  `agent` calls were approved with its launch. */
-
           /** A plugin wrote it: a task's recipe. The run is its agent's, and its
            *  `agent` calls were approved with its launch. */
           ScriptFieldsSchema.mapFields(
@@ -143,31 +137,29 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
 /** Canonical configuration: at most as many outputs as text/media inputs, and
  *  a persona exactly when the agent is inline, named as the agent is. */
 export const AgentConfigSchema = AgentConfigObjectSchema.check(
-  Schema.makeFilter(
-    (config, ctx) => {
-      if (
-        (config.agentSource === 'inline') !== (config.persona != null) ||
-        (config.persona != null && config.persona.name !== config.agent)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['persona'],
-          message:
-            'An inline agent carries its persona, named as the agent, and only it does.',
-        });
-      }
-      if (
-        config.outputFiles.length >
-        config.inputFiles.length + config.mediaFiles.length
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['outputFiles'],
-          message:
-            'Number of output files must not exceed the number of text and media input files.',
-        });
-      }
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((config, ctx) => { if ( (config.agentSource === 'inline') !== (config.persona != null) || (config.persona != null && config.persona.name !== config.agent) ) { ctx.addIssue({ code: 'custom', path: ['persona'], message: 'An inline agent carries its persona, named as the agent, and only it does.', }); } if ( config.outputFiles.length > config.inputFiles.length + config.mediaFiles.length ) { ctx.addIssue({ code: 'custom', path: ['outputFiles'], message: 'Number of output files must not exceed the number of text and media input files.', }); } })` */,
-  ),
+  Schema.makeFilter((config) => {
+    const issues: Schema.FilterIssue[] = [];
+    if (
+      (config.agentSource === 'inline') !== (config.persona != null) ||
+      (config.persona != null && config.persona.name !== config.agent)
+    ) {
+      issues.push({
+        path: ['persona'],
+        issue:
+          'An inline agent carries its persona, named as the agent, and only it does.',
+      });
+    }
+    if (
+      config.outputFiles.length >
+      config.inputFiles.length + config.mediaFiles.length
+    ) {
+      issues.push({
+        path: ['outputFiles'],
+        issue:
+          'Number of output files must not exceed the number of text and media input files.',
+      });
+    }
+    return issues;
+  }),
 );
 export type AgentConfigInput = typeof AgentConfigObjectSchema.Encoded;

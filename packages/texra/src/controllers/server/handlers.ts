@@ -27,7 +27,7 @@ import {
 import {
   Internal,
   type LocalSession,
-  type RequestError,
+  Rejected,
   type Run,
   type Session,
   type RunEnd,
@@ -45,20 +45,16 @@ import {
 } from '@texra-ai/harness/schemas';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import {
-  RequestErrorWireSchema,
-  type RequestErrorWire,
-} from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 
 import {
   PROTOCOL_VERSION,
+  ProjectStateFailed,
+  TaskFailed,
+  TaskRecordsFailed,
   TexraRpcs,
-  type ProjectStateFailed,
   type ServiceInfo,
-  type TaskFailed,
-  type TaskRecordsFailed,
 } from './protocol';
 
 import { makeHostWindows } from './hostWindows';
@@ -158,33 +154,13 @@ function liveRoot(session: LocalSession, runId: RunId): RunId | null {
   return root;
 }
 
-/** A request error in its wire shape: the fields the wire schema names. */
-const wireError = (error: RequestError): RequestErrorWire =>
-  RequestErrorWireSchema.parse(error);
-
-const failed = (message: string, presented?: boolean): TaskFailed => ({
-  _tag: 'TaskFailed',
-  message,
-  ...(presented === true && { presented }),
-});
-
-const stateFailed = (error: Error): ProjectStateFailed => ({
-  _tag: 'ProjectStateFailed',
-  message: error.message,
-});
-
-const recordsFailed = (
-  reason: TaskRecordsFailed['reason'],
-  message: string,
-): TaskRecordsFailed => ({ _tag: 'TaskRecordsFailed', reason, message });
-
 /** A handler that died answers `Internal` under a reference the service
  *  log carries the cause under, as the session bridge does. */
 const internal = (cause: Cause.Cause<unknown>) =>
   Effect.gen(function* () {
     const ref = randomUUID();
     yield* Effect.logError(`Service request ${ref} failed`, cause);
-    return wireError(new Internal({ ref }));
+    return new Internal({ ref });
   });
 
 /**
@@ -219,10 +195,11 @@ function runEnded(
       .records(runId)
       .readRunEnd()
       .pipe(
-        Effect.mapError((error) =>
-          failed(
-            `Task ${runId} ended; its result could not be read: ${error.message}`,
-          ),
+        Effect.mapError(
+          (error) =>
+            new TaskFailed({
+              message: `Task ${runId} ended; its result could not be read: ${error.message}`,
+            }),
         ),
       );
     if (end !== null) {
@@ -256,7 +233,9 @@ function admit<A, E>(
         onFailure: (cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.fail(
-                failed('The service stopped before the task started.'),
+                new TaskFailed({
+                  message: 'The service stopped before the task started.',
+                }),
               )
             : Effect.logWarning(
                 'A service task ended with a failure',
@@ -266,7 +245,11 @@ function admit<A, E>(
                   Option.match(Cause.findErrorOption(cause), {
                     onSome: refused,
                     onNone: () =>
-                      Effect.fail(failed(toErrorMessage(Cause.squash(cause)))),
+                      Effect.fail(
+                        new TaskFailed({
+                          message: toErrorMessage(Cause.squash(cause)),
+                        }),
+                      ),
                   }),
                 ),
               ),
@@ -288,7 +271,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
     const refuseWhileDraining = Effect.gen(function* () {
       if (!(yield* control.admission))
         return yield* Effect.fail(
-          failed('The service is shutting down; start the task again.'),
+          new TaskFailed({
+            message: 'The service is shutting down; start the task again.',
+          }),
         );
     });
     const hosts = yield* makeHostWindows;
@@ -335,7 +320,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         .pipe(Effect.tap((project) => present(project.session)));
     const open = (workspace: string) =>
       openSession(workspace).pipe(
-        Effect.mapError((error) => failed(error.message)),
+        Effect.mapError((error) => new TaskFailed({ message: error.message })),
       );
     /** What `read` answers from `runId`'s records in the project's session,
      *  read where the run is held; a run the session does not hold is
@@ -347,8 +332,13 @@ export const serviceHandlers = TexraRpcs.toLayer(
     ): Effect.Effect<A, TaskRecordsFailed> =>
       Effect.scoped(
         openSession(workspace).pipe(
-          Effect.mapError((error) =>
-            recordsFailed('unreadable', error.message),
+          Effect.mapError(
+            (error) =>
+              new TaskRecordsFailed({
+                runId,
+                reason: 'unreadable',
+                message: error.message,
+              }),
           ),
           // Whether the run exists, from the log rather than the live
           // fold: a session the open just (re)built has folded nothing yet.
@@ -356,15 +346,21 @@ export const serviceHandlers = TexraRpcs.toLayer(
             Effect.flatMap(session.view.read([runId]), (level) =>
               level.runs.has(runId)
                 ? read(session).pipe(
-                    Effect.mapError((error) =>
-                      recordsFailed('unreadable', error.message),
+                    Effect.mapError(
+                      (error) =>
+                        new TaskRecordsFailed({
+                          runId,
+                          reason: 'unreadable',
+                          message: error.message,
+                        }),
                     ),
                   )
                 : Effect.fail(
-                    recordsFailed(
-                      'unknownRun',
-                      `The TeXRA service holds no task ${runId} in ${workspace}.`,
-                    ),
+                    new TaskRecordsFailed({
+                      runId,
+                      reason: 'unknownRun',
+                      message: `The TeXRA service holds no task ${runId} in ${workspace}.`,
+                    }),
                   ),
             ),
           ),
@@ -430,13 +426,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           openSession(workspace).pipe(
-            Effect.mapError((error): RequestErrorWire => ({
-              _tag: 'Rejected',
-              reason: error.message,
-            })),
-            Effect.flatMap(({ session }) =>
-              session.request(request).pipe(Effect.mapError(wireError)),
-            ),
+            Effect.mapError((error) => new Rejected({ reason: error.message })),
+            Effect.flatMap(({ session }) => session.request(request)),
             Effect.catchDefect((defect) =>
               internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
             ),
@@ -475,7 +466,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
               // client hears that they were.
               (error) =>
                 presentRunFailure(session, error).pipe(
-                  Effect.andThen(Effect.fail(failed(error.message, true))),
+                  Effect.andThen(
+                    Effect.fail(
+                      new TaskFailed({
+                        message: error.message,
+                        presented: true,
+                      }),
+                    ),
+                  ),
                 ),
             );
             return run.runId;
@@ -487,7 +485,11 @@ export const serviceHandlers = TexraRpcs.toLayer(
           Effect.map(
             projects
               .open(workspace)
-              .pipe(Effect.mapError((error) => failed(error.message))),
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
             ({ session }) =>
               hosts.attach(session, capabilities).pipe(
                 // The session's surface is given once the window is held,
@@ -508,7 +510,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
             Effect.map((value) => ({
               ...(value !== undefined && { value: value as JsonValue }),
             })),
-            Effect.mapError(stateFailed),
+            Effect.mapError(
+              (error) => new ProjectStateFailed({ message: error.message }),
+            ),
           ),
         ),
       'state.set': ({ workspace, key, next, ifCurrent }) =>
@@ -533,7 +537,11 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   () => Effect.succeed(false),
                 ),
               );
-          }).pipe(Effect.mapError(stateFailed)),
+          }).pipe(
+            Effect.mapError(
+              (error) => new ProjectStateFailed({ message: error.message }),
+            ),
+          ),
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
@@ -559,7 +567,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
                     : Effect.fail(refusal),
                 ),
               ),
-              (error) => Effect.fail(failed(error.message)),
+              (error) =>
+                Effect.fail(new TaskFailed({ message: error.message })),
             );
           }),
         ),

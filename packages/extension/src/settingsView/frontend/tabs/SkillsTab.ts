@@ -76,8 +76,8 @@ export class SkillsTab extends LitElement {
   @property({ attribute: false }) disabledSkills: string[] = [];
   @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
     [];
-  @property({ attribute: false }) skills: SkillDisplayItem[] = [];
-  @property({ attribute: false }) issues: SkillDisplayIssue[] = [];
+  @property({ attribute: false }) skills: readonly SkillDisplayItem[] = [];
+  @property({ attribute: false }) issues: readonly SkillDisplayIssue[] = [];
   @state() private selectedKey: string | null = null;
 
   /** A delta, not the list: the host applies it to the list it holds, so a
@@ -197,7 +197,7 @@ export class SkillsTab extends LitElement {
         summary="Skill sources"
       >
         <div class="skill-sources">
-          ${ActiveSkillSourceScopeSchema.options.map((scope) => this.renderSourceToggle(scope))}
+          ${ActiveSkillSourceScopeSchema.literals.map((scope) => this.renderSourceToggle(scope))}
         </div>
       </wa-details>
     `;

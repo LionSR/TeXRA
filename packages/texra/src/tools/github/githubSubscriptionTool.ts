@@ -96,7 +96,6 @@ const GitHubSubscriptionInputSchema = Schema.Union([
       min_annotation_level: nullishWithDefault(
         Schema.Literals(['failure', 'warning', 'notice']),
         DEFAULT_CHECK_ANNOTATION_LEVEL,
-      ).describe(
         `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
       ),
     }),

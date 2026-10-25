@@ -34,7 +34,9 @@ const OpenPdfInputSchema = Schema.Struct({
   path: Schema.String.annotate({
     description: 'Path to the PDF file to open.',
   }),
-  preserve_focus: nullishWithDefault(Schema.Boolean, false).describe(
+  preserve_focus: nullishWithDefault(
+    Schema.Boolean,
+    false,
     'Whether the editor should preserve focus after opening.',
   ),
 });

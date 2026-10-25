@@ -2,7 +2,7 @@
  *  its terminal fact, its parent edge and the children its calls own, and
  *  the child loop's turn bookkeeping: database reads of committed rows. */
 
-import { Effect, Result, Stream } from 'effect';
+import { Effect, Result, Schema, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runHistoryRows } from '@agent/runtime/storedTurn';
@@ -64,7 +64,11 @@ export function readChildTurnState(
           if (row.type !== 'child.turn') continue;
           const turn = { key: row.attemptId, index: row.turnIndex };
           if (row.phase !== 'settled') active = turn;
-          else if (active?.key === turn.key && active.index === turn.index)
+          else if (
+            active !== null &&
+            active.key === turn.key &&
+            active.index === turn.index
+          )
             active = null;
           if (row.phase === 'settled') lastCompleted = turn;
         }
@@ -350,9 +354,12 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
     /** The workspace files the run edited, folded from its settled calls
      *  (`RunState.edited`). A run with no run history edited nothing here. */
-    readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
+    readWorkspaceFiles: (): Effect.Effect<
+      readonly string[],
+      DatabaseReadFailed
+    > =>
       Effect.map(folded, (state) =>
-        RunWorkspaceFilesSchema.parse(state?.edited ?? []),
+        Schema.decodeUnknownSync(RunWorkspaceFilesSchema)(state?.edited ?? []),
       ),
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): Effect.Effect<readonly string[], DatabaseReadFailed> =>

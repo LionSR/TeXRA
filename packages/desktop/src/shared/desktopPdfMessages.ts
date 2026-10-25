@@ -23,15 +23,19 @@ export const DesktopShowPdfMessageSchema = Schema.Struct({
   session: Schema.String.check(Schema.isMinLength(1)),
   command: Schema.Literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
   title: Schema.String,
-  pdfUrl:
-    Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url({ protocol: /^file$/ })` */.check(
-      Schema.makeFilter(
-        (url) => new URL(url).pathname.toLowerCase().endsWith('.pdf'),
-        {
-          message: 'Not a PDF',
-        },
-      ),
+  pdfUrl: Schema.String.check(
+    Schema.makeFilter(
+      (url) => {
+        const parsed = URL.parse(url);
+        if (parsed === null || parsed.protocol !== 'file:')
+          return 'Not a file: URL';
+        return parsed.pathname.toLowerCase().endsWith('.pdf')
+          ? undefined
+          : 'Not a PDF';
+      },
+      { message: 'a file: URL of a PDF' },
     ),
+  ),
   build: Schema.Number,
 });
 

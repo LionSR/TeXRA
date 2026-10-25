@@ -6,7 +6,7 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Effect, SynchronizedRef } from 'effect';
+import { Clock, Effect, Schema, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -63,7 +63,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   // The parent's agent, model and tools, opened on the call rather than on
   // a prompt: it reads no input files and renders no instruction.
   const definition = yield* prepareAgentDefinition({
-    config: AgentConfigSchema.parse({
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
       ...run.config,
       model: bound.modelId,
       instruction: '',

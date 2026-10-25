@@ -29,9 +29,6 @@ import {
 } from 'effect';
 
 import {
-  Cancelled,
-  Internal,
-  NotOwner,
   Rejected,
   ResumeRefused,
   RunFailure,
@@ -39,9 +36,7 @@ import {
   StateWriteFailed,
   ToolsRefused,
   TraceUnavailable,
-  Unavailable,
   type ITool,
-  type RequestError,
   type Run,
   type Session,
   type StateStore,
@@ -50,10 +45,7 @@ import {
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
 } from '@texra-ai/harness';
-import type {
-  EventsFrame,
-  RequestErrorWire,
-} from '@texra/shared/session/sessionFrames';
+import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 import { attachWindowHost } from './windowHost';
@@ -62,45 +54,15 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
+import { TaskRecordsFailed, type ProjectStateFailed } from './protocol';
 import type {
   TranscriptSubscription,
   SessionViewInput,
 } from '@texra-ai/harness/transcript';
 import type { RunEndResult } from '@texra-ai/harness/schemas';
-import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
-
-/** A refused request as the runtime spells it; a transport failure is a
- *  refusal worded for the user. */
-function requestError(
-  error:
-    | RequestErrorWire
-    | { readonly _tag: 'RpcClientError'; readonly message: string },
-): RequestError {
-  switch (error._tag) {
-    case 'NotOwner':
-      return new NotOwner({ runId: error.runId });
-    case 'Unavailable':
-      return new Unavailable({ runId: error.runId, reason: error.reason });
-    case 'Cancelled':
-      return new Cancelled();
-    case 'Rejected':
-      return new Rejected({
-        reason: error.reason,
-        ...(error.docsPage && { docsPage: error.docsPage }),
-      });
-    case 'Invalid':
-      return new Rejected({ reason: error.reason });
-    case 'Internal':
-      return new Internal({ ref: error.ref });
-    case 'RpcClientError':
-      return new Rejected({
-        reason: `The TeXRA service did not answer: ${error.message}`,
-      });
-  }
-}
 
 /** A service frame as the view inputs it carries (not its host snapshot). */
 function frameInputs(frame: EventsFrame): SessionViewInput[] {
@@ -134,22 +96,11 @@ const callService = <A, E>(
       : use(client),
   );
 
-/** A task's records the service could not answer for: it is offline (or
- *  did not answer), holds no such run, or its records would not read. */
-export class TaskRecordsUnavailable extends Schema.TaggedError<TaskRecordsUnavailable>()(
-  'TaskRecordsUnavailable',
-  {
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
-    reason: Schema.Literals(['offline', 'unknownRun', 'unreadable']),
-    message: Schema.String,
-  },
-) {}
-
 /**
  * A window's reads of its project's task records, answered by the service
  * from its own session: the run's saved setup, and what its transcript
- * exports read. The window opens no records of its own in service mode.
+ * exports read. The window opens no records of its own in service mode. A
+ * service that is offline, or did not answer, fails the read `offline`.
  */
 export const serviceRecords = (link: ServiceLink, workspace: string) => {
   const ask = <A>(
@@ -160,28 +111,20 @@ export const serviceRecords = (link: ServiceLink, workspace: string) => {
       A,
       TaskRecordsFailed | { readonly _tag: 'RpcClientError'; message: string }
     >,
-  ): Effect.Effect<A, TaskRecordsUnavailable> =>
+  ): Effect.Effect<A, TaskRecordsFailed> =>
     callService(
       link,
-      (message) =>
-        new TaskRecordsUnavailable({
-          runId,
-          reason: 'offline',
-          message,
-        }),
+      (message) => new TaskRecordsFailed({ runId, reason: 'offline', message }),
       (client) =>
         use(client).pipe(
-          Effect.mapError(
-            (error) =>
-              new TaskRecordsUnavailable({
-                runId,
-                ...(error._tag === 'TaskRecordsFailed'
-                  ? { reason: error.reason, message: error.message }
-                  : {
-                      reason: 'offline',
-                      message: `The TeXRA service did not answer: ${error.message}`,
-                    }),
-              }),
+          Effect.mapError((error) =>
+            error._tag === 'TaskRecordsFailed'
+              ? error
+              : new TaskRecordsFailed({
+                  runId,
+                  reason: 'offline',
+                  message: `The TeXRA service did not answer: ${error.message}`,
+                }),
           ),
         ),
     );
@@ -478,7 +421,15 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       (reason) => new Rejected({ reason }),
       (client) =>
         client['task.request']({ workspace, request: runtimeRequest }).pipe(
-          Effect.mapError(requestError),
+          // A transport failure is a refusal worded for the user; the
+          // service's own refusal arrives as the class it failed with.
+          Effect.mapError((error) =>
+            error._tag === 'RpcClientError'
+              ? new Rejected({
+                  reason: `The TeXRA service did not answer: ${error.message}`,
+                })
+              : error,
+          ),
         ),
     );
   /** The run the service admitted, as this window holds it: its end is the

@@ -37,9 +37,9 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) section: SettingsSectionName<'models'> =
     'keys';
   @property({ attribute: false }) providerKeyStatuses:
-    ProviderKeyStatus[] | null = null;
-  @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
-    [];
+    readonly ProviderKeyStatus[] | null = null;
+  @property({ attribute: false })
+  modelSelectionItems: readonly ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =

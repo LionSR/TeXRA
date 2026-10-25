@@ -22,7 +22,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import {
+  Cancelled,
+  Invalid,
+  Rejected,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -118,7 +124,7 @@ const DownEnvelopeSchema = Schema.Struct({
 /** What a request answers when its session closed before the host did. */
 const CANCELLED: Response['result'] = {
   ok: false,
-  error: { _tag: 'Cancelled' },
+  error: new Cancelled(),
 };
 
 export function installWebviewTransport(
@@ -164,10 +170,9 @@ export function installWebviewTransport(
       runtime.runSync(
         Deferred.succeed(settle, {
           ok: false,
-          error: {
-            _tag: 'Invalid',
+          error: new Invalid({
             reason: 'The host sent a malformed response.',
-          },
+          }),
         }),
       );
     } else if (kind === 'events' && generation === session.generation) {
@@ -243,10 +248,9 @@ export function installWebviewTransport(
                   session.pending.delete(message.requestId);
                   return {
                     ok: false,
-                    error: {
-                      _tag: 'Rejected',
+                    error: new Rejected({
                       reason: 'The host did not answer in time.',
-                    },
+                    }),
                   };
                 }),
             }),

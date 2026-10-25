@@ -1,7 +1,7 @@
 /** A run's registration, a resume's activation and a run's end: the rows
  *  its cell commits (record accessors: `runRecords.ts`). */
 
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Exit, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
@@ -66,7 +66,7 @@ export const activationRows = Effect.fn('activationRows')(function* (
 ): Effect.fn.Return<readonly SessionEventDraft[], Error> {
   const target = qualifyAggregateId('run', runId);
   const stored = yield* getRunRecords(session, runId).readRunRecord();
-  const next = RunRecordFieldsSchema.parse(
+  const next = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
     pinRunWorkingDirectory(
       stored?.model === undefined ? config : { ...config, model: stored.model },
       session.roots.workspace,
@@ -155,7 +155,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const config = {
       type: 'run.config',
       aggregateId: target,
-      config: RunRecordFieldsSchema.parse(pinned),
+      config: yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(pinned),
     } satisfies SessionEventDraft;
     const events: SessionEventDraft[] = [];
     if (!prior) {

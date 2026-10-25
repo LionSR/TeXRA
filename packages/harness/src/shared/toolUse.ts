@@ -6,12 +6,13 @@
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
-import { Predicate, Result, Schema, SchemaIssue } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import yaml from 'yaml';
 
 import {
   TOOL_CALL_STATUS,
   ToolUseLogSchema,
+  formatIssuesForDiagnostics,
   type NormalizedToolUse,
   type ToolUseLog,
 } from '@shared/schemas';
@@ -112,13 +113,11 @@ const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
  * report only the invalid field *paths*, never field values, so a partially
  * valid `read`/`bash` row cannot leak its full output into the diagnostic.
  */
-function malformedToolUseDiagnostic(
-  issues: readonly z.SchemaIssue.Issue[],
-): string {
+function malformedToolUseDiagnostic(error: Schema.SchemaError): string {
   const fields = [
     ...new Set(
-      issues
-        .map((issue) => issue.path.join('.'))
+      formatIssuesForDiagnostics(error)
+        .map((row) => row.path)
         .filter((path) => path.length > 0),
     ),
   ];
@@ -147,7 +146,7 @@ export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
   return {
     ...(typeof data.toolName === 'string' ? { toolName: data.toolName } : {}),
     ...('input' in data ? { input: data.input } : {}),
-    error: malformedToolUseDiagnostic(parsed.failure.issues),
+    error: malformedToolUseDiagnostic(parsed.failure),
     status:
       data.status === TOOL_CALL_STATUS.IN_PROGRESS
         ? TOOL_CALL_STATUS.IN_PROGRESS

@@ -4,7 +4,7 @@
  * the publisher and both folds switch over.
  *
  * Every arm nests its payload under one key rather than spreading `.shape`
- * into `durable()`. `durable` builds a plain `z.object`, and spreading a
+ * into `durable()`. `durable` builds a plain `Schema.Struct`, and spreading a
  * `strictObject`'s shape drops both its strictness and every refinement,
  * which would make the cross-field invariants below decorative at the one
  * boundary where persisted data is validated.
@@ -239,72 +239,58 @@ export const ModelMessagePayloadSchema = Schema.Union([
     ),
   }),
 ]).check(
-  Schema.makeFilter(
-    (p, ctx) => {
-      if (p.kind !== 'response') return;
-      // The editor arm has no local calls.
-      if (p.turn.kind !== 'http') {
-        if (p.calls.length > 0) {
-          ctx.addIssue({
-            code: 'custom',
+  Schema.makeFilter((p) => {
+    if (p.kind !== 'response') return;
+    // The editor arm has no local calls.
+    if (p.turn.kind !== 'http')
+      return p.calls.length > 0
+        ? {
             path: ['calls'],
-            message: 'An editor turn dispatches no local calls.',
-          });
-        }
-        return;
-      }
-      const local = p.turn.content.filter((part) => part.kind === 'local-call');
-      if (local.length !== p.calls.length) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['calls'],
-          message:
-            'Every local call of the response has exactly one dispatch fact.',
-        });
-        return;
-      }
-      const ids = new Set(p.calls.map((c) => c.callId));
-      // A duplicate has a primary to reuse, so it names a call that precedes it
-      // and is not itself a duplicate. Membership in `ids` alone would admit a
-      // call naming itself, which can never settle.
-      const earlierPrimaries = new Set<string>();
-      p.calls.forEach((call, index) => {
-        // Order, identity and tool: a fact that names another tool than the
-        // part it stands for is the one the resume rule would dispatch, so the
-        // provider's requested tool is bound here, not only its call id.
-        if (
-          call.callId !== local[index]?.providerCallId ||
-          call.toolName !== local[index]?.name
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['calls', index],
-            message:
-              'Dispatch facts follow the response call order, identity and tool.',
-          });
-        }
-        if (
-          call.duplicateOf != null &&
-          !earlierPrimaries.has(call.duplicateOf)
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['calls', index, 'duplicateOf'],
-            message:
-              'A duplicate names an earlier non-duplicate call of this same response.',
-          });
-        }
-        if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
-      });
-      if (ids.size !== p.calls.length) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['calls'],
-          message: 'Duplicate call id.',
+            issue: 'An editor turn dispatches no local calls.',
+          }
+        : undefined;
+    const local = p.turn.content.filter((part) => part.kind === 'local-call');
+    if (local.length !== p.calls.length) {
+      return {
+        path: ['calls'],
+        issue:
+          'Every local call of the response has exactly one dispatch fact.',
+      };
+    }
+    const issues: Schema.FilterIssue[] = [];
+    const ids = new Set(p.calls.map((c) => c.callId));
+    // A duplicate has a primary to reuse, so it names a call that precedes it
+    // and is not itself a duplicate. Membership in `ids` alone would admit a
+    // call naming itself, which can never settle.
+    const earlierPrimaries = new Set<string>();
+    p.calls.forEach((call, index) => {
+      // Order, identity and tool: a fact that names another tool than the
+      // part it stands for is the one the resume rule would dispatch, so the
+      // provider's requested tool is bound here, not only its call id.
+      if (
+        call.callId !== local[index]?.providerCallId ||
+        call.toolName !== local[index]?.name
+      ) {
+        issues.push({
+          path: ['calls', index],
+          issue:
+            'Dispatch facts follow the response call order, identity and tool.',
         });
       }
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((p, ctx) => { if (p.kind !== 'response') return; // The editor arm has no local calls. if (p.turn.kind !== 'http') { if (p.calls.length > 0) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'An editor turn dispatches no local calls.', }); } return; } const local = p.turn.content.filter((part) => part.kind === 'local-call'); if (local.length !== p.calls.length) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'Every local call of the response has exactly one dispatch fact.', }); return; } const ids = new Set(p.calls.map((c) => c.callId)); // A duplicate has a primary to reuse, so it names a call that precedes it // and is not itself a duplicate. Membership in `ids` alone would admit a // call naming itself, which can never settle. const earlierPrimaries = new Set<string>(); p.calls.forEach((call, index) => { // Order, identity and tool: a fact that names another tool than the // part it stands for is the one the resume rule would dispatch, so the // provider's requested tool is bound here, not only its call id. if ( call.callId !== local[index]?.providerCallId || call.toolName !== local[index]?.name ) { ctx.addIssue({ code: 'custom', path: ['calls', index], message: 'Dispatch facts follow the response call order, identity and tool.', }); } if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) { ctx.addIssue({ code: 'custom', path: ['calls', index, 'duplicateOf'], message: 'A duplicate names an earlier non-duplicate call of this same response.', }); } if (call.duplicateOf == null) earlierPrimaries.add(call.callId); }); if (ids.size !== p.calls.length) { ctx.addIssue({ code: 'custom', path: ['calls'], message: 'Duplicate call id.', }); } })` */,
-  ),
+      if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
+        issues.push({
+          path: ['calls', index, 'duplicateOf'],
+          issue:
+            'A duplicate names an earlier non-duplicate call of this same response.',
+        });
+      }
+      if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
+    });
+    if (ids.size !== p.calls.length) {
+      issues.push({ path: ['calls'], issue: 'Duplicate call id.' });
+    }
+    return issues;
+  }),
 );
 
 /* ----------------------------------------------------------- context.edit */
@@ -431,39 +417,34 @@ export const ToolResultPayloadSchema = Schema.Struct({
   result: SettledToolResultSchema,
   attachments: Schema.Array(SettledAttachmentSchema),
 }).check(
-  Schema.makeFilter(
-    (p, ctx) => {
-      if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['duplicateOf'],
-          message:
-            'A duplicate settlement names its primary, and only a duplicate does.',
-        });
-      }
-      // Both directions. The provider-facing status of the delivered tool group
-      // is derived from `result.status` alone, so a call the run recorded as
-      // failed, cancelled or skipped carrying an executed result is delivered to
-      // the model as a success. A duplicate is the one disposition that copies
-      // its primary's status, whichever that was.
-      if (
-        p.disposition !== 'duplicate' &&
-        (p.disposition === 'executed') !== (p.result.status === 'executed')
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['result'],
-          message:
-            'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
-        });
-      }
-      if (p.disposition === 'duplicate' && p.attachments.length > 0) {
-        ctx.addIssue({
-          code: 'custom',
-          message: "A duplicate never reapplies its primary's effects.",
-        });
-      }
-    } /* TODO(effect-schema): superRefine: return FilterOutput instead of ctx.addIssue; was `.superRefine((p, ctx) => { if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) { ctx.addIssue({ code: 'custom', path: ['duplicateOf'], message: 'A duplicate settlement names its primary, and only a duplicate does.', }); } // Both directions. The provider-facing status of the delivered tool group // is derived from `result.status` alone, so a call the run recorded as // failed, cancelled or skipped carrying an executed result is delivered to // the model as a success. A duplicate is the one disposition that copies // its primary's status, whichever that was. if ( p.disposition !== 'duplicate' && (p.disposition === 'executed') !== (p.result.status === 'executed') ) { ctx.addIssue({ code: 'custom', path: ['result'], message: 'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.', }); } if (p.disposition === 'duplicate' && p.attachments.length > 0) { ctx.addIssue({ code: 'custom', message: "A duplicate never reapplies its primary's effects.", }); } })` */,
-  ),
+  Schema.makeFilter((p) => {
+    const issues: Schema.FilterIssue[] = [];
+    if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
+      issues.push({
+        path: ['duplicateOf'],
+        issue:
+          'A duplicate settlement names its primary, and only a duplicate does.',
+      });
+    }
+    // Both directions. The provider-facing status of the delivered tool group
+    // is derived from `result.status` alone, so a call the run recorded as
+    // failed, cancelled or skipped carrying an executed result is delivered to
+    // the model as a success. A duplicate is the one disposition that copies
+    // its primary's status, whichever that was.
+    if (
+      p.disposition !== 'duplicate' &&
+      (p.disposition === 'executed') !== (p.result.status === 'executed')
+    ) {
+      issues.push({
+        path: ['result'],
+        issue:
+          'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
+      });
+    }
+    if (p.disposition === 'duplicate' && p.attachments.length > 0) {
+      issues.push("A duplicate never reapplies its primary's effects.");
+    }
+    return issues;
+  }),
 );
 export type ToolResultPayload = typeof ToolResultPayloadSchema.Type;

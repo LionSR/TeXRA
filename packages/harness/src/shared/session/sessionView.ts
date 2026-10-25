@@ -137,7 +137,7 @@ const RunViewSchema = Schema.Struct({
   lost: Schema.NullOr(Schema.String),
   // One table (`runStatusDisplay`) keys both, through the status and
   // substate or the interrupted reading; `@ui/copy/runStatus` words the key.
-  statusKey: Schema.Enum(RUN_STATUS_KEYS),
+  statusKey: Schema.Literals(RUN_STATUS_KEYS),
   tone: Schema.Enum(RUN_STATUS_TONE),
   /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */

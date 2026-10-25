@@ -1,7 +1,7 @@
-import { Result, Schema } from 'effect';
+import { Result, Schema, SchemaGetter } from 'effect';
 
 export const APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
-export const ApprovalPolicySchema = Schema.Enum(APPROVAL_POLICIES);
+export const ApprovalPolicySchema = Schema.Literals(APPROVAL_POLICIES);
 export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 /**
  * The tolerant input form of {@link ApprovalPolicySchema}: the one place
@@ -11,10 +11,15 @@ export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
  * strict enum: the `texra.approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the
- * dropdown's options are derived from that same `ZodEnum`.
+ * dropdown's options are derived from that same literal list.
  */
-const ApprovalPolicyInputSchema =
-  ApprovalPolicySchema; /* TODO(effect-schema): preprocess; was `z.preprocess((raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw), ApprovalPolicySchema)` */
+const ApprovalPolicyInputSchema = Schema.String.pipe(
+  Schema.decodeTo(Schema.String, {
+    decode: SchemaGetter.transform((raw) => raw.trim().toLowerCase()),
+    encode: SchemaGetter.passthrough(),
+  }),
+  Schema.decodeTo(ApprovalPolicySchema),
+);
 export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
 /**
  * The policy a `--no-input` run falls back to. Deliberately divergent from

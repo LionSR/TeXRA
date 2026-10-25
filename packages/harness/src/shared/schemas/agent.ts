@@ -1,4 +1,4 @@
-import { Effect, Schema, SchemaGetter, Struct } from 'effect';
+import { Effect, Result, Schema, SchemaGetter, Struct } from 'effect';
 
 import { ToolDefinitionSchema, type ToolDefinition } from './toolDefinition';
 
@@ -57,7 +57,9 @@ export function agentKeyOf(entry: { source: string; name: string }): string {
 export function agentName(key: string): string {
   const idx = key.indexOf(':');
   return idx >= 0 &&
-    Schema.decodeUnknownResult(AgentSourceSchema)(key.slice(0, idx)).success
+    Result.isSuccess(
+      Schema.decodeUnknownResult(AgentSourceSchema)(key.slice(0, idx)),
+    )
     ? key.slice(idx + 1)
     : key;
 }
@@ -104,16 +106,13 @@ export type AgentScanIssue = typeof AgentScanIssueSchema.Type;
  */
 const ToolsSchema = Schema.Array(
   Schema.Union([
-    Schema.String.pipe(
-      Schema.decodeTo(
-        Schema.Unknown /* TODO(effect-schema): transform target schema; was `.transform((name): ToolDefinition => ({ name }))` */,
-        {
-          decode: SchemaGetter.transform((name): ToolDefinition => ({ name })),
-          encode: SchemaGetter.forbidden(() => 'decode-only'),
-        },
-      ),
-    ),
     ToolDefinitionSchema,
+    Schema.String.pipe(
+      Schema.decodeTo(ToolDefinitionSchema, {
+        decode: SchemaGetter.transform((name): ToolDefinition => ({ name })),
+        encode: SchemaGetter.transform((tool) => tool.name),
+      }),
+    ),
   ]),
 );
 

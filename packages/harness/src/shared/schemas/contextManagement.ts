@@ -30,7 +30,12 @@ const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.mapFields(
 
 const TokensFreedDataSchema = ContextManagementDataBaseSchema.mapFields(
   Struct.assign({
-    action: ContextManagementAction.exclude(['max_tokens_reduced']),
+    action: ContextManagementAction.pick([
+      'compaction',
+      'clear_tool_uses',
+      'clear_thinking',
+      'truncation',
+    ]),
     tokensAfter: TokenCountSchema,
     utilizationAfter: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   }),

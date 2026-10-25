@@ -16,11 +16,10 @@
 import { randomUUID } from 'node:crypto';
 import { isPathWithin } from '@texra-ai/harness';
 
-import { ModelError, type ModelErrorFieldsSchema } from '@texra-ai/llm';
+import { ModelError, ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
   type Cause,
   Clock,
-  Data,
   Deferred,
   type Duration,
   Effect,
@@ -61,9 +60,7 @@ export class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
     message: Schema.String,
 
     /** A model's failure, as the window's model raised it. */
-    model: Schema.optional(
-      Schema.Unknown /* TODO(effect-schema): error field type z.infer<typeof ModelErrorFieldsSchema>; was `z.infer<typeof ModelErrorFieldsSchema>` */,
-    ),
+    model: Schema.optional(ModelErrorFieldsSchema),
   },
 ) {}
 
@@ -209,7 +206,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const ask = <A>(
     key: string,
     call: AnsweredCall,
-    schema: Schema.Codec<A>,
+    schema: Schema.Codec<A, unknown>,
     window = target(key, CALL_CAPABILITY[call.kind]),
   ): Effect.Effect<A, WindowCallFailed> =>
     Effect.gen(function* () {
@@ -267,7 +264,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const askStream = <A>(
     key: string,
     call: Extract<HostCall, { kind: 'lmStream' }>,
-    schema: Schema.Codec<A>,
+    schema: Schema.Codec<A, unknown>,
     window = target(key, CALL_CAPABILITY[call.kind]),
   ): Stream.Stream<A, WindowCallFailed> =>
     Stream.unwrap(

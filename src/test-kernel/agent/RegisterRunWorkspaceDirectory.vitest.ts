@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -14,7 +14,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace/root' });
-const baseConfig = AgentConfigSchema.parse({
+const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'chat',
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',

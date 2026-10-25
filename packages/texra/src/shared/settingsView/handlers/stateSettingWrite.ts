@@ -12,7 +12,7 @@
 //     the CLI writes only the rows its `/config` panel lists.
 
 import { Settings, type SettingHost } from '@texra-ai/harness';
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   type SettingsViewStateSettingEntry,
@@ -95,9 +95,10 @@ export function applyStateSettingUpdate<H extends SettingHost>(
       : TEXRA_SETTINGS.settingsViewByKey(key)
   ) as WritableEntry<H> | undefined;
   if (!entry) return Effect.succeed({ kind: 'ignored' });
-  const parsed = value === null ? null : entry.schema.safeParse(value);
-  if (parsed && !parsed.success) {
-    return Effect.succeed({ kind: 'rejected', entry, error: parsed.error });
+  const parsed =
+    value === null ? null : Schema.decodeUnknownResult(entry.schema)(value);
+  if (parsed && !Result.isSuccess(parsed)) {
+    return Effect.succeed({ kind: 'rejected', entry, error: parsed.failure });
   }
   if (
     entry.slot === 'config' &&
@@ -109,7 +110,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
   const persist =
     parsed === null
       ? Settings.reset(ports.stores, entry.key)
-      : Settings.set(ports.stores, entry.key, parsed.data);
+      : Settings.set(ports.stores, entry.key, parsed.success);
   return persist.pipe(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
@@ -118,7 +119,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
         const policy = (
           parsed === null
             ? yield* Settings.get(ports.stores, entry.key)
-            : parsed.data
+            : parsed.success
         ) as ApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),

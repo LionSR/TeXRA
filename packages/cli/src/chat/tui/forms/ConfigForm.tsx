@@ -7,17 +7,14 @@
 // Reads/writes go through the host-aware `Settings` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
-import { Schema } from 'effect';
+import { Result, Schema, SchemaAST } from 'effect';
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import {
-  settingEnumOptions,
-  settingSchemaWithoutPrefault,
-} from '@texra/shared/settingsView/settingRows';
+import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
 
 import {
   buildConfigCategoryItems,
@@ -48,29 +45,24 @@ type SettingInputResult =
 function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
-  const stored = settingSchemaWithoutPrefault(entry);
-  // A nullable setting edits as its value; Ctrl-R resets it to null.
-  const schema =
-    stored instanceof
-    Schema.Unknown /* TODO(effect-schema): z.ZodNullable; was `z.ZodNullable()` */
-      ? stored.unwrap()
-      : stored;
-  if (
-    schema instanceof
-    Schema.Unknown /* TODO(effect-schema): z.ZodBoolean; was `z.ZodBoolean()` */
-  )
-    return 'boolean';
-  if (
-    schema instanceof
-    Schema.Unknown /* TODO(effect-schema): z.ZodNumber; was `z.ZodNumber()` */
-  )
-    return 'number';
-  if (
-    schema instanceof
-    Schema.Unknown /* TODO(effect-schema): z.ZodString; was `z.ZodString()` */
-  )
-    return 'string';
-  return 'readonly';
+  // The schema's node is its value side, the row's default attached as its
+  // stored form, so the node names what the value is. A nullable setting
+  // (`NullOr`, a union with `Null`) edits as its value; Ctrl-R resets it to
+  // null.
+  const node = entry.schema.ast;
+  const valueNode = SchemaAST.isUnion(node)
+    ? node.types.find((member) => !SchemaAST.isNull(member))
+    : node;
+  switch (valueNode?._tag) {
+    case 'Boolean':
+      return 'boolean';
+    case 'Number':
+      return 'number';
+    case 'String':
+      return 'string';
+    default:
+      return 'readonly';
+  }
 }
 
 /**
@@ -102,13 +94,10 @@ function validateSettingInput(
   const coerced = coerceSettingInput(raw, isNumber);
   if (!coerced.ok) return coerced;
 
-  const parsed = entry.schema.safeParse(coerced.value);
-  if (parsed.success) return { ok: true, value: parsed.data };
+  const parsed = Schema.decodeUnknownResult(entry.schema)(coerced.value);
+  if (Result.isSuccess(parsed)) return { ok: true, value: parsed.success };
 
-  return {
-    ok: false,
-    message: parsed.error.issues.at(0)?.message ?? 'Invalid setting value.',
-  };
+  return { ok: false, message: parsed.failure.message };
 }
 
 function formatSettingValue(value: unknown): string {
@@ -235,7 +224,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
   const resetEntry = (entry: SurfacedSettingEntry): void => {
-    runWrite(entry, entry.schema.parse(undefined), () =>
+    runWrite(entry, Schema.decodeUnknownSync(entry.schema)(undefined), () =>
       props.resetValue(entry),
     );
   };

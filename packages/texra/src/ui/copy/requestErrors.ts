@@ -2,11 +2,10 @@
  * How a failed runtime request reads in every renderer: the progress view,
  * the desktop and the terminal print this one sentence for each error kind.
  */
-import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
+import type { RequestError } from '@texra-ai/harness/schemas';
 
-/** A failed request in words. A tagged `RequestError` has the same fields as
- *  its wire shape, so either one can be passed. */
-export function requestErrorText(error: RequestErrorWire): string {
+/** A failed request in words. */
+export function requestErrorText(error: RequestError): string {
   switch (error._tag) {
     case 'Cancelled':
       return 'The request was cancelled.';

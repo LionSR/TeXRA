@@ -19,6 +19,9 @@
  * (the default over http). Both are externally authored, so both pass the
  * same `parseTraceData` boundary.
  */
+import { Result, Schema } from 'effect';
+
+import { Rejected } from '@texra-ai/harness/schemas';
 import {
   UpMessageSchema,
   type DownMessage,
@@ -72,12 +75,12 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
   let state: unknown;
   const bridge: HostBridgeApi = {
     postMessage(message) {
-      const parsed = UpMessageSchema.safeParse(message);
-      if (!parsed.success) {
+      const parsed = Schema.decodeUnknownResult(UpMessageSchema)(message);
+      if (Result.isFailure(parsed)) {
         console.warn('[trace-viewer] unrecognized shell message', message);
         return;
       }
-      const up = parsed.data;
+      const up = parsed.success;
       switch (up.kind) {
         case 'subscribe':
           document.then(
@@ -104,10 +107,9 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
             requestId: up.requestId,
             result: {
               ok: false,
-              error: {
-                _tag: 'Rejected',
+              error: new Rejected({
                 reason: 'An exported trace is read-only.',
-              },
+              }),
             },
           });
           return;

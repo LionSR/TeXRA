@@ -40,11 +40,13 @@ import {
   Deferred,
   Effect,
   Exit,
-  Scope,
   Fiber,
   type FileSystem,
   Layer,
   type Path,
+  Result,
+  Schema,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -267,9 +269,9 @@ vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
 const SELF = '["test-host",4242,"self-start"]';
 const OTHER = '["test-host",4343,"other-start"]';
 /** The run every case here is about; one id, the key of its one aggregate. */
-const RUN = RunIdSchema.parse('ab12cd');
-const OLDER = RunIdSchema.parse('ab12ce');
-const NEWER = RunIdSchema.parse('ef56ab');
+const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
+const OLDER = Schema.decodeUnknownSync(RunIdSchema)('ab12ce');
+const NEWER = Schema.decodeUnknownSync(RunIdSchema)('ef56ab');
 
 /** Wait on the fold's level until it holds a view `ready` accepts: the ref
  *  replays its current value on subscribe, so a view already there ends the
@@ -562,7 +564,8 @@ describe('session events and view', () => {
         const db = yield* Database;
         const events = yield* SessionEvents;
         const oldParent = qualifyAggregateId('run', RUN);
-        const newParentId = RunIdSchema.parse('aabbccdd1122');
+        const newParentId =
+          Schema.decodeUnknownSync(RunIdSchema)('aabbccdd1122');
         const newParent = qualifyAggregateId('run', newParentId);
         const inquiry = qualifyAggregateId(
           'plugin',
@@ -781,7 +784,7 @@ describe('session events and view', () => {
       // Every listing row is a wire-valid event: the webview parses the
       // replay frame whole and drops it on one bad seq.
       const rows = yield* log.readListing();
-      const frame = DownMessageSchema.safeParse({
+      const frame = Schema.decodeUnknownResult(DownMessageSchema)({
         kind: 'events',
         session: 'k',
         generation: 0,
@@ -805,8 +808,8 @@ describe('session events and view', () => {
         },
       });
       expect(
-        frame.success,
-        frame.success ? '' : JSON.stringify(frame.error.issues, null, 1),
+        Result.isSuccess(frame),
+        Result.isSuccess(frame) ? '' : frame.failure.message,
       ).toBe(true);
       // A run born after the build enters through its own row alone,
       // above the reserved space, so a renderer attached at open sees it
@@ -849,7 +852,7 @@ describe('Sessions owner', () => {
         const db = yield* Database;
         const view = yield* SessionViewService;
         const local = yield* SubscriptionRef.make(
-          LocalRuntimeStateSchema.parse({
+          Schema.decodeUnknownSync(LocalRuntimeStateSchema)({
             self: [OTHER],
             dead: [],
             unreadable: [],
@@ -938,7 +941,7 @@ describe('Sessions owner', () => {
           session: () => session,
           log: { ...db, removeRun, detach: events.detach },
           local: yield* SubscriptionRef.make(
-            LocalRuntimeStateSchema.parse({
+            Schema.decodeUnknownSync(LocalRuntimeStateSchema)({
               self: [SELF],
               dead: [],
               unreadable: [],
@@ -1199,7 +1202,7 @@ describe('Sessions owner', () => {
         publishTestRows(session, [runStart]);
         yield* session.log.settled;
         // A trace row on a run with no `run.start` is refused whole.
-        const unborn = RunIdSchema.parse('fe12dc');
+        const unborn = Schema.decodeUnknownSync(RunIdSchema)('fe12dc');
         session.log.publish(unborn, {
           type: 'log',
           level: 'info',
@@ -1259,7 +1262,7 @@ describe('Sessions owner', () => {
         yield* Effect.promise(() =>
           vi.waitFor(() => expect(requestIds()).toEqual([])),
         );
-        const settled = RunIdSchema.parse('aa0001');
+        const settled = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
         track(session, settled);
         // The run completes: its driver untracks it as it unwinds.
         untrackRun(session.runs, settled);
@@ -1269,7 +1272,7 @@ describe('Sessions owner', () => {
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
         releaseChild = registryOf(session.runs).reserveChildActivation({
-          runId: RunIdSchema.parse('aa0002'),
+          runId: Schema.decodeUnknownSync(RunIdSchema)('aa0002'),
           launchParent: null,
           retainsTerminalParent: true,
           interrupt,
@@ -1293,7 +1296,7 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const root = '/workspace/owner/stop-defect';
         const session = yield* open(root);
-        const runId = RunIdSchema.parse('aa0005');
+        const runId = Schema.decodeUnknownSync(RunIdSchema)('aa0005');
         track(session, runId);
         vi.spyOn(session.runs, 'stop').mockReturnValue({
           accepted: () => false,
@@ -1314,7 +1317,7 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/abandoned');
         // A run whose driver takes the stop and never unwinds.
-        const slow = RunIdSchema.parse('aa0003');
+        const slow = Schema.decodeUnknownSync(RunIdSchema)('aa0003');
         registryOf(session.runs).reserveChildActivation({
           runId: slow,
           launchParent: null,
@@ -2238,7 +2241,10 @@ describe('the session event table and its one publisher', () => {
             runStart,
             {
               ...child,
-              parent: { id: RunIdSchema.parse('ffff00'), callId: null },
+              parent: {
+                id: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
+                callId: null,
+              },
             },
           ]),
         );
@@ -2274,7 +2280,7 @@ describe('the session event table and its one publisher', () => {
               ...child,
               aggregateId: qualifyAggregateId(
                 'run',
-                RunIdSchema.parse('ab12d0'),
+                Schema.decodeUnknownSync(RunIdSchema)('ab12d0'),
               ),
             },
           ]),
@@ -2408,7 +2414,7 @@ describe('the session event table and its one publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           model: 'test-model',
         });
         const configured: SessionEventDraft = {
@@ -2760,7 +2766,10 @@ describe('the session event table and its one publisher', () => {
         const db = yield* Database;
         const id = qualifyAggregateId('run', RUN);
         const other = qualifyAggregateId('run', OLDER);
-        const absent = qualifyAggregateId('run', RunIdSchema.parse('ab99ff'));
+        const absent = qualifyAggregateId(
+          'run',
+          Schema.decodeUnknownSync(RunIdSchema)('ab99ff'),
+        );
         const rows = yield* db.appendAll([
           runStart,
           olderStart,
@@ -2874,7 +2883,9 @@ describe('the session event table and its one publisher', () => {
         expect(
           (yield* Effect.flip(
             first.appendAll([
-              thread({ parentRunId: RunIdSchema.parse('ffff00') }),
+              thread({
+                parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
+              }),
             ]),
           ))._tag,
         ).toBe('DatabaseWriteFailed');

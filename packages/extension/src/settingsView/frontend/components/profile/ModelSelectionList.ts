@@ -43,12 +43,14 @@ import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.
 interface ProviderGroup {
   provider: string;
   displayName: string;
-  current: ModelSelectionItem[];
-  deprecated: ModelSelectionItem[];
+  current: readonly ModelSelectionItem[];
+  deprecated: readonly ModelSelectionItem[];
 }
 
 /** Stable sort: fast-first-response models bubble to the top of their provider. */
-function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
+function sortFastFirst(
+  items: readonly ModelSelectionItem[],
+): readonly ModelSelectionItem[] {
   return items.toSorted(
     (a, b) => Number(Boolean(b.isFast)) - Number(Boolean(a.isFast)),
   );
@@ -77,11 +79,11 @@ export class ModelSelectionList extends LitElement {
     modelSelectionListStyles,
   ];
 
-  @property({ attribute: false }) models: ModelSelectionItem[] = [];
+  @property({ attribute: false }) models: readonly ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
   /** Null until the profile state arrives; a group then shows no key icon. */
   @property({ attribute: false }) providerKeyStatuses:
-    ProviderKeyStatus[] | null = null;
+    readonly ProviderKeyStatus[] | null = null;
 
   @property({ type: Boolean, attribute: 'prefer-short-model-names' })
   preferShortModelNames = false;

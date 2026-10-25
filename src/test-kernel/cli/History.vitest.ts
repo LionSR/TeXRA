@@ -9,7 +9,7 @@ import '@test/support/cliInitPlatformMock';
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { it } from '@effect/vitest';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -101,7 +101,7 @@ import {
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
-const config = AgentConfigSchema.parse(
+const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   asDocumentTask({
     agent: 'correct',
     model: 'deepseek/deepseek-v4-flash',
@@ -136,7 +136,7 @@ function historyEntries() {
 function toolUseAgentConfig(
   overrides: Record<string, unknown> = {},
 ): typeof config {
-  return AgentConfigSchema.parse({
+  return Schema.decodeUnknownSync(AgentConfigSchema)({
     ...config,
     script: null,
     inputFiles: [],

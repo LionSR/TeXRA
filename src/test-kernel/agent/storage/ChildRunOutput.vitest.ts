@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
@@ -50,7 +50,7 @@ beforeEach(async () => {
 /** The child's declared files, as its documents report them. */
 function workflowRounds(absolutePath: string): RoundOutput[] {
   return [
-    RoundOutputSchema.parse({
+    Schema.decodeUnknownSync(RoundOutputSchema)({
       round: 1,
       outputs: [
         {
@@ -112,7 +112,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       {
         type: 'run.config',
         aggregateId: qualifyAggregateId('run', childRunId),
-        config: AgentConfigSchema.parse({
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'draft',
           script: {
             code: 'return 1;',

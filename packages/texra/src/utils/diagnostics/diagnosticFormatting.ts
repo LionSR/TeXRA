@@ -76,7 +76,7 @@ const SEVERITY_CONFIG: Record<
 
 /** Count diagnostics by severity level. */
 export function countBySeverity(
-  diagnostics: GenericDiagnostic[],
+  diagnostics: readonly GenericDiagnostic[],
 ): SeverityCounts {
   const counts: SeverityCounts = { errors: 0, warnings: 0, info: 0, hints: 0 };
   for (const d of diagnostics) {
@@ -105,7 +105,9 @@ export function formatCounts(counts: SeverityCounts): string {
  *   10: [error] Unexpected token
  *   15: [warning] Unused variable
  */
-export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
+export function formatMessageList(
+  diagnostics: readonly GenericDiagnostic[],
+): string {
   return diagnostics
     .map((d) => {
       const line = d.range.start.line + 1;
@@ -124,7 +126,7 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
  * **Line 20:** Missing semicolon
  */
 export function formatGroupedSections(
-  diagnostics: GenericDiagnostic[],
+  diagnostics: readonly GenericDiagnostic[],
 ): string {
   // A diagnostic with an unrecognized severity groups under `undefined` and is
   // deliberately dropped: only the three known section titles are rendered.

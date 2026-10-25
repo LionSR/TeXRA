@@ -63,13 +63,16 @@ const ArxivDownloadInputSchema = Schema.Struct({
   id: Schema.String.annotate({
     description: 'arXiv identifier or URL for the source archive.',
   }),
-  autoIndent: nullishWithDefault(Schema.Boolean, true).describe(
+  autoIndent: nullishWithDefault(
+    Schema.Boolean,
+    true,
     'Auto-indent extracted TeX files after downloading source.',
   ),
   destination: nullishWithDefault(
     Schema.Literals(['root', 'references']),
     'references',
-  ).describe('Where to extract the source: workspace root or References/.'),
+    'Where to extract the source: workspace root or References/.',
+  ),
 });
 
 type ArxivDownloadInput = typeof ArxivDownloadInputSchema.Type;

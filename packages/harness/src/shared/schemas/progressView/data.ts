@@ -139,7 +139,7 @@ export type ToolUseLog = typeof ToolUseLogSchema.Type;
  * The flat, renderer-friendly tool-use view `normalizeToolUse`
  * derives from a parsed {@link ToolUseLog}. Declared as a
  * plain type, not a schema: the producer builds this shape field-by-field and
- * nothing ever parses it, so a Zod schema would own no boundary.
+ * nothing ever parses it, so a schema would own no boundary.
  */
 export type NormalizedToolUse = {
   toolName: string;

@@ -38,8 +38,7 @@
     "semver": "^7.8.5",
     "sortablejs": "^1.15.7",
     "tar": "catalog:",
-    "which": "catalog:",
-    "zod": "catalog:"
+    "which": "catalog:"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",

@@ -647,8 +647,7 @@
     "lru-cache": "catalog:",
     "nanoid": "catalog:",
     "strip-ansi": "^7.2.0",
-    "vite": "^8.3.4",
-    "zod": "catalog:"
+    "vite": "^8.3.4"
   },
   "scripts": {
     "clean:dist": "node ../../scripts/clean-extension-dist.mjs",

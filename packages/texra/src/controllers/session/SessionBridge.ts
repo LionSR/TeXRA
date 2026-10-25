@@ -29,7 +29,6 @@
  */
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Fiber,
@@ -44,18 +43,20 @@ import {
   type HostRequestFailure,
   Internal,
   isRequestRefusal,
-  type RequestError,
   type Session,
   withLogChannel,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  Invalid,
+  RequestErrorSchema,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   UpMessageSchema,
   type DownMessage,
   type HostOutcome,
-  type RequestErrorWire,
   type Response,
   type Subscribe,
   type SurfaceActionMessage,
@@ -123,28 +124,9 @@ class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedErr
   }
 }
 
-function wireError(error: RequestError): RequestErrorWire {
-  switch (error._tag) {
-    case 'NotOwner':
-      return { _tag: 'NotOwner', runId: error.runId };
-    case 'Unavailable':
-      return {
-        _tag: 'Unavailable',
-        runId: error.runId,
-        reason: error.reason,
-      };
-    case 'Cancelled':
-      return { _tag: 'Cancelled' };
-    case 'Rejected':
-      return {
-        _tag: 'Rejected',
-        reason: error.reason,
-        ...(error.docsPage && { docsPage: error.docsPage }),
-      };
-    case 'Internal':
-      return { _tag: 'Internal', ref: error.ref };
-  }
-}
+/** A request error as the wire carries it: the class's fields, which the
+ *  surface decodes back (a `postMessage` keeps no Error prototype). */
+const wireError = Schema.encodeSync(RequestErrorSchema);
 
 /** One attached port: its transport, its scopes, and the framer in flight. */
 interface PortEntry {
@@ -324,7 +306,7 @@ export class SessionBridge {
         const envelope = Schema.decodeUnknownResult(RequestEnvelopeSchema)(
           message,
         );
-        const reason = `Unparseable message from port ${port.id}: ${parsed.error.message}`;
+        const reason = `Unparseable message from port ${port.id}: ${parsed.failure.message}`;
         return Effect.logWarning(reason).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
@@ -334,7 +316,10 @@ export class SessionBridge {
                 kind: 'response',
                 session: envelope.success.session,
                 requestId: envelope.success.requestId,
-                result: { ok: false, error: { _tag: 'Invalid', reason } },
+                result: {
+                  ok: false,
+                  error: wireError(new Invalid({ reason })),
+                },
               });
             }),
           ),

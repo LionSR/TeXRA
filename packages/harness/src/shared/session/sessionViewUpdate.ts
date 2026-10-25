@@ -20,7 +20,7 @@
  * costs the chunk, never the row's text.
  */
 
-import { Equal } from 'effect';
+import { Equal, type Types } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -212,7 +212,7 @@ function reconcileExistence(
 }
 
 /** The session's run counts by group, kept as they were when unchanged. */
-function countGroups(view: SessionView): void {
+function countGroups(view: ViewDraft): void {
   const rollup = { running: 0, waiting: 0, interrupted: 0 };
   for (const run of view.runs.values()) {
     if (run.group !== 'recent') rollup[run.group] += 1;
@@ -252,11 +252,14 @@ function emptySessionState(): SessionState {
   };
 }
 
+/** The view one `apply` call builds: a fresh envelope, written field by field. */
+type ViewDraft = Types.Mutable<SessionView>;
+
 /** One input's work. */
 interface Update {
   /** The view being built: a fresh envelope whose containers are shared
    *  with the previous view until written. */
-  readonly view: SessionView;
+  readonly view: ViewDraft;
   readonly state: SessionState;
   /** The containers this `apply` call created, written in place. Any other
    *  belongs to a view already returned and is copied on its first write. */
@@ -265,10 +268,20 @@ interface Update {
 
 /** `map` if this call created it, else a copy this call owns, which the
  *  caller stores back. */
-function writable<K, V>(u: Update, map: Map<K, V>): Map<K, V> {
-  if (u.owned.has(map)) return map;
+function writable<K, V>(u: Update, map: ReadonlyMap<K, V>): Map<K, V> {
+  // cast: a map in `owned` is this call's own copy; no published view holds it.
+  if (u.owned.has(map)) return map as Map<K, V>;
   const copy = new Map(map);
   u.owned.add(copy);
+  return copy;
+}
+
+/** `map` without `key`, as a map this call owns; a map that never held the
+ *  key is left alone, so a delete that removes nothing copies nothing. */
+function without<K, V>(u: Update, map: ReadonlyMap<K, V>, key: K) {
+  if (!map.has(key)) return map;
+  const copy = writable(u, map);
+  copy.delete(key);
   return copy;
 }
 
@@ -384,7 +397,7 @@ function withoutId(ids: readonly RunId[], id: RunId): RunId[] {
 /** Root first. A parent edge always names a run the view holds: `relink`
  *  makes a run whose parent the view lacks top-level. */
 function ancestorsOf(view: SessionView, run: RunView): RunView['ancestors'] {
-  const chain: RunView['ancestors'] = [];
+  const chain: RunView['ancestors'][number][] = [];
   let parentId = run.parentId;
   while (parentId !== null) {
     const parent = view.runs.get(parentId);
@@ -889,7 +902,7 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
  *  opened them: this run's rebuilt from its rows, every other run's left
  *  where they are. Identity is (runId, requestId), so the dedupe of
  *  already-listed requests is scoped to this run, never another's. */
-function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
+function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
   const open = Object.entries(rows.requests).filter(([, r]) => !r.decision);
   const ids = new Set(open.map(([requestId]) => requestId));
   const kept = view.requests.filter(
@@ -910,10 +923,7 @@ function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
   const { view } = u;
   const messages = rows.followUps.filter((f) => f.control === undefined);
   if (messages.length === 0) {
-    if (view.queuedFollowUps.has(runId)) {
-      view.queuedFollowUps = writable(u, view.queuedFollowUps);
-      view.queuedFollowUps.delete(runId);
-    }
+    view.queuedFollowUps = without(u, view.queuedFollowUps, runId);
     return;
   }
   view.queuedFollowUps = writable(u, view.queuedFollowUps).set(
@@ -1079,22 +1089,13 @@ function removeRun(u: Update, runId: RunId): boolean {
   const { view, state } = u;
   const run = view.runs.get(runId);
   if (!run) return false;
-  view.runs = writable(u, view.runs);
-  view.runs.delete(run.id);
-  // A map that never held this run is left alone: a delete that removes
-  // nothing must not copy the map it publishes.
-  if (view.policy.has(run.id)) {
-    view.policy = writable(u, view.policy);
-    view.policy.delete(run.id);
-  }
-  if (view.queuedFollowUps.has(run.id)) {
-    view.queuedFollowUps = writable(u, view.queuedFollowUps);
-    view.queuedFollowUps.delete(run.id);
-  }
+  view.runs = without(u, view.runs, run.id);
+  view.policy = without(u, view.policy, run.id);
+  view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
   state.rows.delete(run.id);
   state.transcripts.delete(run.id);
-  view.transcriptSeq = writable(u, view.transcriptSeq);
-  view.transcriptSeq.delete(qualifyAggregateId('run', run.id));
+  const aggregateId = qualifyAggregateId('run', run.id);
+  view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
@@ -1152,8 +1153,7 @@ function applySubscriptions(
   }
   for (const id of [...view.transcriptSeq.keys()]) {
     if (subscribed.has(id)) continue;
-    view.transcriptSeq = writable(u, view.transcriptSeq);
-    view.transcriptSeq.delete(id);
+    view.transcriptSeq = without(u, view.transcriptSeq, id);
     const runId = runIdOf(id);
     const run = runId === null ? undefined : view.runs.get(runId);
     if (!run) continue;

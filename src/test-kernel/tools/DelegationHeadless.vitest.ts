@@ -23,7 +23,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber, Stream } from 'effect';
+import { Effect, Exit, Fiber, Schema, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
@@ -112,7 +112,7 @@ const delegateReview = (
           run: {
             runId: parent.runId,
             session: parent.session,
-            config: AgentConfigSchema.parse({
+            config: Schema.decodeUnknownSync(AgentConfigSchema)({
               agent: 'assistant',
               model: MODEL,
             }),

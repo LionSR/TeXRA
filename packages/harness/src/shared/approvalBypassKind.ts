@@ -35,14 +35,17 @@ export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
 export const ApprovalPolicySnapshotSchema = Schema.Struct({
   /** A human's `on` or `off` per kind, or `parent`: derived when a resume
    *  ended an ancestor's goal grant, following the ancestry's human values. */
-  own: Schema.Unknown /* TODO(effect-schema): z.partialRecord; was `z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), z.enum(['on', 'off', 'parent']))` */,
+  own: Schema.Record(
+    Schema.Literals(APPROVAL_BYPASS_KINDS),
+    Schema.optionalKey(Schema.Literals(['on', 'off', 'parent'])),
+  ),
   /** The kinds the run's own goal grants it, over its own values, until the
    *  goal ends, a human decides the kind, or a resume ends the goal. */
-  goal: Schema.Array(Schema.Enum(APPROVAL_BYPASS_KINDS)),
+  goal: Schema.Array(Schema.Literals(APPROVAL_BYPASS_KINDS)),
   /** The most permissive policy the run and its descendants run under: a
    *  launch that asked for a stricter policy than the project's narrows it
    *  for this run only, never widened (`policyLimit`). */
-  limit: Schema.optional(Schema.Enum(APPROVAL_POLICY_LIMITS)),
+  limit: Schema.optional(Schema.Literals(APPROVAL_POLICY_LIMITS)),
 });
 export type ApprovalGrants = typeof ApprovalPolicySnapshotSchema.Type;
 

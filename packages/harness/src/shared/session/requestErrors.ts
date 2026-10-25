@@ -1,7 +1,7 @@
 /**
- * How a runtime request fails. Yieldable `Data.TaggedError`s in the
- * runtime; a bridge that parses requests adds its `Invalid` arm and the
- * wire shape with it. A request
+ * How a runtime request fails. Yieldable `Schema.TaggedError`s in the
+ * runtime, carried over the RPC edge as themselves ({@link RequestErrorSchema});
+ * `Invalid` is the arm a bridge that parses requests answers with. A request
  * naming a stream the runtime no longer has is `Unavailable`, never a
  * defect: with two surfaces on one session, one can act from a view that has
  * not yet folded the other's `run.removed`, and a defect would bypass the
@@ -9,25 +9,18 @@
  */
 import { Schema } from 'effect';
 
-import type { RunId } from '@shared/schemas';
-
-import { DatabaseClaimRefused, heldElsewhereBy } from './database';
+import { RunIdSchema } from '@shared/schemas';
 
 /** Another live owner holds the run this request would act on. */
 export class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
-  runId:
-    Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+  runId: RunIdSchema,
 }) {}
 
 /** The stream, request, or run the request names is gone or not in a state
  *  that can take it. */
 export class Unavailable extends Schema.TaggedError<Unavailable>()(
   'Unavailable',
-  {
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
-    reason: Schema.String,
-  },
+  { runId: RunIdSchema, reason: Schema.String },
 ) {}
 
 /** The user cancelled the operation. No refusal notice is needed. */
@@ -48,34 +41,21 @@ export class Internal extends Schema.TaggedError<Internal>()('Internal', {
   ref: Schema.String,
 }) {}
 
-export type RequestError =
-  NotOwner | Unavailable | Cancelled | Rejected | Internal;
+/** The request could not be parsed: a bridge's answer, never the runtime's. */
+export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
+  reason: Schema.String,
+}) {}
 
-/**
- * How a session write the request made fails it: `NotOwner` when another
- * owner holds the run ({@link heldElsewhereBy}); `Rejected`, in the claim's
- * own words, when an owner could not be proven to have exited (as a
- * deletion rejects it); else the `Unavailable` that `unavailable`
- * describes, a closed run's included.
- */
-export function writeRejection(
-  unavailable: ConstructorParameters<typeof Unavailable>[0],
-): (error: unknown) => RequestError {
-  return (error) =>
-    heldElsewhereBy(error) === null
-      ? new Unavailable(unavailable)
-      : claimRejection(unavailable.runId)(error);
-}
-
-/** How a claim the request needed fails it: `Rejected`, in the claim's own
- *  words, when its holder could not be proven to have exited; else
- *  `NotOwner`, another owner holding the run. */
-export const claimRejection =
-  (runId: RunId) =>
-  (error: unknown): RequestError =>
-    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
-      ? new Rejected({ reason: error.message })
-      : new NotOwner({ runId });
+/** The wire form of a request's failure: the classes themselves. */
+export const RequestErrorSchema = Schema.Union([
+  NotOwner,
+  Unavailable,
+  Cancelled,
+  Rejected,
+  Invalid,
+  Internal,
+]);
+export type RequestError = typeof RequestErrorSchema.Type;
 
 /**
  * How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds

@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -83,7 +83,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await mkdir(draftDir, { recursive: true });
     await writeFile(draftAbsolute, workspaceOriginal);
 
-    const runId = RunIdSchema.parse('a1a1a1a1a1a1');
+    const runId = Schema.decodeUnknownSync(RunIdSchema)('a1a1a1a1a1a1');
     const fileService = new RunFileService(runId, testWorkspaceRoots());
 
     await runFileServiceProgram(
@@ -119,7 +119,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
-    const runId = RunIdSchema.parse('b2b2b2b2b2b2');
+    const runId = Schema.decodeUnknownSync(RunIdSchema)('b2b2b2b2b2b2');
     const fileService = new RunFileService(runId, testWorkspaceRoots());
 
     await runFileServiceProgram(
@@ -155,7 +155,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, 'workspace\n');
 
-    const runId = RunIdSchema.parse('c3c3c3c3c3c3');
+    const runId = Schema.decodeUnknownSync(RunIdSchema)('c3c3c3c3c3c3');
     const runFile = path.join(
       runDirUnder(testWorkspaceRoots().storage, runId),
       'macros.sty',

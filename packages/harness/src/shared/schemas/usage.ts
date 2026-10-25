@@ -1,4 +1,4 @@
-import { Effect, Schema, Struct } from 'effect';
+import { Effect, Schema, Struct, type Types } from 'effect';
 
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
@@ -23,7 +23,12 @@ export type UsageRoute = typeof UsageRouteSchema.Type;
  * fallback. `api-key` is excluded because it is the route a decline falls
  * back to.
  */
-export const DeclinableUsageRouteSchema = UsageRouteSchema.exclude(['api-key']);
+export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
+  'chatgpt-subscription',
+  'xai-subscription',
+  'kimi-code-subscription',
+  'glm-coding-plan-subscription',
+]);
 
 export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 
@@ -44,10 +49,11 @@ export const TokenUsageStatsSchema = Schema.Struct({
 
 export type TokenUsageStats = typeof TokenUsageStatsSchema.Type;
 
-type EmptyUsageStats = Required<
-  Omit<TokenUsageStats, 'usageRoute' | 'usagePlan'>
-> &
-  Pick<TokenUsageStats, 'usageRoute' | 'usagePlan'>;
+/** A usage total under construction: every counter present and writable. */
+type EmptyUsageStats = Types.Mutable<
+  Required<Omit<TokenUsageStats, 'usageRoute' | 'usagePlan'>> &
+    Pick<TokenUsageStats, 'usageRoute' | 'usagePlan'>
+>;
 
 /** Returns zero-initialized usage stats. */
 export function emptyUsageStats(): EmptyUsageStats {
@@ -63,8 +69,13 @@ export function emptyUsageStats(): EmptyUsageStats {
 }
 
 /** The numeric counters of a usage row; the route and plan are not counted. */
-const USAGE_COUNTER_KEYS =
-  TokenUsageStatsSchema /* TODO(effect-schema): keyof; was `.keyof()` */.members; /* TODO(effect-schema): filter; was `.filter((key): key is Exclude<typeof key, 'usageRoute' | 'usagePlan'> => key !== 'usageRoute' && key !== 'usagePlan')` */
+type UsageCounterKey = Exclude<
+  keyof TokenUsageStats,
+  'usageRoute' | 'usagePlan'
+>;
+const USAGE_COUNTER_KEYS = Struct.keys(TokenUsageStatsSchema.fields).filter(
+  (key): key is UsageCounterKey => key !== 'usageRoute' && key !== 'usagePlan',
+);
 
 /** Whether usage stats are all zeros (effectively empty). */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
@@ -144,19 +155,19 @@ export const RunUsageTotalsSchema = Schema.Struct({
 
 export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
 
-/** `totals` summed field by field; the first input is the first's. */
-export function sumRunUsageTotals(
-  totals: readonly RunUsageTotals[],
-): RunUsageTotals {
-  const sum = Schema.decodeUnknownSync(RunUsageTotalsSchema)({});
-  for (const usage of totals)
-    for (const key of RunUsageTotalsSchema /* TODO(effect-schema): keyof; was `.keyof()` */.members)
-      if (key !== 'firstInputTokens') sum[key] += usage[key];
-  sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
-  return sum;
-}
-
 /** A run's usage before its first turn: every counter at its zero. */
 export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
   Schema.decodeUnknownSync(RunUsageTotalsSchema)({}),
 );
+
+/** `totals` summed field by field; the first input is the first's. */
+export function sumRunUsageTotals(
+  totals: readonly RunUsageTotals[],
+): RunUsageTotals {
+  const sum: Types.Mutable<RunUsageTotals> = { ...EMPTY_RUN_USAGE_TOTALS };
+  for (const usage of totals)
+    for (const key of Struct.keys(RunUsageTotalsSchema.fields))
+      if (key !== 'firstInputTokens') sum[key] += usage[key];
+  sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
+  return sum;
+}

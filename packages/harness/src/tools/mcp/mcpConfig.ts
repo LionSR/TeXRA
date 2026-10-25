@@ -108,7 +108,7 @@ export const readMcpConfig = (
     if (!Result.isSuccess(parsed))
       return yield* Effect.fail(
         new Error(
-          `${file} must be { "mcpServers": { ... } }: ${parsed.error.message}`,
+          `${file} must be { "mcpServers": { ... } }: ${parsed.failure.message}`,
         ),
       );
     return parseMcpServers(file, parsed.success.mcpServers);

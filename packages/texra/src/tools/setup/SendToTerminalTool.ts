@@ -23,13 +23,15 @@ const SendToTerminalInputSchema = Schema.Struct({
   // multi-step work as a single line.
   command: Schema.String.check(
     Schema.makeFilter((s) => !/[\r\n]/.test(s), {
-      error: 'command must not contain newline / carriage-return characters.',
+      message: 'command must not contain newline / carriage-return characters.',
     }),
   ).annotate({
     description:
       'The command to run inside the integrated terminal. One line; no embedded newlines.',
   }),
-  label: nullishWithDefault(Schema.String, 'setup').describe(
+  label: nullishWithDefault(
+    Schema.String,
+    'setup',
     `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
   ),
   timeout: nullishWithDefault(
@@ -37,7 +39,6 @@ const SendToTerminalInputSchema = Schema.Struct({
       Schema.isLessThanOrEqualTo(900_000),
     ),
     DEFAULT_TIMEOUT_MS,
-  ).describe(
     'Hard cap (ms) on how long to wait for the run. Defaults to 5 min.',
   ),
 });

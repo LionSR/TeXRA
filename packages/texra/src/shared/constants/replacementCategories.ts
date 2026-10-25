@@ -1,7 +1,7 @@
 /**
  * The universe of replacement-category names the persisted config accepts.
  *
- * One declaration, read two ways: `z.enum` validates persisted settings
+ * One declaration, read two ways: a literals schema validates persisted settings
  * against it and the LaTeX tab renders its checkboxes in this order, so the
  * order here is the settings UI's order, not the engine's.
  * `@replacement/engine` keys its rule tables by these names as a `Record`, so

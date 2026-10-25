@@ -9,7 +9,7 @@
  * `creator` agent's new agents therefore reach the selector without a
  * separate step, and one the user turned off stays off under any team.
  */
-import { Effect, Result } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   StateReadFailed,
@@ -59,7 +59,9 @@ export function readWorkspaceAgentsSelection(repoState: StateStore) {
   return Settings.state(
     repoState,
     WorkspaceStateKey.WORKSPACE_AGENTS,
-    WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
+    WorkspaceAgentsSelectionSchema.pipe(
+      Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
+    ),
   );
 }
 
@@ -77,7 +79,9 @@ function readHidden(
   purpose: 'read' | 'modify',
 ): Effect.Effect<Set<string>, StateReadFailed> {
   const key = WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS;
-  const schema = HiddenCustomAgentKeysSchema.prefault([]);
+  const schema = HiddenCustomAgentKeysSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  );
   if (purpose === 'read')
     return Effect.map(
       Settings.state(repoState, key, schema),
@@ -168,11 +172,15 @@ export function forgetHiddenAgent(
     repoState,
     Effect.asVoid(
       repoState.modify(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, (stored) => {
-        const hidden = HiddenCustomAgentKeysSchema.safeParse(stored);
+        const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
+          stored,
+        );
         // Absent or malformed (which every read reports): nothing to
         // forget, so the stored value stays.
         return Result.succeed(
-          hidden.success ? hidden.data.filter((k) => k !== key) : stored,
+          Result.isSuccess(hidden)
+            ? hidden.success.filter((k) => k !== key)
+            : stored,
         );
       }),
     ),

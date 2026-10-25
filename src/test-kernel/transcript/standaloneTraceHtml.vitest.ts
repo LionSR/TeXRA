@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Schema } from 'effect';
 import {
   qualifyAggregateId,
   DisplaySessionEventSchema,
@@ -16,7 +17,7 @@ function trace(message = 'hello'): TraceDocument {
   return {
     runId: RUN_ID,
     events: [
-      DisplaySessionEventSchema.parse({
+      Schema.decodeUnknownSync(DisplaySessionEventSchema)({
         aggregateId: qualifyAggregateId('run', RUN_ID),
         seq: 1,
         commit: 1,

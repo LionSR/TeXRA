@@ -84,7 +84,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
 });
 
 const UpdateConfigInputSchema = Schema.Struct({
-  key: Schema.Enum(UPDATABLE_KEY_LIST).annotate({
+  key: Schema.Literals(UPDATABLE_KEY_LIST).annotate({
     description: `Configuration key to update. Must be on the setup allowlist:\n${ALLOWLIST_TEXT}`,
   }),
   value: Schema.Unknown.annotate({
@@ -94,7 +94,6 @@ const UpdateConfigInputSchema = Schema.Struct({
   target: nullishWithDefault(
     Schema.Literals(['user', 'workspace']),
     'user',
-  ).describe(
     '"user" updates the global setting shared across workspaces; "workspace" scopes the change to the current workspace only.',
   ),
 });
@@ -105,12 +104,13 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   input: UpdateConfigInput,
 ) {
   const entry = catalogEntry(input.key);
-  const schema = settingSchemaWithoutPrefault(entry) as Schema.Top;
-  const parsed = Schema.decodeUnknownResult(schema)(input.value);
+  const parsed = Schema.decodeUnknownResult(
+    settingSchemaWithoutPrefault(entry),
+  )(input.value);
   if (!Result.isSuccess(parsed)) {
     return yield* Effect.fail(
       new ToolError(
-        `Value rejected for ${input.key}: ${parsed.error.message}. ${entry.description ?? ''}`,
+        `Value rejected for ${input.key}: ${parsed.failure.message}. ${entry.description ?? ''}`,
       ),
     );
   }

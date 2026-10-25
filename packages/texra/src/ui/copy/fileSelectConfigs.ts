@@ -15,7 +15,7 @@ import { ICON_NAMES } from '@ui/wa/iconNames';
 const FileSelectConfigSchema = Schema.Struct({
   type: DocumentFileTypeSchema,
   label: Schema.String,
-  icon: Schema.Enum(ICON_NAMES),
+  icon: Schema.Literals(ICON_NAMES),
   addOpenedLabel: Schema.String,
   emptyListLabel: Schema.String,
   selectListLabel: Schema.String,

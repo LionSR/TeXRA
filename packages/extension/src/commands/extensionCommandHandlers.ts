@@ -157,7 +157,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
       actions.showProgressView(options?.inPlace ?? false),
   ),
   'texra.setApiKey': definedHandler(
-    Schema.Tuple([Schema.optional(Schema.Enum(API_KEY_PROVIDER_IDS))]),
+    Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
     (actions: ExtensionCommandActions, provider?: ApiKeyProviderId) =>
       actions.setApiKey(provider),
   ),

@@ -329,7 +329,9 @@ export const executeSubagentInBand = (
     options.runId,
     Effect.gen(function* () {
       const definition = yield* prepareAgentDefinition({
-        config: AgentConfigSchema.parse(options.configPayload),
+        config: Schema.decodeUnknownSync(AgentConfigSchema)(
+          options.configPayload,
+        ),
         session: options.session,
         suppressErrorNotification: true,
       });

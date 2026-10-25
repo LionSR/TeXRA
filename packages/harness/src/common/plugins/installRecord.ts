@@ -28,13 +28,14 @@ const InstalledPluginsSchema = Schema.Array(InstalledPluginSchema);
 /** The record as its schema reads it: absent is empty, anything that does
  *  not validate refuses, so a change never writes over it and loses it. */
 function storedRecord(stored: unknown) {
-  if (stored === undefined) return Result.succeed([] as InstalledPlugin[]);
+  if (stored === undefined)
+    return Result.succeed<readonly InstalledPlugin[]>([]);
   const parsed = Schema.decodeUnknownResult(InstalledPluginsSchema)(stored);
   return Result.isSuccess(parsed)
     ? Result.succeed(parsed.success)
     : Result.fail(
         new PluginError({
-          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${parsed.error.message}`,
+          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${parsed.failure.message}`,
         }),
       );
 }
@@ -55,9 +56,9 @@ export function readInstalled(stores: Pick<SettingsStores, 'globalState'>) {
 export function modifyInstalled<A>(
   stores: Pick<SettingsStores, 'globalState'>,
   change: (
-    current: InstalledPlugin[],
+    current: readonly InstalledPlugin[],
   ) => Result.Result<
-    readonly [InstalledPlugin[], A],
+    readonly [readonly InstalledPlugin[], A],
     PluginError | PluginRequestError
   >,
 ) {

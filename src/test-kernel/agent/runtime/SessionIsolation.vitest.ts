@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
@@ -144,7 +144,10 @@ describe('session isolation', () => {
           });
           const ends = (runId: string) =>
             reopened.log.rows(
-              qualifyAggregateId('run', RunIdSchema.parse(runId)),
+              qualifyAggregateId(
+                'run',
+                Schema.decodeUnknownSync(RunIdSchema)(runId),
+              ),
               ['run.end'],
             );
           expect(yield* ends(own)).toMatchObject([

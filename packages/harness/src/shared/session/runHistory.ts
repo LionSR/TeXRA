@@ -11,7 +11,11 @@
  */
 import { Cause, Context, type Effect, Schema } from 'effect';
 
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import {
+  RunIdSchema,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
@@ -20,12 +24,12 @@ import {
   DatabaseRowEarlier,
   DatabaseWriteFailed,
 } from './database';
-import type { Alongside, Append } from './sessionEvents';
-import type {
-  RunHistoryDraft,
+import {
   RunHistoryInconsistent,
-  RunState,
+  type RunHistoryDraft,
+  type RunState,
 } from './runState';
+import type { Alongside, Append } from './sessionEvents';
 
 /**
  * A refusal the run history itself decided. Database failures are kept OUT of
@@ -64,12 +68,9 @@ export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
       'unprepared-history',
       'inconsistent',
     ]),
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    runId: RunIdSchema,
     detail: Schema.String,
-    cause: Schema.optional(
-      Schema.Unknown /* TODO(effect-schema): error field type RunHistoryInconsistent; was `RunHistoryInconsistent` */,
-    ),
+    cause: Schema.optional(RunHistoryInconsistent),
   },
 ) {
   override get message(): string {

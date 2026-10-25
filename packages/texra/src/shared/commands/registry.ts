@@ -1,5 +1,5 @@
 // Third-party imports
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 
 /**
  * Handler for a registry-dispatched command.
@@ -12,7 +12,7 @@ import { Schema } from 'effect';
  * work stays observable to callers and rejections propagate (a
  * fire-and-forget `void actions.X(); return true;` swallowed them, #3782).
  *
- * No-arg commands are plain callables. Parameterized commands declare a Zod
+ * No-arg commands are plain callables. Parameterized commands declare a
  * tuple schema for their positional arguments via `definedHandler` — the
  * dispatcher parses the raw argument list at the boundary and only calls
  * `run` once parsing succeeds, keeping handlers free of parsing boilerplate.
@@ -30,8 +30,8 @@ export interface TypedCommandHandler<
   TArgs extends readonly unknown[],
   TResult = boolean | Promise<boolean>,
 > {
-  run: (actions: TActions, ...args: TArgs) => TResult;
-  argsSchema: Schema.Codec<TArgs>;
+  run: (actions: TActions, ...args: [...TArgs]) => TResult;
+  argsSchema: Schema.Codec<TArgs, unknown>;
 }
 
 /**
@@ -56,12 +56,12 @@ type CommandHandlerMap<TId extends string, TActions, TResult> = Partial<
  */
 export function definedHandler<
   TActions,
-  TArgs extends readonly unknown[],
+  S extends Schema.Codec<readonly unknown[], unknown>,
   TResult = boolean | Promise<boolean>,
 >(
-  argsSchema: Schema.Codec<TArgs>,
-  run: (actions: TActions, ...args: TArgs) => TResult,
-): TypedCommandHandler<TActions, TArgs, TResult> {
+  argsSchema: S,
+  run: (actions: TActions, ...args: [...S['Type']]) => TResult,
+): TypedCommandHandler<TActions, S['Type'], TResult> {
   return { run, argsSchema };
 }
 
@@ -94,14 +94,17 @@ export function dispatchCommandFromRegistry<
   // Legacy no-arg handlers stay callable directly.
   if (typeof handler === 'function') return handler(actions);
 
-  // Typed handlers parse the positional argument list at the boundary so
-  // handlers receive validated values. A schema parse failure surfaces as
-  // `false` so callers can surface the invalid payload distinctly from a
-  // genuinely unhandled command id.
-  const result = handler.argsSchema.safeParse(rawArgs);
-  if (!result.success) {
-    onFailure?.({ kind: 'invalidArguments', id, error: result.error });
+  // Typed handlers decode the positional argument list at the boundary so
+  // handlers receive validated values; an argument object carrying a key its
+  // schema does not declare is refused, not stripped. A decoding failure
+  // surfaces as `false` so callers can surface the invalid payload
+  // distinctly from a genuinely unhandled command id.
+  const result = Schema.decodeUnknownResult(handler.argsSchema, {
+    onExcessProperty: 'error',
+  })(rawArgs);
+  if (!Result.isSuccess(result)) {
+    onFailure?.({ kind: 'invalidArguments', id, error: result.failure });
     return false;
   }
-  return handler.run(actions, ...result.data);
+  return handler.run(actions, ...result.success);
 }

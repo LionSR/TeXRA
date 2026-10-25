@@ -4,8 +4,15 @@ import * as path from 'node:path';
 
 import { glob } from 'glob';
 
-import { Data, Effect, FileSystem, Result, Schema, Struct } from 'effect';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import {
+  Effect,
+  FileSystem,
+  Result,
+  Schema,
+  SchemaIssue,
+  Struct,
+} from 'effect';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDefinitionSchema,
@@ -77,12 +84,14 @@ export function scanDirectory(
     // A file is the persona's keys plus the blocks the listed plugins own;
     // any other key is refused, as before.
     const { blocks } = yield* ToolRegistry;
+    const blockFields: Record<
+      string,
+      Schema.optional<Schema.Codec<unknown>>
+    > = {};
+    for (const [key, block] of blocks)
+      blockFields[key] = Schema.optional(block.schema);
     const fileSchema = AgentDefinitionSchema.mapFields(
-      Struct.assign(
-        Object.fromEntries(
-          [...blocks].map(([key, block]) => [key, block.schema.optional()]),
-        ),
-      ),
+      Struct.assign(blockFields),
     );
     const issues: AgentScanIssue[] = [];
     // Each file with the root it was found under; a path two roots share
@@ -185,7 +194,7 @@ function entriesWithUniqueNames(
 function readYamlDefinition(
   yamlPath: string,
   dir: string,
-  fileSchema: Schema.Codec<Record<string, unknown>>,
+  fileSchema: Schema.Codec<Record<string, unknown>, unknown>,
   blockKeys: readonly string[],
 ): Effect.Effect<ParsedAgentYaml, AgentScanError, FileSystem.FileSystem> {
   const displayPath = path.relative(dir, yamlPath);
@@ -200,7 +209,13 @@ function readYamlDefinition(
     Effect.mapError(scanError),
   ).pipe(
     Effect.flatMap((content) => {
-      const parsed = parseYamlWith(content, fileSchema);
+      // A key no persona field and no listed plugin's block owns is refused.
+      const parsed = Result.flatMap(safeParseYaml(content), (value) =>
+        Schema.decodeUnknownResult(fileSchema)(value, {
+          onExcessProperty: 'error',
+          errors: 'all',
+        }),
+      );
       if (Result.isFailure(parsed)) {
         return Effect.fail(scanError(parsed.failure));
       }
@@ -240,20 +255,32 @@ function splitBlocks(
   };
 }
 
-function formatScanFailure(error: unknown): string {
-  if (error instanceof ZodError) {
-    const formatted = error.issues.map(formatSchemaIssue).filter(Boolean);
-    if (formatted.length) return formatted.join('; ');
-  }
-  return toErrorMessage(error);
-}
+/** Marks an unrecognized key's issue so the keys are listed together. */
+const UNRECOGNIZED_KEY = 'unrecognized key';
+const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1({
+  leafHook: (issue) =>
+    issue._tag === 'UnexpectedKey'
+      ? UNRECOGNIZED_KEY
+      : SchemaIssue.defaultLeafHook(issue),
+});
 
-function formatSchemaIssue(issue: ZodIssue): string {
-  const where = issue.path.join('.');
-  const prefix = where ? `${where}: ` : '';
-  if (issue.code === 'unrecognized_keys')
-    return `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
-  return issue.message ? `${prefix}${issue.message}` : '';
+/** A schema failure as one line: every issue at its path, the unrecognized
+ *  keys listed together as one. */
+function formatScanFailure(error: unknown): string {
+  if (!(error instanceof Schema.SchemaError)) return toErrorMessage(error);
+  const { issues } = formatIssues(error.issue);
+  const unrecognized = issues
+    .filter(({ message }) => message === UNRECOGNIZED_KEY)
+    .map(({ path }) => (path ?? []).map(String).join('.'));
+  const formatted = issues
+    .filter(({ message }) => message !== UNRECOGNIZED_KEY)
+    .map(({ path, message }) => {
+      const where = (path ?? []).map(String).join('.');
+      return where ? `${where}: ${message}` : message;
+    });
+  if (unrecognized.length)
+    formatted.push(`unrecognized keys ${unrecognized.join(', ')}`);
+  return formatted.length ? formatted.join('; ') : error.message;
 }
 
 /**

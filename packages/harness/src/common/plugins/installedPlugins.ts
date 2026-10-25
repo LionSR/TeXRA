@@ -9,8 +9,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result, Schema } from 'effect';
 import {
+  AGENT_SOURCE,
   AgentSourceSchema,
   SkillNameSchema,
   type InstalledPlugin,
@@ -146,10 +147,10 @@ const nameTaken = (name: string) =>
 function claimName(run: InstallRun, name: string) {
   // A plugin agent is `<plugin>:<name>`, so a plugin named like an agent
   // source would read as that source's agent.
-  if (AgentSourceSchema.safeParse(name).success)
+  if (Result.isSuccess(Schema.decodeUnknownResult(AgentSourceSchema)(name)))
     return Effect.fail(
       new PluginRequestError({
-        message: `A plugin cannot be named "${name}": that name is reserved as an agent source (${AgentSourceSchema.options.join(', ')}).`,
+        message: `A plugin cannot be named "${name}": that name is reserved as an agent source (${Object.values(AGENT_SOURCE).join(', ')}).`,
       }),
     );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));
@@ -364,8 +365,10 @@ function removePlugin(name: string, env: PluginEnv) {
       // or `.` would name the plugins directory's parent or itself. The name
       // must already be canonical: the schema collapses whitespace, and
       // `notes ` is not the directory `notes`.
+      const canonical = Schema.decodeUnknownResult(SkillNameSchema)(name);
       const leftover =
-        SkillNameSchema.safeParse(name).data === name &&
+        Result.isSuccess(canonical) &&
+        canonical.success === name &&
         (yield* FileSystem.FileSystem.use((fs) =>
           Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)]),
         ).pipe(

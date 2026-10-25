@@ -2,7 +2,7 @@
 // pty runs, and embedded browser control.
 //
 // These cross the renderer/main IPC boundary, so unlike the in-memory tab model
-// they are Zod schemas: the renderer's requests are validated in the main
+// they are schemas: the renderer's requests are validated in the main
 // process before touching the filesystem or spawning a shell.
 
 import { Schema, Struct } from 'effect';
@@ -211,7 +211,9 @@ export type DesktopWorkspaceRequest =
 
 /** The commands the main process routes to a project's workspace. */
 export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
-  DesktopWorkspaceInboundMessageSchema.members; /* TODO(effect-schema): flatMap; was `.flatMap((option) => [ ...option.shape.command.values, ])` */
+  DesktopWorkspaceInboundMessageSchema.members.map(
+    (member) => member.fields.command.literal,
+  );
 
 type WorkspaceOutbound =
   | typeof DesktopWorkspaceFilesChangedMessageSchema.Type

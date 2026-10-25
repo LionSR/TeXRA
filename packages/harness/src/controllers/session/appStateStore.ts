@@ -2,7 +2,7 @@
  *  the global `AppState`), read from SQLite on every operation. */
 import * as path from 'node:path';
 
-import { Effect, Layer, RcMap, Result } from 'effect';
+import { Effect, Layer, RcMap, Result, Schema } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
@@ -55,16 +55,16 @@ function appStateStoreFromDatabase(
   ): Result.Result<JsonValue | undefined, StateWriteFailed> =>
     value === undefined
       ? Result.succeed(undefined)
-      : Result.try({
-          try: () => JsonValueSchema.parse(value),
-          catch: (cause) =>
+      : Result.mapError(
+          Schema.decodeUnknownResult(JsonValueSchema)(value),
+          (cause) =>
             refused(
               key,
               new Error(`State key ${key} was given a value that is not JSON`, {
                 cause,
               }),
             ),
-        });
+        );
   const modify = <T, E>(
     key: string,
     change: (current: unknown) => Result.Result<T, E>,

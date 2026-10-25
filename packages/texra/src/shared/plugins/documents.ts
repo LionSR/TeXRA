@@ -9,7 +9,7 @@
  * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
  * with. Browser-safe: it imports only schemas.
  */
-import { Effect, Schema, Struct } from 'effect';
+import { Effect, Result, Schema, Struct } from 'effect';
 
 import {
   AgentOptionDataSchema,
@@ -115,7 +115,7 @@ export function documentsAcceptedFact(
 }
 
 /** A stored documents row's rounds; none for a value that is not one. */
-export function documentRoundsOf(value: unknown): RoundOutput[] {
+export function documentRoundsOf(value: unknown): readonly RoundOutput[] {
   return value === undefined
     ? []
     : Schema.decodeUnknownSync(DocumentsOutputSchema)(value).rounds;
@@ -126,7 +126,7 @@ export function documentRoundsOf(value: unknown): RoundOutput[] {
 export function latestDocumentRounds(
   rows: readonly SessionEvent[],
   aggregate: AggregateId,
-): RoundOutput[] | undefined {
+): readonly RoundOutput[] | undefined {
   const row = rows.findLast(
     (event) =>
       event.aggregateId === aggregate &&
@@ -270,9 +270,10 @@ export function agentProposalLabel(proposal: {
   if (!proposal.task) return 'agent';
   // A reflecting task also runs a critic after every revision but the last;
   // options this plugin cannot read name no critic.
-  return Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(
+  const options = Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(
     proposal.options ?? {},
-  ).data.reflect
+  );
+  return Result.isSuccess(options) && options.success.reflect
     ? 'document task, with critic'
     : 'document task';
 }

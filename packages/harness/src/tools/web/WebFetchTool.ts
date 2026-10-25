@@ -27,13 +27,15 @@ const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MiB
 const MAX_REDIRECTS = 5;
 
 const WebFetchInputSchema = Schema.Struct({
-  url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url('Provide a valid absolute URL to fetch.')` */.check(
+  url: Schema.String.check(
+    Schema.makeFilter((value) => URL.canParse(value), {
+      message: 'Provide a valid absolute URL to fetch.',
+    }),
     Schema.makeFilter(
       (value) => value.startsWith('http://') || value.startsWith('https://'),
       { message: 'URL must use HTTP or HTTPS protocol' },
     ),
-  )
-    .annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
+  ).annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
   prompt: Schema.optional(
     Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   ).annotate({

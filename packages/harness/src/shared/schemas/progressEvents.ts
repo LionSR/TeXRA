@@ -35,7 +35,7 @@ export interface RequestShowInstructionPayload {
    * Host-agnostic action tokens rendered as buttons. The host maps each
    * token to its own UI affordance (see {@link INSTRUCTION_ACTION}).
    */
-  actions?: InstructionAction[];
+  actions?: readonly InstructionAction[];
   showSuppress?: boolean;
 }
 

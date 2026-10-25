@@ -14,6 +14,7 @@ import { Result, Schema } from 'effect';
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
   addTurnUsage,
+  CommitOrdinalSchema,
   EMPTY_RUN_USAGE_TOTALS,
   requestParksItsCaller,
   type CommitOrdinal,
@@ -84,9 +85,7 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
     ]),
     // a stored turn this build of the package cannot parse
     detail: Schema.String,
-    commit: Schema.NullOr(
-      Schema.Unknown /* TODO(effect-schema): error field type CommitOrdinal; was `CommitOrdinal` */,
-    ),
+    commit: Schema.NullOr(CommitOrdinalSchema),
   },
 ) {}
 

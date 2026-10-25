@@ -73,7 +73,8 @@ const LeanDiagnosticsInputSchema = Schema.Struct({
   command: nullishWithDefault(
     Schema.Literals(['list', 'count']),
     'list',
-  ).describe('Use "list" for full messages or "count" for summary only'),
+    'Use "list" for full messages or "count" for summary only',
+  ),
   /** Path to the Lean file */
   file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
@@ -82,7 +83,7 @@ type LeanDiagnosticsInput = typeof LeanDiagnosticsInputSchema.Type;
 
 const LeanFileInputSchema = Schema.Struct({
   /** Command to execute on the file */
-  command: Schema.Enum(FILE_COMMAND_NAMES).annotate({
+  command: Schema.Literals(FILE_COMMAND_NAMES).annotate({
     description: `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
   }),
   /** Path to the Lean file */
@@ -93,7 +94,7 @@ type LeanFileInput = typeof LeanFileInputSchema.Type;
 
 const LeanProjectInputSchema = Schema.Struct({
   /** Command to execute */
-  command: Schema.Enum(PROJECT_COMMAND_NAMES).annotate({
+  command: Schema.Literals(PROJECT_COMMAND_NAMES).annotate({
     description: `Global command to execute:\n${PROJECT_COMMAND_GROUP_INDEX}`,
   }),
 });
@@ -104,7 +105,7 @@ const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
 
 const LeanInspectInputSchema = Schema.Struct({
   /** What to inspect: goal, term_goal, or hover */
-  type: Schema.Enum(INSPECT_TYPES).annotate({
+  type: Schema.Literals(INSPECT_TYPES).annotate({
     description:
       'What to inspect: "goal" for tactic proof state, "term_goal" for expected type in term mode, "hover" for type/docs',
   }),
@@ -118,7 +119,8 @@ const LeanInspectInputSchema = Schema.Struct({
   column: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
     1,
-  ).describe('Column number (1-indexed, default: 1)'),
+    'Column number (1-indexed, default: 1)',
+  ),
 });
 
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;

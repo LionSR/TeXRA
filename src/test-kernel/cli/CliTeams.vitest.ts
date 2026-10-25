@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { Schema } from 'effect';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   cliTeamListRecord,
@@ -19,7 +20,7 @@ function agent(name: string, tools: string[] = []): AgentEntry {
     source: 'builtIn',
     path: `/agents/${name}.yaml`,
     tools,
-    persona: PersonaSchema.parse({}),
+    persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     blocks: {},
   };
 }
@@ -29,7 +30,9 @@ function taskAgent(name: string): AgentEntry {
   return {
     ...agent(name),
     blocks: {
-      task: DOCUMENT_TASK_BLOCK.schema.parse({ requests: ['Revise.'] }),
+      task: Schema.decodeUnknownSync(DOCUMENT_TASK_BLOCK.schema)({
+        requests: ['Revise.'],
+      }),
     },
   };
 }

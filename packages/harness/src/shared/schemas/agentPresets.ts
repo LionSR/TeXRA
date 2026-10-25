@@ -23,7 +23,7 @@ export const AgentModePresetSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   description: Schema.String,
-  icon: Schema.Enum(AGENT_MODE_PRESET_ICON_NAMES),
+  icon: Schema.Literals(AGENT_MODE_PRESET_ICON_NAMES),
   agents: Schema.Array(Schema.String),
 });
 
@@ -47,9 +47,10 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
     const result = Schema.decodeUnknownResult(AgentModePresetSchema)(rawPreset);
     if (Result.isSuccess(result)) return [result.success];
 
-    const name = Schema.decodeUnknownResult(
+    const named = Schema.decodeUnknownResult(
       Schema.Struct({ name: Schema.String }),
-    )(rawPreset).data.name;
+    )(rawPreset);
+    const name = Result.isSuccess(named) ? named.success.name : undefined;
     console.warn(
       `[agentPresets] Ignoring malformed custom agent team ` +
         `${name == null ? `at index ${index}` : `"${name}" (index ${index})`}: ` +

@@ -20,7 +20,7 @@ import { JsonValueSchema, type JsonValue } from '@shared/schemas';
  */
 export interface ValueFamily<T, Deletable extends boolean = false> {
   readonly name: string;
-  readonly schema: Schema.Codec<T>;
+  readonly schema: Schema.Codec<T, unknown>;
   readonly deletable: Deletable;
 }
 

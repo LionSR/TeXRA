@@ -912,7 +912,7 @@ describe('native OpenAI Responses protocol', () => {
             {
               name: 'memory',
               description: 'Read memory.',
-              zodSchema: Schema.Struct({
+              schema: Schema.Struct({
                 view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)),
               }),
             },

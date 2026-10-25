@@ -33,15 +33,15 @@ import {
 import {
   DatabaseClaimRefused,
   type AggregateState,
+  claimRejection,
+  writeRejection,
   type Database,
   type DeletionMode,
 } from '@shared/session/database';
 import {
-  claimRejection,
   NotOwner,
   Rejected,
   Unavailable,
-  writeRejection,
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';

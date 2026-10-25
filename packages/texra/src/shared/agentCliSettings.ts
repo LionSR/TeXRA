@@ -35,7 +35,7 @@ function pickerModels(eligible: (config: ModelConfig) => boolean) {
     (config) => eligible(config) && config.deprecated !== true,
   );
   return {
-    schema: Schema.Enum(configs.map((config) => config.ref)),
+    schema: Schema.Literals(configs.map((config) => config.ref)),
     labels: configs.map((config) => config.label),
   };
 }

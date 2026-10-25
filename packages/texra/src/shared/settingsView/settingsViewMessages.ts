@@ -7,8 +7,8 @@
  * union, and the inbound (webview → backend) message union plus their
  * dispatchers.
  */
-import { Effect, Schema } from 'effect';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
+import { Effect, Schema, Struct } from 'effect';
+import { ReasoningEffort } from 'llm-zoo';
 
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -65,6 +65,14 @@ export {
   type ProviderSetting,
   type UpdateProfileMessage,
 } from './profileViewMessages';
+
+/** A reasoning effort as llm-zoo spells it. */
+const ReasoningEffortSchema = Schema.Enum(ReasoningEffort);
+
+/** An absolute URL the host may open. */
+const UrlSchema = Schema.String.check(
+  Schema.makeFilter((value) => URL.canParse(value), { message: 'a URL' }),
+);
 
 /** Outbound schema to switch tabs, addressed by page or `page/section`. */
 const SetTabMessageSchema = Schema.Struct({
@@ -309,7 +317,7 @@ const ToolInstallActionSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal('url'),
-    url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */,
+    url: UrlSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('extension'),
@@ -550,20 +558,22 @@ const OpenProviderKeyUrlMessageSchema = providerCommand(
 );
 const OpenExternalUrlMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL),
-  url: Schema.String /* TODO(effect-schema): z.url: add the string check; was `z.url()` */,
+  url: UrlSchema,
 });
 
 // Model selection inbound messages
 const SetModelEnabledMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-).extend({ enabled: Schema.Boolean });
+).mapFields(Struct.assign({ enabled: Schema.Boolean }));
 
 const SetModelReasoningLevelMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
-).extend({
-  /** The reasoning level to set, or undefined/null to reset to model default. */
-  level: Schema.NullOr(ReasoningEffortSchema),
-});
+).mapFields(
+  Struct.assign({
+    /** The reasoning level to set, or undefined/null to reset to model default. */
+    level: Schema.NullOr(ReasoningEffortSchema),
+  }),
+);
 const RequestModelAccessMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
 );
@@ -577,7 +587,7 @@ const OpenAgentYamlMessageSchema = agentCommand(
 );
 const SetAgentEnabledMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-).extend({ enabled: Schema.Boolean });
+).mapFields(Struct.assign({ enabled: Schema.Boolean }));
 
 const SetAllAgentsEnabledMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
@@ -662,15 +672,15 @@ const OpenGitHubTokenUrlMessageSchema = commandOnly(
 // Subscription sign-in messages, addressed by provider
 const SignInSubscriptionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
-  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  provider: Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
 });
 const SignOutSubscriptionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION),
-  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  provider: Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
 });
 const SetSubscriptionPreferenceMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE),
-  provider: Schema.Enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  provider: Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
   enabled: Schema.Boolean,
 });
 const GetSubscriptionUsageMessageSchema = Schema.Struct({

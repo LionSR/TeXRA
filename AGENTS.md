@@ -295,12 +295,29 @@ is a site it could not finish and is never committed.
   is the tool-input form (below).
 - Describe a field for the model or a settings page with
   `.annotate({ description: '...' })`; `Schema.resolveAnnotations(S)` reads it.
-- A struct ignores keys it does not declare; a shape that must keep unknown
-  keys is `Schema.StructWithRest(Schema.Struct({...}), [Schema.Record(Schema.String, Schema.Unknown)])`.
+- A struct ignores keys it does not declare. A shape that must refuse them
+  (the former `strictObject`: a security check, a metadata guard) decodes
+  with `{ onExcessProperty: 'error' }` at the one site that needs the
+  refusal, or carries a filter that names the forbidden key; a shape that
+  must keep them is
+  `Schema.StructWithRest(Schema.Struct({...}), [Schema.Record(Schema.String, Schema.Unknown)])`.
 - A transformation is `S.pipe(Schema.decodeTo(Target, { decode, encode }))`
   with `SchemaGetter.transform` on each side; a decode-only transformation
   names `SchemaGetter.forbidden` as its encode and is allowed only at a
   provider boundary, never on a persisted or wire shape.
+  `SchemaGetter.transform` maps a present value only: a decoder that fills
+  an absent key (`?? fallback`) is `SchemaGetter.transformOptional`, and a
+  transformation that can fail is `transformEffect` /
+  `transformOptionalEffect` returning
+  `Effect.fail(new SchemaIssue.InvalidValue({ message }, input))`. An
+  `.annotate({ description })` on a `decodeTo` or `withDecodingDefault`
+  result lands on the decoded side and never reaches the JSON Schema;
+  annotate the encoded layer (`Schema.optional(...)`) before piping.
+- Reading a schema back: `S.fields` (Struct), `S.members` (Union),
+  `S.literals` (Literals), `S.literal` (Literal), `S.key` / `S.value`
+  (Record), `S.from` / `S.to` (a `decodeTo`), `S.ast` for anything else;
+  `Schema.is(S)` is the type guard and `Schema.isSchema(u)` tells a schema
+  from a value.
 - Errors are `Schema.TaggedError` classes with schema fields; a wrapped cause
   is `cause: Schema.Defect()` (or the cause's own error schema). They are
   yieldable, carry `Error.cause`, and cross the RPC edge as themselves.

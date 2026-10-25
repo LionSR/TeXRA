@@ -1,6 +1,6 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
-import { String as Str } from 'effect';
+import { Schema, String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -65,7 +65,7 @@ export class FileSelectGroup extends LitElement {
 
   /** The tool and auto-extract toggles (`Surface.launch`). */
   @property({ attribute: false }) checkboxValues: DocumentTaskOptions =
-    DocumentTaskOptionsSchema.parse({});
+    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({});
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;

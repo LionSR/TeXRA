@@ -4,7 +4,7 @@
  * between two surfaces on one session; a catalog may not, so catalogs live
  * here and never in `Surface`. Components take it as a property; the root
  * receives it with the events frame (`sessionFrames.ts`), and the design
- * harness passes literals. Zod because it crosses the bridge.
+ * harness passes literals. A schema because it crosses the bridge.
  */
 import { Schema, Struct } from 'effect';
 import {

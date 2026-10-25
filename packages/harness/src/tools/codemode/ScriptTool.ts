@@ -8,16 +8,7 @@
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import {
-  Cause,
-  Data,
-  Duration,
-  Effect,
-  Exit,
-  Layer,
-  Result,
-  Schema,
-} from 'effect';
+import { Cause, Duration, Effect, Exit, Layer, Result, Schema } from 'effect';
 
 import {
   CodeSandbox,
@@ -34,6 +25,7 @@ import {
 } from '@agent/runtime/RunCall';
 import {
   JsonValueSchema,
+  SettledToolResultSchema,
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
@@ -108,7 +100,7 @@ const answerOf = (
   const failed = (error: string) => ({ status: 'error' as const, error });
   if (op.name === `${SEARCH_TOOLS}()`) {
     const args = Schema.decodeUnknownResult(SearchArgsSchema)(op.input);
-    if (!Result.isSuccess(args)) return failed(args.error.message);
+    if (!Result.isSuccess(args)) return failed(args.failure.message);
     const [query, options] = args.success;
     const found = searchTools(
       catalog,
@@ -122,7 +114,7 @@ const answerOf = (
     };
   }
   const args = Schema.decodeUnknownResult(DescribeArgsSchema)(op.input);
-  if (!Result.isSuccess(args)) return failed(args.error.message);
+  if (!Result.isSuccess(args)) return failed(args.failure.message);
   const [name] = args.success;
   const declaration = describeTool(catalog, name);
   return declaration === null
@@ -134,8 +126,9 @@ const answerOf = (
 
 /** A call's result ended the turn: the script ends with it. */
 class EndedTurn extends Schema.TaggedError<EndedTurn>()('EndedTurn', {
-  result:
-    Schema.Unknown /* TODO(effect-schema): error field type Extract<ToolResultPayload['result'], { status: 'executed' }>; was `Extract<ToolResultPayload['result'], { status: 'executed' }>` */,
+  // The executed member of a settled result: only an executed result ends
+  // the turn.
+  result: SettledToolResultSchema.members[0],
 }) {}
 
 /** What the guest's `await` gets from a settled call: `{ output, summary }`

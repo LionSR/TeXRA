@@ -19,11 +19,12 @@ const WebSearchInputSchema = Schema.Struct({
     description: 'Search query to send to the web search provider.',
   }),
   max_results: nullishWithDefault(
-    Schema.Number.check(Schema.isGreaterThanOrEqualTo(1)).check(
+    Schema.Finite.check(Schema.isGreaterThanOrEqualTo(1)).check(
       Schema.isLessThanOrEqualTo(5),
     ),
     3,
-  ).describe('Maximum number of search results to return, up to 5.'),
+    'Maximum number of search results to return, up to 5.',
+  ),
 });
 
 type WebSearchInput = typeof WebSearchInputSchema.Type;
@@ -34,13 +35,13 @@ type WebSearchInput = typeof WebSearchInputSchema.Type;
 
 /**
  * `RelatedTopics` entries are self-referential (a topic group nests further
- * `Topics`), so the interface is kept and the recursive schema is annotated
- * against it (z.lazy).
+ * `Topics`), so the interface is kept and the recursive schema is typed
+ * against it (`Schema.suspend`).
  */
 interface DuckDuckGoResult {
-  Text?: string | null;
-  FirstURL?: string | null;
-  Topics?: DuckDuckGoResult[] | null;
+  readonly Text?: string | null;
+  readonly FirstURL?: string | null;
+  readonly Topics?: readonly DuckDuckGoResult[] | null;
 }
 
 const DuckDuckGoResultSchema: Schema.Codec<DuckDuckGoResult> = Schema.suspend(
@@ -117,7 +118,7 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
         if (!Result.isSuccess(parsed)) {
           return yield* Effect.fail(
             new Error(
-              `Unexpected DuckDuckGo response shape: ${parsed.error.message}`,
+              `Unexpected DuckDuckGo response shape: ${parsed.failure.message}`,
             ),
           );
         }
@@ -158,7 +159,10 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
   }
 
   // Extract from RelatedTopics (including nested Topics)
-  function extractTopics(topics: DuckDuckGoResult[], limit: number): void {
+  function extractTopics(
+    topics: readonly DuckDuckGoResult[],
+    limit: number,
+  ): void {
     for (const item of topics) {
       if (results.length >= limit) break;
       if (item.Text && item.FirstURL) {

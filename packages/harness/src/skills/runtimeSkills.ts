@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   readInstalledPluginLoad,
@@ -317,7 +317,11 @@ export const activatedSkillNames = (texts: readonly string[]): string[] =>
         [
           ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
         ].flatMap(([, name]) =>
-          QualifiedSkillNameSchema.safeParse(name).success ? [name] : [],
+          Result.isSuccess(
+            Schema.decodeUnknownResult(QualifiedSkillNameSchema)(name),
+          )
+            ? [name]
+            : [],
         ),
       ),
     ),

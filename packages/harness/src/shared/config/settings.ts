@@ -69,7 +69,10 @@ function entryOf(config: ConfigProvider, key: string): StateSettingEntry {
 }
 
 /** A stored value against the row's schema; absent resolves to its default. */
-function classifyStored(schema: Schema.Top, raw: unknown): StoredSetting {
+function classifyStored(
+  schema: Schema.Codec<unknown, unknown>,
+  raw: unknown,
+): StoredSetting {
   if (raw === undefined) {
     return {
       kind: 'value',
@@ -79,7 +82,7 @@ function classifyStored(schema: Schema.Top, raw: unknown): StoredSetting {
   const result = Schema.decodeUnknownResult(schema)(raw);
   return Result.isSuccess(result)
     ? { kind: 'value', value: result.success }
-    : { kind: 'invalid', cause: result.error.message };
+    : { kind: 'invalid', cause: result.failure.message };
 }
 
 /**
@@ -94,7 +97,7 @@ function invalidStoredMessage(key: string, cause: string): string {
 
 const valueOrDefault = (
   key: string,
-  schema: Schema.Top,
+  schema: Schema.Codec<unknown, unknown>,
   stored: StoredSetting,
 ): Effect.Effect<unknown> =>
   stored.kind === 'value'
@@ -206,7 +209,7 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   // cast: the row's schema produced its own default.
-  return entry.schema.parse(undefined) as T;
+  return Schema.decodeUnknownSync(entry.schema)(undefined) as T;
 }
 
 /**
@@ -217,8 +220,8 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
  * A value the row's schema rejects is a defect of the program, not a member
  * of the `ConfigWriteFailed | Error` channel: it is thrown, so it will not
  * arrive as a catchable failure. Callers pass a value they already know is
- * valid; user input is validated upstream (a settings-UI write is
- * `safeParse`d by the app before it reaches here). A row
+ * valid; user input is validated upstream (a settings-UI write is decoded
+ * by the app before it reaches here). A row
  * that excludes a setting the catalog lacks is the same kind of defect.
  *
  * A config-slot row is written to `target` when given (the one caller that
@@ -242,7 +245,12 @@ function set(
   // A schema rejection is thrown rather than constructed as a typed failure:
   // `src/shared` may take only type imports from `src/platform`.
   return Effect.gen(function* () {
-    yield* writeSlot(entry, entry.schema.parse(value), stores, target);
+    yield* writeSlot(
+      entry,
+      Schema.decodeUnknownSync(entry.schema)(value),
+      stores,
+      target,
+    );
     if (value !== true) return;
     for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
       const excluded = stores.config.catalog.byKey(excludedKey);
@@ -279,7 +287,7 @@ function reset(
  * these keys, so no reader casts the store's `unknown` to the type it hopes
  * for.
  */
-function state<S extends Schema.Top>(
+function state<S extends Schema.Codec<unknown, unknown>>(
   store: Pick<StateStore, 'get'>,
   key: string,
   schema: S,
@@ -296,7 +304,7 @@ function state<S extends Schema.Top>(
  * with its cause. For a read-modify-write, where a write built from the
  * default would replace what is stored. Absence still reads as the default.
  */
-function inspectState<S extends Schema.Top>(
+function inspectState<S extends Schema.Codec<unknown, unknown>>(
   store: Pick<StateStore, 'get'>,
   key: string,
   schema: S,

@@ -264,7 +264,7 @@ export class SettingsViewMessageHandler {
       return showLoggedErrorMessage(
         this.channel,
         `Settings could not handle the '${command}' request`,
-        parsed.error.message,
+        parsed.failure.message,
       ).pipe(Effect.asVoid);
     });
   }

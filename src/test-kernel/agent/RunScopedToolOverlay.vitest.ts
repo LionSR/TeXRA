@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer, SynchronizedRef } from 'effect';
+import { Effect, Layer, Schema, SynchronizedRef } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { apiKeyEnvName, apiKeySecretName } from '@texra-ai/llm';
@@ -144,7 +144,7 @@ describe('run-scoped tool resolution', () => {
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();
         const logger = { ...noopTrace, warn };
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
@@ -194,7 +194,7 @@ describe('run-scoped tool resolution', () => {
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
@@ -272,7 +272,7 @@ describe('run-scoped tool resolution', () => {
         const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
@@ -280,7 +280,9 @@ describe('run-scoped tool resolution', () => {
         const launch = validationLaunch({ runId, session }, config);
         const ctx: AgentLaunchContext = {
           ...launch,
-          persona: PersonaSchema.parse({ tools: [{ name: 'agent' }] }),
+          persona: Schema.decodeUnknownSync(PersonaSchema)({
+            tools: [{ name: 'agent' }],
+          }),
         };
         yield* runToolUse({ resume: false }).pipe(
           Effect.provide(runLayer(ctx, [])),
@@ -329,14 +331,14 @@ describe('run-scoped tool resolution', () => {
         const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
-        const config = AgentConfigSchema.parse({
+        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
         const ctx: AgentLaunchContext = {
           ...validationLaunch({ runId, session }, config),
-          persona: PersonaSchema.parse({
+          persona: Schema.decodeUnknownSync(PersonaSchema)({
             tools: [
               { name: 'script' },
               { name: 'read_file' },
@@ -393,7 +395,7 @@ describe('run-scoped tool resolution', () => {
       // The run's tool policy carries both gates; `AgentRun` hands them to the
       // resolver when it builds the model-facing list.
       const resolved = yield* resolveTestStep({
-        tools: PersonaSchema.parse({
+        tools: Schema.decodeUnknownSync(PersonaSchema)({
           tools: [
             { name: 'bash' },
             { name: 'grep' },

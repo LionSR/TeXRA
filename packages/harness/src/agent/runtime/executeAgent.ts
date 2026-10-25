@@ -9,6 +9,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   isTaskConfig,
+  RunIdSchema,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
@@ -45,8 +46,7 @@ const CHANNEL = 'executeAgent';
 export class ResumeSessionUnavailableError extends Schema.TaggedError<ResumeSessionUnavailableError>()(
   'ResumeSessionUnavailableError',
   {
-    runId:
-      Schema.Unknown /* TODO(effect-schema): error field type RunId; was `RunId` */,
+    runId: RunIdSchema,
   },
 ) {
   override get message(): string {

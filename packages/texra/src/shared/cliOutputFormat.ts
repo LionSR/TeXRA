@@ -10,7 +10,7 @@ export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
 /** Canonical config key for the CLI's output format. */
 export const CLI_OUTPUT_FORMAT_CONFIG_KEY = 'texra.outputFormat';
 
-export const CliOutputFormatSchema = Schema.Enum(CLI_OUTPUT_FORMATS).pipe(
+export const CliOutputFormatSchema = Schema.Literals(CLI_OUTPUT_FORMATS).pipe(
   Schema.withDecodingDefault(Effect.succeed('text')),
 );
 

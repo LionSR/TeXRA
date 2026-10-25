@@ -62,7 +62,7 @@ export interface EditorCapabilities {
   /** A file's diagnostics from the editor's own tooling (`path` absolute). */
   readonly readDiagnostics?: (
     path: string,
-  ) => Effect.Effect<GenericDiagnostic[], DiagnosticsReadFailed>;
+  ) => Effect.Effect<readonly GenericDiagnostic[], DiagnosticsReadFailed>;
   /** Add one critique; false where inline criticism is off. */
   readonly addCriticism?: (
     entry: ManualCriticismEntry,

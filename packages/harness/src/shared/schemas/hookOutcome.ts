@@ -16,7 +16,7 @@ export const SUPPORTED_HOOK_EVENTS = [
   'Stop',
   'SubagentStop',
 ] as const;
-const HookEventSchema = Schema.Enum(SUPPORTED_HOOK_EVENTS);
+const HookEventSchema = Schema.Literals(SUPPORTED_HOOK_EVENTS);
 export type HookEvent = typeof HookEventSchema.Type;
 
 /** How a hook invocation ended: `blocked` is exit code 2, `failed` any other

@@ -325,7 +325,7 @@ const openRealm = (
     );
 
     // What the current step collects; reset as each report is taken.
-    let ops: StepReportWire['ops'] = [];
+    let ops: StepReportWire['ops'][number][] = [];
     let logs: string[] = [];
     let logsDropped = 0;
     let end: ScriptEndWire | undefined;
@@ -530,7 +530,7 @@ const program = Effect.gen(function* () {
         : Deferred.fail(
             fatal,
             new Error(
-              `Code sandbox worker received a malformed message: ${message.error.message}`,
+              `Code sandbox worker received a malformed message: ${message.failure.message}`,
             ),
           );
     }),

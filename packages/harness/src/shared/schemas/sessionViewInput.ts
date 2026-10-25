@@ -7,12 +7,8 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
-import {
-  AggregateIdSchema,
-  CommitOrdinalSchema,
-  DisplaySessionEventSchema,
-  OwnerIdSchema,
-} from './sessionEvent';
+import { AggregateIdSchema, OwnerIdSchema } from './aggregateId';
+import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**
  * The read that delivered a durable row: the cold listing, one
