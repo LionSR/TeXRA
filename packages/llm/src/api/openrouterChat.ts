@@ -13,7 +13,7 @@ import { SDKValidationError } from '@openrouter/sdk/models/errors/sdkvalidatione
 // Local imports - canonical model contract
 import { assembleTurn } from './assembleTurn.js';
 import {
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   ResolvedTurnSchema,
   type Model,
   type OpenRouterConfiguration,
@@ -574,9 +574,7 @@ export function openrouterChatModel(
   configuration: OpenRouterConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
-    configuration,
-  );
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'openrouter-chat')
     throw new ModelError({
       kind: 'unsupported',

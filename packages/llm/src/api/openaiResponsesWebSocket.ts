@@ -17,7 +17,7 @@ import { WebSocket, createWebSocketStream } from 'ws';
 
 // Local imports - canonical model contract
 import {
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   type Model,
   type OpenAIResponsesConfiguration,
 } from '../turn.js';
@@ -78,6 +78,8 @@ const WebSocketErrorSchema = Schema.Union([
     ),
   ),
 ]);
+const decodeEnvelope = Schema.decodeUnknownResult(WebSocketEnvelopeSchema);
+const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
 
 /** Acquires one physical connection; invalidation requires explicit reacquisition. */
 export const openaiResponsesWebSocketModel = Effect.fn(
@@ -86,9 +88,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   configuration: OpenAIResponsesConfiguration,
   authentication: typeof ResponseAuthenticationSchema.Type,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
-    configuration,
-  );
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'openai-responses')
     return yield* new ModelError({
       kind: 'unsupported',
@@ -350,9 +350,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       cause,
                     }),
                 );
-                const envelope = Schema.decodeUnknownResult(
-                  WebSocketEnvelopeSchema,
-                )(raw);
+                const envelope = decodeEnvelope(raw);
                 if (!Result.isSuccess(envelope))
                   return yield* new ModelError({
                     kind: 'malformed-output',
@@ -361,8 +359,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                     cause: envelope.failure,
                   });
                 if (envelope.success.type === 'error') {
-                  const rejected =
-                    Schema.decodeUnknownResult(WebSocketErrorSchema)(raw);
+                  const rejected = decodeRejection(raw);
                   if (!Result.isSuccess(rejected))
                     return yield* new ModelError({
                       kind: 'malformed-output',

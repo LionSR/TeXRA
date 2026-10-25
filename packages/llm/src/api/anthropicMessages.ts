@@ -19,7 +19,7 @@ import {
 
 // Local imports - canonical model contract
 import {
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ResolvedTurnSchema,
   type AnthropicMessagesConfiguration,
@@ -610,9 +610,7 @@ export function anthropicMessagesModel(
   configuration: AnthropicMessagesConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
-    configuration,
-  );
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
     throw new ModelError({
       kind: 'invalid-request',

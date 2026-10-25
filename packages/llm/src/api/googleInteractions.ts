@@ -8,7 +8,7 @@ import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
   completedTurn,
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   ResolvedTurnSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
@@ -568,9 +568,7 @@ export function googleInteractionsModel(
   configuration: GoogleInteractionsConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
-    configuration,
-  );
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'google-interactions' || !transport.apiKey) {
     throw new TypeError(
       'Google Interactions requires its configuration and an explicit API key.',

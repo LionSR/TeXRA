@@ -215,7 +215,7 @@ export const VscodeLanguageModelConfigurationSchema =
   );
 
 /** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
-export const ModelConfigurationSchema = Schema.Union([
+const ModelConfigurationSchema = Schema.Union([
   VscodeLanguageModelConfigurationSchema,
   BindingSchema.mapFields(
     Struct.assign({
@@ -328,6 +328,10 @@ export const ModelConfigurationSchema = Schema.Union([
   ).check(Schema.makeFilter(validateTemperatureDefault)),
 ]);
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
+/** The configuration a binding was built with; a mismatch is a programming defect. */
+export const decodeModelConfiguration = Schema.decodeUnknownSync(
+  ModelConfigurationSchema,
+);
 export type GoogleInteractionsConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'google-interactions' }

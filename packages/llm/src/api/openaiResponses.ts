@@ -21,7 +21,7 @@ import {
   BackgroundSubmissionSchema,
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  ModelConfigurationSchema,
+  decodeModelConfiguration,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Model,
@@ -91,9 +91,7 @@ export function openaiResponsesModel(
     readonly fetch?: typeof fetch;
   },
 ): Model {
-  const config = Schema.decodeUnknownSync(ModelConfigurationSchema)(
-    configuration,
-  );
+  const config = decodeModelConfiguration(configuration);
   if (config.protocol !== 'openai-responses') {
     throw new ModelError({
       kind: 'unsupported',
