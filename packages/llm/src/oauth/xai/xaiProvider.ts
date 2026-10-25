@@ -110,7 +110,7 @@ export const XaiTokenResponseSchema = Schema.Struct({
   // Provider-boundary guard: absent or non-positive expires_in is not a
   // security decision — fall back to a short default and let JWT exp / 401
   // drive the real refresh. Prefer access JWT exp in buildSession when present.
-  expires_in: Schema.Union([Schema.Number, Schema.NumberFromString])
+  expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString])
     .check(Schema.isGreaterThan(0))
     .pipe(
       Schema.catchDecoding(() =>
@@ -143,14 +143,14 @@ export const XaiDeviceCodeSchema = Schema.Struct({
   ),
   expires_in: Schema.optional(
     Schema.NullOr(
-      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
+      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),
   ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
   interval: Schema.optional(
     Schema.NullOr(
-      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
+      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),

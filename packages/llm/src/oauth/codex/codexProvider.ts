@@ -135,7 +135,7 @@ export const CodexDeviceUserCodeSchema = Schema.Struct({
   // The endpoint sends the poll interval (seconds) as a string or a number, may
   // omit it, and could send junk. Normalize at the boundary to a positive
   // number, defaulting to 5 (matches Codex CLI / Zed).
-  interval: Schema.Union([Schema.Number, Schema.NumberFromString])
+  interval: Schema.Union([Schema.Finite, Schema.FiniteFromString])
     .check(Schema.isGreaterThan(0))
     .pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(5))))
     .pipe(Schema.withDecodingDefault(Effect.succeed(5))),
@@ -144,7 +144,7 @@ export const CodexDeviceUserCodeSchema = Schema.Struct({
   // absent or unusable, the caller applies its own fallback deadline.
   expires_in: Schema.optional(
     Schema.NullOr(
-      Schema.Union([Schema.Number, Schema.NumberFromString]).check(
+      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
         Schema.isGreaterThan(0),
       ),
     ),

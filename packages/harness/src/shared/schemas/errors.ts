@@ -101,10 +101,11 @@ const ErrorContextSchema = Schema.Struct({
 export type ErrorContext = typeof ErrorContextSchema.Type;
 
 /**
- * Complete error log data. Strict, like every sibling provider-error schema:
- * a stream log still carrying the retired independent classification markers
- * must fail loudly rather than have them stripped into a classification-less
- * row that reads as an ordinary provider failure.
+ * Complete error log data. `decodeLogPayload` reads it with
+ * `onExcessProperty: 'error'`: a stream log still carrying the retired
+ * independent classification markers must fail loudly rather than have them
+ * stripped into a classification-less row that reads as an ordinary provider
+ * failure.
  */
 export const ErrorLogDataSchema = RetryErrorInfoSchema.mapFields(
   Struct.assign({

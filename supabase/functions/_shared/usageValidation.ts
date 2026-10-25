@@ -19,12 +19,12 @@ const UsageRouteSchema = Schema.Literals([
   'relay',
 ]);
 const AgentCategorySchema = Schema.Literals(['workflow', 'toolUse']);
-/** A UTC ISO 8601 date-time (`Z` only, seconds and fraction optional) on a
- *  real calendar date: the pattern `z.iso.datetime()` checked, kept so the
- *  edge accepts exactly what it accepted before. */
+/** A UTC ISO 8601 date-time (`Z` only, seconds required, fraction optional)
+ *  on a real calendar date: the pattern `z.iso.datetime()` checked, kept so
+ *  the edge accepts exactly what it accepted before. */
 const IsoDateTime = Schema.String.check(
   Schema.isPattern(
-    /^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?Z$/,
+    /^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?Z$/,
     { expected: 'a UTC ISO 8601 date-time' },
   ),
 );

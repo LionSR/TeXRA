@@ -55,8 +55,12 @@ export function decodeLogPayload(
   messageType: MessageType,
   data: unknown,
 ): { readonly payload: LogPayload } | { readonly issue: string } {
+  // An error row is read strictly; see ErrorLogDataSchema.
   const parsed = Schema.decodeUnknownResult(LOG_PAYLOAD_SCHEMAS[messageType])(
     data,
+    messageType === MESSAGE_TYPES.ERROR
+      ? { onExcessProperty: 'error' }
+      : undefined,
   );
   return Result.isSuccess(parsed)
     ? // cast: the indexed schema's decoded type is `LogPayload`'s arm for

@@ -6,14 +6,7 @@
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import {
-  Array as Arr,
-  Cause,
-  Effect,
-  Result,
-  Schema,
-  SchemaGetter,
-} from 'effect';
+import { Array as Arr, Cause, Effect, Result, Schema } from 'effect';
 
 import { defineTool, withLogChannel, ToolResult } from '@texra-ai/harness';
 import {
@@ -66,12 +59,10 @@ const LoogleHitSchema = Schema.StructWithRest(
     type: Schema.String,
     // Loogle, like the sibling `doc` field below, may omit `module` or send
     // null for it; either reads as an empty module name.
-    module: Schema.optional(Schema.NullOr(Schema.String)).pipe(
-      Schema.decodeTo(Schema.String, {
-        decode: SchemaGetter.transform((value) => value ?? ''),
-        // A provider response is read one way; nothing encodes a hit back.
-        encode: SchemaGetter.forbidden(() => 'decode-only'),
-      }),
+    module: nullishWithDefault(
+      Schema.String,
+      '',
+      'The declaring module, or empty when Loogle sends none.',
     ),
     // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
     doc: Schema.optional(Schema.NullOr(Schema.String)),
