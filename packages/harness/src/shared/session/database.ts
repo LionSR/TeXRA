@@ -46,11 +46,7 @@ export type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
 export const INPUT_HISTORY_LIMIT = 1000;
 
 /** Only an explicit single-run deletion may replace an unprovable owner. */
-const DeletionModeSchema = Schema.Literals([
-  'single',
-  'bulk',
-  'automatic',
-]);
+const DeletionModeSchema = Schema.Literals(['single', 'bulk', 'automatic']);
 export type DeletionMode = typeof DeletionModeSchema.Type;
 
 /** The current claim and existence, independent of historical event writers. */

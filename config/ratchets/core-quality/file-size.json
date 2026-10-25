@@ -20,7 +20,7 @@
   "packages/harness/src/controllers/session/storeSchema.ts": 410,
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 450,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 570,
-  "packages/harness/src/shared/session/database.ts": 413,
+  "packages/harness/src/shared/session/database.ts": 409,
   "packages/harness/src/shared/session/runState.ts": 546,
   "packages/harness/src/shared/session/sessionView.ts": 459,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1166,
