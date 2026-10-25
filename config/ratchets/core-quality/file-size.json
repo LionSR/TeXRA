@@ -34,7 +34,7 @@
   "packages/llm/src/api/googleInteractions.ts": 955,
   "packages/llm/src/api/openaiResponses.ts": 499,
   "packages/llm/src/api/openaiResponsesCodec.ts": 472,
-  "packages/llm/src/api/openrouterChat.ts": 770,
+  "packages/llm/src/api/openrouterChat.ts": 747,
   "packages/llm/src/message.ts": 409,
   "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 412,
   "packages/llm/src/turn.ts": 795

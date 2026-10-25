@@ -114,10 +114,11 @@ function frame(delta: object = {}, finishReason: string | null = null): object {
 function receipt(fields: object): object {
   return { ...IDENTITY, choices: [], ...fields };
 }
-/** The SDK hands its fetcher one `Request`. */
-function sentRequest(input: Parameters<typeof globalThis.fetch>[0]): Request {
-  assert(input instanceof Request);
-  return input;
+/** The request a fetch call describes, however it was called. */
+function sentRequest(
+  ...[input, init]: Parameters<typeof globalThis.fetch>
+): Request {
+  return input instanceof Request ? input : new Request(input, init);
 }
 function sse(...frames: object[]): string {
   return (
@@ -171,8 +172,8 @@ describe('native OpenRouter Chat', () => {
     () =>
       Effect.gen(function* () {
         const sent: Record<string, any>[] = [];
-        const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
-          const request = sentRequest(input);
+        const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+          const request = sentRequest(input, init);
           expect(request.url).toBe(
             'https://synthetic.invalid/api/v1/chat/completions',
           );
@@ -409,8 +410,8 @@ describe('native OpenRouter Chat', () => {
     ([_, delta, expected]) =>
       Effect.gen(function* () {
         const bodies: any[] = [];
-        const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
-          bodies.push(await sentRequest(input).json());
+        const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+          bodies.push(await sentRequest(input, init).json());
           return response(sse(frame(delta), frame({}, 'stop')));
         });
         const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
@@ -750,7 +751,7 @@ describe('native OpenRouter Chat', () => {
         const progressed = yield* Deferred.make<void>();
         const cleanup = new Error('Distinct cleanup');
         const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
-          sentRequest(input);
+          sentRequest(input, init);
           signal = init?.signal ?? undefined;
           assert(signal);
           if (stage === 'headers')
@@ -768,7 +769,8 @@ describe('native OpenRouter Chat', () => {
               );
             },
             async cancel() {
-              expect(signal!.aborted).toBe(true);
+              // The body is cancelled first; the request aborts after.
+              expect(signal!.aborted).toBe(false);
               await new Promise<void>((resolve) => {
                 release = resolve;
               });
@@ -810,13 +812,14 @@ describe('native OpenRouter Chat', () => {
           ),
         );
         yield* settle;
-        expect(signal?.aborted).toBe(true);
+        expect(signal?.aborted).toBe(stage === 'headers');
         if (stage !== 'headers') {
           expect(release).toBeDefined();
           expect(yield* Deferred.isDone(joined)).toBe(false);
           release!();
         }
         yield* Fiber.join(interrupting);
+        expect(signal?.aborted).toBe(true);
         const exit = yield* Fiber.await(fiber);
         assert(Exit.isFailure(exit));
         expect(exit.cause.reasons.some(Cause.isInterruptReason)).toBe(true);
@@ -834,7 +837,7 @@ describe('native OpenRouter Chat', () => {
   );
 
   it.effect(
-    'fails a malformed frame once, without its repeat on reader cleanup as a defect',
+    'fails a malformed frame once, and reports a failing body cleanup beside it',
     () =>
       Effect.gen(function* () {
         const cleanup = new Error('Cancellation failed');
@@ -861,13 +864,19 @@ describe('native OpenRouter Chat', () => {
             return yield* Stream.runDrain(model.streamTurn(turn));
           }),
         );
-        expect(errors(exit)[0]).toMatchObject({
+        // A cleanup that fails makes the scope's typed failure a defect too,
+        // so both arrive as defects, each once.
+        assert(Exit.isFailure(exit));
+        const defects = exit.cause.reasons
+          .filter(Cause.isDieReason)
+          .map((reason) => reason.defect);
+        expect(defects).toHaveLength(2);
+        expect(defects[0]).toMatchObject({
           kind: 'malformed-output',
           responseId: 'generation-1',
           requestId: 'request-1',
         });
-        assert(Exit.isFailure(exit));
-        expect(exit.cause.reasons.some(Cause.isDieReason)).toBe(false);
+        expect(defects[1]).toBe(cleanup);
       }),
   );
 });

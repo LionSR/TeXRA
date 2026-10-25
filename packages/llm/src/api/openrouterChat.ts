@@ -3,12 +3,13 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Effect, Result, Schema, Stream } from 'effect';
-import { OpenRouterCore } from '@openrouter/sdk/core';
-import { chatSend } from '@openrouter/sdk/funcs/chatSend';
-import { HTTPClient } from '@openrouter/sdk/lib/http';
-import { HTTPClientError } from '@openrouter/sdk/models/errors/httpclienterrors';
-import { OpenRouterError } from '@openrouter/sdk/models/errors/openroutererror';
-import { SDKValidationError } from '@openrouter/sdk/models/errors/sdkvalidationerror';
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from 'effect/http';
 
 // Local imports - canonical model contract
 import { assembleTurn } from './assembleTurn.js';
@@ -32,17 +33,17 @@ import {
   parseJsonOrModelError,
   sdkModelError,
 } from '../errors.js';
-import { pullStream, readerAbortSignal } from './transport.js';
+import {
+  chatChunks,
+  type ChatMessage,
+  type ChatRequest,
+  type ChatStreamChunk,
+  type ChatUsage,
+  type ContentItem,
+  type ReasoningDetail,
+} from './openrouterChatWire.js';
+import type { Sse } from 'effect/encoding';
 import type { PartEvent } from './parts.js';
-import type {
-  ChatContentItems,
-  ChatMessages,
-  ChatRequest,
-  ChatStreamChunk,
-  ChatUsage,
-  ReasoningDetailUnion,
-  ReasoningFormat,
-} from '@openrouter/sdk/models';
 
 type OpenRouterTurn = Extract<ResolvedTurn, { protocol: 'openrouter-chat' }>;
 type Part = TurnResult['content'][number];
@@ -60,14 +61,14 @@ const FINISH = {
   tool_calls: 'tool-calls',
 } as const;
 
-/** An HTTP rejection body, read from the raw text the SDK kept. */
+/** An HTTP rejection body. */
 const ErrorSchema = Schema.Struct({
   code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
   message: Schema.String,
 });
 
-/** One SDK reasoning detail as canonical evidence; an unknown one is malformed. */
-const canonicalDetail = (detail: ReasoningDetailUnion): Detail | undefined => {
+/** One wire reasoning detail as canonical evidence. */
+const canonicalDetail = (detail: ReasoningDetail): Detail => {
   const metadata = {
     ...('format' in detail && detail.format !== undefined
       ? { format: detail.format }
@@ -95,35 +96,33 @@ const canonicalDetail = (detail: ReasoningDetailUnion): Detail | undefined => {
       return {
         ...metadata,
         kind: 'server-tool-call',
-        toolName: detail.toolName,
-        ...(detail.toolCallId !== undefined
-          ? { toolCallId: detail.toolCallId }
+        toolName: detail.tool_name,
+        ...(detail.tool_call_id !== undefined
+          ? { toolCallId: detail.tool_call_id }
           : {}),
         arguments: detail.arguments,
         result: detail.result,
       };
-    default:
-      return undefined;
   }
 };
 
-/** The canonical receipt of one SDK usage object; absent counts stay unknown. */
+/** The canonical receipt of one usage object; absent counts stay unknown. */
 const canonicalUsage = (
   usage: ChatUsage,
 ): NonNullable<TurnResult['usage']> => ({
-  inputTokens: usage.promptTokens ?? null,
-  outputTokens: usage.completionTokens ?? null,
-  totalTokens: usage.totalTokens ?? null,
-  cachedInputTokens: usage.promptTokensDetails?.cachedTokens ?? null,
-  reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? null,
+  inputTokens: usage.prompt_tokens,
+  outputTokens: usage.completion_tokens,
+  totalTokens: usage.total_tokens,
+  cachedInputTokens: usage.prompt_tokens_details?.cached_tokens ?? null,
+  reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? null,
   providerUsage: {
     kind: 'openrouter',
     ...(usage.cost !== undefined ? { cost: usage.cost } : {}),
-    ...(usage.isByok !== undefined ? { isByok: usage.isByok } : {}),
-    ...(usage.promptTokensDetails !== undefined
+    ...(usage.is_byok !== undefined ? { isByok: usage.is_byok } : {}),
+    ...(usage.prompt_tokens_details !== undefined
       ? {
-          inputDetails: usage.promptTokensDetails && {
-            cacheWriteTokens: usage.promptTokensDetails.cacheWriteTokens,
+          inputDetails: usage.prompt_tokens_details && {
+            cacheWriteTokens: usage.prompt_tokens_details.cache_write_tokens,
           },
         }
       : {}),
@@ -165,8 +164,8 @@ function chatWire(responseId: string | undefined) {
           kind: 'identity',
           id: chunk.id,
           model: chunk.model,
-          ...(chunk.systemFingerprint !== undefined && {
-            fingerprint: chunk.systemFingerprint,
+          ...(chunk.system_fingerprint !== undefined && {
+            fingerprint: chunk.system_fingerprint,
           }),
         },
       ];
@@ -181,7 +180,7 @@ function chatWire(responseId: string | undefined) {
         events.push({ kind: 'usage', usage });
       }
       const choice = chunk.choices[0];
-      if (choice?.finishReason === 'error')
+      if (choice?.finish_reason === 'error')
         return yield* new ModelError({
           kind: 'provider-rejection',
           message: 'OpenRouter reported a failed generation.',
@@ -197,16 +196,8 @@ function chatWire(responseId: string | undefined) {
         return yield* fail(
           'OpenRouter returned unsupported or malformed stream content.',
         );
-      const received: Detail[] = [];
-      for (const detail of delta.reasoningDetails ?? []) {
-        const canonical = canonicalDetail(detail);
-        if (canonical === undefined)
-          return yield* fail(
-            'OpenRouter returned an unknown or malformed reasoning detail.',
-          );
-        received.push(canonical);
-      }
-      const toolCalls = delta.toolCalls ?? [];
+      const received = (delta.reasoning_details ?? []).map(canonicalDetail);
+      const toolCalls = delta.tool_calls ?? [];
       const hasContent =
         !!delta.content ||
         !!delta.refusal ||
@@ -220,7 +211,7 @@ function chatWire(responseId: string | undefined) {
       if (typeof delta.reasoning === 'string')
         plain = (plain ?? '') + delta.reasoning;
       else if (delta.reasoning === null && plain === undefined) plain = null;
-      if (delta.reasoningDetails !== undefined)
+      if (delta.reasoning_details !== undefined)
         details = [...(details ?? []), ...received];
       if (!opened && identified && !finished) {
         opened = true;
@@ -273,9 +264,9 @@ function chatWire(responseId: string | undefined) {
             text: call.function.arguments,
           });
       }
-      if (choice.finishReason === null) return events;
+      if (choice.finish_reason === null) return events;
       const finishReason = Object.entries(FINISH).find(
-        ([wire]) => wire === choice.finishReason,
+        ([wire]) => wire === choice.finish_reason,
       )?.[1];
       if (finishReason === undefined)
         return yield* fail('OpenRouter returned an unknown finish reason.');
@@ -322,6 +313,33 @@ function chatWire(responseId: string | undefined) {
   return { parts, end };
 }
 
+/** One canonical reasoning detail as the wire spells it, for replay. */
+const wireDetail = (detail: Detail): ReasoningDetail => {
+  switch (detail.kind) {
+    case 'text': {
+      const { kind: _, ...fields } = detail;
+      return { ...fields, type: 'reasoning.text' };
+    }
+    case 'summary': {
+      const { kind: _, ...fields } = detail;
+      return { ...fields, type: 'reasoning.summary' };
+    }
+    case 'encrypted': {
+      const { kind: _, ...fields } = detail;
+      return { ...fields, type: 'reasoning.encrypted' };
+    }
+    case 'server-tool-call': {
+      const { kind: _, toolName, toolCallId, ...fields } = detail;
+      return {
+        ...fields,
+        type: 'reasoning.server_tool_call',
+        tool_name: toolName,
+        ...(toolCallId !== undefined ? { tool_call_id: toolCallId } : {}),
+      };
+    }
+  }
+};
+
 // Reused at preparation and execution so rehydration cannot bypass support checks.
 const requestBody = Effect.fn('llm.openrouterRequest')(function* (
   turn: OpenRouterTurn,
@@ -342,7 +360,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       message:
         'The selected OpenRouter route does not support these resolved controls.',
     });
-  const messages: ChatMessages[] = [];
+  const messages: ChatMessage[] = [];
   if (turn.system !== undefined)
     messages.push({ role: 'system', content: turn.system });
   let calls: Extract<Part, { kind: 'local-call' }>[] = [];
@@ -360,7 +378,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         messages.push({
           role: 'tool',
           // The canonical grammar guarantees adjacent, complete ordinals.
-          toolCallId: calls[result.callOrdinal].providerCallId,
+          tool_call_id: calls[result.callOrdinal].providerCallId,
           content: result.status === 'error' ? `Error: ${text}` : text,
         });
       }
@@ -375,7 +393,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       continue;
     }
     if (message.role === 'user') {
-      const content: ChatContentItems[] = [];
+      const content: ContentItem[] = [];
       for (const part of message.content) {
         if (part.kind === 'text')
           content.push({ type: 'text', text: part.text });
@@ -391,7 +409,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         ) {
           content.push({
             type: 'image_url',
-            imageUrl: {
+            image_url: {
               url: `data:${part.mimeType};base64,${part.base64}`,
               ...(part.detail !== undefined ? { detail: part.detail } : {}),
             },
@@ -402,7 +420,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         ) {
           content.push({
             type: 'file',
-            file: { fileData: `data:${part.mimeType};base64,${part.base64}` },
+            file: { file_data: `data:${part.mimeType};base64,${part.base64}` },
           });
         } else if (part.kind === 'audio' && configuration.supportsAudioInput) {
           const formats: Record<string, string> = {
@@ -423,7 +441,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
             });
           content.push({
             type: 'input_audio',
-            inputAudio: { data: part.base64, format },
+            input_audio: { data: part.base64, format },
           });
         } else
           return yield* new ModelError({
@@ -479,41 +497,11 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       ...(refusal !== undefined ? { refusal } : {}),
       ...(reasoning?.plain !== undefined ? { reasoning: reasoning.plain } : {}),
       ...(reasoning?.details !== undefined
-        ? {
-            reasoningDetails: reasoning.details.map(
-              (detail): ReasoningDetailUnion => {
-                // The SDK brands a format it does not list; the wire is a string.
-                const format = detail.format as
-                  ReasoningFormat | null | undefined;
-                switch (detail.kind) {
-                  case 'text': {
-                    const { kind: _, ...fields } = detail;
-                    return { ...fields, format, type: 'reasoning.text' };
-                  }
-                  case 'summary': {
-                    const { kind: _, ...fields } = detail;
-                    return { ...fields, format, type: 'reasoning.summary' };
-                  }
-                  case 'encrypted': {
-                    const { kind: _, ...fields } = detail;
-                    return { ...fields, format, type: 'reasoning.encrypted' };
-                  }
-                  case 'server-tool-call': {
-                    const { kind: _, ...fields } = detail;
-                    return {
-                      ...fields,
-                      format,
-                      type: 'reasoning.server_tool_call',
-                    };
-                  }
-                }
-              },
-            ),
-          }
+        ? { reasoning_details: reasoning.details.map(wireDetail) }
         : {}),
       ...(calls.length > 0
         ? {
-            toolCalls: calls.map((call) => ({
+            tool_calls: calls.map((call) => ({
               id: call.providerCallId,
               type: 'function' as const,
               function: {
@@ -529,7 +517,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
     model: turn.requestedModel,
     messages,
     stream: true,
-    maxCompletionTokens: controls.maxOutputTokens,
+    max_completion_tokens: controls.maxOutputTokens,
     ...(controls.temperature !== null
       ? { temperature: controls.temperature }
       : {}),
@@ -550,7 +538,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
               strict: false,
             },
           })),
-          toolChoice:
+          tool_choice:
             controls.toolChoice === 'auto'
               ? ('auto' as const)
               : {
@@ -559,13 +547,14 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
                 },
         }
       : {}),
-  } satisfies ChatRequest & { stream: true };
+  } satisfies ChatRequest;
 });
 
 /**
- * OpenRouter Chat through `@openrouter/sdk`; selected credentials and transport
- * are explicit. The SDK never retries: the run's retry gate owns every retry,
- * and the SDK's default backoff would hold a 5XX for up to an hour.
+ * OpenRouter Chat over Effect's `HttpClient`, its stream parsed by Effect's
+ * SSE parser and decoded by Effect Schema; selected credentials and the
+ * `fetch` under the client are explicit. Nothing here retries: the run's
+ * retry gate owns every retry.
  */
 export function openrouterChatModel(
   configuration: OpenRouterConfiguration,
@@ -579,6 +568,7 @@ export function openrouterChatModel(
     });
   const origin = originOf(config);
   const http = transport.fetch ?? globalThis.fetch;
+  const endpoint = config.deployment.endpoint.replace(/\/$/, '');
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.prepareTurn')(
     function* (request) {
       const authored = yield* decodeTurnRequest(
@@ -632,77 +622,74 @@ export function openrouterChatModel(
           requestId,
           model: config.requestedModel,
         });
-      // A malformed event throws the SDK's own ZodError, matched by name since
-      // this package imports no Zod; any other read failure is the connection.
-      const streamFailure = (cause: unknown) =>
-        cause instanceof Error && cause.name === 'ZodError'
-          ? new ModelError({
-              kind: 'malformed-output',
-              message:
-                'OpenRouter returned unsupported or malformed stream content.',
-              cause,
-            })
-          : transportFailure(cause);
-      const transportFailure = (cause: unknown) =>
+      // Only the underlying cause: the client error also holds the request,
+      // whose headers carry the API key.
+      const transportFailure = (error: HttpClientError.HttpClientError) =>
         new ModelError({
           kind: 'transport',
           message: 'The OpenRouter connection failed.',
-          cause,
+          cause: error.reason.cause ?? error.reason,
         });
-      /** One SDK request failure; any OpenRouterError is a reply, not ours. */
-      const requestFailure = Effect.fn('llm.openrouterRequestFailure')(
-        function* (error: unknown) {
-          if (!(error instanceof OpenRouterError))
-            return yield* error instanceof SDKValidationError
-              ? new ModelError({
-                  kind: 'invalid-request',
-                  message: 'OpenRouter refused to encode this request.',
-                  cause: error,
-                })
-              : transportFailure(
-                  error instanceof HTTPClientError ? error.cause : error,
-                );
-          const status = error.statusCode;
-          if (status < 400)
-            return yield* new ModelError({
+      // A decoder's refusal of a streamed event is the provider's output; a
+      // failed read is the connection.
+      const streamFailure = (
+        error:
+          HttpClientError.HttpClientError | Sse.SseError | Schema.SchemaError,
+      ) =>
+        HttpClientError.isHttpClientError(error)
+          ? transportFailure(error)
+          : new ModelError({
               kind: 'malformed-output',
-              message: 'OpenRouter returned an unexpected response.',
-              status,
+              message:
+                'OpenRouter returned unsupported or malformed stream content.',
               cause: error,
             });
-          // Status, request id and any retry-after delay come from the reply;
-          // the kind and message come from the raw body the SDK kept.
-          const rejection = sdkModelError(
-            error,
-            {
-              status,
-              headers: error.headers,
-              requestId: error.headers.get('x-request-id'),
-            },
-            `OpenRouter rejected the request (HTTP ${status}).`,
-          );
-          const raw = yield* parseJsonOrModelError(error.body, (cause) =>
-            enrichModelError(rejection, {
-              kind: 'provider-rejection',
-              message: `OpenRouter rejected the request (HTTP ${status}).`,
-              cause,
-            }),
-          );
-          const payload = hasErrorField(raw) ? raw.error : raw;
-          const parsed = Schema.decodeUnknownResult(ErrorSchema)(payload);
-          return yield* Result.isSuccess(parsed)
-            ? enrichModelError(rejection, {
-                kind: authOrRejectionKind(status, parsed.success.code),
-                message: parsed.success.message,
-                cause: payload,
-              })
-            : enrichModelError(rejection, {
-                kind: 'malformed-output',
-                message: 'OpenRouter returned a malformed error receipt.',
-                cause: payload,
-              });
-        },
-      );
+      /** A reply that is not a stream: a rejection, read from its body. */
+      const rejection = Effect.fn('llm.openrouterRejection')(function* (
+        response: HttpClientResponse.HttpClientResponse,
+      ) {
+        const status = response.status;
+        if (status < 400)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: 'OpenRouter returned an unexpected response.',
+            status,
+          });
+        // Status, request id and any retry-after delay come from the reply;
+        // the kind and message come from its body.
+        const failure = sdkModelError(
+          undefined,
+          {
+            status,
+            headers: new globalThis.Headers(response.headers),
+            requestId: requestId ?? null,
+          },
+          `OpenRouter rejected the request (HTTP ${status}).`,
+        );
+        const text = yield* response.text.pipe(
+          Effect.mapError(transportFailure),
+        );
+        const raw = yield* parseJsonOrModelError(text, (cause) =>
+          enrichModelError(failure, {
+            kind: 'provider-rejection',
+            message: `OpenRouter rejected the request (HTTP ${status}).`,
+            cause,
+          }),
+        );
+        const payload = hasErrorField(raw) ? raw.error : raw;
+        const parsed = Schema.decodeUnknownResult(ErrorSchema)(payload);
+        return yield* Result.isSuccess(parsed)
+          ? enrichModelError(failure, {
+              kind: authOrRejectionKind(status, parsed.success.code),
+              message: parsed.success.message,
+              cause: payload,
+            })
+          : enrichModelError(failure, {
+              kind: 'malformed-output',
+              message: 'OpenRouter returned a malformed error receipt.',
+              cause: payload,
+            });
+      });
       return Stream.unwrap(
         Effect.gen(function* () {
           if (
@@ -715,56 +702,46 @@ export function openrouterChatModel(
                 'The prepared turn belongs to another protocol or deployment.',
             });
           const chatRequest = yield* requestBody(turn, config);
-          let reader: ReadableStreamDefaultReader<ChatStreamChunk> | undefined =
-            undefined;
-          const signal = yield* readerAbortSignal(() => reader);
-          // One client per request: its fetcher reads this response's headers,
-          // and hands fetch the scope's signal itself. The SDK's `Request`
-          // only follows that signal through a controller the runtime holds
-          // weakly, so a collected clone would never see the abort.
-          const client = new OpenRouterCore({
-            apiKey: transport.apiKey,
-            serverURL: config.deployment.endpoint,
-            retryConfig: { strategy: 'none' },
-            httpClient: new HTTPClient({
-              fetcher: async (request, init) => {
-                const response = await http(request, { ...init, signal });
-                requestId = response.headers.get('x-request-id') ?? undefined;
-                responseId =
-                  response.headers.get('x-generation-id') ?? undefined;
-                return response;
-              },
-            }),
-          });
-          const result = yield* Effect.tryPromise({
-            try: () =>
-              chatSend(
-                client,
-                { chatRequest },
-                { signal, headers: { 'X-Title': 'TeXRA.ai' } },
+          // The request lives as long as this stream: closing it cancels the
+          // body, then aborts the fetch.
+          const client = HttpClient.withScope(yield* HttpClient.HttpClient);
+          const response = yield* client
+            .execute(
+              HttpClientRequest.post(`${endpoint}/chat/completions`).pipe(
+                HttpClientRequest.setHeaders({
+                  Authorization: `Bearer ${transport.apiKey}`,
+                  Accept: 'text/event-stream',
+                  'X-Title': 'TeXRA.ai',
+                }),
+                HttpClientRequest.bodyJsonUnsafe(chatRequest),
               ),
-            catch: transportFailure,
-          });
-          if (!result.ok) return yield* requestFailure(result.error);
-          if (!(result.value instanceof ReadableStream))
+            )
+            .pipe(Effect.mapError(transportFailure));
+          requestId = response.headers['x-request-id'];
+          responseId = response.headers['x-generation-id'];
+          if (response.status < 200 || response.status >= 300)
+            return yield* rejection(response);
+          if (!response.headers['content-type']?.includes('text/event-stream'))
             return yield* new ModelError({
               kind: 'malformed-output',
               message: 'OpenRouter answered a streamed request without SSE.',
             });
-          reader = result.value.getReader();
-          const body = reader;
           const wire = chatWire(responseId);
           return assembleTurn(
-            Stream.concat(
-              pullStream(() => body.read(), streamFailure).pipe(
-                Stream.mapEffect(wire.parts),
-              ),
-              Stream.sync(wire.end),
+            chatChunks(response.stream).pipe(
+              Stream.mapError(streamFailure),
+              Stream.mapEffect(wire.parts),
+              Stream.concat(Stream.sync(wire.end)),
             ),
             { origin, provider: 'OpenRouter', responseId },
           ).pipe(Stream.mapError(enrich));
         }).pipe(Effect.mapError(enrich)),
       );
-    });
+    }).pipe(
+      Stream.provide(FetchHttpClient.layer),
+      Stream.provideService(FetchHttpClient.Fetch, http),
+      // OpenRouter is a third party: no trace context leaves this process.
+      Stream.provideService(HttpClient.TracerPropagationEnabled, false),
+    );
   return { prepareTurn, streamTurn };
 }
