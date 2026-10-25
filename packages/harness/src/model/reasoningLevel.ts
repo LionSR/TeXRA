@@ -1,5 +1,6 @@
 import { Effect, Result, Schema } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
+import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   acceptedEfforts,
@@ -18,9 +19,6 @@ import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
-
-/** llm-zoo's reasoning-effort vocabulary, as a stored string decodes to it. */
-const ReasoningEffortSchema = Schema.Enum(ReasoningEffort);
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,

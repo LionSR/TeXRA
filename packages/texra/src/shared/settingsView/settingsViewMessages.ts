@@ -8,7 +8,7 @@
  * dispatchers.
  */
 import { Effect, Schema, Struct } from 'effect';
-import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -65,9 +65,6 @@ export {
   type ProviderSetting,
   type UpdateProfileMessage,
 } from './profileViewMessages';
-
-/** A reasoning effort as llm-zoo spells it. */
-const ReasoningEffortSchema = Schema.Enum(ReasoningEffort);
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
