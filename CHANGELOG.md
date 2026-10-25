@@ -20,9 +20,7 @@ All notable changes to this project will be documented in this file.
   serves (some DeepSeek, GLM, MiniMax, Kimi and gpt-oss models) are no longer
   offered; one an agent or setting still names fails with a message saying
   so. Conversations saved by an earlier build show as written by that build
-  and cannot be resumed by this one. SDK: `@texra-ai/llm` drops the
-  `openrouter-chat` protocol and `OpenRouterConfiguration`, and exports
-  `isUnservedModel`; its `ModelRoute` gains an `unserved` arm.
+  and cannot be resumed by this one.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and
