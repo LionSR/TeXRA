@@ -113,6 +113,9 @@ interface ScriptRequest<E, R> {
    * as its input, and settles as a tool call does.
    */
   readonly globals?: ReadonlyArray<string>;
+  /** The modules the script may `import()`, JavaScript module source by
+   *  specifier: data the caller pinned, so a replay loads the same code. */
+  readonly modules?: Readonly<Record<string, string>>;
   /**
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
    * if the script ends first (the caller then records it as stopped, once
@@ -217,6 +220,7 @@ const make = Effect.gen(function* () {
         source: request.source,
         tools: [...request.tools],
         globals: [...(request.globals ?? [])],
+        modules: { ...request.modules },
         cpuBudgetMs,
         wasm,
         interrupt,
@@ -322,8 +326,9 @@ const make = Effect.gen(function* () {
 
 /**
  * Runs guest scripts. A script is the body of an async function; it calls
- * the host as `await tools.<name>(args)`, logs with `console.log`, and
- * `return`s its result. It has no timers, `Date.now()` or `Math.random()`, so
+ * the host as `await tools.<name>(args)`, logs with `console.log`, loads
+ * the modules it is given with `await import(specifier)`, and `return`s its
+ * result. It has no timers, `Date.now()` or `Math.random()`, so
  * the same settlements in the same order replay it exactly.
  */
 export class CodeSandbox extends Context.Service<

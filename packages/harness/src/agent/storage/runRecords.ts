@@ -356,7 +356,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       ),
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): Effect.Effect<readonly string[], DatabaseReadFailed> =>
-      Effect.map(folded, (state) => state?.offeredSkills ?? []),
+      Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
     /** A model failure stopped the run's turn (its folded `lastError`). */
     readModelFailed: (): Effect.Effect<boolean, DatabaseReadFailed> =>
       Effect.map(folded, (state) => state?.lastError != null),

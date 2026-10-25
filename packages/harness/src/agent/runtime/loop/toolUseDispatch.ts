@@ -9,15 +9,14 @@
  * tool failure becomes a model-visible error result; and a durable write
  * failure halts dispatch, so an unfinished call is never recorded as done.
  *
- * One record per call (`PendingCall`), whichever issued it: the response, or
- * a guest of one of its `script` calls. Its rows are its only facts: the
- * `script.call` that issues a script's call commits with the call's first
- * row; its requests, under ids the attempt derives (`callRequestId`);
- * `tool.intent` as the body starts, after the PreToolUse hooks, the
- * guard and its approval, with a slow tool's card; `tool.result` with its
- * card's close; and the delivering `append` with the complete tool group
- * once, when every call of the response has its result. One scheduler
- * places both origins' calls.
+ * One record per call (`PendingCall`), whichever issued it: the response, or a
+ * guest of one of its `script` calls. Its rows are its only facts: the
+ * `script.call` that issues a script's call commits with the call's first row;
+ * its requests, under ids the attempt derives (`callRequestId`); `tool.intent`
+ * as the body starts, after the PreToolUse hooks, the guard and its approval,
+ * with a slow tool's card; `tool.result` with its card's close; and the
+ * delivering `append` with the complete tool group once, when every call of the
+ * response has its result. One scheduler places both origins' calls.
  *
  * Resume reads only row data: a call with a result keeps it; a duplicate
  * derives its primary; a call whose body never started re-enters what it
@@ -904,6 +903,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ? []
               : [{ tool: name, positional: global.positional }];
           }),
+          modules: step.modules,
           call: (op: ScriptOp, source: ScriptSource) =>
             call(op, source).pipe(Effect.provideContext(services)),
           answer: (

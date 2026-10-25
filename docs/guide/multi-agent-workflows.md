@@ -69,6 +69,8 @@ What a script can use:
 
 The inputs are literals in the code: a script has no arguments, no bound files, and no saved script file. Its `return` value comes back to the lead as JSON.
 
+A script can import modules with `await import(…)`. The document tasks come as one: `const { revise, from } = await import('builtIn:documents')`. `revise(agentName, options)` runs that agent's document task, taking the same options as `document_task`, and resolves to its result. `from(result, options)` returns `options` with that result's revised files as the input files, so `await revise('correct', from(await revise('polish', { inputFiles: ['main.tex'] })))` polishes a draft and then corrects the polished copy. A resumed script loads the modules it first ran with, even if TeXRA has been updated since.
+
 A failed call rejects with an error named `AgentFailed`; a call you stopped rejects with `Skipped`, one past its `timeoutMs` with `TimedOut`, and one whose model is not available with `ModelUnavailable`. `try`/`catch` works as usual, and an uncaught error ends the script. `Promise.all` rejects at the first failure without stopping the calls beside it, so a script that should keep going past failures catches inside each branch or uses `Promise.allSettled`. Two calls in one script with the same prompt, options, and files must carry distinct `id`s.
 
 A [goal](./configuration.md#goal-mode) is itself a script: a loop of `self()` calls, each with a `schema` for `{ status, report }`, that returns when a round reports `done` or `needs_user`, or when its rounds reach the spend cap. A script that needs another stopping rule writes the same loop with a check of its own.
