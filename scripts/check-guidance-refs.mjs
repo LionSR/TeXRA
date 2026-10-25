@@ -167,7 +167,7 @@ const EVENT_VOCABULARY_SOURCES = [
 const POSITION_VOCABULARY_SOURCES = [
   [
     'packages/harness/src/shared/schemas/runHistoryEvent.ts',
-    /const PositionAtSchema = z\.enum\(\[([^\]]*)\]\)/u,
+    /const PositionAtSchema = Schema\.Literals\(\[([^\]]*)\]\)/u,
   ],
   [
     'packages/harness/src/shared/session/runRows.ts',
