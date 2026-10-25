@@ -111,10 +111,9 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // `applyStateSettingUpdate` the extension and desktop settings views call, so
   // a row that carries a live side effect (approval policy) cannot be persisted
   // from here while the running session keeps enforcing the old value. The
-  // catalog row still owns the write consequences below it — `writeSetting`
-  // applies the declared mutual exclusions (Kimi Code clears OpenRouter) and
+  // catalog row still owns the write consequences:
   // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
-  // models — so this form keeps no key list of its own. `null` is the shared
+  // models, so this form keeps no key list of its own. `null` is the shared
   // reset convention (delete the key so the schema default reappears).
   const applyUpdate = (
     entry: SurfacedSettingEntry,

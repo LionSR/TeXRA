@@ -56,7 +56,7 @@ If you have not used GitHub Actions before, here is the whole picture:
   plus [`gh`](https://cli.github.com/) authenticated for opening the workflow
   PR (`gh auth login`).
 - An API key from at least one model provider. Prefer open-weight options
-  when you can (DeepSeek, OpenRouter); Anthropic, OpenAI, Google, and xAI
+  when you can (DeepSeek); Anthropic, OpenAI, Google, and xAI
   also work.
 
 ## Setup
@@ -84,10 +84,10 @@ Prefer an open-weight option when you can:
 gh secret set DEEPSEEK_API_KEY
 ```
 
-(Or `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`, or `XAI_API_KEY`; names must match exactly. The action
+(Or `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or
+`XAI_API_KEY`; names must match exactly. The action
 also accepts `MOONSHOT_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`, and
-`GLM_API_KEY`, but the scaffolded workflow only wires the first six, so for
+`GLM_API_KEY`, but the scaffolded workflow only wires the first five, so for
 those you add the matching `moonshot-api-key`, `dashscope-api-key`,
 `minimax-api-key`, or `glm-api-key` input to the review step yourself.)
 
@@ -138,23 +138,22 @@ deliberately.
 
 You can skip this section. By default TeXRA picks a model for
 whichever provider key you set, trying providers in this order: **DeepSeek →
-Anthropic → OpenAI → Google → OpenRouter → xAI → Moonshot → DashScope →
-MiniMax → GLM**.
+Anthropic → OpenAI → Google → xAI → Moonshot → DashScope → MiniMax →
+GLM**.
 
 The built-in defaults:
 
-| Provider   | Default model  |
-| ---------- | -------------- |
-| DeepSeek   | `deepseekproT` |
-| Anthropic  | `opus48T`      |
-| OpenAI     | `gpt55`        |
-| Google     | `gemini31p`    |
-| OpenRouter | `gptoss`       |
-| xAI        | `grok4`        |
-| Moonshot   | `kimi26T`      |
-| DashScope  | `qwenplus`     |
-| MiniMax    | `minimaxM27`   |
-| GLM        | `glm51`        |
+| Provider  | Default model  |
+| --------- | -------------- |
+| DeepSeek  | `deepseekproT` |
+| Anthropic | `opus48T`      |
+| OpenAI    | `gpt55`        |
+| Google    | `gemini31p`    |
+| xAI       | `grok4`        |
+| Moonshot  | `kimi26T`      |
+| DashScope | `qwenplus`     |
+| MiniMax   | `minimaxM27`   |
+| GLM       | `glm51`        |
 
 ::: warning xAI users
 The action's xAI default, `grok4`, is retired in the current CLI and cannot be
@@ -312,7 +311,7 @@ subscription is involved.
 
 **Can I add keys for several providers?** Yes. TeXRA uses the first available
 provider in its default order (DeepSeek → Anthropic → OpenAI → Google →
-OpenRouter → xAI → Moonshot → DashScope → MiniMax → GLM), or exactly what you
+xAI → Moonshot → DashScope → MiniMax → GLM), or exactly what you
 pin via `TEXRA_REVIEW_MODEL`.
 
 ## Next steps

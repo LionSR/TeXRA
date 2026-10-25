@@ -14,6 +14,13 @@ All notable changes to this project will be documented in this file.
   classes and validate their fields when constructed. A TeXRA window and a
   TeXRA service from different builds no longer talk to each other: update
   both together.
+- **OpenRouter is no longer supported.** The "Use OpenRouter for all
+  models" switch and the OpenRouter API key are gone, and the GitHub Action
+  template no longer takes `openrouter-api-key`. Models that only OpenRouter
+  serves (some DeepSeek, GLM, MiniMax, Kimi and gpt-oss models) are no longer
+  offered; one an agent or setting still names fails with a message saying
+  so. Conversations saved by an earlier build show as written by that build
+  and cannot be resumed by this one.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and

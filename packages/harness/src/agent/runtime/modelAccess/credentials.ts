@@ -1,8 +1,8 @@
 /**
- * The credential one decided route bills: a provider or OpenRouter key, or
- * a signed-in subscription session (ChatGPT, Grok) standing in for the
- * provider's key. The secret reaches the binding's transport and never a
- * row. Every failure is a {@link RouteUnavailable} the user can act on.
+ * The credential one decided route bills: a provider key, or a signed-in
+ * subscription session (ChatGPT, Grok) standing in for the provider's key.
+ * The secret reaches the binding's transport and never a row. Every failure
+ * is a {@link RouteUnavailable} the user can act on.
  */
 import { Effect } from 'effect';
 
@@ -35,17 +35,13 @@ type CredentialRoute = Extract<
   ModelRoute,
   {
     kind:
-      | 'api-key'
-      | 'openrouter'
-      | 'no-api-key'
-      | 'chatgpt-subscription'
-      | 'xai-subscription';
+      'api-key' | 'no-api-key' | 'chatgpt-subscription' | 'xai-subscription';
   }
 >;
 
 /**
  * What a route bills: the plan a direct key pays through, a subscription, or
- * the user's own key (OpenRouter, the editor, the validation model). The one
+ * the user's own key (the editor, the validation model). The one
  * owner of the fact: the binding sends it as the wire's billing and pricing
  * stamps it on each turn's usage.
  */
@@ -56,11 +52,10 @@ export function usageRouteOf(route: ModelRoute): UsageRoute {
     case 'chatgpt-subscription':
     case 'xai-subscription':
       return route.kind;
-    case 'openrouter':
     case 'copilot':
     case 'validation':
     case 'no-api-key':
-    case 'openrouter-unsupported':
+    case 'unserved': // never bound: the route decision refuses it
       return 'api-key';
     default:
       return route satisfies never;
@@ -74,7 +69,7 @@ export type RouteCredential = {
   /** The secret the transport sends as its bearer. */
   readonly bearer: string;
 } & (
-  | { readonly route: 'api-key' | 'openrouter' | 'xai-subscription' }
+  | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
       readonly accountId: string | null;
@@ -171,17 +166,17 @@ const subscriptionCredential = (
 
 /**
  * The key and endpoint of an API-key route: the provider key the decision
- * named, or the OpenRouter key, at the endpoint the facts name for it. The
+ * named, at the endpoint the facts name for it. The
  * one producer of the missing-credential failure; an unreadable key store
  * fails as itself, not as a missing key.
  */
 const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
-  route: Extract<CredentialRoute, { kind: 'api-key' | 'openrouter' }>,
+  route: Extract<CredentialRoute, { kind: 'api-key' }>,
   config: ModelConfig,
   facts: Pick<HostRouteFacts, 'endpoints'>,
   secrets: PlatformSecrets,
 ): Effect.fn.Return<RouteCredential, RouteUnavailable> {
-  const provider = route.kind === 'openrouter' ? 'openRouter' : route.provider;
+  const { provider } = route;
   const key = yield* lookupApiKey(secrets, provider).pipe(
     Effect.mapError(
       (cause) =>
@@ -195,10 +190,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   if (key === undefined) {
     return yield* new RouteUnavailable({
       reason: 'missing-api-key',
-      message:
-        route.kind === 'openrouter'
-          ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
-          : `Missing API key for ${provider}. Set a provider API key in settings.`,
+      message: `Missing API key for ${provider}. Set a provider API key in settings.`,
     });
   }
   const bearer = exposeApiKey(key);

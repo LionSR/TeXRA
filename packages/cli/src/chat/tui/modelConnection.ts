@@ -79,7 +79,7 @@ export function holdUntilConnected(message: HeldMessage): boolean {
 export const checkModelConnection = Effect.fn('checkModelConnection')(
   function* (services: CliPlatformServices) {
     const probe = yield* Effect.result(
-      hasUsableSetupCredential(services, services.secrets, 'cli'),
+      hasUsableSetupCredential(services, services.secrets),
     );
     if (probe._tag === 'Failure') {
       yield* Effect.logWarning(
@@ -114,7 +114,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   const { stores, secrets, runtime } = context;
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
-  const ready = yield* hasUsableSetupCredential(stores, secrets, 'cli');
+  const ready = yield* hasUsableSetupCredential(stores, secrets);
   if (!ready) return;
   modelConnectionNeeded.set(false);
   const selection = yield* Effect.exit(

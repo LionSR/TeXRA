@@ -110,8 +110,7 @@ skips approval for autonomous runs.
 ## Models
 
 Bring your own keys for OpenAI, Anthropic, Google Gemini, DeepSeek,
-xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, OpenRouter,
-or any OpenAI-compatible endpoint. Each agent in a team can run a
+xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each agent in a team can run a
 different model — pair a flagship reasoner for orchestration with
 cheaper, faster models for routine sub-tasks.
 

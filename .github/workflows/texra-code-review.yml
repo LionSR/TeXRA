@@ -55,7 +55,7 @@ jobs:
       - name: Check provider key
         id: keys
         env:
-          KEYS: '${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}'
+          KEYS: '${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.XAI_API_KEY }}'
         run: |
           if [ -n "$KEYS" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -131,5 +131,4 @@ jobs:
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           google-api-key: ${{ secrets.GOOGLE_API_KEY }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
           xai-api-key: ${{ secrets.XAI_API_KEY }}

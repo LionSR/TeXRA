@@ -81,7 +81,7 @@ export const undiciFetchThrough = (
  * package's undici ("invalid onRequestStart method").
  *
  * For the same reason a `Request` reaches it as a foreign object: the SDKs
- * that build one (Google's, OpenRouter's) construct the runtime's global
+ * that build one (Google's) construct the runtime's global
  * `Request`, which this undici does not recognize and would stringify to
  * "[object Request]". Its URL, method, headers, body, signal and redirect
  * mode are carried over as an init instead; an explicit `init` still wins.

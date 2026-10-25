@@ -246,8 +246,6 @@ const LLM_BROWSER_SAFE_RESTRICTED_IMPORT_PATTERNS = [
       '@anthropic-ai/sdk/**',
       '@google/genai',
       '@google/genai/**',
-      '@openrouter/sdk',
-      '@openrouter/sdk/**',
       'openai',
       'openai/**',
       'ws',

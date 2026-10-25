@@ -53,7 +53,7 @@ export interface ModelProviderPlugin {
    * Default HTTP base URL, or a China/international pair chosen by the
    * region toggle. `null`: an llm-zoo provider with no HTTP route of its
    * own (checked below, so a dropped endpoint is a compile error). Absent:
-   * a plugin outside llm-zoo's `ModelProvider` (`openRouter`, `kimiCode`).
+   * a plugin outside llm-zoo's `ModelProvider` (`kimiCode`).
    */
   readonly baseUrl?: string | RegionalBaseUrl | null;
 }
@@ -137,11 +137,6 @@ const MANIFEST = [
     baseUrl: 'https://api.meta.ai/v1',
   },
   {
-    id: 'openRouter',
-    displayName: 'OpenRouter',
-    apiKey: true,
-  },
-  {
     id: 'kimiCode',
     displayName: 'Kimi Code',
     apiKey: true,
@@ -195,7 +190,6 @@ export const BACKEND_PROTOCOLS = Object.freeze({
   minimax: 'openai-responses',
   glm: 'openai-responses',
   meta: 'openai-responses',
-  openRouter: 'openrouter-chat',
   copilot: 'vscode-lm',
 } satisfies Partial<
   Record<(typeof MANIFEST)[number]['id'], typeof TurnProtocolSchema.Type>

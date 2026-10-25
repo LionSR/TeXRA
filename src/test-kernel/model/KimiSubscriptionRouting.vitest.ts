@@ -44,13 +44,11 @@ const asConfig = (fields: object) =>
 
 const kimiRoute = (
   fields: object,
-  useOpenRouter: boolean,
   kimiCodeKey: boolean,
   preferKimiCode: boolean,
 ) =>
   decideModelRoute(asConfig(fields), {
     ...OWN_KEY_ROUTE_FACTS,
-    useOpenRouter,
     kimiCodeKey,
     preferKimiCode,
   });
@@ -64,25 +62,23 @@ const onKimiCode = {
 describe('decideModelRoute on Kimi Code', () => {
   it('never routes an ineligible model', () => {
     expect(
-      kimiRoute({ provider: ModelProvider.MOONSHOT }, false, true, true),
+      kimiRoute({ provider: ModelProvider.MOONSHOT }, true, true),
     ).not.toEqual(onKimiCode);
   });
 
   it('routes exclusive models to Kimi Code whatever the toggles say', () => {
     // No other backend exists for coding-only models, so even without a key
     // the route is Kimi Code (and the picker reports the key missing).
-    expect(kimiRoute(exclusive, true, true, false)).toEqual(onKimiCode);
-    expect(kimiRoute(exclusive, false, false, true)).toEqual(onKimiCode);
+    expect(kimiRoute(exclusive, true, false)).toEqual(onKimiCode);
+    expect(kimiRoute(exclusive, false, true)).toEqual(onKimiCode);
   });
 
-  it('routes dual-backend only with prefer on, a key set, and OpenRouter off', () => {
-    expect(kimiRoute(dual, false, true, true)).toEqual(onKimiCode);
+  it('routes dual-backend only with prefer on and a key set', () => {
+    expect(kimiRoute(dual, true, true)).toEqual(onKimiCode);
     // prefer off → open platform.
-    expect(kimiRoute(dual, false, true, false)).not.toEqual(onKimiCode);
+    expect(kimiRoute(dual, true, false)).not.toEqual(onKimiCode);
     // no key → open platform.
-    expect(kimiRoute(dual, false, false, true)).not.toEqual(onKimiCode);
-    // OpenRouter on → the OpenRouter path wins.
-    expect(kimiRoute(dual, true, true, true)).toEqual({ kind: 'openrouter' });
+    expect(kimiRoute(dual, false, true)).not.toEqual(onKimiCode);
   });
 });
 

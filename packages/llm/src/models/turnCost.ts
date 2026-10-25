@@ -87,8 +87,8 @@ function standardCost(
  * did not use. An API-key route bills the catalog's rates on its service
  * tier; a model with a long-context tier bills the whole request at it once
  * the prompt, cached tokens included, is above it (llm-zoo's
- * `requestRates`). A credit-backed OpenRouter receipt and an xAI receipt
- * carry their own settled cost, which wins over the computed one.
+ * `requestRates`). An xAI receipt carries its own settled cost, which wins
+ * over the computed one.
  */
 export function turnCost(
   model: ModelConfig,
@@ -105,15 +105,6 @@ export function turnCost(
   switch (provider?.kind) {
     case 'anthropic':
       cost = anthropicCost(usage, provider, rates);
-      break;
-    case 'openrouter':
-      // BYOK splits billing across accounts, so the settled figure is not
-      // what this key paid: keep the full-inference estimate. A credit-backed
-      // request bills the reported cost, including a reported zero.
-      cost =
-        !plan && provider.isByok !== true && provider.cost != null
-          ? provider.cost
-          : standardCost(usage, rates, false);
       break;
     case 'google':
       cost = standardCost(usage, rates, false);

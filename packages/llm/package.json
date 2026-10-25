@@ -2,14 +2,13 @@
   "name": "@texra-ai/llm",
   "version": "0.1.0",
   "type": "module",
-  "description": "One Effect contract over the OpenAI Responses, Anthropic Messages, Google Interactions and OpenRouter wire protocols, with the llm-zoo model catalog",
+  "description": "One Effect contract over the OpenAI Responses, Anthropic Messages and Google Interactions wire protocols, with the llm-zoo model catalog",
   "keywords": [
     "llm",
     "effect",
     "openai",
     "anthropic",
     "gemini",
-    "openrouter",
     "texra"
   ],
   "license": "Apache-2.0",
@@ -60,7 +59,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.137.0",
     "@google/genai": "2.30.0",
-    "@openrouter/sdk": "1.4.25",
     "llm-zoo": "catalog:",
     "ws": "8.22.0"
   },

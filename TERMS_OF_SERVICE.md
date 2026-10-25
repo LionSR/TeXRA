@@ -88,7 +88,7 @@ If you voluntarily provide suggestions, ideas, enhancement requests, or other fe
 
 ## 11. Third-Party Services
 
-The Service integrates with third-party services, including AI model providers and OpenRouter. We are not responsible for the availability, accuracy, or content of these third-party services. Your use of third-party services is governed by their respective terms and policies. We may add, remove, or change supported third-party integrations at any time.
+The Service integrates with third-party services, including AI model providers. We are not responsible for the availability, accuracy, or content of these third-party services. Your use of third-party services is governed by their respective terms and policies. We may add, remove, or change supported third-party integrations at any time.
 
 ## 12. International Data Transfers
 

@@ -632,9 +632,6 @@ importers:
       '@google/genai':
         specifier: 2.30.0
         version: 2.30.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)
-      '@openrouter/sdk':
-        specifier: 1.4.25
-        version: 1.4.25
       llm-zoo:
         specifier: 'catalog:'
         version: 4.0.0(effect@4.0.6)
@@ -1773,9 +1770,6 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
-
-  '@openrouter/sdk@1.4.25':
-    resolution: {integrity: sha512-H218lYMy9WhU5cMigUvW/k+e1BimCqTTP+9PqssdDXnQ0gFCeEME0HTsFGPbR6UgJgyYh2hTct43/9pMcBem5A==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -6688,10 +6682,6 @@ snapshots:
 
   '@openai/codex@0.163.0-win32-x64':
     optional: true
-
-  '@openrouter/sdk@1.4.25':
-    dependencies:
-      zod: 4.4.3
 
   '@opentelemetry/api@1.9.1': {}
 

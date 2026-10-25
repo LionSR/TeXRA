@@ -23,9 +23,7 @@ export const SETUP_INSTRUCTION =
  * through the project's launch path, the one the Execute button uses. `run`
  * and `project` are the project the user started setup in, taken before the
  * first suspension: the run and its presentation belong to it even when the
- * window moves to another project while the model resolves. Desktop has no
- * routing prompt, so OpenRouter is chosen only when the flag is already on
- * and an OpenRouter key exists (the access-list fallback is opted out).
+ * window moves to another project while the model resolves.
  * Setup continues after its initiating request has completed, so a failure
  * is presented here; the kickoff settles with the setup run, so a second Run
  * Setup waits for it, and the run's own failure is its result row's to show.
@@ -45,12 +43,11 @@ export const kickoffDesktopSetup = (options: {
         new Error('Open a folder before running setup.'),
       );
     }
-    const resolved = yield* resolveSetupLaunchModel(
+    const model = yield* resolveSetupLaunchModel(
       options.project.roots,
       options.secrets,
-      false,
     );
-    if (!resolved) {
+    if (model === null) {
       return yield* Effect.fail(
         new Error(
           'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
@@ -60,7 +57,7 @@ export const kickoffDesktopSetup = (options: {
     const validation = validateRunRequest({
       config: {
         agent: SETUP_AGENT_NAME,
-        model: resolved.model,
+        model,
         instruction: SETUP_INSTRUCTION,
       },
     });

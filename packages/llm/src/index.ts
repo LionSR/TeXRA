@@ -111,6 +111,7 @@ export {
   decideModelRoute,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
+  isUnservedModel,
   OWN_KEY_ROUTE_FACTS,
   resolveModelSource,
   routeConfig,

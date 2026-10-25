@@ -25,8 +25,8 @@ supplies the one copy of it:
 npm install @texra-ai/llm effect
 ```
 
-`llm-zoo` (the catalog) and the Anthropic, Google and OpenRouter SDKs come in
-as dependencies. A binding loads only its own protocol's SDK, on demand.
+`llm-zoo` (the catalog) and the Anthropic and Google SDKs come in as
+dependencies. A binding loads only its own protocol's SDK, on demand.
 OpenAI's runtime is bundled, so `openai` is not installed.
 
 ## Example
@@ -203,7 +203,6 @@ covers, which the operation handle deliberately does not copy.
 | `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                                    |
 | `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                                |
 | `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                               |
-| `api/openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                                   |
 | `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                                         |
 | `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                                     |
 | `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                              |
@@ -251,8 +250,8 @@ media or evidence it cannot represent. The current explicit failures:
   stream that carries hosted execution still fails explicitly — the hosted
   blocks fail the event schema as malformed output, and a paused hosted turn
   fails by name as the boundary a future lane would have to implement.
-- Assistant media output, Responses service-tier billing accounting, native
-  provider compaction, and OpenRouter continuation.
+- Assistant media output, Responses service-tier billing accounting, and native
+  provider compaction.
 - Streaming reconnection and managed-agent execution for background work.
   Observation polls or re-reads; it never creates a replacement generation.
 - Remote cancellation is only ever claimed when the provider answers

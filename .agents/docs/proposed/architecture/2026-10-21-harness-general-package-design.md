@@ -398,7 +398,7 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   switch across protocols is refused early.
 
 Still open after this design: about 350 lines of duplicated lowering across the
-llm adapters and OpenRouter's hand-rolled transport; `sessionViewUpdate.ts` at 1,166
+llm adapters; `sessionViewUpdate.ts` at 1,166
 lines; the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).

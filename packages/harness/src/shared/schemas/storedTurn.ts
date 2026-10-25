@@ -29,7 +29,6 @@ export const StoredProtocolSchema = Schema.Literals([
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
-  'openrouter-chat',
   'vscode-lm',
 ]);
 
