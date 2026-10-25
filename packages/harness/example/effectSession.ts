@@ -13,7 +13,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Result, Schema, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
@@ -42,13 +42,13 @@ const program = Effect.gen(function* () {
   const open = yield* sessions.list;
   console.log('sessions the owner holds:', open.length);
 
-  const persona = InlinePersonaSchema.safeParse({
+  const persona = Schema.decodeUnknownResult(InlinePersonaSchema)({
     name: 'abstract_editor',
     description: 'Reviews abstracts.',
     prompt: 'You review LaTeX abstracts for concision.',
     tools: ['read_file'],
   });
-  console.log('inline persona valid:', persona.success);
+  console.log('inline persona valid:', Result.isSuccess(persona));
 
   // `start` fails with a tagged error rather than a thrown string: an
   // embedder branches on `_tag`.

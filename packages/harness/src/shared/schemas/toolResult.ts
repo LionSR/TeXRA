@@ -259,7 +259,15 @@ const SettledFileMetadataSchema = Schema.StructWithRest(
   ToolFileAttachmentFieldsSchema.mapFields(
     Struct.omit(['base64Data', 'bytes']),
   ),
-  [Schema.Record(Schema.String, JsonValueSchema)],
+  // `undefined` admitted beside JSON: the optional fields read
+  // `string | undefined`, which an index signature must cover in the
+  // published declarations, and `JSON.stringify` drops such a key.
+  [
+    Schema.Record(
+      Schema.String,
+      Schema.Union([JsonValueSchema, Schema.Undefined]),
+    ),
+  ],
 );
 const SettledFileSchema = ToolFileAttachmentSchema.pipe(
   Schema.decodeTo(Schema.Unknown, {

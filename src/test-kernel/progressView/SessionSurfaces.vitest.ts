@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { WebviewTransport } from '@progressView/frontend/sessionTransport';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { Rejected, type RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
@@ -114,7 +114,9 @@ describe('session Surface ownership', () => {
     } as const;
     refuse({ ok: false, error });
     await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toBe(error);
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
+      new Rejected({ reason: error.reason }),
+    );
     expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
     surfaces.act(KEY, { kind: 'dismissRequestError' });
     expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
@@ -243,10 +245,9 @@ describe('session Surface ownership', () => {
     });
     reject({ ok: false, error: { _tag: 'Rejected', reason: 'Unavailable' } });
     await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual({
-      _tag: 'Rejected',
-      reason: 'Unavailable',
-    });
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
+      new Rejected({ reason: 'Unavailable' }),
+    );
     expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
       text: 'New text',
       images: [image],

@@ -42,15 +42,14 @@ const InvokeCommandInputSchema = Schema.Struct({
   command: Schema.String.check(Schema.isMinLength(1)).annotate({
     description: 'VS Code command ID (must be in the setup allowlist).',
   }),
-}).check(
-  // A struct ignores undeclared keys; this one refuses them, so no
-  // credential can reach the host through command arguments.
-  Schema.makeFilter((input) =>
-    'args' in input
-      ? { path: ['args'], issue: 'This tool takes no arguments.' }
-      : undefined,
-  ),
-);
+  // Declared so a value is refused: a struct drops an undeclared key before
+  // any check sees it, and no credential may reach the host through command
+  // arguments. `null` passes, as OpenAI-compatible providers send it for
+  // every advertised field.
+  args: Schema.optionalKey(Schema.Null).annotate({
+    description: 'Not accepted: this tool takes no arguments. Leave it out.',
+  }),
+});
 
 type InvokeCommandInput = typeof InvokeCommandInputSchema.Type;
 

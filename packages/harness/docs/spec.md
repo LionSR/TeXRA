@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:534-547`).
+  `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-371`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -466,8 +466,8 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:534-547`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:491-495`). Each folded
+(`shared/session/runState.ts:533-546`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:495-499`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
 (`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an
