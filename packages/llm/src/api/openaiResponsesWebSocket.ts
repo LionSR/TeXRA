@@ -9,7 +9,6 @@ import {
   Exit,
   Result,
   Schema,
-  SchemaGetter,
   type Scope,
   Stream,
 } from 'effect';
@@ -29,6 +28,10 @@ import {
 } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
+import {
+  WebSocketEnvelopeSchema,
+  WebSocketErrorSchema,
+} from './openaiResponsesWire.js';
 import { originOf } from '../protocol.js';
 import { rejoin } from './transport.js';
 import {
@@ -38,46 +41,6 @@ import {
   responseParameters,
 } from './openaiResponsesRequest.js';
 
-const WebSocketEnvelopeSchema = Schema.Struct({
-  type: Schema.String,
-  // This acquisition owns the implicit lane, not a multiplexed connection.
-  stream_id: Schema.optional(Schema.Never),
-});
-// An error event in the stream's own sequence, with no HTTP status.
-const SequencedWebSocketErrorSchema = Schema.Struct({
-  type: Schema.Literal('error'),
-  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  code: Schema.NullOr(Schema.String),
-  message: Schema.String,
-  param: Schema.NullOr(Schema.String),
-});
-const WebSocketErrorSchema = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal('error'),
-    status: Schema.optional(Schema.Int),
-    error: Schema.Struct({
-      type: Schema.String,
-      code: Schema.NullOr(Schema.String),
-      message: Schema.String,
-      param: Schema.optional(Schema.NullOr(Schema.String)),
-    }),
-  }),
-  SequencedWebSocketErrorSchema.pipe(
-    Schema.decodeTo(
-      Schema.Struct({
-        error: SequencedWebSocketErrorSchema,
-        status: Schema.Undefined,
-      }),
-      {
-        decode: SchemaGetter.transform((error) => ({
-          error,
-          status: undefined,
-        })),
-        encode: SchemaGetter.transform(({ error }) => error),
-      },
-    ),
-  ),
-]);
 const decodeEnvelope = Schema.decodeUnknownResult(WebSocketEnvelopeSchema);
 const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
 

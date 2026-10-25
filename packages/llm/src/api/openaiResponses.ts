@@ -44,13 +44,12 @@ import { filesApiUploads, UploadedSchema } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
-  ResponseEventSchema,
-  ResponseSchema,
   responseEvents,
   responsesWire,
   sdkEvents,
   terminalParts,
 } from './openaiResponsesCodec.js';
+import { ResponseEventSchema, ResponseSchema } from './openaiResponsesWire.js';
 import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   ResponseAuthenticationSchema,

@@ -2,17 +2,22 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, Result, Schema, SchemaGetter, Stream, Struct } from 'effect';
+import { Effect, Result, Schema, Stream } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import { ModelError, fillModelError, type RemoteOperation } from '../errors.js';
 import { openaiFailure } from './openaiError.js';
 import { parseInboundToolArguments, sdkStream } from './transport.js';
+import { responsesUsage } from './openaiResponsesUsage.js';
 import {
-  ResponsesUsageSchema,
-  responsesUsage,
-} from './openaiResponsesUsage.js';
+  DeltaEventSchema,
+  EventSchema,
+  ItemEventSchema,
+  ResponseEventSchema,
+  type OutputItem,
+  type ResponseValue,
+} from './openaiResponsesWire.js';
 import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
 import type { TurnEvent } from '../turn.js';
 import type { HttpTurnResult, InputPart, Part, PartEvent } from './parts.js';
@@ -23,105 +28,6 @@ type Append = Extract<PartEvent, { kind: 'append' }>;
 // request surface and the entry all name the response origin, so it lives
 // with the schemas that produce it.
 export type ResponseOrigin = RemoteOperation['origin'];
-
-const ItemStatusSchema = Schema.Literals([
-  'in_progress',
-  'completed',
-  'incomplete',
-]);
-const ReasoningTextSchema = Schema.Struct({
-  type: Schema.Literal('reasoning_text'),
-  text: Schema.String,
-});
-const OutputItemSchema = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal('message'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    role: Schema.Literal('assistant'),
-    status: ItemStatusSchema,
-    phase: Schema.optional(
-      Schema.NullOr(Schema.Literals(['commentary', 'final_answer'])),
-    ),
-    content: Schema.Array(
-      Schema.Union([
-        Schema.Struct({
-          type: Schema.Literal('output_text'),
-          text: Schema.String,
-          // Unsupported annotations/log probabilities cannot disappear in
-          // conversion; Zhipu omits the empty annotation list.
-          annotations: Schema.optional(Schema.Array(Schema.Never)),
-          logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
-        }),
-        Schema.Struct({
-          type: Schema.Literal('refusal'),
-          refusal: Schema.String,
-        }),
-      ]),
-    ),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('reasoning'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    status: Schema.optional(ItemStatusSchema),
-    encrypted_content: Schema.optional(Schema.NullOr(Schema.String)),
-    // Zhipu reports no summary and one reasoning-text object, not a list.
-    summary: Schema.Array(
-      Schema.Struct({
-        type: Schema.Literal('summary_text'),
-        text: Schema.String,
-      }),
-    ).pipe(Schema.withDecodingDefaultType(Effect.succeed([]))),
-    content: Schema.optional(
-      Schema.Union([
-        Schema.Array(ReasoningTextSchema),
-        ReasoningTextSchema.pipe(
-          Schema.decodeTo(Schema.Array(ReasoningTextSchema), {
-            decode: SchemaGetter.transform((part) => [part]),
-            encode: SchemaGetter.forbidden(() => 'decode-only'),
-          }),
-        ),
-      ]),
-    ),
-  }),
-  Schema.Struct({
-    type: Schema.Literal('function_call'),
-    id: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-    status: Schema.optional(ItemStatusSchema),
-    call_id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
-    arguments: Schema.String,
-  }),
-]);
-type OutputItem = typeof OutputItemSchema.Type;
-
-export const ResponseSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
-  object: Schema.Literal('response'),
-  model: Schema.String.check(Schema.isMinLength(1)),
-  status: Schema.Literals([
-    'queued',
-    'in_progress',
-    'completed',
-    'failed',
-    'cancelled',
-    'incomplete',
-  ]),
-  output: Schema.Array(OutputItemSchema),
-  usage: Schema.optional(Schema.NullOr(ResponsesUsageSchema)),
-  error: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({ code: Schema.String, message: Schema.String }),
-    ),
-  ),
-  incomplete_details: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        reason: Schema.Literals(['max_output_tokens', 'content_filter']),
-      }),
-    ),
-  ),
-});
-type ResponseValue = typeof ResponseSchema.Type;
 
 const malformed = (message: string, cause?: unknown) =>
   new ModelError({ kind: 'malformed-output', message, cause });
@@ -408,30 +314,6 @@ export interface DocumentAccess {
   readonly accepted: boolean;
   readonly fileIdFor: (base64: string) => string | null;
 }
-
-const EventSchema = Schema.Struct({
-  type: Schema.String,
-  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-});
-export const ResponseEventSchema = EventSchema.mapFields(
-  Struct.assign({
-    response: ResponseSchema,
-  }),
-);
-const ItemEventSchema = EventSchema.mapFields(
-  Struct.assign({
-    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    item: OutputItemSchema,
-  }),
-);
-const DeltaEventSchema = EventSchema.mapFields(
-  Struct.assign({
-    item_id: Schema.String.check(Schema.isMinLength(1)),
-    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    delta: Schema.String,
-    logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
-  }),
-);
 
 const TERMINAL_EVENTS = new Set([
   'response.completed',
