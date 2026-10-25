@@ -1,10 +1,19 @@
 import { deepStrictEqual, equal } from 'node:assert/strict';
 
+import { Result, Schema } from 'effect';
+
 import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
   UsageLogEntrySchema,
 } from '../_shared/usageValidation.ts';
+
+const parseEntry = Schema.decodeUnknownSync(UsageLogEntrySchema);
+const parseBatch = Schema.decodeUnknownSync(UsageBatchSchema);
+const isEntry = (input: unknown) =>
+  Result.isSuccess(Schema.decodeUnknownResult(UsageLogEntrySchema)(input));
+const isBatch = (input: unknown) =>
+  Result.isSuccess(Schema.decodeUnknownResult(UsageBatchSchema)(input));
 
 const VALID_BATCH_ID = 'a584b784-a4f1-4d44-a99f-36767d31e79d';
 
@@ -20,7 +29,7 @@ function usageEntry() {
 }
 
 Deno.test('normalizes only missing optional usage fields', () => {
-  const parsed = UsageLogEntrySchema.parse(usageEntry());
+  const parsed = parseEntry(usageEntry());
 
   equal(parsed.usageRoute, undefined);
   equal(parsed.usedRelay, undefined);
@@ -30,7 +39,7 @@ Deno.test('normalizes only missing optional usage fields', () => {
 Deno.test(
   'derives the legacy subscription route from an explicit boolean',
   () => {
-    const parsed = UsageLogEntrySchema.parse({
+    const parsed = parseEntry({
       ...usageEntry(),
       viaChatGptSubscription: true,
     });
@@ -42,7 +51,7 @@ Deno.test(
 Deno.test(
   'classifies Kimi Code usage under the Kimi subscription source',
   () => {
-    const parsed = UsageLogEntrySchema.parse({
+    const parsed = parseEntry({
       ...usageEntry(),
       model: 'k3',
       provider: 'openai-responses',
@@ -54,7 +63,7 @@ Deno.test(
 );
 
 Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
-  const parsed = UsageLogEntrySchema.parse({
+  const parsed = parseEntry({
     ...usageEntry(),
     model: 'glm-5',
     provider: 'openai-responses',
@@ -65,7 +74,7 @@ Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
 });
 
 Deno.test('classifies Grok usage under the grok subscription source', () => {
-  const parsed = UsageLogEntrySchema.parse({
+  const parsed = parseEntry({
     ...usageEntry(),
     model: 'grok-5',
     provider: 'openai-responses',
@@ -76,7 +85,7 @@ Deno.test('classifies Grok usage under the grok subscription source', () => {
 });
 
 Deno.test('keeps paid usage outside subscription sources', () => {
-  const parsed = UsageLogEntrySchema.parse({
+  const parsed = parseEntry({
     ...usageEntry(),
     usageRoute: 'api-key',
   });
@@ -85,7 +94,7 @@ Deno.test('keeps paid usage outside subscription sources', () => {
 });
 
 Deno.test('accepts a nonempty batch of valid entries', () => {
-  const parsed = UsageBatchSchema.parse({
+  const parsed = parseBatch({
     batchId: VALID_BATCH_ID,
     entries: [usageEntry()],
   });
@@ -102,13 +111,13 @@ Deno.test('rejects invalid present optional fields', () => {
   ];
 
   deepStrictEqual(
-    invalidEntries.map((entry) => UsageLogEntrySchema.safeParse(entry).success),
+    invalidEntries.map(isEntry),
     invalidEntries.map(() => false),
   );
 });
 
 Deno.test('accepts a mixed batch with a legacy relay entry', () => {
-  const parsed = UsageBatchSchema.safeParse({
+  const parsed = isBatch({
     batchId: VALID_BATCH_ID,
     entries: [
       usageEntry(),
@@ -116,23 +125,23 @@ Deno.test('accepts a mixed batch with a legacy relay entry', () => {
     ],
   });
 
-  equal(parsed.success, true);
+  equal(parsed, true);
 });
 
 Deno.test('rejects a whole batch when any entry is invalid', () => {
-  const parsed = UsageBatchSchema.safeParse({
+  const parsed = isBatch({
     batchId: VALID_BATCH_ID,
     entries: [usageEntry(), { ...usageEntry(), inputTokens: -1 }],
   });
 
-  equal(parsed.success, false);
+  equal(parsed, false);
 });
 
 Deno.test('rejects empty usage batches', () => {
-  const parsed = UsageBatchSchema.safeParse({
+  const parsed = isBatch({
     batchId: VALID_BATCH_ID,
     entries: [],
   });
 
-  equal(parsed.success, false);
+  equal(parsed, false);
 });

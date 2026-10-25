@@ -19,12 +19,16 @@
  *   marker so clients retain and retry the original batch identifier.
  */
 
+import { Result, Schema, SchemaIssue } from 'effect';
+
 import { handleCors } from './cors.ts';
 import { adminClient, SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
 import { jsonResponse } from './responses.ts';
 import { UsageBatchSchema, type UsageBatch } from './usageValidation.ts';
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
+const flattenIssues = SchemaIssue.makeFormatterStandardSchemaV1();
+const decodeBatch = Schema.decodeUnknownResult(UsageBatchSchema);
 
 function successResponse(
   req: Request,
@@ -51,7 +55,6 @@ function errorResponse(
     retryable?: boolean;
     errorCode?: string;
     issues?: readonly {
-      code: string;
       path: readonly string[];
       message: string;
     }[];
@@ -109,8 +112,9 @@ export function serveLogUsage<Owner>(
       }
 
       // Validate the complete batch before any write.
-      const batchResult = UsageBatchSchema.safeParse(body);
-      if (!batchResult.success) {
+      const batchResult = decodeBatch(body, { errors: 'all' });
+      if (Result.isFailure(batchResult)) {
+        const { issues } = flattenIssues(batchResult.failure.issue);
         // Keep the application-level rejection on HTTP 200 during the rolling
         // client transition. Older clients let ky throw before reading 4xx
         // bodies, which would pin this permanently invalid batch at the head
@@ -120,17 +124,18 @@ export function serveLogUsage<Owner>(
         return errorResponse(req, 'Invalid batch format or entry data', 200, {
           retryable: false,
           errorCode: 'BATCH_REJECTED',
-          issueCount: batchResult.error.issues.length,
-          issues: batchResult.error.issues
+          issueCount: issues.length,
+          issues: issues
             .slice(0, MAX_REPORTED_VALIDATION_ISSUES)
             .map((issue) => ({
-              code: issue.code,
-              path: issue.path.map((part) => String(part)),
+              path: (issue.path ?? []).map((part) =>
+                String(typeof part === 'object' ? part.key : part),
+              ),
               message: issue.message,
             })),
         });
       }
-      const batch = batchResult.data;
+      const batch = batchResult.success;
 
       const stored = await store(owner, batch);
       return successResponse(
