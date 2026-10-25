@@ -96,29 +96,81 @@ function unchanged(dir, journey, file) {
   );
 }
 
+/** The polish fixture's paper with no ASCII ellipsis or straight quote
+ *  left and nothing else lost. */
+function assertPolished(out) {
+  assert(
+    !out.includes('...') && !out.includes('"'),
+    'ASCII ellipsis or straight quote survived',
+  );
+  for (const kept of [
+    '\\label{eq:energy}',
+    '\\begin{equation}',
+    '% We set $J=1$',
+  ]) {
+    assert(out.includes(kept), `the polish dropped ${kept}`);
+  }
+}
+
+const POLISH_PROMPT =
+  'Replace the ASCII ellipsis with \\ldots and the straight double quotes with LaTeX quotes. Change nothing else.';
+
 const JOURNEYS = {
   polish: {
     args: ['polish', '--input', 'paper.tex', '--output', 'paper.polished.tex'],
     // The document task's result, kept with its diff against the input.
     keep: { from: 'paper.tex', to: 'paper.polished.tex' },
-    instruction:
-      'Replace the ASCII ellipsis with \\ldots and the straight double quotes with LaTeX quotes. Change nothing else.',
+    instruction: POLISH_PROMPT,
     approval: 'never',
     check(dir) {
       const out = read(dir, 'paper.polished.tex');
-      assert(
-        !out.includes('...') && !out.includes('"'),
-        'ASCII ellipsis or straight quote survived',
-      );
+      assertPolished(out);
       assert(out.includes('\\ldots'), 'no \\ldots in the output');
-      for (const kept of [
-        '\\label{eq:energy}',
-        '\\begin{equation}',
-        '% We set $J=1$',
-      ]) {
-        assert(out.includes(kept), `the polish dropped ${kept}`);
-      }
       compile(dir, 'paper.polished.tex');
+    },
+  },
+  // A script imports the document tasks and chains two: `correct` must read
+  // polish's last round, and the result keeps polish's edits.
+  imports: {
+    fixture: 'polish',
+    args: ['assistant'],
+    instruction: [
+      'Make exactly one `script` call with this code, unchanged, and then report what it returned:',
+      '```js',
+      "const { revise, from } = await import('builtIn:documents');",
+      `const polished = await revise('polish', { prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
+      "const corrected = await revise('correct', from(polished, { prompt: 'Fix only outright typos. Change nothing else.' }));",
+      'return { polished: polished.documents.outputs.map((o) => o.absolutePath), corrected: corrected.documents.outputs.map((o) => o.absolutePath) };',
+      '```',
+    ].join('\n'),
+    approval: 'yolo',
+    check(dir, records) {
+      const value = records
+        .filter((r) => r.kind === 'progress' && r.event === 'tool.end')
+        .map((r) => r.payload.result?.output?.value)
+        .find((returned) => returned?.corrected !== undefined);
+      assert(value, 'the script returned no { polished, corrected }');
+      // Run storage paths, compared below `executions/`: macOS spells the
+      // temp dir with /private in one and not the other.
+      const tail = (file) => file.split('/executions/')[1];
+      const inputs = records
+        .filter(
+          (r) =>
+            r.event === 'run.config' && r.payload.config.agent === 'correct',
+        )
+        .map((r) => r.payload.config.inputFiles.map(tail))
+        // The task's own revision runs name no input files.
+        .filter((files) => files.length > 0);
+      assert(
+        inputs.length > 0 &&
+          inputs.every(
+            (files) =>
+              files.length === 1 && files[0] === tail(value.polished.at(-1)),
+          ),
+        `correct read ${JSON.stringify(inputs)}, not polish's last round`,
+      );
+      assertPolished(readFileSync(value.corrected.at(-1), 'utf8'));
+      unchanged(dir, 'polish', 'paper.tex');
     },
   },
   latexFixer: {
@@ -187,7 +239,9 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
   const dir = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-`));
   const home = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-home-`));
   try {
-    cpSync(path.join(fixtureRoot, name), dir, { recursive: true });
+    cpSync(path.join(fixtureRoot, journey.fixture ?? name), dir, {
+      recursive: true,
+    });
     const keyEnv = MODEL_KEYS[model];
     const texra = (args, timeout) =>
       spawnSync(process.execPath, [binaryPath, ...args, '--cwd', dir], {
@@ -282,7 +336,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
       });
       writeFileSync(`${stem}.diff`, diff.stdout ?? '');
     }
-    journey.check(dir);
+    journey.check(dir, records);
     const usage = final.result.usage;
     // The run's tool calls, by name, from the `tool.start` rows the progress
     // records carry: `script` counts the scripts, the rest their nested calls.

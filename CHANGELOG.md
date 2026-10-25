@@ -1197,6 +1197,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A document task can start from media files alone.** In VS Code and
+  the desktop app, a task such as audio transcription or OCR with only
+  files under Media was refused with "Choose an input file first", though
+  the CLI ran it. It now starts; with no input or media file at all, it
+  asks for one.
 - **Gemini: a tool that attaches a PDF no longer ends the run.** A `bash`
   result carrying a compiled PDF (or audio or video) failed the next
   request with "Google tool results support only text and image content"

@@ -108,19 +108,19 @@ function checkRule(rule, baseline, actual) {
   return problems;
 }
 
-/** The lowered baseline of one rule; throws rather than widen. */
+/** The lowered baseline of one rule, and every file it would widen. */
 function lowered(rule, baseline, actual) {
   const next = {};
+  const widened = [];
   for (const [file, entry] of actual) {
     const allowed = baseline[file] ?? 0;
-    if (entry.value > allowed) {
-      throw new Error(
+    if (entry.value > allowed)
+      widened.push(
         `${rule}: ${file} has ${entry.value}, above its baseline ${allowed}; --update never widens a baseline. ${RULES[rule]}`,
       );
-    }
     next[file] = entry.value;
   }
-  return next;
+  return { next, widened };
 }
 
 function checkReports(reports, update) {
@@ -285,19 +285,25 @@ const main = async () => {
   }
   const problems = [];
   mkdirSync(baselineDir, { recursive: true });
+  // An update writes nothing until every rule is checked: one rule it
+  // would widen leaves every baseline as it was, and all are reported.
+  const writes = [];
   for (const [rule, actual] of byRule) {
     if (MEASURED_ONLY.has(rule)) continue;
     const baseline = readBaseline(rule, moves);
     if (values.update) {
       // A rule without a baseline file is new: its first baseline is today's count.
-      writeJson(
-        baselinePath(rule),
+      const { next, widened } =
         baseline == null
-          ? Object.fromEntries(
-              [...actual].map(([file, entry]) => [file, entry.value]),
-            )
-          : lowered(rule, baseline, actual),
-      );
+          ? {
+              next: Object.fromEntries(
+                [...actual].map(([file, entry]) => [file, entry.value]),
+              ),
+              widened: [],
+            }
+          : lowered(rule, baseline, actual);
+      problems.push(...widened);
+      writes.push([baselinePath(rule), next]);
     } else if (baseline == null) {
       problems.push(
         `${rule}: config/ratchets/core-quality/${rule}.json is missing`,
@@ -306,7 +312,14 @@ const main = async () => {
       problems.push(...checkRule(rule, baseline, actual));
     }
   }
-  problems.push(...checkReports(apiReports(rootDir), values.update));
+  if (problems.length === 0)
+    for (const [file, next] of writes) writeJson(file, next);
+  problems.push(
+    ...checkReports(
+      apiReports(rootDir),
+      values.update && problems.length === 0,
+    ),
+  );
   if (problems.length > 0) {
     console.error(
       `core-quality: ${problems.length} problem(s)\n\n${problems.join('\n\n')}`,
