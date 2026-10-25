@@ -11,7 +11,7 @@
  * jitter under a cap, returned as a number to a caller that sleeps for
  * itself (`ModelRetryGate`, polling loops).
  */
-import { Duration, Effect, Random, Schedule } from 'effect';
+import { Duration, Effect, PlatformError, Random, Schedule } from 'effect';
 
 export function randomizedExponentialBackoff(base: Duration.Input) {
   return Schedule.exponential(base).pipe(
@@ -22,3 +22,16 @@ export function randomizedExponentialBackoff(base: Duration.Input) {
     ),
   );
 }
+
+/**
+ * Restart schedule for an `fs.watch` stream: up to 5 retries, 1 s doubling,
+ * and only for `Unknown` platform errors (a missing or denied directory will
+ * not fix itself, so those end the stream).
+ */
+export const fileWatchRetrySchedule = Schedule.exponential('1 second').pipe(
+  Schedule.upTo({ times: 5 }),
+  Schedule.while(
+    ({ input }: { readonly input: PlatformError.PlatformError }) =>
+      input.reason._tag === 'Unknown',
+  ),
+);

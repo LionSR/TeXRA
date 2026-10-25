@@ -39,7 +39,6 @@ import {
   Effect,
   FileSystem,
   Layer,
-  type PlatformError,
   Schedule,
   Stream,
 } from 'effect';
@@ -50,6 +49,7 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ToolRegistry } from '@tools/toolTable';
+import { fileWatchRetrySchedule } from '@utils/core/backoffSchedule';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
@@ -124,15 +124,7 @@ const watchCustomDirectory = Stream.unwrap(
       Stream.filter(
         (event) => event._tag !== 'Update' || event.path.endsWith('.yaml'),
       ),
-      Stream.retry(
-        Schedule.exponential('1 second').pipe(
-          Schedule.upTo({ times: 5 }),
-          Schedule.while(
-            ({ input }: { readonly input: PlatformError.PlatformError }) =>
-              input.reason._tag === 'Unknown',
-          ),
-        ),
-      ),
+      Stream.retry(fileWatchRetrySchedule),
       Stream.map(() => undefined),
       Stream.concat(Stream.make(undefined)),
       Stream.repeat(
