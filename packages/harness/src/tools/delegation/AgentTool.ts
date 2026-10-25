@@ -58,6 +58,7 @@ import {
   fingerprint,
   recoverAgentChild,
   reusable,
+  treeCostOf,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
@@ -266,7 +267,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
   const config = yield* getRunRecords(call.run.session, runId).readConfig();
-  const { runs } = yield* call.run.session.view.read([]);
+  const view = yield* call.run.session.view.read([]);
   const recipe = yield* readRecipeResult(
     config,
     result.output,
@@ -283,8 +284,8 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       ...(recipe !== undefined && { changes: recipe.changes }),
       runId,
       outcome: result.outcome,
-      cost: runs.get(runId)?.treeUsage.cost ?? result.usage?.totalCost ?? 0,
-      spent: runs.get(call.run.runId)?.treeUsage.cost ?? 0,
+      cost: treeCostOf(view, runId),
+      spent: treeCostOf(view, call.run.runId),
     }),
     ...(key !== undefined && { reuseKey: key }),
   };
@@ -344,9 +345,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
               `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
             ),
         });
-  // The call's files, resolved where they live: a run-storage file must be
-  // this run's own or a declared output of a completed child of it; a
-  // trusted script's pass as named.
+  // The call's files: a run-storage file must be this run's own or a declared
+  // output of a completed child of it; a trusted script's files pass as named.
   const trusted = isTrustedScript(run.config);
   const resolved = yield* Effect.exit(
     Effect.all(

@@ -38,6 +38,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import type { SessionView } from '@shared/session/sessionView';
 import { errorResult } from '@tools/core/result';
 
 // Local file imports
@@ -244,11 +245,20 @@ const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   ];
 });
 
+/** What `runId` and every run under it have spent. The view lists every
+ *  run with a row, so a run missing from it is a broken invariant, never a
+ *  spend of $0 that would let a script's cost cap pass. */
+export function treeCostOf(view: SessionView, runId: RunId): number {
+  const run = view.runs.get(runId);
+  if (run === undefined)
+    throw new Error(`Run ${runId} is missing from its session's view.`);
+  return run.treeUsage.cost;
+}
+
 /** What the calling run and every run under it have spent so far. */
 const spentBy = (call: RunToolCall) =>
-  Effect.map(
-    call.run.session.view.read([]),
-    ({ runs }) => runs.get(call.run.runId)?.treeUsage.cost ?? 0,
+  Effect.map(call.run.session.view.read([]), (view) =>
+    treeCostOf(view, call.run.runId),
   );
 
 /**
