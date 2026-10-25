@@ -49,9 +49,9 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ToolRegistry } from '@tools/toolTable';
-import { fileWatchRetrySchedule } from '@utils/core/backoffSchedule';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
+import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
 
 /** Register one agent directory root; a failure is logged and leaves the
  *  other roots registered. */

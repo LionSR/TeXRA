@@ -20,8 +20,10 @@ import { Cause, Effect, FileSystem, type PlatformError, Stream } from 'effect';
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { absentReason } from '@utils/files/fsEntryExists';
-import { fileWatchRetrySchedule } from '@utils/core/backoffSchedule';
+import {
+  absentReason,
+  fileWatchRetrySchedule,
+} from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,

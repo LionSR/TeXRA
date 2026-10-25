@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, PlatformError, Schedule } from 'effect';
 
 // Common imports
 import { isNotADirectoryError } from '@common/errors/errorPredicates';
@@ -14,6 +14,19 @@ export const absentReason = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'NotFound' ||
   (error.reason._tag === 'BadResource' &&
     isNotADirectoryError(error.reason.cause));
+
+/**
+ * Restart schedule for an `fs.watch` stream: up to 5 retries, 1 s doubling,
+ * and only for `Unknown` platform errors (a missing or denied directory will
+ * not fix itself, so those end the stream).
+ */
+export const fileWatchRetrySchedule = Schedule.exponential('1 second').pipe(
+  Schedule.upTo({ times: 5 }),
+  Schedule.while(
+    ({ input }: { readonly input: PlatformError.PlatformError }) =>
+      input.reason._tag === 'Unknown',
+  ),
+);
 
 /**
  * lstat's half of the probe below (`FileSystem` has no lstat): a path
