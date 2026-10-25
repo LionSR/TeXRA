@@ -816,12 +816,8 @@ function isDeclarationModule(sourceFile) {
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
       if (clause == null) continue;
-      const fromZod = statement.moduleSpecifier.text === 'zod';
       const fromEffect = statement.moduleSpecifier.text === 'effect';
-      if (clause.name != null) {
-        if (clause.isTypeOnly) types.add(clause.name.text);
-        else if (fromZod) schemas.add(clause.name.text);
-      }
+      if (clause.name != null && clause.isTypeOnly) types.add(clause.name.text);
       const bindings = clause.namedBindings;
       if (bindings != null && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
@@ -831,15 +827,13 @@ function isDeclarationModule(sourceFile) {
           }
           const imported = (element.propertyName ?? element.name).text;
           if (
-            fromZod ||
             (fromEffect && imported === 'Schema') ||
             imported.endsWith('Schema')
           )
             schemas.add(element.name.text);
         }
-      } else if (bindings != null) {
-        if (clause.isTypeOnly) types.add(bindings.name.text);
-        else if (fromZod) schemas.add(bindings.name.text);
+      } else if (bindings != null && clause.isTypeOnly) {
+        types.add(bindings.name.text);
       }
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {

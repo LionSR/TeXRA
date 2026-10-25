@@ -148,7 +148,7 @@ const PATH_PREFIXES = [
 const BUILD_OUTPUT =
   /(^|\/)(dist|out|releases|node_modules|test-results)(\/|$)/;
 
-// The run vocabulary, declared once as Zod and spliced into the trace union.
+// The run vocabulary, declared once as a schema and spliced into the trace union.
 // Guidance names these rows constantly ("a `tool.result` before the loop
 // continues"), and a wrong one is the same confidently-wrong answer as a dead
 // path: CLAUDE.md and AGENTS.md both cited an `approval.requested` row that has

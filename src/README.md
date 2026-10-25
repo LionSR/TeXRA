@@ -29,7 +29,7 @@ not a long relative chain.
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/harness/src/agent/`       | The agent domain model, the run loop, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](../packages/harness/src/agent/core/README.md)                                                     |
 | `packages/harness/src/tools/`       | The tool engine and the built-in plugins (bash and the file tools, web, memory, goal, multi-agent, codemode, MCP)                                                                                                                              |
-| `packages/harness/src/shared/`      | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them, including the transcript row model (`shared/transcript/`)                                                                                                |
+| `packages/harness/src/shared/`      | Wire contracts and message types (Effect schemas) plus the host-neutral logic over them, including the transcript row model (`shared/transcript/`)                                                                                             |
 | `packages/harness/src/controllers/` | The session layer the hosts and the app call into instead of driving `agent/` directly                                                                                                                                                         |
 | `packages/harness/src/utils/`       | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                                                                    |
 | `packages/harness/src/common/`      | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                                                              |
@@ -105,8 +105,9 @@ code, and this file points at them rather than restating them.
   them. Run `npm run typecheck`, or use the `:safe` script variants.
 - **No convenience barrels.** An `index.ts` exists only for a documented public
   surface. Import the file that defines the symbol.
-- **Schemas are the source of truth.** Define the Zod schema, derive the type
-  with `z.infer`. Tool input schemas use `.nullish()`, not `.optional()`.
+- **Schemas are the source of truth.** Define the Effect schema, derive the
+  type with `typeof S.Type`. Tool input schemas use
+  `Schema.optional(Schema.NullOr(S))`, not `Schema.optional(S)`.
 - **Silent degradation is a defect.** A fallback that hides a failure must log
   loudly or not exist.
 

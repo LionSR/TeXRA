@@ -125,7 +125,7 @@ Things the tree won't tell you:
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
-must be declared in the Zod catalog by its owner (the harness's rows in
+must be declared in the settings catalog by its owner (the harness's rows in
 `packages/harness/src/shared/state/stateSettings.ts`, schemas in `packages/harness/src/shared/schemas/coreSettings.ts`;
 TeXRA's rows in `packages/texra/src/shared/settingsView/texraSettings.ts`, a plugin's rows in
 its settings module, listed there; each host's config carries the catalog as
@@ -298,7 +298,7 @@ the run history.
   data). One home per user action; secondary surfaces show read-only status.
 - **Silent degradation is a defect.** A fallback that masks a failure must be
   loud — log the cause at `warn` and surface it — or not exist. `catch {}`, a
-  `??` over a failed read, a Zod `.catch(default)` on persisted data, and a
+  `??` over a failed read, a `catchDecoding` default on persisted data, and a
   `default: return` that quietly drops an unknown event all turn a bug into
   wrong-but-quiet behavior that nobody reports. Taxonomy and the accepted
   best-effort exceptions: §15 of
