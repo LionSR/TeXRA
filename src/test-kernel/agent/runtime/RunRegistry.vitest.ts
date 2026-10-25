@@ -4,7 +4,7 @@ import { Deferred, Effect, Fiber, type Scope, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type {
@@ -22,7 +22,6 @@ import {
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   type RunId,
   type RunPhase,
   type RunSubstate,
@@ -102,8 +101,8 @@ function createRegistry(
   };
 } {
   // The session's publish path, in miniature: every draft the registry
-  // publishes is appended in order, and a phase the fold moved reaches
-  // the folded-stop sweep the way the session's committed tail does.
+  // publishes is appended in order, and a phase the fold moved is what the
+  // registry reads of the run's view.
   const events: PublishedEvents = { published: [] };
   const views = new Map<RunId, RunView>();
   const phases: FoldedPhases = {
@@ -117,7 +116,6 @@ function createRegistry(
         runStartedAt: extra.runStartedAt ?? null,
         parentId: null,
       } as RunView);
-      registry.sweepChildrenOfFoldedStop(runId);
     },
   };
   // What the registry reads of its session: the run's view, the grants a
@@ -248,17 +246,6 @@ function trackInterruptibleHandle(
   return handle;
 }
 
-/** The `RunControls` fixture shared by the tool-use-admission tests. */
-function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
-  return {
-    oneShot: false,
-    requestImmediateCompaction: vi.fn(() => Effect.void),
-    modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
-    switchModel: vi.fn(() => Effect.void),
-    ...overrides,
-  };
-}
-
 /** Run a stop's native settlement at the test boundary and report whether a
  * live target took it. */
 function killRegistry(
@@ -283,7 +270,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId,
           launchParent: parentRunId,
-          retainsTerminalParent: true,
           interrupt: vi.fn(),
         });
 
@@ -425,7 +411,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId: generateRunId(),
           launchParent: rootRunId,
-          retainsTerminalParent: true,
           interrupt: queuedChildInterrupt,
         });
         trackInterruptibleHandle(
@@ -546,7 +531,6 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId,
           launchParent: null,
-          retainsTerminalParent: false,
           interrupt: loopInterrupt,
         });
         trackInterruptibleHandle(registry, { runId }, fiberInterrupt);
@@ -689,6 +673,9 @@ describe('runRegistry', () => {
         );
         expect(error.message).toBe('detach batch refused');
         expect(registry.parentOf(childRunId) === rootRunId).toBe(true);
+        // The run goes on: its stop mark is gone, so a message to it waits
+        // for no drain and a child is admitted under it.
+        expect(registry.get(rootRunId)?.stopReason).toBeUndefined();
       } finally {
         registry.dispose();
       }
@@ -780,15 +767,14 @@ describe('runRegistry', () => {
 
         expect(() =>
           registry.track(createHandle(lateChildRunId, rootRunId)),
-        ).toThrow(/while that run is stopping/);
+        ).toThrow(/that run was stopped/);
         expect(() =>
           registry.reserveChildActivation({
-            retainsTerminalParent: true,
             runId: lateChildRunId,
             launchParent: rootRunId,
             interrupt: vi.fn(),
           }),
-        ).toThrow(/while that run is stopping/);
+        ).toThrow(/that run was stopped/);
 
         yield* Deferred.succeed(allowCommit, undefined);
         yield* Fiber.join(stopped);
@@ -802,7 +788,7 @@ describe('runRegistry', () => {
   );
 
   it.effect(
-    'sweeps a child registered between the stop settlement and its fold, and refuses admission from the fold on (issue #12442)',
+    "refuses a child under a stopped parent from the stop's request to its fold and on (issue #12442)",
     () =>
       Effect.gen(function* () {
         const { phases, registry } = createRegistry();
@@ -811,7 +797,6 @@ describe('runRegistry', () => {
         const lateChildRunId = generateRunId();
         const postFoldChildRunId = generateRunId();
         const childInterrupt = vi.fn();
-        const lateChildInterrupt = vi.fn();
 
         try {
           trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
@@ -824,43 +809,36 @@ describe('runRegistry', () => {
           );
           phases.set(rootRunId, RUN_PHASE.RUNNING);
 
-          // The detaching stop settles completely — its children severed, its
-          // in-flight token lifted — while the parent's `run.end` has not
-          // folded yet. The window the token closed is open again, and the
-          // child whose lineage read preceded the stop registers inside it.
+          // The detaching stop settles completely, its children severed,
+          // while the parent's `run.end` has not folded yet. The stop still
+          // stands on the parent's entry, so a child whose lineage read
+          // preceded the stop is refused as it registers.
           yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
             reason: 'user',
           }).settlement;
           expect(registry.parentOf(childRunId)).toBeNull();
-          trackInterruptibleHandle(
-            registry,
-            { runId: lateChildRunId, parent: rootRunId },
-            lateChildInterrupt,
-          );
-          expect(lateChildInterrupt).not.toHaveBeenCalled();
+          expect(() =>
+            registry.track(createHandle(lateChildRunId, rootRunId)),
+          ).toThrow(/that run was stopped/);
+          expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
 
-          // The parent's terminal fold closes the window: the child that
-          // slipped in is stopped by the parent's own terminal fact, through
-          // the same cascade the stop ran, while the detached child's sever
-          // is preserved exactly.
+          // The fold changes nothing for the detached child: its sever stands.
           phases.set(rootRunId, RUN_PHASE.CANCELLED);
-          expect(lateChildInterrupt).toHaveBeenCalledOnce();
           expect(childInterrupt).not.toHaveBeenCalled();
           expect(registry.parentOf(childRunId)).toBeNull();
 
           // From the fold on, admission itself refuses the stopped parent.
           expect(() =>
             registry.track(createHandle(postFoldChildRunId, rootRunId)),
-          ).toThrow(/stop has already folded/);
+          ).toThrow(/that run was stopped/);
           expect(() =>
             registry.reserveChildActivation({
-              retainsTerminalParent: true,
               runId: postFoldChildRunId,
               launchParent: rootRunId,
               interrupt: vi.fn(),
             }),
-          ).toThrow(/stop has already folded/);
+          ).toThrow(/that run was stopped/);
           expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
         } finally {
           registry.dispose();
@@ -934,7 +912,6 @@ describe('runRegistry', () => {
         // A started run, so an end the stop wrote would show as its row.
         publishTestRunStart(testDefaultSession(), runId);
         registry.reserveChildActivation({
-          retainsTerminalParent: true,
           runId,
           launchParent: generateRunId(),
           interrupt,
@@ -1022,48 +999,6 @@ describe('runRegistry', () => {
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('owns tool-use follow-up admission from status, context, and children', () => {
-    const { phases, registry } = createRegistry();
-    const activeRunId = generateRunId();
-    const resumingRunId = generateRunId();
-    const waitingRunId = generateRunId();
-    const stoppedRunId = generateRunId();
-    const controls = createRunControls();
-
-    try {
-      const activeHandle = createHandle(activeRunId, null, {
-        agentName: 'test-tool-use',
-      });
-      activeHandle.attachControls(controls);
-      registry.track(activeHandle);
-      phases.set(activeRunId, RUN_PHASE.RUNNING);
-
-      expect(registry.getToolUseFollowUpTarget(activeRunId)).toEqual({
-        kind: 'active',
-      });
-
-      phases.set(resumingRunId, RUN_PHASE.RUNNING, {
-        substate: RUN_SUBSTATE.RESUMING,
-      });
-      expect(registry.getToolUseFollowUpTarget(resumingRunId)).toEqual({
-        kind: 'queue',
-      });
-
-      phases.set(waitingRunId, RUN_PHASE.WAITING);
-      expect(registry.getToolUseFollowUpTarget(waitingRunId)).toEqual({
-        kind: 'queue',
-      });
-
-      phases.set(stoppedRunId, RUN_PHASE.CANCELLED);
-      expect(registry.getToolUseFollowUpTarget(stoppedRunId)).toEqual({
-        kind: 'no_session',
-        runStatus: RUN_PHASE.CANCELLED,
-      });
     } finally {
       registry.dispose();
     }

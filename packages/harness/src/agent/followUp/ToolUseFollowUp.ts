@@ -1,18 +1,14 @@
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRejection } from '@agent/runtime/runClassification';
-import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import type { ResumeAttempt, ResumeRunResult } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  type CommitOrdinal,
-  qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
-import type { InboxItem, SendOptions } from './Inbox';
+import { type RunId } from '@shared/schemas';
+import type { InboxItem } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -30,6 +26,9 @@ import type { InboxItem, SendOptions } from './Inbox';
  * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, or a message that
  *   is not the user's own).
+ * - `one_shot`: the run's live loop ends after its current turn and reads
+ *   no message (headless, or an in-band child), or the run has no loop of
+ *   its own and its launch takes none (a background command).
  * - `blocked`: the run's agent, or its agent's plugin, is missing, off or
  *   not trusted here (`RunView.resumeBlocked` says which).
  */
@@ -40,6 +39,7 @@ export type FollowUpFailureReason =
   | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
+  | 'one_shot'
   | 'not_parent'
   | 'blocked';
 
@@ -58,12 +58,9 @@ export type SubmitFollowUpResult =
 
 /** How one input is delivered to a run. */
 export interface RunInboxSendOptions {
-  /**
-   * Notifications never revive a persisted cursor. A child delivery is an
-   * ordinary continuation: its parent counts the child as active until the
-   * delivery has landed, so it always finds a live or recoverable queue.
-   */
-  readonly mode?: 'live_notification';
+  /** A notification for a generation already running: read at a turn's
+   *  end, never resuming the run (`readableMessages`). */
+  readonly hold?: 'generation';
   /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
   readonly fromParent?: boolean;
 }
@@ -83,13 +80,15 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another process. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  one_shot:
+    'This run ends after its current turn and reads no messages. Start a new agent task to continue.',
   not_parent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
 };
 
-export const FOLLOW_UP_WAKE_FAILED_MESSAGE =
+const FOLLOW_UP_WAKE_FAILED_MESSAGE =
   'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.';
 
 /** The one wording of each refusal, shared by every host and tool output. */
@@ -113,6 +112,67 @@ export function presentFollowUpResult(
 }
 
 const CHANNEL = 'ToolUseFollowUp';
+
+/** A resume's result, and whether this caller joined one in flight. */
+export type Resumed = {
+  readonly result: ResumeAttempt;
+  readonly joined: boolean;
+};
+
+/** The resumes in flight here, by run. */
+export class Resumes {
+  /** The runs whose resume is in flight here. */
+  readonly inFlight = new Set<RunId>();
+  private readonly running = new Map<
+    RunId,
+    { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
+  >();
+
+  /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
+  once<R>(
+    runId: RunId,
+    resume: Effect.Effect<ResumeAttempt, Error, R>,
+    onJoined?: () => void,
+  ): Effect.Effect<Resumed, Error, R> {
+    return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
+      const running = this.running.get(runId);
+      if (running !== undefined) {
+        running.joiners += 1;
+        onJoined?.();
+        return Effect.map(Deferred.await(running.done), (result) => ({
+          result,
+          joined: true,
+        })).pipe(Effect.ensuring(Effect.sync(() => (running.joiners -= 1))));
+      }
+      const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
+      this.running.set(runId, { done, joiners: 0 });
+      this.inFlight.add(runId);
+      return resume.pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            this.running.delete(runId);
+            this.inFlight.delete(runId);
+            Deferred.doneUnsafe(done, exit);
+          }),
+        ),
+        Effect.map((result) => ({ result, joined: false })),
+      );
+    });
+  }
+
+  /** Settles when `runId`'s resume in flight here ends; at once if none. */
+  settled(runId: RunId): Effect.Effect<void> {
+    const done = this.running.get(runId)?.done;
+    return done
+      ? Effect.asVoid(Effect.exit(Deferred.await(done)))
+      : Effect.void;
+  }
+
+  /** Whether a caller is joined to `runId`'s resume in flight. */
+  joined(runId: RunId): boolean {
+    return (this.running.get(runId)?.joiners ?? 0) > 0;
+  }
+}
 
 const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
@@ -203,127 +263,30 @@ export function startFollowUpWake(
 }
 
 /**
- * When the last thing running this run here exits, resume it if a message
- * arrived after the loop stopped reading. A message queued while a loop (or
- * a hold) is live is left to it: `Sent.wake` is false and its sender resumes
- * nothing. But a loop stops reading before its fiber ends (the description
- * join, the terminal rows), and a hold reads nothing at all, so a message
- * queued then has no reader. The registry calls this as that last runner
- * exits, with `since`, the commit it started at. Once every job enqueued
- * before has committed, a run nothing here holds, with a message queued on
- * its open input since then, is resumed. A message queued before `since`
- * needs nothing: the runner was started for it (a failed resume leaves it to
- * the next explicit Resume), or its sender saw nothing running and resumed
- * the run itself; the one resume per run (`Inbox.resumeOnce`) joins the two.
- * When the run was stopped, `since` is the commit the stop was asked at
- * (`RunRegistry.stop()`, which stamps it before any detach batch): a message
- * queued before the stop belonged to the stopped turn and stays queued, and
- * one sent after it is resumed. A failure to read is logged.
+ * The one admission of a message to a run: every host and tool sends
+ * through here, and only here is a message refused. The send is durable
+ * before anything is acknowledged or woken; when no reader here takes the
+ * row, this asks the inbox whether the run owes a resume (`Inbox.wake`) and
+ * relays its answer.
+ *
+ * A generation live here decides for itself (`LiveRun.readsMessages`): a
+ * one-shot loop ends after its turn and reads none. With no generation here,
+ * the persisted facts decide, and only the user's own message continues a
+ * run that stopped with a checkpoint: a run's message or a notification
+ * never restarts work the user stopped. A state that cannot be read cannot
+ * be continued.
  */
-export const wakeAfterGeneration = (
-  runId: RunId,
-  session: SessionHandle,
-  since: CommitOrdinal,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    yield* session.log.settled;
-    if (session.runs.get(runId)?.live === true) return;
-    const input = yield* session.followUps.read(runId);
-    if (input.closed) return;
-    const queued = new Set(
-      input.followUps.flatMap((f) =>
-        f.control === undefined ? [f.followUpId] : [],
-      ),
-    );
-    const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-      'followup.queued',
-    ]);
-    const landedSince = rows.some(
-      (row) =>
-        row.type === 'followup.queued' &&
-        row.commit > since &&
-        queued.has(row.followUpId),
-    );
-    if (landedSince) yield* startFollowUpWake(runId, session);
-  }).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `Run ${runId} was not woken as its generation left; an explicit Resume delivers what is queued`,
-      ).pipe(
-        Effect.annotateLogs({ data: Cause.squash(cause) }),
-        withLogChannel(CHANNEL),
-      ),
-    ),
-  );
-
-type Admission =
-  SubmitFollowUpResult | { readonly resume: Effect.Effect<boolean> };
-
-/**
- * Queue a submission on the run. `live`: a running loop holds it, and one
- * reading here makes it `sent`. `wake`: a run no generation here holds is
- * owed a resume, which the caller starts. `quiet`: queued, nothing more.
- */
-function admitQueued(
-  runId: RunId,
-  item: InboxItem,
-  mode: 'live' | 'wake' | 'quiet',
-  { session: ownerSession, fromParent }: SubmitFollowUpOptions,
-): Effect.Effect<Admission, Error> {
-  const options: SendOptions = {
-    // A user's message whose loop ended while it was admitted still wakes.
-    wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
-    fromParent,
-  };
-  return Effect.map(
-    ownerSession.followUps.send(runId, item, options),
-    (sent) => {
-      if (sent.kind === 'duplicate') return { status: 'sent' };
-      if (sent.kind === 'refused') {
-        // Another process holds the run, the sender is not its parent, its
-        // input is closed (deleted, or torn down with nothing queued), or
-        // the session is disposed.
-        return { status: 'failed', reason: sent.reason ?? 'not_resumable' };
-      }
-      if (sent.wake) return { resume: startFollowUpWake(runId, ownerSession) };
-      return { status: mode === 'live' && sent.read ? 'sent' : 'queued' };
-    },
-  );
-}
-
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
-  const ownerSession = options.session;
-  // Routed and admitted synchronously from the registry snapshot to the
-  // send: the row is durable before anything is acknowledged or woken. A
-  // resumed model turn completes after admission, so it cannot block later
-  // input from joining the run's queue.
-  const target = registryOf(ownerSession.runs).getToolUseFollowUpTarget(runId);
-  let dispatch: Admission;
-  if (target.kind !== 'no_session') {
-    // A running loop reads it at its next park; a notification never
-    // revives a persisted run.
-    const live = target.kind === 'active' ? 'live' : 'wake';
-    dispatch = yield* admitQueued(
-      runId,
-      item,
-      options.mode === 'live_notification' ? 'quiet' : live,
-      options,
-    );
+  const { session, hold, fromParent } = options;
+  const live = session.runs.get(runId);
+  if (live?.live === true) {
+    if (!live.readsMessages) return { status: 'failed', reason: 'one_shot' };
   } else {
-    yield* Effect.logWarning(
-      `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
-    ).pipe(withLogChannel(CHANNEL));
-    // No running loop here: the persisted facts decide. Only the user's own
-    // message continues a run that stopped with a checkpoint, admitted the
-    // way a waiting run's is: a run's message never restarts work the user
-    // stopped. Anything else refuses with its worded reason. Only the one
-    // run addressed is inspected.
-    // A state that cannot be read cannot be continued.
-    const rejection = yield* runRejection(runId, ownerSession).pipe(
+    const rejection = yield* runRejection(runId, session).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
           Effect.annotateLogs({ data: error }),
@@ -333,16 +296,22 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       ),
     );
     if (rejection !== null) return { status: 'failed', reason: rejection.kind };
-    if (options.mode !== undefined || item.from.kind !== 'user')
+    if (hold !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
-    dispatch = yield* admitQueued(runId, item, 'wake', options);
   }
-  if ('resume' in dispatch) {
-    return (yield* dispatch.resume)
-      ? { status: 'queued' }
-      : { status: 'queued', wake: 'failed' };
-  }
-  return dispatch;
+  // A user's message to a run that is stopping continues it after the stop:
+  // its row lands after the run's end, which the wake reads.
+  if (item.from.kind === 'user' && live?.stopReason !== undefined)
+    yield* live.drained;
+  const sent = yield* session.followUps.send(runId, item, { hold, fromParent });
+  // Another process holds the run, the sender is not its parent, its input
+  // is closed (deleted, or torn down with nothing queued), or the session
+  // is disposed.
+  if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
+  if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
+  const woken = yield* session.followUps.wake(runId);
+  if (!woken) return { status: 'queued', wake: 'failed' };
+  return { status: sent.kind === 'duplicate' ? 'sent' : 'queued' };
 });
 
 /**

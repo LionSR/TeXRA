@@ -34,12 +34,9 @@ import {
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   type RunId,
-  type RunPhase,
-  type CommitOrdinal,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { RunHandle } from './RunHandle';
@@ -82,33 +79,13 @@ export interface ChildRunActivation {
   /** The run that launched this child; its edge is {@link RunRegistry.parentOf}. */
   readonly launchParent: RunId | null;
   readonly interrupt: () => void;
-  /**
-   * A native child (true) counts as its parent's active child until the last
-   * delivery landed, so a terminal parent's continuation stays recoverable
-   * ({@link RunRegistry.getToolUseFollowUpTarget} queues a follow-up into
-   * it). A process child (false) must not: its reservation would make a
-   * terminal parent look recoverable after it can no longer accept either
-   * user input or the child's result.
-   */
-  readonly retainsTerminalParent: boolean;
 }
-
-/** Where a follow-up for a run goes: its running loop, the run's retained
- *  queue (a WAITING or resuming cursor, or a parent whose children are still
- *  active), or nowhere in this process. */
-export type ToolUseFollowUpTarget =
-  | { readonly kind: 'active' }
-  | { readonly kind: 'queue' }
-  | {
-      readonly kind: 'no_session';
-      readonly runStatus: RunPhase | undefined;
-    };
 
 /**
  * What the session hands its runs. They read a run's phase from the
- * session's fold (`RunView.status`) and keep no phase of their own; the
- * session routes each `run.end` it committed through
- * {@link RunRegistry.sweepChildrenOfFoldedStop} once the view has folded it.
+ * session's fold (`RunView.status`) and keep no phase of their own; a stop
+ * in progress is the entry's `stopReason` until the fold shows the run
+ * cancelled.
  */
 export interface RunRegistryInit {
   /** The session these runs belong to, resolved when first used. */
@@ -120,8 +97,9 @@ export interface RunRegistryInit {
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
   readonly programs: RunPrograms;
-  /** No liveness arm of the run is left here: wake it for rows landed since. */
-  readonly wake: (runId: RunId, since: CommitOrdinal) => void;
+  /** No liveness arm of the run is left here: wake it for the input it
+   *  holds (`Inbox.wake`). */
+  readonly wake: (runId: RunId) => void;
 }
 
 /** The run programs: a root launch, a fresh run's turn, a resumed run's
@@ -148,11 +126,12 @@ interface RunEntry {
   /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRegistry.isLive}). */
   launches: number;
-  /** The stop that interrupted this run here, recorded before the interrupt
-   *  for its cleanup (a `user` reason outlives a later `shutdown`), and the
-   *  commit its owed wake counts from: the claim's, then its first `stop`'s. */
+  /** The stop begun for this run here, recorded at the request, before the
+   *  interrupt, for its cleanup (a `user` reason outlives a later `shutdown`)
+   *  and for child admission ({@link RunRegistry.assertAdmitsChild}): the
+   *  entry outlives the fold of the run's `run.end`, from which the view's
+   *  `cancelled` answers. Cleared by the run's next generation. */
   stopReason?: RunStopReason;
-  since: CommitOrdinal;
 }
 
 /** Session-owned registry of runs: one per session, built by the session
@@ -162,10 +141,6 @@ export class RunRegistry implements RunsShape {
   private readonly entries = new Map<RunId, RunEntry>();
   /** {@link awaitDrained}'s waiters: by run, and `''` for the last entry. */
   private readonly drains = new Map<string, Deferred.Deferred<void>>();
-  /** The stops begun for each run, one token apiece, so of two overlapping
-   *  stops the first to settle cannot admit a child the second's snapshot
-   *  already left behind. */
-  private readonly stopping = new Map<RunId, Set<symbol>>();
   /** Children a detach cut before their run was created, so no row carries
    *  it: added once that detach commits, read through {@link parentOf},
    *  removed with the entry. A marked child is created detached, so once
@@ -209,7 +184,7 @@ export class RunRegistry implements RunsShape {
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { launches: 0, since: 0 };
+    const entry: RunEntry = { launches: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
@@ -262,7 +237,21 @@ export class RunRegistry implements RunsShape {
     const [live, parent] = [this.isLive(runId), this.parentOf(runId)];
     const drained = this.awaitDrained(runId);
     const controls = handle?.controls;
-    return { runId, handle, controls, live, parent, stopReason, drained };
+    const readsMessages =
+      controls !== undefined
+        ? !controls.oneShot
+        : this.init.session().view.run(runId)?.followUpSupport !==
+          USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+    return {
+      runId,
+      handle,
+      controls,
+      live,
+      readsMessages,
+      parent,
+      stopReason,
+      drained,
+    };
   }
 
   /** Whether this process holds a live generation of the run: its fiber, a
@@ -322,34 +311,6 @@ export class RunRegistry implements RunsShape {
   hasActiveChildren = (parentRunId: RunId): boolean =>
     this.childRunIds(parentRunId).length > 0;
 
-  /** Decide how a tool-use follow-up is admitted, from one registry-owned
-   *  snapshot of run status, running loop, and child runs. */
-  getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
-    const run = this.init.session().view.run(runId);
-    const status: RunPhase | undefined =
-      run === undefined || run.status === 'ready' ? undefined : run.status;
-
-    if (status !== undefined && !isInFlightPhase(status)) {
-      // Only a native child's explicit delivery reservation can retain a
-      // terminal parent's continuation. A child-run handle is lifecycle
-      // ownership, not authority to revive a parent that already finished.
-      return this.activations(runId).some((a) => a.retainsTerminalParent)
-        ? { kind: 'queue' }
-        : { kind: 'no_session', runStatus: status };
-    }
-
-    if (this.entries.get(runId)?.handle?.controls) return { kind: 'active' };
-
-    if (
-      run?.substate === RUN_SUBSTATE.RESUMING ||
-      status === RUN_PHASE.WAITING ||
-      this.hasActiveChildren(runId)
-    ) {
-      return { kind: 'queue' };
-    }
-    return { kind: 'no_session', runStatus: status };
-  }
-
   // -------------------------------------------------------------- admission
 
   /** Why this registry admits no run work, or `undefined` while it does. */
@@ -377,15 +338,11 @@ export class RunRegistry implements RunsShape {
       ? this.parentOf(childRunId)
       : launchParent;
     if (parentRunId === null) return;
-    if (this.stopping.has(parentRunId)) {
-      if (this.isRetained(childRunId)) return;
+    const stopping = this.entries.get(parentRunId)?.stopReason !== undefined;
+    if (stopping && this.isRetained(childRunId)) return;
+    if (stopping || this.stopFolded(parentRunId))
       throw new Error(
-        `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
-      );
-    }
-    if (this.stopFolded(parentRunId))
-      throw new Error(
-        `Cannot launch child run ${childRunId} under run ${parentRunId}: that run's stop has already folded.`,
+        `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
       );
   }
 
@@ -462,11 +419,9 @@ export class RunRegistry implements RunsShape {
         if (inactiveStep) return undefined;
         // A new generation is the run starting again: whatever stop the run
         // was marked for belongs to the generation it ended.
-        this.stopping.delete(runId);
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
-        counted.since = this.now();
         return undefined;
       };
       const leave = (): void => {
@@ -476,7 +431,7 @@ export class RunRegistry implements RunsShape {
         if (entry === undefined) return;
         entry.launches -= 1;
         this.prune(runId, entry);
-        if (!this.isLive(runId)) this.init.wake(runId, entry.since);
+        if (!this.isLive(runId)) this.init.wake(runId);
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
@@ -516,7 +471,6 @@ export class RunRegistry implements RunsShape {
       return Effect.asVoid(
         Effect.acquireRelease(
           Effect.gen({ self: this }, function* () {
-            const since = this.now();
             const ready = Deferred.makeUnsafe<void, Error>();
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
@@ -542,16 +496,16 @@ export class RunRegistry implements RunsShape {
               { startImmediately: true },
             );
             yield* Deferred.await(ready);
-            return { latch, fiber, since };
+            return { latch, fiber };
           }),
           // The join awaits the claim release before the caller's scope
           // closes; the hold was the run's liveness, so its end owes the wake.
-          ({ latch, fiber, since }) =>
+          ({ latch, fiber }) =>
             Latch.open(latch).pipe(
               Effect.andThen(Fiber.join(fiber)),
               Effect.andThen(
                 Effect.sync(() => {
-                  if (!this.isLive(runId)) this.init.wake(runId, since);
+                  if (!this.isLive(runId)) this.init.wake(runId);
                 }),
               ),
             ),
@@ -631,36 +585,28 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run and apply the caller's declared child policy. A run this
-   * process drives is stopped where it stands: its children first, by the
-   * policy, then its handle or child driver. A cascading stop does that now,
-   * so {@link RunStop.accepted} answers at once; a detaching one commits the
-   * children's durable `run.detach` batch first, or a child completing while
-   * that batch commits would route its terminal result to the just-stopped
-   * parent. A run no handle or child driver here owns is stopped from
-   * outside: its claim fences the whole gesture, descendant sweep included,
-   * and the stop writes the terminal row itself; a refused row fails it.
+   * Stop a run by the caller's child policy. A run this process drives is
+   * stopped where it stands, children first: a cascading stop now, so
+   * {@link RunStop.accepted} answers at once; a detaching one after the
+   * children's `run.detach` batch commits, or a child completing meanwhile
+   * would route its result to the just-stopped parent. A run nothing here
+   * owns is stopped under its claim, descendants swept, the terminal row
+   * written here; a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
-    const token = Symbol('run-stop');
-    const tokens = this.stopping.get(runId) ?? new Set<symbol>();
     const entry = this.entries.get(runId);
-    if (!tokens.size && entry && !entry.stopReason) entry.since = this.now();
-    this.stopping.set(runId, tokens.add(token));
-    const lift = Effect.sync(() => {
-      const current = this.stopping.get(runId);
-      if (current?.delete(token) !== true) return;
-      if (current.size === 0) this.stopping.delete(runId);
-    });
+    // Marked at the request: from here a child is refused under the run
+    // (`assertAdmitsChild`) and a user's message sent while the stop runs
+    // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
+    const marked = entry?.stopReason;
+    if (entry !== undefined) this.markStopped(runId, options.reason);
 
     const detach = options.detachActiveChildren === true;
-    // Something here to stop: a handle, a child driver, or a launch's fiber
-    // that has not tracked its handle yet.
+    // Something here to stop: a handle, a child driver, or a launch's fiber.
     const local = this.isRetained(runId) || entry?.fiber !== undefined;
     let reached = false;
     const stopHere = (): boolean => {
-      // Shared across the child sweep and the root cascade so each run in
-      // the chain is interrupted exactly once.
+      // Shared by the child sweep and the root cascade: each run once.
       const visited = new Set<string>();
       const { reason } = options;
       if (!detach) this.interruptActiveChildren(runId, visited, reason);
@@ -682,11 +628,9 @@ export class RunRegistry implements RunsShape {
       ).pipe(
         Effect.andThen(
           Effect.suspend(() =>
-            // A reached handle or child driver owns terminal finalization;
-            // only an ownerless stop writes the terminal fact here, as an
-            // inactive-run step: a generation admitted meanwhile (a resume
-            // here) refuses it with `RunLive` and becomes the stop's target
-            // and its lifecycle's one writer. An ended run keeps its verdict.
+            // A reached target finalizes itself; an ownerless stop writes the
+            // terminal row as an inactive-run step, which a generation admitted
+            // meanwhile refuses (`RunLive`) and becomes the target instead.
             stopHere()
               ? Effect.void
               : this.withInactiveRunStep(
@@ -702,6 +646,13 @@ export class RunRegistry implements RunsShape {
                 ),
           ),
         ),
+        // Refused before anything was stopped: the run goes on, unmarked.
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            const current = this.entries.get(runId);
+            if (!reached && current !== undefined) current.stopReason = marked;
+          }),
+        ),
       );
       settlement = local
         ? apply
@@ -712,20 +663,15 @@ export class RunRegistry implements RunsShape {
               .pipe(Effect.andThen(apply)),
           );
     }
-    return {
-      accepted: () => reached,
-      settlement: settlement.pipe(Effect.ensuring(lift)),
-    };
+    return { accepted: () => reached, settlement };
   }
 
   /** The session is closing: refuse every run registered from here on, and
-   *  stop every run no other run here stops, cascading into its children (a
-   *  child whose parent this registry holds is stopped by that parent's
-   *  cascade; every other run is stopped itself). Answers the runs left for
-   *  the caller to settle: those no live target took the stop for, since
-   *  nothing here drives them, and those whose stop failed to record what it
-   *  owed storage (logged here). Stopped runs keep their records until they
-   *  settle ({@link awaitDrained}). */
+   *  stop every run whose parent this registry does not hold (that parent's
+   *  cascade stops the rest). Answers the runs left for the caller to settle:
+   *  those no live target took the stop for, and those whose stop failed to
+   *  record what it owed storage (logged here). Stopped runs keep their
+   *  records until they settle ({@link awaitDrained}). */
   stopAll(): Effect.Effect<readonly RunId[]> {
     this.closing = true;
     const shutdown = {
@@ -755,24 +701,11 @@ export class RunRegistry implements RunsShape {
     ).pipe(Effect.map((left) => left.flat()));
   }
 
-  /** One `run.end` this process committed, from the session's fold-gated tail
-   *  once the view has folded it: a run that ended `cancelled` closes the
-   *  admission window its stop left, so this interrupts the children admitted
-   *  between the stop's settlement and the fold — every later one
-   *  {@link assertAdmitsChild} refuses. Each interrupted driver settles its run. */
-  sweepChildrenOfFoldedStop(runId: RunId): void {
-    if (this.disposed || !this.stopFolded(runId)) return;
-    // The folded stop's reason is not known here: its children are
-    // interrupted without one, so none cancels remote work.
-    this.interruptActiveChildren(runId, new Set(), undefined);
-  }
-
   /** Record why `runId` stops, before it is interrupted (see
    *  {@link RunEntry.stopReason}); only a run this process holds has one. */
   private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
     const entry = this.entries.get(runId);
     if (entry === undefined || reason === undefined) return;
-    if (!this.stopping.has(runId)) entry.since = this.now();
     if (entry.stopReason !== 'user') entry.stopReason = reason;
   }
 
@@ -904,7 +837,6 @@ export class RunRegistry implements RunsShape {
     this.waiting.clear();
     this.entries.clear();
     for (const key of [...this.drains.keys()]) this.completeDrain(key);
-    this.stopping.clear();
   }
 }
 

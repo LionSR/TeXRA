@@ -1103,6 +1103,7 @@ describe('ModelInvoker retry', () => {
             runId,
             handle: undefined,
             live: false,
+            readsMessages: false,
             parent: null,
             drained: Effect.void,
             ...live,

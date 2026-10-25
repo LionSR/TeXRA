@@ -288,7 +288,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
             text: 'new github event',
             from: { kind: 'notification', source: 'github' },
           },
-          { mode: 'live_notification' },
+          { hold: 'generation' },
         );
       }),
   );
@@ -320,7 +320,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
             text: 'new github event',
             from: { kind: 'notification', source: 'github' },
           },
-          { mode: 'live_notification' },
+          { hold: 'generation' },
         );
       }),
   );

@@ -392,10 +392,6 @@ export function createChatSessionController(
       });
     });
 
-  // The reason of the stop asked last, for a stop re-issued once the launch
-  // gap closes.
-  let stopReason: RunStopReason = 'user';
-
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
@@ -403,7 +399,9 @@ export function createChatSessionController(
   /** Stop the chat's run. A stop lands only on a run the session holds:
    *  one the view shows, or `admitted`, which the session has just admitted
    *  whether or not the view has folded it yet (admission re-reads
-   *  `stopRequested` for a stop asked in the launch gap). */
+   *  `stopRequested` for a stop asked in the launch gap). The stop is a
+   *  shutdown while the chat is leaving and a user stop otherwise; why the
+   *  run then stops is the run registry's fact. */
   const interruptActiveRun = (admitted?: RunId): void => {
     const runId = session.runId;
     if (!runId) return;
@@ -411,7 +409,8 @@ export function createChatSessionController(
     session.interruptedRunId = runId;
     // Ctrl-C leaves the child policy unset, so the session's request handler
     // applies the configured "Keep agents running".
-    runtime.runFork(request({ kind: 'run.stop', runId, reason: stopReason }));
+    const reason: RunStopReason = session.leaving ? 'shutdown' : 'user';
+    runtime.runFork(request({ kind: 'run.stop', runId, reason }));
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to
@@ -828,9 +827,6 @@ export function createChatSessionController(
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
     if (reason === 'shutdown' && served) return;
-    stopReason = reason;
-    // The stop is a fact of the claim: a `user` stop is the turn's, and a
-    // shutdown carries into every claim taken while leaving.
     session.askStop(reason);
     interruptActiveRun();
   };

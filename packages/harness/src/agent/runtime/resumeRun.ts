@@ -3,13 +3,12 @@ import { Clock, Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
 /**
  * The one resume entry point. Every host continues a persisted run through
  * it, including implicit follow-up wakes, and a second resume of the same
- * run joins the one in flight (`Inbox.resumeOnce`). It launches on the run
+ * run joins the one in flight (`Resumes.once`). It launches on the run
  * lane; the launched run opens its own reader. Recovered children use the
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
-import { canResume } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
@@ -26,6 +25,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
+import { runRejection } from './runClassification';
 
 import { type RunEndResult } from './RunEndResult';
 import {
@@ -55,11 +55,12 @@ export type ResumeRunResult =
        *  result; children have none. */
       readonly completion?: ResumeRunCompletion;
     }
-  /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
+  /** `read_failed`, `not_parent` and `one_shot` are a follow-up's alone: a
+   *  resume reads under its claim, and only a message meets a loop. */
   | {
       readonly failed: Exclude<
         FollowUpFailureReason,
-        'read_failed' | 'not_parent'
+        'read_failed' | 'not_parent' | 'one_shot'
       >;
     };
 
@@ -127,7 +128,7 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
   if (cancelled()) return REFUSED;
   // The owner's resume is uninterruptible; a joiner is an observer whose
   // wait its own interruption ends, never the resume it joined.
-  const { result, joined } = yield* session.followUps.resumeOnce(
+  const { result, joined } = yield* session.followUps.resumes.once(
     runId,
     resumeHere(runId, options).pipe(
       Effect.provideService(Runs, session.runs),
@@ -200,10 +201,10 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   if (owner !== null) return { ownedBy: owner.parentRunId };
   // What its children hold for it, it reads once it runs here.
   yield* deliverHeld(session, runId);
-  const resumable = yield* canResume(runId, session);
+  // Nothing to continue from, or rows this build cannot open.
+  const rejected = yield* runRejection(runId, session);
   if (cancelled()) return REFUSED;
-  // Nothing to continue from.
-  if (!resumable) return { failed: 'finished' };
+  if (rejected !== null) return { failed: rejected.kind };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason, never failed, for the session's follower to
   // resume once it is back; nothing is launched. Another process's run

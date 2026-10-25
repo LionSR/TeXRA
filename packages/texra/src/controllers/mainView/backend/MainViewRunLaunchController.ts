@@ -75,10 +75,16 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   if ('failed' in resolved) return { valid: false, message: resolved.failed };
   const { entry } = resolved;
   const task = entry !== null && documentTaskOf(entry) !== null ? entry : null;
-  if (task && launch.inputFiles.length === 0) {
+  // A task revises its input files, or reads its media alone (a recording
+  // to transcribe, a scan to OCR).
+  if (
+    task &&
+    launch.inputFiles.length === 0 &&
+    launch.mediaFiles.length === 0
+  ) {
     return {
       valid: false,
-      message: 'Choose an input file first.',
+      message: 'Choose an input or media file first.',
       docsPage: 'file-management',
     };
   }

@@ -56,6 +56,7 @@ import * as Reactivity from 'effect/reactivity/Reactivity';
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 import { Sessions } from '@texra-ai/harness';
 import { registryOf } from '@agent/runtime/runRegistry';
+import * as toast from '@agent/runtime/terminalResultToast';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -1116,10 +1117,9 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
-        const sweep = vi.spyOn(
-          registryOf(session.runs),
-          'sweepChildrenOfFoldedStop',
-        );
+        // The folded tail presents each `run.end` this process committed:
+        // the presenter's calls say which rows the tail delivered.
+        const presented = vi.spyOn(toast, 'presentTerminalResult');
 
         try {
           publishTestRows(session, [
@@ -1180,14 +1180,17 @@ describe('Sessions owner', () => {
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
           yield* session.log.settled;
-          // The live run's `run.end` reaches the folded-stop sweep once the
-          // view has folded it, and a `waiting` step never does.
+          // The live run's `run.end` reaches the folded tail once the view
+          // has folded it, and a `waiting` step never does.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(sweep).toHaveBeenCalledOnce()),
+            vi.waitFor(() => expect(presented).toHaveBeenCalledOnce()),
           );
-          expect(sweep).toHaveBeenCalledWith(OLDER);
+          expect(presented).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ runId: OLDER }),
+          );
         } finally {
-          sweep.mockRestore();
+          presented.mockRestore();
           yield* closeSessionOf(session);
         }
       }),
@@ -1274,7 +1277,6 @@ describe('Sessions owner', () => {
         releaseChild = registryOf(session.runs).reserveChildActivation({
           runId: Schema.decodeUnknownSync(RunIdSchema)('aa0002'),
           launchParent: null,
-          retainsTerminalParent: true,
           interrupt,
         });
 
@@ -1321,7 +1323,6 @@ describe('Sessions owner', () => {
         registryOf(session.runs).reserveChildActivation({
           runId: slow,
           launchParent: null,
-          retainsTerminalParent: false,
           interrupt: () => {},
         });
         const closing = yield* Effect.forkChild(

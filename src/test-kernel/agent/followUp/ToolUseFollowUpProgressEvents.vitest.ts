@@ -91,7 +91,7 @@ describe('tool-use follow-up progress events', () => {
         );
 
         expect(result).toEqual({ status: 'sent' });
-        expect(yield* input.take).toMatchObject({
+        expect(yield* input.next('idle')).toMatchObject({
           followUps: [
             {
               content: {

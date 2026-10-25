@@ -103,11 +103,13 @@ describe('session-owned transcripts and follow-up queues', () => {
       yield* a.log.settled;
 
       const late = { from: { kind: 'user' as const }, text: 'late' };
-      expect(yield* a.followUps.send(runId, late)).toEqual({ kind: 'refused' });
+      expect(yield* a.followUps.send(runId, late)).toEqual({
+        kind: 'refused',
+        reason: 'not_resumable',
+      });
       expect(yield* b.followUps.send(runId, late)).toEqual({
         kind: 'queued',
         read: true,
-        wake: false,
       });
     }),
   );

@@ -63,6 +63,7 @@ import {
   applyRunRow,
   freshRunRows,
   isSharedRunRow,
+  pendingMessages,
   phaseMoveOf,
   type RunRows,
   type SharedRunRow,
@@ -276,8 +277,7 @@ function writable<K, V>(u: Update, map: ReadonlyMap<K, V>): Map<K, V> {
   return copy;
 }
 
-/** `map` without `key`, as a map this call owns; a map that never held the
- *  key is left alone, so a delete that removes nothing copies nothing. */
+/** `map` without `key`; a map that never held the key is not copied. */
 function without<K, V>(u: Update, map: ReadonlyMap<K, V>, key: K) {
   if (!map.has(key)) return map;
   const copy = writable(u, map);
@@ -921,7 +921,7 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
 /** The run's untaken messages (not its own requests), as the view shows them. */
 function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
   const { view } = u;
-  const messages = rows.followUps.filter((f) => f.control === undefined);
+  const messages = pendingMessages(rows.followUps, (id) => view.runs.get(id));
   if (messages.length === 0) {
     view.queuedFollowUps = without(u, view.queuedFollowUps, runId);
     return;

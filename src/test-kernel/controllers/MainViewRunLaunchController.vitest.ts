@@ -123,7 +123,7 @@ describe('main-view run launch controller', () => {
       }),
   );
 
-  it.effect('requires an input file for a document agent', () =>
+  it.effect('requires an input or media file for a document agent', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
         onGlobalStorage(
@@ -133,8 +133,22 @@ describe('main-view run launch controller', () => {
 
       expect(error).toMatchObject({
         _tag: 'Rejected',
-        reason: 'Choose an input file first.',
+        reason: 'Choose an input or media file first.',
         docsPage: 'file-management',
+      });
+      // Media alone is a task too (#14148).
+      const { config } = yield* onGlobalStorage(
+        prepareSurfaceLaunch(
+          launchRequest({
+            agent: 'correct',
+            mediaFiles: ['/papers/first/scan.png'],
+          }),
+          ROOTS,
+        ),
+      );
+      expect(config).toMatchObject({
+        inputFiles: [],
+        mediaFiles: ['/papers/first/scan.png'],
       });
     }),
   );

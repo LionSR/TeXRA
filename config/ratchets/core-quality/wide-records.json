@@ -1,5 +1,4 @@
 {
   "packages/harness/src/agent/runtime/run/AgentRun.ts": 1,
-  "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/shared/session/database.ts": 1
 }

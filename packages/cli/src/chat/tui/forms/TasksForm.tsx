@@ -7,6 +7,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect, Fiber, type Scope } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
+import { presentFollowUpResult } from '@texra-ai/harness';
 import {
   acceptsFollowUp,
   type RunId,
@@ -375,15 +376,14 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                       })
                       .pipe(
                         Effect.map((outcome) => {
+                          if (outcome.kind !== 'followUp') return;
                           // Queued but not taken: the run did not wake, and
                           // waits for a resume before it reads the message.
-                          if (
-                            outcome.kind === 'followUp' &&
-                            outcome.wake === 'failed'
-                          )
-                            say(
-                              'The message is queued, but the task did not wake to read it.',
-                            );
+                          const shown = presentFollowUpResult({
+                            status: outcome.status,
+                            ...(outcome.wake == null ? {} : { wake: 'failed' }),
+                          });
+                          if (shown.severity !== 'none') say(shown.message);
                         }),
                       ),
                   // Not sent: the draft comes back to send again.

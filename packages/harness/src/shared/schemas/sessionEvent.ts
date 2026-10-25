@@ -263,8 +263,7 @@ const DisplayRowDraftSchema = Schema.Union([
   /**
    * A child driven by the child loop, which has no run history or rounds, parks
    * on its own row (one run model, 3.3): `parked` before the loop blocks on
-   * its queue, `resumed` when a batch starts the next turn (what
-   * `getToolUseFollowUpTarget` reads to admit a turn), `paused` when a stop
+   * its queue, `resumed` when a batch starts the next turn, `paused` when a stop
    * rests it with no `run.end`, keeping the `resumeId` a tool call continues
    * it by. A listing key of its own (`listingTypeOf`'s default): a cold
    * listing that dropped it would paint every parked child as busy.
@@ -290,8 +289,10 @@ const DisplayRowDraftSchema = Schema.Union([
   durable('followup.queued', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
     content: FollowUpContentSchema,
-    /** Held until a take also carries an instruction (a pause notice). */
-    holdUntil: Schema.optional(Schema.Literals(['instruction'])),
+    /** When the row may be read; the rules are `readableMessages`. */
+    holdUntil: Schema.optional(
+      Schema.Literals(['instruction', 'turn', 'generation']),
+    ),
     /** A request of the run's own, consumed by the batch that applies it. */
     control: Schema.optional(
       Schema.Union([

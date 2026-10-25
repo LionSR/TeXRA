@@ -7,9 +7,9 @@ import { Inbox, type InboxClosed, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
 import {
   presentFollowUpResult,
+  startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionTransaction,
@@ -70,6 +70,8 @@ function recordedFollowUps(
   options: {
     claimRefused?: boolean;
     failWrites?: number;
+    /** The port's resume; the default records the run and succeeds. */
+    resume?: (runId: RunId) => Effect.Effect<boolean>;
   } = {},
 ) {
   const rows: SessionEvent[] = [];
@@ -138,14 +140,23 @@ function recordedFollowUps(
             )
           : Effect.void;
       }),
+    settled: Effect.void,
   } as InboxPort['log'];
+  const resumed: RunId[] = [];
   const followUps = new Inbox({
     log,
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
-    parentOf: () => undefined,
-    live: (runId) => live.has(runId),
+    run: () => undefined,
+    // As `startFollowUpWake` answers: a run live here needs no resume.
+    resume:
+      options.resume ??
+      ((runId) =>
+        Effect.sync(() => {
+          if (!live.has(runId)) resumed.push(runId);
+          return true;
+        })),
   });
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>
@@ -158,6 +169,7 @@ function recordedFollowUps(
     followUps,
     claims,
     live,
+    resumed,
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
   };
@@ -166,7 +178,9 @@ function recordedFollowUps(
 /** What `input` takes now without blocking (nothing is consumed). */
 const taken = (input: RunInput) =>
   Effect.gen(function* () {
-    const batch = (yield* input.hasQueued) ? yield* input.take : null;
+    const batch = (yield* input.hasPending('idle'))
+      ? yield* input.next('idle')
+      : null;
     return batch?.kind !== 'followUps'
       ? []
       : batch.followUps.map((followUp) => followUp.content.text);
@@ -174,14 +188,28 @@ const taken = (input: RunInput) =>
 
 let recorded = recordedFollowUps();
 
-function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
-  recorded = recordedFollowUps();
+/**
+ * The run the admission meets: a generation `live` here (no resume is owed
+ * and nothing is read from disk), one `idle` with no generation here whose
+ * rows allow a resume, or one whose claim is `unreadable`.
+ */
+type RunState = 'live' | 'idle' | 'unreadable';
+
+function fakeSession(state: RunState): SessionHandle {
+  if (state === 'idle')
+    vi.spyOn(resumability, 'deriveResumability').mockReturnValue(
+      Effect.succeed({ kind: 'checkpoint' }),
+    );
+  // The port's resume is the session's own wake, as the session layer wires it.
+  recorded = recordedFollowUps({
+    resume: (runId) => startFollowUpWake(runId, session),
+  });
   const { followUps, live } = recorded;
   /** The session's resume, as `resumeRun` runs it: one in flight per run,
    *  and a run that took it is live here from then on. */
   const resume = (runId: RunId) =>
-    followUps
-      .resumeOnce(
+    followUps.resumes
+      .once(
         runId,
         Effect.map(tryResume(runId), (resumed) => {
           if (!resumed) return { failed: 'not_resumable' as const };
@@ -190,12 +218,13 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
         }),
       )
       .pipe(Effect.map(({ result }) => result));
-  return {
+  const session = {
     runs: {
       resume,
-      getToolUseFollowUpTarget: () => target,
       get: (runId: RunId) =>
-        live.has(runId) ? { runId, live: true } : undefined,
+        state === 'live' || live.has(runId)
+          ? { runId, live: true, readsMessages: true }
+          : undefined,
       // The session's fork: the attempt outlives the fiber that asked.
       fork: (program: Effect.Effect<unknown, unknown>) =>
         Effect.forkDetach(program, { startImmediately: true }),
@@ -204,12 +233,16 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     interactions: { emit: () => Effect.void },
     log: {
       records: () => Effect.succeed([]),
-      // No database behind this fixture: a claim read fails, a transient
+      // No database behind this fixture: an unreadable claim is a transient
       // refusal that says nothing about the run.
-      owner: () => Effect.fail(new Error('claim store unavailable')),
+      owner: () =>
+        state === 'unreadable'
+          ? Effect.fail(new Error('claim store unavailable'))
+          : Effect.succeed({ ownerId: null, liveness: null }),
     },
     followUps,
   } as unknown as SessionHandle;
+  return session;
 }
 
 const user = (text: string) => ({ text, from: { kind: 'user' as const } });
@@ -226,11 +259,11 @@ describe('submitFollowUp', () => {
   });
 
   it.effect(
-    "queues for the run's own reader while waiting, between turns, and during a turn",
+    'reports input a reader here takes as sent: while waiting, between turns, and during a turn',
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('live');
         const input = yield* session.followUps.open(runId);
         const tryResumeRun = mockTryResume();
 
@@ -239,7 +272,7 @@ describe('submitFollowUp', () => {
             yield* submitFollowUp(runId, user(text), { session }).pipe(
               withResumePort(tryResumeRun),
             ),
-          ).toEqual({ status: 'queued' });
+          ).toEqual({ status: 'sent' });
         }
 
         expect(tryResumeRun).not.toHaveBeenCalled();
@@ -254,7 +287,7 @@ describe('submitFollowUp', () => {
   it.effect('reports input admitted by a running loop as sent', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'active' });
+      const session = fakeSession('live');
       const input = yield* session.followUps.open(runId);
       const tryResumeRun = mockTryResume();
 
@@ -274,15 +307,15 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'active' });
+        const session = fakeSession('live');
         const input = yield* session.followUps.open(runId);
 
         expect(
           yield* submitFollowUp(runId, user('child progress'), {
             session,
-            mode: 'live_notification',
+            hold: 'generation',
           }).pipe(withResumePort(mockTryResume())),
-        ).toEqual({ status: 'queued' });
+        ).toEqual({ status: 'sent' });
         expect(yield* taken(input)).toEqual(['child progress']);
       }),
   );
@@ -292,13 +325,13 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('live');
         const tryResumeRun = mockTryResume();
 
         expect(
           yield* submitFollowUp(runId, user('child progress'), {
             session,
-            mode: 'live_notification',
+            hold: 'generation',
           }).pipe(withResumePort(tryResumeRun)),
         ).toEqual({ status: 'queued' });
         expect(tryResumeRun).not.toHaveBeenCalled();
@@ -309,7 +342,7 @@ describe('submitFollowUp', () => {
   it.effect('wakes a run once and orders concurrent submissions', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       const barrier = createDeferred<boolean>();
       const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
 
@@ -340,7 +373,7 @@ describe('submitFollowUp', () => {
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
+        const session = fakeSession('idle');
         const resumed = createDeferred<boolean>();
         const started = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
@@ -368,7 +401,7 @@ describe('submitFollowUp', () => {
   it.effect('answers a faulted resume as a failed wake', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       expect(
         yield* submitFollowUp(runId, user('keep this input'), {
           session,
@@ -383,7 +416,7 @@ describe('submitFollowUp', () => {
   it.effect('wakes a run whose generation has ended', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({ kind: 'queue' });
+      const session = fakeSession('idle');
       yield* Effect.scoped(session.followUps.open(runId));
       const tryResumeRun = mockTryResume();
 
@@ -397,36 +430,33 @@ describe('submitFollowUp', () => {
   );
 
   it.effect(
-    'admits a child delivery to the retained queue after the parent completes',
+    "refuses a run's message to a run with no generation here, resumable or not",
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
-        const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
+        const session = fakeSession('idle');
+        const tryResumeRun = mockTryResume();
 
         expect(
           yield* submitFollowUp(
             runId,
             {
-              text: 'retained child result',
+              text: 'late child result',
               from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             },
             { session },
-          ).pipe(withResumePort(mockTryResume())),
-        ).toEqual({ status: 'queued' });
+          ).pipe(withResumePort(tryResumeRun)),
+        ).toEqual({ status: 'failed', reason: 'not_resumable' });
 
-        expect(deriveSpy).not.toHaveBeenCalled();
-        expect(recorded.queued(runId)).toEqual(['retained child result']);
+        expect(tryResumeRun).not.toHaveBeenCalled();
+        expect(recorded.queued(runId)).toEqual([]);
       }),
   );
 
   it.effect('refuses child delivery to a parent with no session', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const session = fakeSession({
-        kind: 'no_session',
-        runStatus: 'completed',
-      });
+      const session = fakeSession('unreadable');
       const tryResumeRun = mockTryResume();
 
       expect(
@@ -438,39 +468,36 @@ describe('submitFollowUp', () => {
     }),
   );
 
-  it.effect(
-    'admits a replayed child delivery at most once and wakes at most once',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession({ kind: 'queue' });
-        const tryResumeRun = mockTryResume();
-        const delivery = childResult('exec-1:turn:1:delivery');
+  it.effect('admits a replayed child delivery at most once', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession('live');
+      const tryResumeRun = mockTryResume();
+      const delivery = childResult('exec-1:turn:1:delivery');
 
+      expect(
+        yield* submitFollowUp(runId, delivery, { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
+      ).toEqual({ status: 'queued' });
+
+      // A producer repeating the same logical result must not append
+      // another parent message; the live generation reads the one row.
+      for (let replay = 0; replay < 100; replay++) {
         expect(
           yield* submitFollowUp(runId, delivery, { session }).pipe(
             withResumePort(tryResumeRun),
           ),
-        ).toEqual({ status: 'queued' });
-        expect(tryResumeRun).toHaveBeenCalledTimes(1);
-
-        // A producer repeating the same logical result must not append
-        // another parent message nor trigger another parent wake.
-        for (let replay = 0; replay < 100; replay++) {
-          expect(
-            yield* submitFollowUp(runId, delivery, { session }).pipe(
-              withResumePort(tryResumeRun),
-            ),
-          ).toEqual({ status: 'sent' });
-        }
-        expect(tryResumeRun).toHaveBeenCalledTimes(1);
-        expect(recorded.queuedRows(runId)).toMatchObject([
-          {
-            followUpId: delivery.deliveryId,
-            content: { text: 'child result' },
-          },
-        ]);
-      }),
+        ).toEqual({ status: 'sent' });
+      }
+      expect(tryResumeRun).not.toHaveBeenCalled();
+      expect(recorded.queuedRows(runId)).toMatchObject([
+        {
+          followUpId: delivery.deliveryId,
+          content: { text: 'child result' },
+        },
+      ]);
+    }),
   );
 });
 
@@ -489,7 +516,7 @@ describe('Inbox readers', () => {
     'delivers a successor reader every row still queued, in commit order',
     () =>
       Effect.gen(function* () {
-        const { followUps, queued } = recordedFollowUps();
+        const { followUps, queued, resumed } = recordedFollowUps();
         const id = generateRunId();
         yield* Effect.scoped(
           Effect.andThen(
@@ -497,11 +524,12 @@ describe('Inbox readers', () => {
             followUps.send(id, user('during the first generation')),
           ),
         );
-        expect(
-          yield* followUps.send(id, user('between generations'), {
-            wake: true,
-          }),
-        ).toEqual({ kind: 'queued', read: false, wake: true });
+        expect(yield* followUps.send(id, user('between generations'))).toEqual({
+          kind: 'queued',
+          read: false,
+        });
+        expect(yield* followUps.wake(id)).toBe(true);
+        expect(resumed).toEqual([id]);
 
         expect(queued(id)).toEqual([
           'during the first generation',
@@ -517,12 +545,15 @@ describe('Inbox readers', () => {
 
   it.effect('owes no wake to a run a generation here holds', () =>
     Effect.gen(function* () {
-      const { followUps, live } = recordedFollowUps();
+      const { followUps, live, resumed } = recordedFollowUps();
       const id = generateRunId();
       live.add(id);
-      expect(
-        yield* followUps.send(id, user('queued for it'), { wake: true }),
-      ).toEqual({ kind: 'queued', read: false, wake: false });
+      expect(yield* followUps.send(id, user('queued for it'))).toEqual({
+        kind: 'queued',
+        read: false,
+      });
+      expect(yield* followUps.wake(id)).toBe(true);
+      expect(resumed).toEqual([]);
     }),
   );
 
@@ -537,7 +568,7 @@ describe('Inbox readers', () => {
       for (let attempt = 0; attempt < 2; attempt++) {
         // Not remembered as admitted: a retry is tried again, not
         // reported as a duplicate.
-        expect(yield* followUps.send(id, delivery, { wake: true })).toEqual({
+        expect(yield* followUps.send(id, delivery)).toEqual({
           kind: 'refused',
           reason: 'owned_elsewhere',
         });
@@ -576,7 +607,7 @@ describe('Inbox readers', () => {
       const input = yield* followUps.open(id);
 
       followUps.forget(id);
-      expect(yield* input.take).toBeNull();
+      expect(yield* input.next('idle')).toBeNull();
       expect(closed).toEqual([{ kind: 'run', runId: id }]);
     }),
   );
@@ -608,12 +639,13 @@ describe('Inbox readers', () => {
 
       // Per-session observers (subscription pollers) let the session go.
       expect(closed).toEqual([{ kind: 'session' }]);
-      expect(yield* input.take).toBeNull();
-      expect(yield* followUps.send(id, user('late'), { wake: true })).toEqual({
+      expect(yield* input.next('idle')).toBeNull();
+      expect(yield* followUps.send(id, user('late'))).toEqual({
         kind: 'refused',
+        reason: 'not_resumable',
       });
       const reopened = yield* followUps.open(generateRunId());
-      expect(yield* reopened.take).toBeNull();
+      expect(yield* reopened.next('idle')).toBeNull();
     }),
   );
 
@@ -626,22 +658,26 @@ describe('Inbox readers', () => {
       const pending: QueuedFollowUp[] = [
         { ...followUp('/compact'), control: { kind: 'compact' } },
       ];
-      const input = new RunInput(Effect.sync(() => pending));
+      const input = new RunInput(
+        Effect.sync(() => pending),
+        () => undefined,
+      );
 
-      expect(yield* input.take).toMatchObject({
+      expect(yield* input.next('idle')).toMatchObject({
         kind: 'synthetic',
         text: expect.stringContaining('immediate context compaction'),
       });
       pending.push(followUp('first'), followUp('second'));
       input.notify();
       // Messages first; the request stays queued for the boundary.
-      expect(yield* input.take).toEqual({
+      expect(yield* input.next('idle')).toEqual({
         kind: 'followUps',
         followUps: [followUp('first'), followUp('second')],
+        stale: [],
       });
       expect(yield* input.controls).toHaveLength(1);
       input.end();
-      expect(yield* input.take).toBeNull();
+      expect(yield* input.next('idle')).toBeNull();
     }),
   );
 });
@@ -659,7 +695,6 @@ describe('Inbox delivery identity (#9531)', () => {
         expect(yield* followUps.send(id, delivery)).toEqual({
           kind: 'queued',
           read: true,
-          wake: false,
         });
         for (let replay = 0; replay < 100; replay++) {
           expect(yield* followUps.send(id, delivery)).toEqual({
@@ -690,9 +725,7 @@ describe('Inbox delivery identity (#9531)', () => {
         );
 
         expect(Exit.isFailure(first)).toBe(true);
-        expect(second).toEqual(
-          Exit.succeed({ kind: 'queued', read: true, wake: false }),
-        );
+        expect(second).toEqual(Exit.succeed({ kind: 'queued', read: true }));
         expect(queued(id)).toEqual(['child result']);
       }),
   );
@@ -713,19 +746,19 @@ describe('Inbox delivery identity (#9531)', () => {
   );
 
   it.effect(
-    'finds a replayed id still queued, writing nothing, and owes the wake again',
+    'finds a replayed id still queued, writing nothing, and asks the wake again',
     () =>
       Effect.gen(function* () {
-        const { followUps, queued } = recordedFollowUps();
+        const { followUps, queued, resumed } = recordedFollowUps();
         const id = generateRunId();
         const delivery = childResult('d1');
         yield* followUps.send(id, delivery);
 
-        expect(yield* followUps.send(id, delivery, { wake: true })).toEqual({
-          kind: 'queued',
-          read: false,
-          wake: true,
+        expect(yield* followUps.send(id, delivery)).toEqual({
+          kind: 'duplicate',
         });
+        expect(yield* followUps.wake(id)).toBe(true);
+        expect(resumed).toEqual([id]);
         expect(queued(id)).toEqual(['child result']);
       }),
   );
@@ -752,17 +785,16 @@ describe('Inbox visibility held on the row', () => {
     'reads a pause notice only beside an instruction, and wakes nobody for it',
     () =>
       Effect.gen(function* () {
-        const { followUps } = recordedFollowUps();
+        const { followUps, resumed } = recordedFollowUps();
         const id = generateRunId();
         const notice = { ...childResult('paused'), text: 'child paused' };
         expect(
-          yield* followUps.send(id, notice, {
-            hold: 'instruction',
-            wake: true,
-          }),
-        ).toEqual({ kind: 'queued', read: false, wake: false });
+          yield* followUps.send(id, notice, { hold: 'instruction' }),
+        ).toEqual({ kind: 'queued', read: false });
+        expect(yield* followUps.wake(id)).toBe(true);
+        expect(resumed).toEqual([]);
         const input = yield* followUps.open(id);
-        expect(yield* input.hasQueued).toBe(false);
+        expect(yield* input.hasPending('idle')).toBe(false);
 
         yield* followUps.send(id, user('go on'));
         expect(yield* taken(input)).toEqual(['child paused', 'go on']);
@@ -783,9 +815,10 @@ describe('Inbox closed input', () => {
         yield* followUps.closeInput(closed);
         yield* settle;
 
-        expect(
-          yield* followUps.send(closed, user('still closed'), { wake: true }),
-        ).toEqual({ kind: 'refused' });
+        expect(yield* followUps.send(closed, user('still closed'))).toEqual({
+          kind: 'refused',
+          reason: 'not_resumable',
+        });
         expect(queued(closed)).toEqual([]);
         expect(yield* followUps.send(open, user('never closed'))).toMatchObject(
           { kind: 'queued' },
