@@ -27,7 +27,7 @@ export function nullishWithDefault<S extends Schema.Top>(
   schema: S,
   fallback: S['Type'],
   description: string,
-) {
+): Schema.decodeTo<Schema.toType<S>, Schema.optional<Schema.NullOr<S>>> {
   return Schema.optional(Schema.NullOr(schema))
     .annotate({ description })
     .pipe(

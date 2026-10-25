@@ -1,5 +1,11 @@
 // Third-party imports
-import { Effect, JsonSchema, Schema, SchemaRepresentation } from 'effect';
+import {
+  Effect,
+  JsonSchema,
+  Predicate,
+  Schema,
+  SchemaRepresentation,
+} from 'effect';
 
 // Internal imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -82,7 +88,7 @@ function assertSafeSandboxSchema(schema: unknown): void {
   }
   let nodeCount = 0;
   const walk = (node: unknown, depth: number): void => {
-    if (node === null || typeof node !== 'object') return;
+    if (!Predicate.isObjectOrArray(node)) return;
     if (depth > MAX_SANDBOX_SCHEMA_DEPTH) {
       throw new Error(
         `Structured output JSON Schema is nested deeper than the ${MAX_SANDBOX_SCHEMA_DEPTH}-level limit.`,
@@ -94,11 +100,11 @@ function assertSafeSandboxSchema(schema: unknown): void {
         `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_NODES}-node limit.`,
       );
     }
-    if (Array.isArray(node)) {
+    if (!Predicate.isObject(node)) {
       for (const child of node) walk(child, depth + 1);
       return;
     }
-    const record = node as Record<string, unknown>;
+    const record = node;
     if ('pattern' in record || 'patternProperties' in record) {
       throw new Error(
         'Structured output JSON Schema cannot use pattern or patternProperties.',
@@ -153,11 +159,12 @@ export function normalizeStructuredOutputSchema(
     schema = input;
   } else {
     assertSafeSandboxSchema(input);
-    // cast: a schema compiled from JSON Schema decodes plain JSON and needs
-    // no services; `fromJsonSchemaDocument` only states `Schema.Top`.
-    schema = SchemaRepresentation.fromJsonSchemaDocument(
+    const compiled = SchemaRepresentation.fromJsonSchemaDocument(
       JsonSchema.fromSchemaDraft2020_12(input),
-    ) as Schema.Codec<unknown, unknown>;
+    );
+    // A schema compiled from JSON Schema decodes plain JSON with no services;
+    // cast: `fromJsonSchemaDocument` only states `Schema.Top`.
+    schema = compiled as Schema.Codec<unknown, unknown>;
   }
   const jsonSchema = convertToolSchema({
     name: STRUCTURED_OUTPUT_TOOL_NAME,

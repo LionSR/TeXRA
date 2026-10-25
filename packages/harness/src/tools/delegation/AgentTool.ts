@@ -20,12 +20,14 @@ import { Cause, Effect, Exit, Result, Schema, SynchronizedRef } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ToolContext } from '@agent/core/tools/ToolTypes';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { requireToolRun } from '@agent/runtime/RunCall';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   AGENT_SOURCE,
@@ -40,7 +42,7 @@ import {
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
-import { defineTool } from '@tools/core/definition';
+import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
@@ -80,13 +82,13 @@ import {
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
 class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
   'AgentTimedOut',
-  {
-    timeoutMs: Schema.Number,
-  },
+  { timeoutMs: Schema.Number },
 ) {}
 
 /** A list of file paths, empty when the call names none. */
-export const fileList = (description: string) =>
+export const fileList = (
+  description: string,
+): ReturnType<typeof nullishWithDefault<Schema.$Array<Schema.String>>> =>
   nullishWithDefault(Schema.Array(Schema.String), [], description);
 
 /** The fields that name what an `agent` call runs and with which model. */
@@ -144,6 +146,7 @@ export const CALL_FIELDS = {
 };
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
+type AgentToolServices = AgentRunServices | ToolContext;
 
 /**
  * One child launch as the shared core runs it: the agent and its prompt,
@@ -442,10 +445,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       };
   } else {
     const recovered = yield* Effect.result(
-      recoverAgentChild(call, {
-        notify,
-        running,
-      }),
+      recoverAgentChild(call, { notify, running }),
     );
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
@@ -551,7 +551,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 });
 
 /** The `agent` tool. */
-export const agentTool = () =>
+export const agentTool = (): DefinedTool<AgentInput, AgentToolServices> =>
   defineTool({
     name: 'agent',
     requiresApproval: 'inBody',

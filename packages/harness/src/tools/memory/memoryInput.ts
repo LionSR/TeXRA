@@ -17,7 +17,9 @@ const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMOR
 
 // The directory-listing pagination window, stated once: the schema defaults,
 // the advertised descriptions and the tool description all read these.
+/** The entry a listing starts at when the call names no `offset`. */
 export const LISTING_DEFAULT_OFFSET = 0;
+/** How many entries a listing returns when the call names no `limit`. */
 export const LISTING_DEFAULT_LIMIT = 100;
 const LISTING_MAX_LIMIT = 200;
 
@@ -25,6 +27,7 @@ const PathFieldSchema = Schema.String.annotate({
   description: MEMORY_PATH_DESCRIPTION,
 });
 
+/** The memory tool's input: one struct per command, told apart by `command`. */
 export const MemoryToolInputSchema = Schema.Union([
   Schema.Struct({
     command: Schema.Literal('view'),
@@ -96,4 +99,5 @@ export const MemoryToolInputSchema = Schema.Union([
   }),
 ]);
 
+/** One decoded memory tool call. */
 export type MemoryToolInput = typeof MemoryToolInputSchema.Type;
