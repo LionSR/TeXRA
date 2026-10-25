@@ -61,13 +61,10 @@ const FINISH = {
 } as const;
 
 /** An HTTP rejection body, read from the raw text the SDK kept. */
-const ErrorSchema = Schema.StructWithRest(
-  Schema.Struct({
-    code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
-    message: Schema.String,
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
+const ErrorSchema = Schema.Struct({
+  code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
+  message: Schema.String,
+});
 
 /** One SDK reasoning detail as canonical evidence; an unknown one is malformed. */
 const canonicalDetail = (detail: ReasoningDetailUnion): Detail | undefined => {
@@ -613,17 +610,15 @@ export function openrouterChatModel(
           toolChoice: authored.toolChoice ?? 'auto',
         },
       });
-      if (
-        !Result.isSuccess(prepared) ||
-        prepared.success.protocol !== 'openrouter-chat'
-      )
+      const resolved = Result.getOrUndefined(prepared);
+      if (resolved?.protocol !== 'openrouter-chat')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'OpenRouter cannot prepare these controls.',
           cause: Result.isFailure(prepared) ? prepared.failure : undefined,
         });
-      yield* requestBody(prepared.success, config);
-      return prepared.success;
+      yield* requestBody(resolved, config);
+      return resolved;
     },
   );
 
@@ -637,9 +632,8 @@ export function openrouterChatModel(
           requestId,
           model: config.requestedModel,
         });
-      // The SDK validates each streamed event with its own Zod and throws its
-      // ZodError, which this package does not import, so the error is known
-      // by name; anything else a body read raises is the connection.
+      // A malformed event throws the SDK's own ZodError, matched by name since
+      // this package imports no Zod; any other read failure is the connection.
       const streamFailure = (cause: unknown) =>
         cause instanceof Error && cause.name === 'ZodError'
           ? new ModelError({
@@ -759,7 +753,6 @@ export function openrouterChatModel(
             });
           reader = result.value.getReader();
           const body = reader;
-
           const wire = chatWire(responseId);
           return assembleTurn(
             Stream.concat(

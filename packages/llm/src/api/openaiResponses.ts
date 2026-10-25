@@ -9,7 +9,6 @@ import {
   Exit,
   Result,
   Schema,
-  SchemaGetter,
   type Scope,
   Stream,
   Struct,
@@ -40,7 +39,7 @@ import {
 } from '../errors.js';
 import { originOf } from '../protocol.js';
 import { admitObservation, ownedAbortSafeRequest } from './transport.js';
-import { filesApiUploads, UploadedSchema } from './uploadCache.js';
+import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
@@ -49,7 +48,11 @@ import {
   sdkEvents,
   terminalParts,
 } from './openaiResponsesCodec.js';
-import { ResponseEventSchema, ResponseSchema } from './openaiResponsesWire.js';
+import {
+  decodeUploadedFile,
+  ResponseEventSchema,
+  ResponseSchema,
+} from './openaiResponsesWire.js';
 import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   ResponseAuthenticationSchema,
@@ -59,28 +62,6 @@ import {
   responseAuthentication,
   responseParameters,
 } from './openaiResponsesRequest.js';
-
-/**
- * What a Files API upload must return before its id is cached. The SDK's
- * type is not a check on the JSON, so a missing or empty id, or an expiry
- * that is not whole non-negative Unix seconds (absent means the file does
- * not expire), is a malformed response: the upload counts as failed and the
- * bytes are sent.
- */
-const UploadedFileSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
-  expires_at: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ),
-}).pipe(
-  Schema.decodeTo(UploadedSchema, {
-    decode: SchemaGetter.transform((file) => ({
-      fileId: file.id,
-      expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
-    })),
-    encode: SchemaGetter.forbidden(() => 'decode-only'),
-  }),
-);
 
 /** Direct Responses operations, with no application model adapter. */
 export function openaiResponsesModel(
@@ -115,8 +96,7 @@ export function openaiResponsesModel(
             enrichModelError(openaiFailure(cause), {
               model: origin.requestedModel,
             }),
-          parseUploaded: (raw) =>
-            Schema.decodeUnknownResult(UploadedFileSchema)(raw),
+          parseUploaded: decodeUploadedFile,
           create: async (upload, signal) =>
             client.files.create(
               {

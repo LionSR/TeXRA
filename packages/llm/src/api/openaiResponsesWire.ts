@@ -4,11 +4,13 @@
  * the frames of the WebSocket transport. The socket frames are wire shapes
  * too: the same Responses events travel inside them, with an envelope that
  * names the lane and an error frame that carries no HTTP status.
- * `openaiResponsesCodec.ts` decodes these into canonical parts.
+ * `openaiResponsesCodec.ts` decodes these into canonical parts. The Files
+ * API's create response is here too: `decodeUploadedFile` reads it.
  */
 import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
+import { UploadedSchema } from './uploadCache.js';
 
 const ItemStatusSchema = Schema.Literals([
   'in_progress',
@@ -182,3 +184,28 @@ export const WebSocketErrorSchema = Schema.Union([
     ),
   ),
 ]);
+
+/**
+ * What a Files API upload must return before its id is cached. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not whole non-negative Unix seconds (absent means the file does
+ * not expire), is a malformed response: the upload counts as failed and the
+ * bytes are sent.
+ */
+const UploadedFileSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isMinLength(1)),
+  expires_at: Schema.optional(
+    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  ),
+}).pipe(
+  Schema.decodeTo(UploadedSchema, {
+    decode: SchemaGetter.transform((file) => ({
+      fileId: file.id,
+      expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
+    })),
+    encode: SchemaGetter.forbidden(() => 'decode-only'),
+  }),
+);
+/** Reads a Files API create response into the upload cache's canonical form. */
+export const decodeUploadedFile =
+  Schema.decodeUnknownResult(UploadedFileSchema);

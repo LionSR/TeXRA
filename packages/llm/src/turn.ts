@@ -39,9 +39,6 @@ import {
   type RemoteOperation,
 } from './errors.js';
 
-// Local imports - the usage record
-import { TurnUsageSchema } from './turnUsage.js';
-
 const ToolDefinitionSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)),
   description: Schema.String,
@@ -81,22 +78,17 @@ const ResponsesReasoningSchema = Schema.NullOr(
     summary: Schema.NullOr(Schema.Literals(['auto', 'concise', 'detailed'])),
   }),
 );
-const DisabledThinkingSchema = Schema.Struct({
-  mode: Schema.Literal('disabled'),
-});
-const AdaptiveThinkingSchema = Schema.Struct({
-  mode: Schema.Literal('adaptive'),
-  display: Schema.Literal('summarized'),
-});
-const BudgetedThinkingSchema = Schema.Struct({
-  mode: Schema.Literal('enabled'),
-  budgetTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1024)),
-  display: Schema.Literal('summarized'),
-});
 const AnthropicThinkingSchema = Schema.Union([
-  DisabledThinkingSchema,
-  AdaptiveThinkingSchema,
-  BudgetedThinkingSchema,
+  Schema.Struct({ mode: Schema.Literal('disabled') }),
+  Schema.Struct({
+    mode: Schema.Literal('adaptive'),
+    display: Schema.Literal('summarized'),
+  }),
+  Schema.Struct({
+    mode: Schema.Literal('enabled'),
+    budgetTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1024)),
+    display: Schema.Literal('summarized'),
+  }),
 ]);
 const EffortSchema = Schema.NullOr(
   ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
@@ -332,22 +324,13 @@ export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
 export const decodeModelConfiguration = Schema.decodeUnknownSync(
   ModelConfigurationSchema,
 );
-export type GoogleInteractionsConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'google-interactions' }
->;
-export type OpenAIResponsesConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'openai-responses' }
->;
-export type AnthropicMessagesConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'anthropic-messages' }
->;
-export type OpenRouterConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'openrouter-chat' }
->;
+type ConfigurationOf<P> = Extract<ModelConfiguration, { protocol: P }>;
+export type GoogleInteractionsConfiguration =
+  ConfigurationOf<'google-interactions'>;
+export type OpenAIResponsesConfiguration = ConfigurationOf<'openai-responses'>;
+export type AnthropicMessagesConfiguration =
+  ConfigurationOf<'anthropic-messages'>;
+export type OpenRouterConfiguration = ConfigurationOf<'openrouter-chat'>;
 /** The editor's model configuration, as the editor host serves it. */
 export type VscodeLanguageModelConfiguration =
   (typeof VscodeLanguageModelConfigurationSchema)['Type'];
@@ -427,6 +410,50 @@ export const ResolvedTurnSchema = Schema.Union([
 ]);
 /** A prepared turn: the request with the binding's controls fixed. */
 export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
+
+/** A turn's token counts as the provider reported them, with the counts only
+ *  one provider reports kept under its own name; an unknown count stays null. */
+const TurnUsageSchema = Schema.Struct({
+  inputTokens: Schema.NullOr(CountSchema),
+  outputTokens: Schema.NullOr(CountSchema),
+  totalTokens: Schema.NullOr(CountSchema),
+  cachedInputTokens: Schema.NullOr(CountSchema),
+  reasoningTokens: Schema.NullOr(CountSchema),
+  providerUsage: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('google'),
+        /** Reported tool-use prompt count; absence does not mean zero. */
+        toolUsePromptTokens: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('xai'),
+        costInUsdTicks: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('anthropic'),
+        uncachedInputTokens: Schema.NullOr(CountSchema),
+        cacheCreationTokens: Schema.NullOr(CountSchema),
+        cacheCreation5mTokens: Schema.NullOr(CountSchema),
+        cacheCreation1hTokens: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('openrouter'),
+        cost: Schema.optional(Schema.NullOr(Schema.Number)),
+        isByok: Schema.optional(Schema.Boolean),
+        inputDetails: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              cacheWriteTokens: Schema.optional(Schema.NullOr(CountSchema)),
+            }),
+          ),
+        ),
+      }),
+    ]),
+  ),
+});
+/** {@link TurnUsageSchema}'s value. */
+export type TurnUsage = typeof TurnUsageSchema.Type;
 
 const IdentitySchema = Schema.Struct({
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
@@ -597,9 +624,7 @@ export function assistantMessageFromResult(
 
 // Identity evidence is neither background acceptance nor cancellation.
 const IdentifiedEventSchema = IdentitySchema.mapFields(
-  Struct.assign({
-    kind: Schema.Literal('identified'),
-  }),
+  Struct.assign({ kind: Schema.Literal('identified') }),
 );
 const DeltaEventSchema = Schema.Struct({
   kind: Schema.Literal('delta'),
@@ -611,9 +636,7 @@ const CompletedEventSchema = Schema.Struct({
   result: TurnResultSchema,
 });
 const HttpCompletedEventSchema = CompletedEventSchema.mapFields(
-  Struct.assign({
-    result: HttpTurnResultSchema,
-  }),
+  Struct.assign({ result: HttpTurnResultSchema }),
 );
 /** A streamed turn's event as data, as an editor's model sends it over. */
 export const TurnEventSchema = Schema.Union([
@@ -644,9 +667,7 @@ const SequencedBackgroundEventSchema = Schema.Union([
     Struct.assign({
       ...SequenceSchema.fields,
       requestedOrigin: OriginSchema.mapFields(
-        Struct.assign({
-          protocol: Schema.Literal('openai-responses'),
-        }),
+        Struct.assign({ protocol: Schema.Literal('openai-responses') }),
       ),
     }),
   ),
@@ -670,9 +691,7 @@ export const BackgroundEventSchema = Schema.Union([
     Struct.assign({
       afterSequence: Schema.Null,
       requestedOrigin: OriginSchema.mapFields(
-        Struct.assign({
-          protocol: Schema.Literal('google-interactions'),
-        }),
+        Struct.assign({ protocol: Schema.Literal('google-interactions') }),
       ),
     }),
   ),
