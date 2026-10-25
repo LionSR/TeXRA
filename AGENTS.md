@@ -256,8 +256,14 @@ is a site it could not finish and is never committed.
   `Schema.Struct`. A union of structs is `Schema.Union([...])`; its members
   discriminate on their literal fields (`kind: Schema.Literal('x')`), and
   `Schema.TaggedUnion` is for `_tag` unions.
-- A schema's type crosses a function boundary as `Schema.Codec<T>`
-  (`Schema.Codec<T, Encoded>` when the two differ), never `Schema.Top`.
+- A schema's type crosses a function boundary as `Schema.Codec<T, unknown>`
+  when the schema decodes unknown input (a record's `schema:` field, a tool's
+  input, a stored or wire shape: its encoded form is not `T` once a field
+  has a default, a brand or a transformation), as `Schema.Codec<T>` only
+  when encoded and decoded forms are the same, and as a generic
+  `<S extends Schema.Top>` when the caller's type is wanted back. Never
+  `Schema.Top` for a value a caller decodes with: it has unknown decoding
+  services, so the decode functions reject it.
 - `Schema.declare<T>(guard)` only for an external SDK type a schema cannot
   state, with the reason in a comment.
 - Decode with `Schema.decodeUnknownEffect(S)` inside Effect code (the error
@@ -271,10 +277,19 @@ is a site it could not finish and is never committed.
 - Primitives: `Schema.String`, `Schema.Number`, `Schema.Int`, `Schema.Finite`,
   `Schema.Boolean`, `Schema.Literal('a')`, `Schema.Literals(['a', 'b'])`,
   `Schema.Enum(CONST_OBJECT)` for a `{ KEY: 'value' } as const` table.
-- Checks are `.check(...)` with the built-in predicates: `Schema.isMinLength`,
-  `Schema.isMaxLength`, `Schema.isPattern`, `Schema.isGreaterThan`,
-  `Schema.isBetween`, `Schema.isUUID`, …; a custom one is
-  `Schema.makeFilter(predicate, { message })`.
+- Checks are `.check(...)` with the built-in predicates: `Schema.isMinLength(n)`,
+  `Schema.isMaxLength(n)`, `Schema.isPattern(re)`, `Schema.isGreaterThan(n)`,
+  `Schema.isBetween({ minimum, maximum })` (an options object, not two
+  arguments), `Schema.isUUID()`, …; a custom one is
+  `Schema.makeFilter(predicate, { message })`. `makeFilter` calls the
+  predicate as `(input, ast, options)`, so a function with its own optional
+  parameters is wrapped: `(v) => pred(v)`. A filter either returns a boolean
+  and carries `{ message }`, or returns its own issues (a string, or
+  `{ path, issue }` records; an empty array is success) and carries no
+  `message`: an annotation message replaces whatever the predicate returned.
+- A subset of a `Schema.Literals` is `Lit.pick(['a', 'b'])`, not a second
+  list. A string-keyed JSON object is `Schema.JsonObject`; any JSON value is
+  `Schema.Json`.
 - `Schema.optional(S)` is absent or `undefined`; `Schema.optionalKey(S)` is
   absent only; `Schema.NullOr(S)` is `S | null`; `Schema.optional(Schema.NullOr(S))`
   is the tool-input form (below).
@@ -323,10 +338,15 @@ An optional tool-input field is `Schema.optional(Schema.NullOr(S))`, not
 `Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require
 optional fields to also be nullable for structured output. Check for a missing
 value with `== null` (not `=== undefined`), and coalesce with `?? undefined`
-when passing it to a function expecting `T | undefined`. The model's JSON
-Schema comes from `Schema.toJsonSchemaDocument` through
+when passing it to a function expecting `T | undefined`. A tool-input number
+is `Schema.Finite` or `Schema.Int`, never `Schema.Number`: the JSON Schema
+for `Schema.Number` is an `anyOf` that admits the strings `"Infinity"` and
+`"NaN"` and loses the field's checks. The model's JSON Schema comes from
+`Schema.toJsonSchemaDocument` through
 `packages/harness/src/agent/core/tools/toolSchema.ts`, which flattens a
-top-level union and strips the dialect URI for the providers.
+top-level union, drops the `additionalProperties: true` and duplicate null
+members Effect emits, and strips the dialect URI for the providers. Decode a
+tool's input with `{ errors: 'all' }` so the model sees every issue at once.
 
 Union branches, `nullishWithDefault`, and designing for the model's first call:
 `packages/harness/AGENTS.md` "Tool input schemas".
