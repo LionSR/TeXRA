@@ -33,12 +33,11 @@
  * section whose text an update changed: nothing a request sends differs
  * from the latest record unrecorded.
  */
-import { Effect, Exit, Schema, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Record, Schema, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
-import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
@@ -46,11 +45,9 @@ import type { PluginContext } from '@platform/processRuntime';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
-  sameIdentity,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   type SkillCatalogEntry,
-  type ToolDefinition,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
@@ -61,20 +58,20 @@ import { readDelegationTargets } from '@tools/delegation/delegationAvailability'
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
-import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
+import {
+  declaredToolNames,
+  heldToRecord,
+  resolveStepTools,
+  type ResolvedTools,
+} from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
-import { appendRow, rowAggregate } from './rows';
+import { appendRow, rowAggregate, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
 /** The tools one step offers. */
-export interface StepTools {
-  readonly definitions: readonly ToolDefinition[];
-  /** The offered tools by name: dispatch runs nothing else. */
-  readonly registry: RuntimeToolRegistry;
-  /** Each offered tool's identity, in offer order. */
-  readonly offered: readonly OfferedTool[];
+export interface StepTools extends ResolvedTools {
   /** The pinned plugins' process and session services. */
   readonly services: PluginContext;
   /** The read-only skill directories its calls may read. */
@@ -82,6 +79,8 @@ export interface StepTools {
   /** The command hooks of the installed plugins it accepted, by plugin id:
    *  its calls, and the prompts and stops under it, run these. */
   readonly hooks: readonly StepHook[];
+  /** The modules its scripts may import, source by specifier. */
+  readonly modules: { readonly [specifier: string]: string };
 }
 
 /** The run's current step, the scope that holds its pin, and the tools it
@@ -110,47 +109,6 @@ const sameSet = (
   b: readonly OfferedTool[],
 ): boolean => a !== null && stableStringify(a) === stableStringify(b);
 
-/** The recorded tools a resumed step may still offer, and why the rest
- *  are not offered. */
-function heldToRecord(
-  resolved: Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>,
-  recorded: readonly OfferedTool[],
-): {
-  readonly tools: Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>;
-  readonly notes: string[];
-} {
-  const current = new Map(resolved.offered.map((tool) => [tool.name, tool]));
-  // The current entry, which may describe the tool anew; sent as recorded.
-  const kept = recorded.flatMap((tool) => {
-    const now = current.get(tool.name);
-    return now !== undefined && sameIdentity(now, tool)
-      ? [{ ...now, sent: tool.sent }]
-      : [];
-  });
-  const names = new Set(kept.map(({ name }) => name));
-  const notes = recorded
-    .filter(({ name }) => !names.has(name))
-    .map(({ name }) =>
-      current.has(name)
-        ? `Tool "${name}" changed since this run was offered it; the resumed run does not offer it at this step.`
-        : `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
-    );
-  const byName = new Map(resolved.definitions.map((d) => [d.name, d]));
-  return {
-    tools: {
-      definitions: kept.flatMap(({ name }) => byName.get(name) ?? []),
-      registry: new Map(
-        kept.flatMap(({ name }) => {
-          const tool = resolved.registry.get(name);
-          return tool ? [[name, tool] as const] : [];
-        }),
-      ),
-      offered: kept,
-    },
-    notes,
-  };
-}
-
 /**
  * The offered tools with each that renders its description from the run's
  * declared tools (`ITool.describe`, the `script` tool's declarations)
@@ -159,9 +117,7 @@ function heldToRecord(
  * discovery); at any later step, as the run's last offered set recorded it,
  * so the text holds until a compaction opens the freeze again.
  */
-function describedAtFreeze<
-  T extends Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>,
->(
+function describedAtFreeze<T extends ResolvedTools>(
   tools: T,
   state: RunState,
   declaration: AgentRunShape['toolInputs']['tools'],
@@ -285,7 +241,7 @@ const openStep = Effect.fn('Step.open')(function* (
       state.phase === null
         ? (run.opening?.activated ?? [])
         : (state.input.activated ?? []);
-    const recordedSkills = recorded === null ? null : state.offeredSkills;
+    const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
         ? Schema.decodeUnknownSync(AgentSkillsEnabledSchema)(
@@ -314,6 +270,15 @@ const openStep = Effect.fn('Step.open')(function* (
     const activated = names.flatMap((name) => byName.get(name) ?? []);
     const hooks = stepHooks(pinned.installed, recordedHooks);
     for (const note of hooks.notes) run.logger.warn(note);
+    // A step held to the record loads the modules it recorded, so a
+    // resumed script runs the code it ran with.
+    const imported =
+      held === null
+        ? pinned.modules
+        : Record.map(state.offeredWith.modules, (at) =>
+            stored(state, at, Schema.String),
+          );
+    const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {
         ...tools,
@@ -325,6 +290,7 @@ const openStep = Effect.fn('Step.open')(function* (
             : [{ absolutePath: directory, label: `Skill ${name}` }],
         ),
         hooks: hooks.hooks,
+        modules,
       },
       hooks: hooks.identities,
       warnings: [
@@ -381,12 +347,15 @@ const openStep = Effect.fn('Step.open')(function* (
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);
-  const skillsChanged = skills.join('\0') !== state.offeredSkills.join('\0');
+  const skillsChanged =
+    skills.join('\0') !== state.offeredWith.skills.join('\0');
+  const modules = Record.map(step.tools.modules, sha256);
   const changed =
     toolsChanged ||
     skillsChanged ||
+    stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
     state.offeredContext !== sha256(context) ||
-    step.hooks.join('\0') !== state.offeredHooks.join('\0');
+    step.hooks.join('\0') !== state.offeredWith.hooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
@@ -416,6 +385,7 @@ const openStep = Effect.fn('Step.open')(function* (
             ...(system === undefined ? [] : [system]),
             context,
             ...toolDefinitionsFor(step.tools.definitions),
+            ...Object.values(step.tools.modules),
           ]),
           {
             type: 'tools.offered',
@@ -426,6 +396,7 @@ const openStep = Effect.fn('Step.open')(function* (
               system: system === undefined ? null : sha256(system),
               context: sha256(context),
               hooks: step.hooks,
+              modules,
             },
           } satisfies RunHistoryDraft,
           ...(update === ''
@@ -467,7 +438,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     held && kind === 'park',
     isChild,
     openingSystem,
-    held && kind === 'dispatch' ? state.offeredHooks : null,
+    held && kind === 'dispatch' ? state.offeredWith.hooks : null,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });

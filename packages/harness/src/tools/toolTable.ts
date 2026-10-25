@@ -221,7 +221,8 @@ export interface ToolTable {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id or a tool name, claims one request kind's decisions twice,
+ * plugin id, a tool name or a script module's name, claims one request
+ * kind's decisions twice,
  * claims an agent-file
  * block another plugin or the persona owns, gives a switch to a plugin
  * with no availability probe, or lacks a plugin another `requires` is a
@@ -271,6 +272,11 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     owned.some(({ key }) => key in AgentDefinitionSchema.fields)
   )
     refuse('an agent-file key is owned twice, or is a persona key.');
+  const modules = plugins.flatMap(({ scriptModules = {} }) =>
+    Object.keys(scriptModules),
+  );
+  if (new Set(modules).size !== modules.length)
+    refuse('two plugins ship a script module of one name.');
   return { entries, get: (name) => byName.get(name), decisions, blocks };
 }
 

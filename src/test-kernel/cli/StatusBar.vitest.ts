@@ -71,20 +71,26 @@ function renderBar(input: StatusBarCase): StatusBarDisplay {
     thinkingActive: thinkingActive ?? false,
     compactingActive: compactingActive ?? false,
   });
-  const view = viewWith([run]);
+  let view = viewWith([run]);
   if (bypass) {
-    view.policy.set(run.id, {
-      own: Object.fromEntries(
-        Object.entries(bypass).map(([kind, on]) => [kind, on ? 'on' : 'off']),
-      ),
-      goal: [],
-    });
+    view = {
+      ...view,
+      policy: new Map(view.policy).set(run.id, {
+        own: Object.fromEntries(
+          Object.entries(bypass).map(([kind, on]) => [kind, on ? 'on' : 'off']),
+        ),
+        goal: [],
+      }),
+    };
   }
   if (queuedFollowUpMessages.length > 0) {
-    view.queuedFollowUps.set(
-      run.id,
-      queuedFollowUpMessages.map((text) => ({ text }) as never),
-    );
+    view = {
+      ...view,
+      queuedFollowUps: new Map(view.queuedFollowUps).set(
+        run.id,
+        queuedFollowUpMessages.map((text) => ({ text }) as never),
+      ),
+    };
   }
   return buildStatusBarDisplay(run, view, { ...chrome, turn: clock });
 }

@@ -345,8 +345,8 @@ describe('the golden 1.0 store', () => {
           [SCRIPTED, 'validation-script-1/4'],
           [SERVICE_TASK, null],
         ]);
-        // It asked for `executions`, which the build that wrote the fixture
-        // withheld because its parent was not offered it.
+        // It asked for `executions`, and a child is offered what it declares,
+        // whatever its parent was offered.
         const defined = qualifyAggregateId(
           'run',
           Schema.decodeUnknownSync(RunIdSchema)(DEFINED),
@@ -357,7 +357,7 @@ describe('the golden 1.0 store', () => {
               ? [event.payload.tools.map(({ name }) => name)]
               : [],
           ),
-        ).toEqual([['read_file', 'memory', 'plan']]);
+        ).toEqual([['read_file', 'executions', 'memory', 'plan']]);
         // The plan the chat ran as a goal: a run on the goal's program, its
         // agent the chat's, that ends with what its one round verified.
         const goal = qualifyAggregateId('run', GOAL);

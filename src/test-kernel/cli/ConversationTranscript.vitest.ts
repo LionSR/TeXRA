@@ -891,7 +891,9 @@ describe('CLI conversation transcript', () => {
       row: { ...textRowFixture(id, kind, text), origin: 'local' as const },
     });
     const merged = mergeLocalNotices(
-      { transcript: { rows: [message, reply], settledRows: 2 } } as RunView,
+      {
+        transcript: { rows: [message, reply], settledRows: 2 },
+      } as unknown as RunView,
       [
         notice('n1', 'user', '/model gemini38f'),
         notice('n2', 'assistant', 'Root model set to gemini38f.'),

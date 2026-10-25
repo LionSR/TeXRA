@@ -26,7 +26,7 @@ const PackArgs = Schema.Tuple([
 ]);
 
 const packRegistry = {
-  'test.pack': definedHandler<TestActions, typeof PackArgs.Type>(
+  'test.pack': definedHandler<TestActions, typeof PackArgs>(
     PackArgs,
     (a, args) => {
       a.packed(args);

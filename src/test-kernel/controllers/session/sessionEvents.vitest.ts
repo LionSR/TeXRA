@@ -3662,7 +3662,8 @@ describe('RunHistory', () => {
                   path: 'out/plot.png',
                   mimeType: 'image/png',
                   base64Data: 'AAAA',
-                  bytes: new Uint8Array([1, 2]),
+                  // Not part of the row shape: the decode must drop it.
+                  bytes: new Uint8Array([1, 2]) as never,
                   sourceTool: 'bash',
                 },
               ],

@@ -13,6 +13,8 @@ export const WorkerInputSchema = Schema.Struct({
   /** Names the realm installs as global functions: `name(...args)` issues
    *  an op named `name()` whose input is the argument list. */
   globals: Schema.Array(Schema.String),
+  /** The modules the script may import, source by specifier. */
+  modules: Schema.Record(Schema.String, Schema.String),
   cpuBudgetMs: Schema.Number.check(Schema.isGreaterThan(0)),
   /** The QuickJS module the host compiled once, shared with every worker. */
   wasm: Schema.instanceOf(WebAssembly.Module),

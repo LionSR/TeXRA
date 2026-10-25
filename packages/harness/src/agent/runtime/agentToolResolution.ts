@@ -40,12 +40,20 @@
 
 import { Context, Effect, SubscriptionRef } from 'effect';
 
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry,
+} from '@agent/runtime/ToolServices';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
-import type { OfferedTool, Persona, ToolDefinition } from '@shared/schemas';
+import {
+  sameIdentity,
+  type OfferedTool,
+  type Persona,
+  type ToolDefinition,
+} from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import {
   toolDigests,
@@ -329,3 +337,50 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     withheldForApproval,
   };
 });
+
+/** The tools a step resolves from its pin. */
+export interface ResolvedTools {
+  readonly definitions: readonly ToolDefinition[];
+  /** The offered tools by name: dispatch runs nothing else. */
+  readonly registry: RuntimeToolRegistry;
+  /** Each offered tool's identity, in offer order. */
+  readonly offered: readonly OfferedTool[];
+}
+
+/** The recorded tools a resumed step may still offer, and why the rest
+ *  are not offered. */
+export function heldToRecord(
+  resolved: ResolvedTools,
+  recorded: readonly OfferedTool[],
+): { readonly tools: ResolvedTools; readonly notes: string[] } {
+  const current = new Map(resolved.offered.map((tool) => [tool.name, tool]));
+  // The current entry, which may describe the tool anew; sent as recorded.
+  const kept = recorded.flatMap((tool) => {
+    const now = current.get(tool.name);
+    return now !== undefined && sameIdentity(now, tool)
+      ? [{ ...now, sent: tool.sent }]
+      : [];
+  });
+  const names = new Set(kept.map(({ name }) => name));
+  const notes = recorded
+    .filter(({ name }) => !names.has(name))
+    .map(({ name }) =>
+      current.has(name)
+        ? `Tool "${name}" changed since this run was offered it; the resumed run does not offer it at this step.`
+        : `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
+    );
+  const byName = new Map(resolved.definitions.map((d) => [d.name, d]));
+  return {
+    tools: {
+      definitions: kept.flatMap(({ name }) => byName.get(name) ?? []),
+      registry: new Map(
+        kept.flatMap(({ name }) => {
+          const tool = resolved.registry.get(name);
+          return tool ? [[name, tool] as const] : [];
+        }),
+      ),
+      offered: kept,
+    },
+    notes,
+  };
+}

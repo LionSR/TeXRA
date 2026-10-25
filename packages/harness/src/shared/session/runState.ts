@@ -9,7 +9,7 @@
  * or a rejection. `RunCell.append` applies every batch here before
  * publishing it, so the writer checks only what a batch alone shows.
  */
-import { Result, Schema } from 'effect';
+import { Result, Schema, Struct } from 'effect';
 
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
@@ -137,14 +137,16 @@ export type RunState = RunPosition &
     readonly lastEdit: number | null;
     /** The latest `tools.offered` row's set; `null` before the first. */
     readonly offeredTools: readonly OfferedTool[] | null;
-    /** The names of the skills it listed. */
-    readonly offeredSkills: readonly string[];
     /** The address of the system text the run's context froze. */
     readonly offeredSystem: string | null;
     /** The address of the context its model was told; `null` until a step
      *  opens it (the first, and after a view edit). */
     readonly offeredContext: string | null;
-    readonly offeredHooks: readonly string[]; // the hooks it pinned
+    /** What it pinned besides: skills listed, hooks, module addresses. */
+    readonly offeredWith: Pick<
+      RowOf<'tools.offered'>['payload'],
+      'skills' | 'hooks' | 'modules'
+    >;
     /** The run's `context.blob` rows: model-facing content by address. */
     readonly contents: Readonly<Record<string, JsonValue>>;
     /** The `hook.outcome` rows by point: a recorded point never runs again. */
@@ -226,10 +228,9 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...NO_FACTS,
   lastEdit: null,
   offeredTools: null,
-  offeredSkills: [],
+  offeredWith: { skills: [], hooks: [], modules: {} },
   offeredSystem: null,
   offeredContext: null,
-  offeredHooks: [],
   contents: {},
   hookOutcomes: {},
 });
@@ -449,10 +450,9 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       Result.succeed({
         ...state,
         offeredTools: payload.tools,
-        offeredSkills: payload.skills,
+        offeredWith: Struct.pick(payload, ['skills', 'hooks', 'modules']),
         offeredSystem: payload.system,
         offeredContext: payload.context,
-        offeredHooks: payload.hooks,
       }),
   },
   'context.blob': {

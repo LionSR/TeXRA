@@ -61,6 +61,10 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
   /** The installed plugins' hooks the step pinned, each as
    *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
   hooks: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  /** The modules a `script` of the step may import, each source's address
+   *  by specifier (`builtIn:<name>`), stored as a `context.blob`: a resumed
+   *  script loads these. Empty when the step offers no script. */
+  modules: Schema.Record(Schema.String, Sha256Schema),
 });
 
 /**
