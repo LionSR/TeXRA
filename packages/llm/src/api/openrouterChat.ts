@@ -34,7 +34,9 @@ import {
   sdkModelError,
 } from '../errors.js';
 import {
-  chatChunks,
+  ChatRequestSchema,
+  ChatStreamChunkSchema,
+  sseData,
   type ChatMessage,
   type ChatRequest,
   type ChatStreamChunk,
@@ -550,6 +552,11 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
   } satisfies ChatRequest;
 });
 
+const encodeRequest = HttpClientRequest.schemaBodyJson(ChatRequestSchema);
+const decodeChunk = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(ChatStreamChunkSchema),
+);
+
 /**
  * OpenRouter Chat over Effect's `HttpClient`, its stream parsed by Effect's
  * SSE parser and decoded by Effect Schema; selected credentials and the
@@ -705,17 +712,26 @@ export function openrouterChatModel(
           // The request lives as long as this stream: closing it cancels the
           // body, then aborts the fetch.
           const client = HttpClient.withScope(yield* HttpClient.HttpClient);
-          const response = yield* client
-            .execute(
-              HttpClientRequest.post(`${endpoint}/chat/completions`).pipe(
-                HttpClientRequest.setHeaders({
-                  Authorization: `Bearer ${transport.apiKey}`,
-                  Accept: 'text/event-stream',
-                  'X-Title': 'TeXRA.ai',
+          const request = yield* HttpClientRequest.post(
+            `${endpoint}/chat/completions`,
+          ).pipe(
+            HttpClientRequest.setHeaders({
+              Authorization: `Bearer ${transport.apiKey}`,
+              Accept: 'text/event-stream',
+              'X-Title': 'TeXRA.ai',
+            }),
+            encodeRequest(chatRequest),
+            Effect.mapError(
+              (cause) =>
+                new ModelError({
+                  kind: 'invalid-request',
+                  message: 'This request does not match the OpenRouter wire.',
+                  cause,
                 }),
-                HttpClientRequest.bodyJsonUnsafe(chatRequest),
-              ),
-            )
+            ),
+          );
+          const response = yield* client
+            .execute(request)
             .pipe(Effect.mapError(transportFailure));
           requestId = response.headers['x-request-id'];
           responseId = response.headers['x-generation-id'];
@@ -728,7 +744,8 @@ export function openrouterChatModel(
             });
           const wire = chatWire(responseId);
           return assembleTurn(
-            chatChunks(response.stream).pipe(
+            sseData(response.stream).pipe(
+              Stream.mapEffect((payload) => decodeChunk(payload)),
               Stream.mapError(streamFailure),
               Stream.mapEffect(wire.parts),
               Stream.concat(Stream.sync(wire.end)),

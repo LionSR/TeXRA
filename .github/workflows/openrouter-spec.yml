@@ -1,0 +1,30 @@
+name: OpenRouter spec drift
+
+# `packages/llm` speaks OpenRouter Chat through its own Effect Schema wire
+# shapes, not a generated SDK, so nothing bumps them when OpenRouter changes
+# its API. This checks them against the OpenAPI document OpenRouter publishes,
+# weekly and on demand. It reads one public file: no key, no spend. A red run
+# names each field or value that moved.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: OpenRouter wire against openapi.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Compare the wire shapes with the published spec
+        run: pnpm run test:live test-live/openrouterSpec.live.ts

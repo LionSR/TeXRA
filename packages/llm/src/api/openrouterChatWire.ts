@@ -1,8 +1,10 @@
 /**
  * OpenRouter Chat Completions on the wire, as the API spells it (snake_case).
- * The request shapes are what `openrouterChat.ts` builds and sends;
- * `chatChunks` turns a streamed response body into decoded chunks. An
- * undeclared field is dropped at decode, as it was by the SDK this replaces.
+ * `openrouterChat.ts` encodes its request through `ChatRequestSchema` and
+ * decodes each payload `sseData` yields through `ChatStreamChunkSchema`; the
+ * spec-drift suite (`test-live/openrouterSpec.live.ts`) checks both against
+ * OpenRouter's published OpenAPI document. An undeclared field is dropped at
+ * decode, as it was by the SDK this replaces.
  */
 
 import { Effect, Schema, Stream } from 'effect';
@@ -92,25 +94,23 @@ const StreamChoiceSchema = Schema.Struct({
   }),
 });
 
-/** One SSE `data` payload of a streamed completion, parsed from its JSON text. */
-const ChatStreamChunkSchema = Schema.fromJsonString(
-  Schema.Struct({
-    id: Schema.String,
-    model: Schema.String,
-    object: Schema.Literal('chat.completion.chunk'),
-    created: Schema.Int,
-    system_fingerprint: Schema.optional(Schema.String),
-    usage: Schema.optional(UsageSchema),
-    error: Schema.optional(
-      Schema.Struct({
-        code: Schema.Int,
-        message: Schema.String,
-        metadata: Schema.optional(Schema.Unknown),
-      }),
-    ),
-    choices: Schema.Array(StreamChoiceSchema),
-  }),
-);
+/** One SSE `data` payload of a streamed completion, once parsed as JSON. */
+export const ChatStreamChunkSchema = Schema.Struct({
+  id: Schema.String,
+  model: Schema.String,
+  object: Schema.Literal('chat.completion.chunk'),
+  created: Schema.Int,
+  system_fingerprint: Schema.optional(Schema.String),
+  usage: Schema.optional(UsageSchema),
+  error: Schema.optional(
+    Schema.Struct({
+      code: Schema.Int,
+      message: Schema.String,
+      metadata: Schema.optional(Schema.Unknown),
+    }),
+  ),
+  choices: Schema.Array(StreamChoiceSchema),
+});
 /** One decoded stream chunk. */
 export type ChatStreamChunk = typeof ChatStreamChunkSchema.Type;
 
@@ -169,7 +169,8 @@ const MessageSchema = Schema.Union([
 /** One message of a request. */
 export type ChatMessage = typeof MessageSchema.Type;
 
-const ChatRequestSchema = Schema.Struct({
+/** A streamed Chat Completions request body. */
+export const ChatRequestSchema = Schema.Struct({
   model: Schema.String,
   messages: Schema.Array(MessageSchema),
   stream: Schema.Literal(true),
@@ -206,18 +207,16 @@ export type ChatRequest = typeof ChatRequestSchema.Type;
 /** The SSE `data` that ends a stream. */
 const DONE = '[DONE]';
 
-const decodeChunk = Schema.decodeUnknownEffect(ChatStreamChunkSchema);
-
 /**
- * A streamed response body's SSE `data` payloads as decoded chunks, ending
- * before `[DONE]`: nothing after the sentinel is decoded, even in the same
- * bytes. A `retry:` directive is ignored, since a turn is never reconnected,
- * which is why this feeds Effect's SSE parser rather than piping through
- * `Sse.decode`, whose stream ends on one.
+ * A streamed response body's SSE `data` payloads, ending before `[DONE]`:
+ * nothing after the sentinel is passed on, even from the same bytes. A
+ * `retry:` directive is ignored, since a turn is never reconnected, which is
+ * why this feeds Effect's SSE parser rather than piping through `Sse.decode`,
+ * whose stream ends on one.
  */
-export const chatChunks = <E>(
+export const sseData = <E>(
   body: Stream.Stream<Uint8Array, E>,
-): Stream.Stream<ChatStreamChunk, E | Sse.SseError | Schema.SchemaError> =>
+): Stream.Stream<string, E | Sse.SseError> =>
   Stream.suspend(() => {
     const data: string[] = [];
     const parser = Sse.makeParser((event) => {
@@ -233,6 +232,5 @@ export const chatChunks = <E>(
       }),
       Stream.flattenIterable,
       Stream.takeWhile((payload) => payload !== DONE),
-      Stream.mapEffect((payload) => decodeChunk(payload)),
     );
   });
