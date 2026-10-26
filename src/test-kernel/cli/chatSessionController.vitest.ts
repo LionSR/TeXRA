@@ -491,26 +491,31 @@ describe('createChatSessionController', () => {
     rootRunId.set(undefined);
   });
 
-  it('does not surface an intentional stop as an error', async () => {
-    const run = createDeferred<never>();
-    const executed = createDeferred();
-    const session = makeSession();
-    mocks.executeAgent.mockImplementationOnce(() => {
-      executed.resolve();
-      return run.promise;
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
+  it.live('does not surface an intentional stop as an error', () =>
+    Effect.gen(function* () {
+      const run = createDeferred<never>();
+      const executed = createDeferred();
+      const session = makeSession();
+      mocks.executeAgent.mockImplementationOnce(() => {
+        executed.resolve();
+        return run.promise;
+      });
+      const ctrl = createChatSessionController(makeInit({ session }));
 
-    Effect.runFork(ctrl.startRootRun(makeRunRequest('Check the draft.')));
-    await executed.promise;
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    ctrl.stop('user');
-    run.reject(new Error('run stopped'));
-    await awaitRunSettled(session);
+      yield* Effect.forkChild(
+        ctrl.startRootRun(makeRunRequest('Check the draft.')),
+        { startImmediately: true },
+      );
+      yield* Effect.promise(() => executed.promise);
+      expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      ctrl.stop('user');
+      run.reject(new Error('run stopped'));
+      yield* Effect.promise(() => awaitRunSettled(session));
 
-    expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
-    expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
+      expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
+      expect(session.runExitCode).toBe(CliExitCode.Success);
+    }),
+  );
 
   it.live(
     'keeps detached-child approvals answerable after the stopped root finalizes',
@@ -650,21 +655,24 @@ describe('createChatSessionController', () => {
       }),
   );
 
-  it('reports a fresh-run defect and settles its claimed run slot', async () => {
-    mocks.rootLaunch.mockReturnValueOnce(
-      Effect.die(new Error('launch defect')),
-    );
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
+  it.live('reports a fresh-run defect and settles its claimed run slot', () =>
+    Effect.gen(function* () {
+      mocks.rootLaunch.mockReturnValueOnce(
+        Effect.die(new Error('launch defect')),
+      );
+      const session = makeSession();
+      const ctrl = createChatSessionController(makeInit({ session }));
 
-    Effect.runFork(ctrl.startRootRun(makeRunRequest('Check launch failure.')));
+      // A failed launch still answers: the start completes.
+      yield* ctrl.startRootRun(makeRunRequest('Check launch failure.'));
 
-    await expect(awaitRunSettled(session)).resolves.toBeUndefined();
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      'launch defect',
-    );
-    expect(session.runCompleted).toBe(true);
-  });
+      yield* Effect.promise(() => awaitRunSettled(session));
+      expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+        'launch defect',
+      );
+      expect(session.runCompleted).toBe(true);
+    }),
+  );
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = createDeferred<null>();
