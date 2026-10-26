@@ -89,12 +89,12 @@ describe('retryTransientFetch transience classification', () => {
       ),
   );
 
-  it.effect.each([429, 503])(
+  it.effect.each([408, 429, 500, 503])(
     'treats request timeouts, rate limits, and 5xx errors as transient: HTTP %i',
     (status) => expectTransience(statusError(status), true),
   );
 
-  it.effect.each([404])(
+  it.effect.each([400, 404])(
     'treats 4xx responses as permanent: HTTP %i',
     (status) => expectTransience(statusError(status), false),
   );

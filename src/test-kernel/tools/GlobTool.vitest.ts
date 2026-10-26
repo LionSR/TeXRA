@@ -102,7 +102,10 @@ describe('GlobTool match metadata', () => {
     }),
   );
 
-  it.live.each([{ fileName: 'vanished.tex', tag: 'NotFound' as const }])(
+  it.live.each([
+    { fileName: 'vanished.tex', tag: 'NotFound' as const },
+    { fileName: 'blocked.tex', tag: 'BadResource' as const },
+  ])(
     'omits a match whose metadata lookup fails with $tag',
     ({ fileName, tag }) =>
       Effect.gen(function* () {
