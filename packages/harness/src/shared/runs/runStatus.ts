@@ -14,9 +14,10 @@ import {
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. The derivation rule below is the only production
-// mapping — flows and hosts must
-// not hand-roll their own.
+// lifecycle boundary. The two derivation rules below are the only production
+// mappings — `deriveRunOutcome` from the terminal facts and
+// `outcomeFromCause` from a failure cause — and flows and hosts must not
+// hand-roll their own.
 
 /**
  * The single facts → outcome derivation rule, shared by every flow exit.
