@@ -31,9 +31,9 @@ let missingExternalPath = '';
 
 function createPtyHost(): DesktopPtyHost {
   return {
-    create: vi.fn(() =>
-      Effect.die(new Error('Terminal is not used in this test.')),
-    ),
+    create: vi.fn(async () => {
+      throw new Error('Terminal is not used in this test.');
+    }),
     get: vi.fn(() => undefined),
     disposeAll: vi.fn(),
   };

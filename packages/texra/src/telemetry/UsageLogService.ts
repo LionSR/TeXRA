@@ -236,9 +236,13 @@ class UsageLogServiceImpl {
     // the host process alive.
     this.flushTimer = yield* Effect.forkScoped(
       Clock.clockWith((clock) =>
-        Effect.sync(() => this.requestFlush()).pipe(
-          Effect.schedule(
-            Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
+        Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
+          Effect.andThen(
+            Effect.sync(() => this.requestFlush()).pipe(
+              Effect.schedule(
+                Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
+              ),
+            ),
           ),
           Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
         ),

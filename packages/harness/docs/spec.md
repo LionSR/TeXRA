@@ -188,7 +188,7 @@ highest version each kind was written at
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
-(`controllers/session/rowCodec.ts:373-400`). A plugin kind whose plugin this
+(`controllers/session/rowCodec.ts:373-399`). A plugin kind whose plugin this
 build lacks passes the gate; its rows are left out of every read (below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
