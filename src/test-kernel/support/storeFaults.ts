@@ -508,7 +508,7 @@ export const parkedRoot = (
         request: {
           config: Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'assistant',
-            model: 'gpt56',
+            model: 'openai/gpt-5.6-sol',
             instruction,
           }),
           runId,

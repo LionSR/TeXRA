@@ -73,8 +73,8 @@ catalogs:
       specifier: ^3.1.1
       version: 3.1.1
     llm-zoo:
-      specifier: ^4.0.0
-      version: 4.0.0
+      specifier: ^4.1.0
+      version: 4.1.0
     lru-cache:
       specifier: ^11.5.3
       version: 11.5.3
@@ -233,7 +233,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.1.0(effect@4.0.6)
       openai:
         specifier: 'catalog:'
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.4.3)
@@ -332,7 +332,7 @@ importers:
         version: 7.1.1(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.3.0)(react@19.3.1)
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.1.0(effect@4.0.6)
       lru-cache:
         specifier: ^11.5.3
         version: 11.5.3
@@ -537,7 +537,7 @@ importers:
         version: 3.1.1
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.1.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -637,7 +637,7 @@ importers:
         version: 1.4.25
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.1.0(effect@4.0.6)
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -731,7 +731,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.1.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -4207,8 +4207,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@4.0.0:
-    resolution: {integrity: sha512-9JpNFzaPZMuF5ojRkrCnvHFuDIxcQo0oqsvurM8M9G6dDvbGdYf04TCc2S+GF3kVoPyBZ22+JrVB+7EiuVfyrQ==}
+  llm-zoo@4.1.0:
+    resolution: {integrity: sha512-EFDS/pGeMSJLb4mNtZVX/6MBkIE9+W7QGWkcxDIbhpN+vihOez4+S4X2Gf45c31AvFU27PhOd0eev+KX+Wci0w==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.0.0
@@ -9069,7 +9069,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@4.0.0(effect@4.0.6):
+  llm-zoo@4.1.0(effect@4.0.6):
     optionalDependencies:
       effect: 4.0.6
 

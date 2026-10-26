@@ -20,13 +20,6 @@ describe('assertExplicitModelKnown', () => {
   });
 
   it.each([
-    ['sonnet46T', 'anthropic/claude-sonnet-4-6@high'],
-    ['deepseekT', 'deepseek/deepseek-v4-flash@high'],
-  ])('reads llm-zoo 1.x key %s as the model string %s', (input, id) => {
-    expect(assertExplicitModelKnown(input)).toBe(id);
-  });
-
-  it.each([
     ['glm5.2', 'glm/glm-5.2'],
     ['GLM-5.2', 'glm/glm-5.2'],
     ['glm-5.2', 'glm/glm-5.2'],

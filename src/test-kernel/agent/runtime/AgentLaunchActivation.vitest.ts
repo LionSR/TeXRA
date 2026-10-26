@@ -40,7 +40,7 @@ import { generateRunId } from '@utils/core';
 const config = (instruction: string) =>
   Schema.decodeUnknownSync(AgentConfigSchema)({
     agent: 'assistant',
-    model: 'gpt56',
+    model: 'openai/gpt-5.6-sol',
     instruction,
   });
 

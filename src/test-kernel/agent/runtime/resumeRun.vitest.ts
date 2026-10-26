@@ -494,7 +494,7 @@ describe(
                   asDocumentTask({
                     agent: 'polish',
                     agentSource: 'builtIn',
-                    model: 'gpt56',
+                    model: 'openai/gpt-5.6-sol',
                     instruction: 'Polish the draft.',
                     inputFiles: ['paper.tex'],
                     workingDirectory: roots.workspace,

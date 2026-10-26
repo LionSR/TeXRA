@@ -1,11 +1,6 @@
 // Third-party imports
 import { Effect, Result } from 'effect';
-import {
-  MODEL_CONFIGS,
-  ModelProvider,
-  type ModelConfig,
-  type ReasoningEffort,
-} from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { resolveModelSource } from '@texra-ai/llm';
@@ -183,13 +178,11 @@ export class SettingsModelSelectionController<R = never> {
       // Resolve availability (personal-key, subscription) once for the
       // models this host shows, via the same shared computation the CLI picker
       // uses. Passing an explicit list keeps the picker's view authoritative and
-      // avoids re-deriving availability at render time. Copilot routes are not
-      // candidates: they are transports for the canonical base models (#9635).
+      // avoids re-deriving availability at render time.
       const configs = new Map<string, ModelConfig>(
         Object.entries(MODEL_CONFIGS),
       );
       const candidates = [...configs.values()]
-        .filter((config) => config.provider !== ModelProvider.COPILOT)
         // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
         // resolved source is outside that order can never render as a row.
         // Admitting it anyway would leak it into the serialized `models` payload

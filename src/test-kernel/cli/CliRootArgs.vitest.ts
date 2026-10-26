@@ -31,7 +31,6 @@ import {
   resumeWorkflowOutputDirectory,
 } from '@cli/runtime/workflowOutput';
 import {
-  isCliSupportedModelId,
   knownCliModelIds,
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
@@ -979,15 +978,6 @@ describe('CLI global color/input flags', () => {
     expect(
       reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
     ).toEqual(['--input', 'file.tex', 'run', 'polish']);
-  });
-});
-
-describe('CLI model flag validation contract', () => {
-  it('does not advertise host-only Copilot models as CLI models', () => {
-    expect(isCliSupportedModelId('copilot/copilot-gpt-4o')).toBe(false);
-    expect(knownCliModelIds()).not.toContain('copilot/copilot-gpt-4o');
-    expect(resolveKnownCliModelId('copilot/copilot-gpt-4o')).toBeUndefined();
-    expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();
   });
 });
 

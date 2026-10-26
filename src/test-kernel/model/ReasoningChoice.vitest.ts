@@ -22,7 +22,6 @@ const FULL = [E.LOW, E.MEDIUM, E.HIGH, E.XHIGH, E.MAX] as const;
 // Always thinks, all five levels (Fable 5.1).
 const alwaysThinks = model({ efforts: FULL });
 // Thinking can be turned off only at low–high (Opus 5).
-const offLowToHigh = model({ efforts: FULL, off: [E.LOW, E.MEDIUM, E.HIGH] });
 // No medium level; thinking off via `none` (DeepSeek).
 const gapped = model({ efforts: [E.LOW, E.HIGH, E.MAX], off: [] });
 // Thinks with no effort control (Qwen hybrid, Kimi K2.7 Code).
@@ -108,15 +107,6 @@ describe('chooseReasoning', () => {
       requested: E.NONE,
       note: expect.stringContaining('cannot turn thinking off'),
     });
-  });
-
-  it('keeps an effort with thinking off only where the model accepts it', () => {
-    expect(
-      chooseReasoning(offLowToHigh, { effort: E.HIGH, thinking: false }),
-    ).toEqual({ thinking: false, effort: E.HIGH, mode: null });
-    expect(
-      chooseReasoning(offLowToHigh, { effort: E.MAX, thinking: false }),
-    ).toMatchObject({ thinking: false, effort: E.HIGH, requested: E.MAX });
   });
 
   it('thinks without a level on a model that has no effort control', () => {

@@ -238,10 +238,7 @@ export function decideModelRoute<C>(
   // can serve. The editor sends its own reasoning controls, so a provider
   // mode (OpenAI `pro`) takes the model's own route, as the Codex
   // subscription preference below does.
-  if (
-    (facts.prefersCopilot && facts.mode === undefined) ||
-    config.provider === ModelProvider.COPILOT
-  ) {
+  if (facts.prefersCopilot && facts.mode === undefined) {
     return { kind: 'copilot', route: facts.copilotRoute };
   }
   // OpenRouter is asked for (the model is OpenRouter-only, or the toggle is

@@ -7,7 +7,7 @@
  * user's own credential a failed attempt offers.
  */
 import { Effect } from 'effect';
-import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
+import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
 import {
   decideModelRoute,
@@ -97,8 +97,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   // A provider mode never takes the Copilot preference, so the editor is not
   // asked for a route it would not use.
   const copilotRoute =
-    (prefersCopilot && mode === undefined) ||
-    config.provider === ModelProvider.COPILOT
+    prefersCopilot && mode === undefined
       ? (yield* CopilotRoutes.discover().pipe(
           Effect.mapError((cause) =>
             unavailable(

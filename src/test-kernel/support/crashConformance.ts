@@ -313,7 +313,7 @@ const parkedAfter = (rows: readonly Row[], root: string, count: number) => {
 };
 
 /** The model the user switches the run to. */
-const SWITCH_TO = 'gpt55';
+const SWITCH_TO = 'openai/gpt-5.5-2026-04-23';
 
 /** Whether the root holds a queued request of `kind`. */
 const requested = (rows: readonly Row[], root: string, kind: string) =>
@@ -765,7 +765,7 @@ export function crashConformanceSuite(plugins: string): void {
                   request: {
                     config: Schema.decodeUnknownSync(AgentConfigSchema)({
                       agent: 'golden_crash',
-                      model: 'gpt56',
+                      model: 'openai/gpt-5.6-sol',
                       instruction: 'Work through the crash task.',
                     }),
                     runId: root,
@@ -970,7 +970,7 @@ export function crashConformanceSuite(plugins: string): void {
                     request: {
                       config: Schema.decodeUnknownSync(AgentConfigSchema)({
                         agent: 'golden_delivery',
-                        model: 'gpt56',
+                        model: 'openai/gpt-5.6-sol',
                         instruction: 'Send the children off.',
                       }),
                       runId: root,
@@ -1190,7 +1190,7 @@ export function crashConformanceSuite(plugins: string): void {
                         asDocumentTask({
                           agent: 'polish',
                           agentSource: 'builtIn',
-                          model: 'gpt56',
+                          model: 'openai/gpt-5.6-sol',
                           instruction: 'Polish the draft.',
                           inputFiles: ['paper.tex'],
                           workingDirectory: roots.workspace,
