@@ -6,10 +6,11 @@
  * cannot find latexmk or git. The service asks the user's own login shell
  * instead, so every window gets the same environment.
  */
-import { spawn } from 'node:child_process';
-import { userInfo } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -26,64 +27,77 @@ const TIMEOUT_MS = 10_000;
  * the reason when the shell does not answer, so the caller can say why it
  * runs without them.
  */
-export function loginShellEnvironment(
-  home: string,
-): Effect.Effect<Readonly<Record<string, string>>, Error> {
+export function loginShellEnvironment(): Effect.Effect<
+  Readonly<Record<string, string>>,
+  Error,
+  ChildProcessSpawner
+> {
   // `userInfo` throws for an account with no passwd entry: that is this
   // read's failure, not the caller's crash.
   return Effect.try({ try: () => userInfo(), catch: ensureError })
     .pipe(
       Effect.flatMap(({ shell, username }) =>
-        Effect.callback<string, Error>((resume) => {
-          const child = spawn(
-            shell || '/bin/sh',
-            ['-ilc', `printf '${MARKER}'; env -0`],
-            {
-              // The system PATH, so a profile that runs a tool by name before
-              // it sets PATH still finds it.
-              env: {
-                HOME: home,
-                USER: username,
-                LOGNAME: username,
-                PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+        ChildProcessSpawner.use((spawner) =>
+          spawner.spawn(
+            ChildProcess.make(
+              shell || '/bin/sh',
+              ['-ilc', `printf '${MARKER}'; env -0`],
+              {
+                // The system PATH, so a profile that runs a tool by name
+                // before it sets PATH still finds it. `homedir` is $HOME when
+                // it is set, else the account's passwd entry.
+                env: {
+                  HOME: homedir(),
+                  USER: username,
+                  LOGNAME: username,
+                  PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+                },
+                extendEnv: false,
+                stdin: 'ignore',
+                stderr: 'ignore',
+                // A session of its own: an interactive shell otherwise takes
+                // the controlling terminal of a caller that has one (a
+                // terminal chat), which then loses its raw mode. Detached,
+                // the shell leads its own process group, which the spawner
+                // kills with SIGKILL when the read times out or is
+                // interrupted, so a child its profile left hanging stops
+                // with it. An interactive shell ignores SIGTERM.
+                detached: true,
+                killSignal: 'SIGKILL',
               },
-              stdio: ['ignore', 'pipe', 'ignore'],
-              // A session of its own: an interactive shell otherwise takes the
-              // controlling terminal of a caller that has one (a terminal chat),
-              // which then loses its raw mode.
-              detached: true,
-            },
-          );
-          let stdout = '';
-          child.stdout.setEncoding('utf8');
-          child.stdout.on('data', (chunk: string) => (stdout += chunk));
-          child.once('error', (error) => resume(Effect.fail(error)));
-          child.once('close', (code) => {
+            ),
+          ),
+        ).pipe(
+          Effect.flatMap((handle) =>
+            Effect.all(
+              [
+                Stream.mkString(Stream.decodeText(handle.stdout)),
+                handle.exitCode.pipe(
+                  Effect.map((code) => `exit ${code}`),
+                  Effect.catch((error) => Effect.succeed(error.message)),
+                ),
+              ],
+              { concurrency: 'unbounded' },
+            ).pipe(
+              // Once the shell has exited, unreferenced, the spawner leaves
+              // its group alone when the scope closes: background jobs the
+              // profile started survive a read that finished. A shell that
+              // exited non-zero still has its group killed by the spawner.
+              Effect.tap(() => handle.unref),
+            ),
+          ),
+          Effect.flatMap(([stdout, status]) => {
             const at = stdout.indexOf(MARKER);
-            resume(
-              at < 0
-                ? Effect.fail(
-                    new Error(
-                      `the login shell ${shell} printed no environment (exit ${code})`,
-                    ),
-                  )
-                : Effect.succeed(stdout.slice(at + MARKER.length)),
-            );
-          });
-          // Detached, the shell leads its own process group: a child its
-          // profile left hanging stops with it. The group is gone once
-          // everything in it exited, and then only the shell is signalled.
-          return Effect.sync(() => {
-            const { pid } = child;
-            try {
-              // Without a pid the shell never started, and `-0` would
-              // signal this process's own group.
-              if (pid !== undefined) process.kill(-pid, 'SIGKILL');
-            } catch {
-              child.kill('SIGKILL');
-            }
-          });
-        }),
+            return at < 0
+              ? Effect.fail(
+                  new Error(
+                    `the login shell ${shell} printed no environment (${status})`,
+                  ),
+                )
+              : Effect.succeed(stdout.slice(at + MARKER.length));
+          }),
+          Effect.scoped,
+        ),
       ),
     )
     .pipe(

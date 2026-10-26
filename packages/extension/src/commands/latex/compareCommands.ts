@@ -18,6 +18,7 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
+  showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -112,9 +113,9 @@ const acceptPorts: CommitAcceptedFilePorts = {
       absolutePaths: [absolutePath],
     }),
   showInfo: (message) =>
-    Effect.sync(() => {
-      vscode.window.showInformationMessage(message);
-    }).pipe(Effect.andThen(Effect.logInfo(message)), withLogChannel(CHANNEL)),
+    Effect.forkDetach(showLoggedInfoMessage(CHANNEL, message)).pipe(
+      Effect.asVoid,
+    ),
 };
 
 const validateFilesExist = Effect.fnUntraced(function* (

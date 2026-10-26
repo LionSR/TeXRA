@@ -37,7 +37,6 @@ import {
   isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -505,11 +504,7 @@ export async function runChat(
   disposables.add(announceForegroundApprovals());
   disposables.add(subscribeCliCredentialChanges(runtime));
   // Keys another TeXRA window or the service saves reach this chat too.
-  const watchingKeys = runtime.runFork(
-    cliSecrets(context.storageRoot)
-      .watch()
-      .pipe(Effect.provide(nodeFileServices)),
-  );
+  const watchingKeys = runtime.runFork(cliSecrets(context.storageRoot).watch());
   disposables.add(() => runtime.runFork(Fiber.interrupt(watchingKeys)));
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a

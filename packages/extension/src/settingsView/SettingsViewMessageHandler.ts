@@ -15,8 +15,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { emitAppSignal } from '@eventBus/AppSignals';
-import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { syncInlineCriticism } from '@frontend/latex/inlineCriticism';
@@ -202,18 +201,30 @@ export class SettingsViewMessageHandler {
       ...vscodeLatexSettingsHandlers(this.body),
     };
 
+    // One fiber owns the tool-availability follower and every repaint
+    // subscription; each child starts at once so it is subscribed before the
+    // constructor returns, and disposing interrupts them all.
     const { repaintOn, settle } = this.body;
-    const following = runtime.runFork(this.body.followToolAvailability);
-    context.subscriptions.push(
-      { dispose: () => runtime.runFork(Fiber.interrupt(following)) },
-      ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
-        (signal) =>
-          subscribeAppSignal(runtime, signal, (payload) => {
-            const work = repaintOn[signal](payload as never);
-            if (work) runtime.runFork(settle(work));
-          }),
-      ),
+    const following = runtime.runFork(
+      Effect.forEach(
+        [
+          this.body.followToolAvailability,
+          ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
+            (signal) =>
+              onAppSignal(signal, (payload) => {
+                const work = repaintOn[signal](payload as never);
+                if (work) runtime.runFork(settle(work));
+              }),
+          ),
+        ],
+        (subscription) =>
+          Effect.forkChild(subscription, { startImmediately: true }),
+        { discard: true },
+      ).pipe(Effect.andThen(Effect.never)),
     );
+    context.subscriptions.push({
+      dispose: () => runtime.runFork(Fiber.interrupt(following)),
+    });
   }
 
   /** Clear the tracked active view. */

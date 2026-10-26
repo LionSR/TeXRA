@@ -43,7 +43,6 @@ import {
   effectDiagnosticsLayer,
   FileSecrets,
   JsonConfigProvider,
-  nodeFileServices,
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import {
@@ -591,9 +590,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
-  yield* Effect.forkScoped(
-    secrets.watch().pipe(Effect.provide(nodeFileServices)),
-  );
+  yield* Effect.forkScoped(secrets.watch());
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel

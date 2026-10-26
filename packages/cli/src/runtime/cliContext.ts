@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import path from 'node:path';
 
 import {
@@ -32,8 +31,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
-  CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,
+  CliOutputFormatSchema,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
@@ -42,6 +41,7 @@ import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from './terminalRequirements';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -459,10 +459,8 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
         'TEXRA_OUTPUT_FORMAT',
-        (format): CliOutputFormat | undefined =>
-          (CLI_OUTPUT_FORMATS as readonly string[]).includes(format)
-            ? (format as CliOutputFormat)
-            : undefined,
+        (format) =>
+          Schema.is(CliOutputFormatSchema)(format) ? format : undefined,
         configWarnings,
       )) ??
       Settings.getConfig<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
@@ -558,8 +556,12 @@ export function launchApprovalNotice(
  * `TEXRA_*` settings its starter passed). Children this process spawns
  * inherit the result. Says once which PATH it runs with.
  */
-export function adoptLoginShellEnvironment(): Effect.Effect<void, Error> {
-  return loginShellEnvironment(process.env.HOME ?? homedir()).pipe(
+export function adoptLoginShellEnvironment(): Effect.Effect<
+  void,
+  Error,
+  ChildProcessSpawner
+> {
+  return loginShellEnvironment().pipe(
     Effect.flatMap((login) =>
       Effect.suspend(() => {
         for (const [name, value] of Object.entries(login))
