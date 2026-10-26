@@ -145,7 +145,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
       );
       for (const run of interrupted) yield* check(run.id, policy === 'auto');
     }
-    yield* Effect.forever(
+    return yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(
           session.view.resumeBlocks(),

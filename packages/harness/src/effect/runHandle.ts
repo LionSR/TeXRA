@@ -66,71 +66,70 @@ interface TraceHandover {
  * with nobody reading has no reader, so it detaches and says so at its end.
  * Past the first pull the buffer is the reader's, and nothing drops it.
  */
-const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
-  Effect.gen(function* () {
-    const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
-    let tapping = true;
-    let reading = false;
-    /** How the run settled before any reader came: a failed run's reader
-     *  hears its failure, which the queue holds; a succeeded one's nothing. */
-    let settledUnread: 'succeeded' | 'failed' | null = null;
-    let buffered = 0;
-    /** Stop taking the run's trace events: the reader's close does it while
-     *  the run continues, and the run's settlement does it for a reader that
-     *  never came. */
-    const release = (): void => {
-      tapping = false;
-    };
-    return {
-      offer: (event) => {
-        if (!tapping) return;
-        if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-          release(); // `settle` logs it: no fiber here to log from.
-          return;
+const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
+  runId: RunId,
+): Effect.fn.Return<TraceHandover> {
+  const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
+  let tapping = true;
+  let reading = false;
+  /** How the run settled before any reader came: a failed run's reader
+   *  hears its failure, which the queue holds; a succeeded one's nothing. */
+  let settledUnread: 'succeeded' | 'failed' | null = null;
+  let buffered = 0;
+  /** Stop taking the run's trace events: the reader's close does it while
+   *  the run continues, and the run's settlement does it for a reader that
+   *  never came. */
+  const release = (): void => {
+    tapping = false;
+  };
+  return {
+    offer: (event) => {
+      if (!tapping) return;
+      if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
+        release(); // `settle` logs it: no fiber here to log from.
+        return;
+      }
+      Queue.offerUnsafe(trace, event);
+    },
+    settle: (exit) =>
+      Effect.gen(function* () {
+        release();
+        if (!reading)
+          settledUnread = Exit.isSuccess(exit) ? 'succeeded' : 'failed';
+        if (!reading && buffered > TRACE_HANDOVER_EVENTS) {
+          yield* Effect.logWarning(
+            `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
+          ).pipe(withLogChannel(CHANNEL));
         }
-        Queue.offerUnsafe(trace, event);
-      },
-      settle: (exit) =>
-        Effect.gen(function* () {
-          release();
-          if (!reading)
-            settledUnread = Exit.isSuccess(exit) ? 'succeeded' : 'failed';
-          if (!reading && buffered > TRACE_HANDOVER_EVENTS) {
-            yield* Effect.logWarning(
-              `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
-            ).pipe(withLogChannel(CHANNEL));
-          }
-          // A run nobody read retains nothing: what it buffered goes with it.
-          if (!reading) yield* Effect.orDie(Queue.clear(trace));
-          if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
-          else yield* Queue.end(trace);
-        }),
-      events: Stream.unwrap(
-        Effect.suspend(() => {
-          // A reader past the buffer, or after an unread settlement, has no
-          // trace left to read: it hears why rather than an empty stream.
-          // A failed run's reader hears its failure from the queue instead.
-          let lost: TraceUnavailable['reason'] | null = null;
-          if (settledUnread === 'succeeded') lost = 'ended';
-          if (buffered > TRACE_HANDOVER_EVENTS) lost = 'truncated';
-          if (settledUnread === 'failed') lost = null;
-          if (lost === null) {
-            reading = true;
-            return Effect.succeed(Stream.fromQueue(trace));
-          }
-          const message = `Run ${runId}'s trace is ${lost === 'ended' ? 'gone: the run settled with no reader attached' : 'detached: it passed the handover buffer before a reader attached'}.`;
-          return Effect.logWarning(message).pipe(
-            withLogChannel(CHANNEL),
-            Effect.andThen(
-              Effect.fail(
-                new TraceUnavailable({ runId, reason: lost, message }),
-              ),
-            ),
-          );
-        }),
-      ).pipe(Stream.ensuring(Effect.sync(release))),
-    };
-  });
+        // A run nobody read retains nothing: what it buffered goes with it.
+        if (!reading) yield* Effect.orDie(Queue.clear(trace));
+        if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
+        else yield* Queue.end(trace);
+      }),
+    events: Stream.unwrap(
+      Effect.suspend(() => {
+        // A reader past the buffer, or after an unread settlement, has no
+        // trace left to read: it hears why rather than an empty stream.
+        // A failed run's reader hears its failure from the queue instead.
+        let lost: TraceUnavailable['reason'] | null = null;
+        if (settledUnread === 'succeeded') lost = 'ended';
+        if (buffered > TRACE_HANDOVER_EVENTS) lost = 'truncated';
+        if (settledUnread === 'failed') lost = null;
+        if (lost === null) {
+          reading = true;
+          return Effect.succeed(Stream.fromQueue(trace));
+        }
+        const message = `Run ${runId}'s trace is ${lost === 'ended' ? 'gone: the run settled with no reader attached' : 'detached: it passed the handover buffer before a reader attached'}.`;
+        return Effect.logWarning(message).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new TraceUnavailable({ runId, reason: lost, message })),
+          ),
+        );
+      }),
+    ).pipe(Stream.ensuring(Effect.sync(release))),
+  };
+});
 
 /** What a launch reports to its handle: the moment the run exists in its
  *  session, and that it joined a resume already in flight. */

@@ -244,26 +244,25 @@ export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =
  * tool it reached for. `toolName` names what needs the run, which can be
  * narrower than the tool (`'bash run_in_background'`).
  */
-export const requireRun = (
+export const requireRun = Effect.fn('RunCall.requireRun')(function* (
   toolName: string,
-): Effect.Effect<
+): Effect.fn.Return<
   ToolContextShape & {
     readonly run: ToolRun;
     readonly requests: CallRequests;
   },
   ToolError,
   ToolContext
-> =>
-  Effect.gen(function* () {
-    const call = yield* ToolContext;
-    const { run } = call.env;
-    const { requests } = call;
-    if (run === undefined || requests === undefined)
-      return yield* Effect.fail(
-        new ToolError(`${toolName} requires an active run context.`),
-      );
-    return { ...call, run, requests };
-  });
+> {
+  const call = yield* ToolContext;
+  const { run } = call.env;
+  const { requests } = call;
+  if (run === undefined || requests === undefined)
+    return yield* Effect.fail(
+      new ToolError(`${toolName} requires an active run context.`),
+    );
+  return { ...call, run, requests };
+});
 
 /** A built-in's call made under a run: the call, the run, where its
  *  requests open, and its place in the run. */
@@ -271,18 +270,17 @@ export type RunToolCall = ToolContextShape &
   RunCallShape & { readonly requests: CallRequests };
 
 /** {@link requireRun}, with the call's place in its run, for built-ins. */
-export const requireToolRun = (
+export const requireToolRun = Effect.fn('RunCall.requireToolRun')(function* (
   toolName: string,
-): Effect.Effect<RunToolCall, ToolError, ToolContext> =>
-  Effect.gen(function* () {
-    const call = yield* requireRun(toolName);
-    const runCall = yield* RunCall;
-    if (runCall === null)
-      return yield* Effect.fail(
-        new ToolError(`${toolName} requires an active run context.`),
-      );
-    return { ...call, ...runCall };
-  });
+): Effect.fn.Return<RunToolCall, ToolError, ToolContext> {
+  const call = yield* requireRun(toolName);
+  const runCall = yield* RunCall;
+  if (runCall === null)
+    return yield* Effect.fail(
+      new ToolError(`${toolName} requires an active run context.`),
+    );
+  return { ...call, ...runCall };
+});
 
 /** Count `path` as read by the current call's run: a later edit of it then
  *  needs no fresh read. */

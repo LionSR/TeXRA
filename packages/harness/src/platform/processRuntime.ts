@@ -171,11 +171,11 @@ const openRoots = (): Map<string, RootHold> => {
  * root is keyed by its resolved path, so a trailing slash or a `..` names the
  * same root. A refusal is the open's failure.
  */
-export const holdProcessRoot = (
-  root: string,
-  holder: object,
-): Effect.Effect<void, DatabaseOpenFailed, Path.Path | Scope.Scope> =>
-  Effect.gen(function* () {
+export const holdProcessRoot = Effect.fn('processRuntime.holdProcessRoot')(
+  function* (
+    root: string,
+    holder: object,
+  ): Effect.fn.Return<void, DatabaseOpenFailed, Path.Path | Scope.Scope> {
     // Resolved without I/O: a session opens synchronously (`runSync`).
     const canonical = (yield* Path.Path).resolve(root);
     const take = Effect.suspend(() => {
@@ -201,7 +201,8 @@ export const holdProcessRoot = (
           openRoots().delete(canonical);
       }),
     );
-  });
+  },
+);
 
 /** The runtime a composition root makes over `processLayer`: the process
  *  services, and the `Sessions` that open and close its sessions. */

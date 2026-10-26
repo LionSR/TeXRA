@@ -41,27 +41,28 @@ const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
  * replaced, loudly: every server then records a new revision once, and every
  * plugin with a server asks for trust again.
  */
-export const revisionKey = (globalState: SettingsStores['globalState']) =>
-  Effect.gen(function* () {
-    const isKey = (value: unknown): value is string =>
-      typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
-    const stored = yield* globalState.get(GlobalStateKey.MCP_REVISION_KEY);
-    if (isKey(stored)) return stored;
-    let replaced = false;
-    const key = yield* globalState.modify(
-      GlobalStateKey.MCP_REVISION_KEY,
-      (current) => {
-        if (isKey(current)) return Result.succeed(current);
-        replaced = current !== undefined;
-        return Result.succeed(randomBytes(32).toString('hex'));
-      },
+export const revisionKey = Effect.fn('mcpServers.revisionKey')(function* (
+  globalState: SettingsStores['globalState'],
+) {
+  const isKey = (value: unknown): value is string =>
+    typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
+  const stored = yield* globalState.get(GlobalStateKey.MCP_REVISION_KEY);
+  if (isKey(stored)) return stored;
+  let replaced = false;
+  const key = yield* globalState.modify(
+    GlobalStateKey.MCP_REVISION_KEY,
+    (current) => {
+      if (isKey(current)) return Result.succeed(current);
+      replaced = current !== undefined;
+      return Result.succeed(randomBytes(32).toString('hex'));
+    },
+  );
+  if (replaced)
+    yield* Effect.logWarning(
+      'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',
     );
-    if (replaced)
-      yield* Effect.logWarning(
-        'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',
-      );
-    return key;
-  });
+  return key;
+});
 
 /** A keyed digest of a server's env values, unreadable back to a value. */
 export const envDigest = (key: string, env: Readonly<Record<string, string>>) =>

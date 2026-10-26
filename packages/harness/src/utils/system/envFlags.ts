@@ -75,25 +75,24 @@ export const envFlag = (
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
  */
-export const inheritedEnv = (
+export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   keep?: ApiKeyProviderId,
-): Effect.Effect<Record<string, string>> =>
-  Effect.gen(function* () {
-    const env = yield* environment;
-    const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
-    const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
-    // A project's `.env` never reaches a nested harness process as a requested
-    // approval policy: only the user's own invocation asks for one.
-    const withheld = new Set(
-      [
-        ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
-        'TEXRA_APPROVAL_POLICY',
-      ].map(fold),
-    );
-    return Object.fromEntries(
-      Object.entries(env).filter(
-        (entry): entry is [string, string] =>
-          entry[1] !== undefined && !withheld.has(fold(entry[0])),
-      ),
-    );
-  });
+): Effect.fn.Return<Record<string, string>> {
+  const env = yield* environment;
+  const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
+  const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
+  // A project's `.env` never reaches a nested harness process as a requested
+  // approval policy: only the user's own invocation asks for one.
+  const withheld = new Set(
+    [
+      ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
+      'TEXRA_APPROVAL_POLICY',
+    ].map(fold),
+  );
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined && !withheld.has(fold(entry[0])),
+    ),
+  );
+});

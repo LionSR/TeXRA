@@ -208,11 +208,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
     );
     if (unknown.length > 0)
-      return yield* Effect.fail(
-        new AgentError({
-          message: `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
-        }),
-      );
+      return yield* new AgentError({
+        message: `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+      });
 
     // Validated before registration, so a typo'd model name registers no
     // FAILED execution and surfaces only its targeted instruction.
@@ -274,9 +272,9 @@ const enterRun = Effect.fn('enterRun')(function* (
       ? null
       : yield* registrationRows(session, runId, config, input.registration);
   if (registration !== null && registration[0]?.type !== 'run.start')
-    return yield* Effect.fail(
-      new AgentError({ message: `Run ${runId} already exists; resume it.` }),
-    );
+    return yield* new AgentError({
+      message: `Run ${runId} already exists; resume it.`,
+    });
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter(
     (event) =>

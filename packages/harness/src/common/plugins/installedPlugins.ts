@@ -188,11 +188,9 @@ function installFromRoot(
     for (const candidate of candidates) {
       if (candidate.kind === 'git') {
         if (nested) {
-          return yield* Effect.fail(
-            new PluginError({
-              message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
-            }),
-          );
+          return yield* new PluginError({
+            message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
+          });
         }
         records.push(...(yield* installOrigin(candidate, [], run, true)));
         continue;
@@ -376,11 +374,9 @@ function removePlugin(name: string, env: PluginEnv) {
           Effect.mapError(ioError),
         ));
       if (!leftover)
-        return yield* Effect.fail(
-          new PluginRequestError({
-            message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
-          }),
-        );
+        return yield* new PluginRequestError({
+          message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
+        });
     }
     // A local plugin's directory is the user's; a leftover one is managed.
     const local = plugin !== undefined && plugin.commit === undefined;

@@ -98,10 +98,14 @@ const runCommand = (
  */
 let linuxBootId: string | undefined;
 
-const readLinuxIdentity = (
-  pid: number,
-): Effect.Effect<string, ProcessIdentityUnreadable, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
+const readLinuxIdentity = Effect.fn('nodeProcesses.readLinuxIdentity')(
+  function* (
+    pid: number,
+  ): Effect.fn.Return<
+    string,
+    ProcessIdentityUnreadable,
+    FileSystem.FileSystem
+  > {
     linuxBootId ??= (yield* readTextFile(
       pid,
       '/proc/sys/kernel/random/boot_id',
@@ -120,7 +124,8 @@ const readLinuxIdentity = (
       });
     }
     return `${linuxBootId}:${startTicks}`;
-  });
+  },
+);
 
 /**
  * macOS and the BSDs: `ps -o lstart=` prints the start time as
@@ -129,35 +134,34 @@ const readLinuxIdentity = (
  * `LC_TIME`, so the call pins `LC_ALL=C` for one spelling. The string is
  * compared verbatim, never parsed.
  */
-const readPsIdentity = (
+const readPsIdentity = Effect.fn('nodeProcesses.readPsIdentity')(function* (
   pid: number,
-): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const stdout = yield* runCommand(
+): Effect.fn.Return<string, ProcessIdentityUnreadable, ChildProcessSpawner> {
+  const stdout = yield* runCommand(
+    pid,
+    'ps',
+    ['-o', 'lstart=', '-p', String(pid)],
+    { LC_ALL: 'C' },
+  );
+  const identity = stdout.trim();
+  if (identity === '') {
+    return yield* new ProcessIdentityUnreadable({
       pid,
-      'ps',
-      ['-o', 'lstart=', '-p', String(pid)],
-      { LC_ALL: 'C' },
-    );
-    const identity = stdout.trim();
-    if (identity === '') {
-      return yield* new ProcessIdentityUnreadable({
-        pid,
-        detail: `ps printed no start time for ${pid}`,
-      });
-    }
-    return identity;
-  });
+      detail: `ps printed no start time for ${pid}`,
+    });
+  }
+  return identity;
+});
 
 /**
  * Windows: the process creation time as an ISO-8601 round-trip string via
  * PowerShell. It costs a few hundred milliseconds, which only the lease
  * probes pay, and it is the one source that makes a Windows owner provable.
  */
-const readWindowsIdentity = (
-  pid: number,
-): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
-  Effect.gen(function* () {
+const readWindowsIdentity = Effect.fn('nodeProcesses.readWindowsIdentity')(
+  function* (
+    pid: number,
+  ): Effect.fn.Return<string, ProcessIdentityUnreadable, ChildProcessSpawner> {
     const stdout = yield* runCommand(pid, 'powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
@@ -172,7 +176,8 @@ const readWindowsIdentity = (
       });
     }
     return identity;
-  });
+  },
+);
 
 const readIdentity = (
   pid: number,

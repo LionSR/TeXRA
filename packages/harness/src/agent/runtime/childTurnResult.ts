@@ -294,15 +294,16 @@ export const turnResultPart = (
 /** A child's parent as a job reads it: from the child's rows once its run
  *  exists, else from this process's registry entry for its launch (minus a
  *  detach), which only this process can hold for a run not yet created. */
-export const parentEdgeIn = (
-  session: SessionHandle,
-  child: RunId,
-): Effect.Effect<RunId | null, Error> =>
-  Effect.gen(function* () {
+export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
+  function* (
+    session: SessionHandle,
+    child: RunId,
+  ): Effect.fn.Return<RunId | null, Error> {
     if (!(yield* getRunRecords(session, child).exists()))
       return session.runs.get(child)?.parent ?? null;
     return (yield* persistedParentRunId(session, child)) ?? null;
-  });
+  },
+);
 
 /**
  * Queue a child's message (`item.from`) for its parent, read in the same
@@ -372,19 +373,18 @@ export const commitPart = (
  *  (`Inbox.wake`). A refused resume is told to the user by the resume; a
  *  wake that could not read the parent is a warning, and an explicit Resume
  *  delivers the result. */
-export const wakeParent = (
+export const wakeParent = Effect.fn('childTurnResult.wakeParent')(function* (
   session: SessionHandle,
   delivery: ChildDelivery | undefined,
   trace: AgentTrace | undefined,
-): Effect.Effect<void, Error> =>
-  Effect.gen(function* () {
-    if (delivery === undefined) return;
-    const woken = yield* session.followUps.wake(delivery.to);
-    // The child's boundary waits for its parent's resumed turn.
-    if (woken !== false) return yield* woken;
-    yield* warn(
-      trace,
-      'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
-      { parentRunId: delivery.to },
-    );
-  });
+): Effect.fn.Return<void, Error> {
+  if (delivery === undefined) return;
+  const woken = yield* session.followUps.wake(delivery.to);
+  // The child's boundary waits for its parent's resumed turn.
+  if (woken !== false) return yield* woken;
+  yield* warn(
+    trace,
+    'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
+    { parentRunId: delivery.to },
+  );
+});

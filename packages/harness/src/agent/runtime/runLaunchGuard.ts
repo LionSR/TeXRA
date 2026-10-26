@@ -174,19 +174,18 @@ export function runWithLaunchGuard<A, E, R>(
  * tail seeing a park, and its resume. A parent another process holds keeps
  * it held; a replay writes nothing, so two triggers deliver once.
  */
-export const deliverHeld = (
+export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
   session: SessionHandle,
   parent: RunId,
-): Effect.Effect<void, Error> =>
-  Effect.gen(function* () {
-    // The listing as the log holds it: a session just opened has not folded it.
-    const { runs } = yield* session.view.read([]);
-    for (const child of runs.values())
-      if (child.parentId === parent && !isTerminalOutcomePhase(child.status))
-        yield* session.log.transact((tx) =>
-          deliverOne(session, tx.append, child.id, parent).pipe(Effect.scoped),
-        );
-  });
+): Effect.fn.Return<void, Error> {
+  // The listing as the log holds it: a session just opened has not folded it.
+  const { runs } = yield* session.view.read([]);
+  for (const child of runs.values())
+    if (child.parentId === parent && !isTerminalOutcomePhase(child.status))
+      yield* session.log.transact((tx) =>
+        deliverOne(session, tx.append, child.id, parent).pipe(Effect.scoped),
+      );
+});
 
 /** The child's parks in its current lifecycle, each held one with the
  *  report its turn settled with just before it; none once it ended. */
@@ -206,76 +205,75 @@ const heldParks = (rows: readonly SessionEvent[], child: RunId) => {
 
 /** Every result a child holds for `parent` since its lifecycle began, and
  *  its end when the newest park held its last turn. */
-const deliverOne = (
+const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   session: SessionHandle,
   append: Append,
   child: RunId,
   parent: RunId,
-): Effect.Effect<void, Error, Scope.Scope> =>
-  Effect.gen(function* () {
-    const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
-      'child.park',
-      'run.end',
-      'run.activate',
-      'run.report',
-    ]);
-    const parks = heldParks(rows, child);
-    const held = parks.filter(({ park }) => park.heldFor !== undefined);
-    if (held.length === 0) return;
-    const ends = parks.at(-1)?.park.ends;
-    // The child's claim, held here or taken from an owner that died, lets
-    // this append also end the child or clear its waiting park. A live
-    // owner elsewhere keeps the claim and clears the park itself when it
-    // sees the delivery (`clearHeld`).
-    const holdsChild = yield* session.log.hold(child).pipe(
-      Effect.as(true),
-      Effect.catch((error) =>
-        ends === undefined && heldElsewhereBy(error) !== null
-          ? Effect.succeed(false)
-          : Effect.fail(error),
-      ),
+): Effect.fn.Return<void, Error, Scope.Scope> {
+  const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
+    'child.park',
+    'run.end',
+    'run.activate',
+    'run.report',
+  ]);
+  const parks = heldParks(rows, child);
+  const held = parks.filter(({ park }) => park.heldFor !== undefined);
+  if (held.length === 0) return;
+  const ends = parks.at(-1)?.park.ends;
+  // The child's claim, held here or taken from an owner that died, lets
+  // this append also end the child or clear its waiting park. A live
+  // owner elsewhere keeps the claim and clears the park itself when it
+  // sees the delivery (`clearHeld`).
+  const holdsChild = yield* session.log.hold(child).pipe(
+    Effect.as(true),
+    Effect.catch((error) =>
+      ends === undefined && heldElsewhereBy(error) !== null
+        ? Effect.succeed(false)
+        : Effect.fail(error),
+    ),
+  );
+  const from = { kind: 'run', runId: child } as const;
+  const delivered = [];
+  let refused = false;
+  for (const { park, text } of held) {
+    const one = yield* parentAdmission(
+      session,
+      parent,
+      { text, from, deliveryId: park.heldFor },
+      {},
+      undefined,
     );
-    const from = { kind: 'run', runId: child } as const;
-    const delivered = [];
-    let refused = false;
-    for (const { park, text } of held) {
-      const one = yield* parentAdmission(
-        session,
-        parent,
-        { text, from, deliveryId: park.heldFor },
-        {},
-        undefined,
-      );
-      if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
-        return;
-      // A parent that refused it (its input closed) leaves the park held.
-      if (one.sent.kind === 'refused') refused = true;
-      delivered.push(...one.rows);
-    }
-    if (ends === undefined) {
-      // Only while the newest park still reads as waiting: a replay of a
-      // cleared child writes nothing.
-      const clear =
-        holdsChild && !refused && parks.at(-1)?.park.heldFor !== undefined
-          ? [
-              {
-                type: 'child.park',
-                aggregateId: qualifyAggregateId('run', child),
-                phase: 'parked',
-              } as const,
-            ]
-          : [];
-      yield* append([...delivered, ...clear]);
+    if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
       return;
-    }
-    // The held last turn ends the child, through its cell, in this append:
-    // its unread input consumed, its halt, what it left open, its `run.end`.
-    yield* endIn(session, append, {
-      runId: child,
-      outcome: ends,
-      lastTurn: Effect.succeed({ rows: delivered }),
-    });
+    // A parent that refused it (its input closed) leaves the park held.
+    if (one.sent.kind === 'refused') refused = true;
+    delivered.push(...one.rows);
+  }
+  if (ends === undefined) {
+    // Only while the newest park still reads as waiting: a replay of a
+    // cleared child writes nothing.
+    const clear =
+      holdsChild && !refused && parks.at(-1)?.park.heldFor !== undefined
+        ? [
+            {
+              type: 'child.park',
+              aggregateId: qualifyAggregateId('run', child),
+              phase: 'parked',
+            } as const,
+          ]
+        : [];
+    yield* append([...delivered, ...clear]);
+    return;
+  }
+  // The held last turn ends the child, through its cell, in this append:
+  // its unread input consumed, its halt, what it left open, its `run.end`.
+  yield* endIn(session, append, {
+    runId: child,
+    outcome: ends,
+    lastTurn: Effect.succeed({ rows: delivered }),
   });
+});
 
 /**
  * The tail's triggers, each in `scope`. A result parked for a parent this

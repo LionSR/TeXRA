@@ -195,95 +195,94 @@ const HOLD_RETRY = Schedule.min([
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
 /** One step's pin over its session's resources. */
-const pinStep = <E>(
+const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   shared: ProcessCatalog,
   session: SessionResources,
   off: Effect.Effect<ReadonlySet<string>, E>,
   options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
-): Effect.Effect<ToolStep, E, Scope.Scope> =>
-  Effect.gen(function* () {
-    const switchedOn = shared.onOf(yield* off);
-    const builtIn = shared.builtIn.filter(({ plugin }) =>
-      switchedOn.has(plugin.id),
-    );
-    const plugins = builtIn.map(({ plugin }) => plugin);
-    const read =
-      options?.installed === true ? yield* shared.installed : yield* NONE;
-    // Each installed plugin's servers, started with this project's
-    // variables, for the step's scope.
-    const loads = yield* Effect.forEach(
-      read.plugins,
-      ({ id, servers, source }) =>
-        Effect.map(
-          Effect.forEach(
-            servers,
-            (server) => session.holdServer(server, source.trust.digest),
-            { concurrency: 'unbounded' },
+): Effect.fn.Return<ToolStep, E, Scope.Scope> {
+  const switchedOn = shared.onOf(yield* off);
+  const builtIn = shared.builtIn.filter(({ plugin }) =>
+    switchedOn.has(plugin.id),
+  );
+  const plugins = builtIn.map(({ plugin }) => plugin);
+  const read =
+    options?.installed === true ? yield* shared.installed : yield* NONE;
+  // Each installed plugin's servers, started with this project's
+  // variables, for the step's scope.
+  const loads = yield* Effect.forEach(
+    read.plugins,
+    ({ id, servers, source }) =>
+      Effect.map(
+        Effect.forEach(
+          servers,
+          (server) => session.holdServer(server, source.trust.digest),
+          { concurrency: 'unbounded' },
+        ),
+        (held) => ({ id, held }),
+      ),
+    { concurrency: 'unbounded' },
+  );
+  // An installed plugin's tools go before a configured server's: a
+  // child inheriting one keeps it when a configured server reuses the
+  // name, and the configured one is refused loudly.
+  const merged = mergeEntries([
+    ...builtIn.map(({ plugin, entries }) => [plugin.id, entries] as const),
+    ...loads.map(
+      ({ id, held }) =>
+        [
+          id,
+          new Map(
+            held.flatMap(({ tools, revision }) => [
+              ...entriesOf(id, tools, { revision }),
+            ]),
           ),
-          (held) => ({ id, held }),
-        ),
-      { concurrency: 'unbounded' },
-    );
-    // An installed plugin's tools go before a configured server's: a
-    // child inheriting one keeps it when a configured server reuses the
-    // name, and the configured one is refused loudly.
-    const merged = mergeEntries([
-      ...builtIn.map(({ plugin, entries }) => [plugin.id, entries] as const),
-      ...loads.map(
-        ({ id, held }) =>
-          [
-            id,
-            new Map(
-              held.flatMap(({ tools, revision }) => [
-                ...entriesOf(id, tools, { revision }),
-              ]),
-            ),
-          ] as const,
+        ] as const,
+    ),
+    ...[
+      ...Map.groupBy(
+        options?.held?.entries ?? new Map<string, ToolEntry>(),
+        ([, entry]) => entry.plugin,
       ),
-      ...[
-        ...Map.groupBy(
-          options?.held?.entries ?? new Map<string, ToolEntry>(),
-          ([, entry]) => entry.plugin,
-        ),
-      ].map(([owner, own]) => [owner, new Map(own)] as const),
-    ]);
-    const failures = loads.flatMap(({ held }) =>
-      held.flatMap(({ failure }) => failure ?? []),
-    );
-    return {
-      entries: merged.entries,
-      plugins,
-      modules: Object.fromEntries(
-        plugins.flatMap(({ scriptModules = {} }) =>
-          Object.entries(scriptModules).map(([name, source]) => [
-            `builtIn:${name}`,
-            source,
-          ]),
-        ),
+    ].map(([owner, own]) => [owner, new Map(own)] as const),
+  ]);
+  const failures = loads.flatMap(({ held }) =>
+    held.flatMap(({ failure }) => failure ?? []),
+  );
+  return {
+    entries: merged.entries,
+    plugins,
+    modules: Object.fromEntries(
+      plugins.flatMap(({ scriptModules = {} }) =>
+        Object.entries(scriptModules).map(([name, source]) => [
+          `builtIn:${name}`,
+          source,
+        ]),
       ),
-      installed: new Map(read.plugins.map(({ id, source }) => [id, source])),
-      warnings: [...read.warnings, ...failures, ...merged.warnings],
-      services: (used) =>
-        Effect.reduce(
-          plugins.filter(({ id }) => used.has(id)),
-          // cast: the empty context serves no plugin's tag.
-          () => Context.empty() as PluginContext,
-          (services, { id, processLayer, sessionLayer }) =>
-            Effect.gen(function* () {
-              const forProcess = processLayer
-                ? yield* RcMap.get(shared.processLayers, id)
-                : Context.empty();
-              const forSession = sessionLayer
-                ? yield* RcMap.get(session.layers, id)
-                : Context.empty();
-              return Context.merge(
-                Context.merge(services, forProcess),
-                forSession,
-              );
-            }),
-        ),
-    };
-  });
+    ),
+    installed: new Map(read.plugins.map(({ id, source }) => [id, source])),
+    warnings: [...read.warnings, ...failures, ...merged.warnings],
+    services: (used) =>
+      Effect.reduce(
+        plugins.filter(({ id }) => used.has(id)),
+        // cast: the empty context serves no plugin's tag.
+        () => Context.empty() as PluginContext,
+        (services, { id, processLayer, sessionLayer }) =>
+          Effect.gen(function* () {
+            const forProcess = processLayer
+              ? yield* RcMap.get(shared.processLayers, id)
+              : Context.empty();
+            const forSession = sessionLayer
+              ? yield* RcMap.get(session.layers, id)
+              : Context.empty();
+            return Context.merge(
+              Context.merge(services, forProcess),
+              forSession,
+            );
+          }),
+      ),
+  };
+});
 
 /** One session's catalog over `shared`, in the caller's scope. */
 export const sessionTools = Effect.fnUntraced(function* (

@@ -107,15 +107,15 @@ const removeRunDirectories = (
  * passes never conflict; a failed record stays closed and pending for the
  * next pass, and a failed read of the records is logged.
  */
-export const deletionCollector = (
-  database: Pick<Context.Service.Shape<typeof Database>, 'deletions'>,
-  storage: string,
-): Effect.Effect<
-  Effect.Effect<Fiber.Fiber<void>>,
-  never,
-  FileSystem.FileSystem | Scope.Scope
-> =>
-  Effect.gen(function* () {
+export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
+  function* (
+    database: Pick<Context.Service.Shape<typeof Database>, 'deletions'>,
+    storage: string,
+  ): Effect.fn.Return<
+    Effect.Effect<Fiber.Fiber<void>>,
+    never,
+    FileSystem.FileSystem | Scope.Scope
+  > {
     const fs = yield* FileSystem.FileSystem;
     const scope = yield* Effect.scope;
     const pass = Effect.gen(function* () {
@@ -143,7 +143,8 @@ export const deletionCollector = (
       ),
     );
     return Effect.forkIn(pass, scope);
-  });
+  },
+);
 
 /** What a `run.files` request reads from the process: its files. */
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;

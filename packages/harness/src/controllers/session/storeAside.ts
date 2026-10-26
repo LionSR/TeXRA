@@ -67,21 +67,20 @@ export class OwnersUnproven {
  *  when `single`), or the refusal naming the first that is not. An owner it
  *  has no verdict for restarts the outermost transaction ({@link
  *  provingOwners}). */
-export const reclaimable = (
+export const reclaimable = Effect.fn('storeAside.reclaimable')(function* (
   owners: ReadonlySet<OwnerId>,
   single: boolean,
-): Effect.Effect<void, DatabaseClaimRefused> =>
-  Effect.gen(function* () {
-    const proven = yield* ProvenOwners;
-    const unproven = [...owners].filter((owner) => !proven.has(owner));
-    if (unproven.length > 0)
-      return yield* Effect.die(new OwnersUnproven(unproven));
-    for (const ownerId of owners) {
-      const verdict = proven.get(ownerId);
-      if (verdict === 'alive' || (verdict === 'unprovable' && !single))
-        return yield* new DatabaseClaimRefused({ ownerId, verdict });
-    }
-  });
+): Effect.fn.Return<void, DatabaseClaimRefused> {
+  const proven = yield* ProvenOwners;
+  const unproven = [...owners].filter((owner) => !proven.has(owner));
+  if (unproven.length > 0)
+    return yield* Effect.die(new OwnersUnproven(unproven));
+  for (const ownerId of owners) {
+    const verdict = proven.get(ownerId);
+    if (verdict === 'alive' || (verdict === 'unprovable' && !single))
+      return yield* new DatabaseClaimRefused({ ownerId, verdict });
+  }
+});
 
 /** Run the outermost transaction's `attempt`; one that met claim owners it
  *  has no verdict for rolled back whole, so they are proven here, off the

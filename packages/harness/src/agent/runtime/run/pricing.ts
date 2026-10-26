@@ -80,50 +80,47 @@ export interface UsageAttribution {
  * writes no session row: a turn's usage is its `response` row and a
  * compaction's its `context.edit` row.
  */
-export const reportUsage = (
+export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
   usageLog: UsageLog['Service'],
   bound: BoundModel,
   usage: NormalizedUsage | null,
   attribution: UsageAttribution,
   { config }: SettingsStores,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (usage === null) return;
-    const env = yield* environment;
-    const cachedInputTokens = usage.cachedInputTokens ?? 0;
-    yield* usageLog
-      .log(
-        {
-          model: bound.config.id,
-          provider: usage.provider,
-          agentName: attribution.agentName,
-          // Billing needs a real number, so a provider that reported no
-          // cache-miss count is billed the derived estimate (input minus
-          // cache-read). Display never guesses.
-          inputTokens:
-            usage.cacheMissInputTokens ??
-            Math.max(0, usage.inputTokens - cachedInputTokens),
-          outputTokens: usage.outputTokens,
-          cost: Number(usage.cost.toFixed(6)),
-          responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
-          cachedInputTokens,
-          reasoningTokens: usage.reasoningTokens ?? 0,
-          usageRoute: usageRouteOf(bound.route),
-          // The usage-log edge function's wire key, which stores the run id
-          // in its `stream_id` column; a server-side rename, not ours.
-          ...(attribution.runId === null
-            ? {}
-            : { streamId: attribution.runId }),
-        },
-        config,
-        env,
-      )
-      .pipe(
-        // Best-effort billing edge: a failed log never fails the call.
-        Effect.catchDefect((error) =>
-          Effect.logWarning('Backend usage logging failed').pipe(
-            Effect.annotateLogs({ error }),
-          ),
+): Effect.fn.Return<void> {
+  if (usage === null) return;
+  const env = yield* environment;
+  const cachedInputTokens = usage.cachedInputTokens ?? 0;
+  yield* usageLog
+    .log(
+      {
+        model: bound.config.id,
+        provider: usage.provider,
+        agentName: attribution.agentName,
+        // Billing needs a real number, so a provider that reported no
+        // cache-miss count is billed the derived estimate (input minus
+        // cache-read). Display never guesses.
+        inputTokens:
+          usage.cacheMissInputTokens ??
+          Math.max(0, usage.inputTokens - cachedInputTokens),
+        outputTokens: usage.outputTokens,
+        cost: Number(usage.cost.toFixed(6)),
+        responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
+        cachedInputTokens,
+        reasoningTokens: usage.reasoningTokens ?? 0,
+        usageRoute: usageRouteOf(bound.route),
+        // The usage-log edge function's wire key, which stores the run id
+        // in its `stream_id` column; a server-side rename, not ours.
+        ...(attribution.runId === null ? {} : { streamId: attribution.runId }),
+      },
+      config,
+      env,
+    )
+    .pipe(
+      // Best-effort billing edge: a failed log never fails the call.
+      Effect.catchDefect((error) =>
+        Effect.logWarning('Backend usage logging failed').pipe(
+          Effect.annotateLogs({ error }),
         ),
-      );
-  });
+      ),
+    );
+});

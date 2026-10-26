@@ -222,13 +222,11 @@ export function rootedFileSystem(
     Effect.gen(function* () {
       const fragment = tempNameEscape(options ?? {});
       if (fragment !== undefined) {
-        return yield* Effect.fail(
-          PlatformError.badArgument({
-            module: MODULE,
-            method,
-            description: `temp name fragment is not a file name: ${fragment}`,
-          }),
-        );
+        return yield* PlatformError.badArgument({
+          module: MODULE,
+          method,
+          description: `temp name fragment is not a file name: ${fragment}`,
+        });
       }
       const directory = yield* inRoot(method, options?.directory);
       const created = yield* create(directory);
@@ -249,45 +247,42 @@ export function rootedFileSystem(
     // pattern may be absolute or have a segment matching `..`, and every
     // match must still resolve under the root. A symlinked directory inside
     // the root is followed, as a read through it would be.
-    glob: (pattern, options) =>
-      Effect.gen(function* () {
-        const resolvedRoot = yield* inRoot('glob', options?.root);
-        const escaping = yield* Effect.try({
-          try: () =>
-            globEscape(
-              new Glob(pattern, {
-                ...NODE_GLOB_MATCHER_OPTIONS,
-                cwd: resolvedRoot,
-              }).patterns,
-            ),
-          catch: (cause) =>
-            PlatformError.badArgument({
-              module: MODULE,
-              method: 'glob',
-              description: `pattern does not compile: ${pattern}`,
-              cause,
-            }),
+    glob: Effect.fn('rootedFileSystem.glob')(function* (pattern, options) {
+      const resolvedRoot = yield* inRoot('glob', options?.root);
+      const escaping = yield* Effect.try({
+        try: () =>
+          globEscape(
+            new Glob(pattern, {
+              ...NODE_GLOB_MATCHER_OPTIONS,
+              cwd: resolvedRoot,
+            }).patterns,
+          ),
+        catch: (cause) =>
+          PlatformError.badArgument({
+            module: MODULE,
+            method: 'glob',
+            description: `pattern does not compile: ${pattern}`,
+            cause,
+          }),
+      });
+      if (escaping !== undefined) {
+        return yield* PlatformError.badArgument({
+          module: MODULE,
+          method: 'glob',
+          description: `pattern escapes the root ${root}: ${escaping}`,
         });
-        if (escaping !== undefined) {
-          return yield* Effect.fail(
-            PlatformError.badArgument({
-              module: MODULE,
-              method: 'glob',
-              description: `pattern escapes the root ${root}: ${escaping}`,
-            }),
-          );
-        }
-        const matches = yield* fs.glob(pattern, {
-          ...options,
-          root: resolvedRoot,
-        });
-        yield* Effect.forEach(
-          matches,
-          (match) => at('glob', path.resolve(resolvedRoot, match)),
-          { discard: true },
-        );
-        return matches;
-      }),
+      }
+      const matches = yield* fs.glob(pattern, {
+        ...options,
+        root: resolvedRoot,
+      });
+      yield* Effect.forEach(
+        matches,
+        (match) => at('glob', path.resolve(resolvedRoot, match)),
+        { discard: true },
+      );
+      return matches;
+    }),
     link: (from, to) => onPair('link', fs.link)(from, to),
     lstat: on('lstat', fs.lstat),
     makeDirectory: (target, options) =>

@@ -190,48 +190,49 @@ interface CatalogState {
 }
 
 /** Scan every agent source and publish the result into `state`. */
-const scanInto = (state: CatalogState) =>
-  Effect.gen(function* () {
-    state.changePending = false;
-    const startTime = yield* Clock.currentTimeMillis;
-    const dirs = yield* AgentDirectories;
-    const [customRoots, builtInRoots] = yield* Effect.all(
-      [agentSourceRoots(dirs, 'custom'), agentSourceRoots(dirs, 'builtIn')],
-      { concurrency: 'unbounded' },
-    ).pipe(
-      // The port names its own failure; the load is what the caller asked
-      // for, so it carries the reason and the cause up.
-      Effect.catchTag('AgentDirectoriesFailed', (failure) =>
-        Effect.fail(
-          new AgentCatalogLoadError({
-            message: failure.message,
-            cause: failure.cause,
-          }),
-        ),
+const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
+  state: CatalogState,
+) {
+  state.changePending = false;
+  const startTime = yield* Clock.currentTimeMillis;
+  const dirs = yield* AgentDirectories;
+  const [customRoots, builtInRoots] = yield* Effect.all(
+    [agentSourceRoots(dirs, 'custom'), agentSourceRoots(dirs, 'builtIn')],
+    { concurrency: 'unbounded' },
+  ).pipe(
+    // The port names its own failure; the load is what the caller asked
+    // for, so it carries the reason and the cause up.
+    Effect.catchTag('AgentDirectoriesFailed', (failure) =>
+      Effect.fail(
+        new AgentCatalogLoadError({
+          message: failure.message,
+          cause: failure.cause,
+        }),
       ),
-    );
-    const [custom, builtIn, plugin] = yield* Effect.all(
-      [
-        scanDirectory(customRoots, 'custom'),
-        scanDirectory(builtInRoots, 'builtIn'),
-        scanPluginAgents,
-      ],
-      { concurrency: 'unbounded' },
-    );
-    state.entries = new Map(
-      [...custom.entries, ...builtIn.entries, ...plugin.entries].map(
-        (entry) => [agentKeyOf(entry), entry] as const,
-      ),
-    );
-    // Only custom-agent scan issues are a product surface.
-    state.customScanIssues = Object.freeze(custom.issues);
-    state.skippedFiles = Object.freeze(
-      [custom, builtIn, plugin].flatMap((scan) => scan.issues),
-    );
-    yield* Effect.logInfo(
-      `Loaded ${state.entries.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
-    ).pipe(withLogChannel(CHANNEL));
-  });
+    ),
+  );
+  const [custom, builtIn, plugin] = yield* Effect.all(
+    [
+      scanDirectory(customRoots, 'custom'),
+      scanDirectory(builtInRoots, 'builtIn'),
+      scanPluginAgents,
+    ],
+    { concurrency: 'unbounded' },
+  );
+  state.entries = new Map(
+    [...custom.entries, ...builtIn.entries, ...plugin.entries].map(
+      (entry) => [agentKeyOf(entry), entry] as const,
+    ),
+  );
+  // Only custom-agent scan issues are a product surface.
+  state.customScanIssues = Object.freeze(custom.issues);
+  state.skippedFiles = Object.freeze(
+    [custom, builtIn, plugin].flatMap((scan) => scan.issues),
+  );
+  yield* Effect.logInfo(
+    `Loaded ${state.entries.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
+  ).pipe(withLogChannel(CHANNEL));
+});
 
 /** Why a launch found nothing: the load's failure and the agent files it
  *  skipped. */

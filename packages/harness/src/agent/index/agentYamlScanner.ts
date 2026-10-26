@@ -207,7 +207,6 @@ function readYamlDefinition(
   return FileSystem.FileSystem.pipe(
     Effect.flatMap((fs) => readNormalizedFile(fs, yamlPath)),
     Effect.mapError(scanError),
-  ).pipe(
     Effect.flatMap((content) => {
       // A key no persona field and no listed plugin's block owns is refused.
       const parsed = Result.flatMap(safeParseYaml(content), (value) =>

@@ -163,7 +163,7 @@ export class FileSecrets implements PlatformSecrets {
         (watching) => Effect.forkScoped(watching, { startImmediately: true }),
       );
       yield* announceAll;
-      yield* Effect.never;
+      return yield* Effect.never;
     }).pipe(
       Effect.scoped,
       Effect.catchCause((cause) =>

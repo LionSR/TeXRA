@@ -95,7 +95,7 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
     // Preserve the existing UTF-8 decoding, including a leading BOM.
     Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
     Effect.mapError(storageError),
-    Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+    Effect.catchIf(isFileNotFoundError, () => Effect.void),
   );
   if (content === undefined) return { ...missingFallback };
   const parsed = yield* Effect.try({
