@@ -24,7 +24,7 @@ Explicitly protect macros, labels, theorem numbering, and settled sections:
 
 ### Separate content derivations from prose polishing
 
-Run derivation, proof, or literature tasks (`research`, `derive`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, run `polish` or `correct` on the finished `.tex` file.
+Run derivation, proof, or literature tasks (`research`, `devise`, `prover`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, run `polish` or `correct` on the finished `.tex` file.
 
 ## Model selection
 

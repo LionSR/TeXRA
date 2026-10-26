@@ -79,7 +79,7 @@ To install from a release `.vsix` archive (`texra-<version>.vsix`), right-click 
 
 ## Installing required dependencies
 
-Only a **LaTeX distribution** is required for compiling and diffing documents; Perl, GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
+Only a **LaTeX distribution** is required for compiling documents; Perl (for `latexdiff` and `latexindent`), GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
 
 <FeatureCards
   min="220px"

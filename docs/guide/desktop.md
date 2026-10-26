@@ -4,7 +4,7 @@ import FlowSteps from '../.vitepress/components/FlowSteps.vue';
 
 # Desktop App
 
-The TeXRA desktop app is the standalone Electron host for TeXRA, built for researchers who want the TeXRA agent workflow without installing VS Code. It shares the same agent runtime, model providers, LaTeX tools, settings UI, Sessions view, configuration files (`.texra/config.json` and `~/.texra`), and credential store (`~/.texra/secrets/`) as the extension and CLI.
+The TeXRA desktop app is the standalone Electron host for TeXRA, built for researchers who want the TeXRA agent workflow without installing VS Code. It shares the same agent runtime, model providers, LaTeX tools, settings UI, Sessions view, configuration locations (`.texra/config.json` and `~/.texra`), and credential store (`~/.texra/secrets/`) as the extension and CLI.
 
 ## Availability
 
