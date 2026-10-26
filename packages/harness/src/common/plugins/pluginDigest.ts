@@ -76,16 +76,12 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
     Effect.gen(function* () {
       const full = path.join(dir, name);
       const relative = path.relative(root, full);
-      // `readLink` answers lstat's half (`FileSystem` has no lstat): a
-      // path it reads is a link, digested as its target text.
-      const link = yield* fs
-        .readLink(full)
-        .pipe(Effect.orElseSucceed(() => undefined));
-      if (link !== undefined) {
-        files.push([relative, `-> ${link}`]);
+      // One `lstat` per entry: a link is digested as its target text.
+      const info = yield* fs.lstat(full);
+      if (info.type === 'SymbolicLink') {
+        files.push([relative, `-> ${yield* fs.readLink(full)}`]);
         return;
       }
-      const info = yield* fs.stat(full);
       if (info.type === 'Directory') {
         if (name !== '.git') yield* walk(full);
       } else if (info.type === 'File') {
