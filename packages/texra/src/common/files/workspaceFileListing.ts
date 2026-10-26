@@ -7,7 +7,6 @@ import {
 } from '@texra-ai/harness/node';
 
 // Third-party imports
-import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 // Local imports
@@ -91,7 +90,6 @@ export const listWorkspaceFiles = Effect.fn(
     });
   }
 
-  // The typed listing joins entry paths through `Path`: Node's own.
-  yield* visit(options.root, '').pipe(Effect.provide(NodePath.layer));
+  yield* visit(options.root, '');
   return results.sort((a, b) => a.localeCompare(b));
 });

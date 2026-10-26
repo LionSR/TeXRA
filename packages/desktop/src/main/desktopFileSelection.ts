@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
@@ -35,7 +35,7 @@ export interface DesktopFileSelection {
   fileOptions(): Effect.Effect<
     FileOptions,
     PlatformError.PlatformError,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | Path.Path
   >;
   /**
    * The native picker for one multi-file list. Succeeds with the chosen
