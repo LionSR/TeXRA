@@ -30,13 +30,14 @@ All notable changes to this project will be documented in this file.
   `#texra_arxiv_search` and `#texra_web_fetch` no longer appear in Copilot
   Chat. The one model only Copilot served (`copilot/copilot-gpt-4o`) is no
   longer offered. Conversations saved by an earlier build show as written by
-  that build and cannot be resumed by this one. SDK: the `LanguageModel`
-  service, `UNAVAILABLE_LANGUAGE_MODEL_PORT`, `CopilotRoutes`, the
-  `languageModel` field of the process and session options, the
-  `ownKeyFallback` launch option, `ToolCatalog.current`, `WebFetchTool` in
-  `@texra-ai/harness/plugins`, and llm's `vscode-lm` protocol
-  (`VscodeLanguageModelConfiguration`, `TurnEventSchema`,
-  `ModelErrorFieldsSchema`) are removed.
+  that build and cannot be resumed by this one.
+- **SDK: editor-supplied models are gone.** A host can no longer hand
+  `@texra-ai/harness` a model from its editor: the `LanguageModel` service,
+  `UNAVAILABLE_LANGUAGE_MODEL_PORT`, `CopilotRoutes`, the `languageModel`
+  field of the process and session options, and the `ownKeyFallback` launch
+  option are removed, as are `ToolCatalog.current` and `WebFetchTool` in
+  `@texra-ai/harness/plugins`. `@texra-ai/llm` serves only its HTTP providers:
+  a turn, its result and a model error no longer carry an editor variant.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and
