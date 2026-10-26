@@ -147,7 +147,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 ### Review results
 
 1. When the run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
-2. Inspect the proposed edits and compare the original and modified versions with either tool:
+2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
    - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated run-storage output.
 
      <CompareHero />

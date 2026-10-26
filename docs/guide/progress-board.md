@@ -89,7 +89,7 @@ The header provides a summary and actions for the selected stream:
     - **Archive outputs**: Move the run's output files and log into the `History` folder (read the [file management guide](./file-management.md)).
     - **Delete output files**: Remove the run folder's generated files.
   - **Chat tasks**: **Fork** (branch the conversation into a new task), **Compact** (summarize earlier turns), and links to any forks created from the conversation.
-  - **Global**: **Open tasks in editor**, **LaTeXDiffs**, and **Figures**.
+  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs**.
 - **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or workflows with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 Reviewed outputs are accepted per file: each row under **Generated Files** has

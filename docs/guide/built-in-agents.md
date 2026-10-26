@@ -171,7 +171,7 @@ informal outline, then produce Lean code and iterate until it compiles.
 
 ### `presenter`
 
-Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck in one pass, use the `paper2slide` agent (a document task).
+Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck without the back-and-forth, use the `paper2slide` agent (a document task).
 
 **Best for:** Conference talks, seminar presentations, lightning talks
 
@@ -269,7 +269,7 @@ Run `polish` on the [sample document](/examples/draft.pdf) to see a color-coded 
 
 ### `paper2slide`
 
-Converts a research paper into a LaTeX Beamer presentation in one pass.
+Converts a research paper into a LaTeX Beamer presentation in a two-pass document task (draft, then review and fix).
 
 **Best for:** Conference talks, lecture slides, seminar decks from an existing manuscript
 

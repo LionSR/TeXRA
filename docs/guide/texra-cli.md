@@ -249,7 +249,8 @@ Slash commands inside the session:
 - `/config`: open settings and integrations.
 - `/model`: switch to another model from the same provider mid-session (applies immediately and persists on resume).
 - `/skills`: list available skills and apply one to your next request.
-- `/resume`: restore a stored execution (`/resume all` continues every interrupted task; `/rename <title>` renames the focused task).
+- `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
+- `/rename <title>`: rename the focused task.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
 `texra chat` requires an interactive terminal. For scripts and CI, use `texra run <agent>` with `--print` or `--output-format json|ndjson`:

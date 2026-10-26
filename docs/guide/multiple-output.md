@@ -70,8 +70,8 @@ This is the part that matters for generating multiple distinct files:
 
 Output filenames come from one of two lists:
 
-- **Editing agents (`rewrite: true`, default)**: reuse the selected `INPUT_FILES`.
-- **Generator agents (`rewrite: false`, `task.outputs`)**: emit the fixed filenames listed in `task.outputs`, exposed to prompts as `OUTPUT_FILES`.
+- **Editing agents (no `task.outputs`)**: reuse the selected `INPUT_FILES`.
+- **Generator agents (with `task.outputs`)**: emit the fixed filenames listed in `task.outputs`, exposed to prompts as `OUTPUT_FILES`. Set `rewrite: false` only to skip diff lineage for newly written files.
 
 <MultiOutputModesHero />
 
