@@ -9,6 +9,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  FiberSet,
   Schema,
   Scope,
   Stream,
@@ -857,18 +858,23 @@ export function createChatSessionController(
       );
     });
 
-  // The chat's submissions, one at a time in the order typed: a message
-  // typed while the chat starts its run waits until the session holds the
-  // run, and two messages to one run reach it in the order they were typed.
+  // Where each message goes is decided one at a time, in the order typed,
+  // so a message typed while the chat starts its run waits until the
+  // session holds that run. The send itself runs outside: the session keeps
+  // a run's messages in order.
   const submissionLanes = new Map<'chat', PerKeyLane>();
   const inOrder = withPerKeyLane(submissionLanes, 'chat');
+  // The sends in flight, which a graceful exit waits for.
+  const sending = runtime.runSync(
+    FiberSet.make<void>().pipe(Scope.provide(shutdownScope)),
+  );
 
   /**
    * Send `prepared` to `target`. The session decides everything about the
    * message: whether the run takes it, waiting for a run that is stopping
    * to finish, and resuming a run that is not running. `continuing`: the
-   * chat holds no running claim on `target`, its stopped root, so once the
-   * session answered the chat adopts the run it continued.
+   * chat holds no running claim on `target`, its root, so once the session
+   * answered the chat adopts the run.
    */
   const sendMessage = Effect.fn('sendMessage')(function* (
     target: RunId,
@@ -992,18 +998,17 @@ export function createChatSessionController(
         restoreReservedSkillActivations();
       },
     };
-    const submitInOrder = Effect.gen(function* () {
+    const send = (target: RunId, continuing: boolean) =>
+      FiberSet.run(
+        sending,
+        sendMessage(target, continuing, prepared, attachments, message),
+      );
+    const route = Effect.gen(function* () {
       if (session.leaving) return message.undelivered();
       // The focused agent below the root takes the message.
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
       if (focused !== undefined && focused.parentId !== null)
-        return yield* sendMessage(
-          focused.id,
-          false,
-          prepared,
-          attachments,
-          message,
-        );
+        return yield* send(focused.id, false);
       // The root run the chat holds, stopping or not.
       if (chatTuiRunPending(session)) {
         const held = session.runId;
@@ -1011,30 +1016,19 @@ export function createChatSessionController(
           return message.undelivered(
             'The conversation is still being resumed.',
           );
-        return yield* sendMessage(
-          held,
-          session.stopRequested,
-          prepared,
-          attachments,
-          message,
-        );
+        return yield* send(held, session.stopRequested);
       }
-      // A conversation the user stopped continues; anything else (none
-      // yet, or one that failed) starts a fresh run, which picks its model
-      // again.
+      // The conversation's root while it runs without the chat holding it
+      // (the session resumed it), or one the user stopped, which the session
+      // continues; anything else (none yet, or one that failed) starts a
+      // fresh run, which picks its model again.
       const root = runViewOf(currentView(), rootRunId.get());
       if (
         root !== undefined &&
-        root.status === RUN_PHASE.CANCELLED &&
+        (isLiveRun(root) || root.status === RUN_PHASE.CANCELLED) &&
         acceptsFollowUp(root)
       )
-        return yield* sendMessage(
-          root.id,
-          true,
-          prepared,
-          attachments,
-          message,
-        );
+        return yield* send(root.id, true);
       message.sent();
       const started = yield* startSession(
         prepared.instruction,
@@ -1046,7 +1040,10 @@ export function createChatSessionController(
     // A failure or a throw is reported to the transcript; a bare
     // interruption is the runtime closing, not a failed submission. Either
     // way an unsent message goes back to the input.
-    yield* inOrder(submitInOrder).pipe(
+    yield* Effect.gen(function* () {
+      const sent = yield* inOrder(route);
+      if (sent) yield* Fiber.join(sent);
+    }).pipe(
       Effect.ensuring(Effect.sync(() => message.undelivered())),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -1082,7 +1079,10 @@ export function createChatSessionController(
     resume,
     stop,
     submit,
-    submitted: inOrder(Effect.void),
+    submitted: Effect.andThen(
+      inOrder(Effect.void),
+      FiberSet.awaitEmpty(sending),
+    ),
     activateSkill,
     clearPendingSkills: () => {
       pendingSkillActivationClearEpoch += 1;

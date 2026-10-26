@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
+import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { InboxItem } from './Inbox';
 
 /**
@@ -270,28 +271,36 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const { session, hold, fromParent } = options;
-  const live = session.runs.get(runId);
-  if (live?.live === true) {
-    if (!live.readsMessages) return { status: 'failed', reason: 'one_shot' };
-  } else {
-    const rejection = yield* runRejection(runId, session).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.as({ kind: 'read_failed' } as const),
+  // From the checks to the row's commit, one send to a run at a time, so a
+  // run's messages commit in call order; the wake runs after, so a send that
+  // resumes the run does not hold later sends for the resumed turn.
+  const sent = yield* Effect.gen(function* () {
+    const live = session.runs.get(runId);
+    if (live?.live === true) {
+      if (!live.readsMessages)
+        return { status: 'failed', reason: 'one_shot' } as const;
+    } else {
+      const rejection = yield* runRejection(runId, session).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as({ kind: 'read_failed' } as const),
+          ),
         ),
-      ),
-    );
-    if (rejection !== null) return { status: 'failed', reason: rejection.kind };
-    if (hold === 'generation' || item.from.kind !== 'user')
-      return { status: 'failed', reason: 'not_resumable' };
-  }
-  // A user's message to a run that is stopping continues it after the stop:
-  // its row lands after the run's end, which the wake reads.
-  if (item.from.kind === 'user' && live?.stopReason !== undefined)
-    yield* live.drained;
-  const sent = yield* session.followUps.send(runId, item, { hold, fromParent });
+      );
+      if (rejection !== null)
+        return { status: 'failed', reason: rejection.kind } as const;
+      if (hold === 'generation' || item.from.kind !== 'user')
+        return { status: 'failed', reason: 'not_resumable' } as const;
+    }
+    // A user's message to a run that is stopping continues it after the
+    // stop: its row lands after the run's end, which the wake reads.
+    if (item.from.kind === 'user' && live?.stopReason !== undefined)
+      yield* live.drained;
+    return yield* session.followUps.send(runId, item, { hold, fromParent });
+  }).pipe(withPerKeyLane(session.followUps.sendLanes, runId));
+  if ('status' in sent) return sent;
   // Another process holds the run, the sender is not its parent, its input
   // is closed (deleted, or torn down with nothing queued), or the session
   // is disposed.

@@ -330,6 +330,33 @@ describe('submitFollowUp', () => {
     }),
   );
 
+  it.effect('commits concurrent sends to one run in call order', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession('idle');
+      // The first send's read of whether the run can continue is the slow one.
+      const slowRead = yield* Deferred.make<void>();
+      vi.spyOn(resumability, 'deriveResumability').mockReturnValueOnce(
+        Effect.as(Deferred.await(slowRead), { kind: 'checkpoint' } as const),
+      );
+      const send = (text: string) =>
+        Effect.forkChild(
+          submitFollowUp(runId, user(text), { session }).pipe(
+            withResumePort(mockTryResume()),
+          ),
+        );
+      const first = yield* send('first');
+      const second = yield* send('second');
+
+      yield* settle;
+      expect(recorded.queued(runId)).toEqual([]);
+      yield* Deferred.succeed(slowRead, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(recorded.queued(runId)).toEqual(['first', 'second']);
+    }),
+  );
+
   it.effect(
     'keeps the input queued when the submitting fiber is interrupted mid-wake',
     () =>

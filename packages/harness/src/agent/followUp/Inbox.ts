@@ -33,11 +33,11 @@ import {
   type Append,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
+import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { Resumes } from './ToolUseFollowUp';
 import { RunInput } from './RunInput';
-import { queuedRow } from './followUpMessages';
-import type { FollowUpSenderInput } from './followUpMessages';
+import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -96,8 +96,7 @@ export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean }
   | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input (or a disposed inbox), a run
- *  another live process holds, or a sender that is not the parent. */
+/** Why a send wrote nothing: a closed input, a foreign holder, a non-parent. */
 type Refusal = 'not_resumable' | 'owned_elsewhere' | 'not_parent';
 
 /** What a send asks of the row and of the run. */
@@ -121,6 +120,8 @@ export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
   /** The resumes in flight here: a sender that finds one joins it. */
   readonly resumes = new Resumes();
+  /** Each run's sends, admitted one at a time in call order. */
+  readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
 
@@ -394,7 +395,6 @@ const warnWith =
       withLogChannel(CHANNEL),
     );
 
-/** Whether a message is queued: a request (`control`) and a notice of an
- *  ended child resume no run and keep no input open. */
+/** Whether a message is queued: not a request, nor an ended child's notice. */
 const queued = (input: InputRows, run: InboxPort['run']): boolean =>
   pendingMessages(input.followUps, run).length > 0;
