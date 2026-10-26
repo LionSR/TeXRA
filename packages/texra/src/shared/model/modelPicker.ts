@@ -59,11 +59,9 @@ export function isFastFirstResponseModel(
  * the External Inquiry tool, which lets agents ask the user to paste an
  * answer from their own ChatGPT/Claude/Gemini subscription instead.
  *
- * The test is the output price, not the name: `gpt<digits>pro` once meant
- * "Pro tier", but `gpt56pro` ships at $4/$20 while `o1pro` ($150/$600) and
- * `o3pro` ($20/$80) never matched. The Pro tier (o3pro, gpt5pro … gpt55pro,
- * o1pro) prices output at $80+ per 1M; the most expensive model outside it
- * (o1) is $60, so $80 separates the two.
+ * The test is the output price, not the name: a model's name does not say
+ * whether it is a Pro tier. Pro-tier models price output at $80+ per 1M, and
+ * every other model is cheaper, so $80 separates the two.
  */
 const EXPENSIVE_OUTPUT_PRICE_FLOOR = 80;
 
