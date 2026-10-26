@@ -27,16 +27,9 @@ to reset the ID: [Usage logging](./configuration.md#usage-logging).
 
 ### From extension marketplaces
 
-The shortest path is an extension marketplace:
+Search for **TeXRA** (`texra-ai.texra`) in the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`) of VS Code or any VSCodium-compatible editor and select **Install**.
 
-1.  Open VS Code or your VSCodium-compatible editor.
-2.  Open the Extensions view (select the square icon in the Activity Bar or press `Ctrl+Shift+X`).
-3.  Search for "TeXRA".
-4.  Find the extension published by "texra-ai".
-5.  Select **Install**.
-6.  Reload your editor if prompted.
-
-TeXRA is available on both the official VS Code Marketplace and the Open VSX Registry:
+TeXRA is published on the VS Code Marketplace and the Open VSX Registry:
 
 <a href="vscode:extension/texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 5px 10px 0;">Open in VS Code</a>
 <a href="https://open-vsx.org/extension/texra-ai/texra" target="_blank" style="display: inline-block; background-color: #4D5D99; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0 10px 5px;">View on Open VSX</a>
@@ -82,15 +75,11 @@ Read the [TeXRA CLI guide](./texra-cli.md) for usage, shell completion, and work
 
 ### From VSIX file
 
-1. Open VS Code
-2. Download the newest release (`.vsix` file, e.g., `texra-<version>.vsix`)
-3. Find the `.vsix` file in the VS Code file explorer
-4. Right-click the `.vsix` file
-5. From the context menu, select "Install Extension VSIX"
+To install from a release `.vsix` archive (`texra-<version>.vsix`), right-click the file in the VS Code Explorer and select **Install Extension VSIX**, or run `code --install-extension texra-<version>.vsix`.
 
 ## Installing required dependencies
 
-TeXRA needs a few external tools. Only a **LaTeX distribution** is required for core document processing; the other tools below unlock specific features. Install the ones you need and follow the instructions for your operating system.
+Only a **LaTeX distribution** is required for compiling and diffing documents; Perl, GraphicsMagick/ImageMagick, and Ghostscript unlock specific optional features:
 
 <FeatureCards
   min="220px"
@@ -102,33 +91,21 @@ TeXRA needs a few external tools. Only a **LaTeX distribution** is required for 
   ]"
 />
 
-<p class="hero-caption">Install only what you need: a LaTeX distribution is the one hard requirement; Perl, GraphicsMagick/ImageMagick, and Ghostscript each unlock a specific optional feature.</p>
-
 ::: tip Check what's detected with `texra doctor`
-Run `texra doctor` to see what TeXRA found: Node.js, the workspace and packaged resources, available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the workspace config file. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) are not part of the doctor report; a feature that needs them tells you when they are missing.
+Run `texra doctor` to inspect what TeXRA detected: Node.js, workspace and packaged resources, available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the workspace config file. Optional image tools (GraphicsMagick/ImageMagick and Ghostscript) are checked on demand when a figure tool runs.
 :::
 
 <DoctorReportCard />
 
-<p class="hero-caption"><code>texra doctor</code> checks the runtime, your models, usage logging, the full LaTeX toolchain, and the workspace config. Optional image tools are not listed; the feature that needs them reports when one is missing.</p>
-
 ### Homebrew {#homebrew}
 
-::: info WHAT IS HOMEBREW?
-[Homebrew](https://brew.sh/) is a free package manager for macOS and Linux that installs command-line tools and applications from the terminal. Many of the macOS instructions below use `brew install` commands, which require Homebrew.
-:::
-
-If you're on macOS and don't have Homebrew yet, open the **Terminal** app (in Applications, under Utilities) and paste this command:
+Many macOS instructions below use [Homebrew](https://brew.sh/). If you don't have it installed, run:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Follow the on-screen prompts to complete the installation. Then you can use any of the `brew install` commands in the sections below.
-
-::: tip
-If you prefer not to use Homebrew, each section also links to the tool's official website, where you can download a traditional installer.
-:::
+Each section below also links to the official installer if you prefer not to use Homebrew.
 
 ### LaTeX distribution
 
@@ -338,36 +315,16 @@ Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and
 - **Meta API Key** (Muse Spark): Available from [dev.meta.ai](https://dev.meta.ai/)
   :::
 
-## Verifying installation
+## Verifying and troubleshooting installation
 
-To verify that TeXRA and its dependencies are installed correctly:
-
-1. Open VS Code
-2. Select the TeXRA icon in the Secondary Side Bar
-3. The TeXRA panel should load without errors
-4. Create or open a LaTeX document
-5. Try a simple command like `TeXRA: Format Current LaTeX File` from the Command Palette (the editor title bar only shows TeXRA's Fix Compilation button for LaTeX files)
-
-If a component is missing, TeXRA shows an error message that names what needs to be installed.
-
-## Troubleshooting installation
-
-### Common installation issues
-
-Most installation problems fall into one of four categories. Find your symptom and work through its checks:
+Run `texra doctor` in the terminal, or open the TeXRA view in VS Code and run `TeXRA: Format Current LaTeX File` from the Command Palette on a `.tex` document. If a dependency is missing, TeXRA names the required tool in the error message.
 
 <InstallTroubleshootCards />
 
-<p class="hero-caption">Four common failure modes and the checks for each: a loading extension, LaTeX or image processing, and API keys.</p>
+<p class="hero-caption">Four common failure modes and the checks for each: extension startup, LaTeX toolchain, figure rasterization, and API keys.</p>
 
-### Getting help
-
-If an installation problem persists:
-
-1. Check the [GitHub Issues page](https://github.com/LionSR/TeXRA/issues) for known problems
-2. Look for error messages in the TeXRA ProgressBoard
-3. File a new issue with details about your system and the specific error
+If an issue persists, check the [troubleshooting guide](/guide/troubleshooting) or open an issue on [GitHub](https://github.com/LionSR/TeXRA/issues).
 
 ## Next steps
 
-With TeXRA and its dependencies installed, you're ready to start. Read the [Quick start guide](/guide/quick-start) to learn the basics, or explore specific features in the other documentation sections.
+Read [First run](./first-run.md) or the [Quick start guide](/guide/quick-start) to run your first task.
