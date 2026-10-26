@@ -269,6 +269,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
+      holdAvailable: props.chatInputAvailable && isActivePhase(displayStatus),
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,

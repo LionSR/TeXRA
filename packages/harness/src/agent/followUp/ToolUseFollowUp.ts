@@ -50,8 +50,12 @@ export interface RunInboxSendOptions {
   readonly fromParent?: boolean;
 }
 
-interface SubmitFollowUpOptions extends RunInboxSendOptions {
+interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
   readonly session: SessionHandle;
+  /** `'generation'` as {@link RunInboxSendOptions}; `'turn'`: a user's
+   *  message the run reads when its current turn ends, not at the turn's
+   *  next model request. */
+  readonly hold?: 'generation' | 'turn';
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -280,7 +284,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       ),
     );
     if (rejection !== null) return { status: 'failed', reason: rejection.kind };
-    if (hold !== undefined || item.from.kind !== 'user')
+    if (hold === 'generation' || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
   }
   // A user's message to a run that is stopping continues it after the stop:

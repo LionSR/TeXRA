@@ -84,7 +84,6 @@ export {
   rollupOf,
   sessionActivity,
   type Attention,
-  type FollowUpHost,
   type RequestAnswerability,
   type SessionTitleState,
 } from '@shared/session/sessionView';

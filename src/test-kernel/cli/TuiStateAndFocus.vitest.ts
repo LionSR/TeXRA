@@ -17,7 +17,6 @@ import {
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { CLI_FOLLOW_UP_HOST } from '@cli/chat/tui/state/sessionView';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { acceptsFollowUp, type RunView } from '@shared/session/sessionView';
 import {
@@ -97,9 +96,9 @@ describe('focus over the session view', () => {
       if (!found) throw new Error(`missing ${id}`);
       return found;
     };
-    expect(acceptsFollowUp(stream(grandchild), CLI_FOLLOW_UP_HOST)).toBe(true);
-    expect(acceptsFollowUp(stream(child1), CLI_FOLLOW_UP_HOST)).toBe(false);
-    expect(acceptsFollowUp(stream(child2), CLI_FOLLOW_UP_HOST)).toBe(false);
+    expect(acceptsFollowUp(stream(grandchild))).toBe(true);
+    expect(acceptsFollowUp(stream(child1))).toBe(false);
+    expect(acceptsFollowUp(stream(child2))).toBe(false);
   });
 });
 

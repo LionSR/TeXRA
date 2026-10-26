@@ -90,6 +90,9 @@ export const RuntimeRequestSchema = Schema.Union([
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    /** `turn`: the run reads the message when its current turn ends, not
+     *  at the turn's next model request. Absent: at the next request. */
+    holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
   }),
   /**
    * The one answer to a `request.opened` (one run model, section 3.7): the

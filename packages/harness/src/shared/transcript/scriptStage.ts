@@ -22,7 +22,6 @@ import {
 import {
   acceptsFollowUp,
   requestAnswerability,
-  type FollowUpHost,
 } from '@shared/session/sessionView';
 import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
@@ -192,7 +191,6 @@ function callView(
   row: ToolRow,
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
-  host: FollowUpHost,
 ): ScriptCallView {
   const agent = CHILD_TOOLS.has(row.toolUse.toolName);
   const input = Predicate.isObject(row.toolUse.input) ? row.toolUse.input : {};
@@ -270,7 +268,7 @@ function callView(
       agent &&
       asking === undefined &&
       child !== undefined &&
-      acceptsFollowUp(child, host),
+      acceptsFollowUp(child),
     ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
   };
 }
@@ -349,7 +347,6 @@ export function dispatchedChildren<Run extends RunView>(
 export function scriptStages(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
-  host: FollowUpHost,
 ): ScriptStageView[] {
   const { taskGroups, rows } = run.transcript;
   const stages = taskGroups.filter((group) => group.kind === 'script');
@@ -364,7 +361,7 @@ export function scriptStages(
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])
       .toSorted((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
-      .map((row) => callView(row, run, view, host));
+      .map((row) => callView(row, run, view));
     const cards = new Set(calls.map((call) => call.id));
     let costUsd = 0;
     for (const childId of run.childIds) {

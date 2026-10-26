@@ -34,12 +34,7 @@ import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
-import {
-  CLI_FOLLOW_UP_HOST,
-  killableRunId,
-  runViewOf,
-  sessionView,
-} from '../state/sessionView';
+import { killableRunId, runViewOf, sessionView } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
 import type { RuntimeRequest, RunId } from '@texra-ai/harness/schemas';
@@ -137,8 +132,7 @@ export function ScriptStagePopup({
   const { columns } = useWindowSize();
   const session = useSignal(sessionView());
   const run = runViewOf(session, runId);
-  const stages =
-    run === undefined ? [] : scriptStages(run, session, CLI_FOLLOW_UP_HOST);
+  const stages = run === undefined ? [] : scriptStages(run, session);
   // The newest script unless the user moved to another.
   const stageIndex = Math.max(
     0,

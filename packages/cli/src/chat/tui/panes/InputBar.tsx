@@ -61,12 +61,14 @@ interface InputBarProps {
   /** The chat session's roots: the Ctrl-V image probe writes under this
    *  project's own storage, never under whichever root a later call reads. */
   readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
-  /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
-   *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
+  /** Forwarded to BaseTextInput; called only on real (non-paste) Enter, or
+   *  on Shift-Tab with `holdUntil: 'turn'`. `mediaFiles` carries absolute
+   *  paths of any pasted-image attachments. */
   readonly onSubmit: (
     value: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
+    holdUntil?: 'turn',
   ) => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
@@ -285,7 +287,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   );
 
   const handleSubmit = useCallback(
-    (submitted: string) => {
+    (submitted: string, holdUntil?: 'turn') => {
       const store = attachmentsRef.current;
       // Expand `[Pasted text #N …]` chips back to their full content, and
       // collect any pasted-image attachments still referenced in the draft.
@@ -320,6 +322,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         trimmed,
         mediaFiles.length > 0 ? mediaFiles : undefined,
         images.length > 0 ? images : undefined,
+        holdUntil,
       );
     },
     [clearDraft, onSubmit],
@@ -518,6 +521,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               onImagePaste={onImagePaste}
               onInputChunkSubmit={handleInputChunkSubmit}
               onSubmit={showPalette ? () => undefined : handleSubmit}
+              onSubmitHeld={
+                showPalette
+                  ? undefined
+                  : (submitted) => handleSubmit(submitted, 'turn')
+              }
             />
           )}
         </Box>

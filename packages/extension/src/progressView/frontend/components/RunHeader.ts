@@ -359,7 +359,7 @@ export class RunHeader extends LitElement {
     const canContinue =
       run.group !== 'running' &&
       run.group !== 'waiting' &&
-      acceptsFollowUp(run, { terminalBacked: false });
+      acceptsFollowUp(run);
     const statusLabel = canContinue ? 'Ready' : runStatusLabel(run.statusKey);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');

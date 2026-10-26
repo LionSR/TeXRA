@@ -407,7 +407,7 @@ const handle = (
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
           ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
         },
-        { session: deps.session() },
+        { session: deps.session(), hold: req.holdUntil ?? undefined },
       ).pipe(
         Effect.orDie,
         Effect.flatMap((result) =>

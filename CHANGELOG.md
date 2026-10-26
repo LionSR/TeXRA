@@ -696,6 +696,9 @@ history`, a resume and a follow-up say it was "written by an earlier
   after its one turn is refused with that reason instead of queuing unread,
   and a run written by an earlier build refuses a resume as such instead of
   failing it.
+- **Shift-Tab in the terminal chat holds a message for the end of the
+  turn.** Enter still sends a message the working agent reads at its next
+  step; Shift-Tab sends one it reads only once its current turn ends.
 - **Check an agent's launch in the New task form, and run a task again
   with changes.** An agent's proposal card has **Edit** (`e`): it opens the
   New task form filled with what the agent would start, its agent, model,

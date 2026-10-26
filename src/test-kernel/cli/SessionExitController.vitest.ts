@@ -60,7 +60,7 @@ describe('chat TUI session exit controller', () => {
       disposables: new DisposableStore(),
       terminal,
       runtime: testRuntime(),
-      followUpsIdle: Effect.void,
+      submitted: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
