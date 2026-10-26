@@ -36,7 +36,7 @@ import {
   decodeWireOrFail,
   parseOutboundToolArguments,
   sdkStream,
-  wireFail,
+  wireFail as fail,
 } from './transport.js';
 import {
   filesApiUploads,
@@ -446,20 +446,18 @@ function anthropicWire() {
           message.stop_details != null ||
           message.container != null
         )
-          return yield* wireFail(
-            'Anthropic returned an invalid initial message.',
-          );
+          return yield* fail('Anthropic returned an invalid initial message.');
         started = true;
         usage = message.usage;
         return [{ kind: 'identity', id: message.id, model: message.model }];
       }
       if (!started)
-        return yield* wireFail(
+        return yield* fail(
           'Anthropic emitted content before message identity.',
         );
       if (event.type === 'message_delta') {
         if (open || event.delta.container != null)
-          return yield* wireFail(
+          return yield* fail(
             'Anthropic returned unsettled content.',
             'unsupported',
           );
@@ -476,11 +474,11 @@ function anthropicWire() {
       if (event.type === 'message_stop') {
         const reason = stop.stop_reason;
         if (open || reason == null)
-          return yield* wireFail(
+          return yield* fail(
             'Anthropic stopped without complete content and a terminal reason.',
           );
         if (reason === 'pause_turn')
-          return yield* wireFail(
+          return yield* fail(
             'Anthropic paused hosted execution requires a separate supported continuation protocol.',
             'unsupported',
           );
@@ -509,13 +507,13 @@ function anthropicWire() {
         ];
       }
       if (stop.stop_reason != null)
-        return yield* wireFail(
+        return yield* fail(
           'Anthropic emitted content after terminal message metadata.',
         );
       if (event.type === 'content_block_start') {
         const block = event.content_block;
         if (open || event.index !== next)
-          return yield* wireFail(
+          return yield* fail(
             'Anthropic content blocks are not complete and ordered.',
           );
         if (
@@ -524,7 +522,7 @@ function anthropicWire() {
             (block.toolset_name != null ||
               Object.keys(block.input).length !== 0))
         )
-          return yield* wireFail(
+          return yield* fail(
             'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
             'unsupported',
           );
@@ -551,21 +549,17 @@ function anthropicWire() {
         ];
       }
       if (open?.index !== event.index)
-        return yield* wireFail('Anthropic updated a block that is not open.');
+        return yield* fail('Anthropic updated a block that is not open.');
       if (event.type === 'content_block_stop') {
         if (open.type === 'thinking' && !open.signed)
-          return yield* wireFail(
-            'Anthropic thinking ended without its signature.',
-          );
+          return yield* fail('Anthropic thinking ended without its signature.');
         open = undefined;
         return [{ kind: 'close', index: event.index }];
       }
       const delta = event.delta;
       if (delta.type === 'signature_delta') {
         if (open.type !== 'thinking')
-          return yield* wireFail(
-            'Anthropic emitted a mismatched content delta.',
-          );
+          return yield* fail('Anthropic emitted a mismatched content delta.');
         open.signed = true;
         return [
           {

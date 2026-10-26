@@ -46,7 +46,7 @@ import {
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
-  wireFail,
+  wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
@@ -462,7 +462,7 @@ function googleWire(store: boolean) {
         raw,
       );
       if (done)
-        return yield* wireFail(
+        return yield* fail(
           'Google emitted data after its completed interaction.',
         );
       switch (event.event_type) {
@@ -470,10 +470,10 @@ function googleWire(store: boolean) {
         case 'interaction.completed': {
           const interaction = event.interaction;
           if (store && !interaction.id)
-            return yield* wireFail('Google omitted a stored interaction ID.');
+            return yield* fail('Google omitted a stored interaction ID.');
           // The stream takes content only from complete start/delta/stop cycles.
           if (interaction.steps !== undefined)
-            return yield* wireFail(
+            return yield* fail(
               'Google terminal step snapshots are not supported by this streaming codec.',
               'unsupported',
             );
@@ -488,14 +488,14 @@ function googleWire(store: boolean) {
             ];
           done = true;
           if (!COMPLETED_STATUSES.includes(event.interaction.status))
-            return yield* wireFail(
+            return yield* fail(
               'Google ended without an authoritative completed turn.',
             );
           return interactionEnd(event.interaction);
         }
         case 'interaction.status_update':
           if (store && !event.interaction_id)
-            return yield* wireFail('Google omitted a stored interaction ID.');
+            return yield* fail('Google omitted a stored interaction ID.');
           return [
             { kind: 'identity', id: event.interaction_id || null, model: null },
           ];
