@@ -1813,12 +1813,6 @@ The web: `web_search` and `web_fetch`.
 const web: Plugin
 ```
 
-## WebFetchTool
-
-```ts
-const WebFetchTool: DefinedTool<{ readonly url: string; readonly prompt?: string | null | undefined; }, HttpClient>
-```
-
 ## withRequestTimeout
 
 One request under a deadline of `timeoutMs` that spans the whole of

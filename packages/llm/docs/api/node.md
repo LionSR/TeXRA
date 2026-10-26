@@ -37,7 +37,7 @@ One model on one route, and what the caller asks of it.
 
 ```ts
 interface BindSpec {
-  readonly protocol: Exclude<ModelOrigin['protocol'], 'vscode-lm'>;
+  readonly protocol: ModelOrigin['protocol'];
   /** The llm-zoo entry after `routeConfig`. */
   readonly model: ModelConfig;
   readonly endpoint: string;
