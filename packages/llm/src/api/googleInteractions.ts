@@ -41,10 +41,12 @@ import {
 } from '../errors.js';
 import {
   admitObservation,
+  decodeWireOrFail,
   ownedAbortSafeRequest,
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
+  wireFail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
@@ -452,22 +454,15 @@ function deltaPart(
 
 function googleWire(store: boolean) {
   let done = false;
-  const fail = (
-    message: string,
-    kind: ModelError['kind'] = 'malformed-output',
-  ) => Effect.fail(new ModelError({ kind, message }));
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      const decoded = Schema.decodeUnknownResult(WireEventSchema)(raw);
-      if (!Result.isSuccess(decoded))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned malformed or unsupported stream data.',
-          cause: decoded.failure,
-        });
-      const event = decoded.success;
+      const event = yield* decodeWireOrFail(
+        WireEventSchema,
+        'Google returned malformed or unsupported stream data.',
+        raw,
+      );
       if (done)
-        return yield* fail(
+        return yield* wireFail(
           'Google emitted data after its completed interaction.',
         );
       switch (event.event_type) {
@@ -475,10 +470,10 @@ function googleWire(store: boolean) {
         case 'interaction.completed': {
           const interaction = event.interaction;
           if (store && !interaction.id)
-            return yield* fail('Google omitted a stored interaction ID.');
+            return yield* wireFail('Google omitted a stored interaction ID.');
           // The stream takes content only from complete start/delta/stop cycles.
           if (interaction.steps !== undefined)
-            return yield* fail(
+            return yield* wireFail(
               'Google terminal step snapshots are not supported by this streaming codec.',
               'unsupported',
             );
@@ -493,14 +488,14 @@ function googleWire(store: boolean) {
             ];
           done = true;
           if (!COMPLETED_STATUSES.includes(event.interaction.status))
-            return yield* fail(
+            return yield* wireFail(
               'Google ended without an authoritative completed turn.',
             );
           return interactionEnd(event.interaction);
         }
         case 'interaction.status_update':
           if (store && !event.interaction_id)
-            return yield* fail('Google omitted a stored interaction ID.');
+            return yield* wireFail('Google omitted a stored interaction ID.');
           return [
             { kind: 'identity', id: event.interaction_id || null, model: null },
           ];
@@ -712,16 +707,12 @@ export function googleInteractionsModel(
           message: `Google background interaction ended with status ${interaction.status}.`,
         });
       }
-      const steps = Schema.decodeUnknownResult(WireSnapshotStepsSchema)(
+      const steps = yield* decodeWireOrFail(
+        WireSnapshotStepsSchema,
+        'Google returned malformed or unsupported completed steps.',
         interaction.steps,
       );
-      if (!Result.isSuccess(steps))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned malformed or unsupported completed steps.',
-          cause: steps.failure,
-        });
-      const parts = yield* Effect.forEach(steps.success, (step, index) =>
+      const parts = yield* Effect.forEach(steps, (step, index) =>
         Effect.map(stepPart(step), (part): PartEvent[] => [
           { kind: 'open', index, part },
           { kind: 'close', index },
