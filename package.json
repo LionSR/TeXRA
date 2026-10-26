@@ -57,6 +57,7 @@
     "check:unexecuted-effects": "node scripts/check-unexecuted-effects.mjs",
     "check:effect-test-runs": "node scripts/check-effect-test-runs.mjs",
     "check:core-quality": "node scripts/check-core-quality.mjs",
+    "docgen": "node scripts/check-core-quality.mjs --update",
     "check:ratchet-baselines": "node scripts/check-ratchet-baselines.mjs",
     "check:guidance-refs": "node scripts/check-guidance-refs.mjs",
     "check:proposal-status": "node scripts/check-proposal-status.mjs",
