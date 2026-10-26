@@ -57,7 +57,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     // The completion commits on the parent's input; its wake follows.
     const followUp = vi
       .spyOn(toolUseFollowUp, 'startFollowUpWake')
-      .mockReturnValue(Effect.succeed(true));
+      .mockReturnValue(Effect.succeed(Effect.void));
 
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an

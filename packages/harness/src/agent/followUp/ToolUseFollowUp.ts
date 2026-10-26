@@ -184,6 +184,15 @@ export function resumeOnSession(
   runId: RunId,
   session: SessionHandle,
 ): Effect.Effect<ResumeRunResult> {
+  return Effect.flatten(startResume(runId, session));
+}
+
+/** Start {@link resumeOnSession}'s attempt on the session's fork and give
+ *  back its join, so a caller that only needs it started does not wait. */
+function startResume(
+  runId: RunId,
+  session: SessionHandle,
+): Effect.Effect<Effect.Effect<ResumeRunResult>> {
   const attempt = Effect.suspend(() => {
     let runMissing = false;
     const isCancellationRequested = (): boolean => {
@@ -229,25 +238,26 @@ export function resumeOnSession(
   // only, so it stays interruptible even where the caller is masked (a
   // child's boundary settlement waits here for its parent's whole resumed
   // turn, and a stop of that child must land before the parent parks).
-  return Effect.flatMap(registryOf(session.runs).fork(attempt), (fiber) =>
+  return Effect.map(registryOf(session.runs).fork(attempt), (fiber) =>
     Effect.interruptible(Fiber.join(fiber)),
   );
 }
 
 /**
- * Resume a run whose follow-up row is already durable, for `Inbox.wake`: a
- * generation already live here reads the row at its next request or park,
- * and its exit owes the wake; otherwise the resume ({@link resumeOnSession})
- * runs, and tells the user whatever the run did not take, once.
+ * Start resuming a run whose follow-up row is already durable, for
+ * `Inbox.wake`, and give back the resume's end: a generation already live
+ * here reads the row at its next request or park, and its exit owes the
+ * wake; otherwise the resume ({@link resumeOnSession}) starts on the
+ * session's fork, and tells the user whatever the run did not take, once.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
-): Effect.Effect<void> {
+): Effect.Effect<Effect.Effect<void>> {
   return Effect.suspend(() =>
     session.runs.get(runId)?.live === true
-      ? Effect.void
-      : Effect.asVoid(resumeOnSession(runId, session)),
+      ? Effect.succeed(Effect.void)
+      : Effect.map(startResume(runId, session), Effect.asVoid),
   );
 }
 

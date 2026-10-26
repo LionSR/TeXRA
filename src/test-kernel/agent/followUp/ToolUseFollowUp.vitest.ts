@@ -70,7 +70,7 @@ function recordedFollowUps(
     claimRefused?: boolean;
     failWrites?: number;
     /** The port's resume; the default records the run and succeeds. */
-    resume?: (runId: RunId) => Effect.Effect<void>;
+    resume?: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
   } = {},
 ) {
   const rows: SessionEvent[] = [];
@@ -154,6 +154,7 @@ function recordedFollowUps(
       ((runId) =>
         Effect.sync(() => {
           if (!live.has(runId)) resumed.push(runId);
+          return Effect.void;
         })),
   });
   const queuedRows = (runId: RunId) =>

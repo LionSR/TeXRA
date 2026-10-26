@@ -4,7 +4,7 @@
  * one reader per run (its generation here); the run's claim is the only
  * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
  */
-import { Effect, Fiber, Result, type Scope } from 'effect';
+import { Effect, Result, type Scope } from 'effect';
 
 import type { ClaimError, SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -71,8 +71,9 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Resume the run for its input, telling the user what it does not take. */
-  readonly resume: (runId: RunId) => Effect.Effect<void>;
+  /** Start resuming the run for its input (the resume tells the user what
+   *  it does not take) and give back the resume's end. */
+  readonly resume: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
 }
 
 /** One message a producer sends. */
@@ -217,10 +218,7 @@ export class Inbox {
       const input = yield* this.read(runId);
       if (input.closed || !needsWake(input.rows, runId, this.port.run))
         return Effect.void;
-      const resume = yield* Effect.forkChild(this.port.resume(runId), {
-        startImmediately: true,
-      });
-      return Effect.interruptible(Fiber.join(resume));
+      return yield* this.port.resume(runId);
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
