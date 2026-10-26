@@ -169,224 +169,39 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 ## Document processing issues
 
-### LaTeX processing errors
+### LaTeX compilation and diff errors
 
-**Problem**: Errors when processing LaTeX documents.
+- **Check the toolchain**: Run `texra doctor` to confirm `latexmk`, `pdflatex`, `bibtex`, `biber`, `latexdiff`, and `latexindent` are found on `PATH`.
+- **Verify standalone compilation**: Make sure the original `.tex` document compiles cleanly outside of TeXRA before running a diff or extraction task.
+- **Missing LaTeX packages**: Install missing style files with `tlmgr install <pkg>` (TeX Live) or the MiKTeX Console.
+- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Compile & diff**.
 
-**Solutions**:
+### TikZ and image processing errors
 
-1. **Verify LaTeX installation**:
-   - Make sure your LaTeX distribution is installed correctly
-   - Check whether required packages are installed
-   - Run `tlmgr list --only-installed` (TeX Live) or check MiKTeX Package Manager
+- **Verify Ghostscript and GraphicsMagick / ImageMagick**: Rasterizing PDFs for models without native PDF support requires both tools (`gm version` or `convert -version`, and `gs --version`).
+- **Custom TikZ packages or macros**: Add custom packages to `"texra.latex.tikzTemplate"` and custom style paths to `"texra.latex.tikzInputDirectory"` in `.texra/config.json` (see [TikZ figures](./tikz-figures.md#customizing-tikz-processing)).
 
-2. **Document validation**:
-   - Verify the document compiles outside of TeXRA
-   - Fix any LaTeX errors in the original document
+## AI model and output issues
 
-3. **Package dependencies**:
-   - Some LaTeX packages might be missing
-   - Install required packages with your LaTeX package manager
+### Timeouts, context limits, or weak results
 
-4. **File path issues**:
-   - Make sure file paths don't contain special characters
-   - Use relative paths within your workspace
+- **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
+- **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs or raise the model's max output tokens.
+- **Slow turnaround**: Document tasks run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5-20251001`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
+- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-3.1-pro-preview`) and enable reflection (`--reflect` or additional `task.requests` passes).
 
-### TikZ figure extraction problems
+### Missing or truncated output files
 
-**Problem**: Issues with extracting or compiling TikZ figures.
-
-**Solutions**:
-
-1. **TikZ package installation**:
-   - Verify TikZ and PGF packages are installed
-   - Check for other required TikZ libraries
-
-2. **Template configuration**:
-   - Customize the TikZ template in settings to include the packages you need:
-
-   ```json
-   "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n..."
-   ```
-
-3. **Path configuration**:
-   - Set the correct TikZ input directory:
-
-   ```json
-   "texra.latex.tikzInputDirectory": "/path/to/tikz/inputs"
-   ```
-
-4. **Compilation errors**:
-   - Check build logs for specific error messages
-   - Simplify complex TikZ figures that might exceed compiler limits
-
-### Image processing issues
-
-**Problem**: Errors related to image or PDF processing.
-
-**Solutions**:
-
-1. **GraphicsMagick/ImageMagick**:
-   - Verify installation with `gm version` or `convert -version`
-   - Reinstall if necessary
-
-2. **Ghostscript**:
-   - Check installation with `gs --version`
-   - Make sure the version is compatible (9.52 recommended for Windows)
-
-3. **Permission issues**:
-   - Make sure you have write permission in output directories
-   - Check temporary directory permissions
-
-4. **Format compatibility**:
-   - Some image formats might not be supported
-   - Convert images to PNG or JPG for better compatibility
-
-## AI model issues
-
-### Model response errors
-
-**Problem**: Errors when getting responses from AI models.
-
-**Solutions**:
-
-1. **Check API quotas and limits**:
-   - Verify you haven't exceeded usage limits
-   - Check billing status for your API account
-
-2. **Response timeout**:
-   - For large documents, the model might time out
-   - Try breaking the task into smaller chunks
-
-3. **Context length**:
-   - Documents might exceed the model's context window
-   - Use models with larger context windows for big documents
-   - Split large documents into smaller parts
-
-4. **Model-specific issues**:
-   - Some models might have specific limitations
-   - Check whether the task is appropriate for the selected model
-   - Try a different model for your task
-
-### Quality issues
-
-**Problem**: Low-quality or unexpected outputs from AI models.
-
-**Solutions**:
-
-1. **Improve instructions**:
-   - Be more specific in your instructions
-   - Provide clear examples of desired outputs
-   - Specify what should and shouldn't be changed
-
-2. **Use reflection revisions**:
-   - Use agents that include follow-up entries in `task.requests` (or add them via a custom agent)
-   - TeXRA runs these additional revisions when they exist, which often improves output quality
-
-3. **Use better models**:
-   - Move to more capable models for complex tasks
-   - Try Claude Opus 5 or GPT-6 / GPT-5.6 for highest quality
-   - Match the model to your specific task
-
-4. **Reference materials**:
-   - Provide better reference files to guide the model
-   - Include examples of desired style and formatting
-
-## Interface issues
-
-### File selection issues
-
-**Problem**: Problems with selecting or managing files in TeXRA.
-
-**Solutions**:
-
-1. **Workspace configuration**:
-   - Make sure you're working within a VS Code workspace
-   - Open a folder rather than individual files
-
-2. **File path issues**:
-   - Avoid very long file paths or special characters
-   - Use relative paths within the workspace
-
-3. **File list not updating**:
-   - Restart VS Code if file lists remain outdated
-   - Confirm that the file uses one of TeXRA's built-in supported extensions
-
-4. **File selection issues**:
-   - Try adding files one by one with the picker instead of dragging in bulk
-   - If a file does not appear after dropping, confirm that TeXRA supports its extension
-   - Check the developer console (`Developer: Open Webview Developer Tools`) for errors
-
-## Output file issues
-
-### Missing output files
-
-**Problem**: Output files are not generated or cannot be found.
-
-**Solutions**:
-
-1. **Check file paths**:
-   - Open the generated file from the ProgressBoard file list
-   - Use **Open in run storage** from the ProgressBoard toolbar to browse the run folder
-   - Check the ProgressBoard log for file paths
-
-2. **Permission issues**:
-   - Make sure you have write permission in the output directory
-   - Try running VS Code with administrator/sudo privileges
-
-3. **Naming conflicts**:
-   - Check whether output files exist under unexpected names
-   - Open the run folder from the ProgressBoard and look for `r0/output.extension`
-
-4. **Process interruption**:
-   - The AI process might have been interrupted before completion
-   - Check the ProgressBoard for error messages or signs of interruption
-
-### Output file corruption
-
-**Problem**: Generated output files are incomplete or corrupted.
-
-**Solutions**:
-
-1. **Incomplete generation**:
-   - Check whether the AI reached the token limit
-
-2. **XML parsing issues**:
-   - TeXRA uses XML to structure its output (e.g., `<documents>...</documents>`).
-   - Malformed XML from the LLM (e.g., a missing closing tag like `</documents>`) can cause extraction failures.
-   - **Solution:** Check the raw output file (e.g., `r0/output.xml`) for XML structure problems. Add missing closing tags or fix other structural errors by hand, then re-run any processing you need or extract the content by hand.
+1. **Locate the run folder**:
+   - In VS Code, check **Generated Files** in the ProgressBoard or click **Open in run storage** (<wa-icon library="texra" name="folder-open"></wa-icon>) to open `executions/<run-id>/`.
+   - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
+2. **Repair malformed XML**:
+   - Document tasks wrap their output in `<documents><document name="...">...</document></documents>`.
+   - If the model hits its output token limit or drops the closing `</document>` / `</documents>` tag, extraction fails. Open `r0/output.xml` in the run folder and restore the missing closing tag to recover the text:
 
 <XmlRepairCard />
 
 <p class="hero-caption">A dropped <code>&lt;/documents&gt;</code> breaks extraction. Open <code>r0/output.xml</code> and restore the closing tag to recover the run.</p>
-
-3. **Encoding problems**:
-   - Use consistent text encoding (UTF-8 recommended)
-   - Check for special characters that might cause issues
-
-4. **File size limits**:
-   - Very large outputs might be truncated
-   - Break large tasks into smaller parts
-
-## Performance issues
-
-### Slow response times
-
-**Problem**: TeXRA operations take too long to complete.
-
-**Solutions**:
-
-1. **Model selection**:
-   - Faster models: Gemini Flash, Claude Haiku, GPT-5.4
-   - Match the model to task complexity
-   - Reserve the most capable models for tasks that need them
-2. **Document size**:
-   - Large documents take longer to process
-   - Break large documents into smaller chunks
-   - Use only essential context files
-3. **Network issues**:
-   - Check your internet connection speed
-   - API requests might be delayed by network issues
 
 ### High memory use in long CLI sessions
 
@@ -415,128 +230,25 @@ memory` error.
    Node writes a `.heapsnapshot` file into the working directory right before
    it would run out of memory. Attach it to a bug report.
 
-## LaTeX diff issues
-
-### Diff generation failures
-
-**Problem**: LaTeX diff fails to generate or produces errors.
-
-**Solutions**:
-
-1. **LaTeX compatibility**:
-   - Make sure both documents use compatible LaTeX commands
-   - Some complex LaTeX constructs might cause diff issues
-   - Simplify documents if necessary
-
-2. **latexdiff installation**:
-   - Verify latexdiff is installed: `latexdiff --version`
-   - Install or update if needed:
-
-   ```bash
-   # Perl installation
-   cpan Algorithm::Diff
-   cpan Latexdiff
-   ```
-
-3. **File encoding**:
-   - Use consistent encoding across files (UTF-8 recommended)
-   - Check for special characters that might cause issues
-
-4. **Document validation**:
-   - Verify both documents compile independently
-   - Fix any LaTeX errors before generating the diff
-
-### Diff visualization problems
-
-**Problem**: LaTeX diff output is difficult to read or doesn't show changes correctly.
-
-**Solutions**:
-
-1. **LaTeX style conflicts**:
-   - Custom document classes might conflict with diff markup
-   - Try simplifying the preamble for diff documents
-2. **Complex changes**:
-   - Very large or complex changes might not display well
-   - Break the diff into smaller sections
-   - Consider using the intelligent merge feature instead
-
-## Integration issues
-
-### VS Code integration problems
-
-**Problem**: Issues with TeXRA's integration with VS Code features.
-
-**Solutions**:
-
-1. **Extension conflicts**:
-   - Disable other LaTeX extensions temporarily
-   - Enable them one by one to identify conflicts
-2. **Version incompatibility**:
-   - Update VS Code to the latest version
-   - Make sure TeXRA is up to date
-   - Check the minimum VS Code version requirement
-
-### LaTeX Workshop integration
-
-**Problem**: Conflicts or issues with the LaTeX Workshop extension.
-
-**Solutions**:
-
-1. **Output directory conflicts**:
-   - Configure consistent output directories:
-   ```json
-   "latex-workshop.latex.outDir": "%DIR%/build"
-   ```
-
 ## Debugging tips
 
 ### Using ProgressBoard
 
-The ProgressBoard is your main debugging tool. Read the [ProgressBoard guide](./progress-board.md) for a full explanation of its features.
+The ProgressBoard is your main debugging tool in VS Code. Read the [ProgressBoard guide](./progress-board.md) for a full walkthrough.
 
-Key points for troubleshooting:
-
-1. **Access ProgressBoard**:
-   - The ProgressBoard shares the TeXRA view in the Secondary Side Bar with the
-     New task view: select the TeXRA icon, then switch to the Sessions view
-   - If it is not visible, open it from the Command Palette: "TeXRA: Show Tasks"
-
-2. **Interpreting logs**: entries are color-coded by severity, and nested
-   entries expand to reveal detail: green for information and successful
-   operations, yellow for warnings, red for errors that need attention.
+1. **Open the ProgressBoard**: Select the TeXRA icon in the Secondary Side Bar and click **Tasks**, or run **TeXRA: Show Tasks** from the Command Palette.
+2. **Inspect logs**: Entries are color-coded by severity (green for info/success, yellow for warnings, red for errors) and expand to show nested tool calls and model responses:
 
 <ProgressLogHero />
 
 <p class="hero-caption">ProgressBoard color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
 
-3. **Finding specific information**:
-   - Look for task IDs to track specific operations
-   - Expand nested entries to see detailed information
-
-4. **Sharing logs for support**:
-   - Copy relevant sections from the ProgressBoard
-   - Include them when reporting issues on GitHub
+3. **Copy diagnostics**: Select `⋯` → **Copy diagnostics** on a task header to copy the task ID, model, status, output paths, and any compile errors for a bug report.
 
 ### Getting support
 
-If this guide does not resolve your issue:
-
-1. **Check GitHub issues**:
-   - Search existing issues in the [TeXRA repository](https://github.com/LionSR/TeXRA/issues)
-   - Look for similar problems and solutions
-
-2. **Report new issues**:
-   - Describe your environment in detail
-   - Include steps to reproduce the problem
-   - Attach relevant log excerpts from ProgressBoard
-   - Mention your OS, VS Code version, and TeXRA version
-
-3. **Temporary workarounds**:
-   - Try alternative workflows while waiting for a fix
-   - Use different models or agents that might work better
-   - Consider splitting complex tasks into simpler ones
-4. **Direct contact**:
-   - For critical bugs or private reports, email [contact@texra.ai](mailto:contact@texra.ai)
+- **GitHub Issues**: Search or open an issue on [LionSR/TeXRA](https://github.com/LionSR/TeXRA/issues) with your OS, TeXRA version, reproduction steps, and `texra doctor` or **Copy diagnostics** output.
+- **Email**: For private reports, write to [contact@texra.ai](mailto:contact@texra.ai).
 
 ## Next steps
 

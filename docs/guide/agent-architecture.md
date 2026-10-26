@@ -7,7 +7,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Document tasks: how they work
 
-Whenever you run an agent's document task in TeXRA, the runtime orchestrates your input files, context references, and instructions into a structured prompt, calls the agent once per revision, and yields versioned diffs. This page examines the architectural machinery underneath: YAML configurations, prompt compilation, execution stages, and reflection cycles.
+A document task takes your input files, context references, and instruction, calls the model once per revision, and writes versioned diffs to run storage. This page covers the YAML format, prompt templates, execution stages, and reflection passes.
 
 ::: tip When to run a document task
 Document tasks are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it in another revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
@@ -40,10 +40,6 @@ These `.yaml` files are flat. An agent with a document task has two main parts:
     - `rewrite`, `outputs`, and `files`: whether the agent edits its inputs or writes new documents, the default output filenames, and template files kept beside the YAML.
 
 _(Prompts use Nunjucks templating (Jinja2-style syntax). For the list of available variables such as `{{ INPUT_CONTENT }}` and how to use them, read the [Custom agents](./custom-agents.md) guide.)_
-
-::: tip Transparency & Customization
-These prompts (`prompt`, `task.prefix`, and `task.requests`) are TeXRA's structured approach to guiding the LLM. Because the system is template-based, an agent's behavior is transparent and customizable through its `.yaml` file, not hidden in a black box.
-:::
 
 ## Basic execution flow
 
@@ -111,8 +107,6 @@ The number of revisions is the number of `task.requests` entries. An agent with 
 Control how many revisions run by editing the agent YAML: add or remove entries in `task.requests`. A run ends earlier only on failure or cancellation.
 
 **Critic review (opt-in):** Launched with reflection on (`texra run <agent> --reflect` on the CLI, or `reflect: true` on a lead's `document_task` call), a document task has the bundled `critic` agent review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the task started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the number of `task.requests` entries; reflection adds one critic call between revisions.
-
-This flow, with optional reflection revisions, lets TeXRA agents perform targeted tasks based on their definitions and your instructions. For examples of built-in agents, read the [Built-in agent reference](./built-in-agents.md).
 
 ::: warning Potential XML Issues
 Occasionally an LLM generates slightly malformed XML (for example, a missing closing tag), especially for very long or complex outputs. If TeXRA fails to extract content from an agent's raw XML output (any revision's `r{n}/output.xml`, for example `r0/output.xml`), open the `.xml` file and correct the structural error (such as adding a missing `</document>` tag); TeXRA can then process it. Read the [Troubleshooting guide](./troubleshooting.md#output-file-corruption) for details.

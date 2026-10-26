@@ -6,7 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # First run
 
-With TeXRA installed, this walkthrough guides you through running your first agent—`polish`—on a `.tex` document. The process takes under five minutes and illustrates both the VS Code extension and the terminal CLI side by side.
+This walkthrough runs your first agent—`polish`—on a `.tex` file and shows how to inspect the resulting diff in VS Code or the terminal. It takes under five minutes.
 
 If you don't have TeXRA yet, read the [installation guide](./installation.md).
 

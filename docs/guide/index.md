@@ -43,31 +43,27 @@ serve as supporting capabilities within your research project.
 
 ## Why multi-agent
 
-Theoretical research involves long chains of interdependent steps:
-a derivation where a subtle sign error in Section 3 invalidates
-Appendix C; a Lean formalization demanding precise tactic selection
-to discharge a goal; a numerical simulation that must corroborate an
-analytical closed form. Alongside the mathematics sits the manuscript
-itself: notation that must remain uniform from Definition 2.1 onward,
-every `\cite` resolving to an authentic citation record, and figures
-that compile without warnings.
+Theoretical work depends on long chains of steps: a sign error in Section 3
+breaks Appendix C, a Lean proof needs the right lemma to close a goal, and a
+numerical script has to match an analytical formula. The manuscript has its own
+constraints: uniform notation across sections, real citations in BibTeX, and
+figures that compile cleanly.
 
-General-purpose chatbots make this worse, not better:
+General-purpose chatbots struggle with this:
 
-- **Hallucinated citations**: no grounded search means fabricated references.
-- **Lost structure**: one prompt can't reason across theorem environments, `\label`/`\ref` graphs, BibTeX, and multi-file projects at once.
-- **No verification**: text output with no way to check an algebra step, type-check a proof, or diff what changed.
+- **Hallucinated citations**: without grounded search, models invent references.
+- **Lost structure**: a single prompt rarely keeps theorem environments, `\label`/`\ref` links, BibTeX, and multi-file projects straight at once.
+- **No verification**: raw text output gives you no way to check an algebra step, type-check a proof, or diff what changed.
 - **No tools**: no WolframScript, no Mathlib search by type signature, no compiler in the loop.
 
-TeXRA splits the work across agents, each specialized, each grounded
-in real tools, each producing verifiable output.
+TeXRA splits the work across specialist agents that call real tools and return
+verifiable output.
 
 ## Three surfaces, one system
 
-The VS Code extension, the desktop app and the `texra` CLI share the same
-underlying agents and run history. Credentials stay local to each host, so
-add your API keys in each one you use. A run launched in the CLI surfaces
-live in the extension's Sessions view, and vice versa.
+The VS Code extension, the desktop app, and the `texra` CLI share the same
+agents, credentials, and run history. A run started in the CLI appears live in
+the extension's Sessions view, and vice versa.
 
 <RunParityHero />
 
@@ -97,11 +93,10 @@ TeXRA's agents run in two ways:
 
 <p class="hero-caption">A document task runs a structured pipeline and returns a diff; a chat works conversationally with grounded tools.</p>
 
-The system rests on three established AI design patterns: **reflection**
-(agents critique their own output and iterate), **tool use** (agents
-ground their reasoning in verified data from compilers, LSPs, and search
-APIs), and **planning** (agents decompose tasks, execute steps, and
-adapt to intermediate results).
+Agents combine three mechanisms: **reflection** (critiquing and revising their
+own output), **tool use** (checking work against compilers, language servers,
+and search APIs), and **planning** (breaking a problem into steps and adapting
+as results come back).
 
 ## Who uses TeXRA
 

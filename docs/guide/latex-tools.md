@@ -7,7 +7,7 @@ import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 
 # LaTeX tools
 
-While TeXRA's agents focus primarily on substantive research—deriving theorems, verifying algebra, and formalizing arguments—managing LaTeX syntax and structure should remain effortless. Rather than relying on a language model to guess at formatting or diff boundaries, TeXRA delegates these tasks to proven command-line utilities for formatting, diffing, statistics, and figure extraction.
+Rather than asking a language model to format LaTeX source, count words, or compute diffs by hand, TeXRA delegates those tasks to dedicated command-line utilities (`latexindent`, `tex-fmt`, `latexdiff`, `texcount`) and built-in extractors.
 
 ## Overview
 

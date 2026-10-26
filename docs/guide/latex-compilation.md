@@ -4,19 +4,17 @@ import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 
 # LaTeX compilation environment
 
-TeXRA's agents operate on mathematical derivations, formal arguments, and the LaTeX manuscripts that document them. Because this work takes place in LaTeX source, core capabilities—including compiling previews, typesetting standalone TikZ figures, and generating `latexdiff` visualizations—rely on a local LaTeX distribution.
+Compiling previews, rendering standalone TikZ figures, and building `latexdiff` PDFs require a local LaTeX distribution.
 
 ## Required LaTeX distribution
 
-You need a working LaTeX distribution installed, such as:
+Install a TeX distribution for your platform:
 
 - **Windows**: MiKTeX or TeX Live
-- **macOS**: MacTeX (includes TeX Live)
-- **Linux**: TeX Live (often available through the package manager)
+- **macOS**: TeX Live (`brew install texlive`) or MacTeX
+- **Linux**: TeX Live (`texlive-full` via your package manager)
 
-A working LaTeX installation is required for features like compiling diffs and TikZ previews.
-
-Make sure the `latexmk` command is available (preferred by TeXRA) or at least `pdflatex`. Both must be reachable from your system's command line. `texra doctor` verifies the whole toolchain in one pass, on any platform:
+Make sure `latexmk` (preferred) or `pdflatex` is on your `PATH`. Run `texra doctor` to verify the toolchain in one pass:
 
 <DoctorSliceHero
   :rows="[

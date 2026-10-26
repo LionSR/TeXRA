@@ -7,9 +7,9 @@ import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
 import CliAgentShowHero from '../.vitepress/components/CliAgentShowHero.vue';
 </script>
 
-Every research discipline develops distinct methodological conventions. Whether you need an agent to verify every algebraic step in a derivation against domain invariants, standardize notation across an entire project, or enforce strict formatting for journal submissions, custom agents allow you to formalize these workflows in declarative YAML files.
+Every agent in TeXRA is a YAML file. You can copy and edit any built-in agent or write a new one from scratch—for example, to check derivations against your group's conventions, enforce journal formatting rules, or run a custom multi-pass review.
 
-This guide walks you through creating your own agent definition files (`.yaml`) so TeXRA does what your research needs. No coding required.
+This guide shows how to create and test your own `.yaml` agent definitions.
 
 ::: info Agent fundamentals
 Before creating a custom agent, it helps to understand the underlying concepts:
@@ -105,9 +105,7 @@ field; you choose the model when you run the agent.
 
 #### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using variables in prompts (Nunjucks templating)
 
-Prompts are processed with the Nunjucks templating engine (Jinja2-style syntax), so you can insert dynamic information with `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI.
-
-This mechanism is sometimes called **Variable Retrieval (VR)**: the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` and the full list of selected files is available through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
+Prompts use Nunjucks templating (Jinja2-style syntax). TeXRA populates built-in `{{ variable_name }}` placeholders from the files and instruction you select in the UI. For example, your main input file's text is `{{ INPUT_CONTENT }}`, and all selected inputs wrapped in XML are `{{ ALL_INPUTS }}`.
 
 <TemplateVarsPalette />
 

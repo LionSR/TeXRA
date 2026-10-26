@@ -7,7 +7,7 @@ import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 
 # ProgressBoard
 
-The ProgressBoard is TeXRA's execution dashboard for tracking autonomous agents and inspecting their artifacts in real time. Whether supervising extended mathematical derivations or reviewing concise document edits, you can inspect streaming thoughts and tool calls, re-run tasks, or restore exact configurations with a single click.
+The ProgressBoard is TeXRA's live view in VS Code for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past runs.
 
 ::: tip CLI
 The ProgressBoard is the VS Code extension's live view. The CLI shows the same
@@ -75,23 +75,13 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **One header row**: the Tasks button, the task's title, its status and
-  time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
-  A workflow task also shows which pass it is on, as **Pass 2 of 3**.
-  The menu holds the task's actions, then Open tasks in editor,
-  LaTeXDiffs, and Figures. Every task offers Rename. Workflow tasks offer
-  Run again… (the New task form, filled from the task, to change and start), Open task folder, Export, Copy diagnostics, latexdiff,
-  Archive outputs, and Delete output files; conversations offer Fork,
-  Compact, Open task folder, Export, and Copy diagnostics, and list the forks made from them. Export saves the
-  conversation as Markdown, HTML, or PDF.
-- **Once a task ends**: where the message box stood, the task says
-  it has ended and offers **Fork**, a new task holding the conversation.
-  An interrupted task, or a workflow with saved outputs, offers
-  **Resume** there, its one home. Each of your messages after the first
-  also offers **Fork from here** on hover: the fork holds the
-  conversation before it, and the message waits in its composer.
-- **Delete task**: at the end of the menu, for a task that has stopped.
-  It removes the conversation and its task folder.
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for multi-pass document tasks), **Stop** while running, **New task**, and the **More** menu (`⋯`).
+- **More menu (`⋯`)**:
+  - **All tasks**: Rename, Open task folder, Export (as Markdown, HTML, or PDF), Copy diagnostics, and Delete task (once stopped).
+  - **Document tasks**: Run again… (pre-fills the New task form), latexdiff, Archive outputs, and Delete output files.
+  - **Chat tasks**: Fork, Compact, and links to any forks created from the conversation.
+  - **Global**: Open tasks in editor, LaTeXDiffs, and Figures.
+- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation so far) and, for interrupted tasks or workflows with saved outputs, **Resume**. Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 Each action in detail:
 

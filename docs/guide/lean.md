@@ -7,11 +7,11 @@ import CliLeanHero from '../.vitepress/components/CliLeanHero.vue';
 
 # Lean 4 proofs
 
-Formalizing mathematics requires continuous feedback: inspecting proof states, identifying Mathlib lemmas by signature, resolving compiler errors, and managing build caches. TeXRA connects directly to a running Lean 4 language server, allowing agents to read compiler diagnostics, inspect goal states at any position, search Mathlib via Loogle, and trigger project builds from within your workspace.
+TeXRA connects to a running Lean 4 language server so agents can read compiler diagnostics, inspect tactic goal states at any cursor position, search Mathlib via Loogle, and run project builds.
 
 ## Prerequisites
 
-TeXRA relies on your local Lean toolchain, interfacing with it through one of two mechanisms depending on the host environment:
+TeXRA uses your local Lean toolchain in VS Code or the CLI:
 
 ::: tip You always need a Lake project
 Lean tools only work on `.lean` files that live inside a **Lake project**: a folder (or ancestor folder) containing a `lakefile.lean` or `lakefile.toml`. If there's no lakefile, the language server has nothing to attach to. Create one with `lake new myproject` or `lake init`.

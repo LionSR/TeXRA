@@ -6,9 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # Quick start guide
 
-Whether tackling open theoretical problems or refining an existing manuscript, you can get TeXRA running in under five minutes. On a fresh install, the **setup assistant** guides you through this initial loop in a single conversational session; this page serves as the ongoing reference for the New task view.
-
-The shortest path is: choose a credential, run setup once, then let the orchestrator handle the daily research work.
+On a fresh install, the **setup assistant** walks you through connecting a model, checking your environment, and running a first task. This page is the reference for the **New task** view in VS Code and its CLI equivalents.
 
 <QuickStartHero />
 
@@ -16,12 +14,12 @@ The shortest path is: choose a credential, run setup once, then let the orchestr
 
 ## Overview
 
-TeXRA integrates into your editor and terminal to help you do good work: deriving and validating mathematical expressions in Wolfram, formalizing proofs in Lean 4, querying grounded literature, and polishing prose, correcting errors, and producing figures directly in your workspace. The five core steps:
+A typical document task takes five steps:
 
 1. Select your file
 2. Pick an agent and model
 3. Write a short instruction
-4. Select Execute
+4. Select **Execute**
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
@@ -155,9 +153,8 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 ### Review results
 
-1. Upon completion, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, preserving your input filename).
-2. Inspect the proposed edits carefully. While the agent automates tedious verification and editing steps, final scientific evaluation remains yours.
-3. Compare the original and modified versions with either of these:
+1. When the run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
+2. Inspect the proposed edits and compare the original and modified versions with either tool:
    - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated run-storage output.
 
      <CompareHero />

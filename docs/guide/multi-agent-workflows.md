@@ -4,9 +4,17 @@
 import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
 </script>
 
-Certain research challenges exceed what a single agent can do in one pass: systematically verifying every derivation in an extensive calculation, probing a conjecture from multiple complementary angles, or auditing, correcting, and reconciling a multi-file manuscript. A team lead such as `orchestrator` handles these by calling specialist agents, reading what they return, and deciding what runs next. When the whole shape of the work is known up front, the lead can instead write a short script that calls the specialists in code, runs independent ones concurrently, and combines their results. TeXRA records every call the script makes, so an interrupted script resumes without running finished work again.
+When a task is too large for a single agent pass—checking every derivation in a long calculation, testing a conjecture from several angles, or auditing and reconciling a multi-file paper—a team lead such as `orchestrator` delegates the pieces to specialist agents.
 
-Three tools do this. `agent` runs one named agent as a child of the lead's run, with a prompt. `document_task` runs a named agent's document task over files, also as a child. `script` runs a short JavaScript program that can call both many times. You never write either yourself: the lead writes the calls, you approve them, and the children show up in the progress view like any other delegation.
+Normally the lead calls specialists one turn at a time, reads what comes back, and decides what to run next. When the full fan-out and join are known up front, the lead can instead write a short JavaScript script that runs independent specialists in parallel and combines their outputs. TeXRA records every call the script makes, so an interrupted script resumes without repeating finished work.
+
+Three tools drive delegation:
+
+- `agent` runs a named agent with a prompt as a child of the lead's run.
+- `document_task` runs a named agent's document task over files as a child run.
+- `script` runs a short JavaScript program that can call `agent` and `document_task` many times.
+
+You do not write these calls yourself: the lead proposes them, you approve them, and the child runs appear in the progress view like any other delegation.
 
 ## When the lead reaches for a script
 
