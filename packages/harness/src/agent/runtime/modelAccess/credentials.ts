@@ -41,7 +41,7 @@ type CredentialRoute = Extract<
 
 /**
  * What a route bills: the plan a direct key pays through, a subscription, or
- * the user's own key (the editor, the validation model). The one
+ * the user's own key (the validation model). The one
  * owner of the fact: the binding sends it as the wire's billing and pricing
  * stamps it on each turn's usage.
  */
@@ -52,7 +52,6 @@ export function usageRouteOf(route: ModelRoute): UsageRoute {
     case 'chatgpt-subscription':
     case 'xai-subscription':
       return route.kind;
-    case 'copilot':
     case 'validation':
     case 'no-api-key':
     case 'unserved': // never bound: the route decision refuses it

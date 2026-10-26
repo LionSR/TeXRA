@@ -40,7 +40,7 @@ one of two owners, and an embedder supplies each one there:
 
 - **Process services** (the `agentDirectories` port,
   the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
-  application state, the resume port, the editor language-model bridge) are
+  application state, the resume port) are
   Effect services provided once per process by `installProcessRuntime`
   (`packages/harness/src/controllers/session/sessionLayer.ts`).
 - **Per-workspace services** (the workspace root, its storage paths, its
@@ -159,7 +159,7 @@ yields the detach disposer, so it is `yield*`ed. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
-(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
+(`packages/harness/src/agent/runtime/HostInteractions.ts:67-74`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
 presentation events, and sets `approvalPromptsUnavailable: true` on the
 object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
@@ -295,7 +295,7 @@ agents unless the files exist on disk.
   points `custom()` at your own YAML directory.
 - **Choosing where custom agents live.** The CLI builds its port with
   `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:218-229`,
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:231-235`,
   `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder can
   supply a literal implementation instead:
 
@@ -345,7 +345,7 @@ run's `request.decided` row, and the run continues from it.
 `HostInteractions` is not part of this path. It is a presentation port —
 events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
 carry — and no method on it returns a decision
-(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
+(`packages/harness/src/agent/runtime/HostInteractions.ts:67-74`). Attaching a host with
 `session.interactions.use(...)` is how a host sees what a run does; it never
 resumes a waiting run.
 
@@ -364,10 +364,10 @@ An internal host supplies `approvalPromptsUnavailable` on the object it
 passes to `session.interactions.use({...})`; on the public `@texra-ai/harness`
 surface, a session with no `approve` handler attached in `session.attach({ approve })`
 withholds approval-gated tools automatically. `approvalPromptsUnavailable` is a
-field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:97`), not
+field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:49`), not
 an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
-host's answer (`HostInteractions.ts:272-276`). Each step
+host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`withholdsApprovalTools`,
 `packages/harness/src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
@@ -474,7 +474,7 @@ following classification makes that distinction.
 ### Runtime bootstrap and shipped-feature parity
 
 - **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
+  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:229`), which also
   builds the agent-directories port
   (`:218-229`). The direct Lean language-server layer
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
@@ -516,7 +516,7 @@ following classification makes that distinction.
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
 minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:167`, runs the same
+`packages/desktop/src/main/platform/index.ts:164`, runs the same
 `bootstrapHost` at `:228`. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per

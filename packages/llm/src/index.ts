@@ -15,10 +15,8 @@ export {
   assistantMessageFromResult,
   completedTurn,
   ResolvedTurnSchema,
-  TurnEventSchema,
   TurnRequestSchema,
   TurnResultSchema,
-  VscodeLanguageModelConfigurationSchema,
 } from './turn.js';
 export type {
   BackgroundEvent,
@@ -31,7 +29,6 @@ export type {
   TurnResult,
   TurnUsage,
   UnreleasedUpload,
-  VscodeLanguageModelConfiguration,
 } from './turn.js';
 export {
   checkPreparedHistory,
@@ -49,11 +46,7 @@ export {
   systemUpdateText,
 } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
-export {
-  ModelError,
-  ModelErrorFieldsSchema,
-  RemoteOperationSchema,
-} from './errors.js';
+export { ModelError, RemoteOperationSchema } from './errors.js';
 export type {
   BillingRoute,
   ModelErrorFields,

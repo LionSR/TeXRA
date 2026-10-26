@@ -15,8 +15,11 @@ import {
   responsesContent,
   type DocumentAccess,
 } from './openaiResponsesCodec.js';
-import type { OpenAIResponsesConfiguration, ResolvedTurn } from '../turn.js';
-import type { HttpTurnResult } from './parts.js';
+import type {
+  OpenAIResponsesConfiguration,
+  ResolvedTurn,
+  TurnResult,
+} from '../turn.js';
 import type { UploadCache } from './uploadCache.js';
 
 const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
@@ -282,8 +285,8 @@ export const withResponsesContinuation = Effect.fn(
 )(function* (
   config: OpenAIResponsesConfiguration,
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  result: HttpTurnResult,
-): Effect.fn.Return<HttpTurnResult, ModelError> {
+  result: TurnResult,
+): Effect.fn.Return<TurnResult, ModelError> {
   if (!sameModelOrigin(turn, result.requestedOrigin))
     return yield* new ModelError({
       kind: 'invalid-request',

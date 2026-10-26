@@ -7,10 +7,6 @@ import { describe, expect } from 'vitest';
 import { Effect, Exit, Layer, Scope, Stream } from 'effect';
 
 import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
-import {
   AppState,
   StateReadFailed,
   type StateStore,
@@ -61,9 +57,6 @@ describe('tool-use tool resolution', () => {
     }).pipe(
       Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
       Effect.scoped,
-      // The delegation-annotation availability read yields `LanguageModel`;
-      // this host has no editor models.
-      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(
         pluginCatalogLayer(
           texraPlugins(),
@@ -160,11 +153,7 @@ describe('tool-use tool resolution', () => {
             stores,
             workspaceRoot: undefined,
             host: 'vscode',
-          }).pipe(
-            Effect.provide(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          );
+          });
         const names = (resolved: Effect.Success<ReturnType<typeof resolve>>) =>
           resolved.definitions.map((tool) => tool.name);
 

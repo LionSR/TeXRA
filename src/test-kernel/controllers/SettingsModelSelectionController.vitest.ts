@@ -1,14 +1,13 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
-import { MODEL_CONFIGS, lookup } from 'llm-zoo';
+import { lookup } from 'llm-zoo';
 
 import {
   getEnabledModels,
   type ModelOption,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import type { CopilotModelRoute } from '@model/copilotRouting';
 import {
   DEFAULT_HELPER_MODEL,
   DEFAULT_MODELS,
@@ -19,7 +18,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
-const SONNET46 = 'anthropic/claude-sonnet-4-6';
 
 /** The controller's deps are file-local; derive them from its constructor. */
 type SettingsModelSelectionControllerDeps = ConstructorParameters<
@@ -66,34 +64,8 @@ function createController(
     stores: makeFakeSettingsStores().stores,
     secrets: new FakeSecrets(),
     resolveModelOptions,
-    copilotRoutes: Effect.succeed(new Map()),
     ...overrides,
   });
-}
-
-// A discovered Sonnet 4.6 Copilot route with the editor's context ceiling and
-// subscription pricing, optionally with capabilities overridden.
-function sonnet46CopilotRoutes(
-  access: CopilotModelRoute['access'],
-  capabilities?: CopilotModelRoute['effectiveConfig']['capabilities'],
-): ReadonlyMap<string, CopilotModelRoute> {
-  return new Map<string, CopilotModelRoute>([
-    [
-      SONNET46,
-      {
-        access,
-        reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
-        version: '2026-07',
-        effectiveConfig: {
-          ...MODEL_CONFIGS[SONNET46],
-          ...(capabilities === undefined ? {} : { capabilities }),
-          contextWindow: 200_000,
-          inputPrice: 0,
-          outputPrice: 0,
-        },
-      },
-    ],
-  ]);
 }
 
 describe('SettingsModelSelectionController', () => {
@@ -192,38 +164,4 @@ describe('SettingsModelSelectionController', () => {
       }),
   );
 
-  it.effect(
-    'surfaces discovered Copilot routes as route status, never as picker rows',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          copilotRoutes: Effect.succeed(
-            sonnet46CopilotRoutes('consent-required'),
-          ),
-        });
-
-        const { models, copilotModels } =
-          yield* controller.buildSelectionData();
-
-        expect(copilotModels).toEqual([
-          {
-            name: SONNET46,
-            label: MODEL_CONFIGS[SONNET46].label,
-            access: 'consent-required',
-            preferred: false,
-          },
-        ]);
-        // The route's base model keeps its own single row; no `copilot:` identity
-        // and no Copilot-provider row ever enters the picker.
-        expect(
-          models.filter(
-            (model) =>
-              model.name.startsWith('copilot:') || model.provider === 'copilot',
-          ),
-        ).toEqual([]);
-        expect(models.filter((model) => model.name === SONNET46)).toHaveLength(
-          1,
-        );
-      }),
-  );
 });

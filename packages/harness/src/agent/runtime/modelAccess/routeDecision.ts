@@ -1,13 +1,11 @@
 /**
  * Which route serves a model: llm's pure `decideModelRoute` over the facts
- * one {@link ModelSettings} read holds, the editor's Copilot route where the
- * decision can land on it, and a resumed run's backend, which constrains the
- * decision so a preference turned on since never moves its billing. Also
- * whether a model switch can take the run's route, and the one move onto the
- * user's own credential a failed attempt offers.
+ * one {@link ModelSettings} read holds, and a resumed run's backend, which
+ * constrains the decision so a preference turned on since never moves its
+ * billing. Also whether a model switch can take the run's route, and the one
+ * move onto the user's own credential a failed attempt offers.
  */
 import { Effect } from 'effect';
-import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import {
   decideModelRoute,
@@ -20,18 +18,12 @@ import {
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  copilotRouteUnavailableReason,
-  CopilotRoutes,
-  type CopilotModelRoute,
-} from '@model/copilotRouting';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import {
   decideReasoning,
   reasoningRouteOf,
   servingBackend,
 } from '@model/reasoningLevel';
-import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   getExhaustionReason,
@@ -40,14 +32,10 @@ import {
   type ModelBackend,
   type ProviderError,
 } from '@shared/schemas';
+import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
-/**
- * The routes a binding can take: the unserved one fails in the decision, and
- * a Copilot route binds only with the editor route discovered for it.
- */
-type BindableRoute =
-  | Exclude<ModelRoute<CopilotModelRoute>, { kind: 'unserved' | 'copilot' }>
-  | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
+/** The routes a binding can take: the unserved one fails in the decision. */
+type BindableRoute = Exclude<ModelRoute, { kind: 'unserved' }>;
 
 /** What one route decision found. */
 export interface RouteDecision {
@@ -62,64 +50,39 @@ export interface RouteDecision {
 export interface RouteAsk {
   /** A resumed run's backend; it wins over today's default route. */
   readonly backend?: ModelBackend;
-  /** Own-key quota fallback also declines the Copilot preference. */
-  readonly ownApiKeyFallback?: boolean;
   /** The routes the run declined (its rows record them). */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The provider reasoning mode the request asks for (OpenAI `pro`). */
   readonly mode?: ReasoningMode;
 }
 
-const unavailable = (message: string, cause?: unknown) =>
-  new RouteUnavailable({ reason: 'unavailable', message, cause });
+const unavailable = (message: string) =>
+  new RouteUnavailable({ reason: 'unavailable', message });
 
 /**
  * Decide the route `config` binds under. A resumed conversation's backend
- * constrains the facts: its Copilot and validation choice are
- * the backend's, and a subscription serves it only from its own provider.
- * When the decision can land on Copilot, the editor's routes are discovered
- * here, once. The routes nothing can bind fail as the user's instruction.
+ * constrains the facts: its validation choice is the backend's, and a
+ * subscription serves it only from its own provider. The routes nothing
+ * can bind fail as the user's instruction.
  */
 export const decideRoute = Effect.fn('decideRoute')(function* (
   config: ModelConfig,
   settings: ModelSettings,
   ask: RouteAsk,
-): Effect.fn.Return<RouteDecision, RouteUnavailable, LanguageModel> {
+): Effect.fn.Return<RouteDecision, RouteUnavailable> {
   const host = routeFactsFor(settings, ask.declinedRoutes);
   const { backend, mode } = ask;
-  const prefersCopilot =
-    backend === undefined
-      ? !ask.ownApiKeyFallback && settings.copilotModels.includes(config.ref)
-      : backend === 'copilot';
-  // A provider mode never takes the Copilot preference, so the editor is not
-  // asked for a route it would not use.
-  const copilotRoute =
-    (prefersCopilot && mode === undefined) ||
-    config.provider === ModelProvider.COPILOT
-      ? (yield* CopilotRoutes.discover().pipe(
-          Effect.mapError((cause) =>
-            unavailable(
-              `Could not list the editor's models: ${cause.message}`,
-              cause,
-            ),
-          ),
-        )).get(config.ref)
-      : undefined;
   const decided = decideModelRoute(
     config,
     backend === undefined
       ? {
           ...host,
           validation: yield* shouldUseInternalValidationModel(),
-          prefersCopilot,
-          copilotRoute,
           mode,
         }
       : {
           ...host,
           validation: backend === 'validation',
-          prefersCopilot,
-          copilotRoute,
           chatgptSubscription: host.chatgptSubscription && backend === 'openai',
           xaiSubscription: host.xaiSubscription && backend === 'xai',
           mode,
@@ -127,32 +90,14 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   );
   if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} is served only through OpenRouter, which TeXRA no longer supports. Choose another model.`,
+      `${config.label} is served only through OpenRouter or GitHub Copilot, which TeXRA no longer supports. Choose another model.`,
     );
   }
-  let route: BindableRoute;
-  if (decided.kind === 'copilot') {
-    // A fresh run needs the editor to allow the route; a resumed
-    // conversation keeps its backend and binds whatever route it offers.
-    const refused =
-      backend === undefined
-        ? copilotRouteUnavailableReason(config.ref, decided.route)
-        : undefined;
-    if (refused) return yield* unavailable(refused);
-    if (decided.route === undefined) {
-      return yield* unavailable(
-        `No editor offers ${config.label} through Copilot now: Copilot models run through a VS Code window of this project with GitHub Copilot, and none is open or none offers this model. Open the project in VS Code, or turn off Copilot for this model.`,
-      );
-    }
-    route = { kind: 'copilot', route: decided.route };
-  } else {
-    route = decided;
-  }
-  const served = servingBackend(config, route);
+  const served = servingBackend(config, decided);
   if (served === undefined) {
     return yield* unavailable(`Unsupported model provider: ${config.provider}`);
   }
-  return { route, facts: host, backend: served };
+  return { route: decided, facts: host, backend: served };
 });
 
 /** Why a model cannot replace a run's: a short reason, and the error's sentence. */
@@ -178,7 +123,7 @@ export const admitSwitch = Effect.fn('admitSwitch')(function* (
   backend: ModelBackend,
   settings: ModelSettings,
   declinedRoutes: readonly DeclinableUsageRoute[],
-): Effect.fn.Return<SwitchRefusal | null, RouteUnavailable, LanguageModel> {
+): Effect.fn.Return<SwitchRefusal | null, RouteUnavailable> {
   const decision = yield* decideRoute(selected.config, settings, {
     backend,
     declinedRoutes,
@@ -211,7 +156,6 @@ const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
  * - A subscription or coding-plan route falls back to the route the model
  *   takes with every preference off, unless that is the same kind of route.
  * - A key whose upstream account ran out of credit needs a changed key.
- * - The Copilot route moves to a replacement run on the direct model.
  *
  * A coding-plan fallback is automatic when its key is already stored and the
  * run has not declined that route before; the subscriptions (ChatGPT, Grok)
@@ -228,10 +172,6 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   const { route } = failed;
   let declined: DeclinableUsageRoute;
   switch (route.kind) {
-    case 'copilot':
-      return reason === 'copilot-subscription'
-        ? { kind: 'copilot-fallback' }
-        : null;
     case 'chatgpt-subscription':
     case 'xai-subscription':
       declined = route.kind;

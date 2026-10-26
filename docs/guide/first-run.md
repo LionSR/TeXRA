@@ -31,10 +31,6 @@ A credential is the one step no agent can do for you. Three ways in:
   ChatGPT sign-in section; in the terminal, run `texra auth chatgpt login`.
   Grok connects from the same place; Kimi Code and the GLM Coding Plan take
   a key under **Settings → Models → API keys**.
-- **Use GitHub Copilot in VS Code**: compatible models through your Copilot
-  subscription. Open **Settings → Models → Subscriptions → Copilot in VS Code** and grant
-  access in the native VS Code prompt. No provider API key is needed. This
-  source is unavailable in the terminal and desktop applications.
 
 ## Get a sample file
 

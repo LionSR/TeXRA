@@ -136,14 +136,13 @@ interface ScriptedTurn {
 }
 
 /** The http arm of a binding: `identified` events carry no editor origin. */
-type HttpOrigin = Exclude<ModelOrigin, { protocol: 'vscode-lm' }>;
 
 /**
  * The transport stub: one `Model` per registry name, serving one scripted
  * turn per invocation. The loop calls `prepareTurn` then `streamTurn`, so
  * those two are the whole provider surface this fixture has to script.
  */
-function scriptedOrigin(model: string): HttpOrigin {
+function scriptedOrigin(model: string): ModelOrigin {
   return {
     protocol: 'openai-responses',
     codecVersion: 1,

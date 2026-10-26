@@ -558,7 +558,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           config: input.config,
           continues: input.continues ?? null,
           preferHelperModel: input.helperModel ?? false,
-          ownApiKeyFallback: input.ownKeyFallback ?? false,
           approveDelegatedWork: input.approval?.delegated ?? false,
           approvalPolicy: input.approval?.policy ?? null,
         }).pipe(
@@ -605,7 +604,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ? attachWindowHost(link, workspace, {
             emit: host.emit,
             approvalDenied: host.approvalDenied,
-            languageModel: host.languageModel,
           })
         : Effect.die(
             new Error(

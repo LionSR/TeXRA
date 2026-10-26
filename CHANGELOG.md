@@ -21,6 +21,22 @@ All notable changes to this project will be documented in this file.
   offered; one an agent or setting still names fails with a message saying
   so. Conversations saved by an earlier build show as written by that build
   and cannot be resumed by this one.
+- **GitHub Copilot is no longer supported.** The VS Code extension no longer
+  serves models through a Copilot subscription: the "Copilot in VS Code"
+  section of **Settings → Models → Subscriptions**, its **Grant access** and
+  **Use Copilot** controls, and the "Via Copilot" picker badge are gone, and a
+  model you had set to use Copilot now takes its own provider key or
+  subscription. The Copilot Chat Tools plugin is gone too, so
+  `#texra_arxiv_search` and `#texra_web_fetch` no longer appear in Copilot
+  Chat. The one model only Copilot served (`copilot/copilot-gpt-4o`) is no
+  longer offered. Conversations saved by an earlier build show as written by
+  that build and cannot be resumed by this one. SDK: the `LanguageModel`
+  service, `UNAVAILABLE_LANGUAGE_MODEL_PORT`, `CopilotRoutes`, the
+  `languageModel` field of the process and session options, the
+  `ownKeyFallback` launch option, `ToolCatalog.current`, `WebFetchTool` in
+  `@texra-ai/harness/plugins`, and llm's `vscode-lm` protocol
+  (`VscodeLanguageModelConfiguration`, `TurnEventSchema`,
+  `ModelErrorFieldsSchema`) are removed.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and

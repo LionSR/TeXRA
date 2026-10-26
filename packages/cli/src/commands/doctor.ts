@@ -49,8 +49,7 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
     const services = init.value;
     // The healthy report settles on the root's own context — the provision
     // `services.runtime.runPromise` made before this became one program — so
-    // the availability read takes the process's `LanguageModel` port from it
-    // and the account read's Effect logs reach the CLI's own sink.
+    // the account read's Effect logs reach the CLI's own sink.
     return yield* withProcessServices(
       services.runtime,
       buildDoctorReport(context, {

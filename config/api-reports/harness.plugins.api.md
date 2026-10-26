@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 120
+Exports: 119
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; }`
@@ -120,7 +120,6 @@ Exports: 120
 - `ToolRun` — `interface ToolRun { readonly runId: RunId; }`
 - `ToolTable` — `interface ToolTable { readonly entries: ReadonlyMap<string, Plugin>; readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined; readonly decisions: ReadonlyMap<string, RequestDecisionHook>; readonly blocks: ReadonlyMap<string, AgentBlock>; }`
 - `web` — `const web: Plugin`
-- `WebFetchTool` — `const WebFetchTool: DefinedTool<{ readonly prompt?: null | string | undefined; readonly url: string; }, HttpClient>`
 - `withRequestTimeout` — `const withRequestTimeout: <T, E, R>(timeoutMs: number, request: Effect<T, E, R | Scope>) => Effect<T, E | TimeoutError, Exclude<R, Scope>>`
 - `WorkspacePathResolution` — `interface WorkspacePathResolution { readonly relative: string; readonly absolute: string; readonly fsPath: string; readonly external?: { readonly root: string; readonly writable: boolean; readonly label: string; }; }`
 - `WriteFilter` — `type WriteFilter = (path: string, content: string, config: ConfigProvider) => Effect.Effect<string>; ≡ WriteFilter`

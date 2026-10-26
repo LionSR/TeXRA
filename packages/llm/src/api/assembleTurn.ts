@@ -13,7 +13,6 @@ import {
   keyOf,
   restates,
   sameIdentity,
-  type HttpTurnResult,
   type Part,
   type PartEvent,
   type Slot,
@@ -21,7 +20,7 @@ import {
 
 /** What one assembly is told before its first part. */
 export interface AssemblyOptions {
-  readonly origin: HttpTurnResult['requestedOrigin'];
+  readonly origin: TurnResult['requestedOrigin'];
   /** Names the provider in failures: "Anthropic", "The model". */
   readonly provider: string;
   /** Known before any event: a header, or the remote operation observed. */
@@ -36,7 +35,7 @@ export interface AssemblyOptions {
   readonly partial?: boolean;
   /** What the codec adds to a completed turn: its continuation anchor. */
   readonly finalize?: (
-    result: HttpTurnResult,
+    result: TurnResult,
   ) => Effect.Effect<TurnResult, ModelError>;
 }
 
@@ -47,7 +46,7 @@ interface Assembly {
   model: string | undefined;
   fingerprint: string | undefined;
   announced: boolean;
-  usage: HttpTurnResult['usage'];
+  usage: TurnResult['usage'];
   finish: Extract<PartEvent, { kind: 'finish' }> | undefined;
   readonly slots: Map<number, Slot>;
 }
@@ -287,7 +286,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     finishReason: reason,
     usage: turn.usage,
   });
-  if (!Result.isSuccess(result) || result.success.kind !== 'http')
+  if (!Result.isSuccess(result))
     return yield* new ModelError({
       kind: 'malformed-output',
       message: `${turn.options.provider} returned inconsistent completed content.`,
@@ -304,7 +303,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
  */
 export function turnAssembly(options: AssemblyOptions): {
   readonly step: (event: PartEvent) => Folded;
-  readonly complete: Effect.Effect<HttpTurnResult, ModelError>;
+  readonly complete: Effect.Effect<TurnResult, ModelError>;
   readonly enrich: (error: ModelError) => ModelError;
 } {
   const turn: Assembly = {

@@ -13,11 +13,7 @@ import { Context, Effect, Layer, Schema } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
-import {
-  readModelOptions,
-  Secrets,
-  type LanguageModel,
-} from '@texra-ai/harness';
+import { readModelOptions, Secrets } from '@texra-ai/harness';
 import { ToolError } from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
@@ -162,7 +158,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 ): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
   SubscriptionProbeFailed,
-  Secrets | LanguageModel
+  Secrets
 > {
   const secrets = yield* Secrets;
   const status = yield* getCodexStatus(secrets).pipe(

@@ -138,13 +138,11 @@ to the model provider you chose. TeXRA does not sit between you and
 the provider. Your unpublished proofs, manuscripts, and API keys
 never leave your machine except to the provider endpoint.
 
-**Provider subscriptions** (ChatGPT, Grok, Kimi Code, GLM Coding Plan,
-and GitHub Copilot in VS Code). Requests still go straight from your
-machine to that provider: ChatGPT and Grok via OAuth sign-in, Kimi Code
-and the GLM Coding Plan via a plan-specific key. In the VS Code extension
-the **Settings → Models → Subscriptions** tab can also route models through a
-GitHub Copilot subscription, with no provider API key needed. Connect one
-from that tab, or with `texra auth chatgpt login` / `/login` in the CLI.
+**Provider subscriptions** (ChatGPT, Grok, Kimi Code and the GLM Coding
+Plan). Requests still go straight from your machine to that provider:
+ChatGPT and Grok via OAuth sign-in, Kimi Code and the GLM Coding Plan via a
+plan-specific key. Connect one from the **Settings → Models → Subscriptions**
+tab, or with `texra auth chatgpt login` / `/login` in the CLI.
 
 API keys, whichever mode you use, stay on your machine, in one owner-only
 `secrets/` folder under `~/.texra` that the extension, the desktop app and the

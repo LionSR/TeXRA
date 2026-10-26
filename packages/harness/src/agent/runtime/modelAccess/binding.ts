@@ -1,6 +1,6 @@
 /**
- * A decided route made into a `BoundModel`: the editor's model for a Copilot
- * route, the canned validation model, or a wire model `@texra-ai/llm` binds
+ * A decided route made into a `BoundModel`: the canned validation model, or
+ * a wire model `@texra-ai/llm` binds
  * with the route's one credential and the vendor knobs the settings hold.
  * Also the facts the run reads beside the `Model`: the config it runs and
  * bills with (the media its route carries included), the retry gate's
@@ -29,9 +29,7 @@ import {
   type BackgroundToggles,
   type ModelSettings,
 } from '@model/modelSettings';
-import type { CopilotModelRoute } from '@model/copilotRouting';
 import { modelFetch } from '@platform/defaults/longRunningModelTransport';
-import { LanguageModel } from '@platform/languageModel';
 import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential, usageRouteOf } from './credentials';
@@ -106,57 +104,6 @@ const commonOf = ({ request, backend, settings }: BindPlan) => ({
   textOnly: request.textOnly,
 });
 
-/**
- * The editor's model for a Copilot route, over the exact id, vendor and
- * version its discovery found. The editor manages its own reasoning and
- * context ceiling; the choice is recorded, not sent.
- */
-const bindEditor = Effect.fn('binding.editor')(function* (
-  plan: BindPlan,
-  route: CopilotModelRoute,
-): Effect.fn.Return<BoundModel, CallFailure, Scope.Scope | LanguageModel> {
-  const routed = route.effectiveConfig;
-  const requestedModel = route.reference.id;
-  const deployment = { vendor: route.reference.vendor, version: route.version };
-  // A choice the route cannot carry still fails the bind.
-  yield* reasoningOf(plan, plan.requested);
-  return {
-    ...commonOf(plan),
-    // The editor takes images only: no native PDF or audio input.
-    config: {
-      ...routed,
-      capabilities: {
-        ...routed.capabilities,
-        supportsNativePdf: false,
-        supportsNativeAudio: false,
-      },
-    },
-    model: yield* (yield* LanguageModel).acquire({
-      protocol: 'vscode-lm',
-      requestedModel,
-      deployment,
-      supportsImageInput: routed.capabilities.supportsVision,
-      supportsToolCalling: routed.capabilities.supportsFunctionCalling,
-      defaults: { justification: 'Run the selected agent.' },
-    }),
-    origin: {
-      protocol: 'vscode-lm',
-      codecVersion: 1,
-      requestedModel,
-      deployment,
-    },
-    route: { kind: 'copilot', route },
-    forcedToolChoice: false,
-    persistentConnection: false,
-    billing: {},
-    routes: routePolicies(
-      ['vscode-lm', deployment.vendor, deployment.version],
-      requestedModel,
-    ),
-    delivery: FOREGROUND,
-  };
-});
-
 /** Bind `plan`'s decided route into the caller's scope. */
 export const bindRoute = Effect.fn('bindRoute')(function* (
   plan: BindPlan,
@@ -164,13 +111,11 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | LanguageModel | HttpClient.HttpClient
+  Scope.Scope | HttpClient.HttpClient
 > {
   const { request, requested, settings, backend } = plan;
   const { route, facts } = plan.decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
-  if (protocol === 'vscode-lm' && route.kind === 'copilot')
-    return yield* bindEditor(plan, route.route);
   if (protocol === 'validation') {
     const bound = validationModel(requested);
     yield* reasoningOf(plan, requested);
@@ -196,11 +141,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       delivery: FOREGROUND,
     };
   }
-  if (
-    protocol === 'vscode-lm' ||
-    route.kind === 'copilot' ||
-    route.kind === 'validation'
-  ) {
+  if (route.kind === 'validation') {
     return yield* new RouteUnavailable({
       reason: 'unavailable',
       message: `Model ${request.modelId} routes through ${route.kind}, which the run's ${backend} backend cannot bind.`,

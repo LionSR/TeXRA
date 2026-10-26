@@ -12,7 +12,6 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   settingsCatalog,
   type StateSettingEntry,
@@ -73,8 +72,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
-    // No editor behind this platform.
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),

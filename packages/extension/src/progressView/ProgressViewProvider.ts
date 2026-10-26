@@ -16,7 +16,6 @@ import {
 
 import {
   AppState,
-  LanguageModel,
   withProcessServices,
   SessionHostInteractions,
   type HostInteractions,
@@ -402,8 +401,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     // A window that runs its tasks here attaches to its own session; a
     // window of the service is its project's window there: the service's
-    // runs ask it for the same, stage their tool edits here, and bind the
-    // editor's language models (Copilot) through it.
+    // runs ask it for the same and stage their tool edits here.
     if (windowSession.service === undefined) {
       this.runtime.runSync(
         this.editors
@@ -421,19 +419,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const { service } = windowSession;
     if (service !== undefined)
       this.runtime.runFork(
-        Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
-          this.attachToService(service, {
-            ...presentation,
-            ...editor,
-            languageModel,
-            // What a service task wrote, told here as a task here tells
-            // it: the file decorations follow it.
-            filesWritten: (absolutePaths) =>
-              emitAppSignal('workspaceFilesWritten', {
-                absolutePaths: [...absolutePaths],
-              }),
-          }),
-        ).pipe(Scope.provide(this.scope)),
+        this.attachToService(service, {
+          ...presentation,
+          ...editor,
+          // What a service task wrote, told here as a task here tells
+          // it: the file decorations follow it.
+          filesWritten: (absolutePaths) =>
+            emitAppSignal('workspaceFilesWritten', {
+              absolutePaths: [...absolutePaths],
+            }),
+        }).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();
@@ -687,8 +682,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
   public refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateReadFailed | StateWriteFailed,
-    LanguageModel
+    StateReadFailed | StateWriteFailed
   > {
     return this.onboardingFunnel.run();
   }

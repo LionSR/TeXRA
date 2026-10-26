@@ -94,7 +94,6 @@ export class Sessions extends Context.Service<
             plugins,
             secrets: platform.secrets,
             appState: AppState.layer(platform.roots.globalState),
-            languageModel: platform.languageModel,
             agentDirectories: AgentDirectories.layer(platform.agentDirectories),
             toolMissingReporter: platform.toolMissingHandler,
             // An embedder's console has no live level filter of its own, so

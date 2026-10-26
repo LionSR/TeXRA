@@ -71,22 +71,16 @@ type _EveryBackendProviderIsStored = AssertNever<
 
 /**
  * The backend a fresh run on `route` serves `config` from: the model's own
- * provider on a direct route (any credential), else the route that serves it.
+ * provider on a direct route (any credential), or the validation model.
  */
 export function servingBackend(
   config: Pick<ModelConfig, 'provider'>,
   route: { readonly kind: ModelRoute['kind'] },
 ): ModelBackend | undefined {
-  switch (route.kind) {
-    case 'validation':
-      return 'validation';
-    case 'copilot':
-      return 'copilot';
-    default:
-      return Result.getOrUndefined(
-        Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
-      );
-  }
+  if (route.kind === 'validation') return 'validation';
+  return Result.getOrUndefined(
+    Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
+  );
 }
 
 /** The route a request is bound on, as far as reasoning is concerned. */
@@ -214,12 +208,10 @@ function sentOf(
 /**
  * The reasoning a run on `route` gives `config` (the config the bind decides
  * over) under the saved level, or undefined when the model does not reason
- * there and nothing is refused. The levels offered are those of `runsWith`,
- * the config the route runs: an editor-managed Copilot route offers none.
+ * there and nothing is refused.
  */
 export function routeReasoningOf(input: {
   readonly config: ModelConfig;
-  readonly runsWith: Pick<ModelConfig, 'provider' | 'reasoning'>;
   readonly request: ReasoningRequest;
   readonly saved: ReasoningEffort | undefined;
   readonly route: ReasoningRoute;
@@ -230,7 +222,7 @@ export function routeReasoningOf(input: {
     saved === undefined
       ? sent
       : sentOf(config, chooseOnRoute(config, request, undefined, route));
-  const reasoning = routeReasoning(input.runsWith, route);
+  const reasoning = routeReasoning(config, route);
   if (reasoning === undefined && !('refused' in sent)) return undefined;
   const ceiling = routeCeiling(route);
   // `none` turns thinking off rather than naming a level, so no ceiling

@@ -16,8 +16,8 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 
 /**
  * No route can carry a model call now: its credential is missing or cannot
- * be read, the subscription session needs a sign-in, the editor offers no
- * Copilot route, or the model is unknown or unavailable. A failure of the
+ * be read, the subscription session needs a sign-in, or the model is unknown
+ * or unavailable. A failure of the
  * harness's own model access, never a vendor's (that is llm's `ModelError`).
  * `missing-api-key` is the one reason a host acts on (it offers the key
  * setting); every other reason is read as its message.

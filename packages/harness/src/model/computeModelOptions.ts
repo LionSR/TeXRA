@@ -34,11 +34,6 @@ import {
   servingBackend,
   type RouteReasoning,
 } from './reasoningLevel';
-import {
-  copilotRouteUnavailableReason,
-  CopilotRoutes,
-  type CopilotModelRoute,
-} from './copilotRouting';
 
 /**
  * Every store an availability answer here reads: the secret store behind the
@@ -83,25 +78,6 @@ interface UnavailableReasonContext {
   readonly model: string;
   /** The model source the route bills, for the missing-key sentence. */
   readonly source: string;
-  readonly route: ModelRoute<CopilotModelRoute>;
-}
-
-/**
- * Unavailable reason for both Copilot kinds: the dispatch path's own wording
- * for the route the model was decided onto, so the picker shows the sentence
- * a run would fail with. Only an allowed route has no reason, and an allowed
- * route never reaches an unavailable kind.
- */
-function copilotUnavailableReason({
-  model,
-  route,
-}: UnavailableReasonContext): string {
-  return (
-    copilotRouteUnavailableReason(
-      model,
-      route.kind === 'copilot' ? route.route : undefined,
-    ) ?? `Model "${model}" is currently unavailable through Copilot in VS Code.`
-  );
 }
 
 /**
@@ -117,13 +93,11 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   unserved: ({ model }) =>
-    `Model "${model}" is served only through OpenRouter, which TeXRA no longer supports. Choose another model.`,
+    `Model "${model}" is served only through OpenRouter or GitHub Copilot, which TeXRA no longer supports. Choose another model.`,
   'missing-key': ({ model, source }) =>
     `Model "${model}" requires your ${providerDisplayName(source)} API key. Provide it to continue.`,
   'key-unreadable': ({ model, source }) =>
     `Model "${model}" needs your ${providerDisplayName(source)} API key, which could not be read from secret storage. Check that the store is unlocked and readable, then retry.`,
-  'copilot-consent-required': copilotUnavailableReason,
-  'copilot-unavailable': copilotUnavailableReason,
   // Unreachable from `optionOf` (it answers "not recognized"
   // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
@@ -150,8 +124,6 @@ type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, KeyStatus>>;
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  /** Models whose Copilot route the user prefers. */
-  copilotModels: readonly string[];
   facts: HostRouteFacts;
 }
 
@@ -180,7 +152,7 @@ interface RoutedModel {
   readonly config: ModelConfig;
   /** The effort, thinking and mode the model string asks for. */
   readonly request: ReasoningRequest;
-  readonly route: ModelRoute<CopilotModelRoute>;
+  readonly route: ModelRoute;
   readonly gate: RouteGate;
 }
 
@@ -194,16 +166,10 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * Stage 1: what the decided route means for availability, free of any key
  * status. A route that comes down to a direct provider key answers with that
  * provider, so the batch read that follows consults exactly the providers the
- * routes reached. The discovered Copilot route rides on the decision, so the
- * row's config and an unavailable route's sentence read it there, never the
- * editor.
+ * routes reached.
  */
-function routeGate(route: ModelRoute<CopilotModelRoute>): RouteGate {
+function routeGate(route: ModelRoute): RouteGate {
   switch (route.kind) {
-    case 'copilot':
-      // Consent and temporary unavailability are route states on the one
-      // canonical row, never a reason to fall back to another transport.
-      return { kind: `copilot-${route.route?.access ?? 'unavailable'}` };
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
@@ -292,58 +258,41 @@ function buildAvailabilityContext(
     const facts = routeFactsFor(settings, []);
     return {
       reasoningLevels: settings.reasoningLevels,
-      copilotModels: settings.copilotModels,
       facts,
       keyStatuses: { kimiCode: facts.kimiCodeKey },
     };
   });
 }
 
-/** A failed discovery (the port warns) shows each Copilot row unavailable. */
-const presentedCopilotRoutes = CopilotRoutes.discover().pipe(
-  Effect.orElseSucceed((): ReadonlyMap<string, CopilotModelRoute> => new Map()),
-);
-
 /**
- * Stage 1: decide every model's route once, and keep the decision. Each live
- * input (the editor's routes, the Copilot preference, the stage-0 facts) is
- * therefore read once per computation: stage 3 finishes these decisions
- * rather than re-deciding over inputs that may have moved while the key read
- * was in flight.
+ * Stage 1: decide every model's route once, and keep the decision, so
+ * stage 3 finishes these decisions rather than re-deciding over inputs that
+ * may have moved while the key read was in flight.
  */
-function routeModels(models: readonly string[], ctx: ModelRouteContext) {
-  return Effect.gen(function* () {
-    const routed = new Map<string, RoutedModel>();
-    let copilotRoutes: ReadonlyMap<string, CopilotModelRoute> | undefined;
-    for (const model of models) {
-      if (routed.has(model)) continue;
-      const selected = selectModel(model);
-      if (!selected) continue;
-      const rawConfig = selected.config;
-      // An unserved row settles without its Copilot preference.
-      const prefersCopilot =
-        !isUnservedModel(rawConfig) &&
-        ctx.copilotModels.includes(rawConfig.ref);
-      const copilotRoute = prefersCopilot
-        ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(rawConfig.ref)
-        : undefined;
-      const route = decideModelRoute(rawConfig, {
-        ...ctx.facts,
-        validation: false,
-        prefersCopilot,
-        copilotRoute,
-        mode: selected.request.mode,
-      });
-      routed.set(model, {
-        rawConfig,
-        config: routeConfig(rawConfig, route, ctx.facts),
-        request: selected.request,
-        route,
-        gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route),
-      });
-    }
-    return routed;
-  });
+function routeModels(
+  models: readonly string[],
+  ctx: ModelRouteContext,
+): RoutedModels {
+  const routed = new Map<string, RoutedModel>();
+  for (const model of models) {
+    if (routed.has(model)) continue;
+    const selected = selectModel(model);
+    if (!selected) continue;
+    const rawConfig = selected.config;
+    const route = decideModelRoute(rawConfig, {
+      ...ctx.facts,
+      validation: false,
+      mode: selected.request.mode,
+    });
+    routed.set(model, {
+      rawConfig,
+      config: routeConfig(rawConfig, route, ctx.facts),
+      request: selected.request,
+      route,
+      gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route),
+    });
+  }
+  return routed;
 }
 
 /**
@@ -562,9 +511,9 @@ export type ModelOption =
       readonly usageRoute?: UsageRoute;
       /** The registry config as published: what the model is. */
       readonly published: ModelConfig;
-      /** The config it runs with on its route: the editor's when Copilot serves it. */
+      /** The config it runs with on its route. */
       readonly config: ModelConfig;
-      readonly route: ModelRoute<CopilotModelRoute>;
+      readonly route: ModelRoute;
       /** The key its route bills, or the model's own source. */
       readonly source: string;
       /** The user's saved reasoning effort for it. */
@@ -593,7 +542,7 @@ function optionOf(
       unavailableReason: `Model "${model}" is not recognized.`,
     };
   }
-  const { route } = decision;
+  const { route, config } = decision;
   const { kind, usageRoute } = resolveModelAvailability(
     model,
     decision.gate,
@@ -605,15 +554,10 @@ function optionOf(
     ? undefined
     : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
         model,
-        source: modelSource(route, decision.config),
-        route,
+        source: modelSource(route, config),
       });
-  const config =
-    route.kind === 'copilot' && route.route?.access === 'allowed'
-      ? route.route.effectiveConfig
-      : decision.config;
-  const savedEffort = reasoningLevels[decision.config.ref];
-  const backend = servingBackend(decision.config, route);
+  const savedEffort = reasoningLevels[config.ref];
+  const backend = servingBackend(config, route);
   return {
     model,
     availability: kind,
@@ -631,8 +575,7 @@ function optionOf(
       backend === undefined
         ? undefined
         : routeReasoningOf({
-            config: decision.config,
-            runsWith: config,
+            config,
             request: decision.request,
             saved: savedEffort,
             route: reasoningRouteOf(route, backend),
@@ -648,8 +591,8 @@ function optionOf(
  * finished purely over them, so the ~157-model settings pass costs no
  * per-model awaits. Every host read fails in its typed channel
  * ({@link ModelHostFactUnreadable}). `models`, when given, is honored
- * verbatim, one option each, in order. Nothing is cached here: the editor's
- * routes and the sign-in state are read live by design.
+ * verbatim, one option each, in order. Nothing is cached here: the sign-in
+ * state is read live by design.
  */
 export const readModelOptions = Effect.fn('readModelOptions')(function* (
   stores: ModelOptionStores,
@@ -665,7 +608,7 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
       ),
       routeCtx,
     );
-  const routed = yield* routeModels(visible, routeCtx);
+  const routed = routeModels(visible, routeCtx);
   const context = yield* withConsultedKeyStatuses(
     stores.secrets,
     routed,
@@ -693,8 +636,6 @@ function visibleModelsForAccess(
       decideModelRoute(config, {
         ...facts,
         validation: false,
-        prefersCopilot: false,
-        copilotRoute: undefined,
       }).kind === 'chatgpt-subscription'
     ) {
       models.add(model);

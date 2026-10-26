@@ -81,7 +81,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // configurations because they count only text inputs (no upcaster).
   // v5: no OpenRouter backend (no upcaster: an earlier build's row would
   // fail as damaged).
-  'run.config': { version: 5, upcast: [] },
+  // v6: no Copilot backend (no upcaster, as v5).
+  'run.config': { version: 6, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
@@ -143,13 +144,15 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // shape's missing address).
   // v6: no OpenRouter protocol (no upcaster, as
   // `run.config`: an earlier build's row would fail as damaged).
-  'model.message': { version: 6, upcast: [] },
+  // v7: no `vscode-lm` protocol and no editor turn (no upcaster, as v6).
+  'model.message': { version: 7, upcast: [] },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).
   // v3: media parts by address, as `model.message` v5.
   // v4: no OpenRouter protocol, as `model.message` v6.
-  'context.edit': { version: 4, upcast: [] },
+  // v5: no `vscode-lm` origin, as `model.message` v7.
+  'context.edit': { version: 5, upcast: [] },
   'tool.intent': V1,
   'script.call': V1,
   // v2: a captured attachment holds its bytes by blob address, never inline.

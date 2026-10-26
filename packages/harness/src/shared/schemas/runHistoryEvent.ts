@@ -202,8 +202,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
      * none of the runtime's own accounting metrics. The run's cost is a
      * runtime fact, so the row carries the `NormalizedUsage` the handler
      * produced for this invocation and the fold sums it into
-     * `RunState.usage`. `null` only when the invocation produced no
-     * usage at all: an editor turn, or a provider that reported none.
+     * `RunState.usage`. `null` only when the provider reported no usage.
      * The rows are the only carrier.
      */
     usage: Schema.NullOr(NormalizedUsageSchema),
@@ -241,14 +240,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
 ]).check(
   Schema.makeFilter((p) => {
     if (p.kind !== 'response') return;
-    // The editor arm has no local calls.
-    if (p.turn.kind !== 'http')
-      return p.calls.length > 0
-        ? {
-            path: ['calls'],
-            issue: 'An editor turn dispatches no local calls.',
-          }
-        : undefined;
     const local = p.turn.content.filter((part) => part.kind === 'local-call');
     if (local.length !== p.calls.length) {
       return {

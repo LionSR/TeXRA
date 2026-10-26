@@ -381,7 +381,7 @@ version of the usage program against a packed tarball is in
 
 Every run needs an `AgentPlatform`: the process services the package
 composes (the agent directories, secrets, the resume
-and language-model ports, and an optional `toolMissingHandler` that surfaces
+port, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
@@ -450,8 +450,6 @@ than failing quietly:
   a launch whose custom tools need approval with `ToolsRefused`.
 - **Runs are one cycle long** unless `interactive`: `start` and `resume`
   end the run after its cycle rather than waiting for a follow-up message.
-- **No language-model port.** `nodePlatform` wires the unavailable port, so a
-  host that needs host-provided models must supply its own.
 - **A persistent store may not carry across 0.x releases.** No row schema
   is frozen before 1.0, so a release can change a row kind's version with no
   upcaster. A run holding a row of a kind whose version changed is listed as

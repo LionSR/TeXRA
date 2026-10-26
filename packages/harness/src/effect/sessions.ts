@@ -19,7 +19,6 @@ import type {
   AgentDirectoriesPort,
   ToolMissingHandler,
 } from '@platform/interfaces';
-import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
@@ -69,9 +68,6 @@ export interface AgentPlatform {
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
-  /** The bridge its `LanguageModel` service serves; an embedder with no
-   *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
-  readonly languageModel: LanguageModelPort;
 }
 
 /** What an embedder composes the process from: its platform and its
@@ -146,8 +142,6 @@ export type StartInput = (
   readonly continues?: RunId;
   /** Run on the configured helper model instead of the selected one. */
   readonly helperModel?: boolean;
-  /** A quota-exhausted retry offers the user's own API key. */
-  readonly ownKeyFallback?: boolean;
   /** The policy the launch asked for (it only ever narrows the project's),
    *  and whether delegated work starts approved (Auto-approve). */
   readonly approval?: {

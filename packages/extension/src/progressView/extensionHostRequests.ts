@@ -24,7 +24,6 @@ import {
   type HostRequestFailure,
   type RequestRefusal,
   PlatformSecrets,
-  LanguageModel,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -156,8 +155,7 @@ interface ExtensionHostRequestsOptions {
   readonly refreshApiKeyStatus: Effect.Effect<void, Error, ProcessServices>;
   refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateReadFailed | StateWriteFailed,
-    LanguageModel
+    StateReadFailed | StateWriteFailed
   >;
 }
 

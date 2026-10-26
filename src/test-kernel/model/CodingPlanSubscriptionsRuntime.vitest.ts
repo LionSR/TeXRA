@@ -12,10 +12,6 @@ import {
 } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -35,8 +31,6 @@ const boundEndpoint = (
     const route = decideModelRoute(config, {
       ...facts,
       validation: false,
-      prefersCopilot: false,
-      copilotRoute: undefined,
     });
     if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
@@ -145,11 +139,8 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']).pipe(
-            Effect.provide(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ))[0]?.usageRoute,
+          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']))[0]
+            ?.usageRoute,
         ).toBe(usageRoute);
       }),
   );

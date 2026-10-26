@@ -18,10 +18,6 @@ import {
 import { describe, expect } from 'vitest';
 
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -153,12 +149,7 @@ describe('MCP server plugins', () => {
           Effect.sync(() => delete process.env.FIXTURE_API_KEY),
         );
 
-        const services = yield* Layer.build(
-          Layer.mergeAll(
-            mcpToolTableLayer(dir),
-            LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-          ),
-        );
+        const services = yield* Layer.build(mcpToolTableLayer(dir));
         const open = (pin: Scope.Scope) =>
           resolveTestStep({
             tools: [{ name: 'mcp__fixture__*' }],
@@ -273,14 +264,7 @@ describe('MCP server plugins', () => {
         stores: hostStores(),
         workspaceRoot: undefined,
         host: 'cli',
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            mcpToolTableLayer(dir),
-            LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-          ),
-        ),
-      );
+      }).pipe(Effect.provide(mcpToolTableLayer(dir)));
       const tool = resolved.registry.get('mcp__fixture__echo')!;
       expect(yield* tool.call({ text: 'hi' })).toMatchObject({
         status: 'executed',
@@ -312,14 +296,7 @@ describe('MCP server plugins', () => {
           stores: hostStores(),
           workspaceRoot: undefined,
           host: 'cli',
-        }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              mcpToolTableLayer(dir),
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ),
-        );
+        }).pipe(Effect.provide(mcpToolTableLayer(dir)));
         expect(resolved.definitions).toEqual([]);
         expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([
           expect.stringContaining('MCP server "bad name!"'),
@@ -365,12 +342,7 @@ describe('MCP server plugins', () => {
           workspaceRoot: undefined,
           host: 'cli',
         }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              mcpToolTableLayer(dir),
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ),
+          Effect.provide(mcpToolTableLayer(dir)),
           Effect.provideService(ProjectEnvironment, {
             PATH: sentinel,
             FIXTURE_MARK: 'from-dotenv',

@@ -189,8 +189,6 @@ export function createDesktopSettingsIpc(
     ProcessServices | StorageFs
   > = {
     ...body.handlers,
-    requestModelAccess: unsupported('Copilot models require VS Code.'),
-    clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     installToolExtension: unsupported(NO_EXTENSION_HOSTING),
     installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
     applyLatexSettings: unsupported(

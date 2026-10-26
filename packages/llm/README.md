@@ -1,12 +1,12 @@
 # @texra-ai/llm
 
 TeXRA's model package: the model catalog over `llm-zoo`, the provider catalog,
-the route decision, the subscription sign-in flows, and one contract over four
-HTTP wire protocols and the editor's `vscode-lm`. A `Model` is a configured
-executable value that lowers a turn, decodes the stream, and classifies
-failures. Conversation state, retries, pricing, approvals, budgets, and
-persistence belong to the caller, and the package is pure: the host passes
-configuration in (`RouteFacts`) and credentials through `CredentialStore`.
+the route decision, the subscription sign-in flows, and one contract over three
+HTTP wire protocols. A `Model` is a configured executable value that lowers a
+turn, decodes the stream, and classifies failures. Conversation state, retries,
+pricing, approvals, budgets, and persistence belong to the caller, and the
+package is pure: the host passes configuration in (`RouteFacts`) and
+credentials through `CredentialStore`.
 
 > **0.x: the API may change in any minor release.** The package is versioned
 > on its own, not with the TeXRA app.
@@ -114,8 +114,7 @@ never on its message:
 | `quota`                                      | for `quota-exhausted`: the `plan` used up (a `PlanRoute`, or `null` for the account's credit), and when it resets                                                                                                                   |
 | `status`, `requestId`, `responseId`, `model` | the HTTP facts, when the failure had a reply                                                                                                                                                                                        |
 
-`ModelErrorFieldsSchema` is the same fields as data, for an error that
-crosses a process boundary. The package itself retries nothing. Retry,
+The package itself retries nothing. Retry,
 pricing and persistence belong to the caller
 ([`@texra-ai/harness`](../harness/README.md) is one).
 
@@ -212,12 +211,6 @@ covers, which the operation handle deliberately does not copy.
 | `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
 | `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                              |
 
-The `vscode-lm` protocol cannot live here: it is acquired from the
-editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`
-implements the same `Model` contract against `vscode.lm`, captures one
-concrete model with its exact vendor, id and version, and rejects a foreign or
-retired acquisition rather than silently selecting a replacement.
-
 ## Who calls it
 
 `packages/harness/src/agent/runtime/modelAccess/ModelAccess.ts` binds a route to a `Model`, and
@@ -270,9 +263,7 @@ behind `vitest.live.config.mjs`. Each suite skips itself unless its own key is
 in the environment, so a run with one key exercises one route and skips the
 rest. It is deliberately not part of `npm test`: reach it by name
 (`npm run test:live`) or through the labelled job in
-`.github/workflows/live-llm.yml`. `vscode-lm` has no
-suite there — it is acquired through the extension host's `vscode.lm` API, so
-its live check belongs to an Extension Development Host job.
+`.github/workflows/live-llm.yml`.
 
 What the live tier does not claim: SSE parsing belongs to the vendor SDKs, so
 the package makes no bounded-stream-memory claim, and cleanup joins foreign
