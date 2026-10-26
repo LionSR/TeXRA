@@ -149,7 +149,7 @@ function representativeDiffLineIndex(
 /** Wrapped diff lines bounded to `maxDisplayLines`; 0 = no truncation. An
  *  omitted `scrollOffset` anchors compact windows on the first change.
  *  `width` is already clamped by the `DiffView` entry point. */
-export function scrollBoundedDiffDisplayLines(
+function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxDisplayLines: number,
   scrollOffset: number | undefined,

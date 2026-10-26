@@ -94,7 +94,7 @@ function parseWindows(
   return windows;
 }
 
-export function parseChatGptUsage(
+function parseChatGptUsage(
   body: unknown,
   fetchedAt: number,
 ): ParsedSubscriptionUsage {

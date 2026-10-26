@@ -174,7 +174,7 @@ export function classifyFindings(normalFindings, productionFindings) {
   ].toSorted(compareFindings);
 }
 
-export function findingKey(finding) {
+function findingKey(finding) {
   const normalized = normalizeFinding(finding);
   return `${normalized.file} ${normalized.category} ${normalized.kind} ${normalized.name}`;
 }

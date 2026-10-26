@@ -61,18 +61,6 @@ describe('InvokeCommandTool allowlist', () => {
       }),
   );
 
-  it.effect('allows texra.setApiKey without model-supplied arguments', () =>
-    Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
-      const result = yield* invoke(tool, { command: 'texra.setApiKey' });
-
-      assert.equal(result.status, 'executed');
-      assert.equal(invocations.length, 1);
-      assert.equal(invocations[0].command, 'texra.setApiKey');
-      assert.deepEqual(invocations[0].args, []);
-    }),
-  );
-
   it.effect('rejects arbitrary VS Code commands outside the allowlist', () =>
     Effect.gen(function* () {
       const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());

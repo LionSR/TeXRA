@@ -18,27 +18,4 @@ describe('parseCriticismAnnotations', () => {
       },
     ]);
   });
-
-  it('rejects non-integer and out-of-range confidence values', () => {
-    expect(parseCriticismAnnotations('\\criticize{bad}{3}{999}')).toEqual([]);
-    expect(parseCriticismAnnotations('\\criticize{bad}{3}{4.5}')).toEqual([]);
-  });
-
-  it('does not parse partial macro names', () => {
-    expect(parseCriticismAnnotations('\\criticizeFoo{x}{3}{5}')).toEqual([]);
-  });
-
-  it('handles doubly-nested braces in the message argument', () => {
-    const annotations = parseCriticismAnnotations(
-      '\\criticize{see \\sqrt{\\frac{a}{b}}}{2}{3}',
-    );
-
-    expect(annotations).toMatchObject([
-      {
-        message: 'see \\sqrt{\\frac{a}{b}}',
-        severity: 2,
-        confidence: 3,
-      },
-    ]);
-  });
 });

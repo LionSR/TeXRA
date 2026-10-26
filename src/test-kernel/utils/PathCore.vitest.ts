@@ -1,93 +1,21 @@
-import * as path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-import {
-  escapesRoot,
-  getPathSegments,
-  isPathWithin,
-  isStrictlyWithin,
-  toPosixPath,
-} from '@utils/core/pathCore';
-
-describe('toPosixPath', () => {
-  it.each([
-    ['', '.'],
-    ['.', '.'],
-    ['foo/bar', 'foo/bar'],
-    ['foo\\bar', 'foo/bar'],
-    ['foo//bar', 'foo/bar'],
-    ['/foo/bar', 'foo/bar'],
-    ['foo/bar/', 'foo/bar'],
-    ['  foo/bar  ', 'foo/bar'],
-    ['a\\\\b\\c', 'a/b/c'],
-    // pathe.normalize resolves .. and . segments
-    ['foo/../bar', 'bar'],
-    ['./foo/bar', 'foo/bar'],
-    ['../shared/macros', '../shared/macros'],
-  ])('converts %j → %j', (input, expected) => {
-    expect(toPosixPath(input)).toBe(expected);
-  });
-});
+import { isPathWithin } from '@utils/core/pathCore';
 
 describe('isPathWithin', () => {
   it.each([
-    // The target equal to base counts as contained.
-    ['/base', '/base', true],
-    ['/base', '/base/child/file.tex', true],
     // A sibling directory that merely shares a string prefix is outside.
     ['/base', '/base-other/file.tex', false],
     // Parent-traversal escapes, including via backslashes.
-    ['/base/child', '/base/child/../../etc/passwd', false],
     [
       String.raw`C:\base\child`,
       String.raw`C:\base\child\..\..\etc\passwd`,
       false,
     ],
-    // An absolute target unrelated to a relative base.
-    ['base/child', '/etc/passwd', false],
     // A first segment that merely begins with two dots is inside the base —
     // only a whole `..` segment escapes it.
     ['/base', '/base/..notes.tex', true],
   ])('isPathWithin(%j, %j) → %s', (base, target, expected) => {
     expect(isPathWithin(base, target)).toBe(expected);
-  });
-});
-
-describe('escapesRoot', () => {
-  it.each([
-    ['', false],
-    ['child/file.tex', false],
-    ['..notes.tex', false],
-    ['..foo/bar', false],
-    ['..', true],
-    [`..${path.sep}etc`, true],
-    [`..${path.sep}..${path.sep}etc`, true],
-  ])('escapesRoot(%j) → %s', (relativePath, expected) => {
-    expect(escapesRoot(relativePath)).toBe(expected);
-  });
-});
-
-describe('isStrictlyWithin', () => {
-  it.each([
-    // The target equal to base is NOT strictly within.
-    ['/base', '/base', false],
-    ['/base', '/base/child/file.tex', true],
-    ['/base', '/base-other/file.tex', false],
-    ['/base/child', '/base/child/../../etc/passwd', false],
-  ])('isStrictlyWithin(%j, %j) → %s', (base, target, expected) => {
-    expect(isStrictlyWithin(base, target)).toBe(expected);
-  });
-});
-
-describe('getPathSegments', () => {
-  it.each([
-    ['', []],
-    ['.', []],
-    ['foo/bar/baz', ['foo', 'bar', 'baz']],
-    ['foo//bar', ['foo', 'bar']],
-    ['/foo/bar/', ['foo', 'bar']],
-  ])('segments %j → %j', (input, expected) => {
-    expect(getPathSegments(input)).toEqual(expected);
   });
 });

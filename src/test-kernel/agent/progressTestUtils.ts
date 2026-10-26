@@ -9,12 +9,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
   aggregateTarget,
-  emptyRunEndOutput,
   type BashPermission,
   type DisplaySessionEvent,
   type RequestDecision,
   type RunId,
-  type RunOutcome,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -34,12 +32,12 @@ import { workspaceRelativePath } from '@utils/files/workspaceFS';
  * presentation port's typed calls into the same stream as plain `emit` calls,
  * using its own names, so the event vocabulary is a plain string.
  */
-export type RecordedProgressEvent = {
+type RecordedProgressEvent = {
   event: string;
   payload: unknown;
 };
 
-export interface RecordingProgressSink {
+interface RecordingProgressSink {
   emit(event: string, payload: unknown): void;
 }
 
@@ -91,16 +89,6 @@ export function recordSessionEvents(
         : events.filter((event) => event.aggregateId === filter.aggregateId);
     },
   };
-}
-
-/**
- * Let every reader of a session's plane (`events.all`, the fold fiber)
- * deliver what was published before this call: the readers run on the
- * process runtime's scheduler, which drains on a macrotask.
- */
-export async function settleSessionEvents(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
 }
 
 /** The events (or drafts) of one arm. */
@@ -235,25 +223,6 @@ export async function seedActiveRun(
     ]);
     await Effect.runPromise(session.log.settled);
   }
-}
-
-/** Fold a run to a terminal phase from its `run.end` row, the one fact that
- *  carries it. */
-export async function seedTerminalRun(
-  session: SessionHandle,
-  runId: RunId,
-  outcome: RunOutcome,
-): Promise<void> {
-  await ensureRunStart(session, runId);
-  publishTestRows(session, [
-    {
-      type: 'run.end',
-      aggregateId: qualifyAggregateId('run', runId),
-      outcome,
-      output: emptyRunEndOutput(),
-    },
-  ]);
-  await Effect.runPromise(session.log.settled);
 }
 
 /**

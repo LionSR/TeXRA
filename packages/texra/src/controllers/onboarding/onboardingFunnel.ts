@@ -95,7 +95,7 @@ interface OnboardingFunnelTransition {
  * consented action — the user clicks "Run setup assistant" on the setup card
  * (or invokes the command) to start it. There is deliberately no auto-kickoff.
  */
-export function planOnboardingFunnelTransition(
+function planOnboardingFunnelTransition(
   previous: OnboardingFunnelState | undefined,
   inputs: OnboardingFunnelInputs,
 ): OnboardingFunnelTransition {

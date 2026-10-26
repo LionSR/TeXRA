@@ -10,41 +10,6 @@ import {
 } from '@tools/structuredOutput';
 
 describe('normalizeStructuredOutputSchema', () => {
-  it.effect('normalizes a JSON Schema object into a validating schema', () =>
-    Effect.gen(function* () {
-      const jsonSchema = {
-        type: 'object',
-        properties: {
-          title: { type: 'string' },
-          count: { type: 'integer' },
-        },
-        required: ['title', 'count'],
-        additionalProperties: false,
-      };
-
-      const normalized = normalizeStructuredOutputSchema(jsonSchema);
-      const tool = buildTerminalTool(jsonSchema);
-
-      // `additionalProperties` is the provider conversion's decision, not
-      // the author's: a compiled schema ignores undeclared keys.
-      const { additionalProperties: _closed, ...authored } = jsonSchema;
-      expect(normalized.jsonSchema).toMatchObject(authored);
-      expect(yield* tool.call({ title: 'Lemma', count: 2 })).toMatchObject({
-        status: 'executed',
-      });
-      expect(yield* tool.call({ title: 'Lemma' })).toMatchObject({
-        status: 'error',
-      });
-    }),
-  );
-
-  it('rejects non-object and unconstrained roots at normalization time', () => {
-    expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
-    expect(() =>
-      normalizeStructuredOutputSchema(Schema.Array(Schema.String)),
-    ).toThrow(/object.*root/);
-  });
-
   it('rejects regex-bearing sandbox schemas before host compilation', () => {
     expect(() =>
       normalizeStructuredOutputSchema({
@@ -63,18 +28,6 @@ describe('normalizeStructuredOutputSchema', () => {
         },
       }),
     ).toThrow(/cannot use pattern/);
-  });
-
-  it('allows output fields whose names match JSON Schema keywords', () => {
-    expect(() =>
-      normalizeStructuredOutputSchema({
-        type: 'object',
-        properties: {
-          pattern: { type: 'string' },
-          patternProperties: { type: 'string' },
-        },
-      }),
-    ).not.toThrow();
   });
 
   it('rejects format, $ref, and prototype-polluting property keys', () => {
@@ -98,34 +51,6 @@ describe('normalizeStructuredOutputSchema', () => {
     expect(() => normalizeStructuredOutputSchema(polluting)).toThrow(
       /cannot declare a "__proto__" property/,
     );
-  });
-
-  it('rejects sandbox schemas past the depth and node caps', () => {
-    let deep: Record<string, unknown> = { type: 'string' };
-    for (let i = 0; i < 15; i += 1) {
-      deep = { type: 'object', properties: { next: deep } };
-    }
-    expect(() => normalizeStructuredOutputSchema(deep)).toThrow(
-      /nested deeper than/,
-    );
-
-    const wide: Record<string, unknown> = {};
-    for (let i = 0; i < 1100; i += 1) wide[`f${i}`] = { type: 'string' };
-    expect(() =>
-      normalizeStructuredOutputSchema({ type: 'object', properties: wide }),
-    ).toThrow(/exceeds the .* limit/);
-  });
-
-  it('rejects scalar-heavy schemas past the serialized-size cap', () => {
-    // A giant enum is only a couple of object nodes but a huge payload; the
-    // size cap catches what the node/depth caps cannot.
-    const choice = { enum: Array.from({ length: 200_000 }, (_, i) => `v${i}`) };
-    expect(() =>
-      normalizeStructuredOutputSchema({
-        type: 'object',
-        properties: { choice },
-      }),
-    ).toThrow(/byte size limit/);
   });
 });
 

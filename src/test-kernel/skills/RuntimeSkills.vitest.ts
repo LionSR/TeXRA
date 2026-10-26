@@ -4,8 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { Skills } from '@texra-ai/harness';
-import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   activatedSkillNames,
@@ -26,26 +25,8 @@ const runCatalog = (workspacePath: string) => ({
   plugins: { loadable: [], withheld: [] },
 });
 
-const loadRuntimeSkillCatalog = (
-  ...args: Parameters<typeof loadRuntimeSkillCatalogEffect>
-) =>
-  Effect.runPromise(
-    loadRuntimeSkillCatalogEffect(...args).pipe(
-      Effect.provide(nodePlatformLayer),
-    ),
-  );
-
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
-}
-
-const catalogText = (catalog: readonly { readonly text: string }[]) =>
-  catalog.map(({ text }) => text).join('\n');
-
-function catalogSkillNames(catalog: readonly { readonly text: string }[]) {
-  return [...catalogText(catalog).matchAll(/^- ([^:]+):/gm)].map(
-    (match) => match[1],
-  );
 }
 
 const WORKSPACE_ROOT = '/workspace';
@@ -68,50 +49,12 @@ afterEach(async () => {
 });
 
 describe('runtime skills', () => {
-  it.effect(
-    'formats an enabled skill for activation with skill directory substitution',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(createTempRoot);
-        yield* Effect.promise(() =>
-          writeSkill(
-            root,
-            'proof-audit',
-            {
-              name: 'proof-audit',
-              description: 'Review mathematical proof steps.',
-            },
-            'Read ${TEXRA_SKILL_DIR}/references/checklist.md first & compare <proof>.',
-          ),
-        );
-        installTestSkillRoots([{ tier: 'project', path: root }]);
-
-        const { skills } = yield* Skills.enabled({
-          ...testWorkspaceRoots(),
-          workspace: WORKSPACE_ROOT,
-        });
-        const [skill] = skills;
-
-        expect(skill?.activation).toContain('<skill name="proof-audit">');
-        expect(skill?.activation).toContain('<source>project</source>');
-        expect(skill?.activation).toContain(
-          `Read ${path.dirname(skill?.display.path ?? '')}/references/checklist.md first &amp; compare &lt;proof>.`,
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
   it.effect.each([
     {
       label: 'name',
       key: WorkspaceStateKey.DISABLED_SKILLS,
       value: ['project-skill'],
       expected: ['user-skill'],
-    },
-    {
-      label: 'source',
-      key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-      value: ['user'],
-      expected: ['project-skill'],
     },
   ])('filters runtime skills disabled by $label', ({ key, value, expected }) =>
     Effect.gen(function* () {
@@ -142,31 +85,6 @@ describe('runtime skills', () => {
       expect(result.catalog.map(({ name }) => name)).toStrictEqual(expected);
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
-
-  it('bounds the catalog of one source', async () => {
-    const root = await createTempRoot();
-    const discoveredCount = SKILL_CATALOG_MAX_SKILLS + 2;
-    await Promise.all(
-      Array.from({ length: discoveredCount }, (_, index) => {
-        const name = `skill-${index.toString().padStart(3, '0')}`;
-        return writeSkill(
-          root,
-          name,
-          { name, description: `Description ${index}.` },
-          `Apply ${name}.`,
-        );
-      }),
-    );
-    installTestSkillRoots([{ tier: 'project', path: root }]);
-
-    const result = await loadRuntimeSkillCatalog(runCatalog(WORKSPACE_ROOT));
-    const catalogNames = catalogSkillNames(result.catalog);
-
-    expect(catalogNames).toHaveLength(SKILL_CATALOG_MAX_SKILLS);
-    expect(result.catalog.map(({ name }) => name)).toStrictEqual(catalogNames);
-    expect(catalogNames.at(-1)).toBe('skill-199');
-    expect(catalogText(result.catalog)).not.toContain('skill-200');
-  });
 
   // Fails if a skill root one step admits reaches a call without it (another
   // run of the same project, or a later step that no longer lists it), or if

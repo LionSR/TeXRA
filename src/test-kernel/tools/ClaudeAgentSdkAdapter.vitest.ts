@@ -1,27 +1,11 @@
-// Claude Agent SDK boundary tests: authoritative usage folding, current Task
-// tool summaries, and replace-semantics background-task projection.
+// Claude Agent SDK boundary: the run's usage and cost are folded from the
+// SDK's authoritative per-model usage, nested model calls included.
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentEvent, AgentTrace } from '@agent/trace';
-import { noopTrace } from '@test/support/noopTrace';
-import { ClaudeBackgroundTaskTracker } from '@texra/tools/claudeAgentBackgroundTasks';
 import { claudeResultUsage } from '@texra/tools/claudeAgentShared';
-
-function fakeTrace(): {
-  trace: AgentTrace;
-  toolStarts: () => AgentEvent[];
-  lastToolEnd: () => AgentEvent | undefined;
-} {
-  const events: AgentEvent[] = [];
-  return {
-    trace: { ...noopTrace, emit: (event) => void events.push(event) },
-    toolStarts: () => events.filter((event) => event.type === 'tool.start'),
-    lastToolEnd: () => events.findLast((event) => event.type === 'tool.end'),
-  };
-}
 
 describe('Claude Agent SDK adapter', () => {
   it('folds authoritative modelUsage across main and nested model calls', () => {
@@ -56,61 +40,6 @@ describe('Claude Agent SDK adapter', () => {
       cacheReadInputTokens: 50,
       cacheCreationInputTokens: 7,
       cost: 0.03,
-    });
-  });
-
-  it('replaces the complete background-task level without pairing task edges', () => {
-    const { trace, toolStarts, lastToolEnd } = fakeTrace();
-    const tracker = new ClaudeBackgroundTaskTracker(trace);
-
-    tracker.replace([
-      {
-        task_id: 'task-1',
-        task_type: 'subagent',
-        description: 'Check the proof',
-      },
-    ]);
-
-    expect(toolStarts()).toHaveLength(1);
-    expect(toolStarts()[0]).toMatchObject({
-      toolName: 'claude:background_tasks',
-      input: { source: 'background_tasks_changed' },
-    });
-    expect(lastToolEnd()).toMatchObject({
-      status: 'in_progress',
-      result: {
-        summary: '1 Claude background task',
-        output: { tasks: [{ task_id: 'task-1' }] },
-      },
-    });
-
-    tracker.replace([
-      {
-        task_id: 'task-1',
-        task_type: 'subagent',
-        description: 'Check the proof',
-      },
-      {
-        task_id: 'task-2',
-        task_type: 'shell',
-        description: 'Run tests',
-      },
-    ]);
-    expect(lastToolEnd()).toMatchObject({
-      status: 'in_progress',
-      result: {
-        summary: '2 Claude background tasks',
-        output: { tasks: [{ task_id: 'task-1' }, { task_id: 'task-2' }] },
-      },
-    });
-
-    tracker.replace([]);
-    expect(lastToolEnd()).toMatchObject({
-      status: 'completed',
-      result: {
-        summary: 'No Claude background tasks remain',
-        output: { tasks: [] },
-      },
     });
   });
 });

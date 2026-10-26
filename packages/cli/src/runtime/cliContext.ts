@@ -143,7 +143,7 @@ export interface CliAmbientState {
  * answer "is color OK on *stderr*" — the gate `doctor` and the progress
  * renderer each need for their own destination.
  */
-export function resolveStreamColor(
+function resolveStreamColor(
   streamIsTty: boolean,
   options: {
     env?: Record<string, string | undefined>;

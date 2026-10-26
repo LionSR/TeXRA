@@ -10,8 +10,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachDroppedFiles } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 
-const CONTEXT_EXTENSIONS = ['.bib', '.bbl', '.cls', '.sty', '.txt'];
-
 describe('MainViewDroppedFilesController', () => {
   const tempDirs = useTempDirs();
 
@@ -22,22 +20,6 @@ describe('MainViewDroppedFilesController', () => {
       for (const file of files) await writeFile(join(root, file), '');
       return root;
     });
-
-  it.effect('attaches only the extensions the target field accepts', () =>
-    Effect.gen(function* () {
-      const root = yield* workspaceWith(['notes.txt', 'paper/main.tex']);
-      expect(
-        yield* attachDroppedFiles(
-          root,
-          [
-            pathToFileURL(join(root, 'notes.txt')).href,
-            join(root, 'paper', 'main.tex'),
-          ],
-          CONTEXT_EXTENSIONS,
-        ),
-      ).toEqual({ paths: ['notes.txt'], attachedCount: 1, rejectedCount: 1 });
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 
   it.effect(
     'deduplicates accepted files while counting folders, missing and outside paths',

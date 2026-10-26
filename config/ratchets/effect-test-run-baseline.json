@@ -5,12 +5,8 @@
       "count": 1,
       "reason": "The body forks the subject's own body-local ManagedRuntime and asserts that the lifecycle shutdown disposes that runtime (Fiber.await expects a Failure for exactly that reason), so the receiver is the assertion subject and cannot disappear; the suite is otherwise it.live + Effect.gen."
     },
-    "src/test-kernel/desktop/JsonStore.vitest.ts": {
-      "count": 2,
-      "reason": "The Effect run belongs to the module under test: the body builds an esbuild bundle and imports it, so `bundledEffect` is that bundle's own Effect instance, which the test's tester cannot run; JsonStore is also on the 1.0 retirement boundary."
-    },
     "src/test-kernel/platform/processRuntime.vitest.ts": {
-      "count": 3,
+      "count": 1,
       "reason": "These are runs of the subject: the suite tests the process runtime's own fork-failure reporting, so `runtime.runFork` is the asserted behaviour and not the test executing its program; the bodies are already it.live + Effect.gen."
     }
   }

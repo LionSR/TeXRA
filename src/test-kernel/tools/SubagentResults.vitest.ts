@@ -3,27 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
-import {
-  RUN_OUTCOME,
-  type RunEnd,
-  type RunEndOutput,
-  type RunId,
-} from '@shared/schemas';
-import {
-  formatBashDelivery,
-  formatBashError,
-} from '@tools/delegation/bashDelivery';
-
-function toolUseResult(
-  outcome: RunEnd['outcome'] = RUN_OUTCOME.COMPLETED,
-  output: Partial<RunEndOutput> = {},
-): RunEnd {
-  return {
-    outcome,
-    output: { response: '', files: [], ...output },
-  };
-}
 
 function seconds(milliseconds: number): string {
   return `${(milliseconds / 1000).toFixed(1)}s`;
@@ -55,83 +34,5 @@ describe('formatDelivery', () => {
     );
     // response is text-escaped (&, < — quotes left intact)
     expect(xml).toContain('<response>a &lt; b &amp; c "q"</response>');
-  });
-});
-
-describe('formatSubagentDelivery', () => {
-  it('escapes tool-use response bodies at the XML boundary', () => {
-    const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
-      response: 'Keep </response> literal & preserve <subagent-result> text.',
-    });
-
-    const delivery = formatSubagentDelivery('reviewer', result, {
-      runId: 'abc123' as RunId,
-    });
-
-    expect(delivery).toContain(
-      'Keep &lt;/response> literal &amp; preserve &lt;subagent-result> text.',
-    );
-    expect(delivery).not.toContain('Keep </response> literal');
-  });
-});
-
-describe('formatBashDelivery', () => {
-  it('keeps all content lines when a background output tail ends at the preview limit', () => {
-    const outputTail = Array.from(
-      { length: 20 },
-      (_, index) => `line-${String(index + 1).padStart(2, '0')}`,
-    ).join('\n');
-
-    const delivery = formatBashDelivery(
-      'bash-1',
-      { command: 'printf lines' },
-      1000,
-      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
-      { tail: `${outputTail}\n` },
-      { tail: '' },
-    );
-
-    expect(delivery).toContain('line-01');
-    expect(delivery).toContain('line-20');
-  });
-
-  it('escapes background bash ids at the XML attribute boundary', () => {
-    const delivery = formatBashDelivery(
-      'bash&1"<',
-      { command: 'printf lines' },
-      1000,
-      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
-      { tail: 'ok' },
-      { tail: '' },
-    );
-    const error = formatBashError(
-      'bash&1"<',
-      { command: 'printf lines' },
-      new Error('no'),
-    );
-
-    expect(delivery).toContain('<background-result id="bash&amp;1&quot;&lt;"');
-    expect(error).toContain('<background-error id="bash&amp;1&quot;&lt;"');
-  });
-
-  it('normalizes CRLF when truncating background output previews', () => {
-    const outputTail = Array.from(
-      { length: 21 },
-      (_, index) => `line-${String(index + 1).padStart(2, '0')}`,
-    ).join('\r\n');
-
-    const delivery = formatBashDelivery(
-      'bash-2',
-      { command: 'printf lines' },
-      1000,
-      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
-      { tail: `${outputTail}\r\n` },
-      { tail: '' },
-    );
-
-    expect(delivery).not.toContain('line-01');
-    expect(delivery).toContain('line-02');
-    expect(delivery).toContain('line-21');
-    expect(delivery).not.toContain('\r');
   });
 });

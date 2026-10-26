@@ -36,7 +36,7 @@ type _CodexEffortsAccepted = _AssertTrue<
   `${AgentCliEffort}` extends ModelReasoningEffort ? true : false
 >;
 
-export const CODEX_MODEL_RULE: AgentCliModelRule = {
+const CODEX_MODEL_RULE: AgentCliModelRule = {
   cli: 'Codex',
   eligible: isCodexModel,
   requirement: 'a non-retired OpenAI model served by the Codex backend',

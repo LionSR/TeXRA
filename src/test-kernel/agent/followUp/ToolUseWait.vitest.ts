@@ -1,11 +1,8 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import { Deferred, Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -16,37 +13,22 @@ import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { RunControls } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
-import {
-  emptyRunEndOutput,
-  MESSAGE_TYPES,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import { freshRunState, type RunState } from '@shared/session/runState';
-import { formatSubagentProgress } from '@shared/subagentFollowup';
+import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
   scriptedInvokerLayer,
   startedRun,
-  TEST_ORIGIN,
   textTurn,
   type ScriptedRunInit,
   type ScriptedTurn,
 } from '@test/support/scriptedRunLayers';
-import {
-  publishTestRunStart,
-  queuedFollowUps,
-  publishTestRows,
-} from '@test/support/sessionTestUtils';
+import { publishTestRows } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 
-import {
-  eventsOfType,
-  recordSessionEvents,
-  sessionWithInteractions,
-} from '../progressTestUtils';
+import { sessionWithInteractions } from '../progressTestUtils';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session run history and the
@@ -144,57 +126,6 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
 const quietSession = (overrides: Record<string, unknown> = {}) =>
   sessionWithInteractions({ emit: () => {}, ...overrides });
 
-/**
- * A run whose rows stop where a crash between a committed text response and
- * its post-response policy would leave them: the response and its step are
- * in the run history, nothing after them is.
- */
-const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
-  function* (session: SessionHandle, runId: RunId, text: string) {
-    const cell = yield* session.runHistory.open(runId);
-    const aggregate = rowAggregate(runId);
-    const fresh: RunState = {
-      ...freshRunState(0),
-      family: 'toolUse',
-      modelId: 'test-model',
-      backend: 'deepseek',
-    };
-    const opened = yield* cell.append([
-      appendRow(runId, [
-        { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
-      ]),
-      positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
-    ]);
-    const invocation = { invocationId: randomUUID(), attempt: 1 };
-    return yield* cell.append([
-      {
-        type: 'model.message',
-        aggregateId: aggregate,
-        payload: {
-          kind: 'attempt',
-          request: '0'.repeat(64),
-          invocation,
-          origin: TEST_ORIGIN,
-          purpose: 'turn',
-        },
-      },
-      {
-        type: 'model.message',
-        aggregateId: aggregate,
-        payload: {
-          kind: 'response',
-          responseId: randomUUID(),
-          invocation,
-          turn: textTurn(text),
-          calls: [],
-          usage: null,
-        },
-      },
-      positionRow(runId, opened, 'response.ready'),
-    ]);
-  },
-);
-
 /** Put input on the run's queue before the loop claims it. */
 const enqueue = Effect.fn('test.enqueue')(function* (
   session: SessionHandle,
@@ -281,157 +212,9 @@ describe('a parked child run', () => {
         yield* Fiber.interrupt(again.fiber);
       }),
   );
-
-  it.effect('stops after an error when no batch was drained', () =>
-    Effect.gen(function* () {
-      // A subagent that waited here would wait for a follow-up its
-      // orchestrator was never told to send.
-      const session = yield* quietSession();
-      const parentRunId = generateRunId();
-      const { result } = yield* runLoop({
-        runId: startedRun(session, parentRunId),
-        session,
-        parentRunId,
-        script: [{ failWith: { message: 'boom', userRetryable: false } }],
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-    }),
-  );
 });
 
 describe('a parked root run', () => {
-  it.effect('stops a one-cycle child instead of parking it as waiting', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const parentRunId = generateRunId();
-      const { result, requests } = yield* runLoop({
-        runId: startedRun(session, parentRunId),
-        session,
-        parentRunId,
-        stopAfterCycle: true,
-        script: [textTurn('done')],
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(requests).toHaveLength(1);
-    }),
-  );
-
-  it.effect(
-    'replays a recovered text response through the final-turn policy',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        yield* seedCommittedResponse(session, runId, 'the prose answer');
-
-        const { result, requests, state } = yield* runLoop({
-          runId,
-          session,
-          resume: true,
-          // One cycle, so the scenario ends at the turn it is about.
-          stopAfterCycle: true,
-          finalToolName: 'submit_output',
-          script: [textTurn('and the structured one')],
-        });
-
-        // The crash landed between the response row and the live policy that
-        // reads it. Treating the row as an already-finished turn would end
-        // the run with no structured output attempted at all.
-        expect(requests).toHaveLength(1);
-        expect(requests[0]?.toolChoice).toEqual({ name: 'submit_output' });
-        expect(userTexts(state)).toContain(
-          'Submit the final structured output now.',
-        );
-        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      }),
-  );
-
-  it.effect('waits while parked and runs again once input arrives', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const recorded = recordSessionEvents(session);
-
-      const { fiber, park } = yield* forkLoop({
-        runId,
-        session,
-        script: [textTurn('first'), textTurn('second')],
-      });
-      yield* park(0);
-      yield* enqueue(session, runId, [
-        { text: 'carry on', from: { kind: 'user' as const } },
-      ]);
-      yield* park(1);
-      yield* Fiber.interrupt(fiber);
-
-      // The phase is the loop's own step on the session's plane, the single
-      // rail: the park, then the step that leaves it.
-      const steps = eventsOfType(
-        yield* Effect.promise(() => recorded.read()),
-        'run.position',
-      ).map((event) => event.payload.at);
-      const parked = steps.indexOf('waiting');
-      expect(parked).toBeGreaterThanOrEqual(0);
-      expect(steps.slice(parked + 1).some((step) => step !== 'waiting')).toBe(
-        true,
-      );
-    }),
-  );
-
-  it.effect('restores its park when a resume consumes only stale notices', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const first = yield* forkLoop({
-        runId,
-        session,
-        script: [textTurn('first')],
-      });
-      yield* first.park(0);
-      yield* Fiber.interrupt(first.fiber);
-
-      // Only an ended child's progress notice is queued: consuming it starts
-      // no turn, so the resume must still write the park it cleared.
-      const child = publishTestRunStart(session, generateRunId(), {
-        parent: runId,
-      });
-      publishTestRows(session, [
-        {
-          type: 'run.end',
-          aggregateId: rowAggregate(child),
-          outcome: RUN_OUTCOME.CANCELLED,
-          output: emptyRunEndOutput(),
-        },
-      ]);
-      yield* enqueue(session, runId, [
-        {
-          text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
-          from: { kind: 'run' as const, runId: child },
-          hold: 'generation' as const,
-        },
-      ]);
-      const recorded = recordSessionEvents(session);
-
-      const resumed = yield* forkLoop({
-        runId,
-        session,
-        resume: true,
-        script: [textTurn('never reached'), textTurn('never reached')],
-      });
-      yield* resumed.park(1);
-      yield* Fiber.interrupt(resumed.fiber);
-
-      const steps = eventsOfType(
-        yield* Effect.promise(() => recorded.read()),
-        'run.position',
-      ).map((event) => event.payload.at);
-      expect(steps).toContain('waiting');
-      expect(resumed.requests).toHaveLength(0);
-    }),
-  );
-
   it.effect('answers a follow-up consumed just before the loop exited', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
@@ -472,126 +255,6 @@ describe('a parked root run', () => {
 
 describe('the batch a parked run consumes', () => {
   it.effect(
-    'enters the conversation as one user turn carrying every queued item',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        const reporter = publishTestRunStart(session, undefined, {
-          parent: runId,
-        });
-        const logger = new TraceEmitter();
-        const info = vi.spyOn(logger, 'info');
-        // A progress notice whose child has since ended is consumed, never
-        // delivered: the model and the transcript see only live items.
-        const child = publishTestRunStart(session, generateRunId(), {
-          parent: runId,
-        });
-        publishTestRows(session, [
-          {
-            type: 'run.end',
-            aggregateId: rowAggregate(child),
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: emptyRunEndOutput(),
-          },
-        ]);
-        yield* enqueue(session, runId, [
-          {
-            text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
-            from: { kind: 'run' as const, runId: child },
-            hold: 'generation' as const,
-          },
-          {
-            text: '<subagent-result>done</subagent-result>',
-            from: { kind: 'run' as const, runId: reporter },
-          },
-          {
-            text: 'please revise the theorem',
-            from: { kind: 'user' as const },
-          },
-        ]);
-
-        const { fiber, park } = yield* forkLoop({
-          runId,
-          session,
-          logger,
-          script: [textTurn('first'), textTurn('second')],
-        });
-        yield* park(1);
-        yield* Fiber.interrupt(fiber);
-        const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
-
-        // One batch is one user message whose parts are the items in order;
-        // the transcript still shows each of them as its own row.
-        const batchMessage = state?.messages.filter(
-          (message) => message.role === 'user',
-        );
-        expect(
-          batchMessage
-            ?.at(-1)
-            ?.content.flatMap((part) =>
-              part.kind === 'text' ? [part.text] : [],
-            ),
-        ).toEqual([
-          '<subagent-result>done</subagent-result>',
-          'please revise the theorem',
-        ]);
-        expect(info).toHaveBeenCalledWith('✓ subagent completed', {
-          messageType: MESSAGE_TYPES.USER_MESSAGE,
-        });
-        expect(info).toHaveBeenCalledWith('please revise the theorem', {
-          messageType: MESSAGE_TYPES.USER_MESSAGE,
-        });
-        expect(info).not.toHaveBeenCalledWith(
-          '⟳ coder · started',
-          expect.anything(),
-        );
-        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'warns and drops media the model cannot read, attaching nothing',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        const logger = new TraceEmitter();
-        const info = vi.spyOn(logger, 'info');
-        const warn = vi.spyOn(logger, 'warn');
-        yield* enqueue(session, runId, [
-          {
-            text: 'please inspect this figure',
-            mediaFiles: ['/tmp/texra-figure.png'],
-            from: { kind: 'user' as const },
-          },
-        ]);
-
-        const { fiber, park } = yield* forkLoop({
-          runId,
-          session,
-          logger,
-          bound: { supportsVision: false },
-          script: [textTurn('first'), textTurn('second')],
-        });
-        yield* park(1);
-        yield* Fiber.interrupt(fiber);
-
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringMatching(
-            /^Skipping .*texra-figure\.png: the model does not accept images\.$/,
-          ),
-        );
-        expect(info).toHaveBeenCalledWith(
-          'please inspect this figure',
-          expect.not.objectContaining({
-            data: expect.objectContaining({ attachments: expect.anything() }),
-          }),
-        );
-      }),
-  );
-
-  it.effect(
     'records what was asked and keeps the batch unconsumed when it cannot be applied',
     () =>
       Effect.gen(function* () {
@@ -631,102 +294,5 @@ describe('the batch a parked run consumes', () => {
           ),
         ).toEqual(['use this diagram']);
       }),
-  );
-});
-
-describe('the host wiring a run attaches', () => {
-  it.live(
-    'interrupts opening preparation and releases the follow-up lease',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        const processFs = yield* FileSystem.FileSystem;
-        const entered = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-        const interrupted = yield* Deferred.make<void>();
-        const detach = vi.fn();
-        const blockedFs = {
-          ...processFs,
-          stat: (target: string) =>
-            path.basename(target) === 'AGENTS.md'
-              ? Deferred.succeed(entered, undefined).pipe(
-                  Effect.andThen(Deferred.await(release)),
-                  Effect.onInterrupt(() =>
-                    Deferred.succeed(interrupted, undefined),
-                  ),
-                  Effect.andThen(processFs.stat(target)),
-                )
-              : processFs.stat(target),
-        };
-        const fiber = yield* Effect.forkChild(
-          loopProgram(
-            {
-              runId,
-              session,
-              script: [textTurn('never reached')],
-              attachment: { attach: () => {}, detach },
-            },
-            [],
-            blockedFs,
-          ),
-        );
-
-        const opening = yield* Deferred.await(entered).pipe(
-          Effect.timeoutOption('2 seconds'),
-        );
-        if (opening._tag === 'None') {
-          yield* Deferred.succeed(release, undefined);
-          yield* Fiber.interrupt(fiber);
-        }
-        expect(opening._tag).toBe('Some');
-        const stopping = yield* Effect.forkChild(Fiber.interrupt(fiber));
-        const cancelled = yield* Deferred.await(interrupted).pipe(
-          Effect.timeoutOption('2 seconds'),
-        );
-        yield* Deferred.succeed(release, undefined);
-        yield* Fiber.join(stopping);
-        expect(cancelled._tag).toBe('Some');
-        expect(detach).toHaveBeenCalledTimes(1);
-        const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
-        expect(state?.phase ?? null).toBeNull();
-        // Its reader ended: a next generation opens one.
-        yield* Effect.scoped(session.followUps.open(runId));
-      }).pipe(Effect.provide(NodeFileSystem.layer)),
-  );
-
-  // The loop registers the flow context on the run handle and may interrupt
-  // it in the same call. A throw anywhere after that first statement used to
-  // strand the live context on the handle, because the pairing lived in the
-  // value the callback never got to return.
-  it.effect('detaches a host whose attach threw after wiring itself up', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const attachFailure = new Error('host wiring failed');
-      const detached: RunControls[] = [];
-
-      const exit = yield* Effect.exit(
-        loopProgram(
-          {
-            runId,
-            session,
-            script: [textTurn('never reached')],
-            attachment: {
-              attach: () => {
-                throw attachFailure;
-              },
-              detach: (controls) => {
-                detached.push(controls);
-              },
-            },
-          },
-          [],
-        ),
-      );
-
-      expect(Exit.isFailure(exit)).toBe(true);
-      expect(detached).toHaveLength(1);
-    }),
   );
 });

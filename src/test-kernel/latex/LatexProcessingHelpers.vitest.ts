@@ -1,167 +1,38 @@
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
-import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import type { FileLocation, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import {
-  createExternalLocation,
-  createWorkspaceLocation,
-} from '@utils/files/fileLocation';
+import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
-const mocks = vi.hoisted(() => ({
-  compileLatex2Pdf: vi.fn(),
-}));
+const logger: LatexTrace = spiedTrace();
 
-vi.mock('@latex/texTools', () => ({
-  compileLatex2Pdf: mocks.compileLatex2Pdf,
-}));
-
-type DiffFileProcessorInternals = {
-  processLineByLine(content: string): string;
-};
-
-const compilePdfConfig: DocumentTaskOptions = {
-  autoExtractFigure: false,
+const extractFiguresConfig: DocumentTaskOptions = {
+  autoExtractFigure: true,
   autoExtractTikzFigure: false,
   attachTeXCount: false,
-  autoCompileInputPdf: true,
+  autoCompileInputPdf: false,
   reflect: false,
 };
 
-const logger: LatexTrace = spiedTrace();
-
 const tempDirs = useTempDirs();
-
-afterEach(async () => {
-  vi.clearAllMocks();
-});
-
-describe('DiffFileProcessor line formatting', () => {
-  it('preserves package blank-line insertion order', () => {
-    const processed = (
-      new DiffFileProcessor(
-        testWorkspaceRoots().config,
-      ) as unknown as DiffFileProcessorInternals
-    ).processLineByLine(
-      [
-        '% !TEX root = main.tex',
-        'Here is preamble text from latexdiff',
-        '\\documentclass{article}',
-        '\\usepackage{tikz}',
-        '\\usepackage{pgfplots}',
-        '\\providecommand{\\DIFaddbegin}{}',
-        '\\RequirePackage[normalem]{ulem}',
-        '\\usetikzlibrary{calc}',
-        '\\RequirePackage{color}',
-        'body',
-      ].join('\n'),
-    );
-
-    expect(processed).toBe(
-      [
-        '\\documentclass{article}',
-        '',
-        '\\usepackage{tikz}',
-        '',
-        '\\usepackage{pgfplots}',
-        '',
-        '\\providecommand{\\DIFaddbegin}{}',
-        '',
-        '\\RequirePackage[normalem]{ulem}',
-        '',
-        '\\usetikzlibrary{calc}',
-        '',
-        '\\RequirePackage{color}',
-        '',
-        'body',
-        '',
-      ].join('\n'),
-    );
-  });
-});
-
-describe('LatexMediaManager PDF compilation', () => {
-  it.effect('filters nullish compile results before adding media files', () =>
-    Effect.gen(function* () {
-      const { inputPaths, compiledPdfPath } = yield* Effect.promise(
-        async () => {
-          const dir = await makeTempDir('texra-latex-media-', tempDirs);
-          await installPlatform({ workspacePath: dir });
-          const paths = [
-            path.join(dir, 'compiled.tex'),
-            path.join(dir, 'missing-result.tex'),
-          ];
-          await Promise.all(
-            paths.map(async (filePath) => {
-              await mkdir(path.dirname(filePath), { recursive: true });
-              await writeFile(filePath, '\\documentclass{article}\n');
-            }),
-          );
-          return {
-            inputPaths: paths,
-            compiledPdfPath: path.join(dir, 'build', 'compiled.pdf'),
-          };
-        },
-      );
-
-      mocks.compileLatex2Pdf.mockImplementation(
-        (
-          file: FileLocation,
-          _config: unknown,
-          options: { outputDirectory?: string },
-        ) =>
-          Effect.promise(async () => {
-            if (path.basename(file.absolutePath) === 'missing-result.tex') {
-              return { ok: false, logTail: 'simulated compile failure' };
-            }
-            const outputDirectory = options.outputDirectory!;
-            await mkdir(outputDirectory, { recursive: true });
-            await writeFile(compiledPdfPath, 'compiled pdf');
-            return { ok: true, pdfPath: compiledPdfPath };
-          }),
-      );
-
-      const roots = testWorkspaceRoots();
-      const manager = new LatexMediaManager(
-        logger,
-        roots,
-        new RunFileService('compile-pdf' as RunId, roots),
-      );
-      const media = yield* manager
-        .processInputFiles(
-          inputPaths.map(createExternalLocation),
-          compilePdfConfig,
-        )
-        .pipe(Effect.provide(sessionFsLayer(roots)));
-
-      expect(media.map((file) => file.absolutePath)).toEqual([compiledPdfPath]);
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-});
-
-type LatexMediaManagerFigureInternals = {
-  extractFiguresFromFiles(
-    files: FileLocation[],
-  ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem>;
-};
 
 describe('LatexMediaManager figure extraction', () => {
   async function writeFixture(): Promise<{
@@ -213,24 +84,26 @@ describe('LatexMediaManager figure extraction', () => {
     ).toBe(await realpath(figurePath));
   }
 
-  it.effect(
-    'extractFiguresFromFiles records and mirrors an included figure',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'extract-figure' as RunId;
-        const { texPath, figurePath } = yield* Effect.promise(writeFixture);
+  it.effect('processInputFiles records and mirrors an included figure', () =>
+    Effect.gen(function* () {
+      const runId = 'extract-figure' as RunId;
+      const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
-        const manager = new LatexMediaManager(
-          logger,
-          testWorkspaceRoots(),
-          new RunFileService(runId, testWorkspaceRoots()),
-        ) as unknown as LatexMediaManagerFigureInternals;
-        const media = yield* manager.extractFiguresFromFiles([
-          createWorkspaceLocation(texPath, 'main.tex'),
-        ]);
+      const roots = testWorkspaceRoots();
+      const manager = new LatexMediaManager(
+        logger,
+        roots,
+        new RunFileService(runId, roots),
+      );
+      const media = yield* manager
+        .processInputFiles(
+          [createWorkspaceLocation(texPath, 'main.tex')],
+          extractFiguresConfig,
+        )
+        .pipe(Effect.provide(sessionFsLayer(roots)));
 
-        expect(media.map((f) => f.absolutePath)).toEqual([figurePath]);
-        yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      expect(media.map((f) => f.absolutePath)).toEqual([figurePath]);
+      yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

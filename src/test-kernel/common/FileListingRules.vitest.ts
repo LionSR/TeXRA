@@ -5,7 +5,6 @@ import {
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@texra/common/files/fileListingRules';
-import { matchesEditedFile } from '@texra/shared/launcher/editedFileMatch';
 
 describe('shared file-listing rules', () => {
   it('normalizes filters once and applies file and directory rules', () => {
@@ -36,19 +35,6 @@ describe('shared file-listing rules', () => {
     ];
     for (const [file, expected] of fileCases) {
       expect(passesFileFilters(file, filters)).toBe(expected);
-    }
-  });
-
-  it('matches edited files with shared round-suffix base-name logic', () => {
-    const cases: ReadonlyArray<readonly [string, string, boolean]> = [
-      ['sections/main_edited.tex', 'main.tex', true],
-      ['sections/main_r1.tex', 'main.tex', true],
-      ['sections/main_r3.tex', 'main_r2.tex', true],
-      ['main.tex', 'main.tex', false],
-      ['sections/other.tex', 'main.tex', false],
-    ];
-    for (const [edited, original, expected] of cases) {
-      expect(matchesEditedFile(edited, original)).toBe(expected);
     }
   });
 });

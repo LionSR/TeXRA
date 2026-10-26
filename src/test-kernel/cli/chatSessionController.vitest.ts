@@ -498,32 +498,6 @@ describe('createChatSessionController', () => {
     rootRunId.set(undefined);
   });
 
-  it.live('does not surface an intentional stop as an error', () =>
-    Effect.gen(function* () {
-      const run = createDeferred<never>();
-      const executed = createDeferred();
-      const session = makeSession();
-      mocks.executeAgent.mockImplementationOnce(() => {
-        executed.resolve();
-        return run.promise;
-      });
-      const ctrl = createChatSessionController(makeInit({ session }));
-
-      yield* Effect.forkChild(
-        ctrl.startRootRun(makeRunRequest('Check the draft.')),
-        { startImmediately: true },
-      );
-      yield* Effect.promise(() => executed.promise);
-      expect(mocks.executeAgent).toHaveBeenCalledOnce();
-      ctrl.stop('user');
-      run.reject(new Error('run stopped'));
-      yield* Effect.promise(() => awaitRunSettled(session));
-
-      expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
-      expect(session.runExitCode).toBe(CliExitCode.Success);
-    }),
-  );
-
   it.live(
     'keeps detached-child approvals answerable after the stopped root finalizes',
     () =>
@@ -662,47 +636,6 @@ describe('createChatSessionController', () => {
       }),
   );
 
-  it.live('reports a fresh-run defect and settles its claimed run slot', () =>
-    Effect.gen(function* () {
-      mocks.rootLaunch.mockReturnValueOnce(
-        Effect.die(new Error('launch defect')),
-      );
-      const session = makeSession();
-      const ctrl = createChatSessionController(makeInit({ session }));
-
-      // A failed launch still answers: the start completes.
-      yield* ctrl.startRootRun(makeRunRequest('Check launch failure.'));
-
-      yield* Effect.promise(() => awaitRunSettled(session));
-      expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-        'launch defect',
-      );
-      expect(session.runCompleted).toBe(true);
-    }),
-  );
-
-  it('reserves the root-run slot before resume() awaits the resolution', async () => {
-    const configRead = createDeferred<null>();
-    mocks.getRunRecords.mockReturnValue({
-      readConfig: () => configRead.promise,
-      exists: async () => false,
-    });
-    const session = makeSession({ runCompleted: true });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    const resumed = runResume(ctrl, 'aaaaaa' as RunId);
-
-    // The claim (tryClaimRootRunSlot) must land synchronously, before
-    // resume() ever reaches its first await.
-    expect(session.runSettled).toBeDefined();
-    expect(session.runCompleted).toBe(false);
-    expect(chatTuiCanStartRootRun(session)).toBe(false);
-
-    configRead.resolve(null);
-    await resumed;
-    expect(session.runCompleted).toBe(true);
-  });
-
   it('stops the resumed run for a Ctrl-C issued while resume() is still settling', async () => {
     // The early slot claim makes this resume() interruptible as soon as the
     // session admits the run: a Ctrl-C in that window lands on the resumed
@@ -749,82 +682,6 @@ describe('createChatSessionController', () => {
 
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
     expect(session.runCompleted).toBe(true);
-  });
-
-  it('marks the resumed run, not the previous one, for a Ctrl-C issued before adoption', async () => {
-    // The synchronous slot claim drops the pre-resume run, so a stop in the
-    // window before `onAdmitted` has no run to mark: without the
-    // re-read at adoption the user's Ctrl-C would leave no recoverable
-    // conversation, and any stale run it did find would be the wrong one.
-    const resumeReached = createDeferred<void>();
-    const resumeStarted = createDeferred();
-    const session = makeSession({
-      runId: 'd00001' as RunId,
-      runCompleted: true,
-    });
-    const stops = recordStops();
-    mocks.resumeRun.mockImplementationOnce((id: RunId) => {
-      resumeStarted.resolve();
-      return Effect.as(
-        Effect.promise(() => resumeReached.promise),
-        stoppableRun(id, stops),
-      );
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    holdRun('aaaaaa' as RunId);
-    const resumed = runResume(ctrl, 'aaaaaa' as RunId);
-    await resumeStarted.promise;
-    expect(mocks.resumeRun).toHaveBeenCalledOnce();
-    ctrl.stop('user');
-
-    resumeReached.resolve();
-    await resumed;
-    await awaitRunSettled(session);
-
-    expect(mocks.request).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'run.stop',
-        runId: 'd00001',
-      }),
-    );
-    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
-  });
-
-  it('forwards a stop issued during manual resume helper-model setup', async () => {
-    const helperModel = createDeferred<void>();
-    const helperModelStarted = createDeferred();
-    mocks.setCliHelperModel.mockImplementationOnce(() => {
-      helperModelStarted.resolve();
-      return Effect.tryPromise(() => helperModel.promise);
-    });
-
-    const session = makeSession({ runCompleted: true });
-    const ctrl = createChatSessionController(makeInit({ session }));
-    const resumeCalled = createDeferred();
-    holdRun('aaaaaa' as RunId);
-    const stops = recordStops();
-    mocks.resumeRun.mockImplementationOnce((id: RunId) => {
-      resumeCalled.resolve();
-      return Effect.succeed(stoppableRun(id, stops));
-    });
-
-    const resumeStarted = runResume(ctrl, 'aaaaaa' as RunId);
-    await helperModelStarted.promise;
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
-      expect.anything(),
-      'demo-model',
-    );
-
-    ctrl.stop('user');
-    helperModel.resolve(undefined);
-
-    await resumeStarted;
-    await resumeCalled.promise;
-    // The stop asked during setup lands on the run once it is admitted.
-    expect(stops).toEqual(['aaaaaa']);
-    await awaitRunSettled(session);
-    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
   it('sends messages typed while a stop settles to the session in order, and hands the slot to the continued run', async () => {

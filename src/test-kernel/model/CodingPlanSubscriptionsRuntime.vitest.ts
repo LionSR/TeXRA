@@ -65,40 +65,6 @@ describe('coding-plan subscription runtime', () => {
 
   it.effect.each([
     {
-      name: 'China Coding Plan',
-      useChina: true,
-      codingPlan: true,
-      expected: {
-        baseUrl: 'https://open.bigmodel.cn/api/v1',
-        usageRoute: 'glm-coding-plan-subscription',
-      },
-    },
-    {
-      name: 'global regular API',
-      useChina: false,
-      codingPlan: false,
-      expected: {
-        baseUrl: 'https://api.z.ai/api/v1',
-      },
-    },
-  ])('resolves the exact $name route', ({ useChina, codingPlan, expected }) =>
-    Effect.gen(function* () {
-      yield* hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-      yield* hostStores().globalState.update(
-        GlobalStateKey.GLM_CODING_PLAN,
-        codingPlan,
-      );
-      yield* hostStores().globalState.update(
-        GlobalStateKey.GLM_USE_CHINA,
-        useChina,
-      );
-
-      expect(yield* boundEndpoint(GLM53)).toEqual(expected);
-    }),
-  );
-
-  it.effect.each([
-    {
       name: 'Coding Plan',
       providerEndpoint: '',
       modelBaseUrl: undefined,

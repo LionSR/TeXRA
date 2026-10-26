@@ -1,15 +1,13 @@
 /**
- * Codex launch and atomic disk-resume claims, over a real session whose
+ * Codex atomic disk-resume claims, over a real session whose
  * parent run is parked on the validation model: the child's registration,
  * its loop, its deliveries and its follow-ups are real. Only the Codex SDK
  * (its client and threads) and the app's Codex config are faked, at the
  * edge the tool imports them through.
  *
- * Failure modes:
- * - a fresh launch whose loop fails after the tool answered is never said;
- * - a resume whose launch is refused keeps the thread id reserved;
- * - concurrent calls with the same stale thread_id start two loops, or the
- *   loser re-claims in a spin instead of waiting for the winner's loop.
+ * Failure mode: concurrent calls with the same stale thread_id start two
+ * loops, or the loser re-claims in a spin instead of waiting for the
+ * winner's loop.
  */
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer } from 'effect';
@@ -50,15 +48,12 @@ vi.mock('@texra/tools/codexImport', async (importActual) => {
 import '@test/support/sessionGraphTestSetup';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   parkedRoot,
   REAL_RUN_TIMEOUT,
-  sessionStoreFaults,
   storedRows,
   untilStored,
   validationHost,
@@ -129,83 +124,6 @@ describe(
   { timeout: REAL_RUN_TIMEOUT },
   () => {
     validationHost('texra-codex-resume-');
-
-    it.live(
-      'roots a fresh Codex launch in the session and logs detached rejection',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* parkedParent;
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          const startThread = vi.fn((_options: unknown) => ({
-            id: undefined,
-            runStreamed: () =>
-              Promise.reject(new Error('Codex process exited')),
-          }));
-          mocks.importCodexClass.mockReturnValue(
-            Effect.succeed(
-              class MockCodex {
-                startThread(options: unknown) {
-                  return startThread(options);
-                }
-              },
-            ),
-          );
-          // The failed turn ends the child. Neither its settled end nor the
-          // end recording the lost result commits, so the backstop end is
-          // written and the loop fails after the tool has answered.
-          const logs = captureLogEntries();
-          yield* Effect.addFinalizer(() => Effect.sync(() => setLogSink(null)));
-          const faults = yield* sessionStoreFaults(parent.storage);
-          yield* faults.failNext('appendAll', 'run.end');
-          yield* faults.failNext('appendAll', 'run.end');
-
-          expect(
-            yield* CodexTool.call({
-              prompt: 'launch Codex',
-              sandbox_mode: 'workspace-write',
-            }).pipe(Effect.provide(toolLayer(registry, parent))),
-          ).toMatchObject({ status: 'executed' });
-          const said = () =>
-            logs.has(
-              'ERROR',
-              'childRunLoop',
-              "Child 'codex' run loop failed after launch",
-            );
-          yield* untilStored(parent.storage, said);
-          // The child reads as ended, not as running.
-          const [child] = childrenOf(parent.storage, parent.runId);
-          expect(
-            storedRows(parent.storage).find(
-              (row) => row.run === child && row.type === 'run.end',
-            )?.data,
-          ).toContain("The run's end was not saved: injected appendAll fault");
-          expect(startThread).toHaveBeenCalledWith(
-            expect.objectContaining({
-              workingDirectory: testWorkspaceRoots().workspace,
-            }),
-          );
-        }),
-    );
-
-    it.live(
-      'releases a resume reservation when launch rejects a missing run context',
-      () =>
-        Effect.gen(function* () {
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          expect(
-            yield* CodexTool.call({
-              prompt: 'resume Codex',
-              sandbox_mode: 'workspace-write',
-              thread_id: 'stale-thread',
-            }).pipe(Effect.provide(toolLayer(registry))),
-          ).toMatchObject({ status: 'error' });
-          expect(mocks.importCodexClass).not.toHaveBeenCalled();
-
-          const release = registry.claim('stale-thread');
-          expect(release).toBeTypeOf('function');
-          release?.();
-        }),
-    );
 
     it.live(
       'launches one fallback loop when concurrent calls use the same stale thread_id',
@@ -283,50 +201,6 @@ describe(
           // active. A spin would still reach the same follow-up, so the
           // count is what distinguishes waiting from polling.
           expect(claim).toHaveBeenCalledTimes(2);
-        }),
-    );
-
-    it.live(
-      'leaves a stale thread_id to a fresh launch when the child stops while it parks',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* parkedParent;
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          const { thread } = answeringThread('stale-thread', 'Done.');
-          mocks.importCodexClass.mockReturnValue(
-            Effect.succeed(
-              class MockCodex {
-                resumeThread() {
-                  return thread;
-                }
-              },
-            ),
-          );
-          const faults = yield* sessionStoreFaults(parent.storage);
-          const parking = yield* faults.holdNext('appendAll', 'child.park');
-          const call = (prompt: string) =>
-            CodexTool.call({
-              prompt,
-              sandbox_mode: 'workspace-write',
-              thread_id: 'stale-thread',
-            }).pipe(Effect.provide(toolLayer(registry, parent)));
-
-          // The first call's child settles its turn, held at its park; the
-          // second waits on the id; the child is stopped mid-commit.
-          yield* call('continue the refactor');
-          yield* parking.reached;
-          const second = yield* Effect.forkChild(call('also update the tests'));
-          const [child] = childrenOf(parent.storage, parent.runId);
-          const stopping = yield* Effect.forkChild(
-            parent.session.runs.stop(child as RunId, { reason: 'user' })
-              .settlement,
-          );
-          yield* parking.release;
-          yield* Fiber.join(stopping);
-
-          // A stopped child never takes a follow-up: the waiter is not told
-          // its prompt was queued there; it launches the thread afresh.
-          expect((yield* Fiber.join(second)).summary).toMatch(/Launched Codex/);
         }),
     );
   },

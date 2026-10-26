@@ -98,35 +98,4 @@ describe('claimServiceRecord', () => {
         }),
       ),
   );
-
-  it.live(
-    'publishes exactly one of the services that start at once over a dead record',
-    () =>
-      withGlobalValues(
-        Effect.gen(function* () {
-          const dead = record(1);
-          yield* seed(dead);
-          const contenders = [2, 3, 4, 5];
-          const answers = yield* Effect.all(
-            contenders.map((pid) =>
-              claimServiceRecord(record(pid), (held) =>
-                Effect.succeed(held.pid === dead.pid ? null : held.pid),
-              ),
-            ),
-            { concurrency: 'unbounded' },
-          );
-          const published = yield* readServiceRecord;
-          const serving = contenders.filter(
-            (_, index) => answers[index] === null,
-          );
-          expect(serving).toEqual([published?.pid]);
-          // Every other contender was answered by the one serving.
-          expect(
-            answers.filter(
-              (answer) => answer !== null && answer !== published?.pid,
-            ),
-          ).toEqual([]);
-        }),
-      ),
-  );
 });

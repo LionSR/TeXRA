@@ -66,7 +66,7 @@ type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
  * brew formula install; broader `homebrew` / `linuxbrew` prefixes also contain
  * npm globals when Node itself was installed by Homebrew.
  */
-export function detectInstallMethod(
+function detectInstallMethod(
   modulePath: string = currentModulePath(),
 ): InstallMethod | undefined {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
@@ -120,7 +120,7 @@ function buildUpdateCommand(method: InstallMethod): {
 }
 
 /** Fetch the `latest` dist-tag version from the npm registry, or undefined. */
-export function fetchLatestCliVersion(options?: {
+function fetchLatestCliVersion(options?: {
   registry?: string;
   timeoutMs?: number;
 }): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
@@ -205,7 +205,7 @@ function parseHomebrewFormulaVersion(
  * already be fresh enough to offer the right prompt — but report
  * `refreshed: false` so the caller knows the version may be stale.
  */
-export function fetchLatestHomebrewFormulaVersion(options?: {
+function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
   cwd?: string;

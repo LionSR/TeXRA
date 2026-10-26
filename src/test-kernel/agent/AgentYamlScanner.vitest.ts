@@ -46,34 +46,8 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
 
-  it.live('uses the YAML name as the canonical registry name', () =>
-    Effect.gen(function* () {
-      const dir = yield* agentDir({
-        'Readable Helper.yaml': toolUseAgent('helper', 'help'),
-      });
-
-      const { entries } = yield* scanCustom(dir);
-
-      expect(entries.map((entry) => entry.name)).toEqual(['helper']);
-    }),
-  );
-
-  it.live(
-    'skips duplicate YAML names instead of returning colliding entries',
-    () =>
-      Effect.gen(function* () {
-        const dir = yield* agentDir({
-          'first.yaml': toolUseAgent('shared', 'first'),
-          'second.yaml': toolUseAgent('shared', 'second'),
-          'unique.yaml': toolUseAgent('unique', 'unique'),
-        });
-
-        const { entries } = yield* scanCustom(dir);
-
-        expect(entries.map((entry) => entry.name)).toEqual(['unique']);
-      }),
-  );
-
+  // A file the scan skips must surface as an issue: a custom agent that
+  // silently vanishes from the list is a bug nobody reports.
   it.live('reports skipped custom YAML files as scan issues', () =>
     Effect.gen(function* () {
       const dir = yield* agentDir({

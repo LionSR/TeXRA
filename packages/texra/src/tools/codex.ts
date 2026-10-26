@@ -204,7 +204,7 @@ function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
 /** Run a single streamed turn, logging events to the child stream. The
  * `@openai/codex-sdk` event iterator is this module's foreign edge, consumed
  * as a Stream below. */
-export function runStreamedTurn(
+function runStreamedTurn(
   thread: Thread,
   prompt: string,
   logger: AgentTrace,

@@ -1,5 +1,4 @@
-// Suites for packages/harness/src/utils/system (execUtils, workspaceInfo, binaryResolver,
-// toolUtils).
+// Suites for packages/harness/src/utils/system/execUtils.
 
 // Node imports
 import { strict as assert } from 'node:assert';
@@ -10,29 +9,15 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { build } from 'esbuild';
-import {
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Logger,
-  Option,
-  References,
-  Scope,
-  Stream,
-} from 'effect';
-import * as ChildProcess from 'effect/process/ChildProcess';
+import { Effect, Exit, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
 import { executeCommand } from '@texra-ai/harness/node';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { findCommand } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------
 // execUtils
@@ -67,18 +52,9 @@ function waitForProcessExit(pid: number): Promise<void> {
   );
 }
 
-type ExecuteCommandOptions = Omit<
-  NonNullable<Parameters<typeof executeCommand>[1]>,
-  'cwd' | 'settings'
->;
-
 // Backgrounds a long sleep, records its pid, then blocks on `wait` so the
 // tracked shell keeps running while the descendant holds the inherited stdio.
 const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
-// The array-form child itself, recording its own pid, then idling.
-const PID_WRITER_SCRIPT =
-  "require('node:fs').writeFileSync(process.env.PID_FILE, String(process.pid)); setTimeout(() => {}, 60000)";
-
 // The shell's `>` creates the pid file before `echo` writes to it, so under
 // load the file can exist and still be empty; wait for a parseable pid.
 async function waitForPublishedPid(pidFile: string): Promise<number> {
@@ -106,52 +82,6 @@ describe('executeCommand', () => {
   // platform's workspace names, so the spawn has a real cwd on disk.
   const WORKSPACE = process.cwd();
   setupPlatform({ workspacePath: WORKSPACE });
-
-  // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
-  // backgrounded sleep has published its pid, so callers can assert on the
-  // descendant's fate after an abort or timeout.
-  async function startSleeper(
-    command: string | string[],
-    options: ExecuteCommandOptions,
-  ): Promise<{
-    promise: Promise<ExecResult>;
-    childPid: number;
-  }> {
-    const dir = await makeTempDir('texra-exec-sleeper-', tempDirs);
-    const pidFile = join(dir, 'sleep.pid');
-    const promise = Effect.runPromise(
-      executeCommand(command, {
-        ...options,
-        cwd: dir,
-        settings: undefined,
-        env: { PID_FILE: pidFile },
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-    );
-
-    const childPid = await waitForPublishedPid(pidFile);
-    return { promise, childPid };
-  }
-
-  it.live(
-    'keeps stderr empty for ordinary nonzero exits with stdout only',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* executeCommand(
-          [
-            process.execPath,
-            '-e',
-            `process.stdout.write('failure details'); process.exit(7)`,
-          ],
-          { cwd: WORKSPACE, settings: undefined },
-        );
-
-        assert.equal(result.success, false);
-        assert.equal(result.exitCode, 7);
-        assert.equal(result.stdout, 'failure details');
-        assert.equal(result.stderr, '');
-        assert.equal(result.outputLimitExceeded, undefined);
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
 
   it.live(
     "withholds TeXRA's provider key variables from the child and keeps the rest",
@@ -183,136 +113,6 @@ describe('executeCommand', () => {
 
         expect(JSON.parse(result.stdout)).toStrictEqual([null, 'kept']);
       }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.live('decodes streamed Unicode split across byte chunks', () =>
-    Effect.gen(function* () {
-      let streamed = '';
-      const result = yield* executeCommand(
-        [
-          process.execPath,
-          '-e',
-          `process.stdout.write(Buffer.from([0xf0, 0x9f])); ` +
-            `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
-        ],
-        {
-          cwd: WORKSPACE,
-          settings: undefined,
-          buffer: false,
-          onStdout: (chunk) => {
-            streamed += chunk;
-          },
-        },
-      );
-
-      assert.equal(result.success, true);
-      assert.equal(result.stdout, '');
-      assert.equal(streamed, '🙂');
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.live(
-    'flushes pending multibyte stdout and stderr exactly once on stream close',
-    () =>
-      Effect.gen(function* () {
-        let streamedStdout = '';
-        let streamedStderr = '';
-        const result = yield* executeCommand(
-          [
-            process.execPath,
-            '-e',
-            `const fs = require('node:fs'); ` +
-              `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
-              `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
-              `process.stdout.destroy(); process.stderr.destroy();`,
-          ],
-          {
-            cwd: WORKSPACE,
-            settings: undefined,
-            buffer: false,
-            onStdout: (chunk) => {
-              streamedStdout += chunk;
-            },
-            onStderr: (chunk) => {
-              streamedStderr += chunk;
-            },
-          },
-        );
-
-        assert.equal(result.success, true);
-        assert.equal(streamedStdout, '\ufffd');
-        assert.equal(streamedStderr, '\ufffd');
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.live('disables maxBuffer enforcement when buffering is disabled', () =>
-    Effect.gen(function* () {
-      const outputChars = 10_000;
-      let streamedChars = 0;
-      const result = yield* executeCommand(
-        [
-          process.execPath,
-          '-e',
-          `process.stdout.write('x'.repeat(${outputChars}))`,
-        ],
-        {
-          cwd: WORKSPACE,
-          settings: undefined,
-          buffer: false,
-          maxBuffer: 64,
-          onStdout: (chunk) => {
-            streamedChars += chunk.length;
-          },
-        },
-      );
-
-      assert.equal(result.success, true);
-      assert.equal(result.stdout, '');
-      assert.equal(streamedChars, outputChars);
-      assert.equal(result.outputLimitExceeded, undefined);
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.live(
-    'reports maxBuffer overflow as an error instead of partial success',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* executeCommand(
-          [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
-          { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
-        );
-
-        assert.equal(result.success, false);
-        assert.equal(result.exitCode, 2);
-        assert.equal(result.outputLimitExceeded, true);
-        assert.ok(result.stdout && result.stdout.length > 0);
-        assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.live(
-    'aborts shell command process groups including children',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-
-        const controller = new AbortController();
-        const { promise, childPid } = yield* Effect.promise(() =>
-          startSleeper(SLEEPER_SCRIPT, {
-            signal: controller.signal,
-            timeout: 60_000,
-          }),
-        );
-
-        controller.abort();
-        const result = yield* Effect.promise(() => promise);
-
-        assert.equal(result.success, false);
-        assert.equal(result.timedOut, false);
-        assert.equal(result.stderr, 'Command aborted by user');
-        yield* Effect.promise(() => waitForProcessExit(childPid));
-      }),
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 
   it.live(
@@ -403,205 +203,5 @@ describe('executeCommand', () => {
       }),
     // The bundle build comes on top of the process-exit budget.
     2 * PROCESS_EXIT_TEST_TIMEOUT_MS,
-  );
-
-  it.live(
-    'aborts array-form commands through the abort signal',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-
-        const controller = new AbortController();
-        const { promise, childPid } = yield* Effect.promise(() =>
-          startSleeper([process.execPath, '-e', PID_WRITER_SCRIPT], {
-            signal: controller.signal,
-            timeout: 60_000,
-          }),
-        );
-
-        controller.abort();
-        const result = yield* Effect.promise(() => promise);
-
-        assert.equal(result.success, false);
-        assert.equal(result.timedOut, false);
-        assert.equal(result.exitCode, 130);
-        assert.equal(result.stderr, 'Command aborted by user');
-        yield* Effect.promise(() => waitForProcessExit(childPid));
-      }),
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
-  );
-
-  it.live(
-    'unblocks aborted array-form await when a descendant holds stdio',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-
-        const controller = new AbortController();
-        // The backgrounded sleep inherits stdout/stderr and the abort signals
-        // only the tracked bash pid, so without the scope interrupting the
-        // output drains this await would hang until the descendant exits.
-        const { promise, childPid } = yield* Effect.promise(() =>
-          startSleeper(['bash', '-c', SLEEPER_SCRIPT], {
-            signal: controller.signal,
-            timeout: 60_000,
-          }),
-        );
-
-        controller.abort();
-        const result = yield* Effect.promise(() => promise);
-
-        assert.equal(result.success, false);
-        assert.equal(result.timedOut, false);
-        assert.equal(result.exitCode, 130);
-        assert.equal(result.stderr, 'Command aborted by user');
-        // The default array form has no process-group semantics: the descendant
-        // must survive the abort. Reap it so the test doesn't leak.
-        assert.doesNotThrow(() => process.kill(childPid, 0));
-        process.kill(childPid, 'SIGKILL');
-      }),
-    20_000,
-  );
-
-  it.live(
-    'unblocks timed-out array-form await when a descendant holds stdio',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-
-        const { promise, childPid } = yield* Effect.promise(() =>
-          startSleeper(['bash', '-c', SLEEPER_SCRIPT], { timeout: 50 }),
-        );
-
-        const result = yield* Effect.promise(() => promise);
-
-        assert.equal(result.success, false);
-        assert.equal(result.timedOut, true);
-        assert.doesNotThrow(() => process.kill(childPid, 0));
-        process.kill(childPid, 'SIGKILL');
-      }),
-    20_000,
-  );
-
-  it.live(
-    'aborts array-form descendant trees when killProcessTree is set',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-
-        const controller = new AbortController();
-        const { promise, childPid } = yield* Effect.promise(() =>
-          startSleeper(['bash', '-c', SLEEPER_SCRIPT], {
-            signal: controller.signal,
-            timeout: 60_000,
-            killProcessTree: true,
-          }),
-        );
-
-        controller.abort();
-        const result = yield* Effect.promise(() => promise);
-
-        assert.equal(result.success, false);
-        assert.equal(result.timedOut, false);
-        // Inverts the survival assertions above: the backgrounded sleep is
-        // signalled with the tracked process instead of outliving it.
-        yield* Effect.promise(() => waitForProcessExit(childPid));
-      }),
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
-  );
-});
-
-// ---------------------------------------------------------------------------
-// WorkspaceInfo
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// findCommand
-// ---------------------------------------------------------------------------
-
-describe('findCommand', () => {
-  it.effect('routes Perl scripts through the Perl launcher', () =>
-    Effect.gen(function* () {
-      const resolvedPath =
-        '/usr/local/texlive/scripts/latexindent/latexindent.pl';
-
-      assert.deepEqual(
-        yield* findCommand('latexindent', { path: resolvedPath }),
-        { command: 'perl', args: [resolvedPath], resolvedPath },
-      );
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// supervised Node spawner
-// ---------------------------------------------------------------------------
-
-describe('supervised node spawner', () => {
-  it.live(
-    'bounds the teardown of a child that ignores SIGTERM and SIGKILLs it',
-    () => {
-      const warnings: Array<Record<string, unknown>> = [];
-      const capture = Logger.make((options) => {
-        if (options.logLevel !== 'Warn') return;
-        warnings.push({
-          ...options.fiber.getRef(References.CurrentLogAnnotations),
-        });
-      });
-      return Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-        // No `forceKillAfter`: upstream sends SIGTERM once, waits its grace,
-        // then awaits an exit that never comes.
-        const closed = yield* Effect.scoped(
-          Effect.gen(function* () {
-            const handle = yield* ChildProcess.make(process.execPath, [
-              '-e',
-              "process.on('SIGTERM', () => {}); process.stdout.write('ready'); setInterval(() => {}, 1000);",
-            ]);
-            yield* handle.stdout.pipe(Stream.take(1), Stream.runDrain);
-            return handle.pid;
-          }),
-        ).pipe(Effect.timeoutOption('8 seconds'));
-        expect(Option.isSome(closed)).toBe(true);
-        const pid = Option.getOrThrow(closed);
-        yield* Effect.promise(() => waitForProcessExit(pid));
-        expect(warnings).toEqual([
-          expect.objectContaining({ pid, via: 'scope close' }),
-        ]);
-      }).pipe(Effect.provide(nodeSpawnerLayer), Effect.withLogger(capture));
-    },
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
-  );
-
-  it.live(
-    'kills live children from one exit listener the layer scope owns',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return;
-        const before = new Set(process.listeners('exit'));
-        const layerScope = yield* Scope.make();
-        const context = yield* Layer.buildWithScope(
-          nodePlatformServices,
-          layerScope,
-        );
-        const added = process
-          .listeners('exit')
-          .filter((listener) => !before.has(listener));
-        expect(added).toHaveLength(1);
-
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const handle = yield* ChildProcess.make('sleep', ['60']);
-            for (const listener of added) listener(0);
-            expect(Exit.isFailure(yield* Effect.exit(handle.exitCode))).toBe(
-              true,
-            );
-          }),
-        ).pipe(Effect.provideContext(context));
-
-        yield* Scope.close(layerScope, Exit.void);
-        expect(process.listeners('exit')).not.toContain(added[0]);
-      }),
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 });

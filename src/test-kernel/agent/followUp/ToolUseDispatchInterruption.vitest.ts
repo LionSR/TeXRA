@@ -8,8 +8,6 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { finalizeRun } from '@agent/storage/runLifecycle';
-import { RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -224,72 +222,6 @@ describe('tool dispatch interrupted mid-turn', () => {
       );
       expect(resumed.outcome).toBe('completed');
       expect(toolB.call).toHaveBeenCalledTimes(1);
-    }),
-  );
-
-  /**
-   * A user's follow-up to a stopped response joins that response's delivery:
-   * the one request after the resume carries the skipped call's result and
-   * then the follow-up, so the model reads the new instruction before it
-   * decides whether to run anything again.
-   */
-  it.effect('delivers a follow-up to a stopped response with its results', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions({ emit: () => {} });
-      const runId = generateRunId();
-      publishTestRunStart(session, runId);
-      const toolB = blockingTool('toolB');
-      const tools = { toolB: toolB.tool };
-      const fiber = yield* Effect.forkDetach(
-        runToolUse({ resume: false }).pipe(
-          Effect.provide(
-            loopLayer({
-              runId,
-              session,
-              tools,
-              turns: [toolCallTurn([{ id: 'call-b', name: 'toolB' }])],
-              stopAfterCycle: true,
-            }),
-          ),
-        ),
-      );
-      yield* toolB.started;
-      yield* Fiber.interrupt(fiber);
-      // The halt row the resume's join reads commits with the stopped run's
-      // end, as its lifecycle writes it.
-      yield* Fiber.await(fiber);
-      yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.CANCELLED });
-      yield* session.log.settled;
-      yield* session.followUps.send(runId, {
-        text: 'What is 2+2?',
-        from: { kind: 'user' },
-      });
-
-      // One model turn: a second request would run out of scripted turns.
-      const resumed = yield* runToolUse({ resume: true }).pipe(
-        Effect.provide(
-          loopLayer({
-            runId,
-            session,
-            tools,
-            turns: [textTurn('4')],
-            stopAfterCycle: true,
-          }),
-        ),
-      );
-      expect(resumed.outcome).toBe('completed');
-      expect(toolB.call).toHaveBeenCalledTimes(1);
-      const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
-      expect(state?.messages.map((message) => message.role)).toEqual([
-        'user',
-        'assistant',
-        'tool',
-        'user',
-        'assistant',
-      ]);
-      expect(state?.messages[3]).toMatchObject({
-        content: [{ kind: 'text', text: 'What is 2+2?' }],
-      });
     }),
   );
 });

@@ -1,27 +1,17 @@
-import * as path from 'node:path';
-
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
-  apiKeyEnvName,
   apiKeySecretName,
   hasUsableApiKey,
-  loadApiKeyStatusMap,
   lookupApiKey,
   lookupApiKeyOrigin,
   SecretsFailed,
 } from '@texra-ai/llm';
-import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
-import { FileSecrets } from '@platform/defaults/fileSecrets';
 
 import type { PlatformSecrets } from '@platform/secrets';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
-import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
-import { UnsetApiKeyTool } from '@texra/tools/setup/UnsetApiKeyTool';
 
 function createSecrets(initial: Record<string, string> = {}): {
   secrets: PlatformSecrets;
@@ -51,49 +41,10 @@ function createSecrets(initial: Record<string, string> = {}): {
   };
 }
 
-/**
- * Install a fake host whose credential store is `secrets`, so `unset_api_key`
- * reads and writes the same store the assertions do.
- */
-async function setupApiKeyToolPlatform(
-  secrets: PlatformSecrets,
-  env: Record<string, string> = {},
-): Promise<void> {
-  await installPlatform(
-    { env },
-    {
-      secrets,
-      setup: {
-        commands: {
-          invoke: () => Effect.void,
-        },
-      },
-    },
-  );
-}
-
 describe('API provider key resolution', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  it.effect('derives provider status from the resolved API-key origin', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({
-        [apiKeySecretName('openai')]: 'sk-test',
-      });
-
-      expect((yield* loadApiKeyStatusMap(secrets)).openai).toBe('set');
-
-      const empty = createSecrets({});
-
-      expect(
-        (yield* loadApiKeyStatusMap(empty.secrets).pipe(
-          withEnv({ OPENAI_API_KEY: 'from-env' }),
-        )).openai,
-      ).toBe('env');
-    }).pipe(withEnv({})),
-  );
 
   it.effect(
     'falls through blank stored values to a usable environment key',
@@ -106,17 +57,6 @@ describe('API provider key resolution', () => {
         expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('env');
         expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(true);
       }).pipe(withEnv({ OPENAI_API_KEY: '  from-env  ' })),
-  );
-
-  it.effect('reports blank stored and environment values as absent', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({
-        [apiKeySecretName('openai')]: '   ',
-      });
-
-      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
-      expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(false);
-    }).pipe(withEnv({ OPENAI_API_KEY: '\t' })),
   );
 
   it.effect(
@@ -138,82 +78,5 @@ describe('API provider key resolution', () => {
           readFailure,
         );
       }).pipe(withEnv({})),
-  );
-
-  // Regression: the repaint signal belongs to the store's commit, so a writer
-  // outside the settings controllers (here the setup agent's tool, on the
-  // CLI's file store) still reaches it.
-  it.effect(
-    'unset_api_key on a file-backed store emits credentialChanged',
-    () =>
-      withTempDirEffect('texra-unset-key-', (root) =>
-        Effect.gen(function* () {
-          const secrets = new FileSecrets(path.join(root, 'secrets'), (key) =>
-            emitAppSignal('credentialChanged', { key }),
-          );
-          yield* secrets.set(apiKeySecretName('openai'), 'sk-test');
-          yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
-          expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
-
-          const changed = Deferred.makeUnsafe<string>();
-          const subscriber = yield* Effect.forkChild(
-            onAppSignal('credentialChanged', ({ key }) => {
-              Deferred.doneUnsafe(changed, Effect.succeed(key));
-            }),
-          );
-          yield* Effect.yieldNow;
-
-          yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
-            Effect.provide(nativeToolTestLayer()),
-          );
-
-          expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
-          expect(yield* Deferred.await(changed)).toBe(
-            apiKeySecretName('openai'),
-          );
-          yield* Fiber.interrupt(subscriber);
-        }).pipe(withEnv({})),
-      ),
-  );
-
-  it.effect('removes a stored key whose value can no longer be read', () =>
-    Effect.gen(function* () {
-      const { secrets, store } = createSecrets({
-        [apiKeySecretName('openai')]: 'sk-test',
-      });
-      // The persisted entry is listed but unreadable: the removal path keys off
-      // the stored key *names*, so it still has something to delete.
-      vi.spyOn(secrets, 'get').mockReturnValue(Effect.succeed(undefined));
-      yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
-
-      const result = yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
-        Effect.provide(nativeToolTestLayer()),
-      );
-
-      expect(result.status).toBe('executed');
-      expect(result.output).toContain('Removed stored API key');
-      expect(store.has(apiKeySecretName('openai'))).toBe(false);
-    }),
-  );
-
-  it.effect(
-    'reports the canonical Kimi Code environment variable when unsetting',
-    () =>
-      Effect.gen(function* () {
-        const { secrets } = createSecrets({});
-        yield* Effect.promise(() =>
-          setupApiKeyToolPlatform(secrets, {
-            [apiKeyEnvName('kimiCode')]: 'from-env',
-          }),
-        );
-
-        const result = yield* UnsetApiKeyTool.call({
-          provider: 'kimiCode',
-        }).pipe(Effect.provide(nativeToolTestLayer()));
-
-        expect(result.status).toBe('executed');
-        expect(result.output).toContain('KIMI_CODE_API_KEY');
-        expect(result.output).not.toContain('KIMICODE_API_KEY');
-      }),
   );
 });

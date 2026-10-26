@@ -158,7 +158,7 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 // TurnResult for follow-up delivery.
 // ============================================================================
 
-export function runStreamedTurn(params: {
+function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
   signal: AbortSignal;

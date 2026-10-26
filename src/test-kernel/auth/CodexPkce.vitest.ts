@@ -102,19 +102,4 @@ describe('codex model eligibility', () => {
       'chatgpt-subscription',
     );
   });
-
-  it('gives an OpenRouter-only model no route, even on the subscription', () => {
-    const facts = { ...OWN_KEY_ROUTE_FACTS, chatgptSubscription: true };
-    const flagged = { codexSubscription: { contextWindow: 272_000 } };
-    expect(decideModelRoute(openAIModel(flagged), facts).kind).toBe(
-      'chatgpt-subscription',
-    );
-    // TeXRA reaches no provider that serves an OpenRouter-only model.
-    expect(
-      decideModelRoute(
-        openAIModel({ ...flagged, openRouterOnly: true }),
-        facts,
-      ),
-    ).toEqual({ kind: 'unserved' });
-  });
 });

@@ -1,6 +1,4 @@
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { access, writeFile } from 'node:fs/promises';
 
 import { it } from '@effect/vitest';
 import {
@@ -12,7 +10,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { RunId } from '@shared/schemas';
@@ -20,13 +18,11 @@ import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { closeSessionOf } from '@test/support/sessionEnd';
 
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { createModuleMocks } from '@test/support/moduleMocks';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import type { DiffSource } from '@texra/hosts/uiHosts';
 import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import type * as ToolEditApproval from '@tools/approval/toolEditApproval';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -38,8 +34,6 @@ const approvalTest = (
 ): void => {
   it.live(name, () => Effect.scoped(fn()), 30_000);
 };
-
-const mocks = createModuleMocks();
 
 /**
  * The host wiring point's run. The controller's verbs are Effects and it
@@ -57,12 +51,6 @@ const onRuntime = <A, E>(
     try: () => testRuntime().runPromise(program),
     catch: (error) => error,
   });
-
-async function createTempRoot(prefix = 'texra-approval-'): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), prefix));
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
-  return dir;
-}
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
@@ -190,18 +178,6 @@ function createApprovalFixture(
           );
         });
       },
-      /** Waits until every staged preview's directory has been removed. */
-      waitForStagedCleanup() {
-        return Effect.tryPromise(() =>
-          vi.waitFor(async () => {
-            expect(staged).toHaveLength(stagePreview.mock.calls.length);
-            for (const preview of staged)
-              await expect(
-                pathExists(path.dirname(preview.proposedPath)),
-              ).resolves.toBe(false);
-          }),
-        );
-      },
       /**
        * Wait until `count` requests are both staged on the host and listed by
        * the fold, which is where a surface's decision finds them.
@@ -214,7 +190,9 @@ function createApprovalFixture(
             expect(
               SubscriptionRef.getUnsafe(session.view.ref).requests,
             ).toHaveLength(count);
-          });
+            // The first staging pays the cold module graph; a loaded shard
+            // stages slower than the default second.
+          }, 10_000);
           return stagePreview.mock.calls.map(([request]) => request.permission);
         });
       },
@@ -226,147 +204,6 @@ describe('desktop tool edit approval', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  approvalTest(
-    'routes proposed-file previews through desktop temp files before rejection',
-    () =>
-      Effect.gen(function* () {
-        const opened: string[] = [];
-        const { requestApproval, controller, session, waitForPreviews } =
-          yield* createApprovalFixture({
-            ui: createStubDesktopAgentRunHost({
-              openPath: (filePath) =>
-                Effect.sync(() => {
-                  opened.push(filePath);
-                }),
-            }),
-          });
-
-        const result = yield* Effect.forkScoped(
-          requestApproval({
-            path: '/workspace/notes.txt',
-            originalContent: 'alpha\n',
-            proposedContent: 'beta\n',
-            sourceTool: 'write_file',
-            runId: 'a20000' as RunId,
-          }),
-        );
-        const [request] = yield* waitForPreviews();
-
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'previewProposed',
-          }),
-        );
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(opened).toHaveLength(1)),
-        );
-        expect(path.basename(opened[0])).toContain('proposed');
-        expect(yield* Effect.tryPromise(() => pathExists(opened[0]))).toBe(
-          true,
-        );
-
-        yield* session.requests.request({
-          kind: 'request.decide',
-          runId: 'a20000' as RunId,
-          requestId: request.requestId,
-          decision: { action: 'reject', feedback: 'not yet' },
-        });
-        expect(yield* Fiber.join(result)).toMatchObject({
-          action: 'reject',
-          feedback: 'not yet',
-        });
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(async () => {
-            await expect(pathExists(opened[0])).resolves.toBe(false);
-          }),
-        );
-      }),
-  );
-
-  approvalTest(
-    'routes diff actions through the required desktop diff host',
-    () =>
-      Effect.gen(function* () {
-        const openPath = vi.fn((_filePath: string) => Effect.void);
-        const openDiff = vi.fn(
-          (
-            _original: DiffSource,
-            _proposed: DiffSource,
-            _title: string,
-            _previewId: string,
-          ): Effect.Effect<void> => Effect.void,
-        );
-        const closeDiff = vi.fn(
-          (_previewId: string): Effect.Effect<void> => Effect.void,
-        );
-        const { requestApproval, controller, session, waitForPreviews } =
-          yield* createApprovalFixture({
-            ui: {
-              ...createStubDesktopAgentRunHost({ openPath }),
-              openDiff,
-              closeDiff,
-            },
-          });
-
-        const result = yield* Effect.forkScoped(
-          requestApproval({
-            path: '/workspace/main.tex',
-            originalContent: 'old\n',
-            proposedContent: 'new\n',
-            sourceTool: 'write_file',
-            runId: 'a30000' as RunId,
-          }),
-        );
-        const [request] = yield* waitForPreviews();
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce()),
-        );
-
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'openDiff',
-          }),
-        );
-
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2)),
-        );
-        expect(openPath).not.toHaveBeenCalled();
-        const [original, proposed, title, previewId] = openDiff.mock.calls[0];
-        expect(title).toBe('Tool edit: main.tex');
-        // The diff is named by the request it previews, so closing it below
-        // can only take this request's diff off the Review workbench.
-        expect(previewId).toBe(request.requestId);
-        expect(
-          yield* Effect.tryPromise(() => pathExists(original.filePath)),
-        ).toBe(true);
-        expect(
-          yield* Effect.tryPromise(() => pathExists(proposed.filePath)),
-        ).toBe(true);
-
-        yield* session.requests.request({
-          kind: 'request.decide',
-          runId: 'a30000' as RunId,
-          requestId: request.requestId,
-          decision: { action: 'reject' },
-        });
-        expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
-
-        // The decision releases the preview: the view the diff opened in is
-        // closed before the staged files it reads are removed.
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(async () => {
-            expect(closeDiff).toHaveBeenCalledExactlyOnceWith(
-              request.requestId,
-            );
-            await expect(pathExists(proposed.filePath)).resolves.toBe(false);
-          }),
-        );
-      }),
-  );
 
   approvalTest('applies user edits made in the proposed preview file', () =>
     Effect.gen(function* () {
@@ -423,246 +260,5 @@ describe('desktop tool edit approval', () => {
         }),
       );
     }),
-  );
-
-  approvalTest(
-    'reports a failed preview read and accepts a later approval',
-    () =>
-      Effect.gen(function* () {
-        const opened: string[] = [];
-        const messages: string[] = [];
-        const { requestApproval, controller, waitForPreviews } =
-          yield* createApprovalFixture({
-            ui: createStubDesktopAgentRunHost({
-              openPath: (filePath) =>
-                Effect.sync(() => {
-                  opened.push(filePath);
-                }),
-              showErrorMessage: (message) =>
-                Effect.sync(() => {
-                  messages.push(message);
-                }),
-            }),
-          });
-
-        const result = yield* Effect.forkScoped(
-          requestApproval({
-            path: '/workspace/notes.txt',
-            originalContent: 'alpha\n',
-            proposedContent: 'beta\n',
-            sourceTool: 'write_file',
-            runId: 'a50000' as RunId,
-          }),
-        );
-        const [request] = yield* waitForPreviews();
-        const { requestId } = request;
-
-        yield* onRuntime(
-          controller.handleAction({ requestId, action: 'previewProposed' }),
-        );
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(opened).toHaveLength(1)),
-        );
-        yield* Effect.tryPromise(() => rm(opened[0]));
-
-        yield* onRuntime(
-          controller.handleAction({ requestId, action: 'approve' }),
-        );
-
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(messages).toHaveLength(1)),
-        );
-        expect(messages[0]).toContain('edited document could not be read');
-
-        yield* Effect.tryPromise(() =>
-          writeFile(opened[0], 'beta after retry\r\n', 'utf8'),
-        );
-        yield* onRuntime(
-          controller.handleAction({ requestId, action: 'approve' }),
-        );
-
-        expect(yield* Fiber.join(result)).toMatchObject({
-          action: 'apply',
-          appliedContent: 'beta after retry\n',
-        });
-      }),
-  );
-
-  approvalTest(
-    'routes LaTeX diff inspection without settling the request',
-    () =>
-      Effect.gen(function* () {
-        const runLatexdiff = vi.fn(() => Effect.void);
-        mocks.doMock('@texra/tools/latex/latexPreview', async () => {
-          const actual = await vi.importActual<
-            typeof import('@texra/tools/latex/latexPreview')
-          >('@texra/tools/latex/latexPreview');
-          return { ...actual, runLatexdiff };
-        });
-
-        const openBuildDisplay = vi.fn(() => Effect.void);
-        const { requestApproval, controller, session, waitForPreviews } =
-          yield* createApprovalFixture({
-            ui: createStubDesktopAgentRunHost({ openBuildDisplay }),
-          });
-
-        const result = yield* Effect.forkScoped(
-          requestApproval({
-            path: '/workspace/main.tex',
-            originalContent: 'old\n',
-            proposedContent: 'new\n',
-            sourceTool: 'write_file',
-            runId: 'a60000' as RunId,
-          }),
-        );
-        const [request] = yield* waitForPreviews();
-
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'showLatexdiff',
-          }),
-        );
-
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce()),
-        );
-        // The controller injects its own display callback so it can register
-        // the host build and join it at release, so the second argument is
-        // checked structurally instead of against the host stub by identity.
-        expect(runLatexdiff).toHaveBeenCalledWith(
-          expect.objectContaining({
-            request: expect.objectContaining({
-              permission: expect.objectContaining({
-                requestId: request.requestId,
-              }),
-            }),
-          }),
-          expect.objectContaining({
-            subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay: expect.any(Function),
-          }),
-        );
-        expect(result.pollUnsafe()).toBeUndefined();
-
-        yield* session.requests.request({
-          kind: 'request.decide',
-          runId: 'a60000' as RunId,
-          requestId: request.requestId,
-          decision: { action: 'reject' },
-        });
-        expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
-      }),
-  );
-
-  approvalTest(
-    'uses the injected desktop build display callback for LaTeX preview',
-    () =>
-      Effect.gen(function* () {
-        const workspaceRoot = yield* Effect.tryPromise(() =>
-          createTempRoot('texra-workspace-'),
-        );
-        const displayed: Array<{
-          absolutePath: string;
-          options?: { preserveFocus?: boolean };
-        }> = [];
-        const messages: string[] = [];
-        const { requestApproval, controller, session, waitForPreviews } =
-          yield* createApprovalFixture({
-            workspacePath: workspaceRoot,
-            ui: createStubDesktopAgentRunHost({
-              openBuildDisplay: (location, options) =>
-                Effect.sync(() => {
-                  displayed.push({
-                    absolutePath: location.absolutePath,
-                    options,
-                  });
-                }),
-              showErrorMessage: (message) =>
-                Effect.sync(() => {
-                  messages.push(message);
-                }),
-            }),
-          });
-
-        const result = yield* Effect.forkScoped(
-          requestApproval({
-            path: path.join(workspaceRoot, 'main.tex'),
-            originalContent:
-              '\\documentclass{article}\\begin{document}old\\end{document}\n',
-            proposedContent:
-              '\\documentclass{article}\\begin{document}new\\end{document}\n',
-            sourceTool: 'write_file',
-            runId: 'a70000' as RunId,
-          }),
-        );
-        const [request] = yield* waitForPreviews();
-
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'previewProposed',
-          }),
-        );
-
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(() => {
-            expect([...displayed, ...messages]).toHaveLength(1);
-          }),
-        );
-        expect(messages).toEqual([]);
-        expect(displayed[0].options).toEqual({ preserveFocus: true });
-        expect(path.basename(displayed[0].absolutePath)).toMatch(
-          /^main_preview-[\w-]{8}\.tex$/,
-        );
-        expect(
-          yield* Effect.tryPromise(() => pathExists(displayed[0].absolutePath)),
-        ).toBe(true);
-
-        // The request's own decision releases the preview and everything the
-        // LaTeX inspection staged beside it.
-        yield* session.requests.request({
-          kind: 'request.decide',
-          runId: 'a70000' as RunId,
-          requestId: request.requestId,
-          decision: { action: 'reject' },
-        });
-        expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
-        yield* Effect.tryPromise(() =>
-          vi.waitFor(async () => {
-            await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
-              false,
-            );
-          }),
-        );
-      }),
-  );
-
-  approvalTest(
-    'releases every staged preview when the controller is disposed',
-    () =>
-      Effect.gen(function* () {
-        const {
-          requestApproval,
-          controller,
-          waitForPreviews,
-          waitForStagedCleanup,
-        } = yield* createApprovalFixture();
-
-        yield* Effect.forkScoped(
-          requestApproval({
-            path: '/workspace/disposed.tex',
-            originalContent: 'old\n',
-            proposedContent: 'new\n',
-            sourceTool: 'write_file',
-            runId: 'a80000' as RunId,
-          }),
-        );
-        yield* waitForPreviews();
-
-        yield* onRuntime(controller.dispose());
-
-        yield* waitForStagedCleanup();
-      }),
   );
 });

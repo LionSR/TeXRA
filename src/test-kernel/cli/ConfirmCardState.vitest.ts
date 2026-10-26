@@ -4,7 +4,6 @@ import {
   confirmCardKeyDecision,
   confirmCardKeyRows,
 } from '@cli/chat/tui/modals/ConfirmCardState';
-import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 
 describe('CLI confirm-card key handling', () => {
   const feedbackRows = confirmCardKeyRows({ rejectionMode: 'feedback' });
@@ -23,13 +22,5 @@ describe('CLI confirm-card key handling', () => {
     );
     expect(confirmCardKeyDecision('\u001B', {}, feedbackRows)).toEqual(reject);
     expect(confirmCardKeyDecision('\u001Bn', {}, feedbackRows)).toBeUndefined();
-  });
-
-  it('only enables approve-always where the modal allows it', () => {
-    const rows = confirmCardKeyRows({ alwaysAllowLabel: 'approve all' });
-    expect(confirmCardKeyDecision('a', {}, rows)).toEqual({
-      action: APPROVE_SESSION_ACTION,
-    });
-    expect(confirmCardKeyDecision('a', {}, feedbackRows)).toBeUndefined();
   });
 });

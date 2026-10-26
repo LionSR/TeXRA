@@ -1,6 +1,7 @@
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import { Effect, type FileSystem } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 
 import type { RunId } from '@shared/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
@@ -20,13 +21,6 @@ type RecordingHost = ProgressWorkflowFileActionsControllerDeps['host'] & {
 type RecordingDeps = ProgressWorkflowFileActionsControllerDeps & {
   host: RecordingHost;
 };
-
-/** The `FileSystem` both hosts' request dispatchers carry when they yield a
- *  file action, so it runs here as it runs there. */
-const runAction = <A, E>(
-  action: Effect.Effect<A, E, FileSystem.FileSystem>,
-): Promise<A> =>
-  Effect.runPromise(action.pipe(Effect.provide(NodeFileSystem.layer)));
 
 function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,
@@ -63,50 +57,48 @@ function createDeps(
 }
 
 describe('ProgressWorkflowFileActionsController', () => {
-  it('keeps the accept follow-up backup when the host cancels acceptance', async () => {
-    const followUps: string[] = [];
-    const acceptResults = [false, true];
-    const readResults = [
-      'original model output',
-      'user edited output',
-      'user edited output',
-    ];
-    const deps = createDeps({
-      acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
-      readFile: () => Effect.sync(() => readResults.shift() ?? ''),
-    });
-    deps.runs.sendFollowUp = (_stream, text) =>
-      Effect.sync(() => {
-        followUps.push(text);
-      });
-    const controller = new ProgressWorkflowFileActionsController(deps);
+  it.effect(
+    'keeps the accept follow-up backup when the host cancels acceptance',
+    () =>
+      Effect.gen(function* () {
+        const followUps: string[] = [];
+        const acceptResults = [false, true];
+        const readResults = [
+          'original model output',
+          'user edited output',
+          'user edited output',
+        ];
+        const deps = createDeps({
+          acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
+          readFile: () => Effect.sync(() => readResults.shift() ?? ''),
+        });
+        deps.runs.sendFollowUp = (_stream, text) =>
+          Effect.sync(() => {
+            followUps.push(text);
+          });
+        const controller = new ProgressWorkflowFileActionsController(deps);
 
-    await runAction(
-      controller.compareOriginal(
-        '/workspace/edited.tex',
-        '/workspace/base.tex',
-        RUN,
-      ),
-    );
-    await runAction(
-      controller.acceptFile(
-        '/workspace/edited.tex',
-        '/workspace/base.tex',
-        RUN,
-      ),
-    );
+        yield* controller.compareOriginal(
+          '/workspace/edited.tex',
+          '/workspace/base.tex',
+          RUN,
+        );
+        yield* controller.acceptFile(
+          '/workspace/edited.tex',
+          '/workspace/base.tex',
+          RUN,
+        );
 
-    expect(followUps).toEqual([]);
+        expect(followUps).toEqual([]);
 
-    await runAction(
-      controller.acceptFile(
-        '/workspace/edited.tex',
-        '/workspace/base.tex',
-        RUN,
-      ),
-    );
+        yield* controller.acceptFile(
+          '/workspace/edited.tex',
+          '/workspace/base.tex',
+          RUN,
+        );
 
-    expect(followUps).toHaveLength(1);
-    expect(followUps[0]).toMatch(/edited\.tex/);
-  });
+        expect(followUps).toHaveLength(1);
+        expect(followUps[0]).toMatch(/edited\.tex/);
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
 });

@@ -44,7 +44,7 @@ function addWindow(
   if (window) windows.set(name, window);
 }
 
-export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
+function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
   const root = asObject(body);
   const data = asObject(root?.data) ?? root;
   const windows = new Map<string, SubscriptionUsageWindow>();

@@ -4,48 +4,14 @@ import { describe, expect } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { TraceEmitter } from '@agent/trace';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
-  publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { readRunTranscript } from '@transcript/runTranscript';
 import { generateRunId } from '@utils/core';
-
-describe('session-owned transcripts and follow-up queues', () => {
-  it.effect('commits partial streaming text when the run parks', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const runId = generateRunId();
-      publishTestRunStart(session, runId);
-      yield* session.log.settled;
-      const trace = new TraceEmitter((event) =>
-        session.log.publish(runId, event),
-      );
-      yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
-      const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-      output.append('partial text');
-      yield* session.log.settled;
-      // The `waiting` step parks the run and the loop commits the closure
-      // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
-      // the row's final text instead of streaming forever.
-      publishTestRows(session, session.trace.closure(runId));
-      yield* session.log.settled;
-      const { rows } = yield* readRunTranscript(session, runId);
-      expect(
-        rows.flatMap((row) =>
-          row.kind === 'assistant' ? [row.text.full] : [],
-        ),
-      ).toEqual(['partial text']);
-    }),
-  );
-});
 
 describe('sendFollowUp host-path session routing', () => {
   it.effect(

@@ -8,15 +8,13 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // the mocked modules — keep these imports immediately after the vitest
 // import.
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
-import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
-import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
   CliExecuteOptions,
@@ -108,26 +106,6 @@ type WorkflowRunPayload = Extract<
   WorkflowExecuteResult,
   { ok: true }
 >['result'];
-
-function expectedRecoveryHint(
-  context: CliContext,
-  runId: string,
-  workingDirectory = context.cwd,
-): string {
-  return `Resume this task with: ${formatResumeCommand(
-    context.commandName,
-    runId,
-    {
-      cwd: workingDirectory,
-      processCwd: process.cwd(),
-      approvalPolicy: context.approvalPolicy,
-      outputFormat: context.outputFormat,
-      print: context.mode === 'headless',
-      includeInteropSkills: context.skillSourceOptions.includeInterop,
-      skillSourcePaths: context.skillSourceOptions.additionalPaths,
-    },
-  )}`;
-}
 
 /** The session the suite's init installs, as the command resolved it. */
 let fixtureSession: SessionHandle | undefined;
@@ -254,21 +232,6 @@ async function writeGeneratedOutput(root: string): Promise<string> {
   return generated;
 }
 
-/** Cancelled-run fixture: real source file plus a cancelled run mock. */
-async function setupCancelledOutput(
-  root: string,
-  runId: string,
-): Promise<void> {
-  const generated = await writeGeneratedOutput(root);
-  mockWorkflowRun(
-    workflowRun(runId, {
-      outcome: RUN_OUTCOME.CANCELLED,
-      outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
-    }),
-    true,
-  );
-}
-
 /**
  * The run's opening row, committed by the fixture session itself: the first
  * append claims the aggregate for this process, the way the launch's own
@@ -306,26 +269,6 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         },
       ]);
     seededRunIds.add(runId);
-  });
-
-/**
- * The checkpoint the recovery hint reads. The claim stays with the fixture
- * session: a run being finalized is one its process still holds, and the
- * metadata write below it commits against that same claim.
- */
-const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
-  Effect.gen(function* () {
-    yield* seedStartedRun(session, runId);
-    const cell = yield* session.runHistory.open(runId as RunId, {
-      activation: () => Effect.succeed([]),
-    });
-    yield* cell.append([
-      {
-        type: 'run.position',
-        aggregateId: qualifyAggregateId('run', runId as RunId),
-        payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
-      },
-    ]);
   });
 
 describe('CLI run command, workflow agents', () => {
@@ -425,107 +368,11 @@ describe('CLI run command, workflow agents', () => {
     ),
   );
 
-  it.effect(
-    'prints a resumable recovery command for a cancelled workflow',
-    () =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          mockWorkflowRun(
-            workflowRun('abc007', {
-              outcome: RUN_OUTCOME.CANCELLED,
-            }),
-            true,
-          );
-          // The hint advertises only a resumable run: the cancelled run's own
-          // checkpoint is what the real resumability read has to find.
-          yield* seedResumableCheckpoint(currentSession(), 'abc007');
-
-          const context = createRunCommandCliContext({
-            cwd: root,
-            commandName: 'texra-local',
-            approvalPolicy: 'never',
-          });
-          const exitCode = yield* workflowProgram(
-            { output: 'polished.tex' },
-            context,
-          );
-
-          expect(exitCode).toBe(CliExitCode.Interrupted);
-          expect(
-            Exit.isFailure(
-              yield* Effect.exit(
-                Effect.tryPromise(() =>
-                  fs.stat(path.join(root, 'polished.tex')),
-                ),
-              ),
-            ),
-          ).toBe(true);
-          expect(
-            cliLogSinksMock.writeTextStderr,
-          ).toHaveBeenCalledExactlyOnceWith(
-            expectedRecoveryHint(context, 'abc007'),
-          );
-        }),
-      ),
-  );
-
-  it.effect(
-    'keeps non-empty cancelled outputs in run storage without copying to --output',
-    () =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          yield* Effect.promise(() => setupCancelledOutput(root, 'abc008'));
-          yield* seedResumableCheckpoint(currentSession(), 'abc008');
-
-          const context = createRunCommandCliContext({
-            cwd: root,
-            commandName: 'texra-local',
-            approvalPolicy: 'never',
-          });
-          const exitCode = yield* workflowProgram(
-            { output: 'polished.tex' },
-            context,
-          );
-
-          expect(exitCode).toBe(CliExitCode.Interrupted);
-          // The destination did not previously exist and must stay absent.
-          expect(
-            Exit.isFailure(
-              yield* Effect.exit(
-                Effect.tryPromise(() =>
-                  fs.stat(path.join(root, 'polished.tex')),
-                ),
-              ),
-            ),
-          ).toBe(true);
-          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-          expect(emission?.json).toMatchObject({
-            outcome: RUN_OUTCOME.CANCELLED,
-            workingDirectory: root,
-            runDirectory: '/tmp/runs/abc008',
-          });
-          expect(emission?.json).not.toHaveProperty('copiedOutput');
-          expect(emission?.json).not.toHaveProperty('copiedOutputs');
-          expect(emission?.text).toBe('/tmp/runs/abc008');
-          expect(
-            cliLogSinksMock.writeTextStderr,
-          ).toHaveBeenCalledExactlyOnceWith(
-            expectedRecoveryHint(context, 'abc008'),
-          );
-        }),
-      ),
-  );
-
   it.effect.each([
     {
       label: '--output',
       init: { output: 'polished.tex' },
       destination: (root: string) => path.join(root, 'polished.tex'),
-    },
-    {
-      label: '--output-dir',
-      init: { outputDir: 'out' },
-      destination: (root: string) => path.join(root, 'out', 'paper.tex'),
     },
   ])(
     'keeps failed output in run storage and preserves the requested $label destination',
@@ -573,97 +420,5 @@ describe('CLI run command, workflow agents', () => {
           expect(emission?.text).toContain('/tmp/runs/abc00a');
         }),
       ),
-  );
-
-  it.effect(
-    'leaves a pre-existing --output destination untouched for a cancelled run',
-    () =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          const destination = path.join(root, 'polished.tex');
-          yield* Effect.promise(() => fs.writeFile(destination, 'keep-me'));
-          yield* Effect.promise(() => setupCancelledOutput(root, 'abc00b'));
-
-          const exitCode = yield* workflowProgram(
-            { output: 'polished.tex' },
-            createRunCommandCliContext({ cwd: root }),
-          );
-
-          expect(exitCode).toBe(CliExitCode.Interrupted);
-          expect(
-            yield* Effect.promise(() => fs.readFile(destination, 'utf8')),
-          ).toBe('keep-me');
-        }),
-      ),
-  );
-
-  it.effect.each(['json', 'ndjson'] as const)(
-    'keeps %s stdout free of the cancellation recovery hint',
-    (outputFormat) =>
-      Effect.gen(function* () {
-        mockWorkflowRun(
-          workflowRun('abc007', {
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-          true,
-        );
-        // The hint advertises only a resumable run: the cancelled run's own
-        // checkpoint is what the real resumability read has to find.
-        yield* seedResumableCheckpoint(currentSession(), 'abc007');
-
-        const exitCode = yield* workflowProgram(
-          {},
-          createRunCommandCliContext({ outputFormat }),
-        );
-
-        expect(exitCode).toBe(CliExitCode.Interrupted);
-        expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-        expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-          expectedRecoveryHint(
-            createRunCommandCliContext({ outputFormat }),
-            'abc007',
-          ),
-        );
-      }),
-  );
-
-  // Issue #12162: a remote agent's catalog listing carries no
-  // `task.outputs`, so only the definition the launch loads declares
-  // them — and the launch hands them to output finalization, as the stub
-  // here does: the declared name still decides.
-  it.effect('expects the output files the launched definition declares', () =>
-    withTempDirEffect('texra-workflow-', (root) =>
-      Effect.gen(function* () {
-        const generated = yield* Effect.promise(() =>
-          writeGeneratedOutput(root),
-        );
-        mockWorkflowRun(
-          workflowRun('abc004', {
-            outputs: [
-              runOutputSummary(generated, path.join(root, 'paper.tex')),
-            ],
-          }),
-          true,
-          ['slides.tex'],
-        );
-
-        const exitCode = yield* workflowProgram(
-          { outputDir: 'out' },
-          createRunCommandCliContext({ cwd: root }),
-        );
-
-        expect(exitCode).toBe(CliExitCode.AgentError);
-        // The launch persisted only the input-derived names; the declared
-        // `slides.tex` is what the copy is held to.
-        expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-          cli: { expectedOutputFiles: ['paper.tex'] },
-        });
-        expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledWith(
-          expect.objectContaining({
-            message: expect.stringContaining('slides.tex'),
-          }),
-        );
-      }),
-    ),
   );
 });

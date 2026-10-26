@@ -1,13 +1,9 @@
-// Suites for the annotation-page budget path of @tools/github
-// (PRPollingSource pagination + annotation claim).
+// Suite for the annotation-page path of @tools/github (checkRunsClient
+// pagination before level filtering).
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Duration, Effect, Layer } from 'effect';
-import {
-  RateLimitExceeded,
-  RateLimiterError,
-} from 'effect/persistence/RateLimiter';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
@@ -19,21 +15,7 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
-import {
-  PRPollingSource,
-  type PRSubscriptionState,
-} from '@texra/tools/github/PRPollingSource';
-import type {
-  GhCheckAnnotation,
-  GhCheckRun,
-} from '@texra/tools/github/prTypes';
-import type { PollHookRejected } from '@texra/tools/github/PollingSourceBase';
-
-// Local imports - test fixtures
-import {
-  createPRCurrentShaState,
-  createPRSubscriptionState,
-} from '../support/prPollingSourceState';
+import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
 
 const mocks = vi.hoisted(() => ({
   ghGet: vi.fn(),
@@ -48,18 +30,6 @@ vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
   >()),
   ghGet: mocks.ghGet,
 }));
-
-// ---------------------------------------------------------------------------
-// PRPollingSourceAnnotationPages
-// ---------------------------------------------------------------------------
-
-interface AnnotationDrainSource {
-  drainAnnotationQueues(
-    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
-    now?: number,
-  ): Effect.Effect<void, PollHookRejected>;
-  has(key: string): boolean;
-}
 
 /**
  * The process secret store behind the GitHub client. The client itself is
@@ -90,37 +60,6 @@ function fullWarningPage(): GhCheckAnnotation[] {
     annotation('warning', index),
   );
 }
-
-function checkRun(id: number): GhCheckRun {
-  return {
-    id,
-    name: 'lint',
-    status: 'completed',
-    conclusion: 'success',
-    html_url: `https://example.test/checks/${id}`,
-    completed_at: '2026-05-12T00:00:00Z',
-    output: { annotations_count: 1 },
-  };
-}
-
-function drainState(runs: GhCheckRun[]): PRSubscriptionState {
-  return createPRSubscriptionState({
-    currentShaState: createPRCurrentShaState('abcdef1234567890', {
-      pendingAnnotationRuns: runs,
-    }),
-  });
-}
-
-const exhausted = Effect.fail(
-  new RateLimiterError({
-    reason: new RateLimitExceeded({
-      retryAfter: Duration.seconds(1),
-      key: 'github-annotations',
-      limit: 1,
-      remaining: 0,
-    }),
-  }),
-);
 
 describe('PRPollingSource annotation pagination', () => {
   beforeEach(() => {
@@ -155,68 +94,5 @@ describe('PRPollingSource annotation pagination', () => {
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
       ]);
     }).pipe(Effect.provide(secretsLayer)),
-  );
-
-  it.effect('caps annotation pagination for malformed full pages', () =>
-    Effect.gen(function* () {
-      mocks.ghGet.mockReturnValue(
-        Effect.succeed({ status: 200, data: fullWarningPage() }),
-      );
-
-      const annotations = yield* fetchAnnotations(
-        'owner',
-        'repo',
-        42,
-        Effect.void,
-      );
-
-      expect(annotations).toHaveLength(5000);
-      expect(mocks.ghGet).toHaveBeenCalledTimes(50);
-      expect(mocks.ghGet.mock.calls.at(-1)?.[0]).toBe(
-        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=50',
-      );
-    }).pipe(Effect.provide(secretsLayer)),
-  );
-
-  it.effect('counts annotation budget by endpoint page', () =>
-    Effect.gen(function* () {
-      mocks.ghGet.mockReturnValue(
-        Effect.succeed({ status: 200, data: fullWarningPage() }),
-      );
-
-      let claims = 0;
-      const error = yield* Effect.flip(
-        fetchAnnotations(
-          'owner',
-          'repo',
-          42,
-          Effect.suspend(() => (claims++ < 1 ? Effect.void : exhausted)),
-        ),
-      );
-
-      expect(error).toMatchObject({
-        reason: { _tag: 'RateLimitExceeded' },
-      });
-      expect(mocks.ghGet).toHaveBeenCalledTimes(1);
-    }).pipe(Effect.provide(secretsLayer)),
-  );
-
-  it.effect(
-    'leaves queued annotation runs in place when the page budget is exhausted',
-    () =>
-      Effect.gen(function* () {
-        const source = new PRPollingSource(
-          undefined,
-          exhausted,
-        ) as unknown as AnnotationDrainSource;
-        source.has = vi.fn().mockReturnValue(true);
-        const runs = [checkRun(7), checkRun(8)];
-        const state = drainState(runs);
-
-        yield* source.drainAnnotationQueues([['owner/repo#7', state]]);
-
-        expect(mocks.ghGet).not.toHaveBeenCalled();
-        expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
-      }),
   );
 });

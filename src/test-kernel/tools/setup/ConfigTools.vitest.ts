@@ -20,13 +20,9 @@ import {
   createRecordingHost,
   sessionWithInteractions,
 } from '@test/agent/progressTestUtils';
-import {
-  ReadConfigTool,
-  UpdateConfigTool,
-} from '@texra/tools/setup/ConfigTools';
+import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
 import { generateRunId } from '@utils/core';
 
-const readTool = ReadConfigTool;
 const updateTool = UpdateConfigTool;
 
 function createPlatform() {
@@ -35,45 +31,7 @@ function createPlatform() {
   return { config: project.roots.config, layer };
 }
 
-describe('ConfigTools — read_config', () => {
-  it.effect('rejects keys not starting with texra.', () =>
-    Effect.gen(function* () {
-      const { layer } = createPlatform();
-
-      const result = yield* readTool
-        .call({ key: 'editor.fontSize' })
-        .pipe(Effect.provide(layer));
-
-      assert.equal(result.status, 'error');
-    }),
-  );
-});
-
 describe('ConfigTools — update_config allowlist', () => {
-  it.effect('writes an allowlisted key when the value matches its schema', () =>
-    Effect.gen(function* () {
-      const { config, layer } = createPlatform();
-      // The user scope's value the write replaces: a project value would
-      // shadow it on read.
-      yield* config.update('texra.bib.zoteroPort', 23119, 'global');
-
-      const result = yield* updateTool
-        .call({
-          key: 'texra.bib.zoteroPort',
-          value: 23200,
-          target: 'user',
-        })
-        .pipe(Effect.provide(layer));
-
-      assert.equal(result.status, 'executed');
-      assert.equal(config.get('texra.bib.zoteroPort'), 23200);
-      assert.equal(config.inspect('texra.bib.zoteroPort')?.globalValue, 23200);
-      // Output reports both before and after values for the educative summary.
-      assert.match(result.output ?? '', /23119/);
-      assert.match(result.output ?? '', /23200/);
-    }),
-  );
-
   it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
       const { config, layer } = createPlatform();

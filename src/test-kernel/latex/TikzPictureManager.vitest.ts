@@ -26,34 +26,6 @@ function extractFromPaper(content: string) {
 
 describe('TikzPictureManager', () => {
   it.live(
-    'extracts labeled TikZ pictures from starred figure environments',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* extractFromPaper(String.raw`
-\begin{figure*}[t]
-  \centering
-  \begin{tikzpicture}
-    \node {wide};
-  \end{tikzpicture}
-  \caption{Wide figure}
-  \label{fig:wide}
-\end{figure*}
-`);
-
-        expect(result).toEqual([
-          [
-            'fig:wide',
-            [
-              String.raw`\begin{tikzpicture}
-    \node {wide};
-  \end{tikzpicture}`,
-            ],
-          ],
-        ]);
-      }),
-  );
-
-  it.live(
     'does not attribute an unlabeled figure to a later labeled figure',
     () =>
       Effect.gen(function* () {

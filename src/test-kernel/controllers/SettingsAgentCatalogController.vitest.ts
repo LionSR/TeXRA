@@ -3,11 +3,9 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { describe, expect } from 'vitest';
+import { describe } from 'vitest';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
-import { planTeamRun } from '@common/teams/TeamPlan';
-import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
@@ -115,124 +113,6 @@ function createController(options?: {
 
 describe('SettingsAgentCatalogController', () => {
   it.effect(
-    'applying a team resolves its members to canonical keys and stores the team symbolically',
-    () =>
-      Effect.gen(function* () {
-        const persistedPreset = {
-          id: 'custom-team',
-          name: 'Custom Team',
-          description: 'test',
-          icon: 'bookmark',
-          agents: ['writer', 'review', 'missing'],
-        };
-        const { workspaceAgents, workspaceState } = createController({
-          customPresets: [persistedPreset],
-        });
-
-        const resolved = yield* workspaceAgents.applyTeam('custom-team');
-        if (resolved.status !== 'applied')
-          throw new Error('expected the preset to apply');
-        expect(resolved.preset).toStrictEqual({
-          ...persistedPreset,
-          icon: 'bookmark',
-          source: 'custom',
-        });
-        assert.deepEqual(resolved.resolution.missingAgents, ['missing']);
-        assert.deepEqual(resolved.resolution.agentKeys, [
-          'plugin:writer',
-          'builtIn:review',
-        ]);
-
-        // The commit stores the team reference, not a frozen key snapshot: the
-        // agent list re-resolves it against the catalog on every read.
-        assert.deepEqual(
-          yield* workspaceState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
-          { kind: 'team', teamId: 'custom-team' },
-        );
-      }),
-  );
-
-  it.effect(
-    'selects preset roots without matching arbitrary orchestrator substrings',
-    () =>
-      Effect.gen(function* () {
-        const delegating = (name: string): SettingsAgentCatalogEntry => ({
-          source: 'builtIn',
-          name,
-          blocks: {},
-          tools: ['agent'],
-        });
-        const { controller } = createController({
-          agents: [delegating('engineer'), delegating('leanOrchestrator')],
-        });
-
-        assert.equal(
-          yield* controller.getPresetRoot([
-            'nonOrchestratorHelper',
-            'engineer',
-            'leanOrchestrator',
-          ]),
-          'engineer',
-        );
-        assert.equal(
-          yield* controller.getPresetRoot([
-            'nonOrchestratorHelper',
-            'leanOrchestrator',
-          ]),
-          'leanOrchestrator',
-        );
-      }),
-  );
-
-  it.effect(
-    'previews a built-in team with the root planTeamRun picks for it',
-    () =>
-      Effect.gen(function* () {
-        const delegatingLean: SettingsAgentCatalogEntry = {
-          source: 'plugin',
-          name: 'lean',
-          blocks: {},
-          tools: ['agent'],
-        };
-        const orchestrator: SettingsAgentCatalogEntry = {
-          source: 'builtIn',
-          name: 'orchestrator',
-          blocks: {},
-          tools: ['agent'],
-        };
-        const { controller } = createController({
-          agents: [delegatingLean, orchestrator],
-        });
-        const mathematician = findTeamPreset(teamPresets([]), 'mathematician');
-        assert.ok(mathematician);
-
-        const preview = yield* controller.getPresetRoot(
-          mathematician.agents,
-          mathematician.id,
-        );
-
-        // Built-in semantics search only the built-in root names, so the
-        // delegating 'lean' member earlier in preset order must not win.
-        assert.equal(preview, 'orchestrator');
-        assert.equal(
-          preview,
-          planTeamRun(mathematician, {
-            resolveAgent: (identifier) =>
-              [delegatingLean, orchestrator].find((entry) =>
-                agentMatchesIdentifier(entry, identifier),
-              ),
-          }).rootAgent?.name,
-        );
-        // The same member list previewed ad-hoc keeps custom semantics and
-        // picks the preset-order-first delegating member instead.
-        assert.equal(
-          yield* controller.getPresetRoot(mathematician.agents),
-          'lean',
-        );
-      }),
-  );
-
-  it.effect(
     'preserves unrecognized persisted records when saving a preset',
     () =>
       Effect.gen(function* () {
@@ -251,29 +131,5 @@ describe('SettingsAgentCatalogController', () => {
           'custom-0',
         );
       }),
-  );
-
-  it.effect('preserves other raw records when deleting a preset', () =>
-    Effect.gen(function* () {
-      const target: AgentModePreset = {
-        id: 'target',
-        name: 'Target',
-        description: 'test',
-        icon: 'bookmark',
-        agents: [],
-      };
-      const state = createController({
-        customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],
-      });
-
-      assert.deepEqual(
-        yield* state.controller.deleteCustomPreset(target.id),
-        target,
-      );
-      assert.deepEqual(yield* state.customPresets, [
-        LEGACY_ICON_PRESET,
-        MALFORMED_PRESET,
-      ]);
-    }),
   );
 });

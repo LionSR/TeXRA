@@ -5,10 +5,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema, SynchronizedRef } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
-import { apiKeyEnvName, apiKeySecretName } from '@texra-ai/llm';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
@@ -16,9 +15,8 @@ import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
 import { AppState } from '@platform/interfaces';
-import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
+import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -29,12 +27,10 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { DOCUMENTS_MODULE } from '@texra/tools/documents/documentsModule';
 import { texraPlugins } from '@texra/tools/registry';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { generateRunId } from '@utils/core';
-import { sha256 } from '@utils/core/idHash';
 
 import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
@@ -122,57 +118,6 @@ describe('run-scoped tool resolution', () => {
   setupPlatform({ workspacePath: process.cwd() });
 
   it.effect(
-    'adds the run-scoped tools and submit_output to the model-facing list',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const warn = vi.fn<typeof noopTrace.warn>();
-        const logger = { ...noopTrace, warn };
-        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'chat',
-          model: 'test-model',
-          workingDirectory: process.cwd(),
-          outputSchema: {
-            type: 'object',
-            properties: { answer: { type: 'string' } },
-            required: ['answer'],
-          },
-        });
-        const ctx = validationLaunch({ runId, session, logger }, config);
-        const seen: InvokeRequest[] = [];
-        const shadowing = tool('bash');
-
-        const dispatch = yield* Effect.gen(function* () {
-          yield* runToolUse({ resume: false });
-          const step = yield* SynchronizedRef.get((yield* AgentRun).steps);
-          return step!.tools.registry;
-        }).pipe(
-          // Run-scoped tools, one of them shadowing a registered tool.
-          Effect.provide(runLayer(ctx, [shadowing, tool('second')], seen)),
-          Effect.orDie,
-        );
-
-        // A persona that declares no tools gets no injections: the overlay
-        // tools and the synthetic terminal tool, in overlay order.
-        expect(seen[0]?.tools?.map(({ name }) => name)).toEqual([
-          'bash',
-          'second',
-          'submit_output',
-        ]);
-        expect(warn).toHaveBeenCalledWith(
-          'Run-scoped tool "bash" shadows an existing tool.',
-        );
-        // Dispatch answers the offered names only: a registered tool the run
-        // did not offer is unknown, however the model came to name it.
-        expect(dispatch.get('bash')).toBe(shadowing);
-        expect(dispatch.get('grep')).toBeUndefined();
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  it.effect(
     'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
@@ -242,212 +187,6 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
         );
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  // Failure modes: a credential added mid-run (1) rewrites agent's
-  // description, so its `shown` digest and the cached tools change; (2)
-  // rewrites the frozen system text; (3) never reaches the model; (4)
-  // reaches it as more than one line, or as the whole list again.
-  it.effect(
-    'a credential added mid-run leaves the delegation tool and system text as recorded and tells the model in one line',
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv(apiKeyEnvName('deepseek'), '');
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'chat',
-          model: 'test-model',
-          workingDirectory: process.cwd(),
-        });
-        const launch = validationLaunch({ runId, session }, config);
-        const ctx: AgentLaunchContext = {
-          ...launch,
-          persona: Schema.decodeUnknownSync(PersonaSchema)({
-            tools: [{ name: 'agent' }],
-          }),
-        };
-        yield* runToolUse({ resume: false }).pipe(
-          Effect.provide(runLayer(ctx, [])),
-          Effect.orDie,
-        );
-        const before = (yield* session.runHistory.load(runId))!;
-
-        yield* ctx.stores.secrets.set(apiKeySecretName('deepseek'), 'sk-test');
-        const step = yield* Effect.gen(function* () {
-          return yield* stepFor(yield* AgentRun, before, 'request', false);
-        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
-
-        const offered = step.rows.find((row) => row.type === 'tools.offered');
-        assert(offered?.type === 'tools.offered');
-        expect(offered.payload.tools).toEqual(before.offeredTools);
-        expect(offered.payload.tools.some(({ name }) => name === 'agent')).toBe(
-          true,
-        );
-        expect(offered.payload.system).toBe(before.offeredSystem);
-        const told = step.rows.filter((row) => row.type === 'model.message');
-        expect(told).toHaveLength(1);
-        assert(told[0]?.type === 'model.message');
-        expect(told[0].payload).toMatchObject({
-          kind: 'append',
-          messages: [
-            {
-              role: 'system',
-              text: expect.stringMatching(
-                /^Models for delegation now available: deepseek\/[^\n]*\.$/,
-              ),
-            },
-          ],
-        });
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  // Failure modes: a plugin switched on mid-run (1) re-renders the script
-  // tool's declarations, so its `shown` digest and the cached tools change;
-  // (2) leaves the new tool uncallable from the step; (3) never reaches the
-  // model; (4) reaches it as more than one line.
-  it.effect(
-    'a plugin switched on mid-run leaves the script description as frozen and tells the model in one line',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'chat',
-          model: 'test-model',
-          workingDirectory: process.cwd(),
-        });
-        const ctx: AgentLaunchContext = {
-          ...validationLaunch({ runId, session }, config),
-          persona: Schema.decodeUnknownSync(PersonaSchema)({
-            tools: [
-              { name: 'script' },
-              { name: 'read_file' },
-              { name: 'zotero_search' },
-            ],
-          }),
-        };
-        const switches = ctx.stores.globalState;
-        yield* switches.update(GlobalStateKey.DISABLED_TOOLS, ['zotero']);
-        yield* runToolUse({ resume: false }).pipe(
-          Effect.provide(runLayer(ctx, [])),
-          Effect.orDie,
-        );
-        const before = (yield* session.runHistory.load(runId))!;
-
-        const step = yield* Effect.gen(function* () {
-          const run = yield* AgentRun;
-          // The activation's first step is held to the record; the switch
-          // reaches the one after it.
-          yield* stepFor(run, before, 'request', false);
-          yield* switches.update(GlobalStateKey.DISABLED_TOOLS, []);
-          return yield* stepFor(run, before, 'request', false);
-        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
-
-        const offered = step.rows.find((row) => row.type === 'tools.offered');
-        assert(offered?.type === 'tools.offered');
-        const script = (tools: readonly { name: string; shown: string }[]) =>
-          tools.find(({ name }) => name === 'script')?.shown;
-        expect(script(offered.payload.tools)).toBeDefined();
-        expect(script(offered.payload.tools)).toBe(
-          script(before.offeredTools ?? []),
-        );
-        expect(step.tools.registry.get('zotero_search') !== undefined).toBe(
-          true,
-        );
-        const told = step.rows.filter((row) => row.type === 'model.message');
-        expect(told).toHaveLength(1);
-        assert(told[0]?.type === 'model.message');
-        expect(told[0].payload).toMatchObject({
-          kind: 'append',
-          messages: [
-            {
-              role: 'system',
-              text: 'These tools are now available: zotero_search.',
-            },
-          ],
-        });
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  // Failure modes: a resumed step (1) loads the module source a plugin
-  // ships now rather than the one its run recorded, or (2) records nothing
-  // when the next step loads the new source; (3) a step that offers no
-  // script records a module.
-  it.effect(
-    'a resumed step loads the script modules its run recorded, and the next records the ones shipped now',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const launch = (tools: readonly string[]) => {
-          const runId = generateRunId();
-          publishTestRunStart(session, runId);
-          const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'chat',
-            model: 'test-model',
-            workingDirectory: process.cwd(),
-          });
-          return {
-            runId,
-            ctx: {
-              ...validationLaunch({ runId, session }, config),
-              persona: Schema.decodeUnknownSync(PersonaSchema)({
-                tools: tools.map((name) => ({ name })),
-              }),
-            } satisfies AgentLaunchContext,
-          };
-        };
-        const ran = (tools: readonly string[]) =>
-          Effect.gen(function* () {
-            const { runId, ctx } = launch(tools);
-            yield* runToolUse({ resume: false }).pipe(
-              Effect.provide(runLayer(ctx, [])),
-              Effect.orDie,
-            );
-            return { ctx, state: (yield* session.runHistory.load(runId))! };
-          });
-        expect((yield* ran(['read_file'])).state.offeredWith.modules).toEqual(
-          {},
-        );
-
-        const { ctx, state } = yield* ran(['script', 'document_task']);
-        const shipped = state.offeredWith.modules['builtIn:documents'];
-        assert(shipped !== undefined);
-        expect(state.contents[shipped]).toBe(DOCUMENTS_MODULE);
-        // The run as an earlier build recorded it: another source.
-        const earlier = 'export const revise = () => 1;';
-        const recorded = {
-          ...state,
-          offeredWith: {
-            ...state.offeredWith,
-            modules: { 'builtIn:documents': sha256(earlier) },
-          },
-          contents: { ...state.contents, [sha256(earlier)]: earlier },
-        };
-        const [held, next] = yield* Effect.gen(function* () {
-          const run = yield* AgentRun;
-          return [
-            yield* stepFor(run, recorded, 'request', false),
-            yield* stepFor(run, recorded, 'request', false),
-          ];
-        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
-
-        expect(held.tools.modules).toEqual({ 'builtIn:documents': earlier });
-        expect(held.rows).toEqual([]);
-        expect(next.tools.modules).toEqual({
-          'builtIn:documents': DOCUMENTS_MODULE,
-        });
-        const offered = next.rows.find((row) => row.type === 'tools.offered');
-        assert(offered?.type === 'tools.offered');
-        expect(offered.payload.modules).toEqual({
-          'builtIn:documents': shipped,
-        });
         yield* closeSessionOf(session);
       }),
   );

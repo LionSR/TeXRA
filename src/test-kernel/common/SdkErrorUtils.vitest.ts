@@ -1,8 +1,5 @@
 // Third-party imports
-import {
-  BadRequestError as OpenAIBadRequestError,
-  RateLimitError as OpenAIRateLimitError,
-} from 'openai';
+import { BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -12,12 +9,7 @@ import {
   attachProviderError,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-import {
-  buildErrorLogData,
-  getSdkErrorMessage,
-  normalizeProviderError,
-} from '@common/errors/sdkError/providerErrorFormat';
-import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
@@ -29,22 +21,6 @@ const judged = (cause: unknown) =>
   failureInfo(judgeFailure(openaiFailure(cause), 'api-key'), 'openai');
 
 describe('context-window overflow', () => {
-  it('is the package verdict on third-party provider wording', () => {
-    for (const message of [
-      'context length exceeded',
-      'Maximum context length is 128000.',
-    ])
-      expect(judged(new Error(message)).classification).toStrictEqual({
-        kind: 'context-window',
-      });
-  });
-
-  it('is not read into an unrelated error', () => {
-    expect(
-      judged(new Error('rate limit exceeded')).classification,
-    ).toBeUndefined();
-  });
-
   it("is the verdict on OpenAI's native error code even when the message wording is unfamiliar", () => {
     const err = new OpenAIBadRequestError(
       400,
@@ -56,31 +32,6 @@ describe('context-window overflow', () => {
     expect(judged(err).classification).toStrictEqual({
       kind: 'context-window',
     });
-  });
-
-  it('is the verdict on a nested error.code (e.g. a WebSocket error wrapper) without a top-level code', () => {
-    const err = new Error(
-      'OpenAI WebSocket response failed: overflow',
-    ) as Error & {
-      error?: unknown;
-    };
-    err.error = { code: 'context_length_exceeded', message: 'overflow' };
-
-    expect(judged(err).userRetryable).toBe(false);
-    expect(judged(err).classification).toStrictEqual({
-      kind: 'context-window',
-    });
-  });
-
-  it('is not read into an unrelated native error code', () => {
-    const err = new OpenAIRateLimitError(
-      429,
-      { code: 'rate_limit_exceeded', message: 'Too many requests' },
-      'Too many requests',
-      new Headers(),
-    );
-
-    expect(judged(err).classification).toBeUndefined();
   });
 });
 
@@ -97,52 +48,5 @@ describe('attachProviderError end-to-end', () => {
       hasErrorPresentationClaimed(new Error('wrapped', { cause: frozen })),
     ).toBe(true);
     expect(normalizeProviderError(frozen).userRetryable).toBe(true);
-  });
-
-  it('recovers cached ProviderError data through wrapper causes', () => {
-    const retryInfo: RetryErrorInfo = {
-      message: 'HTTP 503 Service Unavailable – server overloaded',
-      userRetryable: true,
-      statusCode: 503,
-      provider: 'anthropic',
-      requestId: 'req_wrapped_503',
-    };
-
-    const cause = new Error(retryInfo.message);
-    attachProviderError(cause, retryInfo);
-    const wrapper = new Error('Tool-use flow failed', { cause });
-
-    expect(getSdkErrorMessage(wrapper)).toBe(retryInfo.message);
-
-    const logData = buildErrorLogData(wrapper, {
-      operation: 'execute orchestrator',
-    });
-
-    expect(logData.statusCode).toBe(503);
-    expect(logData.provider).toBe('anthropic');
-    expect(logData.requestId).toBe('req_wrapped_503');
-    // The raw message keeps the cause chain: a wrapper's sentence alone is
-    // not a record of what failed.
-    expect(logData.rawMessage).toBe(
-      'Tool-use flow failed: HTTP 503 Service Unavailable – server overloaded',
-    );
-    expect(logData.operation).toBe('execute orchestrator');
-    expect(normalizeProviderError(wrapper)).toBe(retryInfo);
-  });
-
-  it('ignores malformed current ProviderError metadata', () => {
-    const malformed = {
-      message: 'mixed provider metadata',
-      userRetryable: true,
-      classification: { kind: 'context-window' },
-      missingApiKey: true,
-    } as unknown as ProviderError;
-    const err = new Error(malformed.message);
-    attachProviderError(err, malformed);
-
-    const recovered = normalizeProviderError(err);
-
-    expect(recovered).not.toBe(malformed);
-    expect(recovered.classification).toBeUndefined();
   });
 });

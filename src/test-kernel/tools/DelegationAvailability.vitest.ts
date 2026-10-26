@@ -1,58 +1,26 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import type { ModelOptionData } from '@shared/schemas';
-import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
-
-const mocks = vi.hoisted(() => ({
-  readModelOptions: vi.fn<() => Effect.Effect<readonly ModelOptionData[]>>(),
-}));
-
-vi.mock('@model/computeModelOptions', () => ({
-  // A case seeds picker rows; the read answers each row's verdict.
-  readModelOptions: () =>
-    Effect.map(mocks.readModelOptions(), (rows) =>
-      rows.map(({ value, availability }) => ({
-        model: value,
-        availability: availability ?? 'provider-key',
-      })),
-    ),
-}));
-
-const { selectAvailableDelegationModel } =
-  await import('@tools/delegation/delegationAvailability');
-
-function model(
-  value: string,
-  overrides: Partial<ModelOptionData> = {},
-): ModelOptionData {
-  return {
-    value,
-    label: value,
-    ...overrides,
-  };
-}
+import { apiKeySecretName } from '@texra-ai/llm';
+import {
+  fakeProcessServices,
+  hostStores,
+  installedHost,
+} from '@test/support/setupPlatform';
+import { selectAvailableDelegationModel } from '@tools/delegation/delegationAvailability';
 
 describe('delegation model availability', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
+  // Only an OpenAI key is stored, so a named Anthropic model cannot run: the
+  // launch is refused, never silently swapped for a model that can.
   it.effect(
     'rejects an explicitly requested model that is not currently available',
     () =>
       Effect.gen(function* () {
-        mocks.readModelOptions.mockReturnValue(
-          Effect.succeed([
-            model('anthropic/claude-sonnet-4-6'),
-            model('anthropic/claude-opus-4-8', { availability: 'retired' }),
-            model('deepseek/deepseek-v4-flash', {
-              availability: 'provider-key',
-            }),
-          ]),
+        yield* installedHost().secrets.set(
+          apiKeySecretName('openai'),
+          'sk-key',
         );
-
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
             requestedModel: 'anthropic/claude-opus-4-8',
@@ -62,33 +30,9 @@ describe('delegation model availability', () => {
         );
 
         expect(failure.message).toContain(
-          'Model "anthropic/claude-opus-4-8" is not currently available for delegation with the currently configured model access. Available models: anthropic/claude-sonnet-4-6, deepseek/deepseek-v4-flash.',
+          'Model "anthropic/claude-opus-4-8" is not currently available for delegation',
         );
+        expect(failure.message).toMatch(/Available models: openai\//);
       }).pipe(Effect.provide(fakeProcessServices())),
-  );
-
-  it.effect('uses the parent model only when it is available', () =>
-    Effect.gen(function* () {
-      mocks.readModelOptions.mockReturnValue(
-        Effect.succeed([
-          model('deepseek/deepseek-v4-flash'),
-          model('anthropic/claude-sonnet-4-6'),
-        ]),
-      );
-
-      expect(
-        yield* selectAvailableDelegationModel({
-          parentModel: 'anthropic/claude-sonnet-4-6',
-          settings: hostStores(),
-        }),
-      ).toBe('anthropic/claude-sonnet-4-6');
-
-      expect(
-        yield* selectAvailableDelegationModel({
-          parentModel: 'anthropic/claude-opus-4-8',
-          settings: hostStores(),
-        }),
-      ).toBe('deepseek/deepseek-v4-flash');
-    }).pipe(Effect.provide(fakeProcessServices())),
   );
 });

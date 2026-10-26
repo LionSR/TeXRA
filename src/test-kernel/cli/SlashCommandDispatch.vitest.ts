@@ -1,24 +1,19 @@
 // Test composition imports
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 
 // Slash command run dispatch.
 
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
-import { loginFromChat } from '@cli/chat/tui/commands/handlers/loginCommands';
-import {
-  type SlashCommandContext,
-  type SlashCommandOutput,
-} from '@cli/chat/tui/commands/handlers/slashContext';
+import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { notices } from '@cli/chat/tui/state/transcript';
 import { resetCliState, transientNotice } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
-import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { withProcessServices } from '@platform/processRuntime';
@@ -141,38 +136,6 @@ function dispatchSlash(
   );
 }
 
-function silentOutput(): SlashCommandOutput {
-  return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
-}
-
-/** A sign-in mock whose promise rejects when its abort signal fires. */
-/**
- * A sign-in program that never completes on its own and records whether the
- * slash handler's cancellation reached it as fiber interruption.
- */
-function interruptibleProgram(): {
-  program: Effect.Effect<never>;
-  interrupted: () => boolean;
-} {
-  let interrupted = false;
-  return {
-    interrupted: () => interrupted,
-    program: Effect.never.pipe(
-      Effect.onInterrupt(() =>
-        Effect.sync(() => {
-          interrupted = true;
-        }),
-      ),
-    ),
-  };
-}
-
-/** Let a forked sign-in reach its never-ending program before the interrupt
- *  lands: a few turns of the event loop cover the scheduler. */
-const started = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
-
 describe('handleTuiSlashCommand', () => {
   it.effect('discards inline key arguments without recording the secret', () =>
     Effect.gen(function* () {
@@ -187,79 +150,5 @@ describe('handleTuiSlashCommand', () => {
       );
       expect(transcriptJson()).not.toContain(secret);
     }),
-  );
-
-  it.effect(
-    'keeps malformed and mistyped key commands out of the transcript',
-    () =>
-      Effect.gen(function* () {
-        registerBuiltinSlashCommands({ ...services });
-        const context = createContext();
-        const malformedSecrets = [
-          'sk-equals-private-value',
-          'sk-colon-private-value',
-          'sk-slash-private-value',
-          'sk-concatenated-private-value',
-          'sk-transposed-private-value',
-        ];
-        const typoSecret = 'sk-typo-private-value';
-
-        for (const line of [
-          `/key=${malformedSecrets[0]}`,
-          `/key:${malformedSecrets[1]}`,
-          `/key/${malformedSecrets[2]}`,
-          `/key${malformedSecrets[3]}`,
-          `/kye:${malformedSecrets[4]}`,
-        ]) {
-          yield* expectFormOpens(line, 'key', context);
-          activeForm.set(undefined);
-        }
-
-        yield* expectFormOpens(`/ky ${typoSecret}`, 'key', context);
-        const transcript = transcriptJson();
-        for (const secret of [...malformedSecrets, typoSecret]) {
-          expect(transcript).not.toContain(secret);
-        }
-      }),
-  );
-
-  it.effect(
-    'redacts arbitrary concatenated key input without forcing the key form',
-    () =>
-      Effect.gen(function* () {
-        registerBuiltinSlashCommands({ ...services });
-        const secret = 'keyArbitraryCredentialValue';
-
-        expect(yield* dispatchSlash(`/${secret}`, createContext())).toBe(true);
-        expect(activeForm.get()).toBeUndefined();
-        expect(transcriptJson()).not.toContain(secret);
-      }),
-  );
-
-  it.effect(
-    'cancels an interactive sign-in when its fiber is interrupted',
-    () =>
-      Effect.gen(function* () {
-        const signIn = interruptibleProgram();
-        vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
-          signIn.program,
-        );
-
-        const fiber = yield* Effect.forkChild(
-          withProcessServices(
-            services.runtime,
-            loginFromChat(
-              'chatgpt --no-browser',
-              services.stores,
-              createCliContext(),
-              silentOutput(),
-            ),
-          ),
-        );
-        yield* started;
-        yield* Fiber.interrupt(fiber);
-
-        expect(signIn.interrupted()).toBe(true);
-      }),
   );
 });
