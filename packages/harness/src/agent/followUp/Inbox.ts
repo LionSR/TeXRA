@@ -71,9 +71,9 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Resume the run for the input it holds: true once a generation here
-   *  reads it (one already live counts), false when the resume was refused. */
-  readonly resume: (runId: RunId) => Effect.Effect<boolean>;
+  /** Resume the run for the input it holds; what it does not take, the
+   *  resume tells the user. */
+  readonly resume: (runId: RunId) => Effect.Effect<void>;
 }
 
 /** One message a producer sends. */
@@ -208,9 +208,8 @@ export class Inbox {
 
   /** Resume the run if its pending input obliges one (`needsWake`) and
    *  nothing here will read it: no reader open, no resume in flight. Waits
-   *  for the publisher first, so a row still committing is seen. True when
-   *  nothing was owed or a generation here now reads the input; false when
-   *  a resume was owed and refused (the next explicit Resume delivers). */
+   *  for the publisher first, so a row still committing is seen. False only
+   *  when the input could not be read; a refused resume tells the user. */
   wake(runId: RunId): Effect.Effect<boolean> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
@@ -218,8 +217,9 @@ export class Inbox {
       if (this.disposed || this.readers.has(runId)) return true;
       if (this.resumes.running.has(runId)) return true;
       const input = yield* this.read(runId);
-      if (input.closed || !needsWake(input.rows, this.port.run)) return true;
-      return yield* this.port.resume(runId);
+      if (!input.closed && needsWake(input.rows, runId, this.port.run))
+        yield* this.port.resume(runId);
+      return true;
     }).pipe(
       Effect.catch((error) =>
         Effect.as(

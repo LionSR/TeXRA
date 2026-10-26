@@ -5,8 +5,8 @@ import { withLogChannel } from '@logger/effectLog';
 import { recipeBlockOf, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
+import { runEndFromEvents } from '@shared/session/runFacts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { runEndFromEvents } from './runRecords';
 
 const CHANNEL = 'Resumability';
 

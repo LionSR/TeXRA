@@ -16,6 +16,7 @@ import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
 import { parentEdgeOf } from '@shared/session/runRelation';
+import { runEndFromEvents } from '@shared/session/runFacts';
 import {
   qualifyAggregateId,
   aggregateTarget,
@@ -75,23 +76,6 @@ export function readChildTurnState(
         return { active, lastCompleted };
       }),
     );
-}
-
-/** The run's terminal fact for its current lifecycle (a `run.activate`
- *  after the last `run.end` starts one, so a resumed run never carries the
- *  outcome of one it left), or null: the scope `finalizeRun`, the row's
- *  one writer, and every reader share. */
-export function runEndFromEvents(
-  rows: readonly SessionEvent[],
-  runId: RunId,
-): Extract<SessionEvent, { type: 'run.end' }> | null {
-  const id = qualifyAggregateId('run', runId);
-  const lifecycle = rows.findLast(
-    (row): row is Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> =>
-      row.aggregateId === id &&
-      (row.type === 'run.end' || row.type === 'run.activate'),
-  );
-  return lifecycle?.type === 'run.end' ? lifecycle : null;
 }
 
 /**

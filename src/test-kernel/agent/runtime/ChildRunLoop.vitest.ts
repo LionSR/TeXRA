@@ -540,7 +540,7 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           // The fixture's parent has no run to resume: the wake a user's
-          // message owes it is refused.
+          // message owes it is refused, and the resume tells the user.
           mocks.startFollowUpWake.mockReturnValue(Effect.succeed(false));
           expect(
             yield* submitFollowUp(
@@ -550,7 +550,7 @@ describe('childRunLoop E2E fixtures', () => {
                 session,
               },
             ),
-          ).toEqual({ status: 'queued', wake: 'failed' });
+          ).toEqual({ status: 'queued' });
 
           yield* foldParentPhase(false);
           expect(
@@ -584,7 +584,7 @@ describe('childRunLoop E2E fixtures', () => {
                   session,
                 },
               ),
-            ).toEqual({ status: 'queued', wake: 'failed' });
+            ).toEqual({ status: 'queued' });
           } finally {
             releaseNativeChild();
           }
