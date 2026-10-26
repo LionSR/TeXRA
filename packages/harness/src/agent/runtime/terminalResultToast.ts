@@ -3,7 +3,7 @@
  * from `agentErrorPresentation`. Child results and outcomes without error
  * metadata do not produce a notification.
  */
-import { Effect, Predicate, SubscriptionRef } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import type { ResultEvent } from '@agent/trace';
 import {
@@ -22,16 +22,16 @@ import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 /**
- * Whether a terminal result belongs to a child run: the handle's parent edge
- * while the run is tracked (a result is emitted before untrack), else the
- * fold's, which has the run's `run.start` for a launch that failed before a
- * handle existed.
+ * Whether a terminal result belongs to a child run: the registry's parent
+ * edge while it tracks the run (a result is emitted before untrack), else the
+ * view's, which has the run's `run.start` for a launch that failed before a
+ * handle existed. The registry reads the view first, so the two agree.
  */
 function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
-  const live = session.runs.get(event.runId);
-  if (live?.handle) return live.parent !== null;
-  const run = SubscriptionRef.getUnsafe(session.view.ref).runs.get(event.runId);
-  return run !== undefined && run.parentId !== null;
+  const parent =
+    session.runs.get(event.runId)?.parent ??
+    session.view.run(event.runId)?.parentId;
+  return parent != null;
 }
 
 /**

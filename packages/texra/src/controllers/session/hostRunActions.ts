@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 import {
-  Settings,
   type AgentCatalog,
   AppState,
   DatabaseReadFailed,
@@ -41,8 +40,9 @@ import {
   isTaskConfig,
   recipeBlockOf,
   RunIdSchema,
+  runActionRefusal,
+  type RunAction,
   type RunId,
-  GlobalStateKey,
 } from '@texra-ai/harness/schemas';
 import {
   validateRunRequest,
@@ -60,7 +60,6 @@ import {
   documentsOf,
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
-import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
 import {
@@ -284,7 +283,22 @@ export const createHostRunActions = (
     const { roots, session } = ports;
     const view = () => session.view.current();
     const runView = (runId: RunId) => view().runs.get(runId);
-    const guard = runActionGuard({ run: runView });
+    /** The run's `actions` must still hold `action` as the request is
+     *  handled, not only as it was rendered; a run the view no longer holds
+     *  is left to the action's own read. A second Resume joins the first in
+     *  the session; a pack or clean is held by the session (`run.files`). */
+    const requireAction = (
+      runId: RunId,
+      action: RunAction,
+    ): Effect.Effect<void, Rejected> =>
+      Effect.suspend(() => {
+        const run = runView(runId);
+        return run === undefined || run.actions.includes(action)
+          ? Effect.void
+          : Effect.fail(
+              new Rejected({ reason: runActionRefusal(run, action) }),
+            );
+      });
     const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
       isRequestRefusal(cause)
         ? cause
@@ -391,7 +405,7 @@ export const createHostRunActions = (
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
       function* (runId: RunId, action: 'resume' | 'runAgain') {
-        yield* guard.require(runId, action);
+        yield* requireAction(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
           return yield* Effect.fail(
@@ -492,57 +506,27 @@ export const createHostRunActions = (
         if (!isRetryPending(runId, requestId)) return;
         const chooseAnotherModel =
           'Choose another model and start the agent again.';
-        const modelsChanged =
-          'The available models changed while TeXRA was preparing the API key. Try again.';
         if (!request.model) {
           yield* ports.showInfo(
             `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
           );
           return;
         }
-        let fallback = CopilotRoutes.directFallback(
-          request.model,
-          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
-        );
+        const fallback = CopilotRoutes.directFallback(request.model);
         if (!fallback) {
           yield* ports.showInfo(
             `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
           );
           return;
         }
-        // Key entry can outlive the retry panel, and the user can change the
-        // OpenRouter preference while that prompt is open. Revalidate both the
-        // exact retry identity and the effective credential owner after each
-        // prompt so an old action cannot launch or alter a replacement request.
-        let prepared = yield* apiKeyRetry.ensureOwnApiKey(
+        // Key entry can outlive the retry panel: recheck the exact retry
+        // identity after the prompt so an old action cannot launch or alter
+        // a replacement request.
+        const prepared = yield* apiKeyRetry.ensureOwnApiKey(
           fallback.provider,
           false,
         );
         if (!prepared || !isRetryPending(runId, requestId)) return;
-        const currentFallback = CopilotRoutes.directFallback(
-          request.model,
-          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
-        );
-        if (!currentFallback) {
-          yield* ports.showInfo(modelsChanged);
-          return;
-        }
-        if (currentFallback.provider !== fallback.provider) {
-          fallback = currentFallback;
-          prepared = yield* apiKeyRetry.ensureOwnApiKey(
-            fallback.provider,
-            false,
-          );
-          if (!prepared || !isRetryPending(runId, requestId)) return;
-          const finalFallback = CopilotRoutes.directFallback(
-            request.model,
-            yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
-          );
-          if (!finalFallback || finalFallback.provider !== fallback.provider) {
-            yield* ports.showInfo(modelsChanged);
-            return;
-          }
-        }
         const config = yield* readConfig(runId);
         if (!config) {
           yield* ports.showInfo(
@@ -661,7 +645,7 @@ export const createHostRunActions = (
         yield* ports
           .openFinalOutput(config, result)
           .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
-      }, guard.resuming),
+      }),
       runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
       runValidated,
       merge: Effect.fn('HostRunActions.merge')(
@@ -700,16 +684,14 @@ export const createHostRunActions = (
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
-          yield* guard.idle(runId);
-          yield* guard.require(runId, 'files');
+          yield* requireAction(runId, 'files');
           const config = yield* workflowConfig(runId);
           return config ? { runId } : undefined;
         },
       ),
       workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
         function* (runId, operation) {
-          yield* guard.require(runId, 'files');
-          yield* guard.idle(runId);
+          // `run.files` is gated and held by the session's request handler.
           const config = yield* workflowConfig(runId);
           if (!config) return undefined;
           const inputFile = config.inputFiles[0] ?? '';

@@ -31,7 +31,9 @@ export function resolveFileBackedInstruction(
   ).pipe(
     Effect.catchIf(absentReason, () =>
       Effect.fail(
-        new CliUsageError(`--instruction-file: file not found: ${trimmed}`),
+        new CliUsageError({
+          message: `--instruction-file: file not found: ${trimmed}`,
+        }),
       ),
     ),
     Effect.map((fileInstruction) =>

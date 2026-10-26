@@ -141,11 +141,6 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   if (result === false) missingLatexindentReported = true;
   const success = Boolean(result && result.success);
 
-  if (success) {
-    // Wait a moment for the file system to stabilize after a successful write
-    yield* Effect.sleep(100);
-  }
-
   // Always clean up backup files — latexindent creates .bak before modifying,
   // so a crash or failure can still leave orphaned backups.
   const fileBaseName = path.basename(absolutePath, '.tex');

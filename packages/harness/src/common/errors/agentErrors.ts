@@ -1,19 +1,18 @@
 import { Schema } from 'effect';
 
 /**
- * Base class for runtime errors raised by the agent layer.
+ * A runtime failure of the agent layer: a launch it refuses or a run that
+ * ended failed.
  *
  * Host-neutral, so any host can reference it.
- * Specific subclasses should be added only when a concrete thrower and
- * catcher exist for them — anything else duplicates the existing
+ * A more specific error should be added only when a concrete thrower and
+ * catcher exist for it — anything else duplicates the existing
  * `ProviderError` schema and `isUserAbort` machinery.
  */
-export class AgentError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = 'AgentError';
-  }
-}
+export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Defect()),
+}) {}
 
 /**
  * No route can carry a model call now: its credential is missing or cannot

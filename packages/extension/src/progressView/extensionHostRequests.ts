@@ -57,6 +57,8 @@ import {
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { quickPick } from '@frontend/ui/dialogs';
+import { announce } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
@@ -345,27 +347,22 @@ export function createExtensionHostRequests(
    *  dispatch root already provided. */
   function exportTranscript(runId: RunId) {
     return exportRunTranscript(runId, {
-      // The quick pick is a thenable, so it is lifted here -- once, at the
-      // host boundary -- and its refusal is worded into the export's tag.
-      pickFormat: Effect.tryPromise({
-        try: async () =>
-          (
-            await vscode.window.showQuickPick(
-              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-              {
-                title: 'Export transcript',
-                placeHolder: 'Choose a format',
-                ignoreFocusOut: true,
-              },
-            )
-          )?.format,
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'pickFormat',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
+      // A refusal to show the pick is worded into the export's tag.
+      pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
+        title: 'Export transcript',
+        placeHolder: 'Choose a format',
+        ignoreFocusOut: true,
+      }).pipe(
+        Effect.map((choice) => choice?.format),
+        Effect.mapError(
+          (error) =>
+            new TranscriptExportFailed({
+              step: 'pickFormat',
+              message: error.message,
+              cause: error.cause,
+            }),
+        ),
+      ),
       openPath: openExportPath,
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showWarning: (message) => vscodeUi.showWarningMessage(message),
@@ -461,9 +458,13 @@ export function createExtensionHostRequests(
               patch: { commit: parsed.commitHash },
             });
           } else {
-            runtime.runFork(
-              vscodeUi.showInfoMessage(
-                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+            yield* Effect.forkDetach(
+              announce(
+                CHANNEL,
+                vscodeUi.showInfoMessage(
+                  `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+                ),
+                undefined,
               ),
             );
           }
@@ -480,9 +481,13 @@ export function createExtensionHostRequests(
             yield* snapshot.refreshFiles;
             return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
-          runtime.runFork(
-            vscodeUi.showInfoMessage(
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+          yield* Effect.forkDetach(
+            announce(
+              CHANNEL,
+              vscodeUi.showInfoMessage(
+                `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+              ),
+              undefined,
             ),
           );
         }

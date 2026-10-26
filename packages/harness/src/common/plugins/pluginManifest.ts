@@ -148,13 +148,14 @@ export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
           message: `${file} is not valid JSON: ${jsonSyntaxError(error)}`,
         }),
     });
-    const parsed = Schema.decodeUnknownResult(schema)(json);
-    if (!Result.isSuccess(parsed)) {
-      return yield* failPlugin(
-        `${file} does not match the expected shape: ${parsed.failure.message}`,
-      );
-    }
-    return parsed.success;
+    return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
+      Effect.mapError(
+        (error) =>
+          new PluginError({
+            message: `${file} does not match the expected shape: ${error.message}`,
+          }),
+      ),
+    );
   });
 }
 

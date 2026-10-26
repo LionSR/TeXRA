@@ -42,9 +42,9 @@ import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
+import { Settings } from '@shared/config/settings';
 import {
   AGENT_SKILLS_CONFIG_KEY,
-  AgentSkillsEnabledSchema,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   type SkillCatalogEntry,
@@ -244,9 +244,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Schema.decodeUnknownSync(AgentSkillsEnabledSchema)(
-            roots.config.get(AGENT_SKILLS_CONFIG_KEY),
-          )
+        ? Settings.getConfig<boolean>(roots.config, AGENT_SKILLS_CONFIG_KEY)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0

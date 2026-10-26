@@ -55,7 +55,7 @@ function formatConfigValue(value: unknown): string {
  */
 function asTeamUsageError<E>(error: E): E | CliUsageError {
   return error instanceof InvalidAgentTeamError
-    ? new CliUsageError(error.message)
+    ? new CliUsageError({ message: error.message })
     : error;
 }
 
@@ -249,9 +249,10 @@ const configEditCommand = defineCliCommand({
   run: (context) => {
     const ambient = readCliAmbientState();
     if (!ambient.stdinIsTty || !context.stdoutIsTty || context.termIsDumb) {
-      throw new CliUsageError(
-        'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
-      );
+      throw new CliUsageError({
+        message:
+          'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
+      });
     }
     return Effect.gen(function* () {
       const services = yield* initCliPlatform(context);

@@ -161,7 +161,7 @@ const pluginInstallCommand = defineCliCommand({
       typeof ctx.args.ref === 'string' ? ctx.args.ref : undefined,
     );
     if (Result.isFailure(origin))
-      throw new CliUsageError(origin.failure.message);
+      throw new CliUsageError({ message: origin.failure.message });
     const only = collectStringFlagValues(ctx.rawArgs, 'plugin');
     return withPluginEnv(context, (env) =>
       InstalledPlugins.install(origin.success, only, env).pipe(

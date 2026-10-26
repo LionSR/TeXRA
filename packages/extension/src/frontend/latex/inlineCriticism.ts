@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
+import { Cause, Effect, type Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -60,7 +60,7 @@ interface CriticismRegistration {
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
-let outputUnsubscribe: (() => void) | undefined;
+let outputFiber: Fiber.Fiber<void> | undefined;
 /** The single owner of the context and event hub `enable` works against. */
 let registration: CriticismRegistration | undefined;
 
@@ -134,54 +134,43 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
   else activeCollection.delete(uri);
 });
 
-function handleAddOutputFiles(
-  files: readonly OutputFileInfo[],
-  runtime: ProcessRuntime,
-): void {
-  if (!collection) return;
-  runtime.runFork(
-    Effect.forEach(
-      files,
-      // One refresh per path at a time, in arrival order: two rounds writing
-      // the same output file fork two reads, and without the lane the older
-      // read can land last and set stale squiggles over the newer ones.
-      (file) =>
-        refreshFileDiagnostics(file).pipe(
-          withPerKeyLane(fileLanes, file.location.absolutePath),
-        ),
-      { concurrency: 8, discard: true },
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logError(
-          `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(withLogChannel(CHANNEL)),
-      ),
-    ),
-  );
-}
-
 /** Answers whether this call enabled the diagnostics (false when already on). */
 function enable({ context, session, runtime }: CriticismRegistration): boolean {
   if (collection) return false;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
   // The diagnostics toggle with a setting, so this listener's lifetime is
-  // theirs: `disable` interrupts it.
-  const fiber = runtime.runFork(
+  // theirs: `disable` interrupts it, and with it every batch it started.
+  outputFiber = runtime.runFork(
     Stream.runForEach(outputFilesProduced(session), (files) =>
-      Effect.sync(() => handleAddOutputFiles(files, runtime)),
+      Effect.forEach(
+        files,
+        // One refresh per path at a time, in arrival order: two rounds
+        // writing the same output file fork two reads, and without the lane
+        // the older read can land last and set stale squiggles over the
+        // newer ones.
+        (file) =>
+          refreshFileDiagnostics(file).pipe(
+            withPerKeyLane(fileLanes, file.location.absolutePath),
+          ),
+        { concurrency: 8, discard: true },
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError(
+            `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(CHANNEL)),
+        ),
+        Effect.forkChild,
+      ),
     ),
   );
-  outputUnsubscribe = () => {
-    runtime.runFork(Fiber.interrupt(fiber));
-  };
   return true;
 }
 
 /** Answers whether this call disabled the diagnostics (false when already off). */
 function disable(): boolean {
-  outputUnsubscribe?.();
-  outputUnsubscribe = undefined;
+  outputFiber?.interruptUnsafe();
+  outputFiber = undefined;
   if (!collection) return false;
   collection.clear();
   collection.dispose();

@@ -40,7 +40,6 @@ import {
   acceptsFollowUp,
   isLiveRun,
   isTerminalOutcomePhase,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -513,10 +512,8 @@ export function createChatSessionController(
       recoverRun(
         Effect.gen(function* () {
           yield* adoptRunConfig(config);
-          const registeredConfig = yield* Effect.try({
-            try: () => Schema.decodeUnknownSync(AgentConfigSchema)(config),
-            catch: ensureError,
-          });
+          const registeredConfig =
+            yield* Schema.decodeUnknownEffect(AgentConfigSchema)(config);
           // Each chat round mints a fresh root run id, so bash/tool-edit/
           // super-YOLO bypass, which is keyed per stream, would otherwise
           // reset every round even though the user is continuing the same

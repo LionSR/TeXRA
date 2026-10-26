@@ -42,14 +42,11 @@ import {
 } from '@shared/schemas';
 
 /**
- * The routes a binding can take: the unsupported one fails in the decision,
- * and a Copilot route binds only with the editor route discovered for it.
+ * The routes a binding can take: the unserved one fails in the decision, and
+ * a Copilot route binds only with the editor route discovered for it.
  */
 type BindableRoute =
-  | Exclude<
-      ModelRoute<CopilotModelRoute>,
-      { kind: 'openrouter-unsupported' | 'copilot' }
-    >
+  | Exclude<ModelRoute<CopilotModelRoute>, { kind: 'unserved' | 'copilot' }>
   | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
 
 /** What one route decision found. */
@@ -78,7 +75,7 @@ const unavailable = (message: string, cause?: unknown) =>
 
 /**
  * Decide the route `config` binds under. A resumed conversation's backend
- * constrains the facts: its OpenRouter, Copilot and validation choice are
+ * constrains the facts: its Copilot and validation choice are
  * the backend's, and a subscription serves it only from its own provider.
  * When the decision can land on Copilot, the editor's routes are discovered
  * here, once. The routes nothing can bind fail as the user's instruction.
@@ -122,15 +119,14 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
           validation: backend === 'validation',
           prefersCopilot,
           copilotRoute,
-          useOpenRouter: backend === 'openRouter',
           chatgptSubscription: host.chatgptSubscription && backend === 'openai',
           xaiSubscription: host.xaiSubscription && backend === 'xai',
           mode,
         },
   );
-  if (decided.kind === 'openrouter-unsupported') {
+  if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} in ${mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`,
+      `${config.label} is served only through OpenRouter, which TeXRA no longer supports. Choose another model.`,
     );
   }
   let route: BindableRoute;
@@ -234,10 +230,6 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
     case 'copilot':
       return reason === 'copilot-subscription'
         ? { kind: 'copilot-fallback' }
-        : null;
-    case 'openrouter':
-      return reason === 'upstream-credit'
-        ? { kind: 'new-key', provider: 'openRouter' }
         : null;
     case 'chatgpt-subscription':
     case 'xai-subscription':

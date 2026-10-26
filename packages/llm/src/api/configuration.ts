@@ -7,7 +7,7 @@
  */
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
-import { acceptedEfforts, wireEffort } from '../models/reasoningChoice.js';
+import { acceptedEfforts } from '../models/reasoningChoice.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
 import type { ModelConfiguration } from '../turn.js';
 import type { BindSpec } from '../node.js';
@@ -124,30 +124,6 @@ const CONFIGURE: {
       },
     };
   },
-  'openrouter-chat': ({
-    acceptedEfforts: supportedEfforts,
-    base,
-    config,
-    controls,
-    spec,
-    supportsTemperature,
-  }) => ({
-    ...base,
-    requestedModel:
-      config.openrouterFullName ?? `${config.provider}/${config.id}`,
-    protocol: 'openrouter-chat',
-    supportsTemperature,
-    supportsForcedToolChoice: true,
-    supportsImageInput: config.capabilities.supportsVision,
-    supportsAudioInput: config.capabilities.supportsNativeAudio,
-    supportedEfforts,
-    defaults: {
-      maxOutputTokens: controls.maxOutputTokens,
-      temperature: controls.temperature,
-      effort: wireEffort(config, spec.options.reasoning),
-      stopSequences: [],
-    },
-  }),
 };
 
 /** The configuration `spec` binds on its protocol. */
@@ -197,7 +173,6 @@ export function backgroundCapable(
         configuration.background === 'supported' && configuration.defaults.store
       );
     case 'anthropic-messages':
-    case 'openrouter-chat':
       return false;
   }
 }
@@ -214,8 +189,6 @@ export function forcedToolChoice(
       return config.capabilities.supportsFunctionCalling;
     case 'anthropic-messages':
       return false;
-    case 'openrouter-chat':
-      return true;
   }
 }
 

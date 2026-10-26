@@ -80,7 +80,6 @@ const WORKFLOW_TEMPLATE = [
   '          resolve-threads: "true"',
   '          # Provide at least one provider key; open-weight defaults first.',
   '          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}',
-  '          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}',
   '          google-api-key: ${{ secrets.GOOGLE_API_KEY }}',
   '          openai-api-key: ${{ secrets.OPENAI_API_KEY }}',
   '          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}',
@@ -153,7 +152,7 @@ function printSecretChecklist(slug: GitHubSlug | null): void {
     'Prefer an open-weight provider when you can. TeXRA auto-selects from',
   );
   writeTextStdout(
-    'whichever key is set (DeepSeek → Anthropic → OpenAI → Google → OpenRouter → xAI).',
+    'whichever key is set (DeepSeek → Anthropic → OpenAI → Google → xAI).',
   );
 }
 

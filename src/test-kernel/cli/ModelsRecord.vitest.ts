@@ -91,19 +91,13 @@ describe('CLI model list filtering', () => {
           availability: 'provider-key',
         }),
       }),
-      access('openrouterOnlyT', {
-        model: model({
-          value: 'openrouterOnlyT',
-          availability: 'openrouter-key',
-        }),
-      }),
     ];
 
     expect(
       listableModelAccessEntries(personalModeEntries).map(
         (entry) => entry.model.value,
       ),
-    ).toEqual(['deepseek/deepseek-v4-flash', 'openrouterOnlyT']);
+    ).toEqual(['deepseek/deepseek-v4-flash']);
   });
 
   it('keeps unavailable models for the explicit diagnostic view', () => {

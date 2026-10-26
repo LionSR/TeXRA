@@ -120,23 +120,20 @@ function admitInput(
     // than a defect: an instruction this surface will not accept reaches an
     // embedder's `catchTag` in the vocabulary the surface names, as the
     // agent scan's failure above does.
-    return yield* Effect.try({
-      try: () => {
-        // The run is named as its persona's schema spells the name.
-        const persona =
-          typeof agent === 'string'
-            ? null
-            : Schema.decodeUnknownSync(InlinePersonaSchema)(agent);
-        return Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: persona?.name ?? resolved.name,
-          agentSource: resolved.source,
-          persona,
-          instruction: input.instruction,
-          ...(input.model ? { model: input.model } : {}),
-        });
-      },
-      catch: runFailure,
-    });
+    // The run is named as its persona's schema spells the name.
+    const persona =
+      typeof agent === 'string'
+        ? null
+        : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
+            Effect.mapError(runFailure),
+          );
+    return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
+      agent: persona?.name ?? resolved.name,
+      agentSource: resolved.source,
+      persona,
+      instruction: input.instruction,
+      ...(input.model ? { model: input.model } : {}),
+    }).pipe(Effect.mapError(runFailure));
   });
 }
 

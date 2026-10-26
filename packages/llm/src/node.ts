@@ -129,15 +129,6 @@ const construct = Effect.fn('llm.construct')(function* (
         googleInteractionsModel(configuration, { apiKey, fetch }),
       );
     }
-    case 'openrouter-chat': {
-      const apiKey = yield* bearer(credential, configuration.protocol);
-      const { openrouterChatModel } = yield* Effect.promise(
-        () => import('./api/openrouterChat.js'),
-      );
-      return yield* constructed(() =>
-        openrouterChatModel(configuration, { apiKey, fetch }),
-      );
-    }
     case 'openai-responses': {
       // Named fields only: `ResponseAuthenticationSchema` is a strictObject, so
       // a field added to the credential must not reach its parse.

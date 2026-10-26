@@ -161,9 +161,9 @@ describe('tool-use follow-up progress events', () => {
           },
         );
 
-        // The fake platform's resume port refuses, so the input stays queued
-        // behind a failed wake.
-        expect(result).toEqual({ status: 'queued', wake: 'failed' });
+        // The fake platform's resume port refuses, so the input stays queued;
+        // the resume tells the user why.
+        expect(result).toEqual({ status: 'queued' });
         expect(
           yield* queuedFollowUps(testDefaultSession(), resumingRunId),
         ).toMatchObject([{ text: 'queued while resuming' }]);

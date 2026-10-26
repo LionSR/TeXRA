@@ -36,7 +36,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
       assert.equal(
         config.openRouterOnly ?? false,
         false,
-        `${provider}: "${model}" is OpenRouter-only`,
+        `${provider}: "${model}" is served only through OpenRouter, which TeXRA does not reach`,
       );
     }
     // CHATGPT_SETUP_MODEL proves ChatGPT subscription access, which only a
@@ -53,9 +53,8 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     );
   });
 
-  it('covers every non-OpenRouter direct-key API provider', () => {
+  it('covers every direct-key API provider', () => {
     for (const provider of API_KEY_PROVIDER_IDS) {
-      if (provider === 'openRouter') continue;
       assert.ok(
         SETUP_MODEL_BY_PROVIDER[provider],
         `missing setup model for provider "${provider}"`,

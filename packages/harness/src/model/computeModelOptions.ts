@@ -6,6 +6,7 @@ import {
   decideModelRoute,
   hasUsableApiKey,
   type HostRouteFacts,
+  isUnservedModel,
   modelConfig,
   type ModelRoute,
   providerDisplayName,
@@ -42,8 +43,8 @@ import {
 /**
  * Every store an availability answer here reads: the secret store behind the
  * provider-key checks, and the three setting slots behind the picker's
- * persisted choices and the routing switches (the OpenRouter toggle, the two
- * "prefer my subscription" preferences, the Kimi Code preference). Callers
+ * persisted choices and the routing switches (the two "prefer my
+ * subscription" preferences, the Kimi Code preference). Callers
  * hold them (a session's `roots`, the `Secrets` service, the stores a host
  * root threaded down) and pass them in, so this module never looks a host up
  * and never needs the caller's workspace-roots frame to answer for the
@@ -115,20 +116,12 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
 > = {
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
-  'provider-unavailable': ({ model }) =>
-    `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-  'missing-key': ({ model, source, route }) => {
-    if (route.kind === 'openrouter') {
-      return `Model "${model}" requires an OpenRouter API key.`;
-    }
-    const providerName = providerDisplayName(source);
-    return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
-  },
-  'key-unreadable': ({ model, source, route }) => {
-    const providerName =
-      route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source);
-    return `Model "${model}" needs your ${providerName} API key, which could not be read from secret storage. Check that the store is unlocked and readable, then retry.`;
-  },
+  unserved: ({ model }) =>
+    `Model "${model}" is served only through OpenRouter, which TeXRA no longer supports. Choose another model.`,
+  'missing-key': ({ model, source }) =>
+    `Model "${model}" requires your ${providerDisplayName(source)} API key. Provide it to continue.`,
+  'key-unreadable': ({ model, source }) =>
+    `Model "${model}" needs your ${providerDisplayName(source)} API key, which could not be read from secret storage. Check that the store is unlocked and readable, then retry.`,
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
   // Unreachable from `optionOf` (it answers "not recognized"
@@ -142,8 +135,8 @@ type KeyStatus = boolean | 'unreadable';
 
 /**
  * Which providers have a usable API key, as plain data — the only provider-key
- * fact the per-model pass reads. Stage 0 fills the two routing providers
- * (`openRouter`, `kimiCode`); stage 2 fills the providers the route ladder
+ * fact the per-model pass reads. Stage 0 fills the routing provider
+ * (`kimiCode`); stage 2 fills the providers the route ladder
  * said it would consult. A provider absent from the map was never read, which
  * the verdict treats as a defect rather than as an absent key.
  */
@@ -159,7 +152,6 @@ interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   /** Models whose Copilot route the user prefers. */
   copilotModels: readonly string[];
-  openRouterKey: KeyStatus;
   facts: HostRouteFacts;
 }
 
@@ -206,32 +198,24 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * row's config and an unavailable route's sentence read it there, never the
  * editor.
  */
-function routeGate(
-  route: ModelRoute<CopilotModelRoute>,
-  ctx: ModelRouteContext,
-): RouteGate {
+function routeGate(route: ModelRoute<CopilotModelRoute>): RouteGate {
   switch (route.kind) {
     case 'copilot':
       // Consent and temporary unavailability are route states on the one
       // canonical row, never a reason to fall back to another transport.
       return { kind: `copilot-${route.route?.access ?? 'unavailable'}` };
-    case 'openrouter-unsupported':
-      return { kind: 'provider-unavailable' };
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
       return { kind: 'xai-subscription-access', usageRoute: route.kind };
-    case 'openrouter':
-      if (ctx.openRouterKey === 'unreadable') return { kind: 'key-unreadable' };
-      return ctx.openRouterKey
-        ? { kind: 'openrouter-key' }
-        : { kind: 'missing-key' };
     case 'api-key':
       return route.usageRoute === 'api-key'
         ? { needsProviderKey: route.provider }
         : { needsProviderKey: route.provider, usageRoute: route.usageRoute };
     case 'no-api-key':
       return { kind: 'missing-key' };
+    case 'unserved':
+      return { kind: 'unserved' };
     case 'validation':
       return { kind: 'provider-key' };
   }
@@ -293,56 +277,24 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
   );
 
 /**
- * One key status per provider, read once. A failed read is that provider's
- * `unreadable` status, never "no key" (which would send a user with a working
- * key to enter it again), and warns once for the provider, never once per
- * model that consults it (#11508), so one unreadable store cannot flood the
- * log.
- */
-function readProviderKeyStatuses(
-  secrets: PlatformSecrets,
-  providers: readonly ApiKeyProviderId[],
-): Effect.Effect<ProviderKeyStatuses> {
-  return Effect.forEach(
-    providers,
-    (provider) =>
-      hasUsableApiKey(secrets, provider).pipe(
-        Effect.catchTag('SecretsFailed', (failure) =>
-          Effect.logWarning(
-            `Failed to read ${providerDisplayName(provider)} API key status.`,
-            failure.cause,
-          ).pipe(Effect.as<KeyStatus>('unreadable')),
-        ),
-        Effect.map((usable) => [provider, usable] as const),
-      ),
-    { concurrency: 'unbounded' },
-  ).pipe(Effect.map((entries) => Object.fromEntries(entries)));
-}
-
-/**
  * Stage 0: every host fact the routes are decided over, resolved once per
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
- * so it seeds the key statuses, and the OpenRouter branch is decided by the
- * OpenRouter key alone.
+ * so it seeds the key statuses.
  */
 function buildAvailabilityContext(
   stores: ModelOptionStores,
 ): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
-    const [settings, openRouterKey] = yield* Effect.all(
-      [
-        hostFact('the model settings', readModelSettings(stores)),
-        readProviderKeyStatuses(stores.secrets, ['openRouter']),
-      ] as const,
-      { concurrency: 'unbounded' },
+    const settings = yield* hostFact(
+      'the model settings',
+      readModelSettings(stores),
     );
     const facts = routeFactsFor(settings, []);
     return {
       reasoningLevels: settings.reasoningLevels,
       copilotModels: settings.copilotModels,
       facts,
-      openRouterKey: openRouterKey.openRouter ?? false,
-      keyStatuses: { ...openRouterKey, kimiCode: facts.kimiCodeKey },
+      keyStatuses: { kimiCode: facts.kimiCodeKey },
     };
   });
 }
@@ -368,9 +320,10 @@ function routeModels(models: readonly string[], ctx: ModelRouteContext) {
       const selected = selectModel(model);
       if (!selected) continue;
       const rawConfig = selected.config;
-      // A retired row settles without its Copilot preference.
+      // An unserved row settles without its Copilot preference.
       const prefersCopilot =
-        !rawConfig.retired && ctx.copilotModels.includes(rawConfig.ref);
+        !isUnservedModel(rawConfig) &&
+        ctx.copilotModels.includes(rawConfig.ref);
       const copilotRoute = prefersCopilot
         ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(rawConfig.ref)
         : undefined;
@@ -386,7 +339,7 @@ function routeModels(models: readonly string[], ctx: ModelRouteContext) {
         config: routeConfig(rawConfig, route, ctx.facts),
         request: selected.request,
         route,
-        gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route, ctx),
+        gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route),
       });
     }
     return routed;
@@ -413,10 +366,26 @@ function withConsultedKeyStatuses(
     }
   }
   if (consulted.size === 0) return Effect.succeed(ctx);
-  return readProviderKeyStatuses(secrets, [...consulted]).pipe(
-    Effect.map((consultedStatuses) => ({
+  // A failed read is that provider's `unreadable` status, never "no key"
+  // (which would send a user with a working key to enter it again), and warns
+  // once for the provider, never once per model that consults it (#11508).
+  return Effect.forEach(
+    consulted,
+    (provider) =>
+      hasUsableApiKey(secrets, provider).pipe(
+        Effect.catchTag('SecretsFailed', (failure) =>
+          Effect.logWarning(
+            `Failed to read ${providerDisplayName(provider)} API key status.`,
+            failure.cause,
+          ).pipe(Effect.as<KeyStatus>('unreadable')),
+        ),
+        Effect.map((usable) => [provider, usable] as const),
+      ),
+    { concurrency: 'unbounded' },
+  ).pipe(
+    Effect.map((entries) => ({
       ...ctx,
-      keyStatuses: { ...ctx.keyStatuses, ...consultedStatuses },
+      keyStatuses: { ...ctx.keyStatuses, ...Object.fromEntries(entries) },
     })),
   );
 }
@@ -461,8 +430,14 @@ const reportInvalid = (invalid: Schema.SchemaError | undefined) =>
         invalid.message,
       );
 
+/** A model id the registry describes but no provider TeXRA reaches serves. */
+function isUnservedModelId(model: string): boolean {
+  const config = modelConfig(model);
+  return config !== undefined && isUnservedModel(config);
+}
+
 /**
- * Retired models drop out here, so no startup pass sweeps persisted state.
+ * Unserved models drop out here, so no startup pass sweeps persisted state.
  * An explicitly enabled default is also kept in `enabledExtras`, so it stays
  * on if the curated defaults later drop it; the set de-duplicates it.
  */
@@ -473,11 +448,11 @@ function enabledModelsOf(selection: ModelSelection): readonly string[] {
       ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
       ...selection.enabledExtras,
     ]),
-  ].filter((model) => !modelConfig(model)?.retired);
+  ].filter((model) => !isUnservedModelId(model));
 }
 
 /**
- * When every enabled extra has retired and every default is off, the picker
+ * When every enabled extra is unserved and every default is off, the picker
  * would be empty with no way back out from the UI; it shows the defaults.
  */
 function enabledOrDefaults(selection: ModelSelection): readonly string[] {
@@ -502,7 +477,7 @@ export function getEnabledModels(state: Pick<StateStore, 'get'>) {
  * Enable or disable one model — the only writer of
  * `GlobalStateKey.MODEL_SELECTION`.
  *
- * Two invariants: at least one model stays enabled, and a retired model is
+ * Two invariants: at least one model stays enabled, and an unserved model is
  * never enabled. Either violation fails with `StateWriteFailed`.
  */
 export function setModelEnabled(input: {
@@ -517,9 +492,11 @@ export function setModelEnabled(input: {
       message,
       cause: new Error(message),
     });
-  if (input.enabled && modelConfig(input.model)?.retired) {
+  if (input.enabled && isUnservedModelId(input.model)) {
     return Effect.fail(
-      refuse(`Model "${input.model}" is retired and cannot be enabled.`),
+      refuse(
+        `Model "${input.model}" is no longer available from any provider TeXRA reaches and cannot be enabled.`,
+      ),
     );
   }
   let invalid: Schema.SchemaError | undefined;
@@ -594,8 +571,8 @@ export type ModelOption =
       readonly savedEffort: ReasoningEffort | undefined;
       /**
        * What a run on the route sends for reasoning; absent when the model
-       * does not reason there, or no backend serves the route (an
-       * `others` model off OpenRouter, whose row is unavailable).
+       * does not reason there, or no backend serves the route (a model
+       * with no route, whose row is unavailable).
        */
       readonly reasoning: RouteReasoning | undefined;
     };
@@ -711,7 +688,7 @@ function visibleModelsForAccess(
   if (!facts.chatgptSubscription) return [...models];
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
-      !config.retired &&
+      !isUnservedModel(config) &&
       !config.deprecated &&
       decideModelRoute(config, {
         ...facts,

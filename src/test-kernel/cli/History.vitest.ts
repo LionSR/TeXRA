@@ -629,16 +629,14 @@ describe('CLI history runtime', () => {
           publishTestRunStart(session, id);
           yield* session.log.settled;
           expect(
-            yield* deleteCliHistory(testSessionOf(session), { all: true }),
+            yield* deleteCliHistory(testSessionOf(session), 'all'),
           ).toEqual({
             deleted: 'all',
             count: 1,
             active: [],
             failed: [],
           });
-          expect(
-            yield* deleteCliHistory(testSessionOf(session), { id }),
-          ).toEqual({
+          expect(yield* deleteCliHistory(testSessionOf(session), id)).toEqual({
             deleted: 'one',
             id,
             found: false,

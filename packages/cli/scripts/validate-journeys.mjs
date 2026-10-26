@@ -53,15 +53,13 @@ const fixtureRoot = path.join(
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 
 /**
- * The cheap models the journeys fund (the llm-zoo 1.x `gemini38f`,
- * `deepseek41T` and `glm53flash`, spelled as the selections they stand for),
- * and the env var each is served through (`glm/glm-5.3-flash` is
- * OpenRouter-only in the catalog).
+ * The cheap models the journeys fund (the llm-zoo 1.x `gemini38f` and
+ * `deepseek41T`, spelled as the selections they stand for), and the env var
+ * each is served through.
  */
 const MODEL_KEYS = {
   'google/gemini-3.8-flash@medium': 'GOOGLE_API_KEY',
   'deepseek/deepseek-flash@high': 'DEEPSEEK_API_KEY',
-  'glm/glm-5.3-flash@max': 'OPENROUTER_API_KEY',
 };
 
 function assert(condition, message) {

@@ -178,7 +178,9 @@ describe('resolveToolPath path protection', () => {
         );
 
         expect(resolved.external?.writable).toBe(false);
-        expect(() => assertWritable(resolved, targetPath)).toThrowError(
+        expect(
+          yield* Effect.flip(assertWritable(resolved, targetPath)),
+        ).toEqual(
           new ToolError(
             `Cannot write ${targetPath}: Packaged agents is read-only.`,
           ),

@@ -51,6 +51,20 @@ requests that already pass through it, and `runActionGuard.resuming` restates
 `sweepLeftoverRuns.runningRuns` is a third liveness rule (phase-based) that
 keeps a crashed owner's shell forever.
 
+## Landed
+
+F1 and part of F2 and F3 landed in #14261 (`f5c5f063f3`), F5 in #14266
+(`3e474178c5`), the rest of F2, F3, F4 and F6 in the audit-leftovers PR
+(2026-10-26); each finding's section records what landed and what did not.
+
+## Still open
+
+- **The ratchet proposals** in "Why the ratchets miss this".
+- **F2, kept on purpose:** `refusalFor` classifies what a launch throws after
+  the resume's own check passed (a row kind the check did not read, a
+  checkpoint that will not turn into state). It is the same fact read at a
+  later moment from different evidence, so it stays.
+
 ## Findings
 
 ### F1. A stop in progress: four forms, two lifetimes, a sweep for the gap
@@ -115,6 +129,17 @@ Not deleted: `stopReason` is still not on the row (owner ruling: stop vs
 shutdown stays `CANCELLED`); see R2 for what that costs `needsWake`.
 
 ### F2. Why a run cannot continue: three deciders per message, one union for all
+
+**Rest landed 2026-10-26 (audit-leftovers PR):** a refused automatic wake is
+told once, by the resume (`resumeOnSession`), never again by the sender: the
+wake now answers `false` only when it could not read the run, so
+`wake: 'failed'` and its generic notice mean exactly that. A message to a
+blocked run gives the one notice that names the block. The resume's reasons
+are one schema, `ResumeRefusalSchema` (`shared/schemas/followUp.ts`):
+`ResumeRunResult.failed` and `ResumeRefused.reason` use it, and
+`FollowUpFailureReason` is it plus the three reasons a message alone meets.
+No `Exclude` view and no second literal list remain. `refusalFor` stays (see
+"Still open").
 
 **Landed in part in #14261 (2026-10-24):** `runRejection` is the one decider
 the admission, the resume (`resumeHere`, in place of `canResume`) and the
@@ -208,7 +233,30 @@ Deleted: `heldParks`' inline `since` (~5), `needsWake`'s own `findLast` (~3),
 `sweepLeftoverRuns`' `ended` map (~6). About 15 lines; the gain is one scope
 rule rather than lines.
 
+**Rest landed 2026-10-26 (audit-leftovers PR):** `lastLifecycleRow` and
+`runEndFromEvents` live in `shared/session/runFacts.ts`; `needsWake`,
+`heldParks` and `sweepLeftoverRuns` call `lastLifecycleRow`, and the storage
+readers import `runEndFromEvents` from there. The sweep now keeps a held park
+only within the shell's current lifecycle, the rule `deliverHeld` delivers by.
+
+**Landed in part in #14261 (2026-10-24):** `needsWake` reads the run's current
+lifecycle (`findLast(run.end | run.activate)`, the rule `runEndFromEvents`
+has), so the scenario above wakes R for its child's delivery. Not done: the
+rule is still spelled in `needsWake`, `heldParks` and `sweepLeftoverRuns`
+rather than called from one shared `runEndFromEvents`.
+
 ### F4. A held result was delivered: one fact, two rows, an observer in between
+
+**Landed 2026-10-26 (audit-leftovers PR), a fourth design:** the delivery
+clears the child's waiting park in its own append whenever it can hold the
+child's claim (the child is held here, or its owner died, as `endIn` already
+takes it for a last turn). That is the common case: a result is held because
+the parent was open in another process, and by delivery time the child's
+process has usually exited. A child whose live owner is elsewhere is still
+cleared by that owner's observer (`clearHeld`), and if that owner dies before
+writing, the next delivery pass (the parent's resume or its tail) clears it
+from the dead owner's claim. No stored shape is added and the view stays a
+pure fold; the cost is that the observer stays for the live-elsewhere case.
 
 **Verified 2026-10-24, not built:** the caveat below fails. The cold listing
 keys `followup.*` rows by `followup/<id>` and deletes the entry on the
@@ -269,7 +317,7 @@ resume already does. `deliverHeld` reads rows directly and is unaffected.
 
 ### F5. Stop-reason precedence: stated twice, oppositely, held three times
 
-**Built 2026-10-24 (PR from `refactor/stop-reason-one-owner`):** the CLI
+**Landed in #14266 (2026-10-24):** the CLI
 holds no reason; the registry entry's `stopReason` is the one holder and its
 precedence the one rule. The CLI keeps two booleans, each its own fact, not
 a copy: `RootRunClaim.stop` (a stop was asked of this claim's run; consumed
@@ -311,6 +359,18 @@ Deleted: `standingStop` and the `stop` field's reason (`sessionRunState.ts`,
 lines with the comments that explain the precedence.
 
 ### F6. Smaller instances, same species
+
+**Landed 2026-10-26 (audit-leftovers PR):** `Resumes.inFlight` was already
+gone (`Resumes.running` is the one map). `runActionGuard.ts` is deleted: the
+host's `resuming` set and `idle` went (a second Resume joins the first in the
+session, `Resumes.once`, and a run live here is refused there; a pack or
+clean is held by `run.files`), as did the host's `files` re-gate before
+`run.files`; the one check left, `actions` for Resume, Run again and the
+diff (which reach no gated request), is inlined into `hostRunActions.ts`.
+`isChildResult` reads `LiveRun.parent` (the registry's `parentOf`), then the
+view. `sweepLeftoverRuns` treats as running what the registry holds or what
+the view lists as running or waiting, so a shell whose owner died (listed as
+interrupted) is swept.
 
 - **`Resumes.inFlight` restates `Resumes.running`** (HEAD
   `ToolUseFollowUp.ts:119-120, 147-154`): a `Set` and a `Map` keyed the same,

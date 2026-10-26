@@ -167,24 +167,6 @@ Opening VS Code from a configured terminal provides the most reliable environmen
    - Check the status pages for OpenAI, Anthropic, or Google
    - Temporary API outages may cause connection issues
 
-### OpenRouter connectivity
-
-**Problem**: Issues connecting to models via OpenRouter.
-
-**Solutions**:
-
-1. **OpenRouter configuration**:
-   - Verify your OpenRouter API key is set correctly
-   - Check that "Use OpenRouter for all models" is enabled in Settings → Models → API keys → OpenRouter row
-
-2. **Model availability**:
-   - Make sure the requested model is available via OpenRouter
-   - Check the OpenRouter dashboard for model status
-
-3. **Rate limiting**:
-   - OpenRouter may have different rate limits than direct APIs
-   - Check for rate limit error messages in the logs
-
 ## Document processing issues
 
 ### LaTeX processing errors

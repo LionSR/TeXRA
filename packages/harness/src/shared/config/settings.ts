@@ -213,27 +213,20 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
 }
 
 /**
- * Validate and persist a setting to its row's slot, then apply the row's
- * declared write effects, so the read and the write cannot answer for two
- * different workspaces and every write path validates.
+ * Validate and persist a setting to its row's slot, so the read and the
+ * write cannot answer for two different workspaces and every write path
+ * validates.
  *
  * A value the row's schema rejects is a defect of the program, not a member
  * of the `ConfigWriteFailed | Error` channel: it is thrown, so it will not
  * arrive as a catchable failure. Callers pass a value they already know is
  * valid; user input is validated upstream (a settings-UI write is decoded
- * by the app before it reaches here). A row
- * that excludes a setting the catalog lacks is the same kind of defect.
+ * by the app before it reaches here).
  *
  * A config-slot row is written to `target` when given (the one caller that
  * keeps a value in whichever scope already holds it: the "prefer my
  * subscription" switches), else the row's `configTarget`, else
  * `'workspace'`. State slots ignore `target`.
- *
- * `onWrite.disablesWhenEnabled` is applied here rather than in each host's
- * form, so mutually exclusive routes (Kimi Code vs OpenRouter) cannot be
- * enforced on one write path and skipped on another. The excluded rows are
- * written directly; their own effects do not cascade, which keeps the rule a
- * single hop.
  */
 function set(
   stores: SettingsStores,
@@ -244,26 +237,14 @@ function set(
   const entry = entryOf(stores.config, key);
   // A schema rejection is thrown rather than constructed as a typed failure:
   // `src/shared` may take only type imports from `src/platform`.
-  return Effect.gen(function* () {
-    yield* writeSlot(
+  return Effect.suspend(() =>
+    writeSlot(
       entry,
       Schema.decodeUnknownSync(entry.schema)(value),
       stores,
       target,
-    );
-    if (value !== true) return;
-    for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
-      const excluded = stores.config.catalog.byKey(excludedKey);
-      if (!excluded) {
-        return yield* Effect.die(
-          new Error(
-            `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
-          ),
-        );
-      }
-      yield* writeSlot(excluded, false, stores, target);
-    }
-  });
+    ),
+  );
 }
 
 /**
@@ -298,23 +279,6 @@ function state<S extends Schema.Codec<unknown, unknown>>(
   ) as Effect.Effect<S['Type'], StateReadFailed>;
 }
 
-/**
- * {@link state} without the snap to the default, as {@link inspect} is for a
- * catalog row: a present value that fails the schema comes back `invalid`
- * with its cause. For a read-modify-write, where a write built from the
- * default would replace what is stored. Absence still reads as the default.
- */
-function inspectState<S extends Schema.Codec<unknown, unknown>>(
-  store: Pick<StateStore, 'get'>,
-  key: string,
-  schema: S,
-): Effect.Effect<StoredSetting<S['Type']>, StateReadFailed> {
-  // cast: a `value` is what `schema` parsed.
-  return Effect.map(store.get(key), (raw) =>
-    classifyStored(schema, raw),
-  ) as Effect.Effect<StoredSetting<S['Type']>, StateReadFailed>;
-}
-
 /** Every read and write of a setting; see the module comment. */
 export const Settings = Object.freeze({
   get,
@@ -323,5 +287,4 @@ export const Settings = Object.freeze({
   set,
   reset,
   state,
-  inspectState,
 } as const);

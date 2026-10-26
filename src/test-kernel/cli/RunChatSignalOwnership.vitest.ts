@@ -317,10 +317,12 @@ describe('runChat signal ownership wiring', () => {
         readFailure: null,
       }),
     );
-    mocks.discoverTerminalCapabilities.mockResolvedValue({
-      kittyKeyboard: false,
-      oscColorReports: false,
-    });
+    mocks.discoverTerminalCapabilities.mockReturnValue(
+      Effect.succeed({
+        kittyKeyboard: false,
+        oscColorReports: false,
+      }),
+    );
     mocks.installTerminalTitleUpdates.mockReturnValue(mocks.terminalTitle);
     mocks.acquireTuiTerminal.mockReturnValue({
       release: mocks.terminalRelease,

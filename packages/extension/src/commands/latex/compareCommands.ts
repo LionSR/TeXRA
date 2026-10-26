@@ -14,9 +14,11 @@ import {
 } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { quickPick } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
+  showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -111,9 +113,9 @@ const acceptPorts: CommitAcceptedFilePorts = {
       absolutePaths: [absolutePath],
     }),
   showInfo: (message) =>
-    Effect.sync(() => {
-      vscode.window.showInformationMessage(message);
-    }).pipe(Effect.andThen(Effect.logInfo(message)), withLogChannel(CHANNEL)),
+    Effect.forkDetach(showLoggedInfoMessage(CHANNEL, message)).pipe(
+      Effect.asVoid,
+    ),
 };
 
 const validateFilesExist = Effect.fnUntraced(function* (
@@ -255,19 +257,20 @@ function pickReplaceOrCopyTarget(
     },
   ];
 
-  return Effect.tryPromise({
-    try: () =>
-      vscode.window.showQuickPick<AcceptItem>(acceptItems, {
-        title: 'Accept edits',
-        placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
-        ignoreFocusOut: true,
-        prompt: `Edited file: ${path.basename(editedPath)}`,
-      }),
-    catch: acceptEditedFailure(
-      'pick-target',
-      'The accept target could not be chosen',
+  return quickPick(acceptItems, {
+    title: 'Accept edits',
+    placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
+    ignoreFocusOut: true,
+    prompt: `Edited file: ${path.basename(editedPath)}`,
+  }).pipe(
+    Effect.map((pick) => pick?.target),
+    Effect.mapError(
+      acceptEditedFailure(
+        'pick-target',
+        'The accept target could not be chosen',
+      ),
     ),
-  }).pipe(Effect.map((pick) => pick?.target));
+  );
 }
 
 export const handleAcceptEdited = Effect.fn(

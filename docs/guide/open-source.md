@@ -27,7 +27,7 @@ Keeping track of LLM pricing, context windows, and capabilities across providers
 
 ### Highlights
 
-- **140+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and others, with OpenRouter tracked as an access route rather than a provider
+- **140+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and others
 - **Zero dependencies**, with full TypeScript support
 - **Tree-shakeable** for efficient bundling
 - **Effect Schema** for runtime validation and wire shapes

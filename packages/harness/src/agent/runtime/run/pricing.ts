@@ -36,10 +36,6 @@ export function priceTurnUsage(
     case 'anthropic':
       cacheCreationTokens = provider.cacheCreationTokens ?? undefined;
       break;
-    case 'openrouter':
-      cacheCreationTokens =
-        provider.inputDetails?.cacheWriteTokens ?? undefined;
-      break;
     case 'google':
       toolUsePromptTokens = provider.toolUsePromptTokens ?? undefined;
       break;

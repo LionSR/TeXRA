@@ -22,7 +22,11 @@ import {
   type ResultMeta,
   type RunId,
 } from '@shared/schemas';
-import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
+import type {
+  DatabaseClaimError,
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+} from '@shared/session/database';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runState';
@@ -186,29 +190,30 @@ export const parentAdmission = (
   trace: AgentTrace | undefined,
 ): Effect.Effect<
   { readonly rows: readonly RunInputDraft[]; readonly sent: Sent },
-  Error,
+  DatabaseClaimError,
   Scope.Scope
-> =>
-  session.followUps.admission(to, item, options).pipe(
-    Effect.catchIf(
-      (error) =>
-        (error instanceof DatabaseNotOwner && error.closed) ||
-        error instanceof DatabaseReadFailed,
-      (error) =>
-        Effect.as(
-          warnOnCommit(
-            session,
-            trace,
-            `Parent run ${to} is closed or cannot be read.`,
-            { parentRunId: to, error },
-          ),
-          {
-            rows: [],
-            sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
-          },
-        ),
-    ),
+> => {
+  const refused = (error: DatabaseNotOwner | DatabaseReadFailed) =>
+    Effect.as(
+      warnOnCommit(
+        session,
+        trace,
+        `Parent run ${to} is closed or cannot be read.`,
+        { parentRunId: to, error },
+      ),
+      {
+        rows: [],
+        sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
+      },
+    );
+  return session.followUps.admission(to, item, options).pipe(
+    Effect.catchTags({
+      DatabaseReadFailed: refused,
+      DatabaseNotOwner: (error) =>
+        error.closed ? refused(error) : Effect.fail(error),
+    }),
   );
+};
 
 /**
  * The parent's half of a turn result, appended with the child's rows; a
@@ -364,7 +369,8 @@ export const commitPart = (
 
 /** After the transaction that queued `delivery` commits: resume the parent
  *  if the delivery obliges one and no generation here reads it
- *  (`Inbox.wake`); a refused resume is a warning, and an explicit Resume
+ *  (`Inbox.wake`). A refused resume is told to the user by the resume; a
+ *  wake that could not read the parent is a warning, and an explicit Resume
  *  delivers the result. */
 export const wakeParent = (
   session: SessionHandle,
@@ -376,7 +382,7 @@ export const wakeParent = (
     if (!(yield* session.followUps.wake(delivery.to)))
       yield* warn(
         trace,
-        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+        'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
         { parentRunId: delivery.to },
       );
   });

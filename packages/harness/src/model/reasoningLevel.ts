@@ -71,7 +71,7 @@ type _EveryBackendProviderIsStored = AssertNever<
 
 /**
  * The backend a fresh run on `route` serves `config` from: the model's own
- * provider on a direct route (any credential), else the proxy that serves it.
+ * provider on a direct route (any credential), else the route that serves it.
  */
 export function servingBackend(
   config: Pick<ModelConfig, 'provider'>,
@@ -82,8 +82,6 @@ export function servingBackend(
       return 'validation';
     case 'copilot':
       return 'copilot';
-    case 'openrouter':
-      return 'openRouter';
     default:
       return Result.getOrUndefined(
         Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),

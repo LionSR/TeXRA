@@ -117,7 +117,7 @@
   "packages/harness/src/tools/memory/memoryMeta.ts": 1,
   "packages/harness/src/tools/memory/memoryPromptSection.ts": 1,
   "packages/harness/src/tools/memory/MemoryTool.ts": 1,
-  "packages/harness/src/tools/memory/memoryUtils.ts": 3,
+  "packages/harness/src/tools/memory/memoryUtils.ts": 2,
   "packages/harness/src/tools/plan/PlanTool.ts": 1,
   "packages/harness/src/tools/ReadTool.ts": 1,
   "packages/harness/src/tools/toolAvailabilityService.ts": 1,
@@ -128,5 +128,5 @@
   "packages/llm/src/api/openaiResponsesRequest.ts": 1,
   "packages/llm/src/message.ts": 5,
   "packages/llm/src/protocol.ts": 5,
-  "packages/llm/src/turn.ts": 5
+  "packages/llm/src/turn.ts": 4
 }

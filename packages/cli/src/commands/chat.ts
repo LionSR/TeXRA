@@ -55,14 +55,14 @@ export const chatCommand = withUsageSections(
       if (terminalFailure) {
         // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
         // actionable advice is "use `texra run`", not "fix your TERM".
-        throw new CliUsageError(
-          formatInteractiveTerminalFailure(terminalFailure, {
+        throw new CliUsageError({
+          message: formatInteractiveTerminalFailure(terminalFailure, {
             headlessMessage:
               'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
             dumbTerminalCommand: 'chat',
             dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
           }),
-        );
+        });
       }
       return notifyCliUpdate(context).pipe(
         Effect.as({

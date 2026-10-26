@@ -1,6 +1,6 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { defineCommand } from 'citty';
-import { Cause, Effect, absurd } from 'effect';
+import { Effect, absurd } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import {
@@ -160,7 +160,7 @@ export function runHistoryExport(
 
 function runHistoryDelete(
   context: CliContext,
-  options: { id?: RunId; all: boolean; yes: boolean },
+  options: { target: RunId | 'all'; yes: boolean },
 ) {
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
@@ -170,7 +170,7 @@ function runHistoryDelete(
 
     // `--all` is destructive and unrecoverable. Refuse it unless the caller
     // also passes `--yes`, and quote the count so the stakes are explicit.
-    if (options.all && !options.yes) {
+    if (options.target === 'all' && !options.yes) {
       // Unlike list, a full wipe counts (and later clears) every stored
       // run, process entries and agent-spawned children included.
       const count = (yield* session.view.read([])).runs.size;
@@ -180,15 +180,16 @@ function runHistoryDelete(
       return CliExitCode.Usage;
     }
 
-    // A deletion that fails or dies reports its cause and exits Usage, the
-    // way every other refusal on this command does.
+    // A deletion that fails reports its error and exits Usage, the way
+    // every other refusal on this command does; a defect reaches the crash
+    // handler.
     const result: CliHistoryDeleteResult | null = yield* deleteCliHistory(
       session,
-      options,
+      options.target,
     ).pipe(
-      Effect.catchCause((cause) =>
+      Effect.catch((error) =>
         Effect.sync(() => {
-          writeErrorStderr(Cause.squash(cause));
+          writeErrorStderr(error);
           return null;
         }),
       ),
@@ -256,7 +257,9 @@ const historyListCommand = defineCliCommand({
     const limitValue = optString(ctx.args.limit);
     const limit = parseHistoryListLimit(limitValue);
     if (limitValue !== undefined && limit === undefined) {
-      throw new CliUsageError(`Invalid history limit: ${limitValue}`);
+      throw new CliUsageError({
+        message: `Invalid history limit: ${limitValue}`,
+      });
     }
     return runHistoryList(context, { limit });
   },
@@ -286,12 +289,14 @@ const historyShowCommand = defineCliCommand({
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
-      throw new CliUsageError(`Invalid task id: ${ctx.args.id}`);
+      throw new CliUsageError({ message: `Invalid task id: ${ctx.args.id}` });
     }
     const exportFormat = optString(ctx.args.export);
     if (exportFormat !== undefined) {
       if (exportFormat !== 'html' && exportFormat !== 'md') {
-        throw new CliUsageError(formatInvalidExportFormatText(exportFormat));
+        throw new CliUsageError({
+          message: formatInvalidExportFormatText(exportFormat),
+        });
       }
       return runHistoryExport(context, id, exportFormat);
     }
@@ -323,11 +328,14 @@ const historyDeleteCommand = defineCliCommand({
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
-      throw new CliUsageError(`Invalid task id: ${rawId}`);
+      throw new CliUsageError({ message: `Invalid task id: ${rawId}` });
+    }
+    const target = ctx.args.all === true ? 'all' : id;
+    if (!target) {
+      throw new CliUsageError({ message: 'Expected a task id, or --all.' });
     }
     return runHistoryDelete(context, {
-      id,
-      all: ctx.args.all === true,
+      target,
       yes: ctx.args.yes === true,
     });
   },

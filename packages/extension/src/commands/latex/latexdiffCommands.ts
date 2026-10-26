@@ -9,21 +9,20 @@ import {
   pathToLocationIn,
   Settings,
 } from '@texra-ai/harness';
-import {
-  ensureError,
-  toErrorMessage,
-  type FileLocation,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
 } from '@frontend/latex/openBuild';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
+  announce,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
+import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
@@ -107,17 +106,11 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  const pick = yield* Effect.tryPromise({
-    try: () =>
-      Promise.resolve(
-        vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
-          title: 'Latexdiff math markup',
-          placeHolder: 'Select math markup granularity for this diff run',
-          ignoreFocusOut: true,
-          prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
-        }),
-      ),
-    catch: ensureError,
+  const pick = yield* quickPick(prioritizedItems, {
+    title: 'Latexdiff math markup',
+    placeHolder: 'Select math markup granularity for this diff run',
+    ignoreFocusOut: true,
+    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
   });
   if (!pick) {
     yield* Effect.logDebug('Math markup selection cancelled by user');
@@ -427,7 +420,9 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
       );
 
       if (results.length === 0) {
-        vscode.window.showInformationMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(CHANNEL, NO_LATEXDIFF_OPERATIONS_MESSAGE),
+        );
         return;
       }
 
@@ -439,12 +434,21 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           latexdiffAllFailedMessage(mathMarkup),
         );
       } else if (successCount < results.length) {
-        vscode.window.showWarningMessage(
-          `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+        yield* Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showWarningMessage(
+              `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+            ),
+            undefined,
+          ),
         );
       } else {
-        vscode.window.showInformationMessage(
-          `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(
+            CHANNEL,
+            `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
+          ),
         );
       }
 

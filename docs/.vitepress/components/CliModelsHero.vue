@@ -7,7 +7,7 @@
 // (formatCliModelDetails). Model references are exactly what `--model` takes; labels
 // are the literal llm-zoo MODEL_CONFIGS labels the command prints; the status
 // column is the lowercased availability label from
-// src/model/computeModelOptions.ts — 'api key set' / 'openrouter key' /
+// src/model/computeModelOptions.ts — 'api key set' /
 // 'chatgpt subscription' ('missing api key' appears under --all). Snapshot
 // shows a session running on provider API keys.
 //

@@ -45,10 +45,7 @@ import { exportRunTranscript } from '@texra/controllers/progressView/exportTrans
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import {
-  fromHost,
-  hostFailure,
-} from '@texra/controllers/session/hostCallFailure';
+import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
@@ -470,11 +467,10 @@ export function createDesktopHostRequests(
   /**
    * One program per request: the arms this window performs its own way. Every
    * other kind reaches the one shared body, which owns the order, the guards,
-   * and the refusal wording for both GUI hosts. The capabilities that still
-   * answer with a promise are lifted once through `fromHost`, so the failure
-   * channel is the value the arm failed or rejected with and no dispatch arm
-   * re-enters the runtime between here and the bridge that runs this program
-   * (a lifted capability may still run its own program behind its face).
+   * and the refusal wording for both GUI hosts. A capability's failure is
+   * named through `hostFailure`, so the failure channel is the value the arm
+   * failed with and no dispatch arm re-enters the runtime between here and
+   * the bridge that runs this program.
    */
   function dispatch(
     request: HostRequest,
@@ -499,9 +495,11 @@ export function createDesktopHostRequests(
               notOnDesktop(`A picker for ${fileType} files`),
             );
           }
-          const paths = yield* fromHost('files.pickFiles', () =>
-            options.files.pickFiles(fileType),
-          );
+          const paths = yield* options.files
+            .pickFiles(fileType)
+            .pipe(
+              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+            );
           if (paths === null) return yield* Effect.fail(new Cancelled());
           return { kind: 'files', paths };
         }

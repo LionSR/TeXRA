@@ -79,7 +79,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // into a model call instead of its script).
   // v4: media-only tasks can produce outputs; earlier readers reject those
   // configurations because they count only text inputs (no upcaster).
-  'run.config': { version: 4, upcast: [] },
+  // v5: no OpenRouter backend (no upcaster: an earlier build's row would
+  // fail as damaged).
+  'run.config': { version: 5, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
@@ -99,7 +101,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'followup.consumed': V1,
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).
-  'request.opened': { version: 2, upcast: [] },
+  // v3: a retry's credential switch names no OpenRouter key (no upcaster,
+  // as `run.config`).
+  'request.opened': { version: 3, upcast: [] },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [] },
@@ -137,12 +141,15 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v5: a media part holds its bytes by blob address, never inline (no
   // upcaster: an earlier build's inline bytes would read as the newer
   // shape's missing address).
-  'model.message': { version: 5, upcast: [] },
+  // v6: no OpenRouter protocol (no upcaster, as
+  // `run.config`: an earlier build's row would fail as damaged).
+  'model.message': { version: 6, upcast: [] },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).
   // v3: media parts by address, as `model.message` v5.
-  'context.edit': { version: 3, upcast: [] },
+  // v4: no OpenRouter protocol, as `model.message` v6.
+  'context.edit': { version: 4, upcast: [] },
   'tool.intent': V1,
   'script.call': V1,
   // v2: a captured attachment holds its bytes by blob address, never inline.

@@ -238,7 +238,11 @@ describe('runResumeCommand', () => {
     });
     await seedWorkflowResume(workflowConfig);
     mocks.assertOutputDirAvailable.mockReturnValue(
-      Effect.fail(new CliUsageError('--output-dir must refer to a directory.')),
+      Effect.fail(
+        new CliUsageError({
+          message: '--output-dir must refer to a directory.',
+        }),
+      ),
     );
 
     await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);

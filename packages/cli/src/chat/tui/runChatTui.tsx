@@ -37,7 +37,6 @@ import {
   isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -443,10 +442,12 @@ export async function runChat(
   // when `useInput` mounts) caused capability discovery to flip raw mode off
   // ~250ms in, breaking input. Capability-gated notifications fall back to
   // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
-  const terminalCaps = await discoverTerminalCapabilities({
-    stdin: process.stdin,
-    stdout: process.stdout,
-  });
+  const terminalCaps = await runtime.runPromise(
+    discoverTerminalCapabilities({
+      stdin: process.stdin,
+      stdout: process.stdout,
+    }),
+  );
 
   const disposables = new DisposableStore();
   // The one session state the TUI renders (PRD 10.1): the session's fold
@@ -503,11 +504,7 @@ export async function runChat(
   disposables.add(announceForegroundApprovals());
   disposables.add(subscribeCliCredentialChanges(runtime));
   // Keys another TeXRA window or the service saves reach this chat too.
-  const watchingKeys = runtime.runFork(
-    cliSecrets(context.storageRoot)
-      .watch()
-      .pipe(Effect.provide(nodeFileServices)),
-  );
+  const watchingKeys = runtime.runFork(cliSecrets(context.storageRoot).watch());
   disposables.add(() => runtime.runFork(Fiber.interrupt(watchingKeys)));
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a

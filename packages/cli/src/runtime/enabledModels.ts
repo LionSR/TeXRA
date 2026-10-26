@@ -12,7 +12,7 @@
  */
 import { Effect } from 'effect';
 
-import { modelConfig, modelRefOf } from '@texra-ai/llm';
+import { isUnservedModel, modelConfig, modelRefOf } from '@texra-ai/llm';
 import {
   getEnabledModels,
   setModelEnabled,
@@ -33,14 +33,17 @@ export interface CliEnabledModelRow {
 }
 
 /**
- * Full catalog for enable/disable UIs: every non-retired CLI-supported model,
- * marked with whether it is currently enabled.
+ * Full catalog for enable/disable UIs: every CLI-supported model TeXRA can
+ * still serve, marked with whether it is currently enabled.
  */
 export function listCliEnabledModelCatalog(state: StateStore) {
   return Effect.gen(function* () {
     const enabled = new Set(yield* getEnabledModels(state));
     return knownCliModelIds()
-      .filter((id) => !modelConfig(id)?.retired)
+      .filter((id) => {
+        const config = modelConfig(id);
+        return config === undefined || !isUnservedModel(config);
+      })
       .map((id) => {
         const config = modelConfig(id);
         return {
@@ -48,7 +51,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
           label: getModelLabel(id),
           provider: config?.provider ?? 'unknown',
           enabled: enabled.has(id),
-          deprecated: modelConfig(id)?.deprecated ?? false,
+          deprecated: config?.deprecated ?? false,
         };
       })
       .toSorted((a, b) => {

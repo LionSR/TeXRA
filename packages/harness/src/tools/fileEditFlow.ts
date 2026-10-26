@@ -1,7 +1,7 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -24,7 +24,7 @@ import {
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.
@@ -61,7 +61,6 @@ type WritableTargetPreparation =
 
 interface ResolveWritableTargetOptions {
   missing?: 'allow' | 'require';
-  validate?: (target: { path: string; displayPath: string }) => void;
 }
 
 /**
@@ -78,28 +77,16 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     Error,
     ToolContext | FileSystem.FileSystem
   > {
-    // Resolution and the caller's own validation both reject with a ToolError
-    // the tool runner reports to the model, so they stay a failure rather than
-    // becoming a defect.
     const call = yield* ToolContext;
-    const resolved = yield* resolveToolPath(call.env, inputPath);
-    const { display } = resolved;
-    const { path, absolutePath, displayPath } = yield* Effect.try({
-      try: () => {
-        const fsPath = resolved.fsPath;
-        options.validate?.({ path: fsPath, displayPath: display });
-        return {
-          path: fsPath,
-          // The resolution answered for the call's own workspace, so its
-          // absolute form is the one the process filesystem reads —
-          // including a path under a registered external root, which the
-          // workspace facade reached the same way.
-          absolutePath: resolved.absolute,
-          displayPath: display,
-        };
-      },
-      catch: ensureError,
-    });
+    // The resolution answered for the call's own workspace, so its absolute
+    // form is the one the process filesystem reads — including a path under a
+    // registered external root, which the workspace facade reached the same
+    // way.
+    const {
+      fsPath: path,
+      absolute: absolutePath,
+      display: displayPath,
+    } = yield* resolveToolPath(call.env, inputPath);
 
     // Shared read-before-edit gate (lstat semantics), then the current content.
     const fs = yield* FileSystem.FileSystem;
@@ -159,32 +146,34 @@ export function replaceLiteralMatches({
   mode,
   notFoundError,
   multipleMatchesError,
-}: LiteralReplacementRequest): LiteralReplacement {
+}: LiteralReplacementRequest): Result.Result<LiteralReplacement, ToolError> {
   const count = countOccurrences(content, search);
   if (count === 0) {
-    throw new ToolError(notFoundError());
+    return Result.fail(new ToolError(notFoundError()));
   }
 
   if (mode === 'unique' && count > 1) {
     // Only ambiguous matches need the per-line guidance, so the scan over the
     // whole file stays out of the common single-match path.
     const lineNumbers = findOccurrenceLineNumbers(content, search);
-    throw new ToolError(
-      multipleMatchesError?.({ count, lineNumbers }) ??
-        'The text to replace must be unique.',
+    return Result.fail(
+      new ToolError(
+        multipleMatchesError?.({ count, lineNumbers }) ??
+          'The text to replace must be unique.',
+      ),
     );
   }
 
   // A function replacer inserts its result verbatim: dollar patterns in prose
   // or code are never interpreted.
   const verbatim = (): string => replacement;
-  return {
+  return Result.succeed({
     content:
       mode === 'all'
         ? content.replaceAll(search, verbatim)
         : content.replace(search, verbatim),
     count: mode === 'all' ? count : 1,
-  };
+  });
 }
 
 interface AppliedFileEdit {

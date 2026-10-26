@@ -518,7 +518,9 @@ describe('executeCliRequest', () => {
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
       const request = baseRequest();
-      mocks.rootLaunch.mockRejectedValueOnce(new AgentError('boom'));
+      mocks.rootLaunch.mockRejectedValueOnce(
+        new AgentError({ message: 'boom' }),
+      );
       const order: string[] = [];
       mocks.settled.mockImplementationOnce(() =>
         Effect.sync(() => order.push('settled')),
@@ -577,7 +579,7 @@ describe('executeCliRequest', () => {
           const hooks =
             mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
           hooks.emit('requestShowError', { message: 'Agent not found.' });
-          throw new AgentError('Agent not found.');
+          throw new AgentError({ message: 'Agent not found.' });
         });
 
         expect(yield* executeCliRequest(baseRequest(), cliContext())).toEqual({

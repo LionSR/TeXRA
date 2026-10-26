@@ -345,8 +345,8 @@ resumed run takes its first message at idle, not mid-turn.
 Verified in `packages/llm/src/api`: `PreparedHistorySchema`
 (`message.ts:316-351`) allows `assistant(local-call) → tool → user →
 assistant`. Google merges a user message into the previous `user_input` step
-(`googleInteractions.ts:213`); OpenAI Responses and OpenRouter take a user
-message after `function_call_output` / `tool` items with no adjacency rule;
+(`googleInteractions.ts:213`); OpenAI Responses takes a user
+message after `function_call_output` items with no adjacency rule;
 Anthropic emits `user(tool_result[])` then `user(text)`, which the API
 combines into one turn with the tool results first. No codec change.
 
@@ -492,16 +492,33 @@ What the fresh review (2026-10-23, read-only against `a20cc39310`) changed:
   and consumed-once per follow-up id; a consume at a request boundary stays
   within it.
 
-## Open for the owner
+## Landed
 
-1. **`holdUntil: 'turn'` in the CLI.** This PR delivers at the next request
-   and adds no key: the CLI's own delivery queue still holds a typed message
-   until the turn ends, so a key atop it would say nothing. The key (Enter
-   sends for the next request, a second key holds for the turn's end) lands
-   with the second PR, which cuts that queue; the enum member serves the API
-   now.
-2. **Second PR**: the CLI's `FollowUpDeliveryQueue`, `interruptedRunId`,
-   `claimPreparingRoot` and `awaitRunFolded` race, and `FollowUpHost`.
+Steps 1 to 7 of the plan below landed in #14261 (`f5c5f063f3`, 2026-10-24),
+with the review fixes listed in that PR. Finding F5 of the ownership audit,
+the CLI's copies of a stop's reason and outside this design's steps, landed
+in #14266 (`3e474178c5`). The audit's own leftovers are listed in that note,
+not here.
+
+## Still open
+
+The second PR, which none of #14261 started:
+
+1. **The CLI's own delivery bookkeeping.** `FollowUpDeliveryQueue`,
+   `interruptedRunId`, `claimPreparingRoot` and the `awaitRunFolded` race in
+   `packages/cli/src/chat/chatSessionController.ts`. `submitFollowUp` now
+   routes, refuses and waits for a stopping run to drain, so the CLI's copies
+   of those decisions go. The queue sends each message to the harness at
+   once, one at a time, which is why a message typed in the CLI is already
+   delivered at the next request (the hermetic validator's artifact shows
+   it).
+2. **`FollowUpHost`.** The constant each host passes to `acceptsFollowUp`
+   (`packages/harness/src/shared/session/sessionView.ts`) goes;
+   `acceptsFollowUp` and `submitFollowUp` read the same facts.
+3. **A key that holds a message for the turn's end.** The harness reads
+   `holdUntil: 'turn'` already; no host sends it. The key (Enter sends for
+   the next request, a second key holds for the turn's end) belongs to the
+   CLI's composer once item 1 is cut.
 
 ## Plan
 
@@ -518,7 +535,7 @@ One PR, in this order, each step type-checked and `test:pure` green:
 4. One `consume`; `joinStopped` goes; the compaction text moves; the
    dispatcher reads the loop's controls; one presenter for the send result.
 5. Delivery at the next request; the blank-nudge test. The CLI key goes to
-   the second PR (decision 1).
+   the second PR ("Still open", item 3).
 6. E2E: `validate-run.mjs` (the hermetic CLI validator every PR runs)
    drives a real `texra chat` under a PTY against the validation model: the
    agent's one command waits for a release file, the message is typed while

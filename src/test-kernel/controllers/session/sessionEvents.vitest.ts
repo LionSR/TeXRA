@@ -153,7 +153,6 @@ import {
   documentsAcceptedFact,
 } from '@texra/shared/plugins/documents';
 import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
-import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { armsOf, announceRunFacts } from '@tools/plugins';
 import { toolTable } from '@tools/toolTable';
@@ -980,22 +979,6 @@ describe('Sessions owner', () => {
           reason: expect.stringContaining('stop it first'),
         });
         expect(removeRun).not.toHaveBeenCalled();
-
-        // A second Resume while the first is in flight is refused at once,
-        // not queued behind the first's whole run.
-        const guard = runActionGuard({ run: () => undefined });
-        const finish = yield* Deferred.make<void>();
-        const first = yield* Effect.forkChild(
-          guard.resuming(Deferred.await(finish), RUN),
-          { startImmediately: true },
-        );
-        const second = yield* guard
-          .resuming(Effect.void, RUN)
-          .pipe(Effect.flip);
-        expect(second.reason).toBe('This run is already resuming.');
-        yield* Deferred.succeed(finish, undefined);
-        yield* Fiber.join(first);
-        yield* guard.resuming(Effect.void, RUN);
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(

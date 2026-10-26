@@ -295,15 +295,15 @@ export function rejectHeadlessOnlyFlags(
   ];
   if (labels.length === 0) return;
 
-  throw new CliUsageError(
-    `texra ${commandName} is interactive and does not support ${formatCommaList(labels)}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
-  );
+  throw new CliUsageError({
+    message: `texra ${commandName} is interactive and does not support ${formatCommaList(labels)}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+  });
 }
 
 function requireInlineStringFlagValue(flag: string, value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    throw new CliUsageError(`Missing value for ${flag}`);
+    throw new CliUsageError({ message: `Missing value for ${flag}` });
   }
   return trimmed;
 }
@@ -317,7 +317,7 @@ function requireSeparateStringFlagValue(
     value === '--' ||
     (value !== '-' && value.startsWith('-'))
   ) {
-    throw new CliUsageError(`Missing value for ${flag}`);
+    throw new CliUsageError({ message: `Missing value for ${flag}` });
   }
   return value;
 }

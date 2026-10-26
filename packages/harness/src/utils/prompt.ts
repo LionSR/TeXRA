@@ -48,27 +48,26 @@ export function getListOfFiles(
     .join(', ');
 }
 
-let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
-  null;
-
 /**
- * The shared prompt-rendering environment: an empty loader list, since a
- * prompt is an in-memory string and names no template file (a `null` list
- * would get nunjucks' default `views/` loader; an empty one makes any
- * `{% include %}` fail as "template not found"), and autoescape off, since
- * a prompt is raw text, not HTML. The lazy `nunjucks` import is this module's
- * one foreign async edge — memoized, so every render after the first
- * resolves from the already-settled promise.
+ * The prompt-rendering environment: an empty loader list, since a prompt is
+ * an in-memory string and names no template file (a `null` list would get
+ * nunjucks' default `views/` loader; an empty one makes any `{% include %}`
+ * fail as "template not found"), and autoescape off, since a prompt is raw
+ * text, not HTML. The lazy `nunjucks` import is this module's one foreign
+ * async edge; Node's module cache serves every import after the first, and
+ * a failed import surfaces on each render. A fresh environment per
+ * render costs little: `renderString` compiles the template each call anyway.
  */
 const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
   Effect.tryPromise({
-    try: () =>
-      (promptEnvironmentPromise ??= import('nunjucks').then(
-        ({ default: nunjucks }) =>
-          new nunjucks.Environment([], { autoescape: false }),
-      )),
+    try: () => import('nunjucks'),
     catch: ensureError,
-  });
+  }).pipe(
+    Effect.map(
+      ({ default: nunjucks }) =>
+        new nunjucks.Environment([], { autoescape: false }),
+    ),
+  );
 
 /**
  * Render a prompt string using nunjucks templating.

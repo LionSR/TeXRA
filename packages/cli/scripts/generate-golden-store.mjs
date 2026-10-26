@@ -124,7 +124,6 @@ const FAKE_KEY = 'texra-validation-fake-key';
 const PROVIDER_KEYS = [
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
-  'OPENROUTER_API_KEY',
   'GOOGLE_API_KEY',
   'XAI_API_KEY',
   'DEEPSEEK_API_KEY',

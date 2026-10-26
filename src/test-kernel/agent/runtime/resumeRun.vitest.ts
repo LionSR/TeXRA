@@ -510,8 +510,9 @@ describe(
             kind: 'queued',
             read: false,
           });
-          // The run ended: the wake its sender owes is refused.
-          expect(yield* session.followUps.wake(runId)).toBe(false);
+          // The run ended: the wake its sender owes is refused, and the
+          // resume tells the user; the wake itself read the run.
+          expect(yield* session.followUps.wake(runId)).toBe(true);
 
           expect(yield* resume(runId, { session })).toEqual({
             failed: 'finished',

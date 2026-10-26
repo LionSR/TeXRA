@@ -120,14 +120,12 @@ export interface SkillCatalogEntry {
 
 /**
  * Who serves a run's conversation: the provider plugin its route lands on
- * (`openRouter`, `copilot`, or the model's own provider, whose plugin names
- * the protocol), or the internal validation model. A run keeps its backend:
- * a resume or a model switch rebinds it, whatever the OpenRouter and Copilot
- * preferences say now.
+ * (`copilot` or the model's own provider, whose plugin names the protocol),
+ * or the internal validation model. A run keeps its backend: a resume or a
+ * model switch rebinds it, whatever the Copilot preference says now.
  */
 export const ModelBackendSchema = Schema.Literals([
   'validation',
-  'openRouter',
   'copilot',
   'openai',
   'anthropic',

@@ -40,9 +40,9 @@ function parseIdleSeconds(value: unknown): number {
   if (value === undefined) return DEFAULT_IDLE_SECONDS;
   const seconds = Number(value);
   if (typeof value !== 'string' || !Number.isInteger(seconds) || seconds < 1)
-    throw new CliUsageError(
-      `--idle-timeout expects a whole number of seconds, got ${String(value)}.`,
-    );
+    throw new CliUsageError({
+      message: `--idle-timeout expects a whole number of seconds, got ${String(value)}.`,
+    });
   return seconds;
 }
 

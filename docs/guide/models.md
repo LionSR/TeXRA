@@ -1,6 +1,5 @@
 <script setup>
 import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
-import ProviderConfigRow from '../.vitepress/components/ProviderConfigRow.vue';
 import ModelChoiceMatrix from '../.vitepress/components/ModelChoiceMatrix.vue';
 import CliModelsHero from '../.vitepress/components/CliModelsHero.vue';
 </script>
@@ -64,7 +63,7 @@ deprecated. The [Codex integration](./agent-integrations.md#openai-codex) runs G
 `openai/gpt-5.6-terra` (Terra) remains a mid-priced option.
 
 **Pro mode.** Add `+pro` to a GPT model (for example `openai/gpt-5.6-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
-rather than a premium tier, for the hardest planning and long-horizon tasks. Pro mode needs a direct OpenAI route; it is refused through OpenRouter. For one-off hard questions you can
+rather than a premium tier, for the hardest planning and long-horizon tasks. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API.
 
@@ -153,7 +152,7 @@ keeps each response for 30 days, so each model request in a chat sends only what
 rather than the whole conversation.
 
 Every direct provider route uses its vendor's Responses API (or Anthropic's
-and Google's own APIs); only OpenRouter still uses Chat Completions.
+and Google's own APIs).
 
 ## Choosing a model
 
@@ -218,20 +217,6 @@ For headless CLI runs, list what is available with `texra models list` (or `texr
 <CliModelsHero />
 
 <p class="hero-caption">The first column is exactly what <code>--model</code> takes: the same model references used in the tables above. <code>--all</code> includes models your current credentials can't run, with the reason.</p>
-
-## Using OpenRouter
-
-To access additional models or alternative pricing:
-
-1. Get an [OpenRouter](https://openrouter.ai/) API key
-2. Add it with the `TeXRA: Set API Key` command
-3. In Settings → Models → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
-
-Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here:
-
-<ProviderConfigRow />
-
-<p class="hero-caption">Expand a provider's <strong>API keys</strong> row to reveal its masked key field (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
 
 ## Next steps
 

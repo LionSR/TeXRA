@@ -7,49 +7,34 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { type RunId } from '@shared/schemas';
+import { type ResumeRefusal, type RunId } from '@shared/schemas';
 import type { InboxItem } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
- * {@link presentFollowUpResult}.
+ * {@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
+ * message to a run with no loop here is admitted only as a resume would be,
+ * and `not_resumable` there also covers a closed input, a disposed session,
+ * or a message that is not the user's own), or one of the message's alone:
  *
- * - `finished`: the run has no checkpoint left to continue from.
- * - `unusable_checkpoint`: a checkpoint file is there but could not be turned
- *   into resume state (malformed, a spent cursor, shared state the category
- *   no longer accepts). A history listing advertises a run from the file
- *   alone, so this is the refusal that cohort meets — never `finished`, which
- *   would claim the run ended normally.
  * - `read_failed`: the run's claim or state could not be read just now
  *   (a busy or failing store), which says nothing about the run itself.
- * - `owned_elsewhere`: another process holds the run.
- * - `not_resumable`: the run has no running loop here and the submission was
- *   refused (a terminalized queue, a disposed session, or a message that
- *   is not the user's own).
  * - `one_shot`: the run's live loop ends after its current turn and reads
  *   no message (headless, or an in-band child), or the run has no loop of
  *   its own and its launch takes none (a background command).
- * - `blocked`: the run's agent, or its agent's plugin, is missing, off or
- *   not trusted here (`RunView.resumeBlocked` says which).
+ * - `not_parent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =
-  | 'finished'
-  | 'unusable_checkpoint'
-  | 'earlier_build'
-  | 'read_failed'
-  | 'owned_elsewhere'
-  | 'not_resumable'
-  | 'one_shot'
-  | 'not_parent'
-  | 'blocked';
+  ResumeRefusal | 'read_failed' | 'one_shot' | 'not_parent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for the next turn, or it was not admitted for a worded reason. A
- * delivery the admission boundary had already accepted is `sent`.
- * A queued input whose recovery resume did not reach the run is still
- * queued (`wake: 'failed'`): the input belongs to the run, and an
- * explicit Resume delivers it.
+ * delivery the admission boundary had already accepted is `sent`. A resume
+ * the input started that the run refused is told by the resume itself; a
+ * queued input whose run could not even be read for a wake is still queued
+ * (`wake: 'failed'`): the input belongs to the run, and an explicit Resume
+ * delivers it.
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
@@ -121,9 +106,8 @@ export type Resumed = {
 
 /** The resumes in flight here, by run. */
 export class Resumes {
-  /** The runs whose resume is in flight here. */
-  readonly inFlight = new Set<RunId>();
-  private readonly running = new Map<
+  /** The resumes in flight here, by run; only `once` changes it. */
+  readonly running = new Map<
     RunId,
     { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
   >();
@@ -146,12 +130,10 @@ export class Resumes {
       }
       const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
       this.running.set(runId, { done, joiners: 0 });
-      this.inFlight.add(runId);
       return resume.pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
             this.running.delete(runId);
-            this.inFlight.delete(runId);
             Deferred.doneUnsafe(done, exit);
           }),
         ),
@@ -177,16 +159,17 @@ export class Resumes {
 const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
 /**
- * The resume every automatic wake and every host's Resume takes: the one
- * resume (`resumeRun`) on the session that holds the run, started on the fork
+ * The resume every automatic wake takes (a message's, a child's delivery, a
+ * generation's end, an interrupted task's): the one resume (`resumeRun`) on
+ * the session that holds the run, started on the fork
  * the session's launches run on, so the attempt belongs to the session and
  * outlives a caller that stops waiting. It reaches that resume through the
  * session's run programs (`RunRegistryInit.programs`), because a resumed
  * run's child loop wakes its parent through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
- * reason, a fault as a failure unless the session's terminal-result presenter
- * took it. A fault answers as a refusal, so the caller reads one fact:
+ * reason, input it started for and did not read, a fault as a failure unless
+ * the session's terminal-result presenter took it. A fault answers as a refusal, so the caller reads one fact:
  * whether the run took the resume. The resume gives back the recovery it
  * claimed and the run did not take. The attempt is cancelled for good once
  * the run has left the session's view: a run id deleted and re-created is
@@ -205,19 +188,23 @@ export function resumeOnSession(
     return session.runs
       .resume(runId, { session, isCancellationRequested })
       .pipe(
-        Effect.tap((result) =>
-          'failed' in result && !isCancellationRequested()
-            ? session.interactions.emit(
+        Effect.tap((result) => {
+          if (isCancellationRequested()) return Effect.void;
+          // A run that started and ended without reading what it was
+          // resumed for leaves that input queued.
+          let message: string | null = null;
+          if ('failed' in result)
+            message = describeFollowUpFailure(result.failed);
+          else if ('started' in result && !result.delivered)
+            message = FOLLOW_UP_WAKE_FAILED_MESSAGE;
+          return message === null
+            ? Effect.void
+            : session.interactions.emit(
                 'requestShowInstruction',
-                {
-                  key: 'resumeRefused',
-                  message: describeFollowUpFailure(result.failed),
-                  showSuppress: false,
-                },
+                { key: 'resumeRefused', message, showSuppress: false },
                 { replayWhenAttached: true },
-              )
-            : Effect.void,
-        ),
+              );
+        }),
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
             return Effect.succeed(RESUME_REFUSED);
@@ -243,22 +230,19 @@ export function resumeOnSession(
 }
 
 /**
- * Wake a run whose follow-up row is already durable: true when a generation
- * here reads it, either one already live (it takes the row at its next
- * park, or its exit owes the wake: {@link wakeAfterGeneration}) or the one
- * the resume ({@link resumeOnSession}) started.
+ * Resume a run whose follow-up row is already durable, for `Inbox.wake`: a
+ * generation already live here reads the row at its next request or park,
+ * and its exit owes the wake; otherwise the resume ({@link resumeOnSession})
+ * runs, and tells the user whatever the run did not take, once.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
-): Effect.Effect<boolean> {
+): Effect.Effect<void> {
   return Effect.suspend(() =>
     session.runs.get(runId)?.live === true
-      ? Effect.succeed(true)
-      : Effect.map(
-          resumeOnSession(runId, session),
-          (result) => 'started' in result && result.delivered,
-        ),
+      ? Effect.void
+      : Effect.asVoid(resumeOnSession(runId, session)),
   );
 }
 

@@ -149,7 +149,7 @@ describe('sendFollowUp host-path session routing', () => {
               session: processSession,
             },
           ),
-        ).toEqual({ status: 'queued', wake: 'failed' });
+        ).toEqual({ status: 'queued' });
 
         // The default session does not own this run; selecting the actual
         // session is required for desktop follow-up delivery. With no live flow

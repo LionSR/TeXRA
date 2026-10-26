@@ -38,7 +38,7 @@ import {
   writeMemoryFile,
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -109,13 +109,9 @@ const run = Effect.fn('MemoryTool.run')(function* (
   // Normalize a raw display path into a `{ display, storage }` pair at the
   // dispatch boundary; a path outside `/memories` fails with a ToolError.
   const locate = (raw: string): Effect.Effect<MemoryLocation, ToolError> =>
-    Effect.try({
-      try: () => {
-        const storage = displayToStoragePath(raw);
-        return { display: toDisplayPath(storage), storage };
-      },
-      catch: (cause) => new ToolError(toErrorMessage(cause), { cause }),
-    });
+    Effect.fromResult(displayToStoragePath(raw)).pipe(
+      Effect.map((storage) => ({ display: toDisplayPath(storage), storage })),
+    );
 
   switch (input.command) {
     case 'view':
@@ -342,20 +338,18 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
 
   const { content, meta } = yield* readMemoryFile(resolvedPath);
   // A missing or ambiguous match is a failure the model fixes, not a defect.
-  const replacement = yield* Effect.try({
-    try: () =>
-      replaceLiteralMatches({
-        content,
-        search: oldStr,
-        replacement: newStr,
-        mode: 'unique',
-        notFoundError: () =>
-          `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
-        multipleMatchesError: ({ lineNumbers }) =>
-          `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
-      }),
-    catch: ensureError,
-  });
+  const replacement = yield* Effect.fromResult(
+    replaceLiteralMatches({
+      content,
+      search: oldStr,
+      replacement: newStr,
+      mode: 'unique',
+      notFoundError: () =>
+        `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
+      multipleMatchesError: ({ lineNumbers }) =>
+        `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
+    }),
+  );
 
   const updated = replacement.content;
   yield* writeAttributed(resolvedPath, updated, invocation, meta);

@@ -256,10 +256,8 @@ export const fillModelError = (
  * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
  * error code carried in a rejection body) as `authentication` and anything
  * else the provider rejected as `provider-rejection`. Pass every status-like
- * value a given failure carries; the numbers `401`/`403` match, matching the
- * prior per-provider checks this replaces — a status carried as a string
- * (e.g. OpenRouter's `error.code`, typed `string | number`) never matches,
- * same as before this helper existed.
+ * value a given failure carries; only the numbers `401`/`403` match, so a
+ * status carried as a string never does.
  */
 export const authOrRejectionKind = (
   ...statuses: ReadonlyArray<number | string | undefined>
@@ -267,20 +265,6 @@ export const authOrRejectionKind = (
   statuses.some((status) => status === 401 || status === 403)
     ? 'authentication'
     : 'provider-rejection';
-
-/**
- * Parses JSON out of provider stream/error text, mapping a parse failure to
- * the caller's own `ModelError` instead of throwing a raw `SyntaxError`.
- */
-export const parseJsonOrModelError = (
-  text: string,
-  onMalformed: (cause: unknown) => ModelError,
-): Effect.Effect<unknown, ModelError> =>
-  Effect.try({ try: () => JSON.parse(text) as unknown, catch: onMalformed });
-
-/** True when a parsed provider payload embeds an `{ error }` field. */
-export const hasErrorField = (value: unknown): value is { error: unknown } =>
-  typeof value === 'object' && value !== null && 'error' in value;
 
 /**
  * The delay one response asks the caller to wait, in milliseconds:

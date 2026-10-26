@@ -8,7 +8,7 @@ import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { SkillNameSchema } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import {
@@ -16,7 +16,7 @@ import {
   SkillSchema,
   type Skill,
 } from './SkillSchema';
-import { extractFrontmatter, SkillFrontmatterError } from './frontmatter';
+import { extractFrontmatter } from './frontmatter';
 
 export type SkillIssueSeverity = 'error' | 'warning';
 
@@ -228,66 +228,66 @@ export function loadSkillDirectory(
   const skillPath = path.join(skillDir, 'SKILL.md');
 
   return FileSystem.FileSystem.use((fs) => fs.readFileString(skillPath)).pipe(
-    Effect.flatMap((content) =>
-      Effect.try({
-        try: (): LoadedSkill => {
-          const { frontmatter, body } = extractFrontmatter(content);
-          if (!Predicate.isObject(frontmatter)) {
-            return {
-              errors: [
-                issue(
-                  'error',
-                  'invalid_frontmatter',
-                  'SKILL.md frontmatter must be a YAML object',
-                  { path: skillPath },
-                ),
-              ],
-            };
-          }
+    Effect.flatMap((content) => Effect.fromResult(extractFrontmatter(content))),
+    Effect.flatMap(({ frontmatter, body }) => {
+      if (!Predicate.isObject(frontmatter)) {
+        return Effect.succeed<LoadedSkill>({
+          errors: [
+            issue(
+              'error',
+              'invalid_frontmatter',
+              'SKILL.md frontmatter must be a YAML object',
+              { path: skillPath },
+            ),
+          ],
+        });
+      }
 
-          const nameResult = normalizeSkillName(
-            frontmatter.name,
-            directoryName,
-            skillPath,
-          );
-          const errors = [...nameResult.errors];
-          if (!nameResult.name) return { errors };
+      const nameResult = normalizeSkillName(
+        frontmatter.name,
+        directoryName,
+        skillPath,
+      );
+      const errors = [...nameResult.errors];
+      if (!nameResult.name) return Effect.succeed<LoadedSkill>({ errors });
 
-          const descriptionResult = normalizeSkillDescription(
-            frontmatter.description,
-            skillPath,
-            nameResult.name,
-          );
-          errors.push(...descriptionResult.errors);
-          if (!descriptionResult.description) return { errors };
+      const descriptionResult = normalizeSkillDescription(
+        frontmatter.description,
+        skillPath,
+        nameResult.name,
+      );
+      errors.push(...descriptionResult.errors);
+      if (!descriptionResult.description) {
+        return Effect.succeed<LoadedSkill>({ errors });
+      }
 
-          const skill = Schema.decodeUnknownSync(SkillSchema)({
-            name: nameResult.name,
-            description: descriptionResult.description,
-            body,
-            baseDir: skillDir,
+      return Schema.decodeUnknownEffect(SkillSchema)({
+        name: nameResult.name,
+        description: descriptionResult.description,
+        body,
+        baseDir: skillDir,
+        path: skillPath,
+      }).pipe(Effect.map((skill): LoadedSkill => ({ skill, errors })));
+    }),
+    // Malformed frontmatter is its own issue; anything else (a failed read
+    // included) is a read error.
+    Effect.catchTag('SkillFrontmatterError', (err) =>
+      Effect.succeed<LoadedSkill>({
+        errors: [
+          issue('error', 'invalid_frontmatter', err.message, {
             path: skillPath,
-          });
-
-          return { skill, errors };
-        },
-        catch: ensureError,
+          }),
+        ],
       }),
     ),
-    // `extractFrontmatter` throws a typed `SkillFrontmatterError` for every
-    // malformed-frontmatter case; anything else (a failed read included) is
-    // a read error.
-    Effect.orElseSucceed((err): LoadedSkill => ({
-      errors: [
-        issue(
-          'error',
-          err instanceof SkillFrontmatterError
-            ? 'invalid_frontmatter'
-            : 'read_error',
-          toErrorMessage(err),
-          { path: skillPath },
-        ),
-      ],
-    })),
+    Effect.catch((err) =>
+      Effect.succeed<LoadedSkill>({
+        errors: [
+          issue('error', 'read_error', toErrorMessage(err), {
+            path: skillPath,
+          }),
+        ],
+      }),
+    ),
   );
 }

@@ -1,7 +1,5 @@
 import { Result, Schema } from 'effect';
 
-import { parseJsonWith } from '@common/parsing/safeParseJson';
-
 /**
  * The one id a run has: minted once at launch, assigned
  * at `run.start`, and the key of every fact about that run. Hex: 12 chars
@@ -32,6 +30,10 @@ const OwnerIdentitySchema = Schema.Tuple([
   Schema.Int.check(Schema.isGreaterThan(0)),
   Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 ]);
+const OwnerIdentityJsonSchema = Schema.fromJsonString(OwnerIdentitySchema);
+const decodeOwnerIdentityJson = Schema.decodeUnknownResult(
+  OwnerIdentityJsonSchema,
+);
 
 /**
  * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
@@ -40,7 +42,7 @@ const OwnerIdentitySchema = Schema.Tuple([
 export const OwnerIdSchema = Schema.String.check(
   Schema.makeFilter(
     (value) =>
-      Result.match(parseJsonWith(value, OwnerIdentitySchema), {
+      Result.match(decodeOwnerIdentityJson(value), {
         onSuccess: (identity) =>
           identity[0] === identity[0].toLowerCase() &&
           JSON.stringify(identity) === value,
@@ -62,7 +64,7 @@ export function ownerIdentity(ownerId: OwnerId): {
   processStart: string | null;
 } {
   const [hostname, pid, processStart] = Schema.decodeUnknownSync(
-    Schema.fromJsonString(OwnerIdentitySchema),
+    OwnerIdentityJsonSchema,
   )(ownerId);
   return { hostname, pid, processStart };
 }
@@ -92,12 +94,16 @@ const AggregateKeySchema = Schema.Tuple([
     message: 'A run aggregate is keyed by a run id',
   }),
 );
+const AggregateKeyJsonSchema = Schema.fromJsonString(AggregateKeySchema);
+const decodeAggregateKeyJson = Schema.decodeUnknownResult(
+  AggregateKeyJsonSchema,
+);
 
 /** The canonical JSON encoding of an aggregate kind and its logical id. */
 export const AggregateIdSchema = Schema.String.check(
   Schema.makeFilter(
     (value) =>
-      Result.match(parseJsonWith(value, AggregateKeySchema), {
+      Result.match(decodeAggregateKeyJson(value), {
         onSuccess: (key) => JSON.stringify(key) === value,
         onFailure: () => false,
       }),
@@ -136,9 +142,7 @@ export type AggregateTarget =
 
 /** Decode a validated aggregate key at a logical-id boundary. */
 export function aggregateTarget(key: AggregateId): AggregateTarget {
-  const [kind, id] = Schema.decodeUnknownSync(
-    Schema.fromJsonString(AggregateKeySchema),
-  )(key);
+  const [kind, id] = Schema.decodeUnknownSync(AggregateKeyJsonSchema)(key);
   return kind === 'run'
     ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
     : { kind, id };

@@ -71,7 +71,7 @@ function recordedFollowUps(
     claimRefused?: boolean;
     failWrites?: number;
     /** The port's resume; the default records the run and succeeds. */
-    resume?: (runId: RunId) => Effect.Effect<boolean>;
+    resume?: (runId: RunId) => Effect.Effect<void>;
   } = {},
 ) {
   const rows: SessionEvent[] = [];
@@ -155,7 +155,6 @@ function recordedFollowUps(
       ((runId) =>
         Effect.sync(() => {
           if (!live.has(runId)) resumed.push(runId);
-          return true;
         })),
   });
   const queuedRows = (runId: RunId) =>
@@ -398,7 +397,7 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('answers a faulted resume as a failed wake', () =>
+  it.effect('leaves a faulted resume to the resume to tell', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession('idle');
@@ -408,7 +407,7 @@ describe('submitFollowUp', () => {
         }).pipe(
           withResumePort(() => Effect.fail(new Error('resume prep failed'))),
         ),
-      ).toEqual({ status: 'queued', wake: 'failed' });
+      ).toEqual({ status: 'queued' });
       expect(recorded.queued(runId)).toEqual(['keep this input']);
     }),
   );

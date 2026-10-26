@@ -992,7 +992,10 @@ describe('CLI crash report line', () => {
 
   it('does not append a report link for usage errors', () => {
     expect(
-      formatCrashReportLine(new CliUsageError('bad flag'), bugsUrl),
+      formatCrashReportLine(
+        new CliUsageError({ message: 'bad flag' }),
+        bugsUrl,
+      ),
     ).toBeUndefined();
   });
 });

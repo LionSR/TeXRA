@@ -15,7 +15,7 @@ import { Effect, Result, Schema } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
-import { ensureError, toErrorMessage } from './support.js';
+import { toErrorMessage } from './support.js';
 
 import { SerializedWrites } from './authProgram.js';
 import {
@@ -170,13 +170,9 @@ export class SubscriptionOAuthCoordinator<
     ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
       const raw = yield* this.storage.get();
       if (!raw) return null;
-      const parsed = Result.flatMap(
-        Result.try({
-          try: () => JSON.parse(raw) as unknown,
-          catch: ensureError,
-        }),
-        Schema.decodeUnknownResult(this.policy.sessionSchema),
-      );
+      const parsed = Schema.decodeUnknownResult(
+        Schema.fromJsonString(this.policy.sessionSchema),
+      )(raw);
       if (Result.isSuccess(parsed)) return parsed.success;
       return yield* new SubscriptionOAuthError({
         message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(parsed.failure)}`,

@@ -11,6 +11,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
+import { tokenCancelled } from '@frontend/vscode/vscodeEventWait';
 import {
   ArxivProcessor,
   type ArxivDownloadDestination,
@@ -104,15 +105,7 @@ export function downloadArXivSource(
           }),
           // Cancel interrupts the download, whose finalizers remove the
           // staging directory, and ends the command quietly.
-          Effect.callback<void>((resume) => {
-            const listener = token.onCancellationRequested(() =>
-              resume(Effect.void),
-            );
-            // The token fires once, at cancel(); a Cancel pressed before this
-            // arm subscribed is only visible on the flag.
-            if (token.isCancellationRequested) resume(Effect.void);
-            return Effect.sync(() => listener.dispose());
-          }).pipe(
+          tokenCancelled(token).pipe(
             Effect.andThen(Effect.logInfo('User cancelled the download')),
             withLogChannel(CHANNEL),
             Effect.as(Option.none<string>()),

@@ -59,7 +59,6 @@ const KEY_PAGES: {
     international: 'https://z.ai/',
   },
   meta: 'https://dev.meta.ai/',
-  openRouter: 'https://openrouter.ai/keys',
   kimiCode: 'https://www.kimi.com/code/console',
 };
 

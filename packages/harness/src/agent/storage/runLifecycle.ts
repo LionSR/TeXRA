@@ -30,6 +30,7 @@ import {
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
+import { runEndFromEvents } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -37,7 +38,6 @@ import {
   lostResultId,
   openOwnedChildren,
   persistedParentRunId,
-  runEndFromEvents,
 } from './runRecords';
 
 function pinRunWorkingDirectory(

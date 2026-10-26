@@ -24,13 +24,13 @@ export function runSetup(context: CliContext) {
   // `defineCliCommand`).
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
-    throw new CliUsageError(
-      formatInteractiveTerminalFailure(terminalFailure, {
+    throw new CliUsageError({
+      message: formatInteractiveTerminalFailure(terminalFailure, {
         headlessMessage:
           'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra auth chatgpt login`.',
         dumbTerminalCommand: 'setup',
       }),
-    );
+    });
   }
 
   // The setup agent owns the session: environment checks, workspace agents,

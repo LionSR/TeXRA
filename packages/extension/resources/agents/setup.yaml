@@ -184,7 +184,7 @@ prompt: |
           Keys at https://platform.openai.com/api-keys.
         - **Google** (Gemini): long-context, fast. Keys at
           https://aistudio.google.com/apikey.
-        - **DeepSeek**, **xAI** (Grok), **OpenRouter**, **Together**
+        - **DeepSeek**, **xAI** (Grok), **Together**
           and others: list only the one(s) the user mentions.
       Chat subscriptions such as Claude Pro or ChatGPT do NOT include
       API access (Codex-via-ChatGPT is the one exception). The user

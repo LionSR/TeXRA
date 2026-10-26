@@ -9,7 +9,7 @@
  * edited through the regular host settings surface.
  */
 
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
 import {
@@ -104,25 +104,25 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   input: UpdateConfigInput,
 ) {
   const entry = catalogEntry(input.key);
-  const parsed = Schema.decodeUnknownResult(
+  const value = yield* Schema.decodeUnknownEffect(
     settingSchemaWithoutPrefault(entry),
-  )(input.value);
-  if (!Result.isSuccess(parsed)) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Value rejected for ${input.key}: ${parsed.failure.message}. ${entry.description ?? ''}`,
-      ),
-    );
-  }
+  )(input.value).pipe(
+    Effect.mapError(
+      (error) =>
+        new ToolError(
+          `Value rejected for ${input.key}: ${error.message}. ${entry.description ?? ''}`,
+        ),
+    ),
+  );
 
   const call = yield* ToolContext;
   const config = call.env.roots.config;
   const previous = config.get(input.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* config.update(input.key, parsed.success, target);
+  yield* config.update(input.key, value, target);
 
   const before = JSON.stringify(previous);
-  const after = JSON.stringify(parsed.success);
+  const after = JSON.stringify(value);
   return executed(
     `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
     `Updated ${input.key} (${input.target})`,

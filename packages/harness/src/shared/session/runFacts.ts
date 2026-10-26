@@ -189,6 +189,31 @@ export const consumedRow = (
   followUpId,
 });
 
+/** The row that bounds run `runId`'s current lifecycle in `rows`: its last
+ *  `run.end` or `run.activate`, since an activate after an end starts a new
+ *  lifecycle, so a resumed run never carries the end of one it left. */
+export function lastLifecycleRow(
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> | undefined {
+  const id = qualifyAggregateId('run', runId);
+  return rows.findLast(
+    (row): row is Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> =>
+      row.aggregateId === id &&
+      (row.type === 'run.end' || row.type === 'run.activate'),
+  );
+}
+
+/** The run's terminal fact for its current lifecycle, or null: the scope
+ *  `finalizeRun`, the row's one writer, and every reader share. */
+export function runEndFromEvents(
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): Extract<SessionEvent, { type: 'run.end' }> | null {
+  const row = lastLifecycleRow(rows, runId);
+  return row?.type === 'run.end' ? row : null;
+}
+
 /**
  * Whether a run's pending input obliges a resume of it when no generation
  * holds it, from its input rows (`followup.queued`, `followup.consumed`,
@@ -203,14 +228,12 @@ export const consumedRow = (
  */
 export function needsWake(
   rows: readonly SessionEvent[],
+  runId: RunId,
   run: RunLookup,
 ): boolean {
-  // The run's current lifecycle: a `run.activate` after the last `run.end`
-  // starts one (`runEndFromEvents`), so a resumed run that crashed carries
-  // no end, and no earlier Stop of it holds a message back.
-  const end = rows.findLast(
-    (row) => row.type === 'run.end' || row.type === 'run.activate',
-  );
+  // A resumed run that crashed carries no end, so no earlier Stop of it
+  // holds a message back.
+  const end = lastLifecycleRow(rows, runId);
   const stopped = end?.type === 'run.end' && end.outcome === 'cancelled';
   const committed = new Map(
     rows.flatMap((row) =>

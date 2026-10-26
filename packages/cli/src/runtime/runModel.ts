@@ -21,9 +21,9 @@ export function assertExplicitModelKnown(
   if (!trimmed) return undefined;
   const resolved = resolveKnownCliModelId(trimmed);
   if (!resolved) {
-    throw new CliUsageError(
-      `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
-    );
+    throw new CliUsageError({
+      message: `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
+    });
   }
   return resolved;
 }
@@ -66,7 +66,7 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
       selectCliRunnableModel(candidates, { stores }),
     ),
     Effect.catch((error) =>
-      Effect.fail(new CliUsageError(toErrorMessage(error))),
+      Effect.fail(new CliUsageError({ message: toErrorMessage(error) })),
     ),
   );
   if (resolution.notice && context.quietLogs !== true) {

@@ -33,7 +33,7 @@ const requiredFields = {
   timestamp: IsoDateTime,
   model: Schema.String,
   /** The wire surface of the turn (`openai-responses`, `anthropic-messages`,
-   *  `openrouter-chat`, ...), stored verbatim in the `provider` column. From
+   *  `google-interactions`, ...), stored verbatim in the `provider` column. From
    *  TeXRA 1.0 the client sends protocol names where it used to send vendor
    *  names (`openai`, `anthropic`); the column is an external contract
    *  versioned with this function, so it stays a plain string and rows

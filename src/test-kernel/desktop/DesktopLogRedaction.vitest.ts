@@ -13,7 +13,6 @@ import { redactDisplayValue, redactSecrets } from '@logger/redaction';
 const PROVIDER_KEY_EXAMPLES = {
   openai: ['sk-proj-redaction-example-1234567890abcdef'],
   anthropic: ['sk-ant-api03-redaction-example-1234567890abcdef'],
-  openRouter: ['sk-or-v1-redaction-example-1234567890abcdef'],
   google: [
     'AIzaSyRedactionExample1234567890abcdef',
     'AQ.AbRedactionExample1234567890abcdef',

@@ -147,15 +147,6 @@ const AnthropicControlsSchema = Schema.Struct({
   cache: CacheSchema,
   stopSequences: Schema.Array(Schema.String),
 });
-const OpenRouterControlsSchema = Schema.Struct({
-  maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
-  temperature: Schema.NullOr(
-    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
-  ),
-  effort: ReasoningEffortSchema,
-  stopSequences: Schema.Array(Schema.String),
-  toolChoice: ToolChoiceSchema,
-});
 const EditorControlsSchema = Schema.Struct({
   justification: Schema.String,
   toolChoice: Schema.Literal('auto'),
@@ -177,23 +168,6 @@ function validateTemperatureDefault(configuration: {
     : [];
 }
 
-/** Schema check: the default effort must be one the selected route supports. */
-function validateEffortDefault<E extends string>(configuration: {
-  readonly supportedEfforts: readonly E[];
-  readonly defaults: { readonly effort: E | null };
-}): Schema.FilterIssue[] {
-  return configuration.defaults.effort !== null &&
-    !configuration.supportedEfforts.includes(configuration.defaults.effort)
-    ? [
-        {
-          path: ['defaults', 'effort'],
-          issue:
-            'The default reasoning effort must be supported by the selected route.',
-        },
-      ]
-    : [];
-}
-
 /** The editor's model: its binding and defaults, which the editor host serves. */
 export const VscodeLanguageModelConfigurationSchema =
   EditorBindingSchema.mapFields(
@@ -208,22 +182,6 @@ export const VscodeLanguageModelConfigurationSchema =
 /** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
 const ModelConfigurationSchema = Schema.Union([
   VscodeLanguageModelConfigurationSchema,
-  BindingSchema.mapFields(
-    Struct.assign({
-      protocol: Schema.Literal('openrouter-chat'),
-      supportsTemperature: Schema.Boolean,
-      supportsForcedToolChoice: Schema.Boolean,
-      supportsImageInput: Schema.Boolean,
-      supportsAudioInput: Schema.Boolean,
-      supportedEfforts: Schema.Array(ReasoningEffortLevelSchema),
-      defaults: OpenRouterControlsSchema.mapFields(Struct.omit(['toolChoice'])),
-    }),
-  ).check(
-    Schema.makeFilter((configuration) => [
-      ...validateTemperatureDefault(configuration),
-      ...validateEffortDefault(configuration),
-    ]),
-  ),
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('google-interactions'),
@@ -327,7 +285,6 @@ export type GoogleInteractionsConfiguration =
 export type OpenAIResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 export type AnthropicMessagesConfiguration =
   ConfigurationOf<'anthropic-messages'>;
-export type OpenRouterConfiguration = ConfigurationOf<'openrouter-chat'>;
 /** The editor's model configuration, as the editor host serves it. */
 export type VscodeLanguageModelConfiguration =
   (typeof VscodeLanguageModelConfigurationSchema)['Type'];
@@ -366,12 +323,6 @@ export const ResolvedTurnSchema = Schema.Union([
         // An editor object acquisition is not an account or durable origin identity.
         acquisitionId: Schema.String.check(Schema.isUUID()),
         controls: EditorControlsSchema,
-      }),
-    ),
-    PreparedInputSchema.mapFields(
-      Struct.assign({
-        protocol: Schema.Literal('openrouter-chat'),
-        controls: OpenRouterControlsSchema,
       }),
     ),
     GooglePreparedSchema,
@@ -433,18 +384,6 @@ const TurnUsageSchema = Schema.Struct({
         cacheCreationTokens: Schema.NullOr(CountSchema),
         cacheCreation5mTokens: Schema.NullOr(CountSchema),
         cacheCreation1hTokens: Schema.NullOr(CountSchema),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('openrouter'),
-        cost: Schema.optional(Schema.NullOr(Schema.Number)),
-        isByok: Schema.optional(Schema.Boolean),
-        inputDetails: Schema.optional(
-          Schema.NullOr(
-            Schema.Struct({
-              cacheWriteTokens: Schema.optional(Schema.NullOr(CountSchema)),
-            }),
-          ),
-        ),
       }),
     ]),
   ),

@@ -80,7 +80,7 @@ function optionRow(verdict: ModelOption): ModelOptionData {
   if (!('config' in verdict)) {
     return { value: model, label: model, availability };
   }
-  const { config, route, source } = verdict;
+  const { config, source } = verdict;
   const viaCopilot = availability === 'copilot-allowed';
   const reasoning = viaCopilot
     ? config.reasoning && 'Default (provider managed)'
@@ -92,7 +92,7 @@ function optionRow(verdict: ModelOption): ModelOptionData {
     isKimiSubscriptionEligible(config) &&
     !isKimiCodeExclusiveModel(config)
   )
-    routeLabel = `Via ${route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source)}`;
+    routeLabel = `Via ${providerDisplayName(source)}`;
   // The row ships the verdict's kind alone; `MODEL_AVAILABILITY_STATUS`
   // words it for whichever surface renders it.
   return {

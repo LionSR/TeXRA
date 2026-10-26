@@ -38,11 +38,11 @@ const boundEndpoint = (
       prefersCopilot: false,
       copilotRoute: undefined,
     });
-    if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
+    if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
     }
     const baseUrl = resolveRouteEndpoint(config, route, facts);
-    return route.kind === 'api-key' && route.usageRoute !== 'api-key'
+    return route.usageRoute !== 'api-key'
       ? { baseUrl, usageRoute: route.usageRoute }
       : { baseUrl };
   });
@@ -52,7 +52,6 @@ describe('coding-plan subscription runtime', () => {
     globalState: {
       [GlobalStateKey.GLM_CODING_PLAN]: true,
       [GlobalStateKey.KIMI_CODE_PREFER]: false,
-      [GlobalStateKey.USE_OPENROUTER]: true,
     },
     secrets: { [apiKeySecretName('glm')]: 'glm-key' },
   });
@@ -67,9 +66,6 @@ describe('coding-plan subscription runtime', () => {
     );
     await Effect.runPromise(
       hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
-    );
-    await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, true),
     );
   });
 
@@ -110,10 +106,6 @@ describe('coding-plan subscription runtime', () => {
     },
   ])('resolves the exact $name route', ({ useChina, codingPlan, expected }) =>
     Effect.gen(function* () {
-      yield* hostStores().globalState.update(
-        GlobalStateKey.USE_OPENROUTER,
-        false,
-      );
       yield* hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
       yield* hostStores().globalState.update(
         GlobalStateKey.GLM_CODING_PLAN,
@@ -131,7 +123,6 @@ describe('coding-plan subscription runtime', () => {
   it.effect.each([
     {
       name: 'Coding Plan',
-      useOpenRouter: false,
       providerEndpoint: '',
       modelBaseUrl: undefined,
       baseUrl: 'https://open.bigmodel.cn/api/v1',
@@ -139,7 +130,6 @@ describe('coding-plan subscription runtime', () => {
     },
     {
       name: 'provider custom endpoint',
-      useOpenRouter: false,
       providerEndpoint: 'http://proxy.test/api/coding/paas/v4/',
       modelBaseUrl: undefined,
       baseUrl: 'https://proxy.test/api/coding/paas/v4',
@@ -147,28 +137,15 @@ describe('coding-plan subscription runtime', () => {
     },
     {
       name: 'model custom endpoint',
-      useOpenRouter: true,
       providerEndpoint: 'provider.test/v4',
       modelBaseUrl: 'https://model.test/v4',
       baseUrl: 'https://model.test/v4',
       usageRoute: undefined,
     },
-    {
-      name: 'OpenRouter',
-      useOpenRouter: true,
-      providerEndpoint: 'provider.test/v4',
-      modelBaseUrl: undefined,
-      baseUrl: 'https://openrouter.ai/api/v1',
-      usageRoute: undefined,
-    },
   ])(
     'keeps the bound endpoint and subscription usage aligned for $name',
-    ({ useOpenRouter, providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
+    ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
-          GlobalStateKey.USE_OPENROUTER,
-          useOpenRouter,
-        );
         yield* hostStores().globalState.update(
           GlobalStateKey.ENDPOINT_GLM,
           providerEndpoint,
@@ -198,10 +175,6 @@ describe('coding-plan subscription runtime', () => {
     'leaves the stored preference alone for a run that declined the plan',
     () =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
-          GlobalStateKey.USE_OPENROUTER,
-          false,
-        );
         yield* hostStores().globalState.update(
           GlobalStateKey.GLM_CODING_PLAN,
           true,

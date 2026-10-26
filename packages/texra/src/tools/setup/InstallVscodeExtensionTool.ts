@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Option, Schedule, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -19,8 +19,11 @@ const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
   LEAN4_EXTENSION_ID,
 ]);
 
-/** Grace period before re-reading the extension registry after an install. */
-const REGISTRATION_GRACE_MS = 250;
+/**
+ * How long to poll the extension registry after an install. VS Code registers
+ * a new extension asynchronously after the install command resolves.
+ */
+const REGISTRATION_TIMEOUT = '3 seconds';
 
 const InstallVscodeExtensionInputSchema = Schema.Struct({
   extensionId: Schema.String.check(Schema.isMinLength(1)).annotate({
@@ -60,9 +63,17 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
         ),
       );
 
-    // Give VS Code a brief moment to register the new extension.
-    yield* Effect.sleep(REGISTRATION_GRACE_MS);
-    const installed = extensions.isInstalled(id);
+    // Poll until VS Code registers the new extension, up to the timeout.
+    const installed = Option.getOrElse(
+      yield* Effect.sync(() => extensions.isInstalled(id)).pipe(
+        Effect.repeat({
+          schedule: Schedule.spaced('100 millis'),
+          until: (registered) => registered,
+        }),
+        Effect.timeoutOption(REGISTRATION_TIMEOUT),
+      ),
+      () => false,
+    );
 
     return executed(
       installed

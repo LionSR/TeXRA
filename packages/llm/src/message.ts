@@ -36,58 +36,6 @@ const InputPartSchema = Schema.Union([
   ),
 ]);
 
-const OpenRouterDetailMetadataSchema = Schema.Struct({
-  format: Schema.optional(Schema.NullOr(Schema.String)),
-  id: Schema.optional(Schema.NullOr(Schema.String)),
-  index: Schema.optional(Schema.Number),
-});
-const OpenRouterReasoningSchema = Schema.Struct({
-  kind: Schema.Literal('openrouter-reasoning'),
-  plain: Schema.optional(Schema.NullOr(Schema.String)),
-  details: Schema.optional(
-    Schema.Array(
-      Schema.Union([
-        OpenRouterDetailMetadataSchema.mapFields(
-          Struct.assign({
-            kind: Schema.Literal('text'),
-            text: Schema.optional(Schema.NullOr(Schema.String)),
-            signature: Schema.optional(Schema.NullOr(Schema.String)),
-          }),
-        ),
-        OpenRouterDetailMetadataSchema.mapFields(
-          Struct.assign({
-            kind: Schema.Literal('summary'),
-            summary: Schema.String,
-          }),
-        ),
-        OpenRouterDetailMetadataSchema.mapFields(
-          Struct.assign({
-            kind: Schema.Literal('encrypted'),
-            data: Schema.String,
-          }),
-        ),
-        OpenRouterDetailMetadataSchema.mapFields(
-          Struct.assign({
-            kind: Schema.Literal('server-tool-call'),
-            toolName: Schema.String,
-            toolCallId: Schema.optional(Schema.NullOr(Schema.String)),
-            arguments: Schema.String,
-            result: Schema.String,
-          }),
-        ),
-      ]),
-    ),
-  ),
-}).check(
-  Schema.makeFilter(
-    (evidence) =>
-      evidence.plain !== undefined || evidence.details !== undefined,
-    {
-      message:
-        'OpenRouter reasoning preserves a reported plain or details field.',
-    },
-  ),
-);
 const EvidenceStatusSchema = Schema.Literals(['completed', 'incomplete']);
 const MessagePartSchema = Schema.Struct({
   kind: Schema.Literal('message'),
@@ -137,7 +85,6 @@ const OutputPartSchema = Schema.Union([
     content: Schema.optional(Schema.Array(TextPartSchema)),
     evidence: Schema.NullOr(
       Schema.Union([
-        OpenRouterReasoningSchema,
         Schema.Struct({
           kind: Schema.Literal('google-interactions-thought-signature'),
           signature: Schema.String.check(Schema.isMinLength(1)),
@@ -179,11 +126,9 @@ export const EVIDENCE_PROTOCOL = {
   'openai-responses-function-call': 'openai-responses',
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
-  'openrouter-reasoning': 'openrouter-chat',
   google: 'google-interactions',
   anthropic: 'anthropic-messages',
   xai: 'openai-responses',
-  openrouter: 'openrouter-chat',
   'google-interactions': 'google-interactions',
   'openai-responses': 'openai-responses',
 } as const;
@@ -213,14 +158,13 @@ export function validateAssistantContent(
       part.kind === 'reasoning' &&
       ((evidence?.kind === 'anthropic-thinking-signature' &&
         (part.summary.length !== 0 || part.content?.length !== 1)) ||
-        ((evidence?.kind === 'anthropic-redacted-thinking' ||
-          evidence?.kind === 'openrouter-reasoning') &&
+        (evidence?.kind === 'anthropic-redacted-thinking' &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
       issues.push({
         path: ['content', index],
         issue:
-          'Signed thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
+          'Signed thinking preserves one exact returned text field; redacted thinking keeps its content in provider evidence.',
       });
     }
     if (

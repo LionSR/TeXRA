@@ -368,7 +368,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       );
     }
 
-    const failure = new AgentError(errorMsg, { cause: err });
+    const failure = new AgentError({ message: errorMsg, cause: err });
     receiveTerminalFailure(failure, finalized);
     return yield* Effect.fail(failure);
   });
@@ -401,13 +401,11 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         lastResult: result,
       }).pipe(
         // An end that did not save fails the run, saying why.
-        Effect.flatMap(({ event, persistFailure }) =>
-          persistFailure === undefined
+        Effect.flatMap(({ event, persistFailure: cause }) =>
+          cause === undefined
             ? Effect.succeed(withResolvedOutcome(result, event.outcome))
             : Effect.fail(
-                new AgentError(event.error?.message ?? '', {
-                  cause: persistFailure,
-                }),
+                new AgentError({ message: event.error?.message ?? '', cause }),
               ),
         ),
       );
