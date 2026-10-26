@@ -36,7 +36,9 @@ import {
  * compared with or assigned to a property other than `type` (a request's
  * `kind: 'run.model'`) belongs to another union and is skipped, and a
  * same-named value of another union (the trace's `run.end` event) is
- * listed with its reason. Rows read in SQL text are not scanned.
+ * listed with its reason. Rows read in SQL text are not scanned, nor is a
+ * field reached by a computed name (`entry['launchParent']`); an optional
+ * chain (`entry?.launchParent`) is an ordinary property access here.
  */
 
 const EVENTS = 'packages/harness/src/shared/schemas/sessionEvent.ts';
