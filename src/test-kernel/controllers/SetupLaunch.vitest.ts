@@ -1,10 +1,6 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -59,13 +55,8 @@ beforeEach(() => {
 let secrets = new FakeSecrets();
 let fake = makeFakeSettingsStores();
 
-const runSetup = <A, E>(program: Effect.Effect<A, E, LanguageModel>) =>
-  Effect.runPromise(
-    program.pipe(
-      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      withEnv({}),
-    ),
-  );
+const runSetup = <A, E>(program: Effect.Effect<A, E>) =>
+  Effect.runPromise(program.pipe(withEnv({})));
 
 function launchModel() {
   return runSetup(resolveSetupLaunchModel(fake.stores, secrets));

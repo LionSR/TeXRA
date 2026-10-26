@@ -6,7 +6,6 @@ import {
   AppState,
   processLayer,
   AgentDirectoryService,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type ProcessServices,
   type PlatformSecrets,
   type AgentDirectoriesPort,
@@ -130,8 +129,6 @@ export const initializeElectronPlatform = Effect.fn(
         storageRoot: dataRoot,
         plugins: texraPlugins(),
         secrets,
-        // No editor in this process.
-        languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
         agentDirectories: agentDirectoriesLayer,
         // Desktop model traffic goes to the same anonymous usage log the extension
         // and CLI write to, tagged with editorType 'desktop' and the app version.

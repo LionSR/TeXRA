@@ -163,7 +163,7 @@ publisher, store) is a lint zone that imports nothing above it and passes its
 own browser-safety check. It can become `@texra-ai/history` by a rename when a
 second embedder appears, without a redesign.
 
-Leaving the harness: presets, teams, icons, Copilot routing and quota routes
+Leaving the harness: presets, teams, icons and quota routes
 move to `packages/texra/src/host/`, and the canned validation model moves to
 `packages/cli`. Harness-internal aliases are declared only for the harness build
 and the test kernel, so a deep import from the app or a host fails to compile.
@@ -425,7 +425,8 @@ CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
   `tools/plugins.ts:182`; `runtimePresentationEvents.ts:20-26`;
   `rowVersions.vitest.ts:104`; and the line counts of `validationModel.ts`
   (547), `agentPresets.ts` (192), `common/teams` (372), `iconNames.ts` (138),
-  `copilotRouting.ts` (225) and `quotaFallbackRoutes.ts` (71).
+  `copilotRouting.ts` (225, since deleted with Copilot support) and
+  `quotaFallbackRoutes.ts` (71).
 - The import graph was computed by resolving every `tsconfig.json` alias over
   about 1,400 files and 10,000 import statements at `08455c8` (the exact figures
   depend on the file filter). The harness deep-import set matches

@@ -68,10 +68,6 @@ export interface ToolCatalog {
 /** The process's tool catalog as a host, or a plugin's process layer,
  *  reads it. */
 export interface ToolCatalogShape {
-  /** The built-in plugins' tools as the switches stand, each tool's name to
-   *  its plugin's id: now, then on each change (what a host mirrors outside
-   *  any run: Copilot's tools). */
-  readonly current: Stream.Stream<ReadonlyMap<string, string>>;
   /** Borrow a plugin's process services for the caller's scope without
    *  starting them; none while its layer is down. */
   readonly processServices: (
@@ -167,7 +163,7 @@ export const toolCatalogLayer = (
         options.switches ?? Stream.succeed(new Set<string>()),
         (off) => SubscriptionRef.set(on, onOf(off)),
       ).pipe(Effect.forkScoped);
-      // A process layer may read this catalog (Copilot's tools follow it).
+      // A process layer may read this catalog.
       const processLayers: RcMap.RcMap<string, PluginContext> =
         yield* RcMap.make({
           lookup: (id: string) =>
@@ -201,18 +197,6 @@ export const toolCatalogLayer = (
         RcMap.getOption(processLayers, id);
       const state = Context.get(process, AppState);
       const service: typeof ToolCatalogOwner.Service = {
-        current: SubscriptionRef.changes(on).pipe(
-          Stream.map(
-            (switchedOn): ReadonlyMap<string, string> =>
-              new Map(
-                shared.builtIn.flatMap(({ plugin, entries }) =>
-                  switchedOn.has(plugin.id)
-                    ? [...entries.keys()].map((name) => [name, plugin.id])
-                    : [],
-                ),
-              ),
-          ),
-        ),
         processServices,
         disabled: readDisabledTools(state),
         setEnabled: (id, enabled) =>

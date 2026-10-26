@@ -14,7 +14,6 @@ import {
   AgentDirectories,
   getEnabledModels,
   readModelOptions,
-  type LanguageModel,
   type PlatformSecrets,
   type PerKeyLane,
   Settings,
@@ -89,11 +88,7 @@ interface HostSnapshotSourceOptions {
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<
-    Banners['apiKey'],
-    HostSnapshotReadFailed,
-    LanguageModel
-  >;
+  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
     HostSnapshotReadFailed,
@@ -113,24 +108,16 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
+    AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
-  readonly refreshCatalogs: Effect.Effect<
-    void,
-    never,
-    AgentCatalog | LanguageModel
-  >;
+  readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog>;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<
-    void,
-    never,
-    LanguageModel | ChildProcessSpawner
-  >;
+  readonly refreshHostBanners: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
@@ -301,9 +288,9 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
+      AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalog | LanguageModel>(...catalogLoads),
+    refreshCatalogs: guarded<AgentCatalog>(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

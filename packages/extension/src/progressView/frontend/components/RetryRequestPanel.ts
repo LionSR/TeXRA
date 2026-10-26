@@ -32,9 +32,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return 'stop';
   }
 
-  // A Copilot quota stop retries the same subscription; say so.
   protected override get primaryLabel(): string {
-    return this.copilotQuotaExhausted() ? 'Retry Copilot' : 'Retry';
+    return 'Retry';
   }
 
   protected override submitPrimary(): void {
@@ -57,9 +56,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const detailsText = this.formatRetryDetails(data.errorDetails);
-    const ownKeyLabel = this.copilotQuotaExhausted()
-      ? 'Start with your own API key'
-      : 'Retry with your own API key';
+    const ownKeyLabel = 'Retry with your own API key';
 
     return this.renderCard(
       html`
@@ -100,10 +97,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   // ===========================================================================
   // Utilities
   // ===========================================================================
-
-  private copilotQuotaExhausted(): boolean {
-    return this.permission.data.credentialSwitch?.kind === 'copilot-fallback';
-  }
 
   /** The run decided the offer; the card only renders it. */
   private canUseOwnApiKey(): boolean {

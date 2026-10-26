@@ -84,9 +84,6 @@ export const CredentialSwitchSchema = Schema.Union([
     kind: Schema.Literal('new-key'),
     provider: ApiKeyProviderIdSchema,
   }),
-  /** The Copilot quota ran out: a replacement run on the matching direct
-   *  model, whose provider is resolved when that run launches. */
-  Schema.Struct({ kind: Schema.Literal('copilot-fallback') }),
 ]);
 export type CredentialSwitch = typeof CredentialSwitchSchema.Type;
 

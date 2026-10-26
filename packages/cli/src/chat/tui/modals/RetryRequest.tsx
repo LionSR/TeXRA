@@ -24,11 +24,8 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { data } = props.payload;
   const errorText = data.errorMessage ?? data.operation;
-  // The run decided the offer; the card only renders it. The Copilot move is
-  // the editor's, so no run on this host carries it.
-  const canSwitchToPersonalKey =
-    data.credentialSwitch != null &&
-    data.credentialSwitch.kind !== 'copilot-fallback';
+  // The run decided the offer; the card only renders it.
+  const canSwitchToPersonalKey = data.credentialSwitch != null;
   // The modal only names the answer. `y` retries on the credentials the run
   // already has; `approvalDecisionArms` turns a retry on personal credentials
   // into the host's `useOwnApiKey`, which asks for the key when none is

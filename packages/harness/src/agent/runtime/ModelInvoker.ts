@@ -358,7 +358,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
-          turn.kind === 'http' ? localCallsOf(turn.content) : [],
+          localCallsOf(turn.content),
           (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
           generateShortId,

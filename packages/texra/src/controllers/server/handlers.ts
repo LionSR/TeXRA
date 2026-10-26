@@ -439,7 +439,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
         config,
         continues,
         preferHelperModel,
-        ownApiKeyFallback,
         approveDelegatedWork,
         approvalPolicy,
       }) =>
@@ -454,7 +453,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 runId,
                 ...(continues !== null && { continues }),
                 helperModel: preferHelperModel,
-                ownKeyFallback: ownApiKeyFallback,
                 approval: {
                   delegated: approveDelegatedWork,
                   ...(approvalPolicy !== null && { policy: approvalPolicy }),

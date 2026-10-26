@@ -10,9 +10,7 @@
  * labelled CI job in `.github/workflows/live-llm.yml`.
  *
  * Each suite gates itself on its own key, so a run with one key exercises one
- * route and skips the others. `vscode-lm` has no suite here: it is acquired
- * through the extension host's `vscode.lm` API and its live check belongs to
- * an Extension Development Host job.
+ * route and skips the others.
  */
 
 // Node imports

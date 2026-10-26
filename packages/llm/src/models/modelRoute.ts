@@ -1,18 +1,15 @@
 /**
  * The one decision of which route serves a model's next request. The picker,
- * the run binding, the run's backend and the Copilot fallback all read
- * {@link decideModelRoute} over the same {@link RouteFacts}, and carry the
- * decided {@link ModelRoute} instead of re-asking any of its questions.
+ * the run binding and the run's backend all read {@link decideModelRoute}
+ * over the same {@link RouteFacts}, and carry the decided {@link ModelRoute}
+ * instead of re-asking any of its questions.
  *
  * The decision is pure. The host reads its facts once (its settings, its
- * secret store, its editor); the per-call facts (the validation override,
- * the Copilot preference, a resumed conversation's format) are the caller's.
- * The editor's Copilot route is the host's own type, `C`: the package carries
- * it on the decision and never reads it.
- * Precedence: validation, the unserved gate (a model only OpenRouter serves
- * has no route), Copilot, the ChatGPT and Grok subscriptions, then
- * the direct provider key, which may pay through Kimi Code or the GLM Coding
- * Plan.
+ * secret store); the per-call facts (the validation override, a resumed
+ * conversation's format) are the caller's.
+ * Precedence: validation, the unserved gate (a model no route TeXRA reaches
+ * serves), the ChatGPT and Grok subscriptions, then the direct provider key,
+ * which may pay through Kimi Code or the GLM Coding Plan.
  *
  * Kimi Code has two eligibility shapes:
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
@@ -35,17 +32,9 @@ import { KIMI_CODE_BASE_URL } from '../providers/providers.js';
 import type { ApiKeyProviderId } from '../providers/providerPlugins.js';
 
 /** The facts a route reads, and nothing else. */
-export interface RouteFacts<C = unknown> {
+export interface RouteFacts {
   /** A guarded package-validation run: every model binds the validation model. */
   readonly validation: boolean;
-  /** The user asked the editor (Copilot) to serve this model. */
-  readonly prefersCopilot: boolean;
-  /**
-   * The route the editor offers for this model, discovered for this decision
-   * (only when the decision can land on Copilot). A Copilot decision carries
-   * it, so nothing downstream re-reads the editor.
-   */
-  readonly copilotRoute: C | undefined;
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
   /** ChatGPT subscription preferred, signed in, and not declined. */
@@ -73,16 +62,14 @@ export interface RouteFacts<C = unknown> {
 }
 
 /** The facts {@link decideModelRoute} reads. */
-export type RouteDecisionFacts<C = unknown> = Omit<
-  RouteFacts<C>,
+export type RouteDecisionFacts = Omit<
+  RouteFacts,
   'chatgptContextWindow' | 'endpoints'
 >;
 
 /** The facts under which a model takes its own key: no preference is on. */
-export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts<never> = {
+export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts = {
   validation: false,
-  prefersCopilot: false,
-  copilotRoute: undefined,
   chatgptSubscription: false,
   xaiSubscription: false,
   kimiCodeKey: false,
@@ -91,23 +78,15 @@ export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts<never> = {
 };
 
 /** The host half of {@link RouteFacts}, shared by every model. */
-export type HostRouteFacts = Omit<
-  RouteFacts,
-  'validation' | 'prefersCopilot' | 'copilotRoute'
->;
+export type HostRouteFacts = Omit<RouteFacts, 'validation'>;
 
 /** What a direct provider key pays through. */
 export type ApiKeyUsageRoute =
   'api-key' | 'kimi-code-subscription' | 'glm-coding-plan-subscription';
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
-export type ModelRoute<C = unknown> =
+export type ModelRoute =
   | { readonly kind: 'validation' }
-  | {
-      readonly kind: 'copilot';
-      /** The discovered route; absent when the editor offers none now. */
-      readonly route: C | undefined;
-    }
   | {
       readonly kind: 'chatgpt-subscription';
       /** The input window the Codex backend grants this model. */
@@ -121,7 +100,7 @@ export type ModelRoute<C = unknown> =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** Only OpenRouter serves the model, and TeXRA does not call OpenRouter. */
+  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
   | { readonly kind: 'unserved' };
 
 /**
@@ -141,12 +120,17 @@ function codexSubscriptionOf(
 
 /**
  * Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
- * or only OpenRouter serves it, which TeXRA does not call.
+ * or only OpenRouter or GitHub Copilot serves it, neither of which TeXRA
+ * calls.
  */
 export function isUnservedModel(
-  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'provider'>,
 ): boolean {
-  return config.retired === true || config.openRouterOnly === true;
+  return (
+    config.retired === true ||
+    config.openRouterOnly === true ||
+    config.provider === ModelProvider.COPILOT
+  );
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
@@ -236,23 +220,15 @@ export function zeroCostAccessOverrides(contextWindow: number): {
 }
 
 /** Decide the route `config` takes under `facts`. Pure. */
-export function decideModelRoute<C>(
+export function decideModelRoute(
   config: ModelConfig,
-  facts: RouteDecisionFacts<C>,
-): ModelRoute<C> {
+  facts: RouteDecisionFacts,
+): ModelRoute {
   if (facts.validation) return { kind: 'validation' };
-  // Only OpenRouter serves this model, and TeXRA does not call OpenRouter.
-  if (config.openRouterOnly) return { kind: 'unserved' };
-  // A Copilot preference is a hard route choice for every request the
-  // editor can serve. The editor sends its own reasoning controls, so a
-  // provider mode (OpenAI `pro`) takes the model's own route, as the Codex
-  // subscription preference below does.
-  if (
-    (facts.prefersCopilot && facts.mode === undefined) ||
-    config.provider === ModelProvider.COPILOT
-  ) {
-    return { kind: 'copilot', route: facts.copilotRoute };
-  }
+  // Only OpenRouter or GitHub Copilot serves this model, and TeXRA calls
+  // neither.
+  if (config.openRouterOnly || config.provider === ModelProvider.COPILOT)
+    return { kind: 'unserved' };
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
   const codex = codexSubscriptionOf(config);

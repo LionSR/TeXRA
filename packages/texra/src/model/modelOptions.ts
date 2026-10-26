@@ -81,18 +81,12 @@ function optionRow(verdict: ModelOption): ModelOptionData {
     return { value: model, label: model, availability };
   }
   const { config, source } = verdict;
-  const viaCopilot = availability === 'copilot-allowed';
-  const reasoning = viaCopilot
-    ? config.reasoning && 'Default (provider managed)'
-    : reasoningLevelLabel(verdict);
+  const reasoning = reasoningLevelLabel(verdict);
   // The row's identity stays the base model; the badge names the route.
-  let routeLabel: string | undefined;
-  if (viaCopilot) routeLabel = 'Via Copilot';
-  else if (
-    isKimiSubscriptionEligible(config) &&
-    !isKimiCodeExclusiveModel(config)
-  )
-    routeLabel = `Via ${providerDisplayName(source)}`;
+  const routeLabel =
+    isKimiSubscriptionEligible(config) && !isKimiCodeExclusiveModel(config)
+      ? `Via ${providerDisplayName(source)}`
+      : undefined;
   // The row ships the verdict's kind alone; `MODEL_AVAILABILITY_STATUS`
   // words it for whichever surface renders it.
   return {

@@ -50,7 +50,6 @@ import {
   StateWriteFailed,
   type ProcessServices,
   type StateStore,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@texra-ai/harness';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import { GlobalDatabase } from '@texra-ai/harness/node';
@@ -247,9 +246,6 @@ export function installCliProcessRuntime(
           ...(options?.appState && {
             appState: AppState.layer(options.appState),
           }),
-          // A terminal has no editor language models; the CLI's platform installs
-          // the same port.
-          languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
           agentDirectories: agentDirectoriesLayer,
           // CLI model traffic goes to the same anonymous usage log the other hosts
           // write to, tagged with editorType 'cli' and the CLI version. The

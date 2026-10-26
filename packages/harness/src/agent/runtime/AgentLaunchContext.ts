@@ -74,9 +74,6 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /** The launch model's registry config, which `AgentRun` binds (or a
    *  resumed run's snapshot's); a mid-run switch rebinds there. */
   readonly modelConfig: ModelConfig;
-  /** The user's own-API-key fallback ({@link AgentLaunchInput}): the run,
-   *  not the stored preferences, declines Copilot and subscription routes. */
-  readonly ownApiKeyFallback: boolean;
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
 }
@@ -94,9 +91,6 @@ interface AgentLaunchInput {
   onAdmitted?: (runId: RunId) => Effect.Effect<void>;
   /** Session owning this run's coordination state. */
   session: SessionHandle;
-  /** This launch is the user's own-API-key fallback for a quota-exhausted
-   *  retry: it declines the Copilot route and every subscription route. */
-  ownApiKeyFallback?: boolean;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
   toolPolicy?: ToolPolicy;
 }
@@ -390,7 +384,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       resolvedAgentDescription: agentEntry.description,
       persona,
       modelConfig,
-      ownApiKeyFallback: input.ownApiKeyFallback ?? false,
       // Frozen so nothing mutates it mid-run. A script's run ends when its
       // script settles, launched or resumed: it has no later turn for
       // anything to wait for.

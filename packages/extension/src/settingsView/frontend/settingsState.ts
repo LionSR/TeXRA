@@ -52,7 +52,6 @@ import {
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
-  type CopilotRouteInfo,
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
@@ -173,9 +172,6 @@ export const modelSelectionItems = trackedSignal<readonly ModelSelectionItem[]>(
 export const helperModel = settingSignal<string>(GlobalStateKey.HELPER_MODEL);
 export const preferShortModelNames = settingSignal<boolean>(
   GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-);
-export const copilotRouteInfos = trackedSignal<readonly CopilotRouteInfo[]>(
-  () => [],
 );
 
 // ---------------------------------------------------------------------------

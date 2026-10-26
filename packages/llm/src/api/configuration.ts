@@ -12,15 +12,10 @@ import { responsesConfiguration } from './responsesConfiguration.js';
 import type { ModelConfiguration } from '../turn.js';
 import type { BindSpec } from '../node.js';
 
-/** A configuration one of the package's HTTP protocols serves. */
-export type HttpModelConfiguration = Exclude<
-  ModelConfiguration,
-  { protocol: 'vscode-lm' }
->;
-type HttpProtocol = HttpModelConfiguration['protocol'];
+type HttpProtocol = ModelConfiguration['protocol'];
 /** One protocol's configuration. */
 export type ConfigurationOf<P extends HttpProtocol> = Extract<
-  HttpModelConfiguration,
+  ModelConfiguration,
   { protocol: P }
 >;
 
@@ -135,7 +130,7 @@ const CONFIGURE: {
 };
 
 /** The configuration `spec` binds on its protocol. */
-export function configurationFor(spec: BindSpec): HttpModelConfiguration {
+export function configurationFor(spec: BindSpec): ModelConfiguration {
   const { model: config, options } = spec;
   // A request that does not think is sampled at the caller's temperature,
   // except on an OpenAI reasoning model, which refuses a temperature even at
@@ -170,9 +165,7 @@ export function configurationFor(spec: BindSpec): HttpModelConfiguration {
  * Whether a configuration admits background work: Responses and Google mark
  * it, and Google retrieves a background result through server-side state.
  */
-export function backgroundCapable(
-  configuration: HttpModelConfiguration,
-): boolean {
+export function backgroundCapable(configuration: ModelConfiguration): boolean {
   switch (configuration.protocol) {
     case 'openai-responses':
       return configuration.background === 'supported';
@@ -187,7 +180,7 @@ export function backgroundCapable(
 
 /** Whether the configuration takes a tool choice naming one function. */
 export function forcedToolChoice(
-  configuration: HttpModelConfiguration,
+  configuration: ModelConfiguration,
   config: ModelConfig,
 ): boolean {
   switch (configuration.protocol) {
@@ -208,7 +201,7 @@ export function forcedToolChoice(
  */
 export function servesWebSocket(
   spec: BindSpec,
-  configuration: HttpModelConfiguration,
+  configuration: ModelConfiguration,
 ): boolean {
   return (
     configuration.protocol === 'openai-responses' &&

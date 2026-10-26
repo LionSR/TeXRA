@@ -31,7 +31,6 @@ import {
 
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
-import { CopilotRoutes } from './copilotRouting';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
 import type { ModelOptionStores } from './computeModelOptions';
@@ -73,8 +72,6 @@ export interface ModelSettings {
     /** A dashboard GLM endpoint, which outranks the Coding Plan's path. */
     readonly glmEndpoint: boolean;
   };
-  /** Models whose Copilot route the user prefers. */
-  readonly copilotModels: readonly string[];
   /** The user's saved reasoning effort per model reference. */
   readonly reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   /** Send the unpinned `shortName` in place of the date-pinned id. */
@@ -268,7 +265,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         { concurrency: 'unbounded' },
       ),
       Effect.all({
-        copilotModels: CopilotRoutes.preferred(stores.globalState),
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
         background: readBackgroundToggles(stores),

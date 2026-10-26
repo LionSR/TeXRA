@@ -21,7 +21,6 @@ import {
   withLogChannel,
   pathToLocationIn,
   type WorkspaceRoots,
-  CopilotRoutes,
   presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
@@ -116,10 +115,7 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them. */
-type RunValidatedOptions = Pick<
-  StartInput,
-  'helperModel' | 'ownKeyFallback' | 'approval'
->;
+type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
 /** What the run actions read and present beside the window's `Session`:
  *  filled from this process's session where the window holds one
@@ -492,88 +488,6 @@ export const createHostRunActions = Effect.fn(
     },
   });
 
-  /** Retry requests a Copilot fallback is switching here. */
-  const switching = new Set<string>();
-  /** The Copilot subscription's fallback: a replacement run on the user's
-   *  own key for the model Copilot served, then the pending retry is
-   *  cancelled in its favor. */
-  const copilotFallback = Effect.fn('HostRunActions.copilotFallback')(
-    function* (request: Extract<HostRequest, { kind: 'useOwnApiKey' }>) {
-      const { runId, requestId } = request;
-      if (!isRetryPending(runId, requestId)) return;
-      const chooseAnotherModel =
-        'Choose another model and start the agent again.';
-      if (!request.model) {
-        yield* ports.showInfo(
-          `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
-        );
-        return;
-      }
-      const fallback = CopilotRoutes.directFallback(request.model);
-      if (!fallback) {
-        yield* ports.showInfo(
-          `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
-        );
-        return;
-      }
-      // Key entry can outlive the retry panel: recheck the exact retry
-      // identity after the prompt so an old action cannot launch or alter
-      // a replacement request.
-      const prepared = yield* apiKeyRetry.ensureOwnApiKey(
-        fallback.provider,
-        false,
-      );
-      if (!prepared || !isRetryPending(runId, requestId)) return;
-      const config = yield* readConfig(runId);
-      if (!config) {
-        yield* ports.showInfo(
-          `The settings for this run are no longer available. ${chooseAnotherModel}`,
-        );
-        return;
-      }
-      const model = fallback.model;
-      // The replacement run carries the user's choice itself: it declines
-      // the Copilot route and every subscription route for its own
-      // bindings. No standing preference is rewritten, so a concurrent run
-      // keeps the routes its own user chose.
-      // The replacement is started, and the retry cancelled, once it is
-      // admitted; a failure after that is the run's own, presented by
-      // its result unless that already showed it.
-      const started = yield* Effect.suspend(() => {
-        if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
-        return startAgentRequest(
-          { config: { ...config, model } },
-          { ownKeyFallback: true },
-        ).pipe(
-          Effect.tap((run) =>
-            Effect.forkIn(
-              run.result.pipe(
-                Effect.catch((error) =>
-                  Effect.logWarning(
-                    `Own-key replacement of run ${runId} failed: ${error.message}`,
-                  ).pipe(
-                    Effect.andThen(
-                      presentRunFailure(
-                        ports.present,
-                        error,
-                        'Your own-key run failed: ',
-                      ),
-                    ),
-                    withLogChannel(CHANNEL),
-                  ),
-                ),
-              ),
-              ports.scope,
-            ),
-          ),
-          Effect.as(true),
-        );
-      });
-      if (!started) return;
-      yield* settleRetry(runId, requestId, { action: 'cancel' });
-    },
-  );
-
   return {
     runOutputs,
     sendFollowUp(runId, text) {
@@ -754,19 +668,6 @@ export const createHostRunActions = Effect.fn(
     }),
     useOwnApiKey(request) {
       const offer = request.credentialSwitch;
-      if (offer.kind === 'copilot-fallback') {
-        // Checked and claimed in one step: a second click would otherwise
-        // pass the pending check while the first awaits admission, and
-        // start a second replacement before the first cancels the retry.
-        const claim = `${request.runId}/${request.requestId}`;
-        return Effect.suspend(() => {
-          if (switching.has(claim)) return Effect.void;
-          switching.add(claim);
-          return copilotFallback(request).pipe(
-            Effect.ensuring(Effect.sync(() => switching.delete(claim))),
-          );
-        });
-      }
       return apiKeyRetry.useOwnApiKey({
         stream: request.runId,
         requestId: request.requestId,

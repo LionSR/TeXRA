@@ -2,10 +2,6 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import {
@@ -116,9 +112,7 @@ describe('OnboardingFunnelRefresher', () => {
         expect(refresher.state).toBe('setup');
         expect(transitions).toHaveLength(2);
         expect(transitions[1]?.selectSetupAgent).toBe(true);
-      }).pipe(
-        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      ),
+      }),
   );
 
   it.effect(
@@ -140,8 +134,6 @@ describe('OnboardingFunnelRefresher', () => {
         });
         expect(transitions).toHaveLength(0);
         expect(refresher.state).toBeUndefined();
-      }).pipe(
-        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      ),
+      }),
   );
 });

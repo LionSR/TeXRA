@@ -19,8 +19,8 @@ import {
   type ResponseValue,
 } from './openaiResponsesWire.js';
 import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
-import type { TurnEvent } from '../turn.js';
-import type { HttpTurnResult, InputPart, Part, PartEvent } from './parts.js';
+import type { TurnEvent, TurnResult } from '../turn.js';
+import type { InputPart, Part, PartEvent } from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
 
@@ -145,7 +145,7 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
     if (response.status === 'incomplete' && calls) return yield* rejected();
     // A completed response states no reason, and its snapshot may list
     // only part of what streamed: the settled content decides.
-    let finishReason: HttpTurnResult['finishReason'] | null = null;
+    let finishReason: TurnResult['finishReason'] | null = null;
     if (response.status === 'incomplete')
       finishReason =
         incomplete === 'max_output_tokens' ? 'length' : 'content-filter';

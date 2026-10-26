@@ -28,10 +28,6 @@ import {
   type AgentDirectoriesPort,
   type StateStore,
 } from '@platform/interfaces';
-import {
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
-} from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
@@ -112,7 +108,6 @@ export const testProcessOptions = (
   plugins,
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
-  languageModel: fakeHostLanguageModel,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
   toolAvailability: unprobedToolAvailability,
   // The harness reports no usage; the telemetry suite starts its own.
@@ -132,9 +127,6 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
-  /** The language-model port a real root hands `processLayer`,
-   *  held here as its own local. */
-  readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
   /** The process environment the harness ConfigProvider serves; `{}` when absent. */
   readonly env?: Record<string, string>;
@@ -182,7 +174,6 @@ export function createFakeHost(
     workspaceState,
     globalState,
     secrets,
-    languageModel,
     setup,
     ...platformOverrides
   } = overrides;
@@ -195,7 +186,6 @@ export function createFakeHost(
     }),
     secrets: secrets ?? new FakeSecrets(options.secrets),
     env: options.env ?? {},
-    languageModel: languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...(setup ? { setup } : {}),
   };
 }
@@ -271,18 +261,6 @@ export const fakeHostAppState: StateStore = {
   update: (key, value) => installedHost().roots.globalState.update(key, value),
   modify: (key, change) =>
     Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),
-};
-
-/**
- * The `LanguageModel` service of every test runtime, delegating per call for
- * the same reason `fakeHostSecrets` does: the runtime is built once per
- * module instance while the host's port is swapped per test.
- */
-export const fakeHostLanguageModel: LanguageModelPort = {
-  selectModels: (selector) =>
-    installedHost().languageModel.selectModels(selector),
-  acquire: (configuration) =>
-    installedHost().languageModel.acquire(configuration),
 };
 
 /** The `AgentDirectories` service of every test runtime, delegating per call

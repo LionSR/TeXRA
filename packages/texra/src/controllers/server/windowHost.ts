@@ -8,20 +8,13 @@ import {
   Cause,
   type Context,
   Deferred,
-  Duration,
   Effect,
   FiberHandle,
-  FiberMap,
-  RcMap,
   Ref,
-  Result,
-  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-
-import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
@@ -32,8 +25,7 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { RpcClientError } from 'effect/rpc';
-import type { LanguageModelPort, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 import type { HostAnswer, HostCall, HostCapability } from './hostCalls';
 
@@ -49,9 +41,6 @@ export interface WindowHost
   extends
     Pick<HostInteractions, 'emit' | 'approvalDenied'>,
     EditorCapabilities {
-  /** The editor's language models, which the service's runs of this
-   *  project bind through this window. */
-  readonly languageModel?: LanguageModelPort;
   /** Files a task of the project wrote past the editor's own write path,
    *  as the service's announcer heard them: the host tells its own
    *  listeners (a file tree, decorations), as a task here would. */
@@ -76,57 +65,13 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.emit || host.approvalDenied || host.filesWritten
       ? (['notices'] as const)
       : []),
-    ...(host.languageModel ? (['languageModel'] as const) : []),
   ];
 }
-
-/** A failure as the window answers it: a model's failure keeps its fields,
- *  which the service rebuilds into the same `ModelError`. */
-function failureAnswer(error: unknown): HostAnswer {
-  const answer = { ok: false as const, message: toErrorMessage(error) };
-  if (!(error instanceof ModelError)) return answer;
-  const fields = Schema.decodeUnknownResult(ModelErrorFieldsSchema)(
-    toJsonValue(
-      Object.fromEntries(
-        Object.keys(ModelErrorFieldsSchema.fields).map((name) => [
-          name,
-          Reflect.get(error, name),
-        ]),
-      ),
-    ),
-  );
-  return Result.isSuccess(fields)
-    ? { ...answer, model: fields.success }
-    : answer;
-}
-
-/** The streamed call's items: a turn of the editor's model. */
-function performStream(
-  call: Extract<HostCall, { kind: 'lmStream' }>,
-  modelFor: ModelFor,
-): Stream.Stream<unknown, Error> {
-  const { turn } = call;
-  // An editor model runs only foreground turns.
-  if (turn.mode !== 'foreground')
-    return Stream.fail(
-      new Error('An editor model runs foreground turns only.'),
-    );
-  return Stream.unwrap(
-    Effect.map(modelFor(call), (model) => model.streamTurn(turn)),
-  );
-}
-
-/** The window's one acquisition of an editor model per configuration, held
- *  for the attachment: a turn prepared through it streams through it. */
-type ModelFor = (
-  call: Extract<HostCall, { kind: 'lmPrepare' | 'lmStream' }>,
-) => Effect.Effect<Model, Error>;
 
 /** Carry out one call; its value, or the window's failure. */
 function perform(
   host: WindowHost,
   call: HostCall,
-  modelFor: ModelFor,
 ): Effect.Effect<unknown, Error> {
   switch (call.kind) {
     case 'readDiagnostics':
@@ -173,20 +118,6 @@ function perform(
         host.approvalDenied?.(call.denial, call.runId);
         return null;
       });
-    case 'lmModels':
-      return (
-        host.languageModel?.selectModels(
-          call.vendor === null ? undefined : { vendor: call.vendor },
-        ) ?? unoffered(call)
-      );
-    case 'lmPrepare':
-      return Effect.flatMap(modelFor(call), (model) =>
-        model.prepareTurn(call.request),
-      );
-    // Streamed and cancelled by `attachTo`, never performed here.
-    case 'lmStream':
-    case 'cancel':
-      return unoffered(call);
   }
 }
 
@@ -279,38 +210,8 @@ function attachTo(
   const send = (id: string, answer: HostAnswer) =>
     client['host.answer']({ id, answer });
   return Effect.gen(function* () {
-    // The calls answering now, by id, so the service's `cancel` stops one.
-    const answering = yield* FiberMap.make<string>();
-    const editor = host.languageModel;
-    const acquisitions = yield* RcMap.make({
-      lookup: (configuration: string) =>
-        editor === undefined
-          ? Effect.fail(new Error('This window offers no editor models.'))
-          : editor.acquire(JSON.parse(configuration)),
-      // Kept until the attachment ends, so a turn prepared through one
-      // acquisition streams through the same one.
-      idleTimeToLive: Duration.infinity,
-    });
-    const modelFor: ModelFor = (call) => {
-      const key = JSON.stringify(call.configuration);
-      // A failed acquisition is not kept: the next turn tries again.
-      return Effect.scoped(RcMap.get(acquisitions, key)).pipe(
-        Effect.onError(() => RcMap.invalidate(acquisitions, key)),
-      );
-    };
-    const answer = (id: string, call: HostCall) => {
-      const work: Effect.Effect<
-        unknown,
-        Error | RpcClientError.RpcClientError
-      > =
-        call.kind === 'lmStream'
-          ? // Each item as it comes, then the end; the service's `cancel`
-            // interrupts it (`answering`).
-            Stream.runForEach(performStream(call, modelFor), (item) =>
-              send(id, { ok: true, value: toJsonValue(item), more: true }),
-            ).pipe(Effect.as(null))
-          : perform(host, call, modelFor);
-      return work.pipe(
+    const answer = (id: string, call: HostCall) =>
+      perform(host, call).pipe(
         // Any end but an interrupt is answered, a defect included, so the
         // service never waits on a call that died here.
         Effect.matchCauseEffect({
@@ -319,7 +220,10 @@ function attachTo(
           onFailure: (cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)
-              : send(id, failureAnswer(Cause.squash(cause))),
+              : send(id, {
+                  ok: false,
+                  message: toErrorMessage(Cause.squash(cause)),
+                }),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -329,7 +233,6 @@ function attachTo(
               ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
         ),
       );
-    };
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
@@ -349,10 +252,8 @@ function attachTo(
               ),
             ),
           );
-        if (frame.call.kind === 'cancel')
-          return FiberMap.remove(answering, frame.call.call);
         // Each call on its own fiber: a slow build never holds the next.
-        return FiberMap.run(answering, frame.id, answer(frame.id, frame.call));
+        return Effect.forkScoped(answer(frame.id, frame.call));
       }),
     );
   }).pipe(

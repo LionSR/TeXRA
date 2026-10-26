@@ -30,7 +30,7 @@ import type { RunEndResult } from './RunEndResult';
  */
 export interface RootLaunchOptions extends Pick<
   ExecuteAgentOptions,
-  'stopAfterCycle' | 'tools' | 'ownApiKeyFallback' | 'onRun' | 'onAdmitted'
+  'stopAfterCycle' | 'tools' | 'onRun' | 'onAdmitted'
 > {
   /**
    * The caller owns presentation for failures before registration; after

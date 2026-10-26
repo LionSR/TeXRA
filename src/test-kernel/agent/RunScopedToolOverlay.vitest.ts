@@ -15,10 +15,6 @@ import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
 import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
@@ -88,7 +84,6 @@ function runLayer(
   ).pipe(
     Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
     Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
-    Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
       pluginCatalogLayer(

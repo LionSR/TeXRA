@@ -47,9 +47,6 @@ TeXRA panel offers the main access choices:
    page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
-4. **Use GitHub Copilot in VS Code**: compatible models through a Copilot subscription. Open **Models →
-   Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
-   the CLI or desktop applications.
 
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 

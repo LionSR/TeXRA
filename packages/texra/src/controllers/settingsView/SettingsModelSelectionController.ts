@@ -1,22 +1,15 @@
 // Third-party imports
 import { Effect, Result } from 'effect';
-import {
-  MODEL_CONFIGS,
-  ModelProvider,
-  type ModelConfig,
-  type ReasoningEffort,
-} from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { resolveModelSource } from '@texra-ai/llm';
 import {
-  CopilotRoutes,
   getEnabledModels,
   getHelperModelName,
   setModelEnabled,
   StateReadFailed,
   StateWriteFailed,
-  type CopilotModelRoute,
   type ModelOption,
   type ModelOptionStores,
   type PlatformSecrets,
@@ -25,7 +18,6 @@ import {
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
-  type CopilotRouteInfo,
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
   type UpdateModelSelectionMessage,
@@ -48,17 +40,6 @@ interface SettingsModelSelectionControllerDeps<R> {
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
   /**
-   * The Copilot routes the editor offers now (`CopilotRoutes.discover` over
-   * the host's language-model port), for the Copilot section's route status.
-   * This controller composes the read and hands the result back as one
-   * program the host settles at its message boundary.
-   */
-  copilotRoutes: Effect.Effect<
-    ReadonlyMap<string, CopilotModelRoute>,
-    Error,
-    R
-  >;
-  /**
    * The shared model options (`readModelOptions`) for the given models — the
    * same source the CLI picker uses. Each option carries its decided route's
    * config, which the reasoning controls read.
@@ -73,7 +54,6 @@ interface SettingsModelSelectionData {
   models: ModelSelectionItem[];
   helperModel: string;
   preferShortModelNames: boolean;
-  copilotModels: CopilotRouteInfo[];
 }
 
 /** Membership form of the order the Models tab groups by. */
@@ -84,16 +64,6 @@ export class SettingsModelSelectionController<R = never> {
 
   buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
     return Effect.gen({ self: this }, function* () {
-      // A failed discovery shows every preferred route as unavailable; the
-      // port has already logged the failure at `warn`.
-      const routes = yield* this.deps.copilotRoutes.pipe(
-        Effect.orElseSucceed(
-          (): ReadonlyMap<string, CopilotModelRoute> => new Map(),
-        ),
-      );
-      const preferredModels = new Set(
-        yield* CopilotRoutes.preferred(this.deps.stores.globalState),
-      );
       const models = yield* this.buildSelectionItems();
       return {
         models,
@@ -102,7 +72,6 @@ export class SettingsModelSelectionController<R = never> {
           this.deps.stores,
           GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         ),
-        copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
       };
     });
   }
@@ -116,26 +85,6 @@ export class SettingsModelSelectionController<R = never> {
     return Effect.map(this.buildSelectionData(), (data) => ({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ...data,
-    }));
-  }
-
-  /**
-   * Route status for the Models tab Copilot section: every discovered route
-   * plus every persisted preference, labelled by the base model it serves.
-   * A preferred route absent from discovery remains visible as unavailable so
-   * the user can clear it. Routes are transports, never picker rows.
-   */
-  private buildCopilotRouteInfos(
-    routes: ReadonlyMap<string, CopilotModelRoute>,
-    preferredModels: ReadonlySet<string>,
-  ): CopilotRouteInfo[] {
-    const configs = new Map(Object.entries(MODEL_CONFIGS));
-    const names = new Set([...routes.keys(), ...preferredModels]);
-    return [...names].map((name) => ({
-      name,
-      label: configs.get(name)?.label ?? name,
-      access: routes.get(name)?.access ?? 'unavailable',
-      preferred: preferredModels.has(name),
     }));
   }
 
@@ -183,13 +132,11 @@ export class SettingsModelSelectionController<R = never> {
       // Resolve availability (personal-key, subscription) once for the
       // models this host shows, via the same shared computation the CLI picker
       // uses. Passing an explicit list keeps the picker's view authoritative and
-      // avoids re-deriving availability at render time. Copilot routes are not
-      // candidates: they are transports for the canonical base models (#9635).
+      // avoids re-deriving availability at render time.
       const configs = new Map<string, ModelConfig>(
         Object.entries(MODEL_CONFIGS),
       );
       const candidates = [...configs.values()]
-        .filter((config) => config.provider !== ModelProvider.COPILOT)
         // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
         // resolved source is outside that order can never render as a row.
         // Admitting it anyway would leak it into the serialized `models` payload
@@ -243,7 +190,7 @@ export class SettingsModelSelectionController<R = never> {
  * route can carry, the level a run sends with none saved, and, with a level
  * saved, the level a run sends for it: the saved one, or the one the policy
  * substitutes where the route cannot carry it. The row offers no choice
- * where the route carries one level or none (an editor-managed Copilot route).
+ * where the route carries one level or none.
  */
 function reasoningLevelData(
   decided: Extract<ModelOption, { config: ModelConfig }>,

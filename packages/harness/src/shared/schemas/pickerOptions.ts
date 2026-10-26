@@ -31,21 +31,13 @@ const ModelAvailabilityKindSchema = Schema.Literals([
   // be read: not a missing key, so never worded as one.
   'key-unreadable',
   'retired',
-  // Only OpenRouter serves the model, and TeXRA does not call OpenRouter.
+  // Only OpenRouter or GitHub Copilot serves the model, and TeXRA calls
+  // neither.
   'unserved',
   // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
   // The same, on the user's Grok (xAI) subscription.
   'xai-subscription-access',
-  // Editor-hosted Copilot access is keyless but distinct from ChatGPT.
-  // Permission state is reported by the VS Code host, and each kind below is
-  // `copilot-` + that host port's own access word
-  // (`LanguageModelAccessState`): the wire states the fact once, and
-  // `computeModelOptions` builds the kind from the word rather than
-  // translating between two vocabularies.
-  'copilot-allowed',
-  'copilot-consent-required',
-  'copilot-unavailable',
   // The model id survives in a host's enabled-models list but the live
   // registry no longer describes it, so nothing can route a request for it.
   'unknown-model',
@@ -85,21 +77,6 @@ export const MODEL_AVAILABILITY_STATUS = {
   'xai-subscription-access': {
     label: SUBSCRIPTION_AUTH_NAMES.grok.subscriptionLabel,
     available: true,
-    requiresKey: false,
-  },
-  'copilot-allowed': {
-    label: 'Copilot subscription',
-    available: true,
-    requiresKey: false,
-  },
-  'copilot-consent-required': {
-    label: 'Copilot approval required',
-    available: false,
-    requiresKey: false,
-  },
-  'copilot-unavailable': {
-    label: 'Copilot unavailable',
-    available: false,
     requiresKey: false,
   },
   retired: { label: 'Retired', available: false, requiresKey: false },

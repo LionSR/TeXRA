@@ -16,7 +16,7 @@ section shows a second row of sub-tabs, and each sub-tab shows one section.
 The page remembers the sub-tab you last opened while Settings stays open.
 
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
-  **Subscriptions** (ChatGPT and Grok sign-in, Copilot in VS Code), and
+  **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
 - **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
   (compaction, retries, and team coordination).
@@ -90,7 +90,7 @@ is honoured and a `true` is ignored with the same warning.
 ## Model access and credentials
 
 The **Models** page is the single home for model access: provider API keys,
-provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
+provider behavior, subscription sign-in (ChatGPT and Grok), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
 their provider rows with their usage meters. There is no TeXRA account; every
 agent ships bundled.

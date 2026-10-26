@@ -53,7 +53,6 @@
     "check:initial-build-artifacts": "corepack pnpm run check:vsix-contents && corepack pnpm run check:desktop-build-artifacts",
     "check:desktop-package": "node scripts/verify-desktop.mjs package",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
-    "check:refuted-candidates": "node scripts/check-refuted-candidates.mjs",
     "check:unexecuted-effects": "node scripts/check-unexecuted-effects.mjs",
     "check:effect-test-runs": "node scripts/check-effect-test-runs.mjs",
     "check:core-quality": "node scripts/check-core-quality.mjs",

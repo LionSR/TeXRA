@@ -24,14 +24,12 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
-  DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
   type RunId,
@@ -171,7 +169,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | LanguageModel | HttpClient.HttpClient
+  RunHistory | HttpClient.HttpClient
 > =>
   Layer.effect(
     AgentRun,
@@ -268,13 +266,10 @@ export const agentRunLayer = (
       const modelId = config.model;
       const modelConfig = ctx.modelConfig;
       // The routes this run declines: a resumed run replays the set its rows
-      // record, a fresh own-API-key fallback declines every
-      // subscription route from its first binding (the user answered a quota
-      // prompt by choosing to pay with their own key). Nothing here reads or
-      // writes the user's stored preferences.
+      // record; a fresh run declines none. Nothing here reads or writes the
+      // user's stored preferences.
       const declinedRoutes: readonly DeclinableUsageRoute[] =
-        persisted?.declinedRoutes ??
-        (ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.literals : []);
+        persisted?.declinedRoutes ?? [];
       // Each binding owns a scope forked from the run's; only the one in
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.
@@ -284,7 +279,6 @@ export const agentRunLayer = (
           modelId,
           config: modelConfig,
           backend,
-          ownApiKeyFallback: ctx.ownApiKeyFallback,
           declinedRoutes,
           textOnly,
           temperature: persona.temperature,

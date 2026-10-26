@@ -12,10 +12,8 @@ import { Effect, Schema, Stream, Struct } from 'effect';
 import {
   BackgroundCapabilitySchema,
   BindingSchema,
-  EditorBindingSchema,
-  EditorOriginSchema,
   JsonObjectSchema,
-  OriginSchema,
+  ModelOriginSchema,
   sameModelOrigin,
 } from './protocol.js';
 
@@ -23,7 +21,6 @@ import {
 import {
   ContentSchema,
   ContinuationSchema,
-  EditorContentSchema,
   EVIDENCE_PROTOCOL,
   GoogleContinuationSchema,
   PreparedHistorySchema,
@@ -148,11 +145,6 @@ const AnthropicControlsSchema = Schema.Struct({
   cache: CacheSchema,
   stopSequences: Schema.Array(Schema.String),
 });
-const EditorControlsSchema = Schema.Struct({
-  justification: Schema.String,
-  toolChoice: Schema.Literal('auto'),
-});
-
 /** Schema check: a route without temperature support must default to null. */
 function validateTemperatureDefault(configuration: {
   readonly supportsTemperature: boolean;
@@ -169,20 +161,8 @@ function validateTemperatureDefault(configuration: {
     : [];
 }
 
-/** The editor's model: its binding and defaults, which the editor host serves. */
-export const VscodeLanguageModelConfigurationSchema =
-  EditorBindingSchema.mapFields(
-    Struct.assign({
-      protocol: Schema.Literal('vscode-lm'),
-      supportsImageInput: Schema.Boolean,
-      supportsToolCalling: Schema.Boolean,
-      defaults: EditorControlsSchema.mapFields(Struct.omit(['toolChoice'])),
-    }),
-  );
-
-/** A protocol binding and its defaults, as `bindModel` builds it (or the editor host). */
+/** A protocol binding and its defaults, as `bindModel` builds it. */
 const ModelConfigurationSchema = Schema.Union([
-  VscodeLanguageModelConfigurationSchema,
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('google-interactions'),
@@ -288,11 +268,7 @@ export type GoogleInteractionsConfiguration =
 export type OpenAIResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 export type AnthropicMessagesConfiguration =
   ConfigurationOf<'anthropic-messages'>;
-/** The editor's model configuration, as the editor host serves it. */
-export type VscodeLanguageModelConfiguration =
-  (typeof VscodeLanguageModelConfigurationSchema)['Type'];
-
-const PreparedInputSchema = OriginSchema.mapFields(
+const PreparedInputSchema = ModelOriginSchema.mapFields(
   Struct.assign({
     mode: Schema.Literal('foreground'),
     system: Schema.optional(Schema.String),
@@ -318,16 +294,6 @@ const HttpTransportSchema = Schema.Struct({ kind: Schema.Literal('http') });
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = Schema.Union([
   Schema.Union([
-    EditorOriginSchema.mapFields(
-      Struct.assign({
-        ...PreparedInputSchema.mapFields(
-          Struct.pick(['mode', 'system', 'messages', 'tools']),
-        ).fields,
-        // An editor object acquisition is not an account or durable origin identity.
-        acquisitionId: Schema.String.check(Schema.isUUID()),
-        controls: EditorControlsSchema,
-      }),
-    ),
     GooglePreparedSchema,
     ResponsesPreparedSchema.mapFields(
       Struct.assign({
@@ -396,11 +362,12 @@ export type TurnUsage = typeof TurnUsageSchema.Type;
 
 const IdentitySchema = Schema.Struct({
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
-  requestedOrigin: OriginSchema,
+  requestedOrigin: ModelOriginSchema,
   returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
 
-const HttpTurnResultSchema = Schema.Struct({
+/** A completed provider turn, not a completed agent execution. */
+export const TurnResultSchema = Schema.Struct({
   kind: Schema.Literal('http'),
   ...IdentitySchema.fields,
   /** Null for a stateless Google response with no retrievable ID. */
@@ -527,26 +494,6 @@ const HttpTurnResultSchema = Schema.Struct({
     return issues;
   }),
 );
-const EditorTurnResultSchema = Schema.Struct({
-  kind: Schema.Literal('editor'),
-  requestedOrigin: EditorOriginSchema,
-  // Normal editor EOF reports none of these provider facts.
-  providerResponseId: Schema.Null,
-  returnedModel: Schema.Null,
-  modelFingerprint: Schema.Null,
-  finishReason: Schema.Null,
-  usage: Schema.Null,
-  content: EditorContentSchema,
-}).check(
-  Schema.makeFilter((result) =>
-    validateAssistantContent(result.requestedOrigin, result.content),
-  ),
-);
-/** A completed provider turn, not a completed agent execution. */
-export const TurnResultSchema = Schema.Union([
-  HttpTurnResultSchema,
-  EditorTurnResultSchema,
-]);
 /** A completed provider turn: its content, finish reason and usage. */
 export type TurnResult = typeof TurnResultSchema.Type;
 
@@ -574,11 +521,8 @@ const CompletedEventSchema = Schema.Struct({
   kind: Schema.Literal('completed'),
   result: TurnResultSchema,
 });
-const HttpCompletedEventSchema = CompletedEventSchema.mapFields(
-  Struct.assign({ result: HttpTurnResultSchema }),
-);
-/** A streamed turn's event as data, as an editor's model sends it over. */
-export const TurnEventSchema = Schema.Union([
+/** A streamed turn's event as data. */
+const TurnEventSchema = Schema.Union([
   IdentifiedEventSchema,
   DeltaEventSchema,
   CompletedEventSchema,
@@ -593,7 +537,7 @@ export const BackgroundSubmissionSchema = Schema.Union([
     operation: RemoteOperationSchema,
     returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   }),
-  HttpCompletedEventSchema,
+  CompletedEventSchema,
 ]);
 /** {@link BackgroundSubmissionSchema}'s value. */
 export type BackgroundSubmission = typeof BackgroundSubmissionSchema.Type;
@@ -605,16 +549,16 @@ const SequencedBackgroundEventSchema = Schema.Union([
   IdentifiedEventSchema.mapFields(
     Struct.assign({
       ...SequenceSchema.fields,
-      requestedOrigin: OriginSchema.mapFields(
+      requestedOrigin: ModelOriginSchema.mapFields(
         Struct.assign({ protocol: Schema.Literal('openai-responses') }),
       ),
     }),
   ),
   DeltaEventSchema.mapFields(Struct.assign(SequenceSchema.fields)),
-  HttpCompletedEventSchema.mapFields(
+  CompletedEventSchema.mapFields(
     Struct.assign({
       ...SequenceSchema.fields,
-      result: HttpTurnResultSchema.check(
+      result: TurnResultSchema.check(
         Schema.makeFilter(
           (result) => result.requestedOrigin.protocol === 'openai-responses',
         ),
@@ -629,15 +573,15 @@ export const BackgroundEventSchema = Schema.Union([
   IdentifiedEventSchema.mapFields(
     Struct.assign({
       afterSequence: Schema.Null,
-      requestedOrigin: OriginSchema.mapFields(
+      requestedOrigin: ModelOriginSchema.mapFields(
         Struct.assign({ protocol: Schema.Literal('google-interactions') }),
       ),
     }),
   ),
-  HttpCompletedEventSchema.mapFields(
+  CompletedEventSchema.mapFields(
     Struct.assign({
       afterSequence: Schema.Null,
-      result: HttpTurnResultSchema.check(
+      result: TurnResultSchema.check(
         Schema.makeFilter(
           (result) => result.requestedOrigin.protocol === 'google-interactions',
         ),

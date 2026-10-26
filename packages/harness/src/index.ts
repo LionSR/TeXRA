@@ -196,14 +196,6 @@ export {
   type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
-export {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelAccessState,
-  type LanguageModelInfo,
-  type LanguageModelPort,
-  type LanguageModelReference,
-} from '@platform/languageModel';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 // What a plugin's `availability` answers with, and reads.
@@ -236,7 +228,6 @@ export {
   type RunModelDecisionReason,
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
-export { CopilotRoutes, type CopilotModelRoute } from '@model/copilotRouting';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {
   reasoningEffortOverrides,

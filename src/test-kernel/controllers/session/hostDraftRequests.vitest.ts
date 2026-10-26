@@ -8,10 +8,6 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { AppState } from '@platform/interfaces';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
 import { UsageLog } from '@shared/usageLog';
@@ -62,9 +58,6 @@ const processStores = Layer.mergeAll(
   // The pasted-image arm's storage view; this suite exercises the recorder,
   // so nothing here reads it.
   Layer.succeed(StorageFs)({} as RootedFileSystem),
-  // `polishTextWithAI` is mocked, but the request handler's type keeps the
-  // real signature's `LanguageModel` requirement.
-  LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
   UsageLog.disabled,
   // The helper call's route gate, as `processLayer` serves it.
@@ -80,7 +73,6 @@ const storesWithoutCredential = Layer.mergeAll(
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
   Layer.succeed(StorageFs)({} as RootedFileSystem),
-  LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
   UsageLog.disabled,
   // The helper call's route gate, as `processLayer` serves it.

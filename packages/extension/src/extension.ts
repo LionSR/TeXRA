@@ -22,8 +22,6 @@ import {
   AppState,
   processLayer,
   Sessions,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelPort,
   type ProcessRuntime,
   type GlobalValues,
   WorkspaceRoots,
@@ -75,8 +73,6 @@ import { announce } from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
-import { copilotToolsLayer } from '@frontend/lm/registerLanguageModelTools';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -139,8 +135,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   extras: {
     /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
     readonly toolMissingHandler?: ToolMissingHandler;
-    /** The editor's LM bridge, served as `LanguageModel` below. */
-    readonly languageModel?: LanguageModelPort;
     /** The background service this window is a client of: reached once
      *  the runtime that serves its record exists. A window that reaches it
      *  reads the project's state there and opens no project store. */
@@ -171,22 +165,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
-  // The window's roots while its workspace is open: what Copilot's TeXRA
-  // tools run their calls over. Cleared when the activation scope closes.
-  let windowRoots: WorkspaceRoots | undefined;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         storageRoot: defaultNodeStorageRoot(),
-        // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
-          ...(workspaceRoot && {
-            copilot: copilotToolsLayer(
-              () => runtime,
-              () => windowRoots,
-            ),
-          }),
           // The Comments UI behind the `inline_comment` tool. The provider reads
           // the controller this host registers at activation, so it is a value
           // from module load; nothing about it waits on that registration.
@@ -201,9 +185,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           setup: vscodeSetupPlatform,
         }),
         secrets,
-        // The editor's LM API on the workspace path, unavailable on the
-        // credential-only one. The one defaulting site for this host.
-        languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
         agentDirectories: agentDirectoriesLayer(context.extensionPath),
         toolMissingReporter: extras.toolMissingHandler,
         usageLog: usageLogLayer({
@@ -236,14 +217,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     withProcessServices(
       runtime,
       Effect.flatMap(Sessions, (sessions) => sessions.closeAll),
-    ).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          windowRoots = undefined;
-        }),
-      ),
-      Effect.ensuring(Scope.close(projectScope, Exit.void)),
-    ),
+    ).pipe(Effect.ensuring(Scope.close(projectScope, Exit.void))),
   );
   return yield* withProcessServices(
     runtime,
@@ -296,7 +270,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
-      windowRoots = roots;
       // The once-per-process installs, in the order the shared bootstrap owns.
       yield* bootstrapHost({
         roots,
@@ -460,13 +433,11 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
-  const languageModel = createLanguageModelPort(context);
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
   const { secrets, runtime, roots, editors, sessions, reached } =
     yield* initVscodePlatform(context, workspaceRoot, {
-      languageModel,
       toolMissingHandler: vscodeToolMissingReporter,
       service: reachExtensionService(context.extensionPath),
     });
@@ -507,16 +478,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   reached: Result.Result<ServiceLink, Error>,
 ) {
   const { globalState } = roots;
-  // Compatible editors may omit the language-model API. Its events belong
-  // to this extension lifetime; shared model consumers read the port itself.
-  if (typeof vscode.lm?.selectChatModels === 'function') {
-    const changed = (): void =>
-      emitAppSignal('languageModelsChanged', undefined);
-    context.subscriptions.push(
-      vscode.lm.onDidChangeChatModels(changed),
-      context.languageModelAccessInformation.onDidChange(changed),
-    );
-  }
   // A window of the service opens no session of its own: no store, run
   // or claims. Only a window that cannot reach the service runs its
   // tasks here, and says so once. While the link is down, the service's
@@ -600,7 +561,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const settingsViewProvider = registerCommands(
     context,
-    globalState,
     progressViewProvider,
     secrets,
     runtime,
