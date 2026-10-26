@@ -592,10 +592,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // storage root never moves under a live window (#11432).
     this.own(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.runtime.runFork(
-          this.snapshot
-            .refreshWorkspaceRoots()
-            .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+        this.runtime.runSync(
+          Effect.forkIn(
+            this.snapshot
+              .refreshWorkspaceRoots()
+              .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+            this.scope,
+          ),
         );
       }),
     );
@@ -609,7 +612,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     const fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
     const refreshFiles = () => {
-      this.runtime.runFork(this.snapshot.refreshFiles);
+      this.runtime.runSync(
+        Effect.forkIn(this.snapshot.refreshFiles, this.scope),
+      );
     };
     fileWatcher.onDidCreate(refreshFiles);
     fileWatcher.onDidDelete(refreshFiles);
