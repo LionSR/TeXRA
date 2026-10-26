@@ -237,6 +237,7 @@ const deliverOne = (
     );
     const from = { kind: 'run', runId: child } as const;
     const delivered = [];
+    let refused = false;
     for (const { park, text } of held) {
       const one = yield* parentAdmission(
         session,
@@ -247,13 +248,15 @@ const deliverOne = (
       );
       if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
         return;
+      // A parent that refused it (its input closed) leaves the park held.
+      if (one.sent.kind === 'refused') refused = true;
       delivered.push(...one.rows);
     }
     if (ends === undefined) {
       // Only while the newest park still reads as waiting: a replay of a
       // cleared child writes nothing.
       const clear =
-        holdsChild && parks.at(-1)?.park.heldFor !== undefined
+        holdsChild && !refused && parks.at(-1)?.park.heldFor !== undefined
           ? [
               {
                 type: 'child.park',

@@ -369,7 +369,8 @@ export const commitPart = (
 
 /** After the transaction that queued `delivery` commits: resume the parent
  *  if the delivery obliges one and no generation here reads it
- *  (`Inbox.wake`); a refused resume is a warning, and an explicit Resume
+ *  (`Inbox.wake`). A refused resume is told to the user by the resume; a
+ *  wake that could not read the parent is a warning, and an explicit Resume
  *  delivers the result. */
 export const wakeParent = (
   session: SessionHandle,
@@ -381,7 +382,7 @@ export const wakeParent = (
     if (!(yield* session.followUps.wake(delivery.to)))
       yield* warn(
         trace,
-        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+        'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
         { parentRunId: delivery.to },
       );
   });
