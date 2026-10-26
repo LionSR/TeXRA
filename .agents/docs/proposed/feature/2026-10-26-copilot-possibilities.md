@@ -40,9 +40,11 @@ Every main commit before the removal (#14296) holds the code, for example
     so Copilot Chat and agent mode could call them (`#texra_arxiv_search`).
   - The tools were read-only and needed no run.
   - They lived in the `copilot` plugin, behind its own on/off switch.
-- **The quota fallback.** When a Copilot request ran out of quota, the run
-  could retry on the user's own key: the `copilot-fallback` credential switch
-  and the `ownKeyFallback` launch option.
+- **The quota fallback, never reachable.** The code carried a
+  `copilot-fallback` credential-switch arm and an `ownKeyFallback` launch
+  option, meant to retry a Copilot request that ran out of quota on the user's
+  own key. Nothing produced the `copilot-subscription` exhaustion reason that
+  would trigger it, so the fallback never ran.
 - **Settings UI.** The "Copilot in VS Code" section offered Grant access and
   Use Copilot, and models served this way showed a "Via Copilot" badge.
 

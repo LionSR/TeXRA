@@ -1,6 +1,7 @@
 /**
- * Subscription sign-in on the Models page: ChatGPT and Grok. Kimi Code and GLM Coding Plan are API keys, so they live on their
- * provider rows above, with their usage meters.
+ * Subscription sign-in on the Models page: ChatGPT and Grok. Kimi Code and
+ * GLM Coding Plan are API keys, so they live on their provider rows above,
+ * with their usage meters.
  */
 
 import {
