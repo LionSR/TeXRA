@@ -501,7 +501,7 @@ describe('createChatSessionController', () => {
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun(makeRunRequest('Check the draft.'));
+    Effect.runFork(ctrl.startRootRun(makeRunRequest('Check the draft.')));
     await executed.promise;
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     ctrl.stop('user');
@@ -572,7 +572,10 @@ describe('createChatSessionController', () => {
         const ctrl = createChatSessionController(
           makeInit({ session, disposables, shutdownScope }),
         );
-        ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
+        yield* Effect.forkChild(
+          ctrl.startRootRun(makeRunRequest('Delegate the calculation.')),
+          { startImmediately: true },
+        );
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
@@ -654,7 +657,7 @@ describe('createChatSessionController', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun(makeRunRequest('Check launch failure.'));
+    Effect.runFork(ctrl.startRootRun(makeRunRequest('Check launch failure.')));
 
     await expect(awaitRunSettled(session)).resolves.toBeUndefined();
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(

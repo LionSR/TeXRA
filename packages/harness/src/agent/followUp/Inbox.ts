@@ -214,7 +214,7 @@ export class Inbox {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
       if (this.disposed || this.readers.has(runId)) return Effect.void;
-      if (this.resumes.running.has(runId)) return Effect.void;
+      if (this.resumes.running.has(runId)) return this.resumes.settled(runId);
       const input = yield* this.read(runId);
       if (input.closed || !needsWake(input.rows, runId, this.port.run))
         return Effect.void;

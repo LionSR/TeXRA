@@ -480,68 +480,69 @@ export function createChatSessionController(
   const startRootRun = (
     config: AgentConfigPayload,
     runId: RunId = generateRunId(),
-  ): Effect.Effect<void> => {
-    // The slot has to be claimed before the chain that settles it exists, so
-    // the claim holds the `await` of a `Deferred` the run chain completes.
-    // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
-    // node leaves the slot pending exactly as before.
-    const claimedRun = Deferred.makeUnsafe<void, Error>();
-    const claim = Deferred.await(claimedRun);
-    // Native launch may resolve its stream on this turn. Claim first so
-    // marking the run pending cannot erase that run or a reentrant stop.
-    session.markRunPending(claim, runId);
-    // Done once the session holds the run (or the launch failed): a message
-    // typed meanwhile waits for it, so it reaches a run that exists.
-    const launched = Deferred.makeUnsafe<void>();
-    const markLaunched = Effect.sync(() =>
-      Deferred.doneUnsafe(launched, Effect.void),
-    );
-    runtime.runFork(
-      recoverRun(
-        Effect.gen(function* () {
-          yield* adoptRunConfig(config);
-          const registeredConfig =
-            yield* Schema.decodeUnknownEffect(AgentConfigSchema)(config);
-          // Each chat round mints a fresh root run id, so bash/tool-edit/
-          // super-YOLO bypass, which is keyed per stream, would otherwise
-          // reset every round even though the user is continuing the same
-          // conversation. The new round continues the previous one, so bypass
-          // resolution falls through to whatever the prior round had, unless
-          // this round sets its own explicit value.
-          const approval = launchApproval(init.approvalPolicy());
-          const run = yield* runSession.start({
-            config: registeredConfig,
-            runId,
-            continues: rootRunId.get(),
-            approval: {
-              policy: approval.approvalPolicy,
-              delegated: approval.approveDelegatedWork,
-            },
-            interactive: true,
-          });
-          rootRunId.set(run.runId);
-          moveLocalTranscriptToRun(run.runId);
-          focusRun(run.runId);
-          if (session.stopRequested) interruptActiveRun(run.runId);
-          yield* markLaunched;
-          const { outcome } = yield* run.result;
-          session.settleExitCode(claim, runOutcomeExitCode(outcome));
-        }),
-        (error) => reportRunFailure(error, claim),
-      ).pipe(
-        Effect.ensuring(
-          Effect.andThen(
-            markLaunched,
-            Effect.sync(() => session.markRunCompleted(claim)),
+  ): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      // The slot has to be claimed before the chain that settles it exists, so
+      // the claim holds the `await` of a `Deferred` the run chain completes.
+      // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
+      // node leaves the slot pending exactly as before.
+      const claimedRun = Deferred.makeUnsafe<void, Error>();
+      const claim = Deferred.await(claimedRun);
+      // Native launch may resolve its stream on this turn. Claim first so
+      // marking the run pending cannot erase that run or a reentrant stop.
+      session.markRunPending(claim, runId);
+      // Done once the session holds the run (or the launch failed): a message
+      // typed meanwhile waits for it, so it reaches a run that exists.
+      const launched = Deferred.makeUnsafe<void>();
+      const markLaunched = Effect.sync(() =>
+        Deferred.doneUnsafe(launched, Effect.void),
+      );
+      runtime.runFork(
+        recoverRun(
+          Effect.gen(function* () {
+            yield* adoptRunConfig(config);
+            const registeredConfig =
+              yield* Schema.decodeUnknownEffect(AgentConfigSchema)(config);
+            // Each chat round mints a fresh root run id, so bash/tool-edit/
+            // super-YOLO bypass, which is keyed per stream, would otherwise
+            // reset every round even though the user is continuing the same
+            // conversation. The new round continues the previous one, so bypass
+            // resolution falls through to whatever the prior round had, unless
+            // this round sets its own explicit value.
+            const approval = launchApproval(init.approvalPolicy());
+            const run = yield* runSession.start({
+              config: registeredConfig,
+              runId,
+              continues: rootRunId.get(),
+              approval: {
+                policy: approval.approvalPolicy,
+                delegated: approval.approveDelegatedWork,
+              },
+              interactive: true,
+            });
+            rootRunId.set(run.runId);
+            moveLocalTranscriptToRun(run.runId);
+            focusRun(run.runId);
+            if (session.stopRequested) interruptActiveRun(run.runId);
+            yield* markLaunched;
+            const { outcome } = yield* run.result;
+            session.settleExitCode(claim, runOutcomeExitCode(outcome));
+          }),
+          (error) => reportRunFailure(error, claim),
+        ).pipe(
+          Effect.ensuring(
+            Effect.andThen(
+              markLaunched,
+              Effect.sync(() => session.markRunCompleted(claim)),
+            ),
           ),
+          // The claim settles with the run's own exit, so a waiter reads what
+          // the run did rather than what a promise adapter made of it.
+          settleClaimOnExit(claimedRun),
         ),
-        // The claim settles with the run's own exit, so a waiter reads what
-        // the run did rather than what a promise adapter made of it.
-        settleClaimOnExit(claimedRun),
-      ),
-    );
-    return Deferred.await(launched);
-  };
+      );
+      return Deferred.await(launched);
+    });
 
   // -----------------------------------------------------------------------
   // resume

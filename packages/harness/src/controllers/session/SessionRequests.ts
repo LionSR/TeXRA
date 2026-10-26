@@ -344,34 +344,6 @@ const deleteAdmittedRun = (
   });
 };
 
-/** No `admit` wait: `submitFollowUp` refuses under the claim, in send order. */
-const sendFollowUp = (
-  deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'followUp.send' }>,
-): Effect.Effect<Outcome, RequestError> =>
-  submitFollowUp(
-    req.runId,
-    {
-      text: req.text,
-      from: { kind: 'user' },
-      ...(req.displayText == null ? {} : { displayText: req.displayText }),
-      ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
-    },
-    { session: deps.session(), hold: req.holdUntil ?? undefined },
-  ).pipe(
-    Effect.orDie,
-    Effect.flatMap((result) =>
-      result.status === 'failed'
-        ? Effect.fail(
-            new Unavailable({
-              runId: req.runId,
-              reason: describeFollowUpFailure(result.reason),
-            }),
-          )
-        : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
-    ),
-  );
-
 const handle = (
   deps: RequestDeps,
   req: Exclude<RuntimeRequest, { kind: 'followUp.send' }>,
@@ -458,7 +430,31 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
-    if (req.kind === 'followUp.send') return yield* sendFollowUp(deps, req);
+    // A message skips `admit`: `submitFollowUp` refuses under the run's claim
+    // and keeps its run's sends in order, so nothing may wait before it.
+    if (req.kind === 'followUp.send')
+      return yield* submitFollowUp(
+        req.runId,
+        {
+          text: req.text,
+          from: { kind: 'user' },
+          ...(req.displayText == null ? {} : { displayText: req.displayText }),
+          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+        },
+        { session: deps.session(), hold: req.holdUntil ?? undefined },
+      ).pipe(
+        Effect.orDie,
+        Effect.flatMap((result) =>
+          result.status === 'failed'
+            ? Effect.fail(
+                new Unavailable({
+                  runId: req.runId,
+                  reason: describeFollowUpFailure(result.reason),
+                }),
+              )
+            : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
+        ),
+      );
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a parked request has a fiber here.

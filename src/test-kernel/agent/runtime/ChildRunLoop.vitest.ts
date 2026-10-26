@@ -540,7 +540,7 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           // The fixture's parent has no run to resume: the wake a user's
-          // message owes it is refused, and the resume tells the user.
+          // message owes it starts nothing here, and the message stays queued.
           mocks.startFollowUpWake.mockReturnValue(Effect.succeed(Effect.void));
           expect(
             yield* submitFollowUp(
