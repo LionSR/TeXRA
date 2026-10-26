@@ -3,15 +3,9 @@
 // re-proposes them. config/ratchets/refuted-candidates.json holds them as
 // data; this suite pins each refused symbol's shape against it.
 //
-// It is one of two enforcement points, because a pure-tier suite has no PR
-// body: the other is .github/workflows/refuted-candidates.yml, which fails a
-// PR that touches one of these declarations without citing the ruling id.
-// This suite also proves that gate can still find every symbol, so a rename
-// fails here rather than making the workflow silently blind.
-//
-// Neither gate forbids the change. They require the author to have read the
+// It does not forbid the change. It requires the author to have read the
 // ruling: a candidate that lands on NEW evidence updates or deletes its entry
-// in the same PR.
+// in the same PR, citing the ruling id.
 
 // Node imports
 import { readFileSync } from 'node:fs';

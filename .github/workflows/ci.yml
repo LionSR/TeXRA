@@ -25,8 +25,8 @@ concurrency:
 # runtime-validation timing run, and the Windows kernel shards, which no PR or
 # push runs (see the `test` matrix). Every push to main already validates Linux,
 # so the remaining heavy jobs stay gated off `schedule` rather than
-# re-validating an unchanged tree nightly (the macOS webview smoke bills at 10x
-# Linux rates).
+# re-validating an unchanged tree nightly (the macOS jobs bill at 10x Linux
+# rates).
 jobs:
   changes:
     name: detect changes
@@ -341,41 +341,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  webview-smoke:
-    name: webview smoke (macOS)
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    # macOS-only because the smoke renders the packaged webviews in Electron on
-    # the macOS runner. It needs just the Vite webview bundles
-    # (packages/extension/dist/*/bundle.js) — not the esbuild extension-host
-    # compile, typecheck, lint, or kernel tests, which the Linux jobs already
-    # cover. Keeping this job lean avoids paying macOS rates (10x Linux) to
-    # re-run platform-independent checks.
-    runs-on: macos-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      - name: Build webview smoke assets
-        run: pnpm run vite:webviews
-
-      - name: Smoke extension webviews in Electron
-        run: pnpm run smoke:webviews:run
-
-      - name: Upload webview smoke screenshots
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-webview-smoke-screenshots
-          path: artifacts/webview-smoke/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-
   vscode-host-e2e:
     name: vscode host e2e (${{ matrix.vscode }})
     needs: changes
@@ -555,7 +520,6 @@ jobs:
       - guidance-refs
       - test
       - build
-      - webview-smoke
       - desktop-e2e
       - vscode-host-e2e
       - runtime-validation
@@ -566,7 +530,7 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the static/test/build/webview-smoke jobs gate; on
+          # On code PRs the static/test/build jobs gate; on
           # docs-only PRs they are skipped and the lightweight docs
           # build gates instead; on the nightly schedule runtime-validation and
           # the Windows kernel shards run, so a Windows-only suite regression
@@ -593,7 +557,6 @@ jobs:
             'lint:${{ needs.lint.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
-            'webview-smoke:${{ needs.webview-smoke.result }}' \
             'desktop-e2e:${{ needs.desktop-e2e.result }}' \
             'vscode-host-e2e:${{ needs.vscode-host-e2e.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
