@@ -5,7 +5,8 @@
   "scripts": {
     "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
     "sync-changelog": "cp ../CHANGELOG.md changelog.md",
-    "sync-content": "npm run sync-legal && npm run sync-changelog",
+    "sync-api": "rm -rf api && mkdir -p api && cp -r ../packages/harness/docs/api api/harness && cp -r ../packages/llm/docs/api api/llm",
+    "sync-content": "npm run sync-legal && npm run sync-changelog && npm run sync-api",
     "check:content": "node scripts/check-root-docs.mjs",
     "dev": "npm run check:content && npm run sync-content && vitepress dev .",
     "docs:build": "npm run check:content && npm run sync-content && vitepress build .",

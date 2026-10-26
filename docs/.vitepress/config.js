@@ -6,6 +6,26 @@ const base = '/';
 
 // Shared by every page that should show the guide navigation, including the
 // root-level work page, which would otherwise render with no sidebar.
+const apiSidebar = [
+  {
+    text: '@texra-ai/harness',
+    items: [
+      { text: 'harness', link: '/api/harness/' },
+      { text: 'harness/schemas', link: '/api/harness/schemas' },
+      { text: 'harness/transcript', link: '/api/harness/transcript' },
+      { text: 'harness/plugins', link: '/api/harness/plugins' },
+      { text: 'harness/node', link: '/api/harness/node' },
+    ],
+  },
+  {
+    text: '@texra-ai/llm',
+    items: [
+      { text: 'llm', link: '/api/llm/' },
+      { text: 'llm/node', link: '/api/llm/node' },
+    ],
+  },
+];
+
 const guideSidebar = [
   {
     text: 'Getting Started',
@@ -179,12 +199,14 @@ const baseConfig = {
       },
       { text: 'Launch', link: '/launch' },
       { text: 'Work', link: '/work-using-texra' },
+      { text: 'API', link: '/api/harness/', activeMatch: '/api/' },
       { text: 'Changelog', link: '/changelog', activeMatch: '/changelog' },
       { text: 'GitHub', link: 'https://github.com/LionSR/TeXRA' },
     ],
     sidebar: {
       '/guide/': guideSidebar,
       '/work-using-texra': guideSidebar,
+      '/api/': apiSidebar,
     },
     socialLinks: [{ icon: 'github', link: 'https://github.com/texra-ai' }],
     search: {
