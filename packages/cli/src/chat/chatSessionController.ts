@@ -115,7 +115,9 @@ class ChatSessionCallFailed extends Schema.TaggedError<ChatSessionCallFailed>()(
  */
 const settleClaimOnExit =
   <A, E>(claim: Deferred.Deferred<A, E>) =>
-  <R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  <R, E1 extends E>(
+    program: Effect.Effect<A, E1, R>,
+  ): Effect.Effect<A, E1, R> =>
     program.pipe(
       Effect.onExit((exit) =>
         Effect.sync(() => Deferred.doneUnsafe(claim, exit)),
@@ -133,11 +135,11 @@ const settleClaimOnExit =
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
   recover: (error: unknown) => A,
-): Effect.Effect<A, E, R> =>
+): Effect.Effect<A, never, R> =>
   program.pipe(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
-        ? Effect.failCause(cause)
+        ? Effect.interrupt
         : Effect.sync(() => recover(Cause.squash(cause))),
     ),
   );
