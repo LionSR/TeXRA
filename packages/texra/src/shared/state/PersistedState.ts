@@ -2,7 +2,8 @@ import { Result, Schema, SchemaIssue } from 'effect';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {
-  get<T>(key: string, defaultValue?: T): T;
+  /** The stored value, unvalidated; `undefined` when the key is unset. */
+  get(key: string): unknown;
   update(key: string, value: unknown): void;
 }
 
@@ -23,9 +24,8 @@ export function createWebviewStorage(hostBridge: {
   const cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
 
   return {
-    get<T>(key: string, defaultValue?: T): T {
-      const value = cache[key];
-      return value === undefined ? (defaultValue as T) : (value as T);
+    get(key) {
+      return cache[key];
     },
     update(key, value) {
       if (value === undefined) {
