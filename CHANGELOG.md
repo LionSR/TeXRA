@@ -1212,6 +1212,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **One notice when a message cannot wake its task.** A message sent to a
+  task whose agent or plugin is missing or off showed two notices, the
+  second a generic "could not be resumed automatically" that suggested a
+  Resume that could not work. Only the notice naming what blocks it shows
+  now. Pressing Resume again while a task is resuming joins that resume
+  instead of being refused, and a finished subagent's result no longer
+  reads as "waiting" after the process that ran it has exited. Leftover
+  background commands whose process exited are now cleaned up.
 - **A document task can start from media files alone.** In VS Code and
   the desktop app, a task such as audio transcription or OCR with only
   files under Media was refused with "Choose an input file first", though

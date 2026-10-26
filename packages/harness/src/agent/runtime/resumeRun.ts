@@ -8,7 +8,6 @@ import { Clock, Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
-import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 import {
   getRunRecords,
   owningCall,
@@ -17,7 +16,12 @@ import {
 import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  RUN_PHASE,
+  type ResumeRefusal,
+  type RunId,
+} from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, runRowsFrom } from '@shared/session/runRows';
@@ -55,14 +59,7 @@ export type ResumeRunResult =
        *  result; children have none. */
       readonly completion?: ResumeRunCompletion;
     }
-  /** `read_failed`, `not_parent` and `one_shot` are a follow-up's alone: a
-   *  resume reads under its claim, and only a message meets a loop. */
-  | {
-      readonly failed: Exclude<
-        FollowUpFailureReason,
-        'read_failed' | 'not_parent' | 'one_shot'
-      >;
-    };
+  | { readonly failed: ResumeRefusal };
 
 /** One resume job's answer ({@link resumeOwnRun}): its result, or that an
  *  open call of `ownedBy` owns the run, as its records said under its claim

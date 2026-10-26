@@ -20,6 +20,8 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { heldElsewhereBy } from '@shared/session/database';
+import { lastLifecycleRow } from '@shared/session/runFacts';
 import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -188,10 +190,8 @@ export const deliverHeld = (
 
 /** The child's parks in its current lifecycle, each held one with the
  *  report its turn settled with just before it; none once it ended. */
-const heldParks = (rows: readonly SessionEvent[]) => {
-  const since = rows.findLast(
-    (row) => row.type === 'run.end' || row.type === 'run.activate',
-  );
+const heldParks = (rows: readonly SessionEvent[], child: RunId) => {
+  const since = lastLifecycleRow(rows, child);
   if (since?.type === 'run.end') return [];
   return rows.flatMap((park) => {
     if (park.type !== 'child.park' || park.commit <= (since?.commit ?? 0))
@@ -219,11 +219,22 @@ const deliverOne = (
       'run.activate',
       'run.report',
     ]);
-    const parks = heldParks(rows);
+    const parks = heldParks(rows, child);
     const held = parks.filter(({ park }) => park.heldFor !== undefined);
     if (held.length === 0) return;
     const ends = parks.at(-1)?.park.ends;
-    if (ends !== undefined) yield* session.log.hold(child);
+    // The child's claim, held here or taken from an owner that died, lets
+    // this append also end the child or clear its waiting park. A live
+    // owner elsewhere keeps the claim and clears the park itself when it
+    // sees the delivery (`clearHeld`).
+    const holdsChild = yield* session.log.hold(child).pipe(
+      Effect.as(true),
+      Effect.catch((error) =>
+        ends === undefined && heldElsewhereBy(error) !== null
+          ? Effect.succeed(false)
+          : Effect.fail(error),
+      ),
+    );
     const from = { kind: 'run', runId: child } as const;
     const delivered = [];
     for (const { park, text } of held) {
@@ -239,7 +250,19 @@ const deliverOne = (
       delivered.push(...one.rows);
     }
     if (ends === undefined) {
-      yield* append(delivered);
+      // Only while the newest park still reads as waiting: a replay of a
+      // cleared child writes nothing.
+      const clear =
+        holdsChild && parks.at(-1)?.park.heldFor !== undefined
+          ? [
+              {
+                type: 'child.park',
+                aggregateId: qualifyAggregateId('run', child),
+                phase: 'parked',
+              } as const,
+            ]
+          : [];
+      yield* append([...delivered, ...clear]);
       return;
     }
     // The held last turn ends the child, through its cell, in this append:

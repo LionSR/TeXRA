@@ -61,3 +61,23 @@ export const FollowUpContentSchema = Schema.Struct({
   from: FollowUpSenderSchema,
 });
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
+
+/**
+ * Why a persisted run is not resumed here: `finished` (nothing left to
+ * continue from), `owned_elsewhere` (another live process holds it),
+ * `blocked` (an agent or plugin it needs is missing, off or not trusted
+ * here), `unusable_checkpoint` (its saved state is there but cannot be
+ * continued: never `finished`, which would say it ended normally),
+ * `earlier_build` (an earlier build wrote its rows), or `not_resumable` (it
+ * is running here, it was deleted, or its input is closed).
+ */
+export const ResumeRefusalSchema = Schema.Literals([
+  'finished',
+  'owned_elsewhere',
+  'blocked',
+  'unusable_checkpoint',
+  'earlier_build',
+  'not_resumable',
+]);
+/** One reason a resume is refused ({@link ResumeRefusalSchema}). */
+export type ResumeRefusal = typeof ResumeRefusalSchema.Type;
