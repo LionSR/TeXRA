@@ -45,21 +45,21 @@
           <label class="auth-option">
             <input type="radio" v-model="authMethod" value="manual" />
             <span
-              >📝 Enter credentials manually (Recommended for first-time
+              >Enter credentials manually (recommended for first-time
               users)</span
             >
           </label>
           <label class="auth-option">
             <input type="radio" v-model="authMethod" value="secrets" />
-            <span>🔐 Use Codespace Secrets (Best for regular use)</span>
+            <span>Use Codespace Secrets (for regular use)</span>
           </label>
         </div>
 
         <div v-if="authMethod === 'secrets'" class="secrets-info">
-          <p>✅ Make sure you've set up these secrets:</p>
+          <p>Required Codespace secrets:</p>
           <ul>
-            <li><code>OVERLEAF_EMAIL</code> - Your Overleaf email</li>
-            <li><code>OVERLEAF_TOKEN</code> - Your Overleaf Git token</li>
+            <li><code>OVERLEAF_EMAIL</code> — your Overleaf email</li>
+            <li><code>OVERLEAF_TOKEN</code> — your Overleaf Git token</li>
             <li>Repository access: <code>texra-ai/texra-workspace</code></li>
           </ul>
           <div class="secret-links">
@@ -68,14 +68,14 @@
               target="_blank"
               class="setup-link"
             >
-              🔧 Set up Codespace secrets
+              Set up Codespace secrets
             </a>
             <a
               href="https://www.overleaf.com/learn/how-to/Git_integration_authentication_tokens"
               target="_blank"
               class="setup-link"
             >
-              📚 Get Overleaf Git token
+              Get Overleaf Git token
             </a>
           </div>
         </div>
@@ -100,10 +100,10 @@
             />
           </div>
           <div class="quick-guide">
-            <h5>💡 How to get your token:</h5>
+            <h5>How to get your token:</h5>
             <ol>
               <li>In Overleaf: Menu → Git</li>
-              <li>Click "Generate token" (or use existing one)</li>
+              <li>Click "Generate token" (or use an existing one)</li>
               <li>Copy the token and paste it above</li>
             </ol>
             <small style="margin-top: 0.5rem; display: block">
@@ -152,58 +152,38 @@
           :disabled="!isValid"
           class="launch-button"
         >
-          <span v-if="!loading">🚀 Launch Codespace</span>
+          <span v-if="!loading">Launch Codespace</span>
           <span v-else>Preparing...</span>
         </button>
       </div>
 
       <div v-if="error === 'success' && setupCommand" class="success-message">
-        <h3>✅ Codespace creation page opened!</h3>
+        <h3>Codespace creation page opened</h3>
 
         <div
           v-if="repoType === 'overleaf' && authMethod === 'secrets'"
           class="auth-info"
         >
-          🔐 Using Codespace Secrets for authentication
+          Using Codespace Secrets for authentication
         </div>
 
         <div class="command-section">
           <p>
-            📋 After the Codespace starts, paste this command in the terminal:
+            After the Codespace starts, run this command in the terminal to
+            clone your repository and configure git:
           </p>
           <div class="command-box">
             <code>{{ setupCommand }}</code>
             <button @click="copyToClipboard" class="copy-button">
-              {{ copySuccess ? '✓ Copied!' : '📋 Copy' }}
+              {{ copySuccess ? 'Copied' : 'Copy' }}
             </button>
           </div>
         </div>
 
-        <div class="script-info">
-          <p>⚡ The script will:</p>
-          <ul v-if="repoType === 'overleaf' && authMethod === 'secrets'">
-            <li>Use your OVERLEAF_EMAIL and OVERLEAF_TOKEN secrets</li>
-            <li>Clone your repository automatically</li>
-            <li>Configure git for you</li>
-          </ul>
-          <ul v-else-if="repoType === 'overleaf'">
-            <li>Use the credentials you provided</li>
-            <li>Clone your repository</li>
-            <li>Configure git with your email</li>
-          </ul>
-          <ul v-else>
-            <li>Clone your repository</li>
-            <li>Configure git with your credentials</li>
-            <li>Set up the TeXRA environment</li>
-          </ul>
-        </div>
-
         <p class="bookmark-tip">
-          💡 Tip: Bookmark your Codespace URL to quickly resume work next time!
-        </p>
-        <p class="secrets-tip">
-          🔑 You can also add API keys as Codespace secrets (e.g.,
-          ANTHROPIC_API_KEY, OPENAI_API_KEY) to avoid entering them each time.
+          Bookmark your Codespace URL to resume work next time. You can also
+          save API keys (such as <code>ANTHROPIC_API_KEY</code> or
+          <code>OPENAI_API_KEY</code>) as Codespace secrets.
         </p>
       </div>
 
@@ -215,16 +195,12 @@
         <h4>How it works</h4>
         <ol>
           <li>Click "Launch Codespace" to open GitHub Codespaces</li>
-          <li>Wait for the Codespace to start (2-3 minutes first time)</li>
-          <li>Copy and run the setup command shown after clicking Launch</li>
-          <li>Your repository will be cloned and configured automatically</li>
+          <li>Wait for the container to start (~2 minutes on first launch)</li>
+          <li>
+            Run the setup command shown above to clone and configure your
+            project
+          </li>
         </ol>
-        <p
-          style="margin-top: 1rem; color: var(--vp-c-text-3); font-size: 0.9rem"
-        >
-          <strong>⏱️ Note:</strong> First-time setup takes ~2 minutes to
-          download TeXLive packages. Subsequent launches will be much faster.
-        </p>
       </div>
     </div>
   </div>
