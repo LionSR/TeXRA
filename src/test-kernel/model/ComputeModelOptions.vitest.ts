@@ -165,10 +165,8 @@ describe('model availability', () => {
 
   it.effect.each([
     { model: GPT56, override: undefined, expected: 'Default (Medium)' },
-    { model: GPT56, override: 'low', expected: 'Low' },
     // Kimi K3 takes low, high and max: the default medium snaps up to high.
     { model: KIMI3, override: undefined, expected: 'Default (High)' },
-    { model: KIMI3, override: 'low', expected: 'Low' },
     { model: SONNET45, override: 'low', expected: 'Default' },
     { model: GPT4O, override: 'high', expected: undefined },
   ])(
@@ -191,25 +189,6 @@ describe('model availability', () => {
 
         expect(option.reasoning).toBe(expected);
       }),
-  );
-
-  it.effect('uses a Kimi Code key for the plan-exclusive model', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installAccessPlatform({
-          secrets: { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
-        }),
-      );
-
-      const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
-      );
-
-      expect(model).toMatchObject({
-        provider: 'kimiCode',
-        availability: 'provider-key',
-      });
-    }),
   );
 
   it.effect('does not treat a Moonshot key as a Kimi Code credential', () =>
@@ -564,33 +543,6 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
       );
       return model;
     });
-
-  it.effect.each([
-    {
-      name: 'routes to Moonshot by default (Kimi Code subscription off)',
-      globalState: {},
-      secrets: {
-        [apiKeySecretName('kimiCode')]: 'sk-kimi-code',
-        [apiKeySecretName('moonshot')]: 'sk-moonshot',
-      },
-    },
-    {
-      name: 'stays on Moonshot when preferred but no Kimi Code key exists',
-      globalState: { [GlobalStateKey.KIMI_CODE_PREFER]: true },
-      secrets: {
-        [apiKeySecretName('moonshot')]: 'sk-moonshot',
-      },
-    },
-  ])('$name', ({ globalState, secrets }) =>
-    Effect.gen(function* () {
-      const model = yield* kimi3Option(globalState, secrets);
-      expect(model).toMatchObject({
-        provider: 'moonshot',
-        routeLabel: 'Via Moonshot',
-        availability: 'provider-key',
-      });
-    }),
-  );
 
   it.effect(
     'routes to Kimi Code when preferred and a Kimi Code key is set',

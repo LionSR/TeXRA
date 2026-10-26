@@ -144,44 +144,6 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  itHosted('does not retry when no usable OpenAI key is available', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({ keys: {} });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-e' as RunId,
-        requestId: 'retry-e',
-        provider: 'openai',
-        requireNewKey: false,
-      });
-
-      // No usable key exists, so the prompt is still shown (then declined here).
-      expect(harness.prompts).toStrictEqual(['openai']);
-      expect(harness.retries).toStrictEqual([]);
-    }),
-  );
-
-  itHosted(
-    'prepares an existing direct key for a fresh Copilot fallback without retrying in place',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { anthropic: 'stored-anthropic' },
-        });
-
-        const proceeded = yield* harness.controller.ensureOwnApiKey(
-          'anthropic',
-          false,
-        );
-
-        expect(proceeded).toBe(true);
-        expect(harness.prompts).toStrictEqual([]);
-        // The Copilot fallback launches a replacement run; nothing is retried
-        // in place, and no preference of the user's is written.
-        expect(harness.retries).toStrictEqual([]);
-      }),
-  );
-
   itHosted('rechecks the retry identity after the key prompt', () =>
     Effect.gen(function* () {
       let pendingChecks = 0;

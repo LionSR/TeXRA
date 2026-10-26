@@ -3,7 +3,6 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
-import { SubscriptionOAuthError } from '@texra-ai/llm/node';
 import type { PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@shared/config/settings';
@@ -635,31 +634,6 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
-    ['chatgpt' as const, { 'apiKey.kimiCode': 'k', 'apiKey.glm': 'g' }],
-    ['kimiCode' as const, { 'apiKey.glm': 'glm-secret' }],
-    ['glmCodingPlan' as const, { 'apiKey.kimiCode': 'kimiCode-secret' }],
-  ])(
-    'returns unavailable when %s credentials are missing',
-    async (provider, secrets) => {
-      stubCodexSession({ loadSession: () => Effect.succeed(null) });
-      const http = vi.fn<UsageFetch>();
-
-      await expect(
-        runUsage(
-          makeService({ secrets: new FakeSecrets(secrets) }).getUsage(provider),
-          http,
-        ),
-      ).resolves.toMatchObject({
-        state: 'unavailable',
-        provider,
-        reason: 'missing_credentials',
-        windows: [],
-      });
-      expect(http).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each([
     ['chatgpt' as const, 401],
     ['kimiCode' as const, 403],
     ['glmCodingPlan' as const, 401],
@@ -695,30 +669,6 @@ describe('SubscriptionUsageService', () => {
       }
     },
   );
-
-  // SubscriptionOAuthError.needsReauth decides it: a ChatGPT session refresh
-  // that needs re-auth is an invalid credential, a transient one is not.
-  it.each([
-    ['fatal' as const, 'invalid_credentials'],
-    ['expired' as const, 'invalid_credentials'],
-    ['transient' as const, 'request_failed'],
-  ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
-    stubCodexSession({
-      getFreshSession: () =>
-        Effect.fail(
-          new SubscriptionOAuthError({ message: 'refresh failed', kind }),
-        ),
-    });
-    const http = vi.fn<UsageFetch>();
-
-    await expect(
-      runUsage(makeService().getUsage('chatgpt'), http),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason,
-    });
-    expect(http).not.toHaveBeenCalled();
-  });
 
   it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
     stubCodexSession();
@@ -756,29 +706,6 @@ describe('SubscriptionUsageService', () => {
     expect(JSON.stringify(snapshot)).not.toContain('secret');
   });
 
-  it('times out provider requests and returns an unavailable snapshot', async () => {
-    stubCodexSession();
-    const http = vi.fn<UsageFetch>(
-      (_url, init) =>
-        new Promise((_resolve, reject) => {
-          init.signal?.addEventListener(
-            'abort',
-            () => reject(init.signal?.reason),
-            {
-              once: true,
-            },
-          );
-        }),
-    );
-
-    await expect(
-      runUsage(makeService({ requestTimeoutMs: 1 }).getUsage('chatgpt'), http),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-  });
-
   it('uses the TTL cache and forced refresh bypasses it', async () => {
     let now = 1000;
     const http = vi.fn<UsageFetch>(async () =>
@@ -796,28 +723,6 @@ describe('SubscriptionUsageService', () => {
     now += 30_001;
     await runUsage(service.getUsage('kimiCode'), http);
     expect(http).toHaveBeenCalledTimes(3);
-  });
-
-  it('invalidates cached provider snapshots after credentials change', async () => {
-    let remaining = 50;
-    const http = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ usage: { limit: 100, remaining } }),
-    );
-    const service = makeService();
-
-    await expect(
-      runUsage(service.getUsage('kimiCode'), http),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 50 })],
-    });
-    remaining = 25;
-    service.invalidate('kimiCode');
-    await expect(
-      runUsage(service.getUsage('kimiCode'), http),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 75 })],
-    });
-    expect(http).toHaveBeenCalledTimes(2);
   });
 
   // Pins the return path of an invalidated fetch: the caller

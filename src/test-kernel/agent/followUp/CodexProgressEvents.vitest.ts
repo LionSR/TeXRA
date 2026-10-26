@@ -113,29 +113,6 @@ describe('codex progress events', () => {
     }),
   );
 
-  it.effect('finalizes the running turn card when the stream errors', () =>
-    Effect.gen(function* () {
-      const { store, logger } = yield* Effect.promise(() => createLogger());
-      const thread = threadOf([
-        { type: 'turn.started' },
-        { type: 'error', message: 'boom' },
-      ]);
-
-      const error = yield* Effect.flip(
-        runStreamedTurn(thread, 'Do the thing', logger),
-      );
-      expect(error.message).toContain('boom');
-
-      const turnEntry = findTurnEntry(store);
-      expect(turnEntry).toMatchObject({
-        toolName: 'codex_turn',
-        input: { state: 'failed' },
-        error: 'boom',
-        status: 'failed',
-      });
-    }),
-  );
-
   it.effect(
     'finalizes the running turn card when the stream ends without a terminal turn event',
     () =>

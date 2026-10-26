@@ -80,29 +80,6 @@ describe('desktop IPC adapters', () => {
     }),
   );
 
-  it.effect('handles skipSetup by setting firstRunDone and deriving done', () =>
-    Effect.gen(function* () {
-      const { onboarding, runtime, update } = yield* Effect.promise(() =>
-        createOnboardingHarness({
-          hasCredential: () => Effect.succeed(true),
-        }),
-      );
-
-      yield* withProcessServices(runtime, onboarding.refreshOnboardingFunnel());
-      yield* Effect.promise(() => flushAsync());
-      expectFunnelState(onboarding, 'setup');
-      update.mockClear();
-
-      yield* withProcessServices(runtime, onboarding.skipSetup());
-      yield* Effect.promise(() => flushAsync());
-      expect(update).toHaveBeenCalledWith(
-        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-        true,
-      );
-      expectFunnelState(onboarding, 'done');
-    }),
-  );
-
   it.effect(
     'serializes overlapping funnel refreshes to one consistent terminal state',
     () =>

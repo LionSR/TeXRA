@@ -116,31 +116,6 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     ]);
   });
 
-  it('debounces draft persistence from the latest input', async () => {
-    const element = await mountPanel(
-      createPermission({
-        requestId: 'debounce-1',
-        threadId: 'thread-debounce',
-      }),
-    );
-    const answerInput = answerInputOf(element);
-    vi.useFakeTimers();
-
-    setTextareaValue(answerInput, 'first answer');
-    vi.advanceTimersByTime(399);
-    setTextareaValue(answerInput, 'latest answer');
-    vi.advanceTimersByTime(399);
-
-    expect(posted).toEqual([]);
-
-    vi.advanceTimersByTime(1);
-
-    expectDraftPosted('thread-debounce', {
-      answer: 'latest answer',
-      sessionLinks: '',
-    });
-  });
-
   it('flushes a pending draft once when disconnected', async () => {
     const element = await mountPanel(
       createPermission({

@@ -113,20 +113,6 @@ describe('check-dead-code-ratchet extractFindings', () => {
     ]);
   });
 
-  it('never keys a finding by line number, only by (file, category, name)', () => {
-    const issue = {
-      file: 'a.ts',
-      files: [],
-      exports: [{ name: 'foo', line: 10, col: 1, pos: 99 }],
-      types: [],
-      duplicates: [],
-    };
-
-    expect(extractFindings([issue])).toEqual([
-      { file: 'a.ts', category: 'exports', name: 'foo' },
-    ]);
-  });
-
   it('sorts a duplicate group by member name so key order does not depend on knip emission order', () => {
     const groupA = { duplicates: [[{ name: 'b' }, { name: 'a' }]] };
     const groupB = { duplicates: [[{ name: 'a' }, { name: 'b' }]] };

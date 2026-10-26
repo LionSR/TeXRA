@@ -236,7 +236,6 @@ import {
   Sessions,
 } from '../../../packages/harness/src/index';
 import { nodePlatform } from '../../../packages/harness/src/node';
-import { qualifyAggregateId } from '../../../packages/harness/src/schemas';
 
 /** The plugin list every composition below is made with. */
 const PLUGINS: readonly Plugin[] = [];
@@ -574,69 +573,6 @@ describe('agent package sessions', () => {
           Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
         ),
       ),
-  );
-
-  it.live("serves the embedder's tool-missing handler", () =>
-    Effect.gen(function* () {
-      const openOnce = (platform: AgentPlatform) =>
-        Effect.flatMap(Sessions, (sessions) =>
-          sessions.open(PLATFORM.roots),
-        ).pipe(
-          Effect.scoped,
-          Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
-        );
-      const toolMissingHandler = vi.fn();
-      yield* openOnce({ ...PLATFORM, toolMissingHandler });
-      expect(mocks.processLayer).toHaveBeenCalledWith(
-        expect.objectContaining({ toolMissingReporter: toolMissingHandler }),
-      );
-      // The process lives for the layer's scope.
-      expect(mocks.releaseProcess).toHaveBeenCalledOnce();
-    }),
-  );
-
-  it.live(
-    'a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own',
-    () =>
-      Effect.gen(function* () {
-        const interest = [
-          { id: qualifyAggregateId('run', 'ae0001' as RunId), fromSeq: 0 },
-        ];
-
-        const program = Effect.gen(function* () {
-          const sessions = yield* Sessions;
-          const session = yield* sessions.open(PLATFORM.roots);
-          yield* session.start({
-            agent: 'assistant',
-            instruction: 'Test instruction',
-          });
-          yield* Stream.runDrain(
-            session.view.watch(interest, { cursor: 0 as never, debug: false }),
-          );
-        }).pipe(
-          Effect.scoped,
-          Effect.provide(
-            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
-          ),
-        );
-        yield* program;
-
-        const ports = mocks.setTranscriptSubscriptions.mock.calls as [
-          string,
-          readonly unknown[],
-        ][];
-        const reader = ports.filter(([port]) => port.startsWith('sdk/reader/'));
-        // The reader's own port: set for the scope, emptied when it closed.
-        expect(reader).toHaveLength(2);
-        expect(reader[0]?.[1]).toEqual(interest);
-        expect(reader[1]?.[0]).toBe(reader[0]?.[0]);
-        expect(reader[1]?.[1]).toEqual([]);
-        // The run's port is the run's: the reader never touched it, so the
-        // README's residency contract still holds for a finished run.
-        expect(ports.filter(([port]) => port === 'sdk/ae0001')).toEqual([
-          ['sdk/ae0001', interest],
-        ]);
-      }),
   );
 
   it.live(

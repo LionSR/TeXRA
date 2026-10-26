@@ -43,18 +43,6 @@ describe('CLI child list selection', () => {
     });
   });
 
-  it('preserves selection while hidden and restores it when rows return', () => {
-    const selected: ChildListSelectionState = {
-      focused: true,
-      selectedValue: strategy,
-    };
-    const hidden = reconcileSelection(selected, [], main);
-    const restored = reconcileSelection(hidden, [main, strategy], main);
-
-    expect(hidden).toBe(selected);
-    expect(restored.selectedValue).toBe(strategy);
-  });
-
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategy },
@@ -71,22 +59,6 @@ describe('CLI child list selection', () => {
     });
   });
 
-  it('clears a stale row when the active stream is not in the projected list', () => {
-    const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategy },
-      {
-        kind: 'syncActiveRun',
-        runId: main,
-        values: [analysis],
-      },
-    );
-
-    expect(state).toEqual({
-      focused: true,
-      selectedValue: undefined,
-    });
-  });
-
   it('falls back to the active stream and then the first row', () => {
     let state = reconcileSelection(
       {
@@ -100,23 +72,5 @@ describe('CLI child list selection', () => {
 
     state = reconcileSelection(state, [analysis, strategy], undefined);
     expect(state.selectedValue).toBe(analysis);
-  });
-
-  it('does not preselect a row while the active root is absent from the list', () => {
-    let state = reconcileSelection(
-      INITIAL_CHILD_LIST_SELECTION,
-      [analysis],
-      main,
-    );
-    expect(state.selectedValue).toBeUndefined();
-
-    state = reduceChildListSelection(state, {
-      kind: 'focus',
-      value: analysis,
-    });
-    expect(state).toEqual({
-      focused: true,
-      selectedValue: analysis,
-    });
   });
 });

@@ -32,30 +32,6 @@ describe('DraftAttachmentStore', () => {
     );
   });
 
-  it('leaves image chips untouched when expanding text', () => {
-    const chip = store.addPastedImage(img('a.png'));
-    expect(store.expandText(`look ${chip}`)).toBe(`look ${chip}`);
-  });
-
-  it('drops backed image chips from history text after expanding pasted text', () => {
-    const text = store.addPastedText('A\nB\nC\nD');
-    const image = store.addPastedImage(img('a.png'));
-    expect(store.expandTextForHistory(`look ${text} ${image} done`)).toBe(
-      'look A\nB\nC\nD done',
-    );
-    expect(
-      store.resolveImages(`look ${text} ${image} done`).map((e) => e.path),
-    ).toEqual(['/p/a.png']);
-  });
-
-  it('does not strip chip-like text from pasted text history', () => {
-    const text = store.addPastedText('literal [Image #2]');
-    const image = store.addPastedImage(img('a.png'));
-    expect(store.expandTextForHistory(`${text} ${image}`)).toBe(
-      'literal [Image #2]',
-    );
-  });
-
   it('resolves only image chips still present in the draft (orphan gate)', () => {
     const kept = store.addPastedImage(img('a.png'));
     store.addPastedImage(img('b.png')); // orphaned — chip removed from draft

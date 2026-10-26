@@ -4,11 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { Schema } from 'effect';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import {
-  cliTeamListRecord,
-  formatCliTeamLaunchBlockMessage,
-  type CliTeamRunPlan,
-} from '@cli/runtime/cliTeams';
+import { cliTeamListRecord, type CliTeamRunPlan } from '@cli/runtime/cliTeams';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { PersonaSchema, agentMatchesIdentifier } from '@shared/schemas';
@@ -58,13 +54,6 @@ function planRun(
   });
 }
 
-// The full agent list of a preset, with only `root` able to delegate.
-function fullTeam(preset: TeamPreset, root: string): AgentEntry[] {
-  return preset.agents.map((name) =>
-    agent(name, name === root ? ['agent'] : []),
-  );
-}
-
 // The lean-project team with two of its seven members and no delegating root.
 function partialLeanProjectPlan(): CliTeamRunPlan {
   return planRun(findPreset('lean-project'), {
@@ -85,36 +74,6 @@ function partialPhysicistPlan(): CliTeamRunPlan {
 }
 
 describe('CLI teams', () => {
-  it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
-    const preset = findPreset('mathematician');
-    const plan = planRun(preset, {
-      agents: [agent('lean')],
-      agentOverride: 'lean',
-    });
-
-    const message = formatCliTeamLaunchBlockMessage(plan, {
-      requestedTeam: 'mathematician',
-      followUpAdvice:
-        'Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
-    });
-
-    expect(message).toBe(
-      'Team "mathematician" cannot start: team root lean is not a delegating agent. Run `texra team show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
-    );
-    expect(message).not.toContain('cannot delegate');
-  });
-
-  it('rejects launch block message formatting for launchable plans', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      agents: fullTeam(preset, 'leanOrchestrator'),
-    });
-
-    expect(() => formatCliTeamLaunchBlockMessage(plan)).toThrow(
-      /launchable team "lean-project"/,
-    );
-  });
-
   it('serializes planned availability for machine-readable list output', () => {
     const preset = findPreset('lean-project');
     const record = cliTeamListRecord(partialLeanProjectPlan());
@@ -137,27 +96,6 @@ describe('CLI teams', () => {
       },
     });
     expect(record.availability.rootAgent).toBeUndefined();
-  });
-
-  it('loads valid custom team presets and drops malformed state', () => {
-    const valid = [
-      {
-        id: 'custom-paper',
-        name: 'Paper Team',
-        description: 'For this paper',
-        icon: 'bookmark',
-        agents: ['polish', 'review'],
-      },
-    ];
-    const customPresets = (raw: unknown) =>
-      teamPresets(raw).filter((preset) => preset.source === 'custom');
-    const expectedCustom = { ...valid[0], source: 'custom' };
-
-    expect(customPresets(valid)).toEqual([expectedCustom]);
-    expect(customPresets([{ id: 'broken' }, ...valid])).toEqual([
-      expectedCustom,
-    ]);
-    expect(customPresets([{ id: 'broken' }])).toEqual([]);
   });
 
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {

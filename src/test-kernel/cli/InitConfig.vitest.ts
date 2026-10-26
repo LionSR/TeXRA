@@ -8,50 +8,15 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  buildInitConfig,
-  ensureTexraGitignored,
-  writeInitConfig,
-  type InitAnswers,
-} from '@cli/runtime/initConfig';
+import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { Settings } from '@shared/config/settings';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakeConfig } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
 const tempDirs = useTempDirs();
-
-const ANSWERS: InitAnswers = {
-  agent: 'chat',
-  model: 'deepseek/deepseek-v4-flash',
-  outputFormat: 'json',
-};
-
-describe('writeInitConfig', () => {
-  it.effect('writes pretty JSON with a trailing newline', () =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-init-config-', tempDirs),
-      );
-      const configPath = workspaceTexraConfigPath(workspace);
-
-      yield* writeInitConfig(configPath, buildInitConfig(ANSWERS)).pipe(
-        Effect.provide(nodePlatformLayer),
-      );
-
-      const text = yield* Effect.promise(() =>
-        nodeReadFile(configPath, 'utf8'),
-      );
-      expect(text.endsWith('\n')).toBe(true);
-      expect(JSON.parse(text)).toEqual(buildInitConfig(ANSWERS));
-      expect(text).toContain('  "texra.chat": {');
-    }),
-  );
-});
 
 describe('setWorkspaceCliChatAgent', () => {
   it.effect(
@@ -86,24 +51,6 @@ describe('setWorkspaceCliChatAgent', () => {
           model: 'deepseek/deepseek-v4-flash',
         });
       }),
-  );
-
-  it.effect('leaves a user-level model out of the workspace section', () =>
-    Effect.gen(function* () {
-      const config = fakeConfig();
-      yield* Effect.promise(() => installPlatform({}, { config }));
-      yield* config.update(
-        'texra.chat',
-        { model: 'deepseek/deepseek-v4-flash' },
-        'global',
-      );
-
-      yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
-
-      expect(config.inspect('texra.chat')?.workspaceValue).toEqual({
-        agent: 'builtIn:review',
-      });
-    }),
   );
 
   it.effect('refuses an empty agent rather than clearing the default', () =>

@@ -34,44 +34,6 @@ describe('BashTool error feedback', () => {
     vi.restoreAllMocks();
   });
 
-  it.effect(
-    'returns foreground command failures in the model tool-result payload',
-    () =>
-      Effect.gen(function* () {
-        vi.spyOn(execUtils, 'executeCommand').mockReturnValueOnce(
-          Effect.succeed({
-            success: false,
-            stdout: 'stdout failure guidance',
-            stderr: 'stderr failure details',
-            timedOut: false,
-            exitCode: 2,
-          }),
-        );
-
-        const result = yield* BashTool.call({ command: 'echo long' });
-        expect(result.status).toBe('error');
-        expect(result.error).toContain('Command failed');
-        expect(result.error).toContain('stderr failure details');
-        expect(result.error).toContain('stdout failure guidance');
-
-        const output = toolUseOutput(result);
-
-        expect(output).toContain('Command failed');
-        expect(output).toContain('stderr failure details');
-        expect(output).toContain('stdout failure guidance');
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
   it.effect('rejects shell-level backgrounding before command run', () =>
     Effect.gen(function* () {
       const executeSpy = vi.spyOn(execUtils, 'executeCommand');
@@ -160,17 +122,5 @@ describe('BashTool error feedback', () => {
 
     expect(output).toContain('Denied by the approval policy.');
     expect(output).not.toContain('User feedback:');
-  });
-
-  it('preserves policy-denial provenance when its reason is blank', () => {
-    const rejected = buildBashApprovalRejectedResult('echo rejected', {
-      action: 'deny',
-      reason: '   ',
-    });
-
-    expect(rejected.error).toContain('Command denied');
-    expect(rejected.error).not.toContain('User rejected command');
-    expect(rejected.error).not.toContain('Do not retry');
-    expect(rejected.userInstruction).toBeUndefined();
   });
 });

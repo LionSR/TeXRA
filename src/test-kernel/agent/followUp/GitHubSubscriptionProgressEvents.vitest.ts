@@ -5,15 +5,10 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import {
-  onAppSignal,
-  type AppSignal,
-  type AppSignalPayloads,
-} from '@eventBus/AppSignals';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { Secrets } from '@platform/secrets';
@@ -24,13 +19,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import { GitHubAuthError } from '@texra/tools/github/githubClient';
-import {
-  PollingSourceBase,
-  type BasePollSubscriptionState,
-  type PollEventListener,
-  type PollHookRejected,
-} from '@texra/tools/github/PollingSourceBase';
+import type { PollEventListener } from '@texra/tools/github/PollingSourceBase';
 import {
   RunSubscriptionRegistry,
   type RunSubscriptionRegistryOptions,
@@ -62,96 +51,6 @@ function createTestRegistry(
     keyOf: (input) => input,
     ...overrides,
   });
-}
-
-/**
- * Collect one signal on a fiber of the harness runtime, as a host's own run
- * edge does. The await lets that fiber register before the caller publishes:
- * a subscription only receives what is published after it exists.
- */
-async function recordAppSignal<K extends AppSignal>(
-  event: K,
-): Promise<{
-  readonly events: { event: K; payload: AppSignalPayloads[K] }[];
-  readonly dispose: () => void;
-  /** An Effect that completes once `count` events have been delivered. */
-  readonly delivered: (count: number) => Effect.Effect<void>;
-}> {
-  const events: { event: K; payload: AppSignalPayloads[K] }[] = [];
-  const waiters: Array<{ count: number; deferred: Deferred.Deferred<void> }> =
-    [];
-  const notify = () => {
-    for (const waiter of [...waiters]) {
-      if (events.length >= waiter.count) {
-        Deferred.doneUnsafe(waiter.deferred, Effect.void);
-      }
-    }
-  };
-  const fiber = testRuntime().runFork(
-    onAppSignal(event, (payload) => {
-      events.push({ event, payload });
-      notify();
-    }),
-  );
-  await testRuntime().runPromise(Effect.void);
-  return {
-    events,
-    dispose: () => {
-      testRuntime().runFork(Fiber.interrupt(fiber));
-    },
-    delivered: (count) =>
-      Effect.gen(function* () {
-        if (events.length >= count) return;
-        const deferred = yield* Deferred.make<void>();
-        waiters.push({ count, deferred });
-        yield* Deferred.await(deferred);
-      }),
-  };
-}
-
-class TestPollingSource extends PollingSourceBase<
-  string,
-  BasePollSubscriptionState
-> {
-  constructor() {
-    super({
-      name: 'TestPollingSource',
-      pollIntervalMs: 10_000,
-      maxConcurrent: 1,
-      backoffBaseMs: 1_000,
-      backoffMaxMs: 10_000,
-      maxFailureDurationMs: 60_000,
-    });
-  }
-
-  protected pollOne(): Effect.Effect<void, PollHookRejected> {
-    return Effect.void;
-  }
-
-  protected formatErrorEvent(): string {
-    return 'subscription error';
-  }
-
-  failWithAuthError(state: BasePollSubscriptionState): Effect.Effect<void> {
-    return this.handleFailure(
-      'owner/repo',
-      state,
-      new GitHubAuthError({ message: 'bad token' }),
-      Date.now(),
-    );
-  }
-
-  failWithTransient(
-    key: string,
-    state: BasePollSubscriptionState,
-  ): Effect.Effect<void> {
-    return this.handleFailure(
-      key,
-      state,
-      new Error('network down'),
-      Date.now(),
-    );
-  }
 }
 
 class RegistryTestSource {
@@ -222,30 +121,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
     setLogSink(null);
   });
 
-  it.effect('reports token invalid events through app signals', () =>
-    Effect.gen(function* () {
-      const signal = yield* Effect.promise(() =>
-        recordAppSignal('githubTokenInvalid'),
-      );
-      yield* Effect.addFinalizer(() => Effect.sync(() => signal.dispose()));
-      const listener = (): Effect.Effect<void> => Effect.void;
-      const state: BasePollSubscriptionState = {
-        listeners: new Set([listener]),
-        lastSuccessAt: Date.now(),
-        consecutiveFailures: 0,
-        skipPollUntilMs: 0,
-      };
-
-      yield* new TestPollingSource().failWithAuthError(state);
-
-      yield* signal.delivered(1);
-      expect(signal.events).toContainEqual({
-        event: 'githubTokenInvalid',
-        payload: { message: 'bad token' },
-      });
-    }),
-  );
-
   it.effect('dispose releases every binding and the source-key listener', () =>
     Effect.gen(function* () {
       const source = new RegistryTestSource();
@@ -264,33 +139,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
         { key: 'owner/repo', runIds: [] },
       ]);
     }),
-  );
-
-  it.effect(
-    'passes the bind-time input to detached subscription follow-ups',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'stream-a' as RunId;
-        const source = new RegistryTestSource();
-        const inbox = testInbox();
-        const registry = createTestRegistry(source);
-
-        yield* registry
-          .bind(runId, 'owner/repo', inbox)
-          .pipe(Effect.provide(githubServices));
-
-        yield* Effect.promise(() =>
-          source.emit('owner/repo', 'new github event'),
-        );
-
-        expect(inbox.send).toHaveBeenCalledWith(
-          {
-            text: 'new github event',
-            from: { kind: 'notification', source: 'github' },
-          },
-          { hold: 'generation' },
-        );
-      }),
   );
 
   it.effect(

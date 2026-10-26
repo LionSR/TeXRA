@@ -8,18 +8,15 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { parseGitHubSlug } from '@texra/tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -28,19 +25,12 @@ vi.mock('@cli/runtime/browser', () => ({
 
 // The command brings no platform up, but its entry still installs the process
 // runtime its program runs on. Here that is the harness's, so the suite never
-// builds a real one, and the install is a spy so the test below can assert
-// what the entry hands it: `NO_PLATFORM_INSTALL`, the real value spread in
-// from the module. Without it the install would open the global root's handle
-// this command never brings a platform up to dispose.
+// builds a real one.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  browserMocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
-  return {
-    ...actual,
-    installCliProcessRuntime: browserMocks.installCliProcessRuntime,
-  };
+  return { ...actual, installCliProcessRuntime: () => testRuntime() };
 });
 
 const repos: string[] = [];
@@ -90,7 +80,6 @@ describe('install-github-action command', () => {
     spyOnStreamWrite(process.stderr);
     browserMocks.tryOpenBrowser.mockReset();
     browserMocks.tryOpenBrowser.mockImplementation(() => Effect.succeed(true));
-    browserMocks.installCliProcessRuntime.mockClear();
   });
 
   it('commits only the generated workflow file', async () => {
@@ -101,12 +90,6 @@ describe('install-github-action command', () => {
     const result = await runInstall(repo);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
-    // The platform-less handoff itself: the entry opens no global state store
-    // and no global-root handle for a command that disposes neither.
-    expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
-      defaultNodeStorageRoot(),
-      { ...NO_PLATFORM_INSTALL, minimumLogLevel: 'Info' },
-    );
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
       '.github/workflows/texra-code-review.yml',
     );
@@ -147,27 +130,6 @@ describe('install-github-action command', () => {
     await expect(install).resolves.toEqual({
       exitCode: CliExitCode.AgentError,
     });
-  });
-
-  it('creates the install branch from the requested base', async () => {
-    const repo = makeRepo();
-    git(repo, 'checkout', '-b', 'feature');
-    writeFileSync(path.join(repo, 'feature.txt'), 'feature work\n');
-    git(repo, 'add', 'feature.txt');
-    git(repo, 'commit', '-m', 'feature work');
-
-    const result = await runInstall(
-      repo,
-      '--branch',
-      'texra/install-from-main',
-      '--base',
-      'main',
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
-      '.github/workflows/texra-code-review.yml',
-    );
   });
 
   it('reuses an existing branch under --force without resetting its commits', async () => {

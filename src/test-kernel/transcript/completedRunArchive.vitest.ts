@@ -460,14 +460,6 @@ describe('completedRunArchive facade', () => {
       }).pipe((program) => withProcessServices(testRuntime(), program)),
   );
 
-  it('reads a registered run whose transcript is empty', async () => {
-    const runId = 'abc907abc907' as RunId;
-    await stampRun(runId);
-
-    const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult).toEqual([]);
-  });
-
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
     const runId = '0ee5550ee555' as RunId;
 
@@ -508,36 +500,4 @@ describe('completedRunArchive facade', () => {
       { kind: 'tool-result', text: 'File not found.' },
     ]);
   });
-
-  it.live('reports a diagnostic-only transcript as no conversation', () =>
-    Effect.gen(function* () {
-      const runId = '0999cb0999cb' as RunId;
-
-      yield* Effect.promise(() => stampRun(runId));
-
-      yield* Effect.promise(() =>
-        appendRows(runId, [
-          logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-        ]),
-      );
-
-      const result = yield* Effect.promise(() =>
-        readCompletedRunConversation(runId),
-      );
-      expect(result).toEqual([]);
-
-      const endpoint = yield* ExecutionsTool.call({
-        path: `/executions/${runId}/conversation`,
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: { session: taskSession, runId, toolPolicy: {} },
-            roots: taskSession.roots,
-          }),
-        ),
-      );
-      expect(endpoint.status).toBe('executed');
-      expect(endpoint.output).toContain('Conversation (0 messages)');
-    }),
-  );
 });

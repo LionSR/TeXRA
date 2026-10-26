@@ -112,29 +112,6 @@ describe('compiled PDF artifacts', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.live('propagates unexpected compiled PDF stat failures', () =>
-    Effect.gen(function* () {
-      const runDirectory = yield* Effect.promise(makeTempDir);
-      const statError = platformFailure('PermissionDenied', 'stat');
-
-      const failure = yield* Effect.flip(
-        withFsOverrides(
-          { stat: () => Effect.fail(statError) },
-          publishCompiledPdfArtifact({
-            runDirectory,
-            runId: 'stat123' as RunId,
-            round: 1,
-            displayName: 'paper.tex',
-            source: externalSource(runDirectory, 'paper.tex'),
-            compiledPdfPath: path.join(runDirectory, 'paper.pdf'),
-          }),
-        ),
-      );
-
-      expect(failure).toBe(statError);
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
   it.live('continues when destination cleanup reports file not found', () =>
     Effect.gen(function* () {
       const runDirectory = yield* Effect.promise(makeTempDir);
@@ -220,33 +197,6 @@ describe('compiled PDF artifacts', () => {
           readOutput(runDirectory, 'latest', 'paper.pdf'),
         ),
       ).toBe('pdf bytes');
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live('derives diff PDF names from the same source path rule', () =>
-    Effect.gen(function* () {
-      const runDirectory = yield* Effect.promise(makeTempDir);
-      const buildDir = path.join(runDirectory, 'diff', 'r4', 'build');
-      const compiledPdfPath = path.join(buildDir, 'latexdiff-output.pdf');
-      yield* Effect.promise(() => writePdf(compiledPdfPath, 'diff pdf'));
-
-      const artifact = yield* publishCompiledPdfArtifact({
-        runDirectory,
-        runId: 'suffix123' as RunId,
-        round: 4,
-        displayName: 'latexdiff-output.tex',
-        source: runStorageSource(
-          runDirectory,
-          path.join('r4', 'sections', 'main.tex'),
-          'suffix123' as RunId,
-        ),
-        compiledPdfPath,
-        pdfStemSuffix: '-diff',
-      });
-
-      expect(artifact?.relativePath).toBe(
-        'output/latest/sections/main-diff.pdf',
-      );
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 

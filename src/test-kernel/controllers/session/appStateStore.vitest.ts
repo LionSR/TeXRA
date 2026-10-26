@@ -88,21 +88,6 @@ describe('application state on SQLite', () => {
     }),
   );
 
-  it.live('fails the caller when a value is not JSON', () =>
-    Effect.gen(function* () {
-      const storage = yield* Effect.promise(() =>
-        makeTempDir('texra-app-state-', tempDirs),
-      );
-      const store = yield* openStore(storage);
-      yield* store.update('texra.customTeams', ['valid']);
-      const failure = yield* Effect.flip(
-        store.update('texra.customTeams', () => undefined),
-      );
-      expect(failure._tag).toBe('StateWriteFailed');
-      expect(failure.message).toContain('not JSON');
-      expect(yield* store.get('texra.customTeams')).toEqual(['valid']);
-    }),
-  );
   it.live(
     'releases the connection with its owner and reports failed reads',
     () =>

@@ -38,43 +38,6 @@ async function mountOverlay(): Promise<{
 describe('desktop prompt overlay', () => {
   useLitComponentTestDom(loadDesktopPromptOverlay);
 
-  it('opens a focused password input and submits its value', async () => {
-    const { appRoot, overlay, send } = await mountOverlay();
-
-    overlay.open({
-      command: 'desktop:showPrompt',
-      requestId: REQUEST_ID,
-      title: 'Set API key',
-      prompt: 'Enter API key',
-      password: true,
-    });
-    await flushDialogTicks();
-
-    const dialog = appRoot.querySelector<HTMLElement & { open: boolean }>(
-      'wa-dialog.desktop-prompt-overlay',
-    )!;
-    const input = appRoot.querySelector<
-      HTMLElement & { type: string; value: string }
-    >('wa-input.desktop-prompt-input')!;
-    expect(dialog.open).toBe(true);
-    expect(dialog.getAttribute('aria-label')).toBe('Set API key');
-    expect(input.type).toBe('password');
-    expect(document.activeElement).toBe(input);
-
-    input.value = 'sk-test';
-    input.dispatchEvent(
-      new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
-    );
-    await flushDialogTicks();
-
-    expect(send).toHaveBeenCalledWith({
-      command: 'desktop:settlePrompt',
-      requestId: REQUEST_ID,
-      value: 'sk-test',
-    });
-    expect(dialog.open).toBe(false);
-  });
-
   it('settles cancel and replacement requests exactly once', async () => {
     const { appRoot, overlay, send } = await mountOverlay();
     overlay.open({

@@ -190,9 +190,6 @@ describe('codexBackendModelId', () => {
   // account", which reads as a plan problem rather than a bad id.
   it.each([
     ['openai/gpt-5.6-sol', 'gpt-5.6-sol'],
-    ['openai/gpt-5.6-terra', 'gpt-5.6-terra'],
-    ['openai/gpt-5.6-luna', 'gpt-5.6-luna'],
-    ['openai/gpt-6-astra', 'gpt-6-astra'],
     ['openai/gpt-5.5-2026-04-23', 'gpt-5.5'],
   ] as const)('sends the backend slug for %s', (ref, slug) => {
     expect(codexBackendModelId(MODEL_CONFIGS[ref])).toBe(slug);

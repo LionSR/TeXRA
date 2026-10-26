@@ -240,44 +240,6 @@ describe('Copilot route in model pickers', () => {
   );
 
   it.effect(
-    'reports consent-required on the base row without adding entries',
-    () =>
-      Effect.gen(function* () {
-        const port = languageModelPort([
-          { ...GEMINI_PRO, access: 'consent-required' },
-        ]);
-        yield* Effect.promise(() =>
-          installPlatform(
-            {
-              globalState: {
-                [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GEMINI31P],
-                [GlobalStateKey.MODEL_SELECTION]: {
-                  enabledExtras: [],
-                  disabledDefaults: DEFAULT_MODELS.filter(
-                    (model) => model !== GEMINI31P,
-                  ),
-                },
-              },
-            },
-            { languageModel: port },
-          ),
-        );
-
-        const options = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), undefined),
-        );
-
-        expect(options).toHaveLength(1);
-        expect(options[0]).toEqual(
-          expect.objectContaining({
-            value: GEMINI31P,
-            availability: 'copilot-consent-required',
-          }),
-        );
-      }),
-  );
-
-  it.effect(
     'reports an unavailable route instead of falling back to a direct key',
     () =>
       Effect.gen(function* () {

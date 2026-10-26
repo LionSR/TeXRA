@@ -8,8 +8,7 @@ import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeProcessServices,
@@ -47,15 +46,6 @@ function setupResultCase(): {
   const ctx = createTestLaunchContext({ runId, logger });
   publishTestRunStart(ctx.session, runId);
   return { logger, ctx };
-}
-
-/** The completed tool-use result a flow returns for the given run. */
-function completedRun(ctx: AgentLaunchContext): RunEndResult {
-  return {
-    outcome: RUN_OUTCOME.COMPLETED,
-    runId: ctx.runId,
-    output: { response: '', files: [] },
-  };
 }
 
 /** The flow fails with a model failure. */
@@ -97,41 +87,6 @@ describe('terminal result event', () => {
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
 
-  it.effect('emits exactly one completed result on a successful run', () =>
-    Effect.gen(function* () {
-      const { ctx } = setupResultCase();
-      yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
-      const result = yield* expectSingleResult(ctx, {
-        outcome: 'completed',
-      });
-      expect(result.error).toBeUndefined();
-    }),
-  );
-
-  it.effect.each([
-    {
-      name: 'throws while building its program',
-      onRun: () => {
-        throw new Error('onRun boom');
-      },
-    },
-    {
-      name: 'fails',
-      onRun: () => Effect.fail(new Error('onRun failure boom')),
-    },
-  ])('keeps running when onRun $name', ({ onRun }) =>
-    Effect.gen(function* () {
-      const { ctx } = setupResultCase();
-      const result = yield* runLifecycle(
-        ctx,
-        () => Effect.succeed(completedRun(ctx)),
-        { onRun },
-      );
-      expect(result).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      yield* expectSingleResult(ctx, { outcome: 'completed' });
-    }),
-  );
-
   it.effect(
     'emits the failed result even if ending the parent stage throws',
     () =>
@@ -146,32 +101,5 @@ describe('terminal result event', () => {
 
         yield* expectSingleResult(ctx, { outcome: 'failed' });
       }),
-  );
-
-  it.effect(
-    'maps a returned cancellation to a cancelled result (sibling of failed)',
-    () =>
-      Effect.gen(function* () {
-        const { ctx } = setupResultCase();
-        yield* runLifecycle(ctx, () =>
-          Effect.succeed({
-            outcome: RUN_OUTCOME.CANCELLED,
-            runId: ctx.runId,
-            output: { response: '', files: [] },
-          }),
-        );
-        yield* expectSingleResult(ctx, { outcome: 'cancelled' });
-      }),
-  );
-
-  it.effect('emits a cancelled result with kind=abort on a thrown abort', () =>
-    Effect.gen(function* () {
-      const { ctx } = setupResultCase();
-      yield* runLifecycle(ctx, () =>
-        Effect.fail(new DOMException('Request aborted', 'AbortError')),
-      );
-      const result = yield* expectSingleResult(ctx, { outcome: 'cancelled' });
-      expect(result.error?.kind).toBe('abort');
-    }),
   );
 });

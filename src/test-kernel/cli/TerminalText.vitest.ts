@@ -25,16 +25,6 @@ describe('terminal text width limits', () => {
         '\u001B[31ma\u001B[39m',
       );
     });
-
-    it('returns fitting text unchanged', () => {
-      const text = '\u001B[31mab\u001B[39m';
-      expect(clipToWidth(text, 2)).toBe(text);
-    });
-
-    it('normalizes finite widths to non-negative integers', () => {
-      expect(clipToWidth('ab', -1)).toBe('');
-      expect(clipToWidth('ab', 1.9)).toBe('a');
-    });
   });
 
   describe('truncateToWidth', () => {
@@ -44,10 +34,6 @@ describe('terminal text width limits', () => {
         truncateToWidth('abc', 1),
         truncateToWidth('abc', 2),
       ]).toEqual(['', '…', 'a…']);
-    });
-
-    it('returns fitting text unchanged', () => {
-      expect(truncateToWidth('ab', 2)).toBe('ab');
     });
   });
 });

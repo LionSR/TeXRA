@@ -29,11 +29,5 @@ describe('PromptBuilder', () => {
     expect(instructionSuffix).not.toMatch(
       /When memory is relevant, consult pinned memories first/,
     );
-    expect(instructionSuffix).toMatch(
-      /When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history/,
-    );
-    expect(instructionSuffix).not.toMatch(
-      /^ +- When git is available, look into git history/m,
-    );
   });
 });

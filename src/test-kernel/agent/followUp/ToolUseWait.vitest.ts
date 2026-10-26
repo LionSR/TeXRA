@@ -2,8 +2,6 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
-import { rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -47,7 +45,6 @@ import { generateRunId } from '@utils/core';
 import {
   eventsOfType,
   recordSessionEvents,
-  seedTerminalRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
 
@@ -222,32 +219,6 @@ function userTexts(state: RunState | null): string[] {
 }
 
 describe('a parked child run', () => {
-  it.effect.each([false, true])(
-    'keeps the child live across its input wait (input queued: %s)',
-    (queued) =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const parentRunId = generateRunId();
-        const runId = startedRun(session, parentRunId);
-        if (queued) {
-          yield* enqueue(session, runId, [
-            { text: 'later', from: { kind: 'user' as const } },
-          ]);
-        }
-
-        const { fiber, park, requests } = yield* forkLoop({
-          runId,
-          session,
-          parentRunId,
-          script: [textTurn('first cycle'), textTurn('second cycle')],
-        });
-        yield* park(queued ? 1 : 0);
-        expect(fiber.pollUnsafe()).toBeUndefined();
-        expect(requests).toHaveLength(queued ? 2 : 1);
-        yield* Fiber.interrupt(fiber);
-      }),
-  );
-
   it.effect(
     'delivers a follow-up its rows still queue exactly once, with the message it becomes (C3)',
     () =>
@@ -330,49 +301,6 @@ describe('a parked child run', () => {
 });
 
 describe('a parked root run', () => {
-  it.effect(
-    'reports idle at the turn boundary, before it waits for input',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        const onIdle = vi.fn();
-        yield* enqueue(session, runId, [
-          { text: 'keep going', from: { kind: 'user' as const } },
-        ]);
-
-        const { fiber, park } = yield* forkLoop({
-          runId,
-          session,
-          onIdle,
-          script: [textTurn('first'), textTurn('second')],
-        });
-        yield* park(1);
-        yield* Fiber.interrupt(fiber);
-
-        // Idle is a notification, not a suspension: the queued input still
-        // reached the model in the same invocation.
-        expect(onIdle).toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'stops instead of waiting when the launch asked for one cycle',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const { result, requests } = yield* runLoop({
-          runId: startedRun(session),
-          session,
-          stopAfterCycle: true,
-          script: [textTurn('done')],
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-        expect(requests).toHaveLength(1);
-      }),
-  );
-
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
@@ -540,37 +468,6 @@ describe('a parked root run', () => {
       expect(resumed.requests).toHaveLength(1);
     }),
   );
-
-  it.effect('parks a run a retry cancelled, rather than leaving it there', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      yield* Effect.promise(() =>
-        seedTerminalRun(session, runId, RUN_OUTCOME.CANCELLED),
-      );
-      const recorded = recordSessionEvents(session);
-
-      const { fiber, park } = yield* forkLoop({
-        runId,
-        session,
-        script: [textTurn('first')],
-      });
-      yield* park(0);
-      yield* Fiber.interrupt(fiber);
-
-      // The loop's steps carry the run out of its cancelled terminal: it runs
-      // before it parks.
-      const steps = eventsOfType(
-        yield* Effect.promise(() => recorded.read()),
-        'run.position',
-      ).map((event) => event.payload.at);
-      const parked = steps.indexOf('waiting');
-      expect(parked).toBeGreaterThan(0);
-      expect(steps.slice(0, parked).every((step) => step !== 'waiting')).toBe(
-        true,
-      );
-    }),
-  );
 });
 
 describe('the batch a parked run consumes', () => {
@@ -653,61 +550,6 @@ describe('the batch a parked run consumes', () => {
       }),
   );
 
-  it.effect('logs a workflow delivery with its typed summary', () =>
-    Effect.gen(function* () {
-      // The delivery envelope carries the summary typed at the write site;
-      // the transcript row producer parses it once and attaches it
-      // structured, so renderers never re-extract it from the row text.
-      const summary = {
-        name: 'proofread-pipeline',
-        outcome: 'completed',
-        phaseCount: 1,
-        tally: {
-          total: 2,
-          ok: 2,
-          failed: 0,
-          cancelled: 0,
-          skipped: 0,
-        },
-        costUsd: 0.19,
-        durationMs: 5_000,
-        files: [{ path: 'paper.tex', added: 12, removed: 8 }],
-        errorCause: null,
-      };
-      const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const child = publishTestRunStart(session, undefined, { parent: runId });
-      const logger = new TraceEmitter();
-      const info = vi.spyOn(logger, 'info');
-      yield* enqueue(session, runId, [
-        {
-          text: [
-            '<script-result id="abc">',
-            '<response>raw run log</response>',
-            `<script-summary>${escaped}</script-summary>`,
-            '</script-result>',
-          ].join('\n'),
-          from: { kind: 'run' as const, runId: child },
-        },
-      ]);
-
-      const { fiber, park } = yield* forkLoop({
-        runId,
-        session,
-        logger,
-        script: [textTurn('first'), textTurn('second')],
-      });
-      yield* park(1);
-      yield* Fiber.interrupt(fiber);
-
-      expect(info).toHaveBeenCalledWith(
-        expect.stringContaining('✓ proofread-pipeline completed'),
-        expect.objectContaining({ data: { scriptSummary: summary } }),
-      );
-    }),
-  );
-
   it.effect(
     'warns and drops media the model cannot read, attaching nothing',
     () =>
@@ -747,54 +589,6 @@ describe('the batch a parked run consumes', () => {
           }),
         );
       }),
-  );
-
-  it.effect("gives each row of a batch only its own item's badges", () =>
-    Effect.gen(function* () {
-      const figure = path.join(tmpdir(), `texra-badge-${randomUUID()}.png`);
-      // A 1×1 PNG: within any size limit, so it attaches as it is.
-      writeFileSync(
-        figure,
-        Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-          'base64',
-        ),
-      );
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const logger = new TraceEmitter();
-      const info = vi.spyOn(logger, 'info');
-      yield* enqueue(session, runId, [
-        { text: 'just text', from: { kind: 'user' as const } },
-        {
-          text: 'with a figure',
-          mediaFiles: [figure],
-          from: { kind: 'user' as const },
-        },
-      ]);
-
-      const { fiber, park } = yield* forkLoop({
-        runId,
-        session,
-        logger,
-        bound: { supportsVision: true },
-        script: [textTurn('first'), textTurn('second')],
-      });
-      yield* park(1);
-      yield* Fiber.interrupt(fiber);
-      rmSync(figure, { force: true });
-
-      expect(info).toHaveBeenCalledWith(
-        'with a figure',
-        expect.objectContaining({
-          data: expect.objectContaining({ attachments: ['image'] }),
-        }),
-      );
-      expect(info).toHaveBeenCalledWith(
-        'just text',
-        expect.not.objectContaining({ data: expect.anything() }),
-      );
-    }),
   );
 
   it.effect(

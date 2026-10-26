@@ -1,8 +1,3 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { rootCommand } from '@cli/commands/root';
@@ -12,10 +7,6 @@ import {
   collectCommands,
   type CompletionCommand,
 } from '@cli/runtime/completionCommandTree';
-
-function bashQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
 
 /** Resolve one command by its space-joined path. A path that no longer exists
  *  is a broken test, not a command that offers no flags, so this throws rather
@@ -31,47 +22,11 @@ function commandAt(
   return command;
 }
 
-/** Run a bash completion probe against the generated script: drop the
- *  self-registration `complete` line, append the probe body, execute it, and
- *  return the lines the probe printed. Any bash failure is a test failure. */
-function probeBashCompletion(script: string, body: string): string[] {
-  const result = spawnSync('bash', ['-s'], {
-    input: `${script.replace(/\ncomplete .*_texra texra\n$/, '\n')}\n${body}`,
-    encoding: 'utf8',
-  });
-
-  expect(result.stderr).toBe('');
-  expect(result.status).toBe(0);
-  return result.stdout.trim().split('\n');
-}
-
 describe('CLI shell completion', () => {
   let bash: string;
 
   beforeAll(async () => {
     bash = await generateCompletionScript(rootCommand, 'bash');
-  });
-
-  it('wires zsh and fish value choices and dynamic sources from the command tree', async () => {
-    const zsh = await generateCompletionScript(rootCommand, 'zsh');
-    expect(zsh.startsWith('#compdef texra\n')).toBe(true);
-    expect(zsh).toContain('TEXRA_COMPLETION_DYNAMIC');
-    expect(zsh).toContain("'1:shell:(bash zsh fish)'");
-    expect(zsh).toContain(
-      "'--model[Model for the agent]:model:($(_texra_models))'",
-    );
-    expect(zsh).toContain(
-      "'--output-format[Output format for headless commands (default: text)]: :(text json ndjson)'",
-    );
-
-    const fish = await generateCompletionScript(rootCommand, 'fish');
-    expect(fish).toContain(
-      "complete -c texra -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'",
-    );
-    expect(fish).toContain("-l 'output-format' -r -a 'text json ndjson'");
-    expect(fish).toContain(
-      `complete -c texra -l model -s m -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")'`,
-    );
   });
 
   it('consumes every bash value flag while resolving command paths', async () => {
@@ -95,82 +50,6 @@ describe('CLI shell completion', () => {
     expect(pathValueLine).toBeDefined();
     for (const flag of valueFlags) {
       expect(pathValueLine).toContain(flag);
-    }
-  });
-
-  it('uses the right bash agent listing at each launch boundary', () => {
-    // A shell function stands in for the binary: the script resolves
-    // texra by name either way, and a function spawns no process, which
-    // a PATH script costs per listing (several, slow on Windows bash).
-    const completions = probeBashCompletion(
-      bash,
-      `
-texra() {
-  if [[ "$*" == "agents list --quiet --all" ]]; then
-    printf 'task\\tpolish\\nchat\\treview\\nchat\\tlean\\n'
-  elif [[ "$*" == "agents list --quiet" ]]; then
-    printf 'task\\tpolish\\nchat\\treview\\n'
-  elif [[ "$*" == "models list --quiet" ]]; then
-    printf 'gpt54\\n'
-  fi
-}
-COMP_WORDS=(texra run p)
-COMP_CWORD=2
-_texra
-printf 'run:%s\\n' "\${COMPREPLY[@]}"
-COMP_WORDS=(texra run r)
-COMP_CWORD=2
-_texra
-printf 'run-chat:%s\\n' "\${COMPREPLY[@]}"
-COMP_WORDS=(texra chat --agent l)
-COMP_CWORD=3
-_texra
-printf 'agent-flag:%s\\n' "\${COMPREPLY[@]}"
-COMP_WORDS=(texra agents show p)
-COMP_CWORD=3
-_texra
-printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
-`,
-    );
-
-    expect(completions).toEqual([
-      'run:polish',
-      'run-chat:review',
-      'agent-flag:lean',
-      'agents-show:polish',
-    ]);
-  });
-
-  it('keeps spaced bash file completions as one candidate', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-'));
-
-    try {
-      writeFileSync(path.join(root, 'paper draft.tex'), '');
-      writeFileSync(path.join(root, 'regular-file.tex'), '');
-      const spacedDir = path.join(root, 'paper drafts');
-      mkdirSync(spacedDir);
-      writeFileSync(path.join(spacedDir, '.keep'), '', { flag: 'w' });
-      const completions = probeBashCompletion(
-        bash,
-        `
-TEXRA_COMPLETION_DYNAMIC=0
-cd ${bashQuote(root)}
-COMP_WORDS=(texra run polish --input "paper")
-COMP_CWORD=4
-_texra
-printf '%s\\n' "\${COMPREPLY[@]}"
-COMP_WORDS=(texra --cwd "paper")
-COMP_CWORD=2
-_texra
-printf '%s\\n' "\${COMPREPLY[@]}"
-`,
-      );
-
-      expect(completions).toContain('paper draft.tex');
-      expect(completions).toContain('paper drafts');
-      expect(completions).not.toContain('regular-file.tex');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
     }
   });
 

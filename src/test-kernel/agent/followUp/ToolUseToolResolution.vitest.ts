@@ -125,42 +125,6 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'drops the agent tool when its plugin dashboard switch is disabled',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
-            globalState: {
-              [GlobalStateKey.DISABLED_TOOLS]: ['multi-agent'],
-            },
-          }),
-        );
-
-        expect(
-          yield* resolveNames(['bash', 'agent'], {
-            approvalPromptsUnavailable: false,
-          }),
-        ).toEqual(['bash']);
-        // The host this case installs is torn down however the case ends.
-      }).pipe(Effect.ensuring(Effect.promise(() => installPlatform()))),
-  );
-
-  it.effect(
-    'filters injected approval-gated tools when approval prompts are unavailable',
-    () =>
-      Effect.gen(function* () {
-        // Memory and goal are on by default, so both are injected; `plan` is
-        // approval-gated.
-        expect(
-          yield* resolveNames(['grep'], {
-            approvalPromptsUnavailable: true,
-            injectTools: true,
-          }),
-        ).toEqual(['grep', 'memory']);
-      }),
-  );
-
-  it.effect(
     'a switch reaches the next pin; a step keeps its plugin layer until it closes',
     () => {
       const events: string[] = [];

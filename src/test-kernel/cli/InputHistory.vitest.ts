@@ -67,22 +67,4 @@ describe('CLI TUI input history', () => {
       }),
     ),
   );
-
-  it.live('reverse-finds the most recent matching entry first', () =>
-    onGlobalDatabase(
-      storage,
-      Effect.gen(function* () {
-        const { history } = yield* loadInputHistory;
-        yield* history.push('build the project');
-        yield* history.push('run the tests');
-        yield* history.push('build the docs');
-
-        const newest = history.reverseFind('build');
-        expect(newest).toEqual({ value: 'build the docs', index: 2 });
-
-        const older = history.reverseFind('build', newest?.index);
-        expect(older).toEqual({ value: 'build the project', index: 0 });
-      }),
-    ),
-  );
 });

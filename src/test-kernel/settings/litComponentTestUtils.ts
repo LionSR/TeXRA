@@ -376,19 +376,3 @@ export async function mountComponent<
   await element.updateComplete;
   return element;
 }
-
-/**
- * Dispatches the keydown a component's keyboard-activation handlers listen for:
- * bubbling and composed so shadow-DOM delegates see it, cancelable so a handler
- * calling `preventDefault()` is observable.
- */
-export function dispatchKey(target: EventTarget, key: string): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
-}

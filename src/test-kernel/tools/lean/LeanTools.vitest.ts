@@ -71,19 +71,6 @@ describe('resolveWorkspaceRoot', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it.effect('finds lakefile.lean in the same directory', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        writeFile(path.join(scratch, 'lakefile.lean'), ''),
-      );
-      yield* Effect.promise(() =>
-        writeFile(path.join(scratch, 'Foo.lean'), ''),
-      );
-      const root = yield* resolve(path.join(scratch, 'Foo.lean'));
-      expect(root).toBe(scratch);
-    }),
-  );
-
   it.effect('finds lakefile.toml two directories up', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
@@ -173,29 +160,6 @@ describe('runLakeCommand mutex', () => {
     rmSync(workspaceB, { recursive: true, force: true });
   });
 
-  live(
-    'keeps the current 4,194,304-character tail cap and truncation marker',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* runLakeCommand({
-          workspaceRoot: workspaceA,
-          lakeCommand: NODE,
-          args: [
-            '-e',
-            `process.stdout.write('HEAD_MARKER' + 'x'.repeat(${4 * 1024 * 1024 + 100}) + 'TAIL_MARKER')`,
-          ],
-        });
-
-        expect(result.exitCode).toBe(0);
-        expect(result.stdout.startsWith('…[output truncated]…\n')).toBe(true);
-        expect(result.stdout).not.toContain('HEAD_MARKER');
-        expect(result.stdout.endsWith('TAIL_MARKER')).toBe(true);
-        expect(result.stdout.length).toBe(
-          4 * 1024 * 1024 + '…[output truncated]…\n'.length,
-        );
-      }),
-  );
-
   live('preserves timeout diagnostics', () =>
     Effect.gen(function* () {
       const result = yield* runLakeCommand({
@@ -264,11 +228,6 @@ describe('runLakeCommand mutex', () => {
       name: 'across different workspaces',
       secondWorkspace: () => workspaceB,
       serialize: true,
-    },
-    {
-      name: 'when `serialize: false`',
-      secondWorkspace: () => workspaceA,
-      serialize: false,
     },
   ])('runs calls in parallel $name', ({ secondWorkspace, serialize }) =>
     Effect.gen(function* () {

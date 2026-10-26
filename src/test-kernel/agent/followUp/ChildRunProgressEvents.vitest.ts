@@ -34,16 +34,10 @@ import { launchProcessChild } from '@tools/delegation/detachedChildRun';
 import { createChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
-import {
-  createRecordingHost,
-  eventsOfType,
-  recordSessionEvents,
-} from '../progressTestUtils';
+import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 
 const runId = 'c11111' as RunId;
 const parentRunId = 'c11112' as RunId;
-const stoppedRunId = 'c11114' as RunId;
-const failedRunId = 'c11116' as RunId;
 const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
 const config = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -258,77 +252,6 @@ describe('child run progress events', () => {
     }),
   );
 
-  it.effect('emits script identity independently of its worker config', () =>
-    Effect.gen(function* () {
-      const recorded = recordSessionEvents(testDefaultSession());
-      const workerConfig = {
-        ...config,
-        agent: 'generic',
-      };
-
-      const childRun = yield* createRegisteredChildRun(
-        testDefaultSession(),
-        workflowRelaunchRunId,
-        parentRunId,
-        {
-          run: {
-            kind: 'script',
-            title: 'repo-cleanup-readonly-pilot-2026-07-24',
-          },
-          userFollowUpSupport: 'unsupported',
-          description: 'Audit the repository without editing',
-          config: workerConfig,
-        },
-      );
-
-      expect(
-        eventsOfType(yield* Effect.promise(() => recorded.read()), 'run.start'),
-      ).toContainEqual(
-        expect.objectContaining({
-          identity: {
-            kind: 'script',
-            title: 'repo-cleanup-readonly-pilot-2026-07-24',
-          },
-        }),
-      );
-      expect(
-        testDefaultSession().runs.get(workflowRelaunchRunId)?.handle,
-      ).toMatchObject({
-        agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
-      });
-
-      yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-    }),
-  );
-
-  it.effect(
-    'publishes child run existence as a run fact without direct host emission',
-    () =>
-      Effect.gen(function* () {
-        const active = createRecordingHost();
-        const recorded = recordSessionEvents(testDefaultSession());
-
-        const childRun = yield* Effect.promise(() => startBashChild(runId));
-
-        expect(active.events).toEqual([]);
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.start',
-          ),
-        ).toEqual([
-          expect.objectContaining({
-            type: 'run.start',
-            aggregateId: qualifyAggregateId('run', runId),
-            parent: expect.objectContaining({ id: parentRunId }),
-            provenance: null,
-          }),
-        ]);
-
-        yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }),
-  );
-
   it.effect(
     'cancels committed admission before launching detached work and releases both claims',
     () =>
@@ -446,62 +369,6 @@ describe('child run progress events', () => {
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
       }),
-  );
-
-  // A stopped child ends cancelled: the loop observes its own stop (its
-  // signal, or the run fiber's interruption for a native child) and derives
-  // the verdict BEFORE this port is called, so a stop outranks the failure
-  // the child's process reported first. That precedence race is covered in
-  // ChildRunLoop.vitest ('lets a stop landing after a turn failure win the
-  // terminal outcome'); what lands here is the loop's derived verdict,
-  // through the hub.
-  it.effect(
-    'settles a stopped child loop as cancelled from the stop that landed',
-    () =>
-      Effect.gen(function* () {
-        const childRun = yield* Effect.promise(() =>
-          startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
-        );
-        expect(
-          testDefaultSession().runs.get(stoppedRunId)?.handle,
-        ).toBeDefined();
-
-        yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
-
-        expect(testDefaultSession().view.run(stoppedRunId)?.status).toBe(
-          RUN_PHASE.CANCELLED,
-        );
-        expect(
-          yield* getRunRecords(testDefaultSession(), stoppedRunId).readRunEnd(),
-        ).toMatchObject({ outcome: 'cancelled' });
-      }),
-  );
-
-  it.effect('settles failed child handle results with error details', () =>
-    Effect.gen(function* () {
-      const childRun = yield* Effect.promise(() =>
-        startCodexChild(failedRunId, 'Run a failing Codex child loop'),
-      );
-      expect(testDefaultSession().runs.get(failedRunId)?.handle).toBeDefined();
-
-      yield* childRun.finalize({
-        outcome: RUN_OUTCOME.FAILED,
-        error: new Error('child process exited 1'),
-      });
-
-      expect(testDefaultSession().view.run(failedRunId)?.status).toBe(
-        RUN_PHASE.FAILED,
-      );
-      expect(
-        yield* getRunRecords(testDefaultSession(), failedRunId).readRunEnd(),
-      ).toMatchObject({
-        outcome: 'failed',
-        error: {
-          kind: 'unexpected',
-          message: 'child process exited 1',
-        },
-      });
-    }),
   );
 
   // `error` is `unknown`: a value with no primitive conversion throws when

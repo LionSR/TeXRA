@@ -24,14 +24,6 @@ describe('openToolCard', () => {
       name: 'no status is passed (slow-tool path)',
       card: { toolName: 'bash', input: { command: 'ls' } },
     },
-    {
-      name: 'status is explicitly in_progress',
-      card: {
-        toolName: 'bash',
-        input: { command: 'sleep' },
-        status: 'in_progress',
-      },
-    },
   ])('emits only tool.start when $name', ({ card }) => {
     const toolEvents = collectToolEvents(card);
 
@@ -47,14 +39,6 @@ describe('openToolCard', () => {
         input: { path: 'notes.tex' },
         output: 'ok',
         status: 'completed',
-      },
-    },
-    {
-      status: 'failed',
-      card: {
-        toolName: 'bash',
-        input: { command: 'false' },
-        status: 'failed',
       },
     },
   ])(

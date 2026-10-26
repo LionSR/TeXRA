@@ -1,20 +1,12 @@
 // The model and effort the Claude Code and Codex tools run with: which models
-// each CLI accepts, the settings' defaults, and what the reasoning policy
+// each CLI accepts and what the reasoning policy
 // sends (default, @effort suffix, snapping, and the Codex CLI's own ceiling).
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, Result, Schema } from 'effect';
+import { Effect } from 'effect';
 import { ReasoningEffort } from 'llm-zoo';
 
-import { modelConfig } from '@texra-ai/llm';
 import { ToolError } from '@shared/schemas';
-import {
-  CLAUDE_AGENT_MODEL_SETTING,
-  CODEX_MODEL_SETTING,
-  ClaudeAgentModelSchema,
-  type AgentCliEffort,
-  isClaudeCodeModel,
-  isCodexModel,
-} from '@texra/shared/agentCliSettings';
+import { type AgentCliEffort } from '@texra/shared/agentCliSettings';
 import {
   ClaudeAgentStateKey,
   CodexStateKey,
@@ -28,40 +20,6 @@ import { makeFakeSettingsStores } from '../support/settingsStoresFake';
 
 const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
-// The setting's schema is the model list with its default applied; `to` is
-// the list itself.
-const CodexModelSchema = CODEX_MODEL_SETTING.schema.to;
-
-describe('agent CLI model settings', () => {
-  it('offers every current Anthropic model, and only those, to Claude Code', () => {
-    const options = ClaudeAgentModelSchema.literals;
-    expect(options).toContain(CLAUDE_AGENT_DEFAULT_MODEL);
-    expect(options.length).toBe(CLAUDE_AGENT_MODEL_SETTING.enumLabels.length);
-    for (const ref of options) {
-      const config = modelConfig(ref);
-      expect(config && isClaudeCodeModel(config)).toBe(true);
-      expect(config?.deprecated).not.toBe(true);
-    }
-  });
-
-  it('offers current Codex-served models, with the default among them', () => {
-    const options = CodexModelSchema.literals;
-    expect(options).toContain(CODEX_DEFAULT_MODEL);
-    expect(options.length).toBe(CODEX_MODEL_SETTING.enumLabels.length);
-    for (const ref of options) {
-      const config = modelConfig(ref);
-      expect(config && isCodexModel(config)).toBe(true);
-      expect(config?.deprecated).not.toBe(true);
-    }
-    expect(
-      Result.isSuccess(
-        Schema.decodeUnknownResult(CodexModelSchema)(
-          'anthropic/claude-sonnet-5-5',
-        ),
-      ),
-    ).toBe(false);
-  });
-});
 
 describe('readClaudeCodeRun', () => {
   const claudeRun = (

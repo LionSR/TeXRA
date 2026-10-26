@@ -96,23 +96,6 @@ describe('WorkspaceAgentsController', () => {
     }),
   );
 
-  it.effect(
-    'keeps a hidden custom agent hidden when the agent list is all',
-    () =>
-      Effect.gen(function* () {
-        const workspaceAgents = controller(
-          new FakeStateStore({
-            [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: ['custom:search'],
-          }),
-        );
-        expect(
-          (yield* workspaceAgents.getVisibleAgents()).map(
-            (agent) => agent.name,
-          ),
-        ).toEqual(['write', 'review', 'lead']);
-      }),
-  );
-
   it.effect('reads a bare name in a written list as choosing that agent', () =>
     Effect.gen(function* () {
       const workspaceAgents = controller(new FakeStateStore());

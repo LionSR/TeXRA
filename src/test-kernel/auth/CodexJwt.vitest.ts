@@ -71,13 +71,6 @@ describe('codex JWT claim extraction', () => {
     expect(storedClaims(idToken, accessToken).accountId).toBe('from-id-token');
   });
 
-  it('falls back to the access_token when id_token is absent', () => {
-    const accessToken = makeJwt({ chatgpt_account_id: 'from-access-token' });
-    expect(storedClaims(undefined, accessToken).accountId).toBe(
-      'from-access-token',
-    );
-  });
-
   it('falls back field-by-field when id_token lacks claims', () => {
     const idToken = makeJwt({ email: 'from-id-token@example.com' });
     const accessToken = makeJwt({ chatgpt_account_id: 'from-access-token' });

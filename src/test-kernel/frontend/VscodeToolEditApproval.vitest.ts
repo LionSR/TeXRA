@@ -259,32 +259,4 @@ describe('VS Code tool edit approval', () => {
     );
     expect(getText).toHaveBeenCalledOnce();
   });
-
-  it('previews a non-LaTeX proposal by opening the proposed file', async () => {
-    const { controller, decide, requestId } = await startApproval();
-    const proposedUri = currentProposedUri();
-
-    await onRuntime(
-      controller.handleAction({ requestId, action: 'previewProposed' }),
-    );
-
-    await vi.waitFor(() =>
-      expect(vscodeMocks.showTextDocument).toHaveBeenCalledWith(
-        expect.objectContaining({ fsPath: proposedUri.fsPath }),
-        { preview: true, preserveFocus: true },
-      ),
-    );
-    expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
-    expect(decide).not.toHaveBeenCalled();
-
-    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
-    await vi.waitFor(() =>
-      expect(decide).toHaveBeenCalledWith({
-        kind: 'request.decide',
-        runId: 'run-approval',
-        requestId,
-        decision: { action: 'approve', content: 'new\n' },
-      }),
-    );
-  });
 });

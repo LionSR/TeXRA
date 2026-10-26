@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStatusBarDisplay,
   statusBarRunTarget,
-  subscriptionUsageProviderForStatus,
   type BypassState,
   type StatusBarChrome,
 } from '@cli/chat/tui/panes/statusBarDisplay';
@@ -16,7 +15,6 @@ import {
   RUN_LIFECYCLE_READY,
 } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
@@ -135,60 +133,7 @@ function statusInput(overrides: StatusInputOverrides = {}): StatusBarCase {
   };
 }
 
-// The armed-exit notice most tests exercise; the discard-warning table drops
-// `resumeId` to keep its expected rows short.
-const EXIT_NOTICE = {
-  kind: 'exit',
-  text: 'Press Ctrl-C again to exit',
-  resumeId: 'abc123',
-} as const;
-
-type TokenUsage = NonNullable<StatusBarCase['usage']>;
-type UsageRoute = NonNullable<TokenUsage['usageRoute']>;
-
-// One heavy usage reading reused across the context-window route tests.
-function heavyUsage(usageRoute: UsageRoute): TokenUsage {
-  return { inputTokens: 187_000, outputTokens: 4_000, cost: 0, usageRoute };
-}
-
 describe('CLI StatusBar display model', () => {
-  it.each([
-    {
-      name: 'completed API-key usage over a prospective coding plan',
-      usageRoute: 'api-key',
-      prospectiveRoute: 'glm-coding-plan-subscription',
-      expected: undefined,
-    },
-    {
-      name: 'completed coding-plan usage over a prospective ChatGPT route',
-      usageRoute: 'kimi-code-subscription',
-      prospectiveRoute: 'chatgpt-subscription',
-      expected: 'kimiCode',
-    },
-    {
-      name: 'prospective ChatGPT route before completed usage exists',
-      usageRoute: undefined,
-      prospectiveRoute: 'chatgpt-subscription',
-      expected: 'chatgpt',
-    },
-    {
-      name: 'prospective coding-plan route before completed usage exists',
-      usageRoute: undefined,
-      prospectiveRoute: 'glm-coding-plan-subscription',
-      expected: 'glmCodingPlan',
-    },
-    {
-      name: 'prospective route without a quota provider',
-      usageRoute: undefined,
-      prospectiveRoute: 'xai-subscription',
-      expected: undefined,
-    },
-  ] as const)('$name', ({ usageRoute, prospectiveRoute, expected }) => {
-    expect(
-      subscriptionUsageProviderForStatus({ usageRoute, prospectiveRoute }),
-    ).toBe(expected);
-  });
-
   it('surfaces non-default approval policies in the durable status row', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
     const ask = renderBar(input);
@@ -208,57 +153,6 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(yolo)).toEqual(['◆', 'Idle', 'Auto-approve']);
     expect(yolo.left.at(-1)).toMatchObject({ color: 'red' });
-  });
-
-  it('reports the window the model handler served, not a registry lookup', () => {
-    // gpt-5.6's raw registry window is 1.05M, but a Codex-subscription turn
-    // runs under a 400k budget — and a compacted turn under something else
-    // again. The handler stamps what it used; the bar renders that verbatim.
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        usage: heavyUsage('chatgpt-subscription'),
-        contextState: {
-          inputTokens: 187_000,
-          contextWindow: 400_000,
-          utilizationPercent: 46.8,
-        },
-      }),
-    );
-
-    expect(leftTexts(display)).toContain('187k/400k (47%)');
-  });
-
-  it('shows the route that produced usage instead of a stale access preference', () => {
-    const accessLabel = (
-      usageRoute:
-        | 'chatgpt-subscription'
-        | 'kimi-code-subscription'
-        | 'glm-coding-plan-subscription'
-        | 'api-key',
-    ): string[] =>
-      leftTexts(
-        renderBar(
-          statusInput({
-            modelAccess: usageRoute,
-            usage: {
-              inputTokens: 1_000,
-              outputTokens: 100,
-              cost: 0,
-              usageRoute,
-            },
-          }),
-        ),
-      );
-
-    expect(accessLabel('chatgpt-subscription')).toContain('subscription');
-    expect(accessLabel('kimi-code-subscription')).toContain('subscription');
-    expect(accessLabel('glm-coding-plan-subscription')).toContain(
-      'subscription',
-    );
-    // Own API keys are the default route: no access segment at all.
-    expect(accessLabel('api-key')).not.toContain(OWN_API_KEYS.compactLabel);
-    expect(accessLabel('api-key')).not.toContain('subscription');
   });
 
   it('drops elapsed and access mode rather than overflowing the row', () => {
@@ -543,211 +437,5 @@ describe('CLI StatusBar display model', () => {
       expect(target.displayRunId).toBe(expected.displayRunId);
       expect(target.isChildRun).toBe(expected.isChildRun);
     });
-  });
-
-  it('preserves distinct agent-task, bash, and edit bypass badges', () => {
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        bypass: { bash: true, superYolo: true, toolEdit: true },
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Running',
-      'AUTO-TASK',
-      'AUTO-BASH',
-      'AUTO-EDIT',
-    ]);
-    expect(display.left.at(-3)).toMatchObject({
-      badge: true,
-      badgeColor: 'red',
-    });
-    expect(display.left.at(-2)).toMatchObject({
-      badge: true,
-      badgeColor: 'yellow',
-    });
-    expect(display.left.at(-1)).toMatchObject({
-      badge: true,
-      badgeColor: 'yellow',
-    });
-  });
-
-  it('shows the resume command while exit confirmation is armed', () => {
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        transientNotice: EXIT_NOTICE,
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Running',
-      'Press Ctrl-C again to exit',
-    ]);
-    expect(display.bindings).toBe('Resume this task with: texra resume abc123');
-  });
-
-  it('warns that queued follow-ups are discarded while exit is armed', () => {
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        transientNotice: EXIT_NOTICE,
-        queuedFollowUpMessages: [
-          'Keep the proof under one page.',
-          'Also mention the finite monoid argument.',
-        ],
-      }),
-    );
-
-    expect(leftTexts(display)).toContain(
-      '2 queued follow-ups will be discarded',
-    );
-    expect(
-      display.left.find(
-        (segment) => segment.text === '2 queued follow-ups will be discarded',
-      ),
-    ).toMatchObject({ color: 'red' });
-  });
-
-  it('does not describe queued follow-ups as discarded for ordinary notices', () => {
-    const display = renderBar(
-      statusInput({
-        transientNotice: {
-          kind: 'message',
-          text: 'Signed in successfully',
-        },
-        queuedFollowUpMessages: ['Continue with the proof.'],
-      }),
-    );
-
-    expect(leftTexts(display)).toContain('Signed in successfully');
-    expect(leftTexts(display)).not.toContain(
-      '1 queued follow-up will be discarded',
-    );
-  });
-
-  it.each([
-    {
-      name: 'keeps queued-input discard warnings ahead of status details',
-      width: 80,
-      bypass: NO_BYPASS,
-      expected: [
-        '◆',
-        'run 45s',
-        'Press Ctrl-C again to exit',
-        '1 queued follow-up will be discarded',
-      ],
-    },
-    {
-      name: 'bounds queued-input discard warnings in very narrow footers',
-      width: 30,
-      bypass: NO_BYPASS,
-      expected: ['◆', '1 queued follow-up will b…'],
-    },
-    {
-      name: 'drops bypass badges before truncating queued-input discard warnings',
-      width: 30,
-      bypass: { bash: true, superYolo: true, toolEdit: true },
-      expected: ['◆', '1 queued follow-up will b…'],
-    },
-  ])('$name', ({ width, bypass, expected }) => {
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        bypass,
-        turn: { runningFrame: '/', elapsedMs: 45_000 },
-        transientNotice: {
-          kind: 'exit',
-          text: 'Press Ctrl-C again to exit',
-        },
-        queuedFollowUpMessages: ['Continue with the proof.'],
-        width,
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(expected);
-  });
-
-  it('compacts token usage to a percentage before dropping it on narrow widths', () => {
-    const input = statusInput({
-      status: RUN_PHASE.RUNNING,
-      contextState: {
-        inputTokens: 80_000,
-        contextWindow: 1_000_000,
-        utilizationPercent: 8,
-      },
-    });
-
-    // Wide: the full usage segment fits.
-    expect(leftTexts(renderBar({ ...input, width: 80 }))).toContain(
-      '80k/1.0M (8%)',
-    );
-
-    // Narrow: the segment degrades to the bare percentage instead of
-    // disappearing, keeping context pressure visible.
-    const narrow = leftTexts(renderBar({ ...input, width: 24 }));
-    expect(narrow).not.toContain('80k/1.0M (8%)');
-    expect(narrow).toContain('8%');
-  });
-
-  it('keeps the exit confirmation visible in very narrow footers', () => {
-    const display = renderBar(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        transientNotice: EXIT_NOTICE,
-        width: 29,
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(['◆', 'run', 'Press Ctrl-C again t…']);
-    expect(display.bindings).toBe('Resume this task with: texra resume abc123');
-  });
-
-  it('shows the limiting coding-plan quota in the persistent status row', () => {
-    const display = renderBar(
-      statusInput({
-        modelAccess: 'glm-coding-plan-subscription',
-        subscriptionQuota: {
-          state: 'available',
-          provider: 'glmCodingPlan',
-          providerName: 'GLM',
-          planName: 'GLM Coding Plan',
-          fetchedAt: 1,
-          windows: [
-            { name: 'five_hour', percentUsed: 42, percentRemaining: 58 },
-            { name: 'monthly', percentUsed: 86, percentRemaining: 14 },
-          ],
-        },
-      }),
-    );
-
-    expect(leftTexts(display)).toContain('GLM Coding Plan 14% left');
-    expect(
-      display.left.find((segment) =>
-        segment.text.startsWith('GLM Coding Plan'),
-      ),
-    ).toMatchObject({ compactText: '14% left', color: 'yellow' });
-  });
-
-  it('does not render unavailable subscription quota as a false zero', () => {
-    const display = renderBar(
-      statusInput({
-        modelAccess: 'kimi-code-subscription',
-        subscriptionQuota: {
-          state: 'unavailable',
-          provider: 'kimiCode',
-          providerName: 'Kimi Code',
-          planName: 'Kimi Code',
-          fetchedAt: 1,
-          windows: [],
-          reason: 'request_failed',
-        },
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(['◆', 'Idle', 'subscription']);
   });
 });

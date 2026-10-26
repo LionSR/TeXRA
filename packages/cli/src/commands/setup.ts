@@ -15,11 +15,8 @@ import {
 } from './_helpers/globalArgs';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-/**
- * The command's program builder. Exported for the test kernel — the command's
- * `run` is the only other caller.
- */
-export function runSetup(context: CliContext) {
+/** The command's program builder; the command's `run` is its only caller. */
+function runSetup(context: CliContext) {
   // Refused in the builder, before the runtime installs (see
   // `defineCliCommand`).
   const terminalFailure = interactiveTerminalFailure(context);

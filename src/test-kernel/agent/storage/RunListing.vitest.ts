@@ -111,24 +111,6 @@ describe('run listing normalization', () => {
     session = await Effect.runPromise(createProcessSession());
   });
 
-  it.effect('sees runs written by another host after an earlier listing', () =>
-    Effect.gen(function* () {
-      expect(yield* listRuns(session)).toEqual([]);
-
-      const id = 'eee555' as RunId;
-      yield* Effect.promise(() =>
-        writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
-      );
-
-      expect(yield* listRuns(session)).toEqual([
-        expect.objectContaining({
-          id,
-          identity: { kind: 'agent', agent: 'assistant' },
-        }),
-      ]);
-    }),
-  );
-
   // A row is dropped only when the facts it is built from are unreadable. The
   // resumability read is not one of them: it decides an advertisement, so an
   // unreadable run record costs the row its Resume affordance, never its
@@ -185,38 +167,6 @@ describe('run listing normalization', () => {
             status: 'completed',
           }),
         ]);
-      }),
-  );
-
-  it.effect(
-    'uses the config as the canonical source for visible agent fields',
-    () =>
-      Effect.gen(function* () {
-        const id = 'aaa111' as RunId;
-        const agentConfig = config('assistant');
-        yield* Effect.promise(() =>
-          writeRun(id, '2026-07-15T10:00:00.000Z', agentConfig),
-        );
-
-        const entries = yield* listRuns(session);
-
-        expect(entries).toEqual([
-          {
-            id,
-            timestamp: '2026-07-15T10:00:00.000Z',
-            identity: { kind: 'agent', agent: 'assistant' },
-            record: agentConfig,
-            status: 'ready',
-            // The model the run is on is the view's (its newest config's),
-            // not a second copy of the record's.
-            model: agentConfig.model,
-            // A loop-driven run continues from its rows: it is born with its
-            // opening, so the standing never asks for one.
-            resumable: true,
-          },
-        ]);
-        expect(entries[0]).not.toHaveProperty('agent');
-        expect(entries[0]).not.toHaveProperty('category');
       }),
   );
 

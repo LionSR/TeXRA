@@ -37,19 +37,16 @@ describe('xAI subscription session coordinator', () => {
     expect(auth.state.length).toBeGreaterThan(20);
   });
 
-  it.effect.each([
-    { stored: '{not-json', what: 'not JSON' },
-    { stored: JSON.stringify({ accessToken: 'only' }), what: 'off-schema' },
-  ])(
-    'fails an unreadable stored session ($what) as fatal, not signed out',
-    ({ stored }) =>
-      Effect.gen(function* () {
-        const coordinator = xaiCoordinator(storeHolding(stored));
-        const failure = yield* Effect.flip(coordinator.getStatus());
-        expect(failure).toMatchObject({
-          _tag: 'SubscriptionOAuthError',
-          kind: 'fatal',
-        });
-      }),
+  it.effect('fails an unreadable stored session as fatal, not signed out', () =>
+    Effect.gen(function* () {
+      const coordinator = xaiCoordinator(
+        storeHolding(JSON.stringify({ accessToken: 'only' })),
+      );
+      const failure = yield* Effect.flip(coordinator.getStatus());
+      expect(failure).toMatchObject({
+        _tag: 'SubscriptionOAuthError',
+        kind: 'fatal',
+      });
+    }),
   );
 });

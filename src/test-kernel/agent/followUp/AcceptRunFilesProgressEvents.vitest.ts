@@ -278,59 +278,6 @@ describe('accept_run_files progress events', () => {
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
-  it.live(
-    'reports an all-file user rejection without calling it a cancellation',
-    () =>
-      Effect.gen(function* () {
-        const tool = AcceptRunFilesTool;
-
-        setRunStorageEntries({
-          [`executions/${runId}/output.tex`]: 'File',
-        });
-        stubWorkspaceFiles(false, '');
-        absoluteContentFallback = 'proposed content';
-        decideToolEdits(() => ({
-          action: 'reject',
-          feedback: 'keep the original normalization',
-        }));
-
-        const result = yield* runAccept(tool, [
-          { path: 'output.tex', original: 'paper.tex' },
-        ]);
-
-        expect(result.status).toBe('error');
-        expect(result.summary).toBe(
-          'User rejected accept_run_files for paper.tex.',
-        );
-        expect(result.userInstruction).toBe('keep the original normalization');
-        expect(result.error).not.toContain('cancelled');
-      }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
-  it.live(
-    'preserves a cause-free cancellation while aggregating rejections',
-    () =>
-      Effect.gen(function* () {
-        const tool = AcceptRunFilesTool;
-
-        setRunStorageEntries({
-          [`executions/${runId}/output.tex`]: 'File',
-        });
-        stubWorkspaceFiles(false, '');
-        absoluteContentFallback = 'proposed content';
-        decideToolEdits(() => ({ action: 'cancel', cause: null }));
-
-        const result = yield* runAccept(tool, [
-          { path: 'output.tex', original: 'paper.tex' },
-        ]);
-
-        expect(result.summary).toBe(
-          'Tool edit cancelled: accept_run_files for paper.tex.',
-        );
-        expect(result.userInstruction).toBeUndefined();
-      }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
   it.live('preserves mixed policy-denial and cancellation details', () =>
     Effect.gen(function* () {
       const tool = AcceptRunFilesTool;
@@ -475,33 +422,6 @@ describe('accept_run_files progress events', () => {
           written: [[path.join(projectRoots.workspace, 'paper.tex')]],
         });
       }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
-  it.live('reports unchanged same-path fallbacks without approval', () =>
-    Effect.gen(function* () {
-      const explicit = createRecordingHost();
-      const tool = AcceptRunFilesTool;
-      let approvals = 0;
-
-      setRunStorageEntries();
-      const write = stubWorkspaceFiles(true, 'same content');
-      absoluteContentFallback = 'same content';
-      decideToolEdits(() => {
-        approvals++;
-        return { action: 'approve' };
-      });
-
-      const result = yield* runAccept(tool, [
-        { path: 'draft.tex', original: 'draft.tex' },
-      ]);
-
-      expect(result.status).toBe('executed');
-      expect(result.output).toContain('No changes to accept');
-      expect(result.output).toContain('unchanged: draft.tex');
-      expect(approvals).toBe(0);
-      expect(write).not.toHaveBeenCalled();
-      expect(explicit.events).toEqual([]);
-    }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
   it.live(

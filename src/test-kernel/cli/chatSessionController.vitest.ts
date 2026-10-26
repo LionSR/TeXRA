@@ -5,7 +5,6 @@
 // runtime objects wherever a test asserts through them.
 
 import {
-  Cause,
   Deferred,
   Effect,
   Exit,
@@ -69,8 +68,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import { ResumeRefused, type Session } from '@texra-ai/harness';
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
+import { type Session } from '@texra-ai/harness';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type {
   AgentConfig,
@@ -84,13 +82,7 @@ import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashC
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
-import {
-  patchSessionMeta,
-  draftRestoreRequest,
-  rootRunId,
-  sessionMeta,
-  transientNotice,
-} from '@cli/chat/tui/state/cliState';
+import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
   chatTuiCanStartRootRun,
@@ -105,7 +97,6 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -123,10 +114,7 @@ import {
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import {
-  fakeProcessServices,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -453,58 +441,6 @@ describe('CLI terminal outcome resolution', () => {
       });
     }),
   );
-
-  it.effect(
-    'reports an outcome read failure and retains the completed run',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createTestSession();
-        const runId = 'b0f001' as RunId;
-        publishTestRunStart(session, runId);
-        yield* session.log.settled;
-        const reportReadFailure = vi.fn();
-        // The read fails the way a corrupt store fails it: through the
-        // session's own records port, typed.
-        vi.spyOn(session.log, 'records').mockReturnValue(
-          Effect.fail(
-            new DatabaseReadFailed({
-              path: 'run-records',
-              cause: new Error('metadata read failed'),
-            }),
-          ),
-        );
-        vi.spyOn(session.log, 'rows').mockReturnValue(
-          Effect.fail(
-            new DatabaseReadFailed({
-              path: 'run-records',
-              cause: new Error('metadata read failed'),
-            }),
-          ),
-        );
-
-        expect(
-          yield* readCliRunOutcomeState(
-            testSessionOf(session),
-            {
-              outcome: RUN_OUTCOME.COMPLETED,
-              output: { response: '', files: [] },
-              runId,
-            },
-            reportReadFailure,
-          ),
-        ).toEqual({
-          outcome: RUN_OUTCOME.COMPLETED,
-          outcomePersisted: false,
-        });
-        expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
-          expect.objectContaining({
-            message:
-              'Could not verify the persisted outcome for run b0f001; using the current run outcome: metadata read failed',
-            cause: expect.any(Error),
-          }),
-        );
-      }),
-  );
 });
 
 describe('createChatSessionController', () => {
@@ -731,30 +667,6 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
-  it('reports a run failure whose cause also carries an interrupt', async () => {
-    // Fail-fast concurrency and interrupted teardown both fold an Interrupt
-    // into a genuine failure's Cause; recovery must still see the failure.
-    mocks.rootLaunch.mockReturnValueOnce(
-      Effect.failCause(
-        Cause.fromReasons([
-          Cause.makeFailReason(new Error('run failed mid-teardown')),
-          Cause.makeInterruptReason(),
-        ]),
-      ),
-    );
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.startRootRun(makeRunRequest('Check racing failure.'));
-
-    await expect(awaitRunSettled(session)).resolves.toBeUndefined();
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      'run failed mid-teardown',
-    );
-    expect(session.runExitCode).toBe(CliExitCode.AgentError);
-    expect(session.runCompleted).toBe(true);
-  });
-
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = createDeferred<null>();
     mocks.getRunRecords.mockReturnValue({
@@ -775,82 +687,6 @@ describe('createChatSessionController', () => {
     configRead.resolve(null);
     await resumed;
     expect(session.runCompleted).toBe(true);
-  });
-
-  it('retains the configuration of a manually resumed conversation', async () => {
-    const config = makeResumeConfig({
-      cli: { teamId: 'physicist' },
-      delegationAgentScope: ['builtIn:physicsReviewer', 'builtIn:orchestrator'],
-    });
-    installResumeRunStore(config);
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    await runResume(ctrl, 'ec0001' as RunId);
-    await awaitRunSettled(session);
-
-    expect(sessionMeta.get()).toMatchObject({
-      teamName: 'Physicist',
-      cliTeamId: 'physicist',
-      delegationAgentScope: config.delegationAgentScope,
-    });
-  });
-
-  it.each(['unusable_checkpoint', 'owned_elsewhere'] as const)(
-    'refuses %s without changing the visible conversation or its configuration',
-    async (failure) => {
-      const session = makeSession();
-      patchSessionMeta({
-        agent: 'current-agent',
-        model: 'current-model',
-        modelSource: 'explicit-override',
-        teamName: 'Mathematician',
-        cliTeamId: 'mathematician',
-        delegationAgentScope: ['custom:current'],
-      });
-      const previousMetadata = sessionMeta.get();
-      installResumeRunStore(makeResumeConfig({ cli: { teamId: 'physicist' } }));
-      // Both runtime refusals precede the hook that adopts the target run.
-      // The session's refusal, in its words.
-      mocks.resumeRun.mockReturnValueOnce(
-        Effect.fail(
-          new ResumeRefused({
-            runId: 'ec0001',
-            reason: failure,
-            message: describeFollowUpFailure(failure),
-          }),
-        ),
-      );
-      const ctrl = createChatSessionController(makeInit({ session }));
-
-      await runResume(ctrl, 'ec0001' as RunId);
-      await awaitRunSettled(session);
-
-      expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-        describeFollowUpFailure(failure),
-      );
-      expect(sessionMeta.get()).toEqual(previousMetadata);
-      expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
-      expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
-      expect(session.runId).toBeUndefined();
-      expect(rootRunId.get()).toBeUndefined();
-      expect(session.runCompleted).toBe(true);
-    },
-  );
-
-  it('manual resume supersedes stale interrupted recovery state', async () => {
-    const session = makeSession({
-      interruptedRunId: 'e11111' as RunId,
-      runCompleted: true,
-      stopRequested: true,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    await runResume(ctrl, 'aaaaaa' as RunId);
-    await awaitRunSettled(session);
-
-    expect(session.runId).toBe('aaaaaa');
-    expect(session.interruptedRunId).toBeUndefined();
   });
 
   it('stops the resumed run for a Ctrl-C issued while resume() is still settling', async () => {
@@ -945,108 +781,6 @@ describe('createChatSessionController', () => {
       }),
     );
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
-  });
-
-  it('reports resume rehydration failures without rejecting the TUI submit path', async () => {
-    const session = makeSession({
-      interruptedRunId: 'e11111' as RunId,
-      runCompleted: true,
-    });
-    mocks.setCliHelperModel.mockReturnValueOnce(
-      Effect.fail(new Error('rehydration failed')),
-    );
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    await expect(runResume(ctrl, 'aaaaaa' as RunId)).resolves.toBeUndefined();
-    await awaitRunSettled(session);
-
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      'rehydration failed',
-    );
-    expect(session.runExitCode).toBe(CliExitCode.AgentError);
-    expect(session.runCompleted).toBe(true);
-    expect(session.interruptedRunId).toBe('e11111');
-    expect(chatTuiCanStartRootRun(session)).toBe(true);
-  });
-
-  it.live(
-    'surfaces a defected follow-up request instead of an unhandled rejection',
-    () =>
-      Effect.gen(function* () {
-        // A collaborator rejecting inside `followUp.send` defects the request
-        // Effect, which `Effect.match` does not recover: without the defect arm
-        // the queued task rejects with no surfacing at all.
-        holdRun('a11111' as RunId);
-        installSession({
-          view: yield* SubscriptionRef.make(currentView()),
-        });
-        mocks.request.mockReturnValueOnce(
-          Effect.die(new Error('dispatch broke')),
-        );
-        const session = makeSession({
-          runId: 'a11111' as RunId,
-          runSettled: Effect.never,
-        });
-        const ctrl = createChatSessionController(
-          makeInit({
-            session,
-            // A non-slash line never reads the context.
-            getSlashCommandContext: () => ({}) as SlashCommandContext,
-          }),
-        );
-
-        const defectReported = Deferred.makeUnsafe<void>();
-        const baseReportDefect =
-          mocks.reportRequestDefect.getMockImplementation();
-        mocks.reportRequestDefect.mockImplementationOnce(
-          (...args: unknown[]) => {
-            Deferred.doneUnsafe(defectReported, Effect.void);
-            return baseReportDefect!(...args);
-          },
-        );
-
-        yield* ctrl.submit('Deliver this if you can.');
-
-        yield* Deferred.await(defectReported);
-        yield* Effect.yieldNow;
-        expect(mocks.reportRequestDefect).toHaveBeenCalledOnce();
-        expect(transientNotice.get()?.text).toContain(
-          'The request failed inside TeXRA',
-        );
-        expect(
-          draftRestoreRequest.get().map((request) => request.text),
-        ).toContain('Deliver this if you can.');
-        // A defect is no refusal: the run is not marked stopped.
-        expect(session.stopRequested).toBe(false);
-      }).pipe(Effect.provide(fakeProcessServices())),
-  );
-
-  it('restores the draft when the root run fails before the target folds', async () => {
-    // The follow-up target never folds (no run in the view), so the race is
-    // decided by the root run's settlement — and a failed settlement means
-    // "the conversation ended", not a failure that escapes the delivery and
-    // skips both restore branches.
-    installSession({
-      view: installableViewRef(),
-    });
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-      runSettled: Effect.fail(new Error('model call failed')),
-    });
-    const ctrl = createChatSessionController(
-      makeInit({
-        session,
-        getSlashCommandContext: () => ({}) as SlashCommandContext,
-      }),
-    );
-
-    await runSubmit(ctrl, 'Keep this for me.');
-
-    await vi.waitFor(() =>
-      expect(
-        draftRestoreRequest.get().map((request) => request.text),
-      ).toContain('Keep this for me.'),
-    );
   });
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {

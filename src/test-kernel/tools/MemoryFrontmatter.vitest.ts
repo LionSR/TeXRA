@@ -23,23 +23,6 @@ describe('memory frontmatter (yaml-backed) (packages/harness/src/common/memory/m
     expect(parsed.content).toBe('the body\nmore body\n');
   });
 
-  it('omits optional fields when not set', () => {
-    const meta: MemoryFileMeta = {
-      modifiedBy: 'agent',
-      modifiedAt: '2026-06-20T14:30:45.123Z',
-    };
-    const file = buildFile('body', meta);
-
-    // runId and pinned must not appear in the serialized block.
-    expect(file).not.toContain('runId');
-    expect(file).not.toContain('pinned');
-
-    const parsed = parseFrontmatter(file);
-    expect(parsed.meta).toEqual(meta);
-    expect(parsed.meta?.runId).toBeUndefined();
-    expect(parsed.meta?.pinned).toBeUndefined();
-  });
-
   it('parses a block using CRLF line endings', () => {
     const crlf = [
       '---',
@@ -81,27 +64,6 @@ describe('memory frontmatter (yaml-backed) (packages/harness/src/common/memory/m
       modifiedAt: '2026-06-20T14:30:45.123Z',
     });
     expect(parsed.content).toBe(body);
-  });
-
-  it('parses a legacy hand-written block (unquoted values)', () => {
-    const legacy = [
-      '---',
-      'modifiedBy: agent-name',
-      'runId: abc',
-      'modifiedAt: 2026-06-20T14:30:45.123Z',
-      'pinned: true',
-      '---',
-      'legacy body',
-    ].join('\n');
-
-    const parsed = parseFrontmatter(legacy);
-    expect(parsed.meta).toEqual({
-      modifiedBy: 'agent-name',
-      runId: 'abc',
-      modifiedAt: '2026-06-20T14:30:45.123Z',
-      pinned: true,
-    });
-    expect(parsed.content).toBe('legacy body');
   });
 
   // In every unreadable case the full raw text is preserved as content

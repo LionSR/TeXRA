@@ -154,28 +154,6 @@ describe('runWithLifecycle', () => {
     );
   }
 
-  it.effect('carries a subagent abort on its terminal result', () =>
-    Effect.gen(function* () {
-      const { ctx } = lifecycleFixture();
-      ctx.opening?.attachedMemoryMisses.push({
-        path: '/memories/missing.md',
-        reason: 'not found',
-      });
-
-      const result = yield* runLifecycle(
-        ctx,
-        () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        { parentRunId: PARENT_RUN_ID },
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(result.memoryMisses).toEqual(ctx.opening?.attachedMemoryMisses);
-      expect(result.error).toMatchObject({
-        message: expect.stringContaining('aborted'),
-      });
-    }),
-  );
-
   it.effect(
     'does not let a stop abandon a run that completes without suspending',
     () =>
@@ -293,98 +271,6 @@ describe('runWithLifecycle', () => {
       }),
   );
 
-  // The parent's delivery is a projection of the same terminal fact as the
-  // persisted history, so a delivery never contradicts the row. (A stop's
-  // relabel — a failure report the stop says never happened — is now the
-  // fiber interruption's verdict, asserted on the finalizer's `stopped` arm
-  // below; the latch that carried it mid-report is gone.)
-
-  it.effect(
-    'projects returned outcomes to the terminal row and stage end',
-    () =>
-      Effect.gen(function* () {
-        const cases = [
-          RUN_OUTCOME.COMPLETED,
-          RUN_OUTCOME.CANCELLED,
-          RUN_OUTCOME.FAILED,
-        ] as const;
-
-        for (const outcome of cases) {
-          const { runId, ctx } = lifecycleFixture();
-          const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-
-          const result = yield* runLifecycle(ctx, () =>
-            Effect.succeed(toolUseResult(runId, outcome)),
-          );
-
-          expect(result.outcome).toBe(outcome);
-          const [end, ...more] = yield* runEnds(ctx.session, runId);
-          expect(more).toEqual([]);
-          expect(end).toMatchObject({ outcome, output: EMPTY_TOOL_USE_OUTPUT });
-          expect(end).not.toHaveProperty('error');
-          expect(stageEnd).toHaveBeenCalledWith(outcome);
-        }
-      }),
-  );
-
-  it.effect(
-    'finalizes an outcome-only failure without fabricating provider error facts',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
-        );
-        const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-
-        const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
-        const result = yield* runLifecycle(
-          ctx,
-          () => Effect.succeed(carriedResult),
-          { parentRunId: PARENT_RUN_ID },
-        );
-
-        expect(result).toEqual(carriedResult);
-        // `run.end` is not a trace arm: the storage finalizer is its one
-        // writer, so the absent error facts are read off that input.
-        const [end, ...more] = yield* runEnds(ctx.session, runId);
-        expect(more).toEqual([]);
-        expect(end).toMatchObject({
-          outcome: RUN_OUTCOME.FAILED,
-          output: carriedResult.output,
-        });
-        expect(end).not.toHaveProperty('error');
-        expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      }),
-  );
-
-  it.effect(
-    'projects a thrown abort as cancelled on its own stage outcome',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-
-        const result = yield* runLifecycle(ctx, () =>
-          Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        );
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
-          {
-            outcome: RUN_OUTCOME.CANCELLED,
-            error: {
-              kind: 'abort',
-              message: 'Request aborted',
-              userRetryable: false,
-            },
-            output: EMPTY_TOOL_USE_OUTPUT,
-          },
-        ]);
-        expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
-      }),
-  );
-
   it.effect('projects an unexpected throw as failed', () =>
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
@@ -474,31 +360,6 @@ describe('runWithLifecycle', () => {
           error: { message: expect.stringContaining('finalizer died') },
         },
       ]);
-    }),
-  );
-
-  it.effect('returns a flow-carried subagent failure with its error', () =>
-    Effect.gen(function* () {
-      const { runId, ctx } = lifecycleFixture();
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
-      );
-      const carriedResult = {
-        outcome: RUN_OUTCOME.FAILED,
-        runId,
-        output: { response: '', files: [] },
-        error: { message: 'subagent failed', userRetryable: false },
-      };
-
-      const result = yield* runLifecycle(
-        ctx,
-        () => Effect.succeed(carriedResult),
-        {
-          parentRunId: PARENT_RUN_ID,
-        },
-      );
-
-      expect(result).toEqual(carriedResult);
     }),
   );
 

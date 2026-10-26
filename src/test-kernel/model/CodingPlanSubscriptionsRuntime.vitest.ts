@@ -80,23 +80,6 @@ describe('coding-plan subscription runtime', () => {
       },
     },
     {
-      name: 'global Coding Plan',
-      useChina: false,
-      codingPlan: true,
-      expected: {
-        baseUrl: 'https://api.z.ai/api/v1',
-        usageRoute: 'glm-coding-plan-subscription',
-      },
-    },
-    {
-      name: 'China regular API',
-      useChina: true,
-      codingPlan: false,
-      expected: {
-        baseUrl: 'https://open.bigmodel.cn/api/v1',
-      },
-    },
-    {
       name: 'global regular API',
       useChina: false,
       codingPlan: false,

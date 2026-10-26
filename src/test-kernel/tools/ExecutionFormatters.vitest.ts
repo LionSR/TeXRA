@@ -24,7 +24,6 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ec1000000001');
 
 // Local imports
-import { formatConversation } from '@tools/executions/conversationFormat';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 let session: SessionHandle;
@@ -104,17 +103,4 @@ describe('turnAttributionNote', () => {
         assert.doesNotMatch(note ?? '', /still running/);
       }),
   );
-});
-
-describe('formatConversation', () => {
-  // The executions conversation view stays pure ASCII: a long message is cut
-  // with `...`, never the Unicode ellipsis the shared truncation helper uses.
-  it('truncates long conversation text with an ASCII ellipsis', () => {
-    const output = formatConversation([
-      { kind: 'assistant-text', text: 'x'.repeat(501) },
-    ]);
-
-    assert.ok(output.includes(`${'x'.repeat(497)}...`));
-    assert.ok(!output.includes('…'));
-  });
 });

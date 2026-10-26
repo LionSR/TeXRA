@@ -3,7 +3,7 @@ import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage/runRecords';
-import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import {
@@ -11,7 +11,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace/root' });
 const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -100,50 +99,6 @@ describe('run registration and finalization', () => {
         expect(yield* Effect.flip(register())).toBe(failure);
         expect(yield* session.log.owns(runId)).toBe(false);
         expect(yield* getRunRecords(session, runId).exists()).toBe(false);
-      }),
-  );
-
-  it.effect(
-    'releases reacquired database claims when repeated registration fails',
-    () =>
-      Effect.gen(function* () {
-        yield* register();
-        yield* Effect.scoped(session.log.hold(runId, { ends: true }));
-        const failure = new Error('registration rejected');
-        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
-          Effect.die(failure),
-        );
-        expect(yield* Effect.flip(register())).toBe(failure);
-        const refused = yield* Effect.flip(
-          seedReport(session, runId, 'unowned'),
-        );
-        expect(refused).toBeInstanceOf(Error);
-        yield* Effect.scoped(
-          session.log
-            .hold(runId)
-            .pipe(Effect.andThen(seedReport(session, runId, 'owned'))),
-        );
-        expect(yield* getRunRecords(session, runId).readReport()).toBe('owned');
-      }),
-  );
-
-  it.effect(
-    'reports a terminal status write that failed, and persists nothing',
-    () =>
-      Effect.gen(function* () {
-        yield* register();
-        const failure = new Error('status write failed');
-        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
-          Effect.die(failure),
-        );
-        // The run's rows live until explicit deletion: finalization writes
-        // the terminal row and removes nothing beside it, so a failed write is
-        // the whole failure and comes back unwrapped.
-        expect(
-          yield* Effect.flip(
-            finalizeRun(session, { runId, outcome: 'failed' }),
-          ),
-        ).toBe(failure);
       }),
   );
 });

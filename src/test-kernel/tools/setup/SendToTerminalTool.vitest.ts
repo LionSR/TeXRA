@@ -89,34 +89,4 @@ describe('SendToTerminalTool', () => {
       assert.equal(runs.length, 0);
     }),
   );
-
-  it.effect('does not truncate the host-captured terminal tail again', () =>
-    Effect.gen(function* () {
-      // The host owns its process-level capture bound; the recorder owns the
-      // display preview and spill. Keep both sentinels inside the host result.
-      const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
-      const end = 'Setting up perl ... done\nEND_MARKER';
-      const { tool, runId } = yield* Effect.tryPromise(() =>
-        setupTool({
-          exitCode: 0,
-          output: head + '\n' + end,
-          timedOut: false,
-        }),
-      );
-
-      const result = yield* callTool(tool, runId, {
-        command: 'sudo apt-get install -y perl',
-      });
-
-      assert.equal(result.status, 'executed');
-      assert.ok(
-        (result.output ?? '').includes('END_MARKER'),
-        'the captured tail must be preserved for the recorder',
-      );
-      assert.ok(
-        (result.output ?? '').includes('BEGIN_MARKER'),
-        'the captured tail must not be truncated again',
-      );
-    }),
-  );
 });

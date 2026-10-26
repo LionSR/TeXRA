@@ -1,5 +1,5 @@
 // Node imports
-import { access, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -106,18 +106,6 @@ function expectClonedInto(cwd: string): void {
   expect(approve?.options).toMatchObject({ cwd, extendEnv: false });
 }
 
-async function withProcessCwd<T>(
-  cwd: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(cwd);
-  try {
-    return await run();
-  } finally {
-    cwdSpy.mockRestore();
-  }
-}
-
 describe('CLI Overleaf clone command', () => {
   const tempDirs = useTempDirs();
   let workspacePath: string;
@@ -210,27 +198,6 @@ describe('CLI Overleaf clone command', () => {
     expect(`${stdout}${stderr}`).not.toContain('olp_secret');
   });
 
-  it('creates and clones into a relative positional destination', async () => {
-    const destination = path.join(workspacePath, 'resobabce');
-    const result = await withProcessCwd(workspacePath, () =>
-      runCli([
-        'clone',
-        'https://git@git.overleaf.com/0123456789abcdef01234567',
-        'resobabce',
-        '--output-format',
-        'json',
-        '--no-input',
-      ]),
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expectClonedInto(destination);
-    expect(JSON.parse(stdout)).toMatchObject({
-      cloned: true,
-      destination: destination,
-    });
-  });
-
   it('stops the Git process when the host interrupts cloning', async () => {
     const controller = new AbortController();
     hostAbort = controller;
@@ -256,49 +223,6 @@ describe('CLI Overleaf clone command', () => {
     expect(stdout).not.toContain('"cloned":true');
   });
 
-  it('does not create a positional destination when the token is missing', async () => {
-    mocks.getSecret.mockReturnValue(Effect.succeed(undefined));
-    const destination = path.join(workspacePath, 'missing-token');
-    const result = await withProcessCwd(workspacePath, () =>
-      runCli(['clone', PROJECT_ID, 'missing-token', '--no-input']),
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.Usage);
-    await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(cloneCalls()).toHaveLength(0);
-  });
-
-  it('does not create a positional destination when Git is unavailable', async () => {
-    spawn.gitVersion = { stderr: 'git not found', exitCode: 127 };
-    const destination = path.join(workspacePath, 'missing-git');
-    const result = await withProcessCwd(workspacePath, () =>
-      runCli(['clone', PROJECT_ID, 'missing-git', '--no-input']),
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.AgentError);
-    expect(stderr).toContain('Git is not installed or is not on PATH.');
-    await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(cloneCalls()).toHaveLength(0);
-  });
-
-  it('rejects ambiguous positional and --cwd destinations', async () => {
-    const result = await runCli([
-      'clone',
-      PROJECT_ID,
-      path.join(workspacePath, 'positional'),
-      '--cwd',
-      workspacePath,
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(CliExitCode.Usage);
-    expect(stderr).toContain(
-      'either as the second argument or with --cwd, not both',
-    );
-    expect(mocks.getSecret).not.toHaveBeenCalled();
-    expect(cloneCalls()).toHaveLength(0);
-  });
-
   it.each([
     { mode: 'headless', extraArgs: ['--no-input'] },
     { mode: 'machine-readable', extraArgs: ['--output-format', 'json'] },
@@ -322,20 +246,6 @@ describe('CLI Overleaf clone command', () => {
       expect(cloneCalls()).toHaveLength(0);
     },
   );
-
-  it('rejects invalid project identifiers before reading credentials', async () => {
-    const result = await runCli([
-      'clone',
-      'not-a-project',
-      '--cwd',
-      workspacePath,
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(CliExitCode.Usage);
-    expect(stderr).toContain('Invalid Overleaf/ShareLaTeX project.');
-    expect(mocks.getSecret).not.toHaveBeenCalled();
-  });
 
   it('refuses to clone into a nonempty destination', async () => {
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');

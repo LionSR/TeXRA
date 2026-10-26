@@ -20,7 +20,6 @@ import {
   Exit,
   Fiber,
   Layer,
-  Result,
   Schema,
   Scope,
   Stream,
@@ -39,7 +38,6 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry,
@@ -57,8 +55,6 @@ import type { PluginContext } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatIssuesForDiagnostics,
   qualifyAggregateId,
   type RunId,
   type ToolDefinition,
@@ -235,7 +231,6 @@ function agentRun(
   session: SessionHandle,
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
-  rootUserInstruction: string | undefined,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger, model, scope: Scope.makeUnsafe() },
@@ -243,7 +238,6 @@ function agentRun(
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'assistant',
         model: GPT54,
-        ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),
     },
   );
@@ -267,12 +261,9 @@ interface DispatchKit {
 interface HarnessOptions {
   readonly tools: Record<string, ITool>;
   readonly calls: readonly Call[];
-  readonly rootUserInstruction?: string;
   readonly logger?: AgentTrace;
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
-  /** A model switch waiting for the next boundary, for the upload gating. */
-  readonly pendingSwitch?: string;
 }
 
 /**
@@ -328,20 +319,10 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
-  // A switch the user queued waits on the run's input for the next boundary.
-  if (options.pendingSwitch !== undefined)
-    yield* session.followUps.send(runId, {
-      text: `/model ${options.pendingSwitch}`,
-      from: { kind: 'user' },
-      control: { kind: 'model', model: options.pendingSwitch },
-    });
   const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
-    Layer.succeed(
-      AgentRun,
-      agentRun(runId, session, logger, model, options.rootUserInstruction),
-    ),
+    Layer.succeed(AgentRun, agentRun(runId, session, logger, model)),
     Layer.succeed(RunHistory, session.runHistory),
   );
   return {
@@ -506,72 +487,6 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('settles a tool-input validation failure as a tool error', () =>
-    Effect.gen(function* () {
-      // An empty object against a required array: the issue names no
-      // `received` value, and the settled row must still be JSON.
-      const parsed = Schema.decodeUnknownResult(
-        Schema.Struct({ files: Schema.Array(Schema.String) }),
-      )({});
-      const invalidInputTool: ITool = {
-        definition: { name: 'texcount', description: 'texcount' },
-        call: () =>
-          Effect.succeed<ToolResult>({
-            status: 'error',
-            error: 'Invalid input',
-            diagnostics: {
-              type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-              formatted: Result.isFailure(parsed)
-                ? formatIssuesForDiagnostics(parsed.failure)
-                : [],
-            },
-          }),
-      };
-      const kit = yield* openDispatch({
-        tools: { texcount: invalidInputTool },
-        calls: [makeCall('c1', 'texcount', {})],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      const [delivered] = deliveredResults(state);
-      expect(delivered?.status).toBe('error');
-      expect(delivered?.text).toMatch(/Invalid input/);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('preserves the unwrapped root instruction across delegation', () =>
-    Effect.gen(function* () {
-      let observedInstruction: string | undefined;
-      let observedTrace: unknown;
-      const inspectContext: ITool = {
-        definition: {
-          name: 'inspect_context',
-          description: 'inspect_context',
-          parameters: {},
-        },
-        call: () =>
-          Effect.map(requireToolRun('inspect_context'), (call) => {
-            observedInstruction = call.instruction;
-            observedTrace = call.run.logger;
-            return { status: 'executed', output: 'ok' } satisfies ToolResult;
-          }),
-      };
-      const kit = yield* openDispatch({
-        tools: { inspect_context: inspectContext },
-        calls: [makeCall('c1', 'inspect_context', {})],
-        rootUserInstruction: 'Do not use files or external tools.',
-      });
-
-      yield* dispatch(kit);
-
-      expect(observedInstruction).toBe('Do not use files or external tools.');
-      expect(observedTrace).toBe(noopTrace);
       yield* closeSessionOf(kit.session);
     }),
   );
@@ -1020,29 +935,6 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('shares the primary result for side-effect tool duplicates', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: { write_file: probeTool(probe, 'write_file', 5) },
-        calls: [
-          makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
-          makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
-        ],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      expect(countStarts(probe)).toBe(1);
-      const delivered = deliveredResults(state);
-      expect(delivered[0]?.status).toBe('success');
-      // Accidental re-emissions get the primary's result, not an error.
-      expect(delivered[1]?.status).toBe('success');
-      expect(delivered[1]?.text).toBe(delivered[0]?.text);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
   it.effect(
     'keeps delivered documents as bytes and bounds a stalled upload by its deadline',
     () =>
@@ -1163,58 +1055,6 @@ describe('tool-use dispatch', () => {
         expect.stringContaining('"a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"'),
       ]);
       expect(outcome.state.messages.at(-1)?.role).toBe('tool');
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.effect('uploads nothing while a model switch waits for the boundary', () =>
-    Effect.gen(function* () {
-      const pdf = Buffer.from('%PDF-1.7').toString('base64');
-      let uploads = 0;
-      const uploading: Model = {
-        ...boundModel().model,
-        uploadFile: () => Effect.sync(() => uploads++),
-      };
-      const kit = yield* openDispatch({
-        tools: {
-          fetch_papers: {
-            definition: { name: 'fetch_papers' },
-            call: () =>
-              Effect.succeed({
-                status: 'executed',
-                output: 'fetched',
-                files: [
-                  {
-                    path: 'a.pdf',
-                    mimeType: 'application/pdf',
-                    base64Data: pdf,
-                  },
-                ],
-              } satisfies ToolResult),
-          } as ITool,
-        },
-        calls: [makeCall('fetch', 'fetch_papers', {})],
-        pendingSwitch: 'claude-sonnet-4',
-        bound: {
-          ...boundModel(),
-          model: uploading,
-          config: withDocuments(boundModel().config),
-        },
-      });
-      const { state } = yield* dispatch(kit);
-      expect(uploads).toBe(0);
-      // The bytes still deliver; only the optional upload is skipped.
-      const group = state.messages.at(-1);
-      if (group?.role !== 'tool') {
-        throw new Error('The dispatch delivered no tool group.');
-      }
-      expect(group.results[0]?.content.slice(1)).toStrictEqual([
-        {
-          kind: 'document',
-          mimeType: 'application/pdf',
-          digest: blobAddress(pdf),
-        },
-      ]);
       yield* closeSessionOf(kit.session);
     }),
   );

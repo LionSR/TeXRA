@@ -28,42 +28,6 @@ describe('desktop window lifecycle', () => {
     expect(disposeRendererResources).toHaveBeenCalledOnce();
   });
 
-  it('allows discard and clears continuations when editing continues', () => {
-    const webContents = new FakeWebContents();
-    const clearContinueQuitAfterWindowClose = vi.fn();
-    const showDiscardDialog = vi.fn(() => 0);
-    bootstrapDesktopWindowLifecycle({
-      webContents,
-      workspaceIpc: { disposeRendererResources: vi.fn() },
-      showDiscardDialog,
-      isFatalShutdownRequested: () => false,
-      clearContinueQuitAfterWindowClose,
-    });
-    const keepEditing = { preventDefault: vi.fn() };
-    showDiscardDialog.mockReturnValueOnce(0);
-    webContents.emit('will-prevent-unload', keepEditing);
-    expect(keepEditing.preventDefault).not.toHaveBeenCalled();
-    expect(clearContinueQuitAfterWindowClose).toHaveBeenCalledOnce();
-
-    const discard = { preventDefault: vi.fn() };
-    showDiscardDialog.mockReturnValueOnce(1);
-    webContents.emit('will-prevent-unload', discard);
-    expect(discard.preventDefault).toHaveBeenCalledOnce();
-
-    const fatal = { preventDefault: vi.fn() };
-    const fatalWebContents = new FakeWebContents();
-    bootstrapDesktopWindowLifecycle({
-      webContents: fatalWebContents,
-      workspaceIpc: { disposeRendererResources: vi.fn() },
-      showDiscardDialog,
-      isFatalShutdownRequested: () => true,
-      clearContinueQuitAfterWindowClose,
-    });
-    fatalWebContents.emit('will-prevent-unload', fatal);
-    expect(fatal.preventDefault).toHaveBeenCalledOnce();
-    expect(showDiscardDialog).toHaveBeenCalledTimes(2);
-  });
-
   it('continues a closed-window quit through one shutdown sequence', async () => {
     let listener: ((event: { preventDefault(): void }) => void) | undefined;
     const app = {
@@ -114,5 +78,41 @@ describe('desktop window lifecycle', () => {
     listener?.({ preventDefault: vi.fn() });
     expect(ranShutdown).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows discard and clears continuations when editing continues', () => {
+    const webContents = new FakeWebContents();
+    const clearContinueQuitAfterWindowClose = vi.fn();
+    const showDiscardDialog = vi.fn(() => 0);
+    bootstrapDesktopWindowLifecycle({
+      webContents,
+      workspaceIpc: { disposeRendererResources: vi.fn() },
+      showDiscardDialog,
+      isFatalShutdownRequested: () => false,
+      clearContinueQuitAfterWindowClose,
+    });
+    const keepEditing = { preventDefault: vi.fn() };
+    showDiscardDialog.mockReturnValueOnce(0);
+    webContents.emit('will-prevent-unload', keepEditing);
+    expect(keepEditing.preventDefault).not.toHaveBeenCalled();
+    expect(clearContinueQuitAfterWindowClose).toHaveBeenCalledOnce();
+
+    const discard = { preventDefault: vi.fn() };
+    showDiscardDialog.mockReturnValueOnce(1);
+    webContents.emit('will-prevent-unload', discard);
+    expect(discard.preventDefault).toHaveBeenCalledOnce();
+
+    const fatal = { preventDefault: vi.fn() };
+    const fatalWebContents = new FakeWebContents();
+    bootstrapDesktopWindowLifecycle({
+      webContents: fatalWebContents,
+      workspaceIpc: { disposeRendererResources: vi.fn() },
+      showDiscardDialog,
+      isFatalShutdownRequested: () => true,
+      clearContinueQuitAfterWindowClose,
+    });
+    fatalWebContents.emit('will-prevent-unload', fatal);
+    expect(fatal.preventDefault).toHaveBeenCalledOnce();
+    expect(showDiscardDialog).toHaveBeenCalledTimes(2);
   });
 });

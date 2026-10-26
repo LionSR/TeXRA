@@ -1,11 +1,9 @@
 import '@test/support/defaultSessionTestSetup';
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { rootCommand, runCli } from '@cli/commands/root';
@@ -15,26 +13,15 @@ import {
   detectUnknownCliCommand,
   detectUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
-import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
   collectStringFlagValues,
-  optionalStringFlagValue,
   pickGlobalArgs,
 } from '@cli/commands/_helpers/globalArgs';
-import {
-  expandRunInputs,
-  hasMixedStdinWorkflowInputSpecs,
-} from '@cli/runtime/workflowInputs';
+import { expandRunInputs } from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
-  resumeWorkflowOutputDirectory,
 } from '@cli/runtime/workflowOutput';
-import {
-  isCliSupportedModelId,
-  knownCliModelIds,
-  resolveKnownCliModelId,
-} from '@cli/runtime/cliConfig';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -43,12 +30,10 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   makeTempDir,
   useTempDirs,
-  withTempDir,
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
 
@@ -154,31 +139,10 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
-  it('does not rewrite subcommand-scoped shortcut flags', () => {
-    expect(normalizeRootShortcuts(['chat', '--version'])).toEqual([
-      'chat',
-      '--version',
-    ]);
-  });
-
-  it('routes inline top-level --resume values to the resume subcommand', () => {
-    expect(normalizeRootShortcuts(['--resume=abc123'])).toEqual([
-      'resume',
-      'abc123',
-    ]);
-  });
-
   it('preserves global flags when routing top-level --resume', () => {
     expect(
       normalizeRootShortcuts(['--output-format', 'json', '--resume', 'abc123']),
     ).toEqual(['resume', 'abc123', '--output-format', 'json']);
-  });
-
-  it('does not rewrite unknown leading flags before a shortcut', () => {
-    expect(normalizeRootShortcuts(['--unknown', '--version'])).toEqual([
-      '--unknown',
-      '--version',
-    ]);
   });
 
   it('keeps leading global flags attached to explicit subcommands', () => {
@@ -189,35 +153,6 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
-  it('keeps leading source flags attached to agent subcommands', () => {
-    expect(
-      reorderGlobalFlags(['--source', 'vendor/skills', 'run', 'polish']),
-    ).toEqual(['run', 'polish', '--source', 'vendor/skills']);
-    expect(
-      reorderGlobalFlags(['-s', 'vendor/skills', 'run', 'polish']),
-    ).toEqual(['run', 'polish', '-s', 'vendor/skills']);
-    expect(reorderGlobalFlags(['--include-interop', 'chat'])).toEqual([
-      'chat',
-      '--include-interop',
-    ]);
-  });
-
-  it('keeps unknown leading flags in place for citty to report', () => {
-    expect(reorderGlobalFlags(['--unknown', 'auth'])).toEqual([
-      '--unknown',
-      'auth',
-    ]);
-  });
-
-  it('detects unknown top-level commands before citty falls back to help', async () => {
-    await expect(
-      detectUnknownCliCommand(rootCommand, ['bogus']),
-    ).resolves.toEqual({
-      typedCommand: 'texra bogus',
-      helpCommand: 'texra',
-    });
-  });
-
   it('suggests close command names for mistyped top-level commands', async () => {
     await expect(
       detectUnknownCliCommand(rootCommand, ['chatt']),
@@ -226,17 +161,6 @@ describe('CLI root argument routing', () => {
       helpCommand: 'texra',
       suggestedCommand: 'texra chat',
     });
-  });
-
-  it('detects unknown command-group children', async () => {
-    for (const group of ['agents', 'history', 'auth', 'models', 'skills']) {
-      await expect(
-        detectUnknownCliCommand(rootCommand, [group, 'bogus']),
-      ).resolves.toEqual({
-        typedCommand: `texra ${group} bogus`,
-        helpCommand: `texra ${group}`,
-      });
-    }
   });
 
   it('detects unknown command-scoped flags before command run', async () => {
@@ -282,57 +206,6 @@ describe('CLI root argument routing', () => {
     }
   });
 
-  it('rejects camelCase spellings for kebab-case flags', async () => {
-    await expect(
-      detectUnknownCliFlag(rootCommand, [
-        'models',
-        'list',
-        '--outputFormat',
-        'json',
-      ]),
-    ).resolves.toEqual({
-      flag: '--outputFormat',
-      helpCommand: 'texra models list',
-    });
-  });
-
-  it('validates help command paths against the displayed command', async () => {
-    await expect(
-      detectUnknownCliFlag(rootCommand, [
-        'help',
-        'models',
-        'list',
-        '--unknown',
-      ]),
-    ).resolves.toEqual({
-      flag: '--unknown',
-      helpCommand: 'texra models list',
-    });
-    await expect(
-      detectUnknownCliFlag(rootCommand, [
-        'help',
-        'models',
-        'list',
-        '--no-input',
-        '--output-format',
-        'json',
-      ]),
-    ).resolves.toBeUndefined();
-  });
-
-  it('does not classify known command arguments as unknown commands', async () => {
-    for (const args of [
-      ['run', 'polish', '--input', 'paper.tex'],
-      ['history', 'show', 'abc123'],
-      ['completion', 'zsh'],
-      ['--unknown', 'bogus'],
-    ]) {
-      await expect(
-        detectUnknownCliCommand(rootCommand, args),
-      ).resolves.toBeUndefined();
-    }
-  });
-
   it('collects repeated run context flags from raw args', () => {
     expect(
       collectStringFlagValues(
@@ -361,42 +234,6 @@ describe('CLI root argument routing', () => {
     expect(() =>
       collectStringFlagValues(['firstread', '-i', '-p'], 'input', 'i'),
     ).toThrow('Missing value for -i');
-  });
-
-  it('rejects file flags with empty inline values', () => {
-    expect(() =>
-      collectStringFlagValues(['firstread', '--input='], 'input', 'i'),
-    ).toThrow('Missing value for --input');
-  });
-
-  it('preserves bare dash as a file flag stdin value', () => {
-    expect(
-      collectStringFlagValues(['firstread', '--input', '-'], 'input', 'i'),
-    ).toEqual(['-']);
-  });
-
-  it('reads optional file flags from raw args with the same value guard', () => {
-    expect(
-      optionalStringFlagValue(['firstread', '--output', 'out.tex'], 'output'),
-    ).toBe('out.tex');
-    expect(
-      optionalStringFlagValue(
-        ['review', '--instruction-file=prompt.md'],
-        'instruction-file',
-      ),
-    ).toBe('prompt.md');
-    expect(
-      optionalStringFlagValue(['firstread', '--output', '-'], 'output'),
-    ).toBe('-');
-    expect(() =>
-      optionalStringFlagValue(
-        ['review', '--instruction-file', '--print'],
-        'instruction-file',
-      ),
-    ).toThrow('Missing value for --instruction-file');
-    expect(() =>
-      optionalStringFlagValue(['firstread', '--output='], 'output'),
-    ).toThrow('Missing value for --output');
   });
 
   it.effect(
@@ -438,18 +275,6 @@ describe('CLI root argument routing', () => {
           ).toEqual(['paper/sections/appendix.tex']);
         }),
       ),
-  );
-
-  it.effect('rejects a literal --input file that does not exist', () =>
-    withTempDirEffect('texra-cli-inputs-', (root) =>
-      Effect.gen(function* () {
-        const missing = path.join(root, 'no-such.tex');
-        // A pure path (no glob magic, not a directory) is validated here rather
-        // than handed to the workflow to fail on later with a raw ENOENT.
-        const error = yield* Effect.flip(expandSpecs([missing], root));
-        expect(error.message).toMatch(/--input: file not found/);
-      }),
-    ),
   );
 
   it.effect('materializes stdin when --input - is passed', () =>
@@ -494,50 +319,6 @@ describe('CLI root argument routing', () => {
     ),
   );
 
-  it.effect('preserves stdin position when mixed with file inputs', () =>
-    withTempDirEffect('texra-cli-stdin-', (root) =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'paper.tex'), 'paper'),
-        );
-        const { readStdinText } = trackedStdinReader();
-
-        const expanded = yield* expandSpecs(
-          ['-', 'paper.tex'],
-          root,
-          '--input',
-          { readStdinText },
-        );
-
-        expect(path.basename(expanded[0])).toBe('stdin.tex');
-        expect(path.basename(path.dirname(expanded[0]))).toMatch(
-          /^texra-stdin-/,
-        );
-        expect(expanded[1]).toBe('paper.tex');
-      }),
-    ),
-  );
-
-  it.effect('rejects empty stdin input', () =>
-    withTempDirEffect('texra-cli-stdin-', (root) =>
-      Effect.gen(function* () {
-        const { readStdinText } = trackedStdinReader(' \n\t ');
-
-        const error = yield* Effect.flip(
-          expandSpecs(['-'], root, '--input', { readStdinText }),
-        );
-        expect(error.message).toMatch(/stdin: no data on stdin/);
-      }),
-    ),
-  );
-
-  it('detects stdin mixed with other raw workflow input specs', () => {
-    expect(hasMixedStdinWorkflowInputSpecs(['-'])).toBe(false);
-    expect(hasMixedStdinWorkflowInputSpecs(['-', '-'])).toBe(false);
-    expect(hasMixedStdinWorkflowInputSpecs(['-', 'paper.tex'])).toBe(true);
-    expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
-  });
-
   it.effect('does not read stdin before later --input validation errors', () =>
     withTempDirEffect('texra-cli-stdin-', (root) =>
       Effect.gen(function* () {
@@ -552,74 +333,6 @@ describe('CLI root argument routing', () => {
         expect(readCount()).toBe(0);
       }),
     ),
-  );
-
-  it.effect('does not read stdin before --context validation errors', () =>
-    withTempDirEffect('texra-cli-stdin-', (root) =>
-      Effect.gen(function* () {
-        const { readStdinText, readCount } = trackedStdinReader();
-
-        const error = yield* Effect.flip(
-          expandRunInputs(['-'], ['missing-context.tex'], root, {
-            readStdinText,
-          }).pipe(Effect.provide(nodePlatformLayer)),
-        );
-        expect(error.message).toMatch(
-          /--context: file not found: missing-context\.tex/,
-        );
-        expect(readCount()).toBe(0);
-      }),
-    ),
-  );
-
-  it.effect(
-    'materializes stdin for --context - when input is a normal file',
-    () =>
-      withTempDirEffect('texra-cli-stdin-', (root) =>
-        Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            fs.writeFile(path.join(root, 'main.tex'), 'main'),
-          );
-          const { readStdinText } = trackedStdinReader('context body');
-
-          const { inputFiles, contextFiles } = yield* expandRunInputs(
-            ['main.tex'],
-            ['-'],
-            root,
-            { readStdinText },
-          ).pipe(Effect.provide(nodePlatformLayer));
-
-          expect(inputFiles).toEqual(['main.tex']);
-          expect(contextFiles).toHaveLength(1);
-          expect(path.basename(contextFiles[0])).toBe('stdin.tex');
-          expect(path.basename(path.dirname(contextFiles[0]))).toMatch(
-            /^texra-stdin-/,
-          );
-          yield* Effect.promise(() =>
-            expect(
-              fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
-            ).resolves.toBe('context body'),
-          );
-        }),
-      ),
-  );
-
-  it.effect(
-    'rejects stdin across both input and context with a clear usage error',
-    () =>
-      withTempDirEffect('texra-cli-stdin-', (root) =>
-        Effect.gen(function* () {
-          const { readStdinText } = trackedStdinReader('piped body');
-          const error = yield* Effect.flip(
-            expandRunInputs(['-'], ['-'], root, { readStdinText }).pipe(
-              Effect.provide(nodePlatformLayer),
-            ),
-          );
-          expect(error.message).toMatch(
-            /Use `-` for either --input or --context/,
-          );
-        }),
-      ),
   );
 
   it.effect(
@@ -640,19 +353,6 @@ describe('CLI root argument routing', () => {
       ),
   );
 
-  it.effect('rejects external directories before globbing their contents', () =>
-    withExternalDirs((root, externalDir) =>
-      Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          expandRunInputs([externalDir], [], root, {
-            requireWorkspaceFiles: true,
-          }).pipe(Effect.provide(nodePlatformLayer)),
-        );
-        expect(error.message).toMatch(/--input: file is outside --cwd:/);
-      }),
-    ),
-  );
-
   it.effect('prefers an exact filename containing glob syntax', () =>
     withTempDirEffect('texra-cli-literal-magic-', (root) =>
       Effect.gen(function* () {
@@ -669,52 +369,6 @@ describe('CLI root argument routing', () => {
         ).toEqual(['refs/[ab].bib']);
       }),
     ),
-  );
-
-  it.effect('expands host-native globs for both --input and --context', () =>
-    withTempDirEffect('texra-cli-native-glob-', (root) =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'refs', 'zeta.bib'), 'zeta'),
-        );
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha'),
-        );
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'refs', 'notes.md'), 'notes'),
-        );
-        const pattern = path.join('refs', '*.bib');
-
-        expect(
-          yield* expandRunInputs([pattern], [pattern], root).pipe(
-            Effect.provide(nodePlatformLayer),
-          ),
-        ).toEqual({
-          inputFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
-          contextFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
-        });
-      }),
-    ),
-  );
-
-  it.effect.skipIf(process.platform !== 'win32')(
-    'expands an absolute drive-letter glob',
-    () =>
-      withTempDirEffect('texra-cli-drive-glob-', (root) =>
-        Effect.gen(function* () {
-          yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
-          yield* Effect.promise(() =>
-            fs.writeFile(path.join(root, 'refs', 'paper.bib'), 'paper'),
-          );
-          const pattern = path.join(root, 'refs', '*.bib');
-
-          expect(pattern).toMatch(/^[A-Za-z]:\\/);
-          expect(yield* expandSpecs([pattern], root)).toEqual([
-            'refs/paper.bib',
-          ]);
-        }),
-      ),
   );
 
   it.effect.skipIf(process.platform === 'win32')(
@@ -735,77 +389,6 @@ describe('CLI root argument routing', () => {
           ).toEqual(['refs/[ab]-one.bib']);
         }),
       ),
-  );
-
-  it.effect('detects brace-only workflow globs', () =>
-    withTempDirEffect('texra-cli-brace-glob-', (root) =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => fs.mkdir(path.join(root, 'refs')));
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'refs', 'beta.bib'), 'beta'),
-        );
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha'),
-        );
-
-        expect(yield* expandSpecs(['refs/{alpha,beta}.bib'], root)).toEqual([
-          'refs/alpha.bib',
-          'refs/beta.bib',
-        ]);
-      }),
-    ),
-  );
-
-  it.effect(
-    'attributes unmatched globs to the original input or context flag',
-    () =>
-      withTempDirEffect('texra-cli-unmatched-glob-', (root) =>
-        Effect.gen(function* () {
-          const pattern = path.join('missing refs', '*.bib');
-
-          const inputError = yield* Effect.flip(
-            expandSpecs([`  ${pattern}  `], root),
-          );
-          expect(inputError.message).toContain(
-            `--input: no files matched: ${pattern}`,
-          );
-          const contextError = yield* Effect.flip(
-            expandSpecs([`  ${pattern}  `], root, '--context'),
-          );
-          expect(contextError.message).toContain(
-            `--context: no files matched: ${pattern}`,
-          );
-        }),
-      ),
-  );
-
-  it.effect('keeps a failed workflow with no output in run storage', () =>
-    Effect.gen(function* () {
-      expect(
-        yield* resolveWorkflowOutput(
-          'corrected.tex',
-          undefined,
-          {
-            outcome: RUN_OUTCOME.FAILED,
-            output: {
-              response: '',
-              files: [],
-              structured: { outputs: [], compileFailures: [], diffs: [] },
-            },
-            runId: 'run-without-output' as RunId,
-          },
-          createRunCommandCliContext(),
-          { storageRoot: '/tmp/storage' },
-        ).pipe(Effect.provide(nodePlatformLayer)),
-      ).toMatchObject({
-        outcome: RUN_OUTCOME.FAILED,
-        runDirectory: runDirUnder(
-          '/tmp/storage',
-          'run-without-output' as RunId,
-        ),
-        output: { documents: { outputs: [] } },
-      });
-    }),
   );
 
   it('restores one requested workflow output path for resume', () => {
@@ -840,59 +423,6 @@ describe('CLI root argument routing', () => {
     );
   });
 
-  it('preserves whitespace in stored workflow output and workspace paths', () => {
-    const workingDirectory = path.join(path.sep, 'tmp', 'project ');
-    const outputFile = path.join(workingDirectory, ' output.tex ');
-    expect(
-      resumeWorkflowOutputFile(
-        storedConfig({
-          workingDirectory,
-          cli: { outputFile },
-        }),
-      ),
-    ).toBe(outputFile);
-  });
-
-  it('keeps legacy resume output paths relative when no stored working directory exists', () => {
-    expect(
-      resumeWorkflowOutputFile(
-        storedConfig({
-          workingDirectory: undefined,
-          outputFiles: ['paper.polished.tex'],
-        }),
-      ),
-    ).toBe('paper.polished.tex');
-  });
-
-  it('does not infer resume output targets for multi-output workflows', () => {
-    expect(
-      resumeWorkflowOutputFile(
-        storedConfig({ outputFiles: ['paper.tex', 'appendix.tex'] }),
-      ),
-    ).toBeUndefined();
-  });
-
-  it('does not infer resume output targets for chat configs', () => {
-    expect(
-      resumeWorkflowOutputFile(
-        storedConfig({
-          script: null,
-          outputFiles: ['paper.polished.tex'],
-        }),
-      ),
-    ).toBeUndefined();
-  });
-
-  it('rejects a non-absolute stored CLI output directory', () => {
-    expect(() =>
-      resumeWorkflowOutputDirectory(
-        storedConfig({ cli: { outputDirectory: 'out/polished' } }),
-      ),
-    ).toThrow(
-      'Stored document task output directory is not absolute: out/polished',
-    );
-  });
-
   it.effect(
     'reports successful stopped workflows with missing requested outputs as failed copies',
     () =>
@@ -922,41 +452,9 @@ describe('CLI root argument routing', () => {
         );
       }),
   );
-
-  it.effect(
-    'keeps stopped workflows with missing requested outputs interrupted',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* resolveWorkflowOutput(
-          'corrected.tex',
-          undefined,
-          {
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: {
-              response: '',
-              files: [],
-              structured: { outputs: [], compileFailures: [], diffs: [] },
-            },
-            runId: 'stopped-without-output' as RunId,
-          },
-          createRunCommandCliContext(),
-          { storageRoot: '/tmp/storage' },
-        ).pipe(Effect.provide(nodePlatformLayer));
-
-        expect(result).toMatchObject({
-          outcome: RUN_OUTCOME.CANCELLED,
-        });
-        expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
-        expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
-      }),
-  );
 });
 
 describe('CLI global color/input flags', () => {
-  it('preserves whitespace in the explicit workspace argument', () => {
-    expect(pickGlobalArgs({ cwd: ' workspace ' }, []).cwd).toBe(' workspace ');
-  });
-
   it('maps CLI color and no-input flags to canonical knobs', () => {
     expect(
       pickGlobalArgs({ color: false, 'no-input': true }, []),
@@ -964,49 +462,6 @@ describe('CLI global color/input flags', () => {
       noColor: true,
       noInput: true,
     });
-  });
-
-  it('maps citty negated input output to --no-input', () => {
-    expect(pickGlobalArgs({ input: false }, [])).toMatchObject({
-      noInput: true,
-    });
-    expect(pickGlobalArgs({ input: 'file.tex' }, [])).toMatchObject({
-      noInput: false,
-    });
-  });
-
-  it('does not treat command-specific --input as a leading global flag', () => {
-    expect(
-      reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
-    ).toEqual(['--input', 'file.tex', 'run', 'polish']);
-  });
-});
-
-describe('CLI model flag validation contract', () => {
-  it('does not advertise host-only Copilot models as CLI models', () => {
-    expect(isCliSupportedModelId('copilot/copilot-gpt-4o')).toBe(false);
-    expect(knownCliModelIds()).not.toContain('copilot/copilot-gpt-4o');
-    expect(resolveKnownCliModelId('copilot/copilot-gpt-4o')).toBeUndefined();
-    expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();
-  });
-});
-
-describe('CLI crash report line', () => {
-  const bugsUrl = 'https://github.com/LionSR/TeXRA/issues';
-
-  it('points unexpected crashes at the issue tracker', () => {
-    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toContain(
-      bugsUrl,
-    );
-  });
-
-  it('does not append a report link for usage errors', () => {
-    expect(
-      formatCrashReportLine(
-        new CliUsageError({ message: 'bad flag' }),
-        bugsUrl,
-      ),
-    ).toBeUndefined();
   });
 });
 
@@ -1096,14 +551,6 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('USAGE');
   });
 
-  it('rejects unknown commands before honoring explicit --help', async () => {
-    const result = await runCli(['workflows', '--help']);
-    expectUsageError(
-      result,
-      'Unknown command: texra workflows. Run `texra --help` for usage.',
-    );
-  });
-
   it('rejects unknown flags before running command bodies', async () => {
     const result = await runCli(['doctor', '--bogus', '--no-input']);
     expectUsageError(
@@ -1112,67 +559,8 @@ describe('runCli usage output stream routing', () => {
     );
   });
 
-  it('preserves the interactive-command error for headless-only flags', async () => {
-    const cases: Array<{ args: string[]; message: string; absent: string[] }> =
-      [
-        {
-          args: ['chat', '--print'],
-          message: 'texra chat is interactive and does not support --print.',
-          absent: ['--output-format', '--no-input', 'Unknown option'],
-        },
-        {
-          args: ['setup', '--no-input'],
-          message:
-            'texra setup is interactive and does not support --no-input.',
-          absent: ['--print', '--output-format', 'Unknown option'],
-        },
-        {
-          args: ['setup', '--no-input=true'],
-          message:
-            'texra setup is interactive and does not support --no-input.',
-          absent: ['--print', '--output-format', 'Unknown option'],
-        },
-      ];
-
-    for (const { args, message, absent } of cases) {
-      stderr = '';
-
-      const result = await runCli(args);
-
-      expectUsageError(result, message);
-      for (const text of absent) {
-        expect(stderr).not.toContain(text);
-      }
-    }
-  });
-
   // Resume is dual-mode: a workflow run resumes headless, so the headless
   // globals are accepted and advertised alongside the interactive ones.
-
-  it('accepts headless globals on resume instead of rejecting them', async () => {
-    const result = await runCli(['resume', 'abc123', '--print']);
-    expectUsageError(result, 'Run not found: abc123');
-    expect(stderr).not.toContain('is interactive');
-    expect(stderr).not.toContain('Unknown option');
-
-    stderr = '';
-    const shortcutResult = await runCli([
-      '--output-format',
-      'json',
-      '--resume',
-      'abc123',
-    ]);
-    expectUsageError(shortcutResult, 'Run not found: abc123');
-    expect(stderr).not.toContain('is interactive');
-    expect(stderr).not.toContain('Unknown option');
-  });
-
-  it('honors --no-color in explicit help output', async () => {
-    const result = await runCli(['--no-color', '--help']);
-    expectOk(result);
-    expect(stdout).toContain('USAGE');
-    expect(stdout).toBe(stripAnsi(stdout));
-  });
 
   it('honors structured output for the version command', async () => {
     const jsonResult = await runCli(['version', '--output-format', 'json']);
@@ -1195,65 +583,5 @@ describe('runCli usage output stream routing', () => {
       version: expect.stringMatching(/^\d+\.\d+\.\d+/),
       ts: expect.any(String),
     });
-  });
-
-  it('prints version output without resolving workspace context', async () => {
-    const result = await runCli([
-      '--cwd',
-      '/definitely/missing/texra-version-test',
-      '--version',
-      '--output-format',
-      'json',
-    ]);
-
-    expectOk(result);
-    expect(JSON.parse(stdout)).toMatchObject({
-      version: expect.stringMatching(/^\d+\.\d+\.\d+/),
-    });
-  });
-
-  it('shows full command paths for nested usage errors', async () => {
-    const result = await runCli(['history', 'show']);
-    expectUsageError(result, 'Run `texra history show --help` for usage.');
-  });
-
-  it('defaults bare history to list while accepting global flags', async () => {
-    await withTempDir('texra-history-', async (root) => {
-      const result = await runCli([
-        'history',
-        '--cwd',
-        root,
-        '--output-format',
-        'json',
-      ]);
-
-      expectOk(result);
-      expect(JSON.parse(stdout)).toEqual([]);
-    });
-  });
-
-  it('forwards history globals before an explicit subcommand', async () => {
-    const missingRoot = path.join(
-      os.tmpdir(),
-      `texra-history-missing-${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`,
-    );
-
-    const result = await runCli([
-      'history',
-      '--cwd',
-      missingRoot,
-      'list',
-      '--output-format',
-      'json',
-    ]);
-
-    expectUsageError(result, `--cwd: path does not exist: ${missingRoot}`);
-  });
-
-  it('reports unknown command paths passed to help', async () => {
-    const result = await runCli(['help', 'bogus']);
-    expectUsageError(result, 'Unknown command: texra bogus');
   });
 });

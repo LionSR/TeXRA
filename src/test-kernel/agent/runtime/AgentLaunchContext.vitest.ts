@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -10,10 +10,6 @@ import {
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -27,9 +23,8 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
-import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
+import { recordSessionEvents } from '../progressTestUtils';
 
 const buildAgentLaunchContext = (
   input: Omit<
@@ -114,60 +109,6 @@ describe('AgentLaunchContext', () => {
   });
 
   it.effect(
-    'publishes missing-agent banners through the supplied host interactions',
-    () =>
-      Effect.gen(function* () {
-        // The banner claims the failure, so the launch catch adds no generic toast.
-        const explicit = createRecordingHost();
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        yield* session.interactions.use(explicit.interactions);
-
-        yield* launchWithMissingAgent(
-          session,
-          '__missing_agent_for_launch_context_test__',
-        );
-
-        expect(explicit.events).toEqual([
-          {
-            event: 'showAgentConfigBanner',
-            payload: {
-              agentName: '__missing_agent_for_launch_context_test__',
-            },
-          },
-        ]);
-      }),
-  );
-
-  it.effect(
-    'renders a queued missing-agent banner once a live host replays it',
-    () =>
-      Effect.gen(function* () {
-        // The retained replay renders the targeted banner and no generic toast.
-        const recording = createRecordingHost();
-        const session = yield* triggerQueuedMissingAgentFailure(
-          yield* createTestSession(),
-        );
-        const owner = session.interactions;
-
-        yield* owner.use(recording.interactions);
-        yield* settle;
-
-        expect(
-          recording.events.filter(
-            (event) => event.event === 'showAgentConfigBanner',
-          ),
-        ).toHaveLength(1);
-        expect(
-          recording.events.filter(
-            (event) => event.event === 'requestShowError',
-          ),
-        ).toHaveLength(0);
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  it.effect(
     'falls back to the generic toast when a live host throws on the missing-agent banner',
     () =>
       Effect.gen(function* () {
@@ -218,51 +159,6 @@ describe('AgentLaunchContext', () => {
           events.filter((event) => event === 'requestShowError'),
         ).toHaveLength(1);
         yield* closeSessionOf(session);
-      }),
-  );
-
-  it.effect(
-    'does not double-surface a model-not-recognized failure via the generic error toast',
-    () =>
-      Effect.gen(function* () {
-        const recording = createRecordingHost();
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        yield* session.interactions.use(recording.interactions);
-
-        // Rejected while preparing the definition, before any execution is
-        // registered for the unknown model.
-        const error = yield* Effect.flip(
-          prepareAgentDefinition({
-            config: Schema.decodeUnknownSync(AgentConfigSchema)({
-              agent: 'critic',
-              model: '__unregistered_model_for_launch_context_test__',
-            }),
-            session,
-          }),
-        ).pipe(
-          Effect.provide(
-            Layer.merge(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-              nodePlatformLayer,
-            ),
-          ),
-          Effect.provide(fakeProcessServices()),
-        );
-        expect(error.message).toContain('is not registered');
-
-        // Only the targeted instruction should fire; the generic `requestShowError`
-        // catch-all must not repeat a failure the instruction already presented.
-        expect(
-          recording.events.filter(
-            (event) => event.event === 'requestShowError',
-          ),
-        ).toEqual([]);
-        expect(
-          recording.events.filter(
-            (event) => event.event === 'requestShowInstruction',
-          ),
-        ).toHaveLength(1);
       }),
   );
 

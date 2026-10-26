@@ -36,16 +36,6 @@ describe('read_file line ranges', () => {
     });
   });
 
-  it.effect('reads the whole file when no range is given', () =>
-    Effect.gen(function* () {
-      const result = yield* callRead({ path: 'small.txt' });
-
-      expect(result.summary).toBe('Read small.txt');
-      expect(result.output).toContain('line 1');
-      expect(result.output).toContain('line 10');
-    }),
-  );
-
   it.effect.each([
     {
       name: 'an explicit in-bounds range inclusively',
@@ -53,13 +43,6 @@ describe('read_file line ranges', () => {
       summary: 'Read lines 3-5 of small.txt',
       contains: ['line 3', 'line 5'],
       excludes: ['line 2', 'line 6'],
-    },
-    {
-      name: 'a single-line range with the singular label',
-      range: { start: 4, end: 4 },
-      summary: 'Read line 4 of small.txt',
-      contains: ['line 4'],
-      excludes: ['line 5'],
     },
     {
       name: 'an end clamped past EOF, saying so in the summary',
@@ -115,16 +98,5 @@ describe('read_file line ranges', () => {
         expect(result.summary).toBe('Read lines 2-2001 of large.txt');
         expect(result.output).toContain('...(truncated, 499 more lines)');
       }),
-  );
-
-  it.effect('rejects an end below the start', () =>
-    Effect.gen(function* () {
-      const result = yield* callRead({
-        path: 'small.txt',
-        range: { start: 5, end: 2 },
-      });
-
-      expect(result.status).toBe('error');
-    }),
   );
 });

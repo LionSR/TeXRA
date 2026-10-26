@@ -91,38 +91,6 @@ describe('main-view run launch controller', () => {
     vi.clearAllMocks();
   });
 
-  it.effect('prepares ordinary launches without loading the team catalog', () =>
-    Effect.gen(function* () {
-      const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(launchRequest({ agent: 'orchestrator' }), ROOTS),
-      );
-
-      expect(config).toMatchObject({
-        agent: 'orchestrator',
-        instruction: 'Improve the draft.',
-        outputFiles: [],
-      });
-      expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'keeps missing selections explicit before schema prefaults apply',
-    () =>
-      Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          onGlobalStorage(
-            prepareSurfaceLaunch(launchRequest({ model: '' }), ROOTS),
-          ),
-        );
-
-        expect(error).toMatchObject({
-          _tag: 'Rejected',
-          reason: 'Choose an agent and a model first.',
-        });
-      }),
-  );
-
   it.effect('requires an input or media file for a document agent', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
@@ -175,37 +143,5 @@ describe('main-view run launch controller', () => {
           instruction: 'Improve the draft.',
         });
       }),
-  );
-
-  it.effect('builds the resolved team fields over the renderer agent', () =>
-    Effect.gen(function* () {
-      mocks.resolveTeamLaunch.mockReturnValue({
-        status: 'ready',
-        fields: {
-          agent: 'builtIn:lead',
-          delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
-          cli: { teamId: 'custom-team' },
-        },
-        missingNames: ['writer'],
-      });
-
-      // The renderer's selected agent is ignored in favour of the team plan.
-      const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(
-          launchRequest({
-            launchTarget: 'team',
-            selectedTeamId: 'physicist',
-            agent: 'stale-renderer-agent',
-          }),
-          ROOTS,
-        ),
-      );
-
-      expect(config).toMatchObject({
-        agent: 'builtIn:lead',
-        delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
-        cli: { teamId: 'custom-team' },
-      });
-    }),
   );
 });

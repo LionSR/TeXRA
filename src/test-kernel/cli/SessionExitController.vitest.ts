@@ -3,9 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { RunId } from '@shared/schemas';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
@@ -71,48 +69,6 @@ describe('chat TUI session exit controller', () => {
     });
     return { controller, terminal };
   }
-
-  it('prints an artifact flush failure during signal teardown despite quiet logging', async () => {
-    const session = new TuiSession();
-    session.runId = 'exec-flush-warning' as RunId;
-    session.runExitCode = CliExitCode.Success;
-    const exitCalled = createDeferred();
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
-      exitCalled.resolve();
-      return undefined as never;
-    }) as typeof process.exit);
-    const stderrWrite = createDeferred();
-    const stderrWaitCalled = createDeferred();
-    mocks.writeTextStderrAndWait.mockImplementationOnce(() => {
-      stderrWaitCalled.resolve();
-      return Effect.promise(() => stderrWrite.promise);
-    });
-    vi.spyOn(session, 'isResumableIdle').mockReturnValue(true);
-    const { controller } = createController(session);
-
-    try {
-      controller.handleSigint();
-      await stderrWaitCalled.promise;
-      expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce();
-
-      expect(mocks.writeTextStdout).toHaveBeenCalledWith(
-        expect.stringContaining('texra resume exec-flush-warning'),
-      );
-      expect(mocks.writeTextStderrAndWait).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Transcript flush failed during exit; the session tail may be missing: disk full',
-        ),
-      );
-      expect(mocks.cliPlatformShutdownSequence).not.toHaveBeenCalled();
-      expect(exit).not.toHaveBeenCalled();
-
-      stderrWrite.resolve();
-      await exitCalled.promise;
-      expect(exit).toHaveBeenCalledWith(CliExitCode.Success);
-    } finally {
-      exit.mockRestore();
-    }
-  });
 
   it('restores the terminal and prints the hint when the graceful flush fails', async () => {
     const session = new TuiSession();

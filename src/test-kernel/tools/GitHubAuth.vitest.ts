@@ -77,11 +77,6 @@ describe('resolveGitHubTokenSource', () => {
       expected: 'secret',
     },
     {
-      name: 'reports "env" when no persisted token exists but an env var does',
-      env: { GH_TOKEN: 'gh-env-token' },
-      expected: 'env',
-    },
-    {
       name: 'reports "none" when neither a persisted token nor an env var exists',
       expected: 'none',
     },

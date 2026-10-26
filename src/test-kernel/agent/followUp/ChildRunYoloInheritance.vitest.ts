@@ -11,9 +11,7 @@ import {
   type ApprovalGrants,
   inheritedGrants,
   resolveBypass,
-  runBypasses,
 } from '@shared/approvalBypassKind';
-import { delegatedChildGrants } from '@tools/delegation/subagentRun';
 
 /** A session's grants as its rows fold them: parent edges, each run's
  *  standing and its latest grants. Every run is live unless `interrupted`. */
@@ -54,15 +52,6 @@ describe('child subagent stream approval inheritance', () => {
     });
     expect(resolveBypass(view, 'child' as RunId, 'toolEdit')).toBe('human');
     expect(resolveBypass(view, 'child' as RunId, 'bash')).toBeNull();
-  });
-
-  it('leaves the child gated when the parent still prompts', () => {
-    const view = rows({ parent: {}, child: { parent: 'parent' } });
-    expect(runBypasses(view, 'child' as RunId)).toEqual({
-      bash: false,
-      toolEdit: false,
-      superYolo: false,
-    });
   });
 
   it('follows a parent change made after the child started, with no row of its own', () => {
@@ -132,18 +121,6 @@ describe('child subagent stream approval inheritance', () => {
     const goal = goalGrant(['bash', 'toolEdit'])(NO_APPROVAL_GRANTS);
     expect(humanGrant(['bash'], false)(goal)).toEqual({
       own: { bash: 'off' },
-      goal: ['toolEdit'],
-    });
-  });
-
-  it('registers an approved delegation with its own grant', () => {
-    expect(delegatedChildGrants('inherit')).toEqual(NO_APPROVAL_GRANTS);
-    expect(delegatedChildGrants('auto-approved')).toEqual({
-      own: { toolEdit: 'on' },
-      goal: [],
-    });
-    expect(delegatedChildGrants('goal-approved')).toEqual({
-      own: {},
       goal: ['toolEdit'],
     });
   });

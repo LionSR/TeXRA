@@ -34,9 +34,8 @@ describe('replaceLiteralMatches', () => {
     );
   });
 
-  it.each(dollarPatterns)(
-    'inserts %j verbatim for a unique match',
-    (replacement) => {
+  it('inserts replacement patterns verbatim for a unique match', () => {
+    for (const replacement of dollarPatterns) {
       expect(
         replaceLiteralMatches({
           content: 'before OLD after',
@@ -48,8 +47,8 @@ describe('replaceLiteralMatches', () => {
       ).toEqual(
         Result.succeed({ content: `before ${replacement} after`, count: 1 }),
       );
-    },
-  );
+    }
+  });
 
   it('reports every matching line through the declared ambiguity error', () => {
     expect(
@@ -65,9 +64,8 @@ describe('replaceLiteralMatches', () => {
     ).toEqual(Result.fail(new ToolError('3 matches on 1,2,3')));
   });
 
-  it.each(dollarPatterns)(
-    'inserts %j verbatim for every occurrence',
-    (replacement) => {
+  it('inserts replacement patterns verbatim for every occurrence', () => {
+    for (const replacement of dollarPatterns) {
       expect(
         replaceLiteralMatches({
           content: 'OLD and OLD',
@@ -82,6 +80,6 @@ describe('replaceLiteralMatches', () => {
           count: 2,
         }),
       );
-    },
-  );
+    }
+  });
 });

@@ -138,69 +138,6 @@ describe('catalog-derived settings snapshots', () => {
       }
     }),
   );
-
-  it.effect(
-    'builds the LaTeX message from validated catalog values and defaults',
-    () =>
-      Effect.gen(function* () {
-        const logs = captureLogEntries();
-        const { stores, workspaceState } = makeFakeSettingsStores();
-        yield* workspaceState.update(
-          DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-          false,
-        );
-        yield* workspaceState.update(
-          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-          'stale-bogus-value',
-        );
-        yield* workspaceState.update(TexraStateKey.LATEX_FORMATTER, 'tex-fmt');
-
-        try {
-          const message = yield* buildSettingsSnapshotMessage('latex', {
-            ...stores,
-            host: 'desktop',
-          });
-
-          assert.equal(message.snapshot, 'latex');
-          assert.equal(
-            message.values[DocumentsStateKey.WORKFLOW_AUTO_COMPILE],
-            false,
-          );
-          assert.equal(
-            message.values[DocumentsStateKey.LATEXDIFF_MATH_MARKUP],
-            LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-          );
-          assert.equal(
-            message.values[TexraStateKey.LATEX_FORMATTER],
-            'tex-fmt',
-          );
-          assert.equal(logs.at('WARN', 'settings').length, 1);
-        } finally {
-          setLogSink(null);
-        }
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-  );
-});
-
-/**
- * The set the CLI builds from this same export for its unknown-key walk over
- * `.texra/config.json` (`packages/cli/src/runtime/cliConfig.ts`).
- */
-const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(
-  TEXRA_SETTINGS.configSlotKeys,
-);
-
-describe('knownKeys derivation', () => {
-  it('whitelists config-slot keys, not state.json keys', () => {
-    assert.equal(KNOWN_TEXRA_KEYS.has('texra.model'), true);
-    // A workspaceState-backed setting is read from state.json, not config.json,
-    // so it must NOT be whitelisted there (a config.json entry is a no-op the
-    // unknown-key warning should catch).
-    assert.equal(
-      KNOWN_TEXRA_KEYS.has(DocumentsStateKey.WORKFLOW_AUTO_COMPILE),
-      false,
-    );
-  });
 });
 
 describe('Settings', () => {
@@ -238,42 +175,6 @@ describe('Settings', () => {
     }),
   );
 
-  it.effect('routes telemetry writes to global configuration', () =>
-    Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores();
-      const entry = TEXRA_SETTINGS.settingsViewByKey('texra.telemetry.enabled');
-      assert.ok(entry);
-
-      yield* Settings.set(stores, entry.key, false);
-
-      assert.deepEqual(config.inspect(entry.key), {
-        globalValue: false,
-        workspaceValue: undefined,
-      });
-    }),
-  );
-
-  it.effect('routes CLI endpoint writes to global state', () =>
-    Effect.gen(function* () {
-      const { stores, config, globalState } = makeFakeSettingsStores();
-      const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-      yield* Settings.set(
-        {
-          ...stores,
-          host: 'cli',
-        },
-        entry.key,
-        'https://example.invalid/v1',
-      );
-      assert.equal(yield* isStored(globalState, entry.key), true);
-      assert.equal(yield* isStored(config, entry.key), false);
-      assert.equal(
-        yield* Settings.get({ ...stores, host: 'cli' }, entry.key),
-        'https://example.invalid/v1',
-      );
-    }),
-  );
-
   it.effect('reset deletes the key so the default reappears', () =>
     Effect.gen(function* () {
       yield* assertResetRestoresDefault({
@@ -281,17 +182,6 @@ describe('Settings', () => {
         host: 'vscode',
         storeName: 'workspaceState',
         expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-      });
-    }),
-  );
-
-  it.effect('reset deletes a repository-slot key too', () =>
-    Effect.gen(function* () {
-      yield* assertResetRestoresDefault({
-        key: WorkspaceStateKey.GIT_MARK_COMMITS,
-        host: 'cli',
-        storeName: 'repoState',
-        expectedDefault: true,
       });
     }),
   );

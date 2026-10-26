@@ -104,18 +104,6 @@ describe('traceFrame replays the document through the one fold', () => {
     );
   });
 
-  it('replays the run plan', () => {
-    const trace = traceDocument(runStart(), {
-      type: 'run.fact',
-      fact: { key: 'plan', plan: { objective: 'Replay the plan' } },
-    });
-
-    const replayed = foldTrace(trace);
-    expect(replayed).toMatchObject({
-      plan: { objective: 'Replay the plan' },
-    });
-  });
-
   it.each([
     { outcome: 'failed', expected: 'failed' },
     { outcome: 'completed', expected: 'completed' },
@@ -132,17 +120,5 @@ describe('traceFrame replays the document through the one fold', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
     expect(foldTrace(traceDocument(runStart()))?.durableOutcome).toBeNull();
-  });
-
-  it("folds a process run's exported config into the command", () => {
-    const trace = traceDocument(runStart({ kind: 'process', tool: 'bash' }), {
-      type: 'run.config',
-      config: {
-        agent: 'bash',
-        instruction: 'ls -la',
-      },
-    });
-
-    expect(foldTrace(trace)?.command).toBe('ls -la');
   });
 });

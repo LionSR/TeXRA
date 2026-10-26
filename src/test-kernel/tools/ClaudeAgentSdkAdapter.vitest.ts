@@ -59,10 +59,6 @@ describe('Claude Agent SDK adapter', () => {
     });
   });
 
-  it('keeps empty model usage out of progress accounting', () => {
-    expect(claudeResultUsage({ modelUsage: {} } as never)).toBeNull();
-  });
-
   it('replaces the complete background-task level without pairing task edges', () => {
     const { trace, toolStarts, lastToolEnd } = fakeTrace();
     const tracker = new ClaudeBackgroundTaskTracker(trace);

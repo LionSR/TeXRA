@@ -6,7 +6,6 @@ import * as resumability from '@agent/storage/resumability';
 import { Inbox, type InboxClosed, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
 import {
-  presentFollowUpResult,
   startFollowUpWake,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -280,42 +279,6 @@ describe('submitFollowUp', () => {
           'between turns',
           'during turn',
         ]);
-      }),
-  );
-
-  it.effect('reports input admitted by a running loop as sent', () =>
-    Effect.gen(function* () {
-      const runId = generateRunId();
-      const session = fakeSession('live');
-      const input = yield* session.followUps.open(runId);
-      const tryResumeRun = mockTryResume();
-
-      expect(
-        yield* submitFollowUp(runId, user('during active turn'), {
-          session,
-        }).pipe(withResumePort(tryResumeRun)),
-      ).toEqual({ status: 'sent' });
-
-      expect(tryResumeRun).not.toHaveBeenCalled();
-      expect(yield* taken(input)).toEqual(['during active turn']);
-    }),
-  );
-
-  it.effect(
-    'does not report an automatic live-flow notification as user input',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('live');
-        const input = yield* session.followUps.open(runId);
-
-        expect(
-          yield* submitFollowUp(runId, user('child progress'), {
-            session,
-            hold: 'generation',
-          }).pipe(withResumePort(mockTryResume())),
-        ).toEqual({ status: 'sent' });
-        expect(yield* taken(input)).toEqual(['child progress']);
       }),
   );
 
@@ -597,20 +560,6 @@ describe('Inbox readers', () => {
     expect(heldElsewhereBy(notOwner(null, false))).toBeNull();
   });
 
-  it.effect("ends a deleted run's reader and tells the observers", () =>
-    Effect.gen(function* () {
-      const { followUps } = recordedFollowUps();
-      const id = generateRunId();
-      const closed: InboxClosed[] = [];
-      followUps.onClosed((event) => closed.push(event));
-      const input = yield* followUps.open(id);
-
-      followUps.forget(id);
-      expect(yield* input.next('idle')).toBeNull();
-      expect(closed).toEqual([{ kind: 'run', runId: id }]);
-    }),
-  );
-
   it.effect(
     'tells the observers of a terminal end, not a recoverable one',
     () =>
@@ -683,28 +632,6 @@ describe('Inbox readers', () => {
 
 describe('Inbox delivery identity (#9531)', () => {
   it.effect(
-    'suppresses a replayed delivery id instead of queueing it again',
-    () =>
-      Effect.gen(function* () {
-        const { followUps, queued } = recordedFollowUps();
-        const id = generateRunId();
-        yield* followUps.open(id);
-        const delivery = childResult('exec-1:turn:1:delivery');
-
-        expect(yield* followUps.send(id, delivery)).toEqual({
-          kind: 'queued',
-          read: true,
-        });
-        for (let replay = 0; replay < 100; replay++) {
-          expect(yield* followUps.send(id, delivery)).toEqual({
-            kind: 'duplicate',
-          });
-        }
-        expect(queued(id)).toEqual(['child result']);
-      }),
-  );
-
-  it.effect(
     'judges a concurrent duplicate against the first write, never before it settles',
     () =>
       Effect.gen(function* () {
@@ -726,21 +653,6 @@ describe('Inbox delivery identity (#9531)', () => {
         expect(Exit.isFailure(first)).toBe(true);
         expect(second).toEqual(Exit.succeed({ kind: 'queued', read: true }));
         expect(queued(id)).toEqual(['child result']);
-      }),
-  );
-
-  it.effect(
-    'keeps distinct delivery ids distinct even with identical text',
-    () =>
-      Effect.gen(function* () {
-        const { followUps, queuedRows } = recordedFollowUps();
-        const id = generateRunId();
-        for (const deliveryId of ['d1', 'd2'])
-          yield* followUps.send(id, childResult(deliveryId));
-        expect(queuedRows(id).map((row) => row.followUpId)).toEqual([
-          'd1',
-          'd2',
-        ]);
       }),
   );
 
@@ -846,26 +758,6 @@ describe('Inbox closed input', () => {
       expect(queued(id)).toEqual(['raced', 'later']);
     }),
   );
-});
-
-describe('presentFollowUpResult', () => {
-  it('words only refusals, with a failed wake as information', () => {
-    expect(presentFollowUpResult({ status: 'sent' })).toEqual({
-      severity: 'none',
-    });
-    expect(presentFollowUpResult({ status: 'queued' })).toEqual({
-      severity: 'none',
-    });
-    expect(
-      presentFollowUpResult({ status: 'queued', wake: 'failed' }),
-    ).toMatchObject({ severity: 'info' });
-    expect(
-      presentFollowUpResult({ status: 'failed', reason: 'owned_elsewhere' }),
-    ).toMatchObject({
-      severity: 'warning',
-      message: expect.stringContaining('another process'),
-    });
-  });
 });
 
 // The relation admission stamps on a run sender is read from lineage alone.

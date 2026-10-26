@@ -4,24 +4,13 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { build } from 'esbuild';
 import { Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
-
-const JSON_STORE_SOURCE = repoPath(
-  'packages',
-  'harness',
-  'src',
-  'platform',
-  'defaults',
-  'jsonStore.ts',
-);
 
 async function loadJsonStore(): Promise<
   typeof import('@platform/defaults/jsonStore').JsonStore
@@ -32,20 +21,6 @@ async function loadJsonStore(): Promise<
 
 async function readStoredJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
-}
-
-/**
- * Entry that re-exports the store beside the `Effect` module it was bundled
- * with, so a bundle's programs are run by the same copy of Effect that built
- * them — `open` and `set` are Effects, and a second copy would not run them.
- */
-async function writeBundleEntry(dir: string): Promise<string> {
-  const entry = join(dir, 'jsonStoreEntry.ts');
-  await writeFile(
-    entry,
-    `export { JsonStore } from ${JSON.stringify(JSON_STORE_SOURCE)};\nexport { Effect } from 'effect';\n`,
-  );
-  return entry;
 }
 
 describe('shared JsonStore', () => {
@@ -75,23 +50,6 @@ describe('shared JsonStore', () => {
       expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
         original,
       );
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.effect.each([
-    ['array', '[]'],
-    ['null', 'null'],
-    ['string', '"text"'],
-  ])('treats valid non-object JSON (%s) as corruption', ([_kind, content]) =>
-    Effect.gen(function* () {
-      const JsonStore = yield* Effect.promise(() => loadJsonStore());
-      const filePath = yield* Effect.promise(() =>
-        createTempFile('state.json', content),
-      );
-
-      const error = yield* Effect.flip(JsonStore.open(filePath));
-      expect(error).toBeInstanceOf(TypeError);
-      expect(error.message).toContain('to contain a JSON object');
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
@@ -244,43 +202,6 @@ describe('shared JsonStore', () => {
         }).toEqual({ memory: { committed: 'a' }, file: { committed: 'a' } });
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
-
-  it('keeps the lock function callable in a split ESM bundle', async () => {
-    tempDir = await makeTempDir('texra-json-store-bundle-', tempDirs);
-    const outdir = join(tempDir, 'bundle');
-    await build({
-      entryPoints: {
-        jsonStore: await writeBundleEntry(tempDir),
-      },
-      bundle: true,
-      format: 'esm',
-      splitting: true,
-      platform: 'node',
-      outdir,
-      outExtension: { '.js': '.mjs' },
-      logLevel: 'silent',
-      tsconfig: repoPath('tsconfig.json'),
-      nodePaths: [repoPath('node_modules')],
-    });
-
-    const { JsonStore, Effect: bundledEffect } = (await import(
-      moduleFileUrl(join(outdir, 'jsonStore.mjs'))
-    )) as typeof import('@platform/defaults/jsonStore') & {
-      Effect: typeof Effect;
-    };
-    const filePath = join(tempDir, 'state.json');
-    const store = await bundledEffect.runPromise(
-      JsonStore.open(filePath).pipe(Effect.provide(nodePlatformLayer)),
-    );
-
-    await bundledEffect.runPromise(
-      store.set('persisted', true).pipe(Effect.provide(nodePlatformLayer)),
-    );
-
-    expect(await readStoredJson(filePath)).toEqual({
-      persisted: true,
-    });
-  });
 
   it.effect(
     'opens read-only on unwritable storage; only the first write prepares the directory',

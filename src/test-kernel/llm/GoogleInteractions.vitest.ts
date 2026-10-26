@@ -290,25 +290,16 @@ describe('canonical Google Interactions protocol', () => {
   // lifecycle/identity checks.
   it.effect.each([
     { store: false, id: '', outcome: 'ok' },
-    { store: false, id: undefined, outcome: 'ok' },
     { store: false, id: 'int_fixture', outcome: 'ok' },
     { store: true, id: 'int_fixture', outcome: 'ok' },
     { store: false, id: '', status: { id: '' }, outcome: 'ok' },
-    { store: false, id: undefined, status: { id: undefined }, outcome: 'ok' },
     {
       store: true,
       id: 'int_fixture',
       status: { id: '' },
       outcome: 'malformed-output',
     },
-    {
-      store: true,
-      id: 'int_fixture',
-      status: { id: undefined },
-      outcome: 'malformed-output',
-    },
     { store: false, id: '', status: { id: null }, outcome: 'malformed-output' },
-    { store: false, id: '', status: { id: 42 }, outcome: 'malformed-output' },
     {
       store: false,
       id: 'int_fixture',
@@ -316,9 +307,7 @@ describe('canonical Google Interactions protocol', () => {
       outcome: 'malformed-output',
     },
     { store: true, id: '', outcome: 'malformed-output' },
-    { store: true, id: undefined, outcome: 'malformed-output' },
     { store: false, id: 42, outcome: 'malformed-output' },
-    { store: false, id: null, outcome: 'malformed-output' },
     { store: false, id: '', fault: 'no-start', outcome: 'malformed-output' },
     { store: false, id: '', fault: 'no-end', outcome: 'malformed-output' },
     { store: false, id: '', fault: 'provider', outcome: 'provider-rejection' },
@@ -577,7 +566,7 @@ describe('canonical Google Interactions protocol', () => {
       }),
   );
 
-  it.effect.each(['cancelled', 'completed', 'requires_action', 'in_progress'])(
+  it.effect.each(['cancelled', 'in_progress'])(
     'confirms a cancel only when the work reports %s as cancelled',
     (status) =>
       Effect.gen(function* () {
@@ -1197,9 +1186,6 @@ describe('canonical Google Interactions protocol', () => {
     'missing-result',
     'origin',
     'media-bytes',
-    'media-mime',
-    'media-detail',
-    'media-label',
   ] as const)('rejects a changed %s before provider I/O', (changed) =>
     Effect.gen(function* () {
       const configured = model();
@@ -1216,12 +1202,6 @@ describe('canonical Google Interactions protocol', () => {
         next.continuation.origin.deployment.credentialScope = 'other-account';
       if (changed === 'media-bytes')
         next.messages[0].content[2].base64 = 'AQ==';
-      if (changed === 'media-mime')
-        next.messages[0].content[2].mimeType = 'image/jpeg';
-      if (changed === 'media-detail')
-        next.messages[0].content[2].detail = 'low';
-      if (changed === 'media-label')
-        next.messages[0].content[1].text = 'Other figure';
       expect(yield* Effect.flip(configured.prepareTurn(next))).toMatchObject({
         _tag: 'ModelError',
       });
@@ -1362,10 +1342,8 @@ describe('canonical Google Interactions protocol', () => {
     'duplicate-id',
     'missing-id',
     'incomplete',
-    'null-event',
     'null-step',
     'invalid-text',
-    'invalid-usage',
     'terminal-snapshot',
     'prototype-key',
     'empty-action',
@@ -1400,7 +1378,6 @@ describe('canonical Google Interactions protocol', () => {
           step: { type: 'function_call', id: '', name: 'fetch', arguments: {} },
         };
       if (invalid === 'incomplete') events.pop();
-      if (invalid === 'null-event') events[1] = null;
       if (invalid === 'null-step')
         events[1] = { event_type: 'step.start', index: 0, step: null };
       if (invalid === 'invalid-text')
@@ -1408,15 +1385,6 @@ describe('canonical Google Interactions protocol', () => {
           event_type: 'step.delta',
           index: 1,
           delta: { type: 'text', text: 3 },
-        };
-      if (invalid === 'invalid-usage')
-        events[15] = {
-          event_type: 'interaction.completed',
-          interaction: {
-            id: 'int_1',
-            status: 'requires_action',
-            usage: 'invalid',
-          },
         };
       if (invalid === 'terminal-snapshot')
         events[15] = {

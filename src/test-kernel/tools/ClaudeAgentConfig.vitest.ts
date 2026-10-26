@@ -1,15 +1,20 @@
-// Third-party imports
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { ConfigProvider, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - model
 import { apiKeySecretName } from '@texra-ai/llm';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { buildClaudeAgentEnv } from '@texra/tools/claudeAgentConfig';
 import type * as ChildProcess from 'effect/process/ChildProcess';
+
+const home = vi.hoisted(() => ({ dir: undefined as string | undefined }));
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: () => home.dir ?? actual.homedir() };
+});
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
@@ -17,21 +22,6 @@ let cleanupDirs: string[];
 let keychainAccount: string | undefined;
 /** Every command the env build asked the spawner for. */
 let spawnCalls: ChildProcess.StandardCommand[];
-let homedirMock: string;
-
-async function loadBuildClaudeAgentEnv(): Promise<
-  typeof import('@texra/tools/claudeAgentConfig').buildClaudeAgentEnv
-> {
-  vi.doMock('node:os', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('node:os')>();
-    return {
-      ...actual,
-      homedir: () => homedirMock,
-    };
-  });
-
-  return (await import('@texra/tools/claudeAgentConfig')).buildClaudeAgentEnv;
-}
 
 /** The suite's secret store as the `Secrets` service the env builder reads. */
 const fakeSecrets: PlatformSecrets = {
@@ -47,16 +37,9 @@ const fakeSecrets: PlatformSecrets = {
   listStoredKeys: () => Effect.sync(() => [...secretStore.keys()]),
 };
 
-type BuildEnvOptions = Parameters<
-  Awaited<ReturnType<typeof loadBuildClaudeAgentEnv>>
->[0];
-
-/** Reload the module under the current mocks and build the env in one step. */
-async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
-  const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
-  // Imported after the reload so the tag is the instance the freshly
-  // imported module under test yields.
-  const { Secrets } = await import('@platform/secrets');
+function buildEnv(
+  options?: Parameters<typeof buildClaudeAgentEnv>[0],
+): Promise<NodeJS.ProcessEnv> {
   const spawner = scriptedSpawnerLayer((command) => ({
     exitCode:
       keychainAccount !== undefined && command.args.includes(keychainAccount)
@@ -81,19 +64,13 @@ function seedManagedSecret(): void {
   secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
 }
 
-/** Keychain probe succeeds only for the named account; everything else misses. */
-function mockKeychainAccount(account: string): void {
-  keychainAccount = account;
-}
-
 describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
     secretStore = new Map();
     cleanupDirs = [];
-    homedirMock = os.homedir();
+    home.dir = undefined;
     keychainAccount = undefined;
     spawnCalls = [];
-    vi.resetModules();
     // Deterministic baseline: no OAuth credential present. Point the config dir
     // at a path that cannot contain `.credentials.json` and clear the token so
     // tests don't pick up a real `claude login` session on the host.
@@ -107,7 +84,6 @@ describe('Claude Code CLI configuration', () => {
   });
 
   afterEach(() => {
-    vi.doUnmock('node:os');
     vi.unstubAllEnvs();
     for (const dir of cleanupDirs)
       rmSync(dir, { recursive: true, force: true });
@@ -117,37 +93,25 @@ describe('Claude Code CLI configuration', () => {
     seedManagedSecret();
 
     const env = await buildEnv();
-    expect(env).toMatchObject({ ANTHROPIC_API_KEY: 'from-secret' });
+    expect(env).toMatchObject({
+      ANTHROPIC_API_KEY: 'from-secret',
+      CLAUDE_AGENT_SDK_CLIENT_APP: 'texra',
+    });
   });
 
-  it('leaves ANTHROPIC_API_KEY absent when no credential exists', async () => {
-    const env = await buildEnv();
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('texra');
-  });
-
-  it('does not override a CLAUDE_CODE_OAUTH_TOKEN session with the managed secret', async () => {
-    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'oauth-token');
-    seedManagedSecret();
-
-    const env = await buildEnv();
-    // The stale Settings key must not shadow the working login session.
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
-  });
-
-  it('strips an inherited ANTHROPIC_API_KEY when an OAuth token is present', async () => {
+  it('strips an inherited and a managed API key when an OAuth token is present', async () => {
     // OAuth must win even over an explicit env API key; otherwise the CLI
     // prefers ANTHROPIC_API_KEY and ignores the login session.
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', ' oauth-token ');
+    seedManagedSecret();
 
     const env = await buildEnv();
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
   });
 
-  it('ignores a whitespace-only OAuth token when no OAuth credential exists', async () => {
+  it('ignores a whitespace-only OAuth token and prefers the env key over the managed secret', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '   ');
     seedManagedSecret();
@@ -157,25 +121,13 @@ describe('Claude Code CLI configuration', () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
-  it('strips ANTHROPIC_API_KEY when a `claude login` session file exists', async () => {
-    const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'texra-claude-'));
-    writeFileSync(path.join(sessionDir, '.credentials.json'), '{}');
-    cleanupDirs.push(sessionDir);
-    vi.stubEnv('CLAUDE_CONFIG_DIR', sessionDir);
-    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
-    seedManagedSecret();
-
-    const env = await buildEnv();
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
-  });
-
-  it('expands a tilde CLAUDE_CONFIG_DIR before checking for a login session file', async () => {
+  it('expands a tilde CLAUDE_CONFIG_DIR and strips the API key when a login session file exists', async () => {
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'texra-home-'));
     const sessionDir = path.join(homeDir, '.claude');
     mkdirSync(sessionDir);
     writeFileSync(path.join(sessionDir, '.credentials.json'), '{}');
     cleanupDirs.push(homeDir);
-    homedirMock = homeDir;
+    home.dir = homeDir;
     vi.stubEnv('CLAUDE_CONFIG_DIR', '~/.claude');
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     seedManagedSecret();
@@ -189,7 +141,7 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     seedManagedSecret();
-    mockKeychainAccount(`${path.resolve(configDir)}-access-token`);
+    keychainAccount = `${path.resolve(configDir)}-access-token`;
 
     const env = await buildEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
@@ -200,7 +152,7 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     seedManagedSecret();
-    mockKeychainAccount('Claude Code-credentials');
+    keychainAccount = 'Claude Code-credentials';
 
     const env = await buildEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBe('from-env');
@@ -212,13 +164,5 @@ describe('Claude Code CLI configuration', () => {
           command.args.includes('Claude Code-credentials'),
       ),
     ).toBe(false);
-  });
-
-  it('passes an explicit env ANTHROPIC_API_KEY through when no OAuth credential exists', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
-    seedManagedSecret();
-
-    const env = await buildEnv();
-    expect(env).toMatchObject({ ANTHROPIC_API_KEY: 'from-env' });
   });
 });

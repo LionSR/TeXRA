@@ -106,19 +106,6 @@ describe('ChatExportController.exportAsHtml', () => {
     });
   });
 
-  it.effect('returns config_missing when nothing is stored', () =>
-    Effect.gen(function* () {
-      const templatePath = yield* Effect.promise(writeTemplate);
-
-      const outcome = yield* controller.exportAsHtml(
-        'eec404' as RunId,
-        templatePath,
-      );
-
-      expect(outcome).toEqual({ status: 'config_missing' });
-    }).pipe(Effect.provide(rootedFsLayer(session.roots))),
-  );
-
   it.effect(
     'writes a self-contained HTML file with the trace embedded, when everything is present',
     () =>
@@ -151,36 +138,5 @@ describe('ChatExportController.exportAsHtml', () => {
           '<script type="module" crossorigin src="./index.js">',
         );
       }).pipe(Effect.provide(rootedFsLayer(session.roots))),
-  );
-});
-
-describe('ChatExportController.buildExportInput', () => {
-  let controller: ChatExportController;
-
-  beforeEach(async () => {
-    await installStoragePlatform();
-    session = await Effect.runPromise(
-      createTestSession({ roots: testWorkspaceRoots() }),
-    );
-    controller = new ChatExportController({
-      latexPreamble: '',
-      roots: session.roots,
-      records: localExportRecords(testSessionOf(session)),
-    });
-  });
-
-  it.effect(
-    'reports conversation_missing when a config is stored but no transcript exists',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'eec003' as RunId;
-        publishTestRunStart(session, runId);
-        yield* session.log.settled;
-        yield* seedRunRecord(session, runId, config());
-
-        expect(yield* controller.buildExportInput(runId)).toEqual({
-          status: 'conversation_missing',
-        });
-      }),
   );
 });

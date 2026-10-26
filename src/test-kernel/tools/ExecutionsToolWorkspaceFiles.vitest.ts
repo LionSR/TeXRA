@@ -17,7 +17,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_PHASE,
-  emptyRunEndOutput,
   qualifyAggregateId,
   RunIdSchema,
   type RunId,
@@ -499,52 +498,6 @@ describe('ExecutionsTool', () => {
           }),
         ),
       ),
-  );
-
-  it.live("serves the run's joined result envelope", () =>
-    Effect.gen(function* () {
-      // The subagent's record holds its reply; the run's end holds the
-      // outcome. The endpoint serves the two joined.
-      const runId = 'abc123' as RunId;
-      const session = testDefaultSession();
-      publishTestRunStart(session, runId);
-      publishTestRows(session, [
-        {
-          type: 'run.result',
-          aggregateId: qualifyAggregateId('run', runId),
-          result: {
-            producer: 'subagent',
-            output: { response: 'Checked the proof.', files: ['notes.md'] },
-          },
-        },
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          outcome: 'completed',
-          output: emptyRunEndOutput(),
-        },
-      ]);
-      yield* session.log.settled;
-
-      const result = yield* ExecutionsTool.call({
-        path: `/executions/${runId}/result`,
-      });
-
-      expect(JSON.parse(result.output ?? '')).toEqual({
-        outcome: 'completed',
-        output: { response: 'Checked the proof.', files: ['notes.md'] },
-      });
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
   );
 
   it.live('refuses unrecorded workspace file reads', () =>

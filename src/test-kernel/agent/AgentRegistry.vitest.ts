@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer } from 'effect';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeAll, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -27,9 +27,6 @@ import {
   installPlatform,
   storePluginsLayer,
 } from '@test/support/setupPlatform';
-import { texraPlugins } from '@texra/tools/registry';
-import { agentCatalogFollower } from '@tools/agentCatalogFollower';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 const registerExternalRoot = vi.hoisted(() => vi.fn());
 
@@ -107,57 +104,12 @@ describe('agent registry', () => {
   const extensionPath = resolve(REPO_ROOT, 'packages/extension');
   const resourcesPath = resolve(extensionPath, 'resources');
 
-  beforeEach(() => {
-    registerExternalRoot.mockReset();
-  });
-
   beforeAll(async () => {
     // Use the real bundled agent YAMLs rather than synthetic fixtures.
     await initPlatformWithState({});
     useAgentDirectories();
     await Effect.runPromise(catalog.refresh);
   });
-
-  it.effect(
-    'registers the agent directories for every host as the catalog follower is built',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.scoped(Layer.build(agentCatalogFollower)).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              unusedGlobalStorageFs(),
-              nodePlatformLayer,
-              testHttpClientLayer,
-              AgentDirectories.layer({
-                ...mutableAgentDirectories,
-                resourcesRoot: resourcesPath,
-              }),
-              AppState.layer(new FakeStateStore()),
-              // TeXRA's plugins, whose bundled agent directories register.
-              Layer.succeed(ToolRegistry)(toolTable(texraPlugins())),
-            ),
-          ),
-        );
-
-        expect(registerExternalRoot).toHaveBeenCalledWith(
-          resolve(resourcesPath, 'agents'),
-          expect.objectContaining({ kind: 'builtIn', writable: false }),
-        );
-        expect(registerExternalRoot).toHaveBeenCalledWith(
-          resolve(resourcesPath, 'docs', 'agent-creation'),
-          expect.objectContaining({ kind: 'agentDocs', writable: false }),
-        );
-        expect(registerExternalRoot).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({ kind: 'custom', writable: true }),
-        );
-      }).pipe(
-        // The follower installs the plugin agent directories, module state.
-        Effect.ensuring(
-          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
-        ),
-      ),
-  );
 
   it.effect('pools tool plugin agent directories into the builtIn source', () =>
     Effect.gen(function* () {

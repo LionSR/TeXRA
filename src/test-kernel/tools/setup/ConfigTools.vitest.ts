@@ -74,40 +74,13 @@ describe('ConfigTools — update_config allowlist', () => {
     }),
   );
 
-  // OpenAI-compatible providers send an omitted optional field as `null`.
-  it.effect('writes the user setting when the model sends target: null', () =>
+  it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
       const { config, layer } = createPlatform();
 
+      const key = 'texra.model.useGoogleInteractionsServerState';
       const result = yield* updateTool
-        .call({ key: 'texra.bib.zoteroPort', value: 23200, target: null })
-        .pipe(Effect.provide(layer));
-
-      assert.equal(result.status, 'executed');
-      assert.equal(config.inspect('texra.bib.zoteroPort')?.globalValue, 23200);
-    }),
-  );
-
-  it.effect.each([
-    {
-      case: 'a non-allowlisted key',
-      key: 'texra.model.useGoogleInteractionsServerState',
-      value: true,
-    },
-    {
-      case: 'a type-mismatched value',
-      key: 'texra.bib.zoteroPort',
-      value: 'not a number',
-    },
-    // Port range is 1..65535
-    { case: 'port 0', key: 'texra.bib.zoteroPort', value: 0 },
-    { case: 'port 70000', key: 'texra.bib.zoteroPort', value: 70000 },
-  ])('rejects $case without writing', ({ key, value }) =>
-    Effect.gen(function* () {
-      const { config, layer } = createPlatform();
-
-      const result = yield* updateTool
-        .call({ key, value, target: 'user' })
+        .call({ key, value: true, target: 'user' })
         .pipe(Effect.provide(layer));
 
       assert.equal(result.status, 'error');

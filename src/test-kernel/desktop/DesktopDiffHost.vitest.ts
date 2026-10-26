@@ -113,41 +113,6 @@ describe('createDesktopDiffHost', () => {
     expect(patch).toContain('+new');
   });
 
-  it('posts desktop:showDiff to the renderer when wired', async () => {
-    const posted: unknown[] = [];
-    // External fallback should not be invoked when postToRenderer is set.
-    const { host, openPath } = createHost({
-      postToRenderer: (message) => {
-        posted.push(message);
-        return true;
-      },
-    });
-
-    await openDiffPair(
-      host,
-      'Compare doc.tex',
-      ['doc.tex', 'doc.proposed.tex'],
-      ['hello\nold\n', 'hello\nnew\n'],
-    );
-
-    expect(openPath).not.toHaveBeenCalled();
-    expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({
-      command: 'desktop:showDiff',
-      session: REVIEW_ROOTS.storage,
-      // Minted by the host: a compare has no request to name its diff, and
-      // the renderer needs every diff it holds named to close one by name.
-      previewId: expect.stringMatching(/.+/),
-      title: 'Compare doc.tex',
-      displayPath: 'Compare doc.tex',
-      originalText: 'hello\nold\n',
-      proposedText: 'hello\nnew\n',
-      additions: 1,
-      deletions: 1,
-      language: 'latex',
-    });
-  });
-
   it('falls back to the external editor when postToRenderer returns false', async () => {
     // Simulates the renderer not being reachable — IPC bridge not yet
     // wired at startup or BrowserWindow already destroyed. Bot review

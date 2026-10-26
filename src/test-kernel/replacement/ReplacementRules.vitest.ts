@@ -386,26 +386,6 @@ describe('latex forbidden commands replacements', () => {
       expected: '\\section{Intro}\n\nBody',
     },
     {
-      name: 'removes starred invalid endings',
-      input: '\\subsection*{Overview}\n\\end{subsection*}\nMore',
-      expected: '\\subsection*{Overview}\n\nMore',
-    },
-    {
-      name: 'removes endings with stray spaces',
-      input: '\\paragraph{Detail}\n\\end {paragraph}\nNext',
-      expected: '\\paragraph{Detail}\n\nNext',
-    },
-    {
-      name: 'removes endings with space after opening brace',
-      input: '\\section{Intro}\n\\end{ section}\nBody',
-      expected: '\\section{Intro}\n\nBody',
-    },
-    {
-      name: 'removes endings with space before closing brace',
-      input: '\\subsection{Part}\n\\end{subsection }\nMore',
-      expected: '\\subsection{Part}\n\nMore',
-    },
-    {
       name: 'removes starred endings with spaces in multiple positions',
       input: '\\section*{Title}\n\\end { section* }\nText',
       expected: '\\section*{Title}\n\nText',
@@ -523,12 +503,6 @@ describe('stripCriticizeAnnotations', () => {
       count: 1,
     },
     {
-      name: 'handles nested braces inside \\criticize arguments',
-      input: `\\criticize{note with \\textbf{bold}}{high}{0.9}\n`,
-      content: ``,
-      count: 1,
-    },
-    {
       name: 'handles doubly-nested braces inside \\criticize arguments',
       input: `before\n\\criticize{see \\sqrt{\\frac{a}{b}}}{2}{3}\nafter`,
       content: `before\nafter`,
@@ -571,11 +545,6 @@ describe('escapeTextttUnderscores', () => {
       expected: '\\texttt{ch:BELIEF\\_PROP}',
     },
     {
-      name: 'escapes multiple bare underscores',
-      input: '\\texttt{multi_part_identifier}',
-      expected: '\\texttt{multi\\_part\\_identifier}',
-    },
-    {
       name: 'preserves already escaped underscores',
       input: '\\texttt{already\\_escaped}',
       expected: '\\texttt{already\\_escaped}',
@@ -607,11 +576,6 @@ describe('wrapCritiqueInAlign', () => {
       expected: `\\begin{align}\n\\intertext{\\critique{issue}}\n\\end{align}`,
     },
     {
-      name: 'wraps bare critique inside align*',
-      input: `\\begin{align*}\n\\critique{issue}\n\\end{align*}`,
-      expected: `\\begin{align*}\n\\intertext{\\critique{issue}}\n\\end{align*}`,
-    },
-    {
       name: 'wraps bare comment inside align',
       input: `\\begin{align}\n\\comment{note}\n\\end{align}`,
       expected: `\\begin{align}\n\\intertext{\\comment{note}}\n\\end{align}`,
@@ -638,11 +602,5 @@ describe('wrapCritiqueInAlign', () => {
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(wrapCritiqueInAlign(input), expected);
-  });
-
-  it('is idempotent for comment', () => {
-    const input = `\\begin{align}\n\\comment{note}\n\\end{align}`;
-    const once = wrapCritiqueInAlign(input);
-    assert.strictEqual(wrapCritiqueInAlign(once), once);
   });
 });

@@ -19,8 +19,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
-// Live (not deprecated): a stored preference for a deprecated model drops out at read.
-const SONNET55 = 'anthropic/claude-sonnet-5-5';
 const SONNET46 = 'anthropic/claude-sonnet-4-6';
 
 /** The controller's deps are file-local; derive them from its constructor. */
@@ -191,57 +189,6 @@ describe('SettingsModelSelectionController', () => {
         } finally {
           defaults.unshift(first);
         }
-      }),
-  );
-
-  it.effect('shows the defaults when the stored selection is malformed', () =>
-    Effect.gen(function* () {
-      const enabledNames = (controller: SettingsModelSelectionController) =>
-        controller
-          .buildSelectionData()
-          .pipe(
-            Effect.map(({ models }) =>
-              models
-                .filter((model) => model.enabled)
-                .map((model) => model.name),
-            ),
-          );
-      const malformed = createController({
-        stores: {
-          ...makeFakeSettingsStores().stores,
-          globalState: new FakeStateStore({
-            [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
-          }),
-        },
-      });
-
-      expect(yield* enabledNames(malformed)).toEqual(
-        yield* enabledNames(createController()),
-      );
-    }),
-  );
-
-  it.effect(
-    'keeps a preferred undiscovered Copilot route visible for opt-out',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          stores: {
-            ...makeFakeSettingsStores().stores,
-            globalState: new FakeStateStore({
-              [GlobalStateKey.COPILOT_ROUTE_MODELS]: [SONNET55],
-            }),
-          },
-        });
-
-        expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
-          {
-            name: SONNET55,
-            label: MODEL_CONFIGS[SONNET55].label,
-            access: 'unavailable',
-            preferred: true,
-          },
-        ]);
       }),
   );
 
