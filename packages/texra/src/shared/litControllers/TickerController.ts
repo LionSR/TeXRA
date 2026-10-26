@@ -9,7 +9,7 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
  * private readonly ticker = new TickerController(this, 1000);
  *
  * render() {
- *   const elapsed = formatDuration(this.ticker.now - this.startTime);
+ *   const elapsed = formatCompactDuration(this.ticker.now - this.startTime);
  *   ...
  * }
  * ```

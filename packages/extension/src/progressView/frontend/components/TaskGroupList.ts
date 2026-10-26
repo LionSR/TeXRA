@@ -33,9 +33,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { formatDuration } from '@ui/copy/format';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -423,7 +423,7 @@ export class TaskGroupList extends LitElement {
       new Date(group.startTime),
     );
     const durationText = group.endTime
-      ? formatDuration(group.endTime - group.startTime)
+      ? formatCompactDuration(group.endTime - group.startTime)
       : '';
 
     const status = taskGroupDisplayStatus(

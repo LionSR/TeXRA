@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
 import { TickerController } from '@texra/shared/litControllers/TickerController';
-import { formatDuration } from '@ui/copy/format';
+import { formatCompactDuration } from '@texra-ai/harness/transcript';
 
 @customElement('tool-timer')
 export class ToolTimer extends LitElement {
@@ -46,8 +46,11 @@ export class ToolTimer extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (this.startTime <= 0) return nothing;
-    const elapsed = formatDuration(this._ticker.now - this.startTime);
-    const limit = this.timeoutMs > 0 ? formatDuration(this.timeoutMs) : null;
+    const elapsed = formatCompactDuration(
+      this._ticker.now - this.startTime,
+    );
+    const limit =
+      this.timeoutMs > 0 ? formatCompactDuration(this.timeoutMs) : null;
     // prettier-ignore
     return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${elapsed}${limit === null ? '' : ` of ${limit}`}`} dir="ltr">${elapsed}${limit === null ? nothing : html`<span class="timer-limit"> / ${limit}</span>`}</span>`;
   }
