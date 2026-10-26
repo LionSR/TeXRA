@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - fs
 import { WorkspaceFs } from '@texra-ai/harness';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -55,14 +55,8 @@ export function createSampleProjectWithoutWorkspace(
     } else {
       yield* fs.copy(path.join(extensionPath, 'resources', 'examples'), dest);
     }
-    yield* Effect.tryPromise({
-      try: () =>
-        vscode.commands.executeCommand(
-          'vscode.openFolder',
-          vscode.Uri.file(dest),
-          { forceNewWindow: false },
-        ),
-      catch: ensureError,
+    yield* executeVscodeCommand('vscode.openFolder', vscode.Uri.file(dest), {
+      forceNewWindow: false,
     });
   }).pipe(
     Effect.catch((error: PlatformError.PlatformError | Error) =>

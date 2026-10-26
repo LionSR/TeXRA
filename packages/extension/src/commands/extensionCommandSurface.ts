@@ -24,7 +24,7 @@ import {
 import { handleCompileTikzFigures as latexCompileTikzFigures } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -41,8 +41,6 @@ import type {
   PlatformSecrets,
   WorkspaceRoots,
 } from '@texra-ai/harness';
-
-const externalOpener = new VscodeExternalOpener();
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -70,6 +68,7 @@ export function createExtensionCommandActions(
         (runId) =>
           Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
         progressViewProvider.showConnectModel(),
+        progressViewProvider.showProgressView(),
       ).pipe(
         Effect.andThen(
           progressViewProvider.refreshOnboardingFunnel().pipe(
@@ -85,12 +84,10 @@ export function createExtensionCommandActions(
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
     downloadArXivSource: () => latexDownloadArXivSource(roots),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
-    openDoc: (page) =>
-      page
-        ? externalOpener.openExternal(`https://texra.ai/guide/${page}.html`)
-        : Effect.void,
+    openDoc: (page) => (page ? openGuidePage(page) : Effect.void),
     indentCurrentTeX: () => latexIndentCurrentTeX(roots),
-    fixCompilation: () => latexFixCompilation(roots),
+    fixCompilation: () =>
+      latexFixCompilation(roots, progressViewProvider.runValidated),
     getTeXCount: () => latexGetTeXCount(roots),
     compileTikzFigures: () => latexCompileTikzFigures(roots),
     cloneOverleafProject: () => gitCloneOverleafProject(secrets),
@@ -153,8 +150,10 @@ export function registerExtensionCommandRegistry(
               );
               return;
             }
-            console.error(
-              `[extension] dispatch: unhandled command ${failure.id}`,
+            runtime.runFork(
+              Effect.logError(
+                `No handler is registered for command ${failure.id}`,
+              ).pipe(withLogChannel('ExtensionCommandRegistry')),
             );
           },
           ...rawArgs,

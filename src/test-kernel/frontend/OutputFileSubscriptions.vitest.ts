@@ -2,18 +2,22 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AppState } from '@platform/interfaces';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { waitForCondition } from '@test/support/asyncTestUtils';
+import { testSessionOf } from '@test/support/testProcessRuntime';
+import {
+  pollForCondition,
+  waitForCondition,
+} from '@test/support/asyncTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRows } from '@test/support/sessionTestUtils';
 import { documentsOutputFact } from '@texra/shared/plugins/documents';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   diagnosticCollections: [] as Array<{
@@ -114,7 +118,7 @@ vi.mock('vscode', () => {
 
 const { createTestSession, publishTestRunStart } =
   await import('@test/support/sessionTestUtils');
-const { registerInlineCriticism, syncInlineCriticism } =
+const { followInlineCriticism } =
   await import('@frontend/latex/inlineCriticism');
 
 const runId = 'f0a1b2c3d4e5' as RunId;
@@ -165,19 +169,6 @@ function latestDiagnostics(absolutePath: string): unknown[] | undefined {
   return mocks.diagnosticCollections.at(-1)?.items.get(absolutePath);
 }
 
-/** The native context only owns frontend disposables. */
-function fakeExtensionContext() {
-  return { subscriptions: [] };
-}
-
-function disposeContext(context: {
-  subscriptions: Array<{ dispose(): unknown }>;
-}) {
-  for (const subscription of context.subscriptions.toReversed()) {
-    subscription.dispose();
-  }
-}
-
 describe('output-file run fact frontend subscriptions', () => {
   let tempDir: string | undefined;
 
@@ -210,41 +201,61 @@ describe('output-file run fact frontend subscriptions', () => {
 
         const session = yield* createTestSession();
         publishTestRunStart(session, runId);
-        const context = fakeExtensionContext();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => disposeContext(context)),
-        );
         const { stores, globalState } = makeFakeSettingsStores();
+        // The global store's change feed: each write below wakes it, as the
+        // database's commit does.
+        const writes = yield* SubscriptionRef.make(0);
         const setEnabled = (enabled: boolean) =>
           globalState
             .update(TexraStateKey.INLINE_CRITICISM_ENABLED, enabled)
-            .pipe(Effect.andThen(syncInlineCriticism()));
-        yield* registerInlineCriticism(
-          context as unknown as VSCode.ExtensionContext,
-          testRuntime(),
-          testSessionOf(session),
-          stores,
+            .pipe(Effect.andThen(SubscriptionRef.update(writes, (n) => n + 1)));
+        yield* Effect.forkScoped(
+          followInlineCriticism(testSessionOf(session), stores).pipe(
+            Effect.provideService(AppState, {
+              get: (key) => globalState.get(key),
+              update: (key, value) => globalState.update(key, value),
+              modify: (key, change) => globalState.modify(key, change),
+              changes: () =>
+                SubscriptionRef.changes(writes).pipe(Stream.as(undefined)),
+            }),
+            Effect.provide(nodePlatformLayer),
+          ),
         );
 
         yield* Effect.promise(() => emitOutputFiles(session, outputPath));
         yield* setEnabled(true);
         expect(latestDiagnostics(outputPath)).toBe(undefined);
 
-        yield* Effect.promise(() => emitOutputFiles(session, outputPath));
-        yield* Effect.promise(() =>
-          waitForCondition(
-            () => (latestDiagnostics(outputPath) ?? []).length > 0,
-            {
-              timeoutMs: 200,
-              timeoutMessage: 'inline criticism diagnostics were not refreshed',
-            },
-          ),
-        );
+        // The follower opens the diagnostics off this fiber, so each new
+        // round is written until one lands after it has subscribed.
+        let refreshed = false;
+        for (let round = 0; round < 40 && !refreshed; round++) {
+          yield* Effect.promise(() => emitOutputFiles(session, outputPath));
+          refreshed = yield* Effect.promise(() =>
+            pollForCondition(
+              () => (latestDiagnostics(outputPath) ?? []).length > 0,
+              { timeoutMs: 50 },
+            ),
+          );
+        }
+        expect(refreshed).toBe(true);
         expect(latestDiagnostics(outputPath)).toHaveLength(1);
 
         yield* setEnabled(false);
+        yield* Effect.promise(() =>
+          waitForCondition(
+            () =>
+              mocks.diagnosticCollections.at(-1)?.dispose.mock.calls.length ===
+              1,
+            {
+              timeoutMs: 2000,
+              timeoutMessage: 'inline criticism diagnostics were not closed',
+            },
+          ),
+        );
         yield* Effect.promise(() => emitOutputFiles(session, outputPath));
         expect(latestDiagnostics(outputPath)).toBe(undefined);
+        expect(mocks.diagnosticCollections).toHaveLength(1);
       }),
   );
 });

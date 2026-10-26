@@ -6,11 +6,11 @@ import * as vscode from 'vscode';
 import {
   Cause,
   Context,
+  Deferred,
   Effect,
   Exit,
   Layer,
   ManagedRuntime,
-  Queue,
   Result,
   Schema,
   Scope,
@@ -48,16 +48,20 @@ import {
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
+import {
+  appSignalStream,
+  emitAppSignal,
+  onAppSignal,
+} from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
+  executeVscodeCommand,
   safeExecuteCommand,
   vscodeToolMissingReporter,
 } from '@frontend/system/commandUtils';
@@ -67,7 +71,6 @@ import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { agentDirectoriesLayer } from '@frontend/agents/agentDirectoriesLayer';
-import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { announce } from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -75,7 +78,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { copilotToolsLayer } from '@frontend/lm/registerLanguageModelTools';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
+import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
   getInlineCommentProvider,
   registerInlineComments,
@@ -86,13 +89,15 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import type { CommandId } from '@texra/shared/commands/catalog';
+import {
+  settingsTabByCommand,
+  type CommandId,
+} from '@texra/shared/commands/catalog';
 import {
   serviceProjectState,
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
-import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
@@ -110,6 +115,7 @@ import { reachExtensionService } from './common/extensionService';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 import type { WindowSession } from './progressView/ProgressViewProvider';
+import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
 
@@ -239,7 +245,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       Effect.ensuring(Scope.close(projectScope, Exit.void)),
     ),
   );
-  yield* Effect.addFinalizer(() => Effect.sync(() => disposeDiffRefresh()));
   return yield* withProcessServices(
     runtime,
     Effect.gen(function* () {
@@ -304,7 +309,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const notice = vscode.env.isTelemetryEnabled
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
-      if (notice) void vscode.window.showInformationMessage(notice);
+      if (notice)
+        yield* Effect.forkDetach(
+          announce(
+            EXTENSION_CHANNEL,
+            vscodeUi.showInfoMessage(notice),
+            undefined,
+          ),
+        );
       // The process's sessions, read once here from the runtime that
       // serves them and threaded to the window's activation.
       const sessions = yield* Effect.map(
@@ -401,7 +413,6 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 ) {
   yield* installUnhandledRejectionSurface();
   if (vscode.workspace.workspaceFolders?.length !== 1) {
-    registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into the shared
     // secrets file (the `Secrets` service) and the global `~/.texra` config — none of it
     // needs a folder — so the walkthrough's credential buttons work before
@@ -411,6 +422,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
       context,
       undefined,
     );
+    registerWelcomeView(context, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -558,6 +570,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
+  // The settings view is built with the commands, after the progress view
+  // that opens it, so the progress view waits for it.
+  const settingsView = yield* Deferred.make<SettingsViewProvider>();
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
@@ -567,6 +582,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     windowSession,
     editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
+    (target) =>
+      Effect.flatMap(Deferred.await(settingsView), (view) =>
+        view.showSettingsView(target),
+      ),
   );
   yield* Effect.andThen(
     progressViewProvider.initialize(),
@@ -579,7 +598,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     Effect.asVoid(Effect.flatMap(Sessions, (sessions) => sessions.closeAll)),
   );
 
-  registerCommands(
+  const settingsViewProvider = registerCommands(
     context,
     globalState,
     progressViewProvider,
@@ -588,6 +607,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     roots,
     session,
   );
+  yield* Deferred.succeed(settingsView, settingsViewProvider);
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
   yield* Effect.forkScoped(secrets.watch());
@@ -627,12 +647,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // any prompt still open.
   const openSettings = 'Open Git settings';
   yield* Effect.forkScoped(
-    Stream.callback<string>((queue) =>
-      onAppSignal('githubTokenInvalid', ({ message }) =>
-        Queue.offerUnsafe(queue, message),
-      ),
-    ).pipe(
-      Stream.runForEach((message) =>
+    appSignalStream('githubTokenInvalid').pipe(
+      Stream.runForEach(({ message }) =>
         announce(
           EXTENSION_CHANNEL,
           vscodeUi.error(gitHubTokenRejectedMessage(message), {
@@ -642,7 +658,16 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ).pipe(
           Effect.flatMap((choice) =>
             choice === openSettings
-              ? safeExecuteCommand('texra.showGitSettings')
+              ? settingsViewProvider
+                  .showSettingsView(
+                    settingsTabByCommand['texra.showGitSettings'],
+                  )
+                  .pipe(
+                    Effect.ignore({
+                      log: 'Warn',
+                      message: 'Opening the Git settings',
+                    }),
+                  )
               : Effect.void,
           ),
           Effect.forkChild,
@@ -651,7 +676,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ),
     { startImmediately: true },
   );
-  yield* registerInlineCriticism(context, runtime, session, roots);
+  yield* Effect.forkScoped(followInlineCriticism(session, roots));
   registerInlineComments(context);
 
   const statusBarItem = vscode.window.createStatusBarItem(
@@ -750,11 +775,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // after ALL `registerCommand` calls in this function, otherwise palette
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
-  yield* Effect.tryPromise({
-    try: () =>
-      vscode.commands.executeCommand('setContext', 'texra.activated', true),
-    catch: ensureError,
-  });
+  yield* executeVscodeCommand('setContext', 'texra.activated', true);
   const welcomeKey = 'texra.welcomeShown';
   if (
     !(yield* Settings.state(
@@ -765,9 +786,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   ) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
-      fromHost('texra.showMainView', () =>
-        vscode.commands.executeCommand('texra.showMainView'),
-      ).pipe(
+      progressViewProvider.showLauncher().pipe(
         Effect.andThen(globalState.update(welcomeKey, true)),
         // Scope close interrupts this fiber; that is not a failed welcome.
         Effect.catchCause((cause) =>

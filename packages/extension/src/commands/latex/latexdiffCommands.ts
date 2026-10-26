@@ -178,7 +178,7 @@ const restorePreparedViewerTarget = (
 
 /**
  * Prepare every successful diff in result order and schedule exactly one
- * detached viewer handoff for the last viewer-ready diff.
+ * viewer handoff, in the caller's scope, for the last viewer-ready diff.
  *
  * Each file-open/build phase stays settled and serialized, so setup failures
  * reach `withLatexdiffTool`. The viewer is restored to the last viewer-ready
@@ -226,9 +226,9 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
             yield* restorePreparedViewerTarget(lastViewerLocation);
         }
         if (viewerTargetReady) {
-          // Detached: the viewer confirmation fires long after this finalizer
-          // returns, exactly as the fork on the entry's runtime did.
-          yield* Effect.forkDetach(scheduleViewerDisplay, {
+          // In the caller's scope: the viewer confirmation fires long after
+          // this finalizer returns, and closing that scope cancels it.
+          yield* Effect.forkScoped(scheduleViewerDisplay, {
             startImmediately: true,
           });
         }

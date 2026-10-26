@@ -1,15 +1,15 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -20,10 +20,13 @@ import {
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,
+  /** The window's launcher, which the fixer run starts on. */
+  launch: HostRunActions['runValidated'],
 ): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
     roots,
@@ -45,20 +48,14 @@ export function handleFixCompilation(
           roots.workspace,
         );
 
-        yield* safeExecuteCommand(
-          'texra.execute',
-          [
-            {
-              config: {
-                agent: 'latexFixer',
-                instruction,
-              },
-              // This is a "run latexFixer" command, so prefer the helper model.
-              preferHelperModel: true,
-            },
-          ],
-          CHANNEL,
-        );
+        // This is a "run latexFixer" command, so prefer the helper model.
+        // The command settles when the run ends.
+        const config = yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
+          agent: 'latexFixer',
+          instruction,
+        });
+        const run = yield* launch({ config }, { helperModel: true });
+        yield* run.result;
       }),
   );
 }

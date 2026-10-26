@@ -13,16 +13,17 @@
  *
  * Gated on the `texra.inlineCriticism.enabled` catalog row (global state,
  * default false), a switch on the LaTeX settings page. The settings write goes
- * through the generic catalog path; {@link syncInlineCriticism} then reconciles
- * the diagnostics with the stored value.
+ * through the generic catalog path; {@link followInlineCriticism} follows the
+ * stored value, here or written by another window.
  */
 
 // Third-party imports
-import { Cause, Effect, type Fiber, FileSystem, Stream } from 'effect';
+import { Cause, Effect, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import {
+  AppState,
   type PerKeyLane,
   withLogChannel,
   hasExtension,
@@ -36,12 +37,7 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import type {
-  Session,
-  ProcessRuntime,
-  StateReadFailed,
-  SettingsStores,
-} from '@texra-ai/harness';
+import type { Session, SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -51,18 +47,9 @@ const CODE_TOOL = 'criticize:tool';
 
 const fileLanes = new Map<string, PerKeyLane>();
 
-/** What {@link registerInlineCriticism} attached the feature to. */
-interface CriticismRegistration {
-  readonly context: vscode.ExtensionContext;
-  readonly session: Pick<Session, 'view'>;
-  readonly runtime: ProcessRuntime;
-  readonly stores: SettingsStores;
-}
-
+/** The diagnostics while the setting is on, which the `diagnostics` tool's
+ *  entries also land in; held by {@link followInlineCriticism}. */
 let collection: vscode.DiagnosticCollection | undefined;
-let outputFiber: Fiber.Fiber<void> | undefined;
-/** The single owner of the context and event hub `enable` works against. */
-let registration: CriticismRegistration | undefined;
 
 /** Criticism severity (0–5) → VS Code DiagnosticSeverity. */
 function mapSeverity(severity: number): vscode.DiagnosticSeverity {
@@ -134,62 +121,91 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
   else activeCollection.delete(uri);
 });
 
-/** Answers whether this call enabled the diagnostics (false when already on). */
-function enable({ context, session, runtime }: CriticismRegistration): boolean {
-  if (collection) return false;
-  collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
-  context.subscriptions.push(collection);
-  // The diagnostics toggle with a setting, so this listener's lifetime is
-  // theirs: `disable` interrupts it, and with it every batch it started.
-  outputFiber = runtime.runFork(
-    Stream.runForEach(outputFilesProduced(session), (files) =>
-      Effect.forEach(
-        files,
-        // One refresh per path at a time, in arrival order: two rounds
-        // writing the same output file fork two reads, and without the lane
-        // the older read can land last and set stale squiggles over the
-        // newer ones.
-        (file) =>
-          refreshFileDiagnostics(file).pipe(
-            withPerKeyLane(fileLanes, file.location.absolutePath),
+/**
+ * The diagnostics, from the moment this runs until it is interrupted: the
+ * collection opens, every output file a run produces refreshes its entries,
+ * and an interrupt clears and closes the collection, ending the refreshes
+ * it started.
+ */
+function showDiagnostics(
+  session: Pick<Session, 'view'>,
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.acquireRelease(
+    Effect.sync(() => {
+      collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
+      return collection;
+    }).pipe(Effect.tap(Effect.logInfo('Inline criticism diagnostics enabled'))),
+    (opened) =>
+      Effect.sync(() => {
+        if (collection === opened) collection = undefined;
+        opened.clear();
+        opened.dispose();
+      }).pipe(
+        Effect.andThen(Effect.logInfo('Inline criticism diagnostics disabled')),
+      ),
+  ).pipe(
+    Effect.andThen(
+      Stream.runForEach(outputFilesProduced(session), (files) =>
+        Effect.forEach(
+          files,
+          // One refresh per path at a time, in arrival order: two rounds
+          // writing the same output file fork two reads, and without the
+          // lane the older read can land last and set stale squiggles over
+          // the newer ones.
+          (file) =>
+            refreshFileDiagnostics(file).pipe(
+              withPerKeyLane(fileLanes, file.location.absolutePath),
+            ),
+          { concurrency: 8, discard: true },
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError(
+              `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
           ),
-        { concurrency: 8, discard: true },
-      ).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logError(
-            `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(CHANNEL)),
+          Effect.forkChild,
         ),
-        Effect.forkChild,
       ),
     ),
+    Effect.scoped,
   );
-  return true;
 }
 
-/** Answers whether this call disabled the diagnostics (false when already off). */
-function disable(): boolean {
-  outputFiber?.interruptUnsafe();
-  outputFiber = undefined;
-  if (!collection) return false;
-  collection.clear();
-  collection.dispose();
-  collection = undefined;
-  return true;
-}
-
-/** Turn the diagnostics on or off to match the stored setting. */
-const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
-  const enabled = yield* Settings.get<boolean>(
-    current.stores,
+/**
+ * Show the diagnostics while the setting is on, following every write to
+ * it. Runs until interrupted; the activation scope holds it, so
+ * deactivation closes the collection. A setting that cannot be read is
+ * logged, and the diagnostics stay as they were.
+ */
+export function followInlineCriticism(
+  session: Pick<Session, 'view'>,
+  stores: SettingsStores,
+): Effect.Effect<void, never, AppState | FileSystem.FileSystem> {
+  const enabled = Settings.get<boolean>(
+    stores,
     TexraStateKey.INLINE_CRITICISM_ENABLED,
+  ).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Could not read whether inline criticism is on: ${error.message}`,
+      ).pipe(Effect.as(undefined)),
+    ),
   );
-  if (enabled ? enable(current) : disable()) {
-    yield* Effect.logInfo(
-      `Inline criticism diagnostics ${enabled ? 'enabled' : 'disabled'}`,
-    ).pipe(withLogChannel(CHANNEL));
-  }
-});
+  return Stream.unwrap(
+    Effect.map(AppState, (appState) =>
+      appState.changes([TexraStateKey.INLINE_CRITICISM_ENABLED]),
+    ),
+  ).pipe(
+    Stream.mapEffect(() => enabled),
+    Stream.filter((on) => on !== undefined),
+    Stream.changes,
+    Stream.switchMap((on) =>
+      on ? Stream.fromEffect(showDiagnostics(session)) : Stream.empty,
+    ),
+    Stream.runDrain,
+    withLogChannel(CHANNEL),
+  );
+}
 
 /**
  * Append a criticism entry from an agent. Returns false when the
@@ -223,36 +239,4 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 
   collection.set(uri, [...existing, diag]);
   return true;
-}
-
-export function registerInlineCriticism(
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: Pick<Session, 'view'>,
-  stores: SettingsStores,
-): Effect.Effect<void, StateReadFailed> {
-  return Effect.suspend(() => {
-    registration = { context, session, runtime, stores };
-    context.subscriptions.push({ dispose: disable });
-    return reconcile(registration);
-  });
-}
-
-/**
- * Reconcile the diagnostics after a write to the setting. The settings view
- * calls this once the catalog write has landed.
- */
-export function syncInlineCriticism(): Effect.Effect<
-  void,
-  StateReadFailed | Error
-> {
-  return Effect.suspend(() =>
-    registration
-      ? reconcile(registration)
-      : Effect.fail(
-          new Error(
-            'syncInlineCriticism called before registerInlineCriticism',
-          ),
-        ),
-  );
 }

@@ -9,8 +9,7 @@
  * presentation plane forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
-import { Cause, Effect } from 'effect';
-import * as vscode from 'vscode';
+import { Cause, Effect, Scope } from 'effect';
 
 import {
   withProcessServices,
@@ -23,7 +22,6 @@ import {
   withLogChannel,
 } from '@texra-ai/harness';
 import {
-  ensureError,
   toErrorMessage,
   INSTRUCTION_ACTION,
   type InstructionAction,
@@ -31,12 +29,17 @@ import {
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@texra-ai/harness/schemas';
+import { setApiKey } from '@commands/api/apiKeyCommands';
+import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  StateStore,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -55,35 +58,32 @@ function warnOnFailure<E>(
   );
 }
 
-const revealProgressView = Effect.tryPromise({
-  try: async () => {
-    await vscode.commands.executeCommand('texra.showProgressView');
-  },
-  catch: ensureError,
-});
-
 /**
- * Maps the host-agnostic action tokens the agent core emits to the VS Code
- * command (and button label) this host invokes. Keeping this table here — not
- * in the agent core — is what lets the core stay free of `texra.*` command IDs.
+ * Maps the host-agnostic action tokens the agent core emits to the button
+ * label and the program this host runs for it. Keeping this table here — not
+ * in the agent core — is what lets the core stay free of host actions.
  */
 const INSTRUCTION_ACTION_VIEW: Record<
   InstructionAction,
-  { title: string; command: string; args?: unknown[] }
+  {
+    title: string;
+    run: (
+      roots: WorkspaceRoots,
+      secrets: PlatformSecrets,
+    ) => Effect.Effect<void, Error>;
+  }
 > = {
   [INSTRUCTION_ACTION.SET_API_KEY]: {
     title: 'Set API Key',
-    command: 'texra.setApiKey',
+    run: (roots, secrets) => setApiKey(roots, secrets),
   },
   [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: {
     title: 'Open Settings Guide',
-    command: 'texra.openDoc',
-    args: ['configuration'],
+    run: () => openGuidePage('configuration'),
   },
   [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: {
     title: 'Model Documentation',
-    command: 'texra.openDoc',
-    args: ['models'],
+    run: () => openGuidePage('models'),
   },
 };
 
@@ -100,8 +100,9 @@ function handleRequestShowError({
     .pipe(
       Effect.flatMap((choice) =>
         choice && docsPage
-          ? Effect.asVoid(
-              safeExecuteCommand('texra.openDoc', [docsPage], CHANNEL),
+          ? warnOnFailure(
+              openGuidePage(docsPage),
+              `Failed to open the ${docsPage} guide`,
             )
           : Effect.void,
       ),
@@ -110,6 +111,8 @@ function handleRequestShowError({
 
 function handleRequestShowInstruction(
   globalState: StateStore,
+  roots: WorkspaceRoots,
+  secrets: PlatformSecrets,
   payload: RequestShowInstructionPayload,
 ): Effect.Effect<void, Error> {
   const actions = (payload.actions ?? []).map((token) => {
@@ -117,8 +120,9 @@ function handleRequestShowInstruction(
     return {
       title: view.title,
       callback: () =>
-        Effect.asVoid(
-          safeExecuteCommand(view.command, [...(view.args ?? [])], CHANNEL),
+        warnOnFailure(
+          view.run(roots, secrets),
+          `The instruction action "${view.title}" failed`,
         ),
     };
   });
@@ -157,7 +161,7 @@ function handleRequestEnsureProgressView(
     // A failed reveal is a diagnostic, not non-delivery: fall through to the
     // visibility re-check and, when provided, the toast handoff below (#10554).
     yield* warnOnFailure(
-      revealProgressView,
+      progressViewProvider.showProgressView(),
       'Failed to reveal the progress view',
     );
 
@@ -188,7 +192,7 @@ function handleRequestEnsureProgressView(
     // The toast handoff already established delivery; a failed retry is
     // a diagnostic, not non-delivery, so it must not downgrade the event.
     yield* warnOnFailure(
-      revealProgressView,
+      progressViewProvider.showProgressView(),
       'Failed to retry the progress-view reveal',
     );
   });
@@ -210,24 +214,28 @@ function handleRequestEnsureProgressView(
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
   globalState: StateStore,
+  secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
+  /** The view's scope, which a scheduled PDF viewer open runs in. */
+  scope: Scope.Scope,
 ): Pick<HostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<
     RuntimePresentationEventPayloads,
     HostPresentation
   > = {
     // The open-and-build program takes this window's file services from the
-    // runtime's context, which the session that forks it does not carry.
+    // runtime's context, which the session that forks it does not carry, and
+    // schedules the PDF viewer in the view's scope.
     requestOpenFile: (payload) =>
       withProcessServices(
         runtime,
         openBuildDisplayIfTex(roots, payload.location, {
           preserveFocus: payload.preserveFocus,
-        }),
+        }).pipe(Effect.provideService(Scope.Scope, scope)),
       ).pipe(Effect.asVoid),
     requestShowInstruction: (payload) =>
-      handleRequestShowInstruction(globalState, payload),
+      handleRequestShowInstruction(globalState, roots, secrets, payload),
     showAgentConfigBanner: (payload) =>
       progressViewProvider.showAgentConfigBanner(payload.agentName),
     requestShowError: handleRequestShowError,
