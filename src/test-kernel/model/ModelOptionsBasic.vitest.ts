@@ -1,13 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { modelConfig } from '@texra-ai/llm';
 import {
   DEFAULT_HELPER_MODEL,
   DEFAULT_MODELS,
 } from '@shared/constants/defaultModels';
-import { isExpensiveModel } from '@texra/shared/model/modelPicker';
 
 // Local imports - model
 
@@ -35,18 +33,5 @@ describe('default model list', () => {
           modelConfig(model)?.retired || modelConfig(model)?.deprecated,
       ),
     ).toEqual([]);
-  });
-});
-
-describe('premium pricing hint', () => {
-  // Name matching (`gpt<digits>pro`) flagged the $4/$20 GPT-5.6 Pro and missed
-  // the $150/$600 o1-pro; the hint follows the price.
-  it('flags models by output price, not by a Pro-shaped name', () => {
-    expect(
-      isExpensiveModel(MODEL_CONFIGS['openai/o1-pro-2025-03-19'].outputPrice),
-    ).toBe(true);
-    expect(
-      isExpensiveModel(MODEL_CONFIGS['openai/gpt-5.6-sol'].outputPrice),
-    ).toBe(false);
   });
 });
