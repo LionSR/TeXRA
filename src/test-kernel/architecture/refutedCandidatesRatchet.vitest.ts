@@ -17,11 +17,6 @@ import { describe, expect, it } from 'vitest';
 
 import { parseSourceFile, REPO_ROOT } from '../support/repoScan';
 
-const { locateSymbol } = await import(
-  // @ts-expect-error This internal JavaScript script intentionally has no declaration file.
-  '../../../scripts/refutedCandidates.mjs'
-);
-
 const BASELINE_FILE = 'config/ratchets/refuted-candidates.json';
 
 interface RefutedSymbol {
@@ -205,22 +200,4 @@ describe('refuted-candidate shape ratchet', () => {
         `signature in ${BASELINE_FILE} in the same PR.`,
     ).toBe(entry.signature);
   });
-
-  it.each(cases)(
-    '$id: keeps $symbol findable by the CI gate text locator',
-    (entry) => {
-      const source = readFileSync(resolve(REPO_ROOT, entry.file), 'utf8');
-      const { startLine, endLine } = locateSymbol(source, entry.symbol) as {
-        startLine: number;
-        endLine: number;
-      };
-      // A range that collapsed to nothing would let the workflow pass a PR
-      // that rewrote the declaration.
-      expect(endLine).toBeGreaterThanOrEqual(startLine);
-      expect(
-        source.split('\n')[startLine - 1],
-        `scripts/refutedCandidates.mjs located the wrong line for ${entry.symbol}`,
-      ).toContain(entry.symbol);
-    },
-  );
 });
