@@ -18,7 +18,13 @@ import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { CROSS, HOLLOW_DOT, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
+import {
+  CROSS,
+  HOLLOW_DOT,
+  SKIP_CIRCLE,
+  STATUS_DIAMOND,
+  TICK,
+} from '@cli/tui/ui/glyphs';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
@@ -149,7 +155,7 @@ export function ScriptStagePopup({
           {
             kind: 'heading' as const,
             key: `phase:${phase.title}`,
-            text: `◆ ${phase.title}`,
+            text: `${STATUS_DIAMOND} ${phase.title}`,
           },
         ]),
     ...phase.calls.map((call) => ({
