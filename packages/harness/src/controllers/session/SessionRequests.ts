@@ -1,9 +1,9 @@
 /**
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime, answered once with an `Outcome` or a request error.
- * Existence is read from the sequence table first: no row is
- * `Unavailable`, a foreign claim without a death
- * proof `NotOwner`, a rejecting collaborator a defect.
+ * Existence is read from the sequence table first: no row is `Unavailable`,
+ * a foreign claim without a death proof `NotOwner`, a rejecting collaborator
+ * a defect. A message is the exception: `submitFollowUp` admits it.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -344,9 +344,37 @@ const deleteAdmittedRun = (
   });
 };
 
+/** No `admit` wait: `submitFollowUp` refuses under the claim, in send order. */
+const sendFollowUp = (
+  deps: RequestDeps,
+  req: Extract<RuntimeRequest, { kind: 'followUp.send' }>,
+): Effect.Effect<Outcome, RequestError> =>
+  submitFollowUp(
+    req.runId,
+    {
+      text: req.text,
+      from: { kind: 'user' },
+      ...(req.displayText == null ? {} : { displayText: req.displayText }),
+      ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+    },
+    { session: deps.session(), hold: req.holdUntil ?? undefined },
+  ).pipe(
+    Effect.orDie,
+    Effect.flatMap((result) =>
+      result.status === 'failed'
+        ? Effect.fail(
+            new Unavailable({
+              runId: req.runId,
+              reason: describeFollowUpFailure(result.reason),
+            }),
+          )
+        : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
+    ),
+  );
+
 const handle = (
   deps: RequestDeps,
-  req: RuntimeRequest,
+  req: Exclude<RuntimeRequest, { kind: 'followUp.send' }>,
   admitted: AggregateState,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, RequestServices> => {
@@ -398,35 +426,6 @@ const handle = (
         ),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
-    case 'followUp.send':
-      return submitFollowUp(
-        req.runId,
-        {
-          text: req.text,
-          from: { kind: 'user' },
-          ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
-        },
-        { session: deps.session(), hold: req.holdUntil ?? undefined },
-      ).pipe(
-        Effect.orDie,
-        Effect.flatMap((result) =>
-          result.status === 'failed'
-            ? Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: describeFollowUpFailure(result.reason),
-                }),
-              )
-            : Effect.succeed<Outcome>({
-                kind: 'followUp',
-                status: result.status,
-                ...(result.status === 'queued' && result.wake === 'failed'
-                  ? { wake: 'failed' }
-                  : {}),
-              }),
-        ),
-      );
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
@@ -459,6 +458,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
+    if (req.kind === 'followUp.send') return yield* sendFollowUp(deps, req);
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a parked request has a fiber here.

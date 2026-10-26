@@ -306,8 +306,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // is disposed.
   if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
   if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
-  const woken = yield* session.followUps.wake(runId);
-  if (!woken) return { status: 'queued', wake: 'failed' };
+  // The sender hears the resume start, not the resumed turn end.
+  if ((yield* session.followUps.wake(runId)) === false)
+    return { status: 'queued', wake: 'failed' };
   return { status: sent.kind === 'duplicate' ? 'sent' : 'queued' };
 });
 

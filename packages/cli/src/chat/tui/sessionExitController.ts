@@ -313,11 +313,9 @@ export function createSessionExitController(
       ctx.interruptActive('shutdown');
       return true;
     };
-    // Interrupt an actively-running turn BEFORE waiting for the chat's sends.
-    // A message that continues a stopped conversation is answered only once
-    // the resumed turn rests, so waiting first would block the quit behind a
-    // long model turn. Re-check after the wait for a run a send itself
-    // started.
+    // Interrupt an actively-running turn BEFORE waiting for the chat's sends:
+    // a message to a stopping run lands only once the stop finishes. Re-check
+    // after the wait for a run a send itself resumed.
     const drain = withProcessServices(
       ctx.runtime,
       Effect.gen(function* () {

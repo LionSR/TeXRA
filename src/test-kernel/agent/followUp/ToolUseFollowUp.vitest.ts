@@ -517,7 +517,7 @@ describe('Inbox readers', () => {
           kind: 'queued',
           read: false,
         });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([id]);
 
         expect(queued(id)).toEqual([
@@ -541,7 +541,7 @@ describe('Inbox readers', () => {
         kind: 'queued',
         read: false,
       });
-      expect(yield* followUps.wake(id)).toBe(true);
+      expect(yield* followUps.wake(id)).not.toBe(false);
       expect(resumed).toEqual([]);
     }),
   );
@@ -695,7 +695,7 @@ describe('Inbox delivery identity (#9531)', () => {
         expect(yield* followUps.send(id, delivery)).toEqual({
           kind: 'duplicate',
         });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([id]);
         expect(queued(id)).toEqual(['child result']);
       }),
@@ -729,7 +729,7 @@ describe('Inbox visibility held on the row', () => {
         expect(
           yield* followUps.send(id, notice, { hold: 'instruction' }),
         ).toEqual({ kind: 'queued', read: false });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([]);
         const input = yield* followUps.open(id);
         expect(yield* input.hasPending('idle')).toBe(false);

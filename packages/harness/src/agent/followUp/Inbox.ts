@@ -4,7 +4,7 @@
  * one reader per run (its generation here); the run's claim is the only
  * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
  */
-import { Effect, Result, type Scope } from 'effect';
+import { Effect, Fiber, Result, type Scope } from 'effect';
 
 import type { ClaimError, SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -71,8 +71,7 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Resume the run for the input it holds; what it does not take, the
-   *  resume tells the user. */
+  /** Resume the run for its input, telling the user what it does not take. */
   readonly resume: (runId: RunId) => Effect.Effect<void>;
 }
 
@@ -90,8 +89,7 @@ export interface InboxItem {
   readonly control?: QueuedFollowUp['control'];
 }
 
-/** How a send landed. `queued.read`: a reader here takes it; otherwise the
- *  sender asks {@link Inbox.wake} whether the run owes a resume. */
+/** How a send landed. `queued.read`: a reader here takes it (else: `wake`). */
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean }
@@ -207,27 +205,29 @@ export class Inbox {
     );
   }
 
-  /** Resume the run if its pending input obliges one (`needsWake`) and
-   *  nothing here will read it: no reader open, no resume in flight. Waits
-   *  for the publisher first, so a row still committing is seen. False only
-   *  when the input could not be read; a refused resume tells the user. */
-  wake(runId: RunId): Effect.Effect<boolean> {
+  /** Start resuming the run if its input obliges one (`needsWake`) and no
+   *  reader or resume here takes it, once the publisher settled. False only
+   *  if the input could not be read; else the resume's end, for a caller to
+   *  wait on (at once if none started). */
+  wake(runId: RunId): Effect.Effect<false | Effect.Effect<void>> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
-      // A reader here, or a resume in flight, reads the input.
-      if (this.disposed || this.readers.has(runId)) return true;
-      if (this.resumes.running.has(runId)) return true;
+      if (this.disposed || this.readers.has(runId)) return Effect.void;
+      if (this.resumes.running.has(runId)) return Effect.void;
       const input = yield* this.read(runId);
-      if (!input.closed && needsWake(input.rows, runId, this.port.run))
-        yield* this.port.resume(runId);
-      return true;
+      if (input.closed || !needsWake(input.rows, runId, this.port.run))
+        return Effect.void;
+      const resume = yield* Effect.forkChild(this.port.resume(runId), {
+        startImmediately: true,
+      });
+      return Effect.interruptible(Fiber.join(resume));
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
           warnWith(
             `Run ${runId} was not woken; an explicit Resume delivers what is queued`,
           )(error),
-          false,
+          false as const,
         ),
       ),
     );
