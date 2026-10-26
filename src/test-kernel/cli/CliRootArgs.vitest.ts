@@ -30,10 +30,6 @@ import {
   resumeWorkflowOutputFile,
   resumeWorkflowOutputDirectory,
 } from '@cli/runtime/workflowOutput';
-import {
-  knownCliModelIds,
-  resolveKnownCliModelId,
-} from '@cli/runtime/cliConfig';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

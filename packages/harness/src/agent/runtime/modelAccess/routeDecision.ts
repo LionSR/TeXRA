@@ -7,7 +7,6 @@
  * user's own credential a failed attempt offers.
  */
 import { Effect } from 'effect';
-import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
 import {
   decideModelRoute,
@@ -40,6 +39,7 @@ import {
   type ModelBackend,
   type ProviderError,
 } from '@shared/schemas';
+import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
 /**
  * The routes a binding can take: the unserved one fails in the decision, and

@@ -1,10 +1,11 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
+import { MODELS } from 'llm-zoo';
+
 import { getEnabledModels } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
-import { knownCliModelIds } from '../runtime/cliConfig';
 import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
@@ -62,10 +63,7 @@ function listModels(context: CliContext, options: CliModelListOptions) {
         const services = yield* initCliPlatform(context);
         return yield* getCliModelAccessList({
           stores: services,
-          models:
-            options.includeUnavailable === true
-              ? knownCliModelIds()
-              : undefined,
+          models: options.includeUnavailable === true ? MODELS : undefined,
         });
       }),
     );

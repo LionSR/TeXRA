@@ -1,6 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
-import { MODEL_CONFIGS, formatModelRef, parseModelRef } from 'llm-zoo';
+import { MODELS, formatModelRef, parseModelRef } from 'llm-zoo';
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
@@ -54,10 +54,6 @@ export interface CliCommandDefaults {
   readonly modelScope?: 'workspace-config' | 'user-config';
 }
 
-export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS);
-}
-
 function normalizeCliModelLookupKey(value: string): string {
   return value
     .trim()
@@ -84,7 +80,7 @@ export function resolveKnownCliModelId(model: string): string | undefined {
   if (selection) return formatModelRef(selection);
 
   const lower = trimmed.toLowerCase();
-  const ids = knownCliModelIds();
+  const ids = MODELS;
   const exactIdMatch = ids.find((id) => id.toLowerCase() === lower);
   if (exactIdMatch) return exactIdMatch;
 

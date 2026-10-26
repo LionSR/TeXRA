@@ -11,6 +11,7 @@
  * write that follows it hit the same store.
  */
 import { Effect } from 'effect';
+import { MODELS } from 'llm-zoo';
 
 import { isUnservedModel, modelConfig, modelRefOf } from '@texra-ai/llm';
 import {
@@ -22,7 +23,7 @@ import {
 } from '@texra-ai/harness';
 import { getModelLabel, GlobalStateKey } from '@texra-ai/harness/schemas';
 
-import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
+import { resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {
   readonly id: string;
@@ -39,11 +40,10 @@ export interface CliEnabledModelRow {
 export function listCliEnabledModelCatalog(state: StateStore) {
   return Effect.gen(function* () {
     const enabled = new Set(yield* getEnabledModels(state));
-    return knownCliModelIds()
-      .filter((id) => {
-        const config = modelConfig(id);
-        return config === undefined || !isUnservedModel(config);
-      })
+    return MODELS.filter((id) => {
+      const config = modelConfig(id);
+      return config === undefined || !isUnservedModel(config);
+    })
       .map((id) => {
         const config = modelConfig(id);
         return {
