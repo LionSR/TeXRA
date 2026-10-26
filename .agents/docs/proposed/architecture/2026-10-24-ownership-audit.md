@@ -59,7 +59,6 @@ F1 and part of F2 and F3 landed in #14261 (`f5c5f063f3`), F5 in #14266
 
 ## Still open
 
-- **The ratchet proposals** in "Why the ratchets miss this".
 - **F2, kept on purpose:** `refusalFor` classifies what a launch throws after
   the resume's own check passed (a row kind the check did not read, a
   checkpoint that will not turn into state). It is the same fact read at a
@@ -480,7 +479,31 @@ duplicates then grew as fields _on_ that record (`stopReason` beside
 `stopping`) and as derived caches elsewhere (`unbornDetached`, `userStopped`,
 the CLI claim), which the rule's wording does not forbid.
 
-A cheap check that would surface this species (described, not built):
+**Built 2026-10-26 (fact-owner ratchets PR):** proposals 1 and 2 are one
+pure-tier suite, `src/test-kernel/architecture/factOwnerRatchet.vitest.ts`,
+with the baseline `config/ratchets/row-readers-baseline.json`.
+
+- **Readers per row type.** The baseline lists, per durable row type, the files
+  that read it outside its reducers (`runRows.ts`, `runState.ts`,
+  `turnRowHandlers.ts`, `sessionViewUpdate.ts`, `transcriptUpdate.ts`,
+  `projections.ts`). A new reader fails; a reader that goes is dropped with
+  `npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`,
+  which can only remove entries. Not covered: the transcript arms, whose
+  literals the trace's `AgentEvent` shares; rows read inside SQL text; and
+  `RunView` fields. A view field is what the rule tells a reader to read, and
+  a scan by name is noise: `.status` has 444 sites in 174 files.
+- **Owners per fact.** `OWNERS` in the suite names seven facts and their one
+  file: who assigns `stopReason`, who reads `launchParent` (the registry's
+  `parentOf` input), and who builds `run.end`, `run.activate`, `run.detach`,
+  `run.removed` and `followup.closed`. `run.start` and `child.park` are left
+  out, since each has more than one builder today.
+- **Same-name fields across shapes: rejected on measurement.** Over 423
+  exported shapes in `packages/harness/src`, 128 `name: type` pairs sit on
+  more than one shape, and about 4% of them are copies of one fact. The rest
+  are descriptors (`id`, `name`, `runId`), init fields and request-to-result
+  pass-through.
+
+A cheap check that would surface this species (as first described):
 
 1. **Readers per row type and view field.** A script over the TypeScript AST
    that, for each `SessionEvent` type literal (`'run.end'`, `'child.park'`,
