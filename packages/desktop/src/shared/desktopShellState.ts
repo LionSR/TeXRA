@@ -1,5 +1,5 @@
 // Per-project document metadata. Dockview owns group positions, sizes and tabs.
-import { Effect, Schema } from 'effect';
+import { Effect, Number as Num, Schema } from 'effect';
 import { getBasename } from '@texra-ai/harness/schemas';
 
 import type { IconName } from '@ui/wa/iconNames';
@@ -174,6 +174,6 @@ export function setSidebarWidth(
   state: DesktopShellState,
   width: number,
 ): DesktopShellState {
-  const next = Math.max(220, Math.min(480, Math.round(width)));
+  const next = Num.clamp(Math.round(width), { minimum: 220, maximum: 480 });
   return next === state.sidebarWidth ? state : { ...state, sidebarWidth: next };
 }

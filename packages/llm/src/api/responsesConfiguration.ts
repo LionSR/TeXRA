@@ -3,6 +3,7 @@
  * format on their own endpoints (DeepSeek, Kimi, GLM, DashScope, MiniMax),
  * OpenAI and xAI on theirs, and the ChatGPT subscription's Codex backend.
  */
+import { Number as Num } from 'effect';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 import { codexBackendModelId } from '../models/modelRoute.js';
@@ -115,7 +116,10 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: ['high'],
         stores: false,
-        temperature: Math.min(1, Math.max(0.01, spec.options.temperature)),
+        temperature: Num.clamp(spec.options.temperature, {
+          minimum: 0.01,
+          maximum: 1,
+        }),
         reasoning: choice.thinking ? reasoning('high') : null,
       });
     default:
