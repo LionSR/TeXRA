@@ -22,7 +22,7 @@ interface DesktopFileSelectionOptions {
   workspacePath: string | undefined;
   showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
-  ): Promise<string[] | undefined>;
+  ): Effect.Effect<string[] | undefined, Error>;
 }
 
 /**
@@ -38,11 +38,11 @@ export interface DesktopFileSelection {
     FileSystem.FileSystem
   >;
   /**
-   * The native picker for one multi-file list. Resolves to the chosen
+   * The native picker for one multi-file list. Succeeds with the chosen
    * files, workspace-relative where they are inside the paper, or null when
    * the dialog was cancelled.
    */
-  pickFiles(fileType: ListableFileType): Promise<string[] | null>;
+  pickFiles(fileType: ListableFileType): Effect.Effect<string[] | null, Error>;
 }
 
 const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
@@ -65,26 +65,33 @@ export function createDesktopFileSelection(
   const { workspacePath } = options;
   return {
     fileOptions: () => workspaceFileOptions(workspacePath),
-    async pickFiles(fileType) {
-      if (!workspacePath) return null;
+    pickFiles(fileType) {
+      if (!workspacePath) return Effect.succeed(null);
       const listConfig = getFileListConfig(fileType);
-      const selectedFiles = await options.showOpenFileDialog({
-        title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
-        defaultPath: workspacePath,
-        allowMultiple: true,
-        filters: [
-          {
-            name: 'Supported files',
-            // Electron's dialog filter extensions must not include the
-            // leading dot (unlike getFileListConfig's `.tex`-style entries).
-            extensions: listConfig.include.map((ext) => ext.replace(/^\./, '')),
-          },
-        ],
-      });
-      if (!selectedFiles) return null;
-      return selectedFiles.map((file) =>
-        toWorkspaceRelative(workspacePath, file),
-      );
+      return options
+        .showOpenFileDialog({
+          title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
+          defaultPath: workspacePath,
+          allowMultiple: true,
+          filters: [
+            {
+              name: 'Supported files',
+              // Electron's dialog filter extensions must not include the
+              // leading dot (unlike getFileListConfig's `.tex`-style entries).
+              extensions: listConfig.include.map((ext) =>
+                ext.replace(/^\./, ''),
+              ),
+            },
+          ],
+        })
+        .pipe(
+          Effect.map(
+            (selectedFiles) =>
+              selectedFiles?.map((file) =>
+                toWorkspaceRelative(workspacePath, file),
+              ) ?? null,
+          ),
+        );
     },
   };
 }

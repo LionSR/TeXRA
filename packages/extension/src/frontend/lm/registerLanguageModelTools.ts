@@ -19,7 +19,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
+import { Context, Effect, Layer, Option, Stream } from 'effect';
 
 import {
   ToolCatalog,
@@ -35,6 +35,7 @@ import {
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
 
+import { tokenCancelled } from '@frontend/vscode/vscodeEventWait';
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
 
 // Local imports - language model tools
@@ -127,42 +128,38 @@ const copilotTools = Effect.fnUntraced(function* (
         // Run the invocation directly on the process runtime rather than
         // forking and joining it: the effect's failure is delivered to the
         // awaited `runPromise` caller only, never to the fork-failure
-        // reporting seam (#12663). Cancellation interrupts the in-flight
-        // effect through the token's own handler.
+        // reporting seam (#12663). A cancelled token wins the race and
+        // interrupts the call; the cancellation wait is listed first, so a
+        // token that is already cancelled stops the call before it starts.
         const result = await runtime.runPromise(
           Effect.scoped(
-            Effect.gen(function* () {
-              const fiber = yield* Effect.fiber;
-              yield* Effect.acquireRelease(
-                Effect.sync(() =>
-                  token.onCancellationRequested(() => {
-                    runtime.runFork(Fiber.interrupt(fiber));
-                  }),
-                ),
-                (subscription) => Effect.sync(() => subscription.dispose()),
-              );
-              if (token.isCancellationRequested) return yield* Effect.interrupt;
-              // Its plugin's process services, as a step would serve them
-              // (the research tools' plugins own none).
-              const services = yield* catalog.processServices(plugin);
-              return yield* tool.call(options.input).pipe(
-                Effect.provide(
-                  Option.getOrElse(services, () => Context.empty()),
-                ),
-                Effect.provideService(ToolContext, {
-                  // Copilot's invocation names no call id of its own.
-                  callId: `${lmName}-${crypto.randomUUID()}`,
-                  env: { roots },
-                  emit: () => undefined,
+            tokenCancelled(token).pipe(
+              Effect.andThen(Effect.interrupt),
+              Effect.raceFirst(
+                Effect.gen(function* () {
+                  // Its plugin's process services, as a step would serve them
+                  // (the research tools' plugins own none).
+                  const services = yield* catalog.processServices(plugin);
+                  return yield* tool.call(options.input).pipe(
+                    Effect.provide(
+                      Option.getOrElse(services, () => Context.empty()),
+                    ),
+                    Effect.provideService(ToolContext, {
+                      // Copilot's invocation names no call id of its own.
+                      callId: `${lmName}-${crypto.randomUUID()}`,
+                      env: { roots },
+                      emit: () => undefined,
+                    }),
+                    // A Copilot call is under no run: `ChildRuns` and `RunCall`
+                    // keep their defaults, which launch and read none.
+                    // Every `WorkspaceFs`/`StorageFs` service read in this call
+                    // resolves against the window's folders, and path
+                    // resolution takes `ToolContext.env` as data.
+                    Effect.provide(sessionFsLayer(roots)),
+                  );
                 }),
-                // A Copilot call is under no run: `ChildRuns` and `RunCall`
-                // keep their defaults, which launch and read none.
-                // Every `WorkspaceFs`/`StorageFs` service read in this call
-                // resolves against the window's folders, and path resolution
-                // takes `ToolContext.env` as data.
-                Effect.provide(sessionFsLayer(roots)),
-              );
-            }),
+              ),
+            ),
           ),
         );
         return new vscode.LanguageModelToolResult([

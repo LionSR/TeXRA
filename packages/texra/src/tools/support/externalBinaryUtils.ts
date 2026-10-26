@@ -68,31 +68,26 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
         ? new Error(opts.notFoundMessage, { cause: err })
         : ensureError(err),
   }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () => {
-          // The bundler's interop shape is not what the module's type
-          // declares, so the lookup reads the namespace as the plain record
-          // it is at runtime.
-          const record = mod as Record<string, unknown>;
-          const value =
-            record[opts.exportName] ??
-            (record.default as Record<string, unknown> | undefined)?.[
-              opts.exportName
-            ] ??
-            record.default;
-          if (typeof value !== 'function') {
-            const keys = Object.keys(record).join(', ');
-            throw new Error(
-              `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
-                `Ensure ${opts.specifier} is NOT in esbuild externals.`,
-            );
-          }
-          return value as M[K];
-        },
-        catch: ensureError,
-      }),
-    ),
+    Effect.flatMap((mod) => {
+      // The bundler's interop shape is not what the module's type declares,
+      // so the lookup reads the namespace as the plain record it is at
+      // runtime.
+      const record = mod as Record<string, unknown>;
+      const value =
+        record[opts.exportName] ??
+        (record.default as Record<string, unknown> | undefined)?.[
+          opts.exportName
+        ] ??
+        record.default;
+      if (typeof value === 'function') return Effect.succeed(value as M[K]);
+      const keys = Object.keys(record).join(', ');
+      return Effect.fail(
+        new Error(
+          `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
+            `Ensure ${opts.specifier} is NOT in esbuild externals.`,
+        ),
+      );
+    }),
   );
 }
 

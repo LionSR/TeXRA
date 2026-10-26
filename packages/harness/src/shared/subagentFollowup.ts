@@ -12,8 +12,7 @@
 // CLI can consume it.
 
 import escapeRegExp from 'escape-string-regexp';
-import { Result } from 'effect';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { Result, Schema } from 'effect';
 import {
   DELIVERY_TAG,
   DELIVERY_TAGS,
@@ -173,11 +172,11 @@ export function parseScriptDeliverySummary(
 ): ScriptDeliverySummary | undefined {
   const rawSummary = innerTag(xml, 'script-summary');
   if (!rawSummary) return undefined;
-  const parsed = parseJsonWith(
-    decodeXmlEntities(rawSummary),
-    ScriptDeliverySummarySchema,
+  return Result.getOrUndefined(
+    Schema.decodeUnknownResult(
+      Schema.fromJsonString(ScriptDeliverySummarySchema),
+    )(decodeXmlEntities(rawSummary)),
   );
-  return Result.getOrUndefined(parsed);
 }
 
 /** The envelopes that carry a `<script-summary>` element. */

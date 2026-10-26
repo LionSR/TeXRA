@@ -10,7 +10,7 @@
  * render `message` at their run edge.
  */
 // Third-party imports
-import { Duration, Effect, Result, Schema } from 'effect';
+import { Duration, Effect, Schema } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
@@ -157,18 +157,13 @@ export const parseOAuthJson = Effect.fn('oauthRequest.parseOAuthJson')(
     schema: Schema.Codec<T, unknown>,
     unexpectedMessage: string,
   ) {
-    const raw = yield* Effect.try({
-      try: (): unknown => JSON.parse(response.text),
-      catch: (cause) =>
-        new OAuthUnexpectedResponse({ message: unexpectedMessage, cause }),
-    });
-    const parsed = Schema.decodeUnknownResult(schema)(raw);
-    if (!Result.isSuccess(parsed)) {
-      return yield* new OAuthUnexpectedResponse({
-        message: unexpectedMessage,
-        cause: parsed.failure,
-      });
-    }
-    return parsed.success;
+    return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(
+      response.text,
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new OAuthUnexpectedResponse({ message: unexpectedMessage, cause }),
+      ),
+    );
   },
 );

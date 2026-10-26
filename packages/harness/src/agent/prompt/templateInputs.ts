@@ -10,7 +10,7 @@ import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -354,11 +354,10 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
         // `displayToStoragePath` rejects a path outside /memories, which is a
         // miss on that memory rather than a failed prompt build — the same
         // answer a failed read gives.
-        Effect.try({
-          try: () => path.join(storageRoot, displayToStoragePath(displayPath)),
-          catch: ensureError,
-        }).pipe(
-          Effect.flatMap((target) => readNormalizedFile(fs, target)),
+        Effect.fromResult(displayToStoragePath(displayPath)).pipe(
+          Effect.flatMap((storagePath) =>
+            readNormalizedFile(fs, path.join(storageRoot, storagePath)),
+          ),
           Effect.map((raw) => {
             // Strip frontmatter metadata — only inject the user-visible content
             const trimmed = parseFrontmatter(raw).content.trim();

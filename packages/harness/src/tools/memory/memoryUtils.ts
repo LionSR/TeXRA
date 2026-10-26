@@ -1,6 +1,9 @@
 import * as path from 'node:path';
 
+import { Result } from 'effect';
+
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { ToolError } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 
@@ -31,13 +34,19 @@ export function toDisplayPath(storagePath: string): string {
   return relativeToDisplayPath(relative);
 }
 
-export function displayToStoragePath(displayPath: string): string {
+/** The storage path of a `/memories/...` display path, or why it is not
+ *  one: outside `/memories`, or escaping the memory root. */
+export function displayToStoragePath(
+  displayPath: string,
+): Result.Result<string, ToolError> {
   if (
     displayPath !== MEMORY_DISPLAY_ROOT &&
     !displayPath.startsWith(`${MEMORY_DISPLAY_ROOT}/`)
   ) {
-    throw new Error(
-      `Invalid path "${displayPath}". All memory paths must start with /memories (e.g., /memories or /memories/notes.md).`,
+    return Result.fail(
+      new ToolError(
+        `Invalid path "${displayPath}". All memory paths must start with /memories (e.g., /memories or /memories/notes.md).`,
+      ),
     );
   }
   const suffix =
@@ -48,12 +57,14 @@ export function displayToStoragePath(displayPath: string): string {
   const base = path.resolve(WORKSPACE_STORAGE_LAYOUT.memory);
   const relative = path.relative(base, resolved);
   if (!isPathWithin(base, resolved)) {
-    throw new Error(`Invalid memory path: ${displayPath}`);
+    return Result.fail(new ToolError(`Invalid memory path: ${displayPath}`));
   }
   // Memory paths use a forward-slash display convention regardless of host
   // platform, so normalize the storage path the same way relativeToDisplayPath
   // does (path.join on Windows would otherwise emit backslashes).
-  return relative
-    ? normalizeFilePath(path.join(WORKSPACE_STORAGE_LAYOUT.memory, relative))
-    : WORKSPACE_STORAGE_LAYOUT.memory;
+  return Result.succeed(
+    relative
+      ? normalizeFilePath(path.join(WORKSPACE_STORAGE_LAYOUT.memory, relative))
+      : WORKSPACE_STORAGE_LAYOUT.memory,
+  );
 }

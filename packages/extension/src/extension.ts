@@ -10,9 +10,11 @@ import {
   Exit,
   Layer,
   ManagedRuntime,
+  Queue,
   Result,
   Schema,
   Scope,
+  Stream,
 } from 'effect';
 
 // Local imports
@@ -623,17 +625,33 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
+  // Each prompt runs in its own child fiber, so a second rejection doesn't
+  // wait behind an unanswered notification, and closing the scope interrupts
+  // any prompt still open.
+  const openSettings = 'Open Git settings';
   yield* Effect.forkScoped(
-    onAppSignal('githubTokenInvalid', ({ message }) => {
-      const rejected = gitHubTokenRejectedMessage(message);
-      void vscode.window
-        .showErrorMessage(rejected, 'Open Git settings')
-        .then((choice) => {
-          if (choice === 'Open Git settings') {
-            void vscode.commands.executeCommand('texra.showGitSettings');
-          }
-        });
-    }),
+    Stream.callback<string>((queue) =>
+      onAppSignal('githubTokenInvalid', ({ message }) =>
+        Queue.offerUnsafe(queue, message),
+      ),
+    ).pipe(
+      Stream.runForEach((message) =>
+        announce(
+          EXTENSION_CHANNEL,
+          vscodeUi.error(gitHubTokenRejectedMessage(message), {
+            items: [openSettings],
+          }),
+          undefined,
+        ).pipe(
+          Effect.flatMap((choice) =>
+            choice === openSettings
+              ? safeExecuteCommand('texra.showGitSettings')
+              : Effect.void,
+          ),
+          Effect.forkChild,
+        ),
+      ),
+    ),
     { startImmediately: true },
   );
   yield* registerInlineCriticism(context, runtime, session, roots);

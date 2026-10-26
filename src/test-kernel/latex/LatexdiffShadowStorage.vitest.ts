@@ -342,6 +342,8 @@ describe('LaTeXdiffService shadow output', () => {
           stdout: '',
           stderr:
             'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
+          timedOut: false,
+          exitCode: 1,
         }),
       );
 

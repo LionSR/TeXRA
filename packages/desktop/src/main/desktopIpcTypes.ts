@@ -1,10 +1,12 @@
 import { Effect, Result, Schema } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness';
 
-export type DesktopCommandMessage = { command: string } & Record<
-  string,
-  unknown
->;
+/** A renderer command: a named command and whatever fields it carries. */
+export const DesktopCommandMessageSchema = Schema.StructWithRest(
+  Schema.Struct({ command: Schema.String }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
+type DesktopCommandMessage = typeof DesktopCommandMessageSchema.Type;
 
 /** The program one inbound command runs. The window's one router runs it and
  *  reports whatever it fails with. */
@@ -70,15 +72,4 @@ export function tryShowInRenderer(
     );
     return false;
   }
-}
-
-export function isDesktopCommandMessage(
-  message: unknown,
-): message is DesktopCommandMessage {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'command' in message &&
-    typeof message.command === 'string'
-  );
 }

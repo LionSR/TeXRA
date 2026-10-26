@@ -322,9 +322,9 @@ export function readCliHistoryStandaloneTemplate(
       absentReason(error)
         ? Effect.succeed(null)
         : Effect.fail(
-            new CliUsageError(
-              `history export: cannot read ${templatePath}: ${cliErrorMessage(error)}`,
-            ),
+            new CliUsageError({
+              message: `history export: cannot read ${templatePath}: ${cliErrorMessage(error)}`,
+            }),
           ),
     ),
   );
@@ -333,15 +333,10 @@ export function readCliHistoryStandaloneTemplate(
 /** Delete indexed run lifetimes through the session's claim transaction. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   session: LocalSession,
-  options: { id?: RunId; all?: boolean },
+  target: RunId | 'all',
 ) {
-  if (!options.all && !options.id) {
-    return yield* Effect.fail(new Error('Expected a run id, or --all.'));
-  }
-  const { listed, deleted, active, failed } = yield* session.deleteRuns(
-    options.all ? 'all' : options.id!,
-  );
-  if (options.all)
+  const { listed, deleted, active, failed } = yield* session.deleteRuns(target);
+  if (target === 'all')
     return {
       deleted: 'all',
       count: deleted.length,
@@ -358,7 +353,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   else if (active.length > 0) status = 'active';
   return {
     deleted: 'one',
-    id: options.id!,
+    id: target,
     found: listed > 0,
     status,
   } satisfies CliHistoryDeleteResult;

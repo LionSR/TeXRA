@@ -168,8 +168,7 @@ export function registerExternalRoot(
   // and only throws on permission errors or unexpected failures; per the
   // fail-closed contract in its JSDoc, let those propagate so an
   // un-verifiable path is never admitted to the allowlist. Registration is
-  // setup-time and the caller already has a try/catch that surfaces a
-  // meaningful error.
+  // setup-time; the caller turns the throw into a failure it logs.
   const canonicalPath = canonicalizePath(absolutePath);
   // Frozen: the registry hands these entries to tool code and to
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would

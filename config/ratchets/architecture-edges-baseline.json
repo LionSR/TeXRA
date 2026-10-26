@@ -38,7 +38,6 @@
     { "from": "platform", "to": "utils", "kind": "value" },
     { "from": "replacement", "to": "shared", "kind": "type-only" },
     { "from": "replacement", "to": "utils", "kind": "value" },
-    { "from": "shared", "to": "common", "kind": "value" },
     { "from": "shared", "to": "logger", "kind": "value" },
     { "from": "shared", "to": "platform", "kind": "type-only" },
     { "from": "shared", "to": "utils", "kind": "value" },

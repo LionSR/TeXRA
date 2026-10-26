@@ -1,12 +1,10 @@
 /**
- * The one failure tag a GUI host's lifted capability names, and the lift that
- * names it (PRD one-fold-three-renderers, 8.3). Both hosts still reach
- * capabilities that answer with a promise — a VS Code command, an editor API,
- * a Promise-faced controller port, the desktop's preview and file hosts — and
- * each is lifted at the host edge rather than at the depth that calls it: a
- * refusal the callee already worded travels as itself, and every other
- * rejection is tagged with the member it came from, so the bridge's
- * refusal-versus-defect fold and its log read what `await` handed over.
+ * The one failure tag a GUI host's capability names (`hostFailure`), and
+ * `fromHost`, which lifts a capability that still answers with a promise (a
+ * VS Code command, an editor API, a Promise-faced controller port) at the
+ * host edge rather than at the depth that calls it. A refusal the callee
+ * already worded travels as itself; every other rejection is tagged with the
+ * member it came from, so the bridge can tell a refusal from a defect.
  */
 import { Effect, Schema } from 'effect';
 

@@ -8,6 +8,7 @@ import { imageSize } from 'image-size';
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
 import type { ConfigProvider } from '@platform/interfaces';
+import { Settings } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -96,12 +97,8 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
   config: ConfigProvider,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const configuredMaxDimension = yield* Effect.try({
-    try: () => config.get<number>('texra.maxImageDimension'),
-    catch: conversionFailure,
-  });
   const maxDimension = Math.min(
-    configuredMaxDimension,
+    Settings.getConfig<number>(config, 'texra.maxImageDimension'),
     API_MAX_IMAGE_DIMENSION,
   );
   const { width, height } = yield* getImageDimensions(imagePath);

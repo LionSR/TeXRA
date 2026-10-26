@@ -24,7 +24,6 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
-  parseJsonOrModelError,
 } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
@@ -41,6 +40,9 @@ import {
   responseParameters,
 } from './openaiResponsesRequest.js';
 
+const decodeFrame = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Unknown),
+);
 const decodeEnvelope = Schema.decodeUnknownResult(WebSocketEnvelopeSchema);
 const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
 
@@ -303,15 +305,16 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                     message:
                       'The Responses connection returned a binary frame.',
                   });
-                const raw = yield* parseJsonOrModelError(
-                  next.value as string,
-                  (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The Responses connection returned invalid JSON.',
-                      cause,
-                    }),
+                const raw = yield* decodeFrame(next.value).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ModelError({
+                        kind: 'malformed-output',
+                        message:
+                          'The Responses connection returned invalid JSON.',
+                        cause,
+                      }),
+                  ),
                 );
                 const envelope = decodeEnvelope(raw);
                 if (!Result.isSuccess(envelope))

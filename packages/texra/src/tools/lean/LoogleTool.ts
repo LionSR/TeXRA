@@ -6,7 +6,8 @@
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { Array as Arr, Cause, Effect, Result, Schema } from 'effect';
+import { Array as Arr, Cause, Effect, Schema } from 'effect';
+import { HttpClientResponse } from 'effect/http';
 
 import { defineTool, withLogChannel, ToolResult } from '@texra-ai/harness';
 import {
@@ -137,19 +138,18 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
         headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
         acceptJson: true,
       });
-      const raw = yield* response.json;
       // Validate the body at the boundary. A malformed shape is not
       // transient, so it is not retried; searchOne surfaces it as a tool
       // error.
-      const parsed = Schema.decodeUnknownResult(LoogleResponseSchema)(raw);
-      if (!Result.isSuccess(parsed)) {
-        return yield* Effect.fail(
-          new Error(
-            `Unexpected Loogle response shape: ${parsed.failure.message}`,
+      return yield* HttpClientResponse.schemaBodyJson(LoogleResponseSchema)(
+        response,
+      ).pipe(
+        Effect.catchTag('SchemaError', (error) =>
+          Effect.fail(
+            new Error(`Unexpected Loogle response shape: ${error.message}`),
           ),
-        );
-      }
-      return parsed.success;
+        ),
+      );
     }),
     {
       retries: LOOGLE_RETRIES,

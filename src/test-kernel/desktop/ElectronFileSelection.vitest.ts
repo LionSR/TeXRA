@@ -73,7 +73,7 @@ describe('desktop file selection', () => {
     runtime = testRuntime();
     return createDesktopFileSelection({
       workspacePath,
-      showOpenFileDialog: vi.fn(async () => undefined),
+      showOpenFileDialog: vi.fn(() => Effect.succeed(undefined)),
       ...overrides,
     });
   }
@@ -101,15 +101,17 @@ describe('desktop file selection', () => {
       Effect.gen(function* () {
         const showOpenFileDialog = vi
           .fn()
-          .mockResolvedValue([
-            join(workspacePath, 'main.tex'),
-            join(workspacePath, 'sections', 'main_r1.tex'),
-          ]);
+          .mockReturnValue(
+            Effect.succeed([
+              join(workspacePath, 'main.tex'),
+              join(workspacePath, 'sections', 'main_r1.tex'),
+            ]),
+          );
         const files = yield* Effect.promise(() =>
           createFileSelection({ showOpenFileDialog }),
         );
 
-        expect(yield* Effect.promise(() => files.pickFiles('input'))).toEqual([
+        expect(yield* files.pickFiles('input')).toEqual([
           'main.tex',
           'sections/main_r1.tex',
         ]);
@@ -127,9 +129,7 @@ describe('desktop file selection', () => {
     Effect.gen(function* () {
       const files = yield* Effect.promise(() => createFileSelection());
 
-      expect(
-        yield* Effect.promise(() => files.pickFiles('context')),
-      ).toBeNull();
+      expect(yield* files.pickFiles('context')).toBeNull();
     }),
   );
 

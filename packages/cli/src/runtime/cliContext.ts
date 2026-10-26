@@ -8,6 +8,7 @@ import {
   Result,
   Config,
   Option,
+  Schema,
   type LogLevel,
 } from 'effect';
 
@@ -22,7 +23,6 @@ import {
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import {
-  safeParseJson,
   APPROVAL_POLICY_CONFIG_KEY,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
@@ -103,16 +103,14 @@ export interface CliContext {
   ) => Effect.Effect<string, Error>;
 }
 
-export class CliUsageError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CliUsageError';
-  }
-}
+export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
+  'CliUsageError',
+  { message: Schema.String },
+) {}
 
 /** Fail the command with a usage error. */
 export const failUsage = (message: string) =>
-  Effect.fail(new CliUsageError(message));
+  Effect.fail(new CliUsageError({ message: message }));
 
 export interface CliAmbientState {
   readonly isCi: boolean;
@@ -205,10 +203,15 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
-interface CliPackageManifest {
-  readonly version?: string;
-  readonly bugs?: { readonly url?: string };
-}
+const CliPackageManifest = Schema.Struct({
+  version: Schema.NonEmptyString,
+  bugs: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
+});
+type CliPackageManifest = typeof CliPackageManifest.Type;
+
+const decodeCliPackageManifest = Schema.decodeUnknownResult(
+  Schema.fromJsonString(CliPackageManifest),
+);
 
 /**
  * The CLI's `package.json`, read once and synchronously: a few hundred bytes
@@ -222,20 +225,20 @@ function readCliPackageManifest(): CliPackageManifest | undefined {
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
-    // A candidate that is absent, unreadable or unparsable is the expected
-    // answer for the layout this build is not: try the next one.
+    // A candidate that is absent, unreadable or not a manifest with a
+    // version is the expected answer for the layout this build is not: try
+    // the next one.
     let text: string;
     try {
       text = readFileSync(candidate, 'utf8');
     } catch {
       continue;
     }
-    const pkg = Result.getOrUndefined(safeParseJson(text)) as
-      CliPackageManifest | undefined;
+    const pkg = decodeCliPackageManifest(text);
     // Source and bundled `dist/bin` layouts both reach the CLI manifest via
     // `../../`; keep the fallback for build layouts that place runtime files
     // one level below the package root.
-    if (pkg?.version) return pkg;
+    if (Result.isSuccess(pkg)) return pkg.success;
   }
   return undefined;
 }
@@ -382,20 +385,20 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   }
   const requested = path.resolve(cwdFlag);
   const fs = yield* FileSystem.FileSystem;
-  const info = yield* fs
-    .stat(requested)
-    .pipe(
-      Effect.mapError((error) =>
-        absentReason(error)
-          ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
-          : new CliUsageError(
-              `--cwd: cannot access ${requested}: ${toErrorMessage(error.reason.cause ?? error)}`,
-            ),
-      ),
-    );
+  const info = yield* fs.stat(requested).pipe(
+    Effect.mapError((error) =>
+      absentReason(error)
+        ? new CliUsageError({
+            message: `--cwd: path does not exist: ${requested}`,
+          })
+        : new CliUsageError({
+            message: `--cwd: cannot access ${requested}: ${toErrorMessage(error.reason.cause ?? error)}`,
+          }),
+    ),
+  );
   if (info.type !== 'Directory') {
     return yield* Effect.fail(
-      new CliUsageError(`--cwd: not a directory: ${requested}`),
+      new CliUsageError({ message: `--cwd: not a directory: ${requested}` }),
     );
   }
   return canonicalizeWorkspacePath(requested);

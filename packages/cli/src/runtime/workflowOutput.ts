@@ -58,29 +58,31 @@ function outputPathError(
   error: PlatformError.PlatformError,
 ): CliUsageError | PlatformError.PlatformError {
   if (notADirectory(error) || error.reason._tag === 'AlreadyExists') {
-    return new CliUsageError(
-      flagLabel === '--output-dir'
-        ? `--output-dir is not a directory (a parent path component is a file): ${target}`
-        : `--output: a parent path component is a file: ${target}`,
-    );
+    return new CliUsageError({
+      message:
+        flagLabel === '--output-dir'
+          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+          : `--output: a parent path component is a file: ${target}`,
+    });
   }
   const code = errnoCode(error);
   if (code === 'EROFS') {
-    return new CliUsageError(
-      `${flagLabel} is not writable (read-only file system): ${target}`,
-    );
+    return new CliUsageError({
+      message: `${flagLabel} is not writable (read-only file system): ${target}`,
+    });
   }
   if (error.reason._tag === 'PermissionDenied' || code === 'EPERM') {
-    return new CliUsageError(
-      `${flagLabel} is not writable (permission denied): ${target}`,
-    );
+    return new CliUsageError({
+      message: `${flagLabel} is not writable (permission denied): ${target}`,
+    });
   }
   if (error.reason._tag === 'NotFound') {
-    return new CliUsageError(
-      flagLabel === '--output-dir'
-        ? `--output-dir cannot be created: ${target}`
-        : `--output parent directory cannot be created: ${target}`,
-    );
+    return new CliUsageError({
+      message:
+        flagLabel === '--output-dir'
+          ? `--output-dir cannot be created: ${target}`
+          : `--output parent directory cannot be created: ${target}`,
+    });
   }
   return error;
 }
@@ -158,7 +160,9 @@ export function assertOutputDirAvailable(
     Effect.flatMap((stats) =>
       stats && stats.type !== 'Directory'
         ? Effect.fail(
-            new CliUsageError(`--output-dir is not a directory: ${target}`),
+            new CliUsageError({
+              message: `--output-dir is not a directory: ${target}`,
+            }),
           )
         : Effect.void,
     ),
@@ -180,9 +184,9 @@ export function assertOutputFileAvailable(
     Effect.flatMap((stats) =>
       stats?.type === 'Directory'
         ? Effect.fail(
-            new CliUsageError(
-              `--output is a directory; use --output-dir or pick a file path: ${target}`,
-            ),
+            new CliUsageError({
+              message: `--output is a directory; use --output-dir or pick a file path: ${target}`,
+            }),
           )
         : Effect.void,
     ),
@@ -440,9 +444,9 @@ export function resumeWorkflowOutputFile(
   const cliOutputFile = config.cli?.outputFile;
   if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
     if (!path.isAbsolute(cliOutputFile)) {
-      throw new CliUsageError(
-        `Stored document task output file is not absolute: ${cliOutputFile}`,
-      );
+      throw new CliUsageError({
+        message: `Stored document task output file is not absolute: ${cliOutputFile}`,
+      });
     }
     return cliOutputFile;
   }
@@ -469,9 +473,9 @@ export function resumeWorkflowOutputDirectory(
   if (typeof outputDirectory !== 'string' || outputDirectory.trim() === '')
     return undefined;
   if (!path.isAbsolute(outputDirectory)) {
-    throw new CliUsageError(
-      `Stored document task output directory is not absolute: ${outputDirectory}`,
-    );
+    throw new CliUsageError({
+      message: `Stored document task output directory is not absolute: ${outputDirectory}`,
+    });
   }
   return outputDirectory;
 }

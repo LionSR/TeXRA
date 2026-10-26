@@ -33,7 +33,7 @@ import {
   openDesktopBrowserWindow,
 } from './desktopBrowserWindow.js';
 import {
-  isDesktopCommandMessage,
+  DesktopCommandMessageSchema,
   parsedRoute,
   type DesktopCommandRoute,
   type DesktopCommandRoutes,
@@ -346,19 +346,23 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     Effect.sync(() =>
       installDesktopHostBridge(window, {
         onCommand: (message) => {
-          if (!isDesktopCommandMessage(message)) {
+          const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
+            message,
+          );
+          if (!Result.isSuccess(named)) {
             console.warn('Dropped a renderer command with no command name');
             return;
           }
-          const route = commandRoutes.get(message.command);
+          const command = named.success;
+          const route = commandRoutes.get(command.command);
           if (!route) {
-            console.warn(`Dropped ${message.command}: no surface routes it`);
+            console.warn(`Dropped ${command.command}: no surface routes it`);
             return;
           }
           // The one run site for every command's program, and its one
           // report: a failure or defect reaches the window's async-error
           // reporter.
-          spawn(host.reported(route(message)));
+          spawn(host.reported(route(command)));
         },
         // A session message names its project: that project's port answers
         // it.

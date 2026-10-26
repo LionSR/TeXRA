@@ -531,10 +531,9 @@ class UsageLogServiceImpl {
             ),
         }),
       );
-      const response: UsageLogResponse = yield* Effect.try({
-        try: () => Schema.decodeUnknownSync(UsageLogResponseSchema)(data),
-        catch: (error) => undelivered(toErrorMessage(error)),
-      });
+      const response: UsageLogResponse = yield* Schema.decodeUnknownEffect(
+        UsageLogResponseSchema,
+      )(data).pipe(Effect.mapError((error) => undelivered(error.message)));
       if (!response.success) {
         if (response.retryable === false) return response;
         return yield* undelivered(response.error ?? 'Usage batch was rejected');

@@ -49,23 +49,27 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ToolRegistry } from '@tools/toolTable';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
 
-/** Register one agent directory root; a failure is logged and leaves the
- *  other roots registered. */
+/** Register one agent directory root; a failure (an unreadable directory
+ *  setting, a relative path, a path that cannot be canonicalised) is logged
+ *  and leaves the other roots registered. A defect still propagates. */
 const registerRoot = <E, R>(
   directory: Effect.Effect<string, E, R>,
   options: Parameters<typeof registerExternalRoot>[1],
 ) =>
   directory.pipe(
     Effect.flatMap((absolutePath) =>
-      Effect.sync(() => registerExternalRoot(absolutePath, options)),
+      Effect.try({
+        try: () => registerExternalRoot(absolutePath, options),
+        catch: ensureError,
+      }),
     ),
-    Effect.catchCause((cause) =>
+    Effect.catch((error) =>
       Effect.logError(
-        `Failed to register the ${options.label.toLowerCase()} directory with the file tools: ${toErrorMessage(Cause.squash(cause))}`,
+        `Failed to register the ${options.label.toLowerCase()} directory with the file tools: ${toErrorMessage(error)}`,
       ),
     ),
   );

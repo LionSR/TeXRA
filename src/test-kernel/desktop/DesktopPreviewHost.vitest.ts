@@ -150,7 +150,7 @@ describe('desktop preview host', () => {
         );
         const files = createDesktopFileSelection({
           workspacePath: undefined,
-          showOpenFileDialog: async () => undefined,
+          showOpenFileDialog: () => Effect.succeed(undefined),
         });
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),

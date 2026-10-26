@@ -24,6 +24,7 @@ import {
   withLogChannel,
 } from '@texra-ai/harness';
 import {
+  ensureError,
   toErrorMessage,
   agentKeyOf,
   type FileLocation,
@@ -31,8 +32,7 @@ import {
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
 import { BundledViewContentProvider } from '@common/webview';
-import { emitAppSignal } from '@eventBus/AppSignals';
-import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
@@ -42,7 +42,6 @@ import {
   OnboardingFunnelRefresher,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -187,17 +186,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * It never auto-starts setup; the user launches it from the setup card.
    */
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
-  private readonly debouncedRefreshCatalogs = createFlushableDebounce(
-    () =>
-      this.runtime.runFork(
-        this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
-          Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    // Dropdown options refresh.
-    300,
-  );
   private readonly draftRequests = new HostDraftRequests();
 
   constructor(
@@ -604,7 +592,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // storage root never moves under a live window (#11432).
     this.own(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        void this.runtime.runPromise(
+        this.runtime.runFork(
           this.snapshot
             .refreshWorkspaceRoots()
             .pipe(Effect.andThen(this.snapshot.refreshFiles)),
@@ -620,16 +608,32 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     const fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
-    const refreshFiles = () =>
-      void this.runtime.runPromise(this.snapshot.refreshFiles);
+    const refreshFiles = () => {
+      this.runtime.runFork(this.snapshot.refreshFiles);
+    };
     fileWatcher.onDidCreate(refreshFiles);
     fileWatcher.onDidDelete(refreshFiles);
-    this.own(
-      fileWatcher,
-      // The catalog reloads itself on every change to its sources
-      // (`agentCatalogFollower`); this launcher repaints what it lists.
-      subscribeAppSignal(this.runtime, 'workspaceAgentsChanged', () =>
-        this.debouncedRefreshCatalogs.schedule(),
+    this.own(fileWatcher);
+    // The catalog reloads itself on every change to its sources
+    // (`agentCatalogFollower`); this launcher repaints what it lists, at most
+    // once per 300ms burst of changes.
+    const agentsChanged = Stream.callback<void>((queue) =>
+      onAppSignal('workspaceAgentsChanged', () =>
+        Queue.offerUnsafe(queue, undefined),
+      ),
+    );
+    this.runtime.runSync(
+      Effect.forkIn(
+        agentsChanged.pipe(
+          Stream.debounce('300 millis'),
+          Stream.runForEach(() =>
+            this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
+              Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
+            ),
+          ),
+          withLogChannel(CHANNEL),
+        ),
+        this.scope,
       ),
     );
   }
@@ -714,21 +718,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      const warn = (text: string) =>
-        this.runtime.runFork(
-          Effect.logWarning(text).pipe(withLogChannel(CHANNEL)),
-        );
+      // The post starts synchronously inside runFork, so sends keep their order.
       const send = (message: DownMessage): void => {
-        void Promise.resolve(view.webview.postMessage(message)).then(
-          (delivered) => {
-            if (!delivered)
-              warn(`A ${message.kind} message was not delivered to ${id}`);
-          },
-          (error: unknown) => {
-            warn(
-              `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
-            );
-          },
+        this.runtime.runFork(
+          Effect.tryPromise({
+            try: () => view.webview.postMessage(message),
+            catch: ensureError,
+          }).pipe(
+            Effect.flatMap((delivered) =>
+              delivered
+                ? Effect.void
+                : Effect.logWarning(
+                    `A ${message.kind} message was not delivered to ${id}`,
+                  ),
+            ),
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Posting a ${message.kind} message to ${id} failed: ${error.message}`,
+              ),
+            ),
+            withLogChannel(CHANNEL),
+          ),
         );
       };
       const attached = yield* this.bridge.attach({ id, send }).pipe(
@@ -948,7 +958,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.closePort(this.editor?.port);
       this.editor?.panel.dispose();
       this.editor = undefined;
-      this.debouncedRefreshCatalogs.cancel();
       yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();

@@ -66,11 +66,12 @@ function findTask(client: ServiceClient, id: string) {
         : tasks.filter((task) => task.runId.startsWith(id));
       if (matches.length === 1) return Effect.succeed(matches[0]);
       return Effect.fail(
-        new CliUsageError(
-          matches.length === 0
-            ? `No task ${id}. \`texra tasks list\` shows the tasks.`
-            : `${matches.length} tasks start with ${id}; give more of the id.`,
-        ),
+        new CliUsageError({
+          message:
+            matches.length === 0
+              ? `No task ${id}. \`texra tasks list\` shows the tasks.`
+              : `${matches.length} tasks start with ${id}; give more of the id.`,
+        }),
       );
     }),
   );
@@ -91,7 +92,8 @@ function requestTask(
     }).pipe(
       Effect.catchIf(
         (error): error is RequestError => error._tag !== 'RpcClientError',
-        (error) => Effect.fail(new CliUsageError(requestErrorText(error))),
+        (error) =>
+          Effect.fail(new CliUsageError({ message: requestErrorText(error) })),
       ),
     );
     return { task, outcome };
@@ -137,9 +139,10 @@ const attachCommand = defineCliCommand({
   run: (context, ctx) => {
     // A live transcript has no single JSON document to print.
     if (context.outputFormat === 'json')
-      throw new CliUsageError(
-        '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
-      );
+      throw new CliUsageError({
+        message:
+          '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
+      });
     return Effect.gen(function* () {
       const { client } = yield* connectCliService(context.storageRoot);
       const task = yield* findTask(client, ctx.args.id);
@@ -183,7 +186,7 @@ const startCommand = defineCliCommand({
       const instruction = ctx.args.instruction.trim();
       if (!instruction)
         return yield* Effect.fail(
-          new CliUsageError('--instruction must not be empty.'),
+          new CliUsageError({ message: '--instruction must not be empty.' }),
         );
       const services = yield* initCliPlatform(context);
       // The task runs in the service under the project's persisted policy,

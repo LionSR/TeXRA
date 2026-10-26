@@ -143,6 +143,10 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
   return pullStream(() => iterator.next(), onError);
 });
 
+const decodeToolArguments = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(JsonObjectSchema),
+);
+
 /**
  * Parses a persisted local-call's argument text back into the JSON object a
  * provider request carries. This process authored the history, so a
@@ -152,17 +156,17 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
 export const parseOutboundToolArguments = (
   argumentsText: string,
 ): Effect.Effect<typeof JsonObjectSchema.Type, ModelError> =>
-  Effect.try({
-    try: () =>
-      Schema.decodeUnknownSync(JsonObjectSchema)(JSON.parse(argumentsText)),
-    catch: (cause) =>
-      new ModelError({
-        kind: 'invalid-request',
-        message:
-          'History carries local-call arguments that are not a JSON object.',
-        cause,
-      }),
-  });
+  decodeToolArguments(argumentsText).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelError({
+          kind: 'invalid-request',
+          message:
+            'History carries local-call arguments that are not a JSON object.',
+          cause,
+        }),
+    ),
+  );
 
 /**
  * Parses a tool call's argument text as a provider just returned it. The
@@ -173,16 +177,16 @@ export const parseInboundToolArguments = (
   argumentsText: string,
   provider: string,
 ): Effect.Effect<typeof JsonObjectSchema.Type, ModelError> =>
-  Effect.try({
-    try: () =>
-      Schema.decodeUnknownSync(JsonObjectSchema)(JSON.parse(argumentsText)),
-    catch: (cause) =>
-      new ModelError({
-        kind: 'malformed-output',
-        message: `${provider} returned tool call arguments that are not a JSON object.`,
-        cause,
-      }),
-  });
+  decodeToolArguments(argumentsText).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelError({
+          kind: 'malformed-output',
+          message: `${provider} returned tool call arguments that are not a JSON object.`,
+          cause,
+        }),
+    ),
+  );
 
 /**
  * Waits out `pending` at scope close. A rejection is dropped only when it

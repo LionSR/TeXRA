@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Internal imports
 import { withLogChannel, Settings } from '@texra-ai/harness';
@@ -52,6 +52,28 @@ type CommandExecOptions = {
   timeout: number;
   cwd: string | undefined;
 };
+
+/** One latexdiff or latexdiff-vc run that did not succeed. */
+class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
+  'LatexdiffFailed',
+  {
+    commandType: Schema.String,
+    flatten: Schema.Boolean,
+    timedOut: Schema.Boolean,
+    timeoutMs: Schema.Number,
+    stderr: Schema.String,
+  },
+) {
+  override get message(): string {
+    const variant = this.flatten ? '' : ' (without --flatten)';
+    if (this.timedOut) {
+      return `${this.commandType} operation timed out after ${this.timeoutMs}ms${variant}`;
+    }
+    return this.stderr
+      ? `Failed to run ${this.commandType}${variant}: ${this.stderr}`
+      : `Failed to run ${this.commandType}${variant}`;
+  }
+}
 
 export class DiffCommandExecutor {
   constructor(
@@ -165,12 +187,9 @@ export class DiffCommandExecutor {
     cwd: string | undefined,
   ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return Effect.gen({ self: this }, function* () {
-      // Snapshot the timeout once per invocation so the value stays consistent
-      // across the --flatten attempt and any retry, while still picking up any
-      // updates the user has made between successive diff runs. Reading per
-      // diff also matters because `LaTeXdiffService` is constructed at module
-      // scope (before any host is composed); a value captured at construction
-      // would permanently freeze at whatever the default was at activation-zero.
+      // Read the timeout once per invocation so the --flatten attempt and any
+      // retry use the same value, while each diff run still picks up a value
+      // the user changed since the last one.
       const timeoutMs = yield* this.setting<number>(
         DocumentsStateKey.LATEXDIFF_TIMEOUT_MS,
       );
@@ -179,37 +198,40 @@ export class DiffCommandExecutor {
         timeout: timeoutMs,
         cwd,
       };
+      const attempt = (flatten: boolean) =>
+        Effect.gen({ self: this }, function* () {
+          const variant = flatten ? 'with --flatten' : 'without --flatten';
+          yield* Effect.logDebug(`Running ${commandType} ${variant}`);
+          const result = yield* this.exec(
+            yield* commandBuilder(flatten),
+            execOptions,
+          );
+          if (!result.success) {
+            return yield* new LatexdiffFailed({
+              commandType,
+              flatten,
+              timedOut: result.timedOut,
+              timeoutMs,
+              stderr: result.stderr,
+            });
+          }
+          yield* Effect.logDebug(
+            `${commandType} completed successfully (${variant})`,
+          );
+          return result;
+        });
 
-      yield* Effect.logDebug(`Attempting ${commandType} with --flatten flag`);
-      const result = yield* this.exec(yield* commandBuilder(true), execOptions);
-
-      if (result.success) {
-        yield* Effect.logDebug(
-          `${commandType} completed successfully (with --flatten)`,
-        );
-        return result;
-      }
-
-      if (result.timedOut) {
-        return yield* Effect.fail(
-          new Error(`${commandType} operation timed out after ${timeoutMs}ms`),
-        );
-      }
-
-      if (!this.isBibliographyError(result.stderr)) {
-        return yield* Effect.fail(
-          new Error(
-            result.stderr
-              ? `Failed to run ${commandType}: ${result.stderr}`
-              : `Failed to run ${commandType}`,
-          ),
-        );
-      }
-
-      return yield* this.retryWithoutFlatten(
-        commandBuilder,
-        commandType,
-        execOptions,
+      return yield* attempt(true).pipe(
+        Effect.catchIf(
+          (error) =>
+            error instanceof LatexdiffFailed &&
+            !error.timedOut &&
+            this.isBibliographyError(error.stderr),
+          () =>
+            Effect.logWarning(
+              'Bibliography compilation failed with --flatten, retrying without --flatten',
+            ).pipe(Effect.andThen(attempt(false))),
+        ),
       );
     });
   }
@@ -223,45 +245,6 @@ export class DiffCommandExecutor {
       ...execOptions,
       // The roots of the workspace being diffed, held by this executor.
       settings: this.roots,
-    });
-  }
-
-  private retryWithoutFlatten(
-    commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
-    commandType: string,
-    execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
-    return Effect.gen({ self: this }, function* () {
-      yield* Effect.logWarning(
-        'Bibliography compilation failed with --flatten, retrying without --flatten',
-      );
-      yield* Effect.logDebug(`Retrying ${commandType} without --flatten flag`);
-
-      const result = yield* this.exec(
-        yield* commandBuilder(false),
-        execOptions,
-      );
-
-      if (result.timedOut) {
-        return yield* Effect.fail(
-          new Error(
-            `${commandType} operation timed out after ${execOptions.timeout}ms (retry)`,
-          ),
-        );
-      }
-
-      if (!result.success) {
-        return yield* Effect.fail(
-          new Error(
-            `Failed to run ${commandType} (both with and without --flatten)`,
-          ),
-        );
-      }
-
-      yield* Effect.logDebug(
-        `${commandType} completed successfully (without --flatten)`,
-      );
-      return result;
     });
   }
 

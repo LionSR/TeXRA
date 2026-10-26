@@ -55,7 +55,9 @@ export function resolveCliRunAgent(
       .forLaunch(stores, name)
       .pipe(
         Effect.catchTag('AgentNotFound', () =>
-          Effect.fail(new CliUsageError(missingAgentMessage(name))),
+          Effect.fail(
+            new CliUsageError({ message: missingAgentMessage(name) }),
+          ),
         ),
       ),
   );

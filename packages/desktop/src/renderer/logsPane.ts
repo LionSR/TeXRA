@@ -1,8 +1,8 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { Hash, Result } from 'effect';
-import { parseJsonWith, truncateSummary } from '@texra-ai/harness/schemas';
+import { Hash, Result, Schema } from 'effect';
+import { truncateSummary } from '@texra-ai/harness/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -87,6 +87,10 @@ const LOG_LEVEL_PRESENTATION = {
   { readonly icon: IconName; readonly label: string }
 >;
 
+const decodeDesktopLogLine = Schema.decodeUnknownResult(
+  Schema.fromJsonString(DesktopLogLineSchema),
+);
+
 /**
  * Reads the redacted desktop log excerpt, one JSON entry per line. Severity and
  * time are fields the writer put there, so nothing is recovered from formatted
@@ -104,7 +108,7 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
 
   const duplicateIds = new Map<string, number>();
   return lines.map((raw) => {
-    const parsed = parseJsonWith(raw, DesktopLogLineSchema);
+    const parsed = decodeDesktopLogLine(raw);
     const line = Result.isSuccess(parsed) ? parsed.success : undefined;
     const message = line ? desktopLogLineText(line) : raw;
 
