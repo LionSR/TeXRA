@@ -351,6 +351,21 @@ function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
   ].join('\n');
 }
 
+/**
+ * The instruction a message carries when a person activated skills before
+ * typing it: each activation block, then the person's own line.
+ */
+export const skillActivationInstruction = (
+  activations: readonly string[],
+  line: string,
+): string =>
+  [
+    activations.join('\n\n'),
+    '<user_request>',
+    escapeText(line),
+    '</user_request>',
+  ].join('\n');
+
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   function* (run: {
     /** The run's session roots: its workspace (undefined with no folder

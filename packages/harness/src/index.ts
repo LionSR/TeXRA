@@ -278,6 +278,7 @@ export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 // ones a person activates) with their issues, and a host's source options.
 export {
   Skills,
+  skillActivationInstruction,
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';

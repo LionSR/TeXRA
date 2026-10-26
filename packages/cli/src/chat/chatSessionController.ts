@@ -26,6 +26,7 @@ import {
   type ProcessServices,
   type RunStopReason,
   type Session,
+  skillActivationInstruction,
   withPerKeyLane,
 } from '@texra-ai/harness';
 import {
@@ -35,7 +36,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
-  escapeText,
   generateRunId,
   isTaskConfig,
   type RunId,
@@ -271,16 +271,11 @@ function takePendingSkillActivations(
     ([name, activationPrompt]) => ({ name, activationPrompt }),
   );
   pendingSkillActivations.clear();
-  const activations = entries
-    .map(({ activationPrompt }) => activationPrompt)
-    .join('\n\n');
   return {
-    instruction: [
-      activations,
-      '<user_request>',
-      escapeText(line),
-      '</user_request>',
-    ].join('\n'),
+    instruction: skillActivationInstruction(
+      entries.map(({ activationPrompt }) => activationPrompt),
+      line,
+    ),
     displayInstruction: line,
     reservedSkillActivations: entries,
   };
