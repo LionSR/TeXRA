@@ -57,7 +57,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json && node scripts/build.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.137.0",
+    "@anthropic-ai/sdk": "1.1.0",
     "@google/genai": "2.30.0",
     "llm-zoo": "catalog:",
     "ws": "8.22.0"

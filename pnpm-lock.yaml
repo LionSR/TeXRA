@@ -627,8 +627,8 @@ importers:
   packages/llm:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: 0.137.0
-        version: 0.137.0(zod@4.6.5)
+        specifier: 1.1.0
+        version: 1.1.0(zod@4.6.5)
       '@google/genai':
         specifier: 2.30.0
         version: 2.30.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)
@@ -665,7 +665,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 'catalog:'
-        version: 0.3.306(@anthropic-ai/sdk@0.137.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.306(@anthropic-ai/sdk@1.1.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)
       '@awesome.me/webawesome':
         specifier: ^3.14.0
         version: 3.14.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.3.0)
@@ -870,8 +870,8 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.137.0':
-    resolution: {integrity: sha512-YpEnbPz8kWF1BWthwUCnRhci7OvDLSUO8NFKoevoPkjNkK9CJeibZITgxr9vhqOP8Le61e5tNDHFTxw1dc6Png==}
+  '@anthropic-ai/sdk@1.1.0':
+    resolution: {integrity: sha512-Op/fKMsfVwFCfObc87leLOFlORE0RjOvLzRzPCWWLI7Ww6bobpKR6YmYC8ZYgulRh+m2a/3/61VUXoWHFtCXIw==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -5685,9 +5685,9 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.306':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.306(@anthropic-ai/sdk@0.137.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.306(@anthropic-ai/sdk@1.1.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@anthropic-ai/sdk': 0.137.0(zod@4.6.5)
+      '@anthropic-ai/sdk': 1.1.0(zod@4.6.5)
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@10.2.2)(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
@@ -5700,7 +5700,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.306
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.306
 
-  '@anthropic-ai/sdk@0.137.0(zod@4.6.5)':
+  '@anthropic-ai/sdk@1.1.0(zod@4.6.5)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       json-schema-to-ts: 3.1.1
