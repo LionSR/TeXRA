@@ -46,9 +46,7 @@ export class ToolTimer extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (this.startTime <= 0) return nothing;
-    const elapsed = formatCompactDuration(
-      this._ticker.now - this.startTime,
-    );
+    const elapsed = formatCompactDuration(this._ticker.now - this.startTime);
     const limit =
       this.timeoutMs > 0 ? formatCompactDuration(this.timeoutMs) : null;
     // prettier-ignore
