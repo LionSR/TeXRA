@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Claude requests use API version 2026-10-21 (`@anthropic-ai/sdk` 1.3.0).**
+  Requests to Anthropic no longer send a temperature: an agent's
+  `temperature` still applies to other providers, and Claude samples at its
+  default. TeXRA no longer forces Claude to call a run's final tool, because
+  Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 refuse a forced tool; the run
+  asks for it instead. The API key now goes out as
+  `Authorization: Bearer` instead of `X-Api-Key`: if your Anthropic endpoint
+  points at a gateway or proxy that reads only `X-Api-Key`, update the
+  gateway. For SDK users, `AnthropicMessagesConfiguration` loses
+  `supportsTemperature`, `supportsForcedToolChoice` and
+  `defaults.temperature`.
 - **SDK: schemas are Effect Schema; Zod is gone.** `@texra-ai/harness` and
   `@texra-ai/llm` no longer depend on Zod. A plugin's tool input
   (`defineTool({ schema })`), agent block and plugin row take an Effect

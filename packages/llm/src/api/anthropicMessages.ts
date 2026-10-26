@@ -146,37 +146,14 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   }
   const controls = turn.controls;
   if (
-    (!config.supportsTemperature && controls.temperature !== null) ||
-    (controls.thinking.mode !== 'disabled' &&
-      controls.temperature !== null &&
-      controls.temperature !== 1) ||
-    (controls.thinking.mode === 'enabled' &&
-      controls.thinking.budgetTokens >= controls.maxOutputTokens)
+    controls.thinking.mode === 'enabled' &&
+    controls.thinking.budgetTokens >= controls.maxOutputTokens
   ) {
     return yield* new ModelError({
       kind: 'invalid-request',
       message:
-        'Anthropic thinking requires an admitted temperature and a manual budget below the output limit.',
+        'Anthropic manual thinking requires a budget below the output limit.',
     });
-  }
-  const choice = controls.toolChoice;
-  if (choice !== 'auto') {
-    if (
-      !config.supportsForcedToolChoice ||
-      controls.thinking.mode === 'enabled'
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'This selected Anthropic binding does not support forcing a tool with these thinking controls.',
-      });
-    }
-    if (!turn.tools.some((tool) => tool.name === choice.name)) {
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The selected Anthropic tool is absent from this invocation.',
-      });
-    }
   }
   const nowMs = yield* Clock.currentTimeMillis;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
@@ -302,9 +279,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     messages,
     stream: true,
     ...(turn.system === undefined ? {} : { system: turn.system }),
-    ...(controls.temperature === null
-      ? {}
-      : { temperature: controls.temperature }),
     ...(controls.effort === null
       ? {}
       : { output_config: { effort: controls.effort } }),
@@ -318,9 +292,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       : {
           tools,
           tool_choice: {
-            ...(choice === 'auto'
-              ? { type: 'auto' as const }
-              : { type: 'tool' as const, name: choice.name }),
+            type: 'auto',
             disable_parallel_tool_use: !controls.parallelToolCalls,
           },
         }),
@@ -618,7 +590,7 @@ export function anthropicMessagesModel(
         'Anthropic Messages requires its selected configuration and an explicit API key.',
     });
   }
-  // The pinned SDK otherwise lets these ambient headers override selected credentials and protocol.
+  // The SDK otherwise lets these ambient headers override selected credentials and protocol.
   if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
     throw new ModelError({
       kind: 'unsupported',
@@ -681,7 +653,6 @@ export function anthropicMessagesModel(
       tools: input.tools ?? [],
       controls: {
         ...fitLimit(config.defaults, input.maxOutputTokens),
-        temperature: config.defaults.temperature,
         parallelToolCalls: config.defaults.parallelToolCalls,
         toolChoice: input.toolChoice ?? 'auto',
         effort: config.defaults.effort,

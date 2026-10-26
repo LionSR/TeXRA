@@ -77,22 +77,14 @@ function anthropicThinking(
 const CONFIGURE: {
   readonly [P in HttpProtocol]: (facts: Facts) => ConfigurationOf<P>;
 } = {
-  'anthropic-messages': ({
-    base,
-    config,
-    controls,
-    spec,
-    supportsTemperature,
-  }) => {
+  'anthropic-messages': ({ base, config, controls, spec }) => {
     const choice = spec.options.reasoning;
     return {
       ...base,
       protocol: 'anthropic-messages',
-      supportsTemperature,
-      supportsForcedToolChoice: true,
       supportsSystemMessages: config.capabilities.supportsIntermDevMsgs,
       defaults: {
-        ...controls,
+        maxOutputTokens: controls.maxOutputTokens,
         parallelToolCalls: true,
         thinking: anthropicThinking(config, choice, controls.maxOutputTokens),
         // Anthropic has no `none` or `minimal`: off is the thinking switch.
@@ -221,6 +213,7 @@ export function forcedToolChoice(
     case 'google-interactions':
       return config.capabilities.supportsFunctionCalling;
     case 'anthropic-messages':
+      return false;
     case 'openrouter-chat':
       return true;
   }

@@ -792,9 +792,9 @@ const SCENARIOS = [
     env: {
       ANTHROPIC_API_KEY: 'harness-anthropic-key',
       HARNESS_CAN_SELECT_MODEL: '1',
-      HARNESS_DISABLED_MODEL_SWITCHES: 'anthropic/claude-sonnet-4-6',
+      HARNESS_DISABLED_MODEL_SWITCHES: 'anthropic/claude-sonnet-5-5',
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_MODELS: 'anthropic/claude-sonnet-4-6||openai/gpt-5.6-sol',
+      HARNESS_VISIBLE_MODELS: 'anthropic/claude-sonnet-5-5||openai/gpt-5.6-sol',
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
@@ -802,7 +802,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Choose the model for future turns.',
-      'Sonnet 4.6',
+      'Sonnet 5.5',
       'different conversation format',
       'GPT-5.6 Sol',
     ],

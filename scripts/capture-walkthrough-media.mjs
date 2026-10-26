@@ -199,8 +199,8 @@ const webviewViews = [
         models: [
           modelSelection(
             'anthropic',
-            'claude-sonnet-4.5',
-            'Claude Sonnet 4.5',
+            'claude-sonnet-5-5',
+            'Claude Sonnet 5.5',
             true,
           ),
           modelSelection('openai', 'gpt-5.5', 'GPT-5.5', false),
