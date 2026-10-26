@@ -1,10 +1,14 @@
 // Node imports
 import { join } from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
-import { absentReason } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  readDirectoryTypedTolerant,
+} from '@texra-ai/harness/node';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import * as NodePath from '@effect/platform-node/NodePath';
+import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 // Local imports
 import {
@@ -21,11 +25,11 @@ interface WorkspaceFileListingOptions {
 
 /**
  * The workspace-relative paths under `root` the filters admit, sorted.
- * `FileSystem.readDirectory` returns names alone, so each entry's type is a
- * `stat` — which follows a symlink, matching the platform listing this
- * replaces: a link to a directory is visited, a link to a file is listed,
- * and a dangling, circular, or unreadable link, like an entry that vanished
- * between the listing and the probe, is skipped.
+ * Each entry's type comes with the directory listing (`readdir` dirents), so
+ * only a symlink costs a `stat` — which follows it, matching the platform
+ * listing this replaces: a link to a directory is visited, a link to a file
+ * is listed, and a dangling, circular, or unreadable link, like an entry
+ * that vanished between the listing and the probe, is skipped.
  */
 export const listWorkspaceFiles = Effect.fn(
   'workspaceFileListing.listWorkspaceFiles',
@@ -34,43 +38,49 @@ export const listWorkspaceFiles = Effect.fn(
   const filters = prepareFileFilters(options.config);
   const results: string[] = [];
 
+  // A link's target type, or undefined when it does not resolve. Absent
+  // (`absentReason`: NotFound / ENOTDIR), the rest of BadResource (`ELOOP`),
+  // and PermissionDenied skip the entry; any other failure is real. glob.ts
+  // drops NotFound and BadResource the same way.
+  const followLink = (absolutePath: string) =>
+    fs.stat(absolutePath).pipe(
+      Effect.map((info) => info.type),
+      Effect.catchIf(
+        (error) =>
+          absentReason(error) ||
+          error.reason._tag === 'BadResource' ||
+          error.reason._tag === 'PermissionDenied',
+        () => Effect.succeed(undefined),
+      ),
+    );
+
   function visit(
     directory: string,
     relativeDirectory: string,
-  ): Effect.Effect<void, PlatformError.PlatformError> {
+  ): Effect.Effect<void, PlatformError.PlatformError, Path.Path> {
     return Effect.gen(function* () {
-      const entries = yield* fs.readDirectory(directory);
+      const entries = yield* readDirectoryTypedTolerant(directory);
 
-      // Results are sorted at the end, so entries are probed concurrently.
+      // Results are sorted at the end, so entries are handled concurrently.
       yield* Effect.forEach(
         entries,
-        (name) =>
+        ([name, entryType]) =>
           Effect.gen(function* () {
             const relativePath = normalizeFilePath(
               relativeDirectory ? `${relativeDirectory}/${name}` : name,
             );
             const absolutePath = join(directory, name);
-            const info = yield* fs.stat(absolutePath).pipe(
-              // Absent (`absentReason`: NotFound / ENOTDIR), the rest of
-              // BadResource (`ELOOP`), and PermissionDenied skip this entry;
-              // any other failure is real. glob.ts drops NotFound and
-              // BadResource the same way; the platform listing swallowed every
-              // symlink-target stat error.
-              Effect.catchIf(
-                (error) =>
-                  absentReason(error) ||
-                  error.reason._tag === 'BadResource' ||
-                  error.reason._tag === 'PermissionDenied',
-                () => Effect.succeed(undefined),
-              ),
-            );
+            const type =
+              entryType === 'SymbolicLink'
+                ? yield* followLink(absolutePath)
+                : entryType;
 
-            if (info?.type === 'Directory') {
+            if (type === 'Directory') {
               if (shouldVisitDirectory(relativePath, filters)) {
                 yield* visit(absolutePath, relativePath);
               }
             } else if (
-              info?.type === 'File' &&
+              type === 'File' &&
               passesFileFilters(relativePath, filters)
             ) {
               results.push(relativePath);
@@ -81,6 +91,7 @@ export const listWorkspaceFiles = Effect.fn(
     });
   }
 
-  yield* visit(options.root, '');
+  // The typed listing joins entry paths through `Path`: Node's own.
+  yield* visit(options.root, '').pipe(Effect.provide(NodePath.layer));
   return results.sort((a, b) => a.localeCompare(b));
 });
