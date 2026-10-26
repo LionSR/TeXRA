@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.137.0",
-    "@google/genai": "2.30.0",
+    "@google/genai": "2.31.0",
     "llm-zoo": "catalog:",
     "ws": "8.22.0"
   },
