@@ -19,7 +19,10 @@ import {
   type RunOutcome,
   type SessionEvent,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import {
+  isTerminalOutcomePhase,
+  outcomeFromCause,
+} from '@shared/runs/runStatus';
 import { heldElsewhereBy } from '@shared/session/database';
 import { lastLifecycleRow } from '@shared/session/runFacts';
 import type { Append } from '@shared/session/sessionEvents';
@@ -115,9 +118,7 @@ export function runWithLaunchGuard<A, E, R>(
               endRunOutsideLifecycle(
                 session,
                 runId,
-                Cause.hasInterrupts(exit.cause)
-                  ? RUN_OUTCOME.CANCELLED
-                  : RUN_OUTCOME.FAILED,
+                outcomeFromCause(exit.cause),
                 Cause.squash(exit.cause),
               ),
             ),

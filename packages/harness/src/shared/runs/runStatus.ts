@@ -1,4 +1,6 @@
 /** Run status constants shared across agent runtime and UI layers. */
+import { Cause } from 'effect';
+
 import {
   type PositionAt,
   RUN_OUTCOME,
@@ -12,9 +14,10 @@ import {
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. The derivation rule below is the only production
-// mapping — flows and hosts must
-// not hand-roll their own.
+// lifecycle boundary. The two derivation rules below are the only production
+// mappings — `deriveRunOutcome` from the terminal facts and
+// `outcomeFromCause` from a failure cause — and flows and hosts must not
+// hand-roll their own.
 
 /**
  * The single facts → outcome derivation rule, shared by every flow exit.
@@ -27,6 +30,19 @@ export function deriveRunOutcome(facts: {
   if (facts.failed) return RUN_OUTCOME.FAILED;
   if (facts.cancelled) return RUN_OUTCOME.CANCELLED;
   return RUN_OUTCOME.COMPLETED;
+}
+
+/**
+ * The one verdict of a run's failure cause. Any interrupt in it is a stop,
+ * even when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
+ * already reports that run `CANCELLED`, so every terminal row agrees. This is
+ * the only cause → outcome mapping — callers that end a run from an `Exit`
+ * must route through it rather than re-deriving the ternary.
+ */
+export function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome {
+  return Cause.hasInterrupts(cause)
+    ? RUN_OUTCOME.CANCELLED
+    : RUN_OUTCOME.FAILED;
 }
 
 // ============================================================================
