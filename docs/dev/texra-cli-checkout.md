@@ -1,14 +1,8 @@
 # TeXRA CLI — Checkout Workflow
 
-Developer-only notes for running the `texra` CLI from a local repository
-checkout. These instructions assume a working build toolchain and a cloned
-source tree, so they live here rather than in the public CLI guide
-(`docs/guide/texra-cli.md`), which covers the published `texra` command. The
-client software itself is Apache-2.0 (see `LICENSE` and
-`docs/guide/open-source.md`).
-
-For end-user CLI usage (`texra run`, `texra completion`, workspace defaults,
-history, tools), see the [public CLI guide](../guide/texra-cli.md).
+This guide covers building and running the `texra` CLI from a local repository
+checkout. For installed-CLI usage (`texra run`, `texra completion`, workspace
+defaults, history, tools), see the [public CLI guide](../guide/texra-cli.md).
 
 ## Install From a Checkout
 

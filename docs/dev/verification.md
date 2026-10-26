@@ -44,23 +44,15 @@ corepack pnpm --filter @texra-ai/cli validate:tui --snapshot-dir /tmp/texra-tui-
 
 ## PR review automation
 
-Every pull request should keep the required checks green, including the TeXRA
-review job. One special case needs an explicit rule: a pull request may edit
-the review workflow or its review prompts. In that case the
-review job must not run untrusted automation from the pull request itself.
-
-The repository handles this by running the pull request through trusted
-automation. The review action is external to this repository
-(`texra-ai/texra-action`), so a pull request cannot alter its implementation in
-this tree. The in-repo prompt can still be edited by a pull request, so the
-`TeXRA Code Review` workflow checks out the prompt from the base commit and
-runs with that copy. This means changes to
-`.github/workflows/texra-code-review.yml` or `.github/prompts/` are still
-reviewed, but the changed prompts only take effect after the PR is merged.
+The `TeXRA Code Review` workflow runs the external `texra-ai/texra-action`
+action and checks out the in-repo review prompts from the base commit, so a
+pull request that edits `.github/workflows/texra-code-review.yml` or
+`.github/prompts/` never executes untrusted automation from the PR branch
+itself.
 
 If GitHub refuses to run a self-editing workflow, or if the provider-side review
-service is unavailable, do not treat the missing review as silently acceptable.
-Use the `status:blocked-external` label and leave a PR comment that records:
+service is unavailable, apply the `status:blocked-external` label and leave a
+PR comment recording:
 
 - the blocked check or run URL,
 - why the failure is external to the proposed code,
@@ -72,15 +64,15 @@ the changed automation or prompt files directly.
 
 ## Surfaces to confirm by hand
 
-| Surface                  | Extension (VS Code)                                                                      | Desktop (Electron)                                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Launcher (main view)     | Open the TeXRA sidebar; the launcher renders with agent + model pickers.                 | `pnpm --filter @texra/desktop dev` and confirm the launcher mounts on the `main` route.                     |
-| Progress board           | Run a tiny agent; the Progress view shows the stream as it ticks.                        | Run a tiny agent; switch to Progress (chrome icon button) and confirm the same stream appears.              |
-| Settings tabs            | Open `TeXRA: Open Settings`; cycle tabs (History, Memory, Models, Agents, LaTeX, Tools). | Click the Settings chrome icon; cycle the same tabs.                                                        |
-| Onboarding / walkthrough | First install: VS Code's native walkthrough opens.                                       | First launch: the in-renderer first-run dialog opens; "Got it" persists dismissal.                          |
-| Command palette          | VS Code's native palette (`Cmd/Ctrl+Shift+P`) lists `TeXRA: …` commands.                 | The renderer's palette (`Cmd/Ctrl+K` or chrome "Commands" button) lists the same actions.                   |
-| Theme switching          | Toggle VS Code light/dark/HC; the webviews follow within ~200ms.                         | Toggle the OS theme; the renderer follows within ~200ms (`nativeTheme` 'updated' → `applyHostBodyTheme()`). |
-| Workspace explorer       | n/a — VS Code's native explorer drives selection.                                        | Confirm the desktop explorer lists files and supports double-click → "Use as input/reference/...".          |
+| Surface                  | Extension (VS Code)                                                                        | Desktop (Electron)                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Launcher (main view)     | Open the TeXRA sidebar; the launcher renders with agent + model pickers.                   | `pnpm --filter @texra/desktop dev` and confirm the launcher mounts on the `main` route.                     |
+| Progress board           | Run a tiny agent; the Progress view shows the stream as it ticks.                          | Run a tiny agent; switch to Progress (chrome icon button) and confirm the same stream appears.              |
+| Settings tabs            | Open `TeXRA: Open Settings`; cycle tabs (General, Models, Agents, Memory, Plugins, LaTeX). | Click the Settings chrome icon; cycle the same tabs.                                                        |
+| Onboarding / walkthrough | First install: VS Code's native walkthrough opens.                                         | First launch: the in-renderer first-run dialog opens; "Got it" persists dismissal.                          |
+| Command palette          | VS Code's native palette (`Cmd/Ctrl+Shift+P`) lists `TeXRA: …` commands.                   | The renderer's palette (`Cmd/Ctrl+K` or chrome "Commands" button) lists the same actions.                   |
+| Theme switching          | Toggle VS Code light/dark/HC; the webviews follow within ~200ms.                           | Toggle the OS theme; the renderer follows within ~200ms (`nativeTheme` 'updated' → `applyHostBodyTheme()`). |
+| Workspace explorer       | n/a — VS Code's native explorer drives selection.                                          | Confirm the desktop explorer lists files and supports double-click → "Use as input/reference/...".          |
 
 ## Files that should never diverge between hosts
 

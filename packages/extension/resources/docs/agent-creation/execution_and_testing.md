@@ -1,16 +1,8 @@
 # Execution & Testing Model
 
-This note explains how TeXRA runs agents, and — more importantly — how the
-`creator` agent can test a new agent before handing it back to the user.
-
 ## How TeXRA runs agents
 
-Every agent run flows through one entry point: `texra.execute` command →
-the session's root launch (`session.runs.launch`), which assigns the run id and calls
-`executeAgent(definition, runId, options)`. The runtime takes a
-`PreparedAgentDefinition` (agent name, model, instruction, and optional input
-/ memory / working-directory fields), resolves the YAML, and runs it in one of
-two ways:
+TeXRA validates the agent YAML and runs it in one of two ways:
 
 - **A chat** (or an `agent` call): any agent, given a prompt. Multi-step
   loop invoking its declared tools. May WAIT for interim follow-ups, spawn
@@ -22,10 +14,9 @@ two ways:
   container / `task.outputs`. The last revision's documents are proposed
   for the user to accept.
 
-The creator agent does NOT need to call `executeAgent` directly. Instead it
-delegates through the `agent` and `document_task` tools, which handle
-everything (including approval and the follow-up queue) the way an ordinary
-user would.
+The `creator` agent tests new agents by delegating through the `agent` and
+`document_task` tools, which exercise the same validation, approval, and
+follow-up flow as a user launch.
 
 ## Testing a new agent
 

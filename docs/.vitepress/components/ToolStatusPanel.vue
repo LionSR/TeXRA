@@ -82,8 +82,8 @@ const groups = [
         library="texra"
         name="screwdriver-wrench"
       ></wa-icon>
-      <span class="mk-card-title tsp-head-name">Tools</span>
-      <span class="mk-card-sub tsp-head-sub">Dashboard</span>
+      <span class="mk-card-title tsp-head-name">Dependencies</span>
+      <span class="mk-card-sub tsp-head-sub">Settings → LaTeX</span>
     </div>
 
     <div v-for="g in groups" :key="g.label" class="tsp-group">

@@ -84,8 +84,6 @@ it:
 
 <ToolPathSearchOrder />
 
-<p class="hero-caption">Launched from Finder or the Start menu, VS Code inherits a minimal PATH, so TeXRA probes these well-known install dirs in order, per OS, falling back to <code>kpsewhich</code> and <code>texmf-dist/scripts</code>.</p>
-
 **macOS:**
 
 1. `/opt/homebrew/bin` (Apple Silicon Homebrew)
@@ -126,12 +124,6 @@ it:
 7. `~/.local/bin` (user-local tools such as Claude Code's native installer)
 8. Versioned TeX Live directories
 9. User-specific installations
-
-**Fallback mechanisms:**
-
-- If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
-- Uses `kpsewhich` to locate Perl scripts (e.g., `latexdiff.pl`)
-- Runs Perl scripts with the `perl` interpreter when needed
 
 Opening VS Code from a configured terminal provides the most reliable environment.
 
