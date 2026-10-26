@@ -122,23 +122,32 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  // Resolve and load entries concurrently; dedupe and report in name order.
-  const resolved = yield* Effect.forEach(
+  // Each entry resolves and loads in one concurrent pass; duplicates and
+  // issues are decided afterwards in name order (a duplicate's load, which
+  // has no side effects, is dropped).
+  const entries = yield* Effect.forEach(
     names.toSorted((a, b) => a.localeCompare(b)),
     (name) => {
       const skillPath = path.join(root, name, 'SKILL.md');
       return fs.realPath(skillPath).pipe(
-        Effect.map((realSkillPath) => ({
-          name,
-          skillPath,
-          realSkillPath,
-          issue: undefined,
-        })),
+        Effect.flatMap((realSkillPath) =>
+          Effect.map(
+            loadSkillDirectory(path.join(root, name), name),
+            (loaded) => ({
+              name,
+              skillPath,
+              realSkillPath,
+              loaded,
+              issue: undefined,
+            }),
+          ),
+        ),
         Effect.catch((error) =>
           Effect.succeed({
             name,
             skillPath,
             realSkillPath: undefined,
+            loaded: undefined,
             issue: absentReason(error)
               ? undefined
               : issue('warning', 'read_error', error.message, {
@@ -148,41 +157,18 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
         ),
       );
     },
-    { concurrency: 8 },
-  );
-  const unique = resolved.map((entry) => {
-    const { realSkillPath } = entry;
-    if (realSkillPath === undefined) return entry;
-    if (seenRealPaths.has(realSkillPath)) {
-      return {
-        ...entry,
-        realSkillPath: undefined,
-        issue: dupRealpathIssue(realSkillPath, entry.skillPath),
-      };
-    }
-    seenRealPaths.add(realSkillPath);
-    return entry;
-  });
-  const loadedAll = yield* Effect.forEach(
-    unique,
-    (entry) =>
-      Effect.gen(function* () {
-        const loaded =
-          entry.realSkillPath === undefined
-            ? undefined
-            : yield* loadSkillDirectory(
-                path.join(root, entry.name),
-                entry.name,
-              );
-        return { ...entry, loaded };
-      }),
-    { concurrency: 8 },
+    { concurrency: 16 },
   );
 
-  for (const entry of loadedAll) {
+  for (const entry of entries) {
     if (entry.issue !== undefined) errors.push(entry.issue);
     const { loaded, realSkillPath } = entry;
     if (loaded === undefined || realSkillPath === undefined) continue;
+    if (seenRealPaths.has(realSkillPath)) {
+      errors.push(dupRealpathIssue(realSkillPath, entry.skillPath));
+      continue;
+    }
+    seenRealPaths.add(realSkillPath);
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
