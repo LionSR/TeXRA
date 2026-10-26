@@ -30,7 +30,6 @@ const ambient = {
   stderrIsTty: false,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
-  renderRunProgress: false,
 };
 
 function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
