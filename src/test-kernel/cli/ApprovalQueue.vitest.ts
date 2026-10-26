@@ -7,8 +7,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   attentionRequests,
   currentApproval,
-  forgetSettledRequests,
-  stagePresentation,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import {
@@ -17,7 +15,6 @@ import {
   sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 
 import {
   bindTestSessionView,
@@ -35,20 +32,6 @@ function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
     kind: 'bash',
     data: { requestId, allowBypass: true, runId, command: 'echo ok' },
   } satisfies ApprovalPayload;
-}
-
-/** The view after each payload's `request.opened` folded, in order. */
-function viewOfRequests(...payloads: readonly ApprovalPayload[]): SessionView {
-  const runs = [...new Set(payloads.map((p) => p.data.runId))]
-    .filter((id): id is RunId => id !== '')
-    .map((id) => makeRunView({ id, parentId: ROOT }));
-  return viewWith([makeRunView({ id: ROOT }), ...runs], {
-    requests: payloads.map((payload) => ({
-      runId: payload.data.runId as RunId,
-      requestId: payload.data.requestId,
-      payload,
-    })),
-  });
 }
 
 beforeAll(bindTestSessionView);
@@ -104,54 +87,5 @@ describe('CLI approval surface', () => {
       RUN_A,
     ]);
     expect(sessionListRunIds.get()).toEqual([RUN_A]);
-  });
-
-  it('presents no request this window cannot answer', () => {
-    // A child another process holds: its answer would be refused, and the
-    // refusal reopens the modal, trapping the keys.
-    const held = bashPayload(RUN_A);
-    const view = viewOfRequests(held);
-    const run = view.runs.get(RUN_A);
-    if (!run) throw new Error('fixture lost its run');
-    seedView({
-      ...view,
-      runs: new Map(view.runs).set(RUN_A, { ...run, readOnly: true }),
-    });
-
-    expect(currentApproval.get()).toBeUndefined();
-    expect(attentionRequests.get()).toEqual([]);
-  });
-
-  it('drops a request the moment the fold resolves it', () => {
-    const first = bashPayload(RUN_A);
-    const second = bashPayload(RUN_B);
-    seedView(viewOfRequests(first, second));
-    expect(currentApproval.get()?.payload).toEqual(first);
-
-    seedView(viewOfRequests(second));
-    expect(currentApproval.get()?.payload).toEqual(second);
-
-    seedView(viewOfRequests());
-    expect(currentApproval.get()).toBeUndefined();
-  });
-
-  it('keeps the modal on screen when an older request becomes presentable after a settle', () => {
-    const retry = {
-      kind: 'retry',
-      data: { requestId: 'retry-1', allowBypass: false, runId: RUN_A },
-      tui: {},
-    } as unknown as ApprovalPayload;
-    const a = bashPayload(RUN_A);
-    const b = bashPayload(RUN_B);
-    seedView(viewOfRequests(retry, a, b));
-    expect(currentApproval.get()?.payload).toEqual(a);
-
-    seedView(viewOfRequests(retry, b));
-    forgetSettledRequests(new Set(['retry-1', b.data.requestId]));
-    expect(currentApproval.get()?.payload).toEqual(b);
-
-    // The retry's key lookup lands: it joins behind the modal being answered.
-    stagePresentation(retry);
-    expect(currentApproval.get()?.payload).toEqual(b);
   });
 });

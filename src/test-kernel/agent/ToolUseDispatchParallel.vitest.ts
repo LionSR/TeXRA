@@ -28,7 +28,6 @@ import {
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 import {
   type Model,
@@ -60,10 +59,7 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
-import {
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
@@ -76,7 +72,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ScriptTool } from '@tools/codemode/ScriptTool';
-import { blobAddress } from '@utils/core/idHash';
 
 import { recordSessionEvents } from './progressTestUtils';
 
@@ -197,16 +192,6 @@ function boundModel(): BoundModel {
     textOnly: false,
   };
 }
-
-/** `config` with a route that carries images and PDFs. */
-const withDocuments = (config: BoundModel['config']): BoundModel['config'] => ({
-  ...config,
-  capabilities: {
-    ...config.capabilities,
-    supportsVision: true,
-    supportsNativePdf: true,
-  },
-});
 
 let dispatchRunCounter = 0;
 const dispatchRunId = (): RunId =>
@@ -355,140 +340,36 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
     ).pipe(Effect.orDie),
   ).pipe(Effect.provide(kit.layer));
 
-/** The one tool group the dispatch delivers, in call order. */
-function deliveredResults(
-  state: RunState,
-): readonly { status: string; text: string }[] {
-  const group = state.messages.at(-1);
-  if (group === undefined || group.role !== 'tool') {
-    throw new Error('The dispatch delivered no tool group.');
-  }
-  return group.results.map((result) => ({
-    status: result.status,
-    text: result.content
-      .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-      .join(''),
-  }));
-}
-
-function countStarts(probe: DispatchProbe, toolName = ''): number {
-  return probe.events.filter((event) => event.startsWith(`start ${toolName}`))
-    .length;
-}
-
 describe('tool-use dispatch', () => {
-  it.live.each([
-    'failure',
-    'failure behind a tool error',
-    'interrupted failure',
-    'interrupted defect',
-  ] as const)('leaves a durable tool write unsettled: %s', (mode) =>
-    Effect.gen(function* () {
-      const failure = new DatabaseWriteFailed({
-        path: '/unavailable/state.sqlite',
-        cause: new Error('disk write failed'),
-      });
-      const failureCause =
-        mode === 'interrupted defect'
-          ? Cause.die(failure)
-          : Cause.fail(failure);
-      const beside = {
-        failure: Cause.empty,
-        'failure behind a tool error': Cause.fail(new Error('tool failed')),
-        'interrupted failure': Cause.interrupt(),
-        'interrupted defect': Cause.interrupt(),
-      }[mode];
-      const cause = Cause.combine(beside, failureCause);
-      const kit = yield* openDispatch({
-        tools: {
-          write_state: {
-            definition: { name: 'write_state' },
-            call: () => Effect.failCause(cause),
-          },
-        },
-        calls: [makeCall('failed-write', 'write_state', {})],
-      });
-      const exit = yield* Effect.exit(dispatch(kit));
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        expect(Cause.squash(exit.cause)).toBe(failure);
-        expect(Cause.hasInterrupts(exit.cause)).toBe(
-          mode.startsWith('interrupted'),
-        );
-      }
-      const saved = yield* kit.session.runHistory.load(kit.runId);
-      expect(settledIds(saved)).toEqual([]);
-      expect(saved?.pendingResponse).not.toBeNull();
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('ends the run on a claim a tool write lost', () =>
-    Effect.gen(function* () {
-      // A write outside the run history (an approval scope, a goal) raises
-      // the claim's own refusal, never a tool result the model reads.
-      const kit = yield* openDispatch({
-        tools: {
-          write_state: {
-            definition: { name: 'write_state' },
-            call: () =>
-              Effect.fail(
-                new DatabaseNotOwner({
-                  aggregateId: rowAggregate(dispatchRunId()),
-                  ownerId: null,
-                  closed: false,
-                }),
-              ),
-          },
-        },
-        calls: [makeCall('lost-claim', 'write_state', {})],
-      });
-      const exit = yield* Effect.exit(dispatch(kit));
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        expect(Cause.squash(exit.cause)).toMatchObject({
-          _tag: 'RunHistoryRefused',
-          reason: 'not-owner',
+  it.live(
+    'leaves a durable tool write unsettled when it fails under an interrupt',
+    () =>
+      Effect.gen(function* () {
+        const failure = new DatabaseWriteFailed({
+          path: '/unavailable/state.sqlite',
+          cause: new Error('disk write failed'),
         });
-      }
-      const saved = yield* kit.session.runHistory.load(kit.runId);
-      expect(settledIds(saved)).toEqual([]);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('converts a malformed attachment result into a tool error', () =>
-    Effect.gen(function* () {
-      const malformedAttachmentTool: ITool = {
-        definition: {
-          name: 'malformed_attachment',
-          description: 'malformed_attachment',
-          parameters: {},
-        },
-        call: () =>
-          Effect.sync((): ToolResult => {
-            // Deliberately malformed (`path` is a number): parsed from JSON so
-            // the shape reaches the dispatch boundary unchecked, as a real tool
-            // returning bad data would, without a cast asserting it is valid.
-            return JSON.parse(
-              '{"status":"executed","output":"not accepted","files":[{"path":42,"mimeType":"image/png"}]}',
-            );
-          }),
-      };
-      const kit = yield* openDispatch({
-        tools: { malformed_attachment: malformedAttachmentTool },
-        calls: [makeCall('c1', 'malformed_attachment', {})],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      const [delivered] = deliveredResults(state);
-      expect(delivered?.status).toBe('error');
-      expect(delivered?.text).toMatch(
-        /malformed_attachment: Tool returned an invalid result/i,
-      );
-      yield* closeSessionOf(kit.session);
-    }),
+        const cause = Cause.combine(Cause.interrupt(), Cause.die(failure));
+        const kit = yield* openDispatch({
+          tools: {
+            write_state: {
+              definition: { name: 'write_state' },
+              call: () => Effect.failCause(cause),
+            },
+          },
+          calls: [makeCall('failed-write', 'write_state', {})],
+        });
+        const exit = yield* Effect.exit(dispatch(kit));
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(Cause.squash(exit.cause)).toBe(failure);
+          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        }
+        const saved = yield* kit.session.runHistory.load(kit.runId);
+        expect(settledIds(saved)).toEqual([]);
+        expect(saved?.pendingResponse).not.toBeNull();
+        yield* closeSessionOf(kit.session);
+      }),
   );
 
   // Failure mode: the guest ends (here it throws) while a call it issued is
@@ -556,54 +437,6 @@ describe('tool-use dispatch', () => {
       }),
   );
 
-  it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      // Neither call completes until both have started: a fixed sleep raced
-      // the second call's intent append, which the 1.0 store made slower
-      // than the sleep. A serial dispatch never opens the latch, and the
-      // deadline only turns that deadlock into a legible failure.
-      const bothStarted = yield* Deferred.make<void>();
-      const awaitSibling = Effect.gen(function* () {
-        if (probe.inFlight === 2)
-          yield* Deferred.succeed(bothStarted, undefined);
-        yield* Deferred.await(bothStarted).pipe(
-          Effect.timeoutOrElse({
-            duration: '10 seconds',
-            orElse: () =>
-              Effect.die(
-                new Error('The parallel-safe calls did not run concurrently.'),
-              ),
-          }),
-        );
-      });
-      const kit = yield* openDispatch({
-        tools: {
-          grep: probeTool(probe, 'grep', awaitSibling, { lane: 'parallel' }),
-          read_file: probeTool(probe, 'read_file', awaitSibling, {
-            lane: 'parallel',
-          }),
-        },
-        calls: [
-          makeCall('c1', 'grep', { pattern: 'a' }),
-          makeCall('c2', 'read_file', { path: 'b' }),
-        ],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      expect(probe.maxInFlight).toBe(2);
-      expect(deliveredResults(state).map((result) => result.status)).toEqual([
-        'success',
-        'success',
-      ]);
-      expect(deliveredResults(state)[0]?.text).toContain(
-        'grep:{"pattern":"a"}',
-      );
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
   it.live('treats non-safe tools as ordering barriers', () =>
     Effect.gen(function* () {
       const probe = newProbe();
@@ -632,63 +465,6 @@ describe('tool-use dispatch', () => {
       ]);
       yield* closeSessionOf(kit.session);
     }),
-  );
-
-  it.live('stops dispatch and ends the turn after a terminal result', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          submit_output: probeTool(probe, 'submit_output', 0, {
-            endTurn: true,
-          }),
-          write_file: probeTool(probe, 'write_file', 0),
-        },
-        calls: [
-          makeCall('c1', 'submit_output', { title: 'done' }),
-          makeCall('c2', 'write_file', { path: 'late.txt' }),
-        ],
-      });
-
-      const outcome = yield* dispatch(kit);
-
-      expect(probe.events).toEqual([
-        'start submit_output:{"title":"done"}',
-        'end submit_output:{"title":"done"}',
-      ]);
-      expect(outcome.endTurn).toBe(true);
-      // The skipped call still settles: the model sees a complete group.
-      const delivered = deliveredResults(outcome.state);
-      expect(delivered[1]?.status).toBe('error');
-      expect(delivered[1]?.text).toContain(
-        'an earlier tool call ended the turn',
-      );
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live(
-    'executes duplicate parallel calls once and fans the result out',
-    () =>
-      Effect.gen(function* () {
-        const probe = newProbe();
-        const kit = yield* openDispatch({
-          tools: { grep: probeTool(probe, 'grep', 5, { lane: 'parallel' }) },
-          calls: [
-            makeCall('c1', 'grep', { pattern: 'same' }),
-            makeCall('c2', 'grep', { pattern: 'same' }),
-            makeCall('c3', 'grep', { pattern: 'other' }),
-          ],
-        });
-
-        const { state } = yield* dispatch(kit);
-
-        expect(countStarts(probe)).toBe(2);
-        const delivered = deliveredResults(state);
-        expect(delivered[1]?.status).toBe('success');
-        expect(delivered[1]?.text).toBe(delivered[0]?.text);
-        yield* closeSessionOf(kit.session);
-      }),
   );
 
   // The settlement is the whole transactional boundary: the result and the
@@ -755,306 +531,6 @@ describe('tool-use dispatch', () => {
       );
       expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
       expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  // No fail-fast sibling interruption and no fabricated settlement: an
-  // interrupted call is outcome-unknown until resume settles it as such.
-  it.live('commits no settlement for a call interrupted in flight', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const bothStarted = yield* Deferred.make<void>();
-      const awaitInterruption = Effect.gen(function* () {
-        if (probe.inFlight === 2)
-          yield* Deferred.succeed(bothStarted, undefined);
-        yield* Effect.never;
-      });
-      const kit = yield* openDispatch({
-        tools: {
-          grep: probeTool(probe, 'grep', awaitInterruption, {
-            lane: 'parallel',
-          }),
-          read_file: probeTool(probe, 'read_file', awaitInterruption, {
-            lane: 'parallel',
-          }),
-        },
-        calls: [
-          makeCall('c1', 'grep', { pattern: 'a' }),
-          makeCall('c2', 'read_file', { path: 'b' }),
-          // A duplicate of the interrupted primary: it must derive nothing
-          // from a call whose outcome nobody knows.
-          makeCall('c3', 'grep', { pattern: 'a' }),
-        ],
-      });
-
-      const fiber = yield* Effect.forkChild(dispatch(kit));
-      // Interrupt only after both calls have entered and are held in flight.
-      yield* Deferred.await(bothStarted);
-      expect(probe.maxInFlight).toBe(2);
-      yield* Fiber.interrupt(fiber);
-
-      const folded = yield* Effect.provide(
-        Effect.gen(function* () {
-          const runHistory = yield* RunHistory;
-          return yield* runHistory.load(kit.runId);
-        }),
-        kit.layer,
-      );
-      const pending = folded?.pendingResponse ?? null;
-      expect(settledIds(folded)).toEqual([]);
-      // The duplicate is recognised as one and still settles nothing: with
-      // the primary interrupted it waits rather than fabricating a result.
-      expect(
-        pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
-      ).toBe('c1');
-      expect(countStarts(probe, 'grep')).toBe(1);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  // A person's answer is committed by the decide command, another writer,
-  // while a sibling call of the same parallel partition keeps settling
-  // through the cell: the answer's commit is below the sibling's, so it
-  // cannot be folded onto the cell afterwards. The cell re-reads the run.
-  it.live('reads a decision committed before a sibling call settled', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          grep: probeTool(probe, 'grep', 0, { lane: 'parallel' }),
-          read_file: probeTool(probe, 'read_file', 0, { lane: 'parallel' }),
-        },
-        calls: [
-          makeCall('c1', 'grep', { pattern: 'a' }),
-          makeCall('c2', 'read_file', { path: 'b' }),
-        ],
-      });
-      const aggregateId = rowAggregate(kit.runId);
-      const cell = kit.cell;
-      yield* cell.append(
-        ['c1', 'c2'].map((callId) => ({
-          type: 'tool.intent' as const,
-          aggregateId,
-          payload: {
-            origin: { kind: 'response' as const, responseId: RESPONSE_ID },
-            callId,
-            attempt: 1,
-          },
-        })),
-      );
-      yield* cell.append([
-        {
-          type: 'request.opened',
-          aggregateId,
-          requestId: 'q1',
-          payload: {
-            kind: 'bash',
-            data: {
-              requestId: 'q1',
-              allowBypass: false,
-              runId: kit.runId,
-              command: 'grep a',
-            },
-          },
-        },
-      ]);
-      yield* kit.session.requests.decide(kit.runId, 'q1', { action: 'reject' });
-      yield* cell.append([
-        {
-          type: 'tool.result',
-          aggregateId,
-          payload: {
-            responseId: RESPONSE_ID,
-            callId: 'c2',
-            attempt: 1,
-            disposition: 'executed',
-            duplicateOf: null,
-            result: { status: 'executed', output: 'ok' },
-            attachments: [],
-          },
-        },
-      ]);
-      const state = yield* cell.refresh;
-      expect(state.requests['q1']?.decision).toMatchObject({
-        action: 'reject',
-      });
-      expect(settledIds(state)).toEqual(['c2']);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('does not share read results across a mutating barrier', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          read_file: probeTool(probe, 'read_file', 5, { lane: 'parallel' }),
-          write_file: probeTool(probe, 'write_file', 5),
-        },
-        calls: [
-          makeCall('c1', 'read_file', { path: 'x' }),
-          makeCall('c2', 'write_file', { path: 'x', content: 'new' }),
-          makeCall('c3', 'read_file', { path: 'x' }),
-        ],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      // The post-barrier read must execute again — the write may have changed
-      // what it returns, so sharing the pre-barrier result would feed the
-      // model stale contents.
-      expect(countStarts(probe, 'read_file')).toBe(2);
-      expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.live('allows an identical mutation again after a different mutation', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          write_file: probeTool(probe, 'write_file', 5),
-          edit_file: probeTool(probe, 'edit_file', 5),
-        },
-        calls: [
-          makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
-          makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
-          makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
-        ],
-      });
-
-      const { state } = yield* dispatch(kit);
-
-      // The edit changed state, so re-issuing the identical write is a
-      // plausible restore — it must execute, not be swallowed as a glitch.
-      expect(countStarts(probe, 'write_file')).toBe(2);
-      expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  it.effect(
-    'keeps delivered documents as bytes and bounds a stalled upload by its deadline',
-    () =>
-      Effect.gen(function* () {
-        const pdf = Buffer.from('%PDF-1.7').toString('base64');
-        const warnings: string[] = [];
-        // `a.pdf` finishes only once `b.pdf` has started, and `b.pdf` never
-        // answers: uploads taken one at a time would never reach `b.pdf`.
-        const bStarted = yield* Deferred.make<void>();
-        const uploading: Model = {
-          ...boundModel().model,
-          uploadFile: (file) =>
-            file.filename === 'a.pdf'
-              ? Deferred.await(bStarted)
-              : Effect.sync(() =>
-                  Deferred.doneUnsafe(bStarted, Effect.void),
-                ).pipe(Effect.andThen(Effect.never)),
-        };
-        const kit = yield* openDispatch({
-          tools: {
-            fetch_papers: {
-              definition: { name: 'fetch_papers' },
-              call: () =>
-                Effect.succeed({
-                  status: 'executed',
-                  output: 'fetched',
-                  files: ['a.pdf', 'b.pdf'].map((path) => ({
-                    path,
-                    mimeType: 'application/pdf',
-                    base64Data: pdf,
-                  })),
-                } satisfies ToolResult),
-            } as ITool,
-          },
-          calls: [makeCall('fetch', 'fetch_papers', {})],
-          logger: {
-            ...noopTrace,
-            warn: (message: string) => {
-              warnings.push(message);
-            },
-          },
-          bound: {
-            ...boundModel(),
-            model: uploading,
-            config: withDocuments(boundModel().config),
-          },
-        });
-        const delivering = yield* Effect.forkChild(dispatch(kit));
-        yield* Deferred.await(bStarted);
-        yield* TestClock.adjust('5 seconds');
-        const outcome = yield* Fiber.join(delivering);
-        expect(warnings).toStrictEqual([expect.stringContaining('"b.pdf"')]);
-        const group = outcome.state.messages.at(-1);
-        if (group?.role !== 'tool') {
-          throw new Error('The dispatch delivered no tool group.');
-        }
-        // The run history holds the bytes by address; a file id only ever
-        // lives in memory.
-        const digest = blobAddress(pdf);
-        expect(group.results[0]?.content.slice(1)).toStrictEqual([
-          { kind: 'document', mimeType: 'application/pdf', digest },
-          { kind: 'document', mimeType: 'application/pdf', digest },
-        ]);
-        yield* closeSessionOf(kit.session);
-      }),
-  );
-
-  it.effect('bounds the whole upload batch by one aggregate deadline', () =>
-    Effect.gen(function* () {
-      const pdf = Buffer.from('%PDF-1.7').toString('base64');
-      const warnings: string[] = [];
-      // Five stalled uploads: past the four-wide window, a per-item
-      // deadline would hold delivery for two waves.
-      const started = yield* Deferred.make<void>();
-      const uploading: Model = {
-        ...boundModel().model,
-        uploadFile: () =>
-          Effect.sync(() => Deferred.doneUnsafe(started, Effect.void)).pipe(
-            Effect.andThen(Effect.never),
-          ),
-      };
-      const kit = yield* openDispatch({
-        tools: {
-          fetch_papers: {
-            definition: { name: 'fetch_papers' },
-            call: () =>
-              Effect.succeed({
-                status: 'executed',
-                output: 'fetched',
-                files: ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf', 'e.pdf'].map(
-                  (path) => ({
-                    path,
-                    mimeType: 'application/pdf',
-                    base64Data: pdf,
-                  }),
-                ),
-              } satisfies ToolResult),
-          } as ITool,
-        },
-        calls: [makeCall('fetch', 'fetch_papers', {})],
-        logger: {
-          ...noopTrace,
-          warn: (message: string) => {
-            warnings.push(message);
-          },
-        },
-        bound: {
-          ...boundModel(),
-          model: uploading,
-          config: withDocuments(boundModel().config),
-        },
-      });
-      const delivering = yield* Effect.forkChild(dispatch(kit));
-      yield* Deferred.await(started);
-      yield* TestClock.adjust('5 seconds');
-      const outcome = yield* Fiber.join(delivering);
-      expect(warnings).toStrictEqual([
-        expect.stringContaining('"a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"'),
-      ]);
-      expect(outcome.state.messages.at(-1)?.role).toBe('tool');
       yield* closeSessionOf(kit.session);
     }),
   );

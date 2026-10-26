@@ -65,27 +65,6 @@ export function rootedFsLayer(roots: {
 }
 
 /**
- * A `GlobalStorageFs` no program under test reaches: a suite whose fake host
- * answers `agentDirectories.custom()` from a directory of its own still names
- * the service in its requirements, and this satisfies that type without
- * standing up a root nothing reads.
- */
-export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
-  return Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
-}
-
-/**
- * The process's cross-workspace storage view over `root` — what
- * `processLayer` serves as `GlobalStorageFs` — for a suite that runs
- * one of its consumers on `it.effect`'s own runtime.
- */
-export function globalStorageFsTestLayer(
-  root: string,
-): Layer.Layer<GlobalStorageFs> {
-  return Layer.provide(globalStorageFsLayer(root), nodePlatformLayer);
-}
-
-/**
  * Whether `path` exists on disk. Non-ENOENT stat failures (permissions,
  * I/O) propagate — a path that cannot be inspected is not "absent".
  */
@@ -97,6 +76,16 @@ export async function pathExists(path: string): Promise<boolean> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
     throw error;
   }
+}
+
+/**
+ * A `GlobalStorageFs` no program under test reaches: a suite whose fake host
+ * answers `agentDirectories.custom()` from a directory of its own still names
+ * the service in its requirements, and this satisfies that type without
+ * standing up a root nothing reads.
+ */
+export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
+  return Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
 }
 
 /** Builds an `Error` carrying an errno-style `code` (e.g. 'ENOENT'). */

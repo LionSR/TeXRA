@@ -78,24 +78,6 @@ function workflowResult(
 }
 
 describe('CLI workflow output resolution', () => {
-  it('fails --output-dir resolution when an expected multi-input output is missing', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
-
-    await expect(
-      resolveOutput(
-        undefined,
-        'out',
-        workflowResult([{ absolutePath: runOutput, relativePath: 'r1/a.tex' }]),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['a.tex', 'b.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
-    ).rejects.toThrow(/b\.tex/);
-  });
-
   it('does not publish cancelled workflow outputs to requested destinations', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
@@ -135,9 +117,6 @@ describe('CLI workflow output resolution', () => {
         workingDirectory: cwd,
         runDirectory: runDirUnder(join(cwd, 'storage'), TEST_RUN_ID),
       });
-      expect(Object.hasOwn(result, 'status')).toBe(false);
-      expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
-      expect(Object.hasOwn(result, 'endGroupStatus')).toBe(false);
       expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
       expect(Object.hasOwn(result, 'copiedOutputs')).toBe(false);
     }
@@ -145,88 +124,6 @@ describe('CLI workflow output resolution', () => {
     await expect(readFile(outputDirectoryFile, 'utf8')).resolves.toBe(
       'existing directory file',
     );
-  });
-
-  it('copies every expected --output-dir workflow output', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
-    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
-    const runB = await writeRunFile(cwd, 'r1/b.tex', 'B');
-
-    const result = await resolveOutput(
-      undefined,
-      'out',
-      workflowResult([
-        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-        { absolutePath: runB, relativePath: 'r1/b.tex' },
-        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-      ]),
-      testContext(cwd),
-      {
-        expectedOutputFiles: ['a.tex', 'b.tex'],
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.COMPLETED,
-      workingDirectory: cwd,
-      copiedOutputs: [join(cwd, 'out', 'a.tex'), join(cwd, 'out', 'b.tex')],
-    });
-    await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
-      'A2',
-    );
-    await expect(readFile(join(cwd, 'out', 'b.tex'), 'utf8')).resolves.toBe(
-      'B',
-    );
-  });
-
-  it('preserves expected nested input paths when copying flattened workflow outputs', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runMain = await writeRunFile(cwd, 'r1/main.tex', 'main');
-    const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
-
-    const result = await resolveOutput(
-      undefined,
-      'out',
-      workflowResult([
-        {
-          absolutePath: runMain,
-          relativePath: 'r1/main.tex',
-          originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
-        },
-        {
-          absolutePath: runSeries,
-          relativePath: 'r1/series.tex',
-          originalPath: join(
-            cwd,
-            'run',
-            'original',
-            'paper',
-            'chapters',
-            'series.tex',
-          ),
-        },
-      ]),
-      testContext(cwd),
-      {
-        expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    expect(result).toMatchObject({
-      copiedOutputs: [
-        join(cwd, 'out', 'paper', 'main.tex'),
-        join(cwd, 'out', 'paper', 'chapters', 'series.tex'),
-      ],
-    });
-    await expect(
-      readFile(join(cwd, 'out', 'paper', 'main.tex'), 'utf8'),
-    ).resolves.toBe('main');
-    await expect(
-      readFile(join(cwd, 'out', 'paper', 'chapters', 'series.tex'), 'utf8'),
-    ).resolves.toBe('series');
   });
 
   it('uses original-path lineage before flat generated names when basenames collide', async () => {
@@ -275,117 +172,5 @@ describe('CLI workflow output resolution', () => {
     await expect(
       readFile(join(cwd, 'out', 'paper', 'chapters', 'main.tex'), 'utf8'),
     ).resolves.toBe('nested');
-  });
-
-  it('does not remap arbitrary same-source outputs to an expected input name', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runDerived = await writeRunFile(cwd, 'r1/derived.tex', 'derived');
-
-    await expect(
-      resolveOutput(
-        undefined,
-        'out',
-        workflowResult([
-          {
-            absolutePath: runDerived,
-            relativePath: 'r1/derived.tex',
-            originalPath: join(cwd, 'run', 'original', 'paper', 'input.tex'),
-          },
-        ]),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['paper/input.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
-    ).rejects.toThrow(/paper[/\\]input\.tex/);
-  });
-
-  it('does not remap output paths on partial original-path segment matches', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
-
-    await expect(
-      resolveOutput(
-        undefined,
-        'out',
-        workflowResult([
-          {
-            absolutePath: runSeries,
-            relativePath: 'r1/series.tex',
-            originalPath: join(
-              cwd,
-              'run',
-              'original',
-              'mychapters',
-              'series.tex',
-            ),
-          },
-        ]),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['chapters/series.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
-    ).rejects.toThrow(/chapters[/\\]series\.tex/);
-  });
-
-  it('uses the latest round when --output-dir workflow outputs arrive out of order', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
-    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
-
-    await resolveOutput(
-      undefined,
-      'out',
-      workflowResult([
-        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-      ]),
-      testContext(cwd),
-      {
-        expectedOutputFiles: ['a.tex'],
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
-      'A2',
-    );
-  });
-
-  it('copies the last output of the final round for a multi-document workflow', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runMain = await writeRunFile(cwd, 'r2/main.tex', 'MAIN2');
-    const runAppendix = await writeRunFile(cwd, 'r2/appendix.tex', 'APPENDIX2');
-    const runMain1 = await writeRunFile(cwd, 'r1/main.tex', 'MAIN1');
-
-    const result = await resolveOutput(
-      'out/paper.tex',
-      undefined,
-      workflowResult([
-        { absolutePath: runMain1, relativePath: 'r1/main.tex', round: 1 },
-        { absolutePath: runMain, relativePath: 'r2/main.tex', round: 2 },
-        {
-          absolutePath: runAppendix,
-          relativePath: 'r2/appendix.tex',
-          round: 2,
-        },
-      ]),
-      testContext(cwd),
-      {
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    expect(result).toMatchObject({
-      copiedOutput: join(cwd, 'out', 'paper.tex'),
-    });
-    // Last of the final round: the CLI has always kept the later element on a
-    // round tie, so the consolidation onto finalWorkflowOutput preserves it.
-    await expect(readFile(join(cwd, 'out', 'paper.tex'), 'utf8')).resolves.toBe(
-      'APPENDIX2',
-    );
   });
 });

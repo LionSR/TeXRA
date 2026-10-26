@@ -22,8 +22,6 @@ const CLI_PROJECTION_MODULE =
 // its importers are the containment chain for headless output.
 const ALLOWED_CLI_PROJECTION_IMPORTERS = [
   'packages/cli/src/runtime/executeCli.ts',
-  'src/test-kernel/cli/CliSessionProgressSubscription.vitest.ts',
-  'src/test-kernel/cli/ExecuteCli.vitest.ts',
   'src/test-kernel/cli/RunProgressRenderer.vitest.ts',
 ] as const;
 

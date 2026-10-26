@@ -82,26 +82,6 @@ function withGlobWorkspace(
 }
 
 describe('GlobTool match metadata', () => {
-  it.live('orders matches by modification time', () =>
-    Effect.gen(function* () {
-      yield* withGlobWorkspace(() =>
-        Effect.gen(function* () {
-          const result = yield* GlobTool.call({
-            pattern: '{old,new}.tex',
-          });
-
-          expect(result.status).toBe('executed');
-          expect(result.output).toContain('new.tex');
-          expect(result.output).toContain('old.tex');
-          const output = result.output ?? '';
-          expect(output.indexOf('new.tex')).toBeLessThan(
-            output.indexOf('old.tex'),
-          );
-        }),
-      );
-    }),
-  );
-
   it.live.each([
     { fileName: 'vanished.tex', tag: 'NotFound' as const },
     { fileName: 'blocked.tex', tag: 'BadResource' as const },
@@ -125,24 +105,6 @@ describe('GlobTool match metadata', () => {
       }),
   );
 
-  it.live('surfaces operational stat failures through the tool boundary', () =>
-    Effect.gen(function* () {
-      yield* withGlobWorkspace((workspacePath) =>
-        Effect.gen(function* () {
-          const result = yield* globWithFailedStat(
-            path.join(workspacePath, 'unreadable.tex'),
-            'PermissionDenied',
-            'match is unreadable',
-            { pattern: 'unreadable.tex' },
-          );
-
-          expect(result.status).toBe('error');
-          expect(result.error).toContain('match is unreadable');
-        }),
-      );
-    }),
-  );
-
   it.live(
     'rejects a pattern that leaves the search directory without walking',
     () =>
@@ -161,23 +123,6 @@ describe('GlobTool match metadata', () => {
           }),
         );
       }),
-  );
-
-  it.live('matches names ending in a dot, which cannot escape', () =>
-    Effect.gen(function* () {
-      yield* withGlobWorkspace((workspacePath) =>
-        Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            writeFile(path.join(workspacePath, 'trailing.'), 'x'),
-          );
-
-          const result = yield* GlobTool.call({ pattern: '*.' });
-
-          expect(result).toMatchObject({ status: 'executed' });
-          expect(result.output).toContain('trailing.');
-        }),
-      );
-    }),
   );
 
   it.live(

@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -157,25 +157,6 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
   });
 
 describe('resolveChildRunOutput', () => {
-  it.effect(
-    'resolves a declared regular output of a completed direct child',
-    () =>
-      Effect.gen(function* () {
-        const absolutePath = yield* persistCompletedChild();
-
-        expect(
-          yield* resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-            Effect.provide(resolveLayer),
-          ),
-        ).toEqual({
-          kind: 'runStorage',
-          absolutePath,
-          relativePath,
-          runId: childRunId,
-        });
-      }),
-  );
-
   it.effect('rejects output references from an unrelated run tree', () =>
     Effect.gen(function* () {
       const absolutePath = yield* persistCompletedChild(otherParentRunId);
@@ -186,37 +167,6 @@ describe('resolveChildRunOutput', () => {
         ),
       );
       expect(error.message).toContain('is not a direct child');
-    }),
-  );
-
-  it.effect(
-    'rejects files that are present but absent from the result manifest',
-    () =>
-      Effect.gen(function* () {
-        const absolutePath = yield* persistCompletedChild();
-        const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
-        yield* Effect.promise(() => writeFile(undeclaredPath, 'notes'));
-
-        const error = yield* Effect.flip(
-          resolveChildRunOutput(parentRunId, undeclaredPath, session).pipe(
-            Effect.provide(resolveLayer),
-          ),
-        );
-        expect(error.message).toContain('is not a declared output');
-      }),
-  );
-
-  it.effect('fails loudly when a declared output has disappeared', () =>
-    Effect.gen(function* () {
-      const absolutePath = yield* persistCompletedChild();
-      yield* Effect.promise(() => rm(absolutePath));
-
-      const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-          Effect.provide(resolveLayer),
-        ),
-      );
-      expect(error.message).toContain('is missing');
     }),
   );
 

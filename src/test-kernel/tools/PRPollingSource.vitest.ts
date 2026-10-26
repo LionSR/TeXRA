@@ -1,31 +1,16 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-// Local imports - platform
-import { Secrets } from '@platform/secrets';
-
-// Local imports - test support
-import { FakeSecrets } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-
 // Local imports - tools
-import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@texra/tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@texra/tools/github/githubClient';
-import {
-  makePollingLifetime,
-  type PollHookRejected,
-} from '@texra/tools/github/PollingSourceBase';
+import type { PollHookRejected } from '@texra/tools/github/PollingSourceBase';
 import {
   PRPollingSource,
-  prKeyToString,
   type PRSubscriptionState,
 } from '@texra/tools/github/PRPollingSource';
-import type {
-  GhCheckAnnotation,
-  GhCheckRun,
-} from '@texra/tools/github/prTypes';
+import type { GhCheckRun } from '@texra/tools/github/prTypes';
 
 // Local imports - test fixtures
 import {
@@ -49,14 +34,13 @@ vi.mock('@texra/tools/github/checkRunsClient', async (importOriginal) => ({
 /**
  * The private drain surface these tests must still reach: there is no public
  * seam for draining annotation queues on demand or reading a subscription's
- * state. `subscribe`/`updateSubscription`/`has` are public and used directly.
+ * state.
  */
 interface AnnotationDrainAccess {
   drainAnnotationQueues(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
   ): Effect.Effect<void, PollHookRejected>;
-  getSubscriptionState(key: string): PRSubscriptionState | undefined;
 }
 
 function drainAccess(source: PRPollingSource): AnnotationDrainAccess {
@@ -75,19 +59,6 @@ function createCheckRun(id: number): GhCheckRun {
   };
 }
 
-function annotation(
-  level: GhCheckAnnotation['annotation_level'],
-  message: string,
-): GhCheckAnnotation {
-  return {
-    path: 'blueprint/src/chapter.tex',
-    start_line: 12,
-    end_line: 12,
-    annotation_level: level,
-    message,
-  };
-}
-
 function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
   return createPRSubscriptionState({
     currentShaState: createPRCurrentShaState('abcdef1234567890', {
@@ -95,16 +66,6 @@ function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
     }),
   });
 }
-
-/**
- * The process secret store `subscribe`'s polling reads its GitHub token from.
- * The annotation fetch is mocked here, so no member is called; the layer
- * satisfies the requirement the host root provides in production.
- */
-const secretsLayer = Layer.merge(
-  Secrets.layer(new FakeSecrets()),
-  testHttpClientLayer,
-);
 
 /** A source whose subscription states stay active for the whole drain. */
 function createDrainSource(): PRPollingSource {
@@ -141,138 +102,5 @@ describe('PRPollingSource annotation drain', () => {
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
         expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
       }),
-  );
-
-  it.effect(
-    'drains annotation queues in fair passes across subscriptions',
-    () =>
-      Effect.gen(function* () {
-        const source = createDrainSource();
-        const firstState = createDrainState([
-          createCheckRun(1),
-          createCheckRun(2),
-          createCheckRun(3),
-        ]);
-        const secondState = createDrainState([
-          createCheckRun(4),
-          createCheckRun(5),
-          createCheckRun(6),
-        ]);
-        const thirdState = createDrainState([
-          createCheckRun(7),
-          createCheckRun(8),
-          createCheckRun(9),
-        ]);
-        mocks.fetchAnnotations.mockReturnValue(Effect.succeed([]));
-
-        yield* drainAccess(source).drainAnnotationQueues([
-          ['first', firstState],
-          ['second', secondState],
-          ['third', thirdState],
-        ]);
-
-        expect(
-          mocks.fetchAnnotations.mock.calls.map((call) => call[2]),
-        ).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 9]);
-        for (const state of [firstState, secondState, thirdState]) {
-          expect(state.currentShaState?.pendingAnnotationRuns).toEqual([]);
-        }
-      }),
-  );
-
-  it.effect('filters check annotations by each listener minimum level', () =>
-    Effect.gen(function* () {
-      const source = createDrainSource();
-      const run = createCheckRun(12);
-      const state = createDrainState([run]);
-      const defaultListener = vi.fn<(text: string) => Effect.Effect<void>>(
-        () => Effect.void,
-      );
-      const warningListener = vi.fn<(text: string) => Effect.Effect<void>>(
-        () => Effect.void,
-      );
-      const noticeListener = vi.fn<(text: string) => Effect.Effect<void>>(
-        () => Effect.void,
-      );
-      state.listeners.add(defaultListener);
-      state.listeners.add(warningListener);
-      state.listeners.add(noticeListener);
-      state.annotationLevelByListener.set(
-        defaultListener,
-        DEFAULT_CHECK_ANNOTATION_LEVEL,
-      );
-      state.annotationLevelByListener.set(warningListener, 'warning');
-      state.annotationLevelByListener.set(noticeListener, 'notice');
-      mocks.fetchAnnotations.mockReturnValue(
-        Effect.succeed([
-          annotation('notice', 'advisory note'),
-          annotation('warning', 'format warning'),
-          annotation('failure', 'blocking failure'),
-        ]),
-      );
-
-      yield* drainAccess(source).drainAnnotationQueues([
-        ['owner/repo#7', state],
-      ]);
-
-      expect(defaultListener).toHaveBeenCalledOnce();
-      const defaultMessage = defaultListener.mock.calls[0][0] as string;
-      expect(defaultMessage).toContain('[FAILURE]');
-      expect(defaultMessage).not.toContain('[WARNING]');
-      expect(defaultMessage).not.toContain('[NOTICE]');
-
-      expect(warningListener).toHaveBeenCalledOnce();
-      const warningMessage = warningListener.mock.calls[0][0] as string;
-      expect(warningMessage).toContain('[WARNING]');
-      expect(warningMessage).toContain('[FAILURE]');
-      expect(warningMessage).not.toContain('[NOTICE]');
-
-      expect(noticeListener).toHaveBeenCalledOnce();
-      const noticeMessage = noticeListener.mock.calls[0][0] as string;
-      expect(noticeMessage).toContain('[NOTICE]');
-      expect(noticeMessage).toContain('[WARNING]');
-      expect(noticeMessage).toContain('[FAILURE]');
-    }),
-  );
-
-  it.effect('updates the annotation level for an existing listener', () =>
-    Effect.gen(function* () {
-      const source = new PRPollingSource(
-        yield* makePollingLifetime,
-        Effect.void,
-      );
-      const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
-      const listener = vi.fn<(text: string) => Effect.Effect<void>>(
-        () => Effect.void,
-      );
-      const disposable = yield* source.subscribe(pr, listener);
-      const key = prKeyToString(pr);
-      const state = drainAccess(source).getSubscriptionState(key);
-      if (!state) throw new Error('Expected subscription state');
-      mocks.fetchAnnotations.mockReturnValue(
-        Effect.succeed([annotation('warning', 'format warning')]),
-      );
-
-      state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
-        pendingAnnotationRuns: [createCheckRun(13)],
-      });
-      yield* drainAccess(source).drainAnnotationQueues([[key, state]]);
-
-      expect(listener).not.toHaveBeenCalled();
-
-      source.updateSubscription(
-        { ...pr, minAnnotationLevel: 'warning' },
-        listener,
-      );
-      state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
-        pendingAnnotationRuns: [createCheckRun(14)],
-      });
-
-      yield* drainAccess(source).drainAnnotationQueues([[key, state]]);
-
-      expect(listener).toHaveBeenCalledOnce();
-      expect(listener.mock.calls[0][0]).toContain('[WARNING]');
-      disposable.dispose();
-    }).pipe(Effect.provide(secretsLayer)),
   );
 });

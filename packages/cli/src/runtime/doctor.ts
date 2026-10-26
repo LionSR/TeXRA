@@ -455,7 +455,7 @@ function formatDoctorText(
     .join('\n');
 }
 
-export function doctorNdjsonRecords(
+function doctorNdjsonRecords(
   report: DoctorReport,
   ts = new Date().toISOString(),
 ): readonly CliNdjsonRecord[] {

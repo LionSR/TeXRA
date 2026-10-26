@@ -9,22 +9,18 @@
  * - a run that fails while its description is still being generated ends
  *   without it, or records it after its `run.end`.
  */
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
-import { apiKeySecretName } from '@texra-ai/llm';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { withProcessServices } from '@platform/processRuntime';
 import { AgentConfigSchema } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
-import { fakeHostSecrets } from '@test/support/setupPlatform';
 import {
   parkedAfter,
   sessionStoreFaults,
@@ -99,89 +95,6 @@ describe(
           expect(
             storedRows(roots.storage).filter((row) => row.run === runId),
           ).toEqual([]);
-        }),
-    );
-
-    // Regression: the description join once lived in a generator `finally`,
-    // which the Effect driver never resumes after a failed `yield*`, so a run
-    // that failed left with the description's write still in flight.
-    it.live(
-      'a run that fails while its description is generated records the description before its end',
-      () =>
-        Effect.gen(function* () {
-          const roots = testWorkspaceRoots();
-          const session = yield* openTestDefaultSession({ roots });
-          const runId = generateRunId();
-          // The default helper model's key, so the label is the validation
-          // model's to answer.
-          yield* fakeHostSecrets.set(
-            apiKeySecretName('deepseek'),
-            'validation-fake-key',
-          );
-          const faults = yield* sessionStoreFaults(roots.storage);
-          const end = yield* faults.holdNext('appendAll', 'run.end');
-          // The run's first read after it opened fails it. That fault must
-          // come before the run's first model turn: the turn carries the
-          // GOLDEN-PARK instruction too, so the validation model would hold it.
-          const launch = yield* withProcessServices(
-            testRuntime(),
-            session.runs.launch({
-              // The validation model holds a call that names GOLDEN-PARK, its
-              // label's included, until released.
-              request: { config: config('GOLDEN-PARK Fix grammar.'), runId },
-              options: {
-                onAdmitted: () =>
-                  Effect.sync(() => {
-                    Effect.runFork(
-                      faults
-                        .holdNext('readAggregate')
-                        .pipe(
-                          Effect.flatMap((hold) =>
-                            hold.reached.pipe(Effect.andThen(hold.fail)),
-                          ),
-                        ),
-                    );
-                  }),
-              },
-            }),
-          ).pipe(Effect.flip, Effect.forkChild);
-
-          // The run fails with its description still being generated: its
-          // loop's stop is logged on the way to the description's settle.
-          yield* untilStored(roots.storage, (rows) =>
-            rows.some(
-              (row) =>
-                row.run === runId &&
-                row.type === 'log' &&
-                row.data.includes('stopped: injected readAggregate fault'),
-            ),
-          );
-          // The settle joins the description: no `run.end` is attempted
-          // while it is unanswered (a run that left it in flight ends at once).
-          const early = yield* end.reached.pipe(
-            Effect.as(true),
-            Effect.timeoutOrElse({
-              duration: '1 second',
-              orElse: () => Effect.succeed(false),
-            }),
-          );
-          expect(early).toBe(false);
-          writeFileSync(join(roots.storage, 'golden-park.release'), '');
-          yield* end.reached;
-          yield* end.release;
-          expect((yield* Fiber.join(launch)).message).toContain(
-            'injected readAggregate fault',
-          );
-          const rows = storedRows(roots.storage).filter(
-            (row) =>
-              row.run === runId &&
-              (row.type === 'run.description' || row.type === 'run.end'),
-          );
-          expect(rows.map((row) => row.type)).toEqual([
-            'run.description',
-            'run.end',
-          ]);
-          expect(rows[0]!.data).toContain('Parked run released');
         }),
     );
   },

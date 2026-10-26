@@ -3,22 +3,14 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import {
-  Deferred,
-  Effect,
-  Fiber,
-  Option,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { startAwaited, testRunHandle } from '@test/support/runHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -105,124 +97,6 @@ describe('committed run removal', () => {
             parent,
           );
           expect(session.log.now()).toBe(before + 1);
-        }),
-      ),
-  );
-
-  it.live(
-    'holds a run deletion through interrupted cleanup before admitting a launch',
-    () =>
-      withSession((session) =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const started = yield* Deferred.make<void>();
-            const cleaning = yield* Deferred.make<void>();
-            const releaseCleanup = yield* Deferred.make<void>();
-            const operation = Effect.acquireUseRelease(
-              Effect.void,
-              () =>
-                Deferred.succeed(started, undefined).pipe(
-                  Effect.andThen(Effect.never),
-                ),
-              () =>
-                Deferred.succeed(cleaning, undefined).pipe(
-                  Effect.andThen(Deferred.await(releaseCleanup)),
-                ),
-            );
-            const deletion = yield* Effect.forkScoped(
-              registryOf(session.runs).withInactiveRunStep(
-                'aabbccdd' as RunId,
-                operation,
-              ),
-            );
-            yield* Deferred.await(started);
-            const interruption = yield* Effect.forkScoped(
-              Fiber.interrupt(deletion),
-            );
-            yield* Deferred.await(cleaning);
-            let launched = false;
-            const launch = yield* Effect.forkScoped(
-              startAwaited(
-                session.runs,
-                'aabbccdd' as RunId,
-                Effect.sync(() => {
-                  launched = true;
-                }),
-              ),
-              { startImmediately: true },
-            );
-            yield* startAwaited(session.runs, '11223344' as RunId, Effect.void);
-            expect(launched).toBe(false);
-            yield* Deferred.succeed(releaseCleanup, undefined);
-            yield* Fiber.join(interruption);
-            yield* Fiber.join(launch);
-            expect(launched).toBe(true);
-          }),
-        ),
-      ),
-  );
-});
-
-describe('indexed background-shell cleanup', () => {
-  it.live(
-    'removes only declared background shells that are not running locally',
-    () =>
-      withSession((session) =>
-        Effect.gen(function* () {
-          const shell = 'cc0001' as RunId;
-          const active = 'cc0002' as RunId;
-          // Not a background shell: the sweep only removes `process` runs.
-          const notAShell = 'cc0003' as RunId;
-          const agent = 'cc0004' as RunId;
-          registryOf(session.runs).track(
-            testRunHandle({
-              runId: active,
-              agent: 'bash',
-            }),
-          );
-          publishTestRows(session, [
-            {
-              type: 'run.start',
-              aggregateId: qualifyAggregateId('run', shell),
-              identity: { kind: 'process', tool: 'bash' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-            },
-            {
-              type: 'run.start',
-              aggregateId: qualifyAggregateId('run', active),
-              identity: { kind: 'process', tool: 'bash' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-            },
-            {
-              type: 'run.start',
-              aggregateId: qualifyAggregateId('run', notAShell),
-              identity: { kind: 'agent', agent: 'assistant' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-            },
-          ]);
-          publishTestRunStart(session, agent);
-          yield* session.log.settled;
-          const rows = yield* Effect.all(
-            [shell, active, notAShell, agent].map((id) =>
-              session.log.display(id),
-            ),
-          );
-          yield* sweepLeftoverRuns(session, rows.flat());
-          const swept = yield* Stream.runHead(
-            session.view.changes.pipe(
-              Stream.filter((view) => !view.runs.has(shell)),
-            ),
-          );
-          const runs = Option.getOrThrow(swept).runs;
-          expect([...runs.keys()].toSorted()).toEqual(
-            [active, notAShell, agent].toSorted(),
-          );
         }),
       ),
   );

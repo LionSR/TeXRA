@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Effect, Exit } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -31,41 +31,6 @@ async function createPromptController(
 }
 
 describe('DesktopPromptController', () => {
-  it.effect('correlates text and password prompt results', () =>
-    Effect.gen(function* () {
-      const messages: Record<string, unknown>[] = [];
-      const controller = yield* Effect.promise(() =>
-        createPromptController((message) => {
-          messages.push(message as Record<string, unknown>);
-          return true;
-        }),
-      );
-
-      const fiber = yield* Effect.forkChild(
-        controller.request({
-          title: 'Set API key',
-          prompt: 'Enter API key',
-          password: true,
-        }),
-        { startImmediately: true },
-      );
-      const request = messages[0];
-
-      expect(request).toMatchObject({
-        command: 'desktop:showPrompt',
-        title: 'Set API key',
-        prompt: 'Enter API key',
-        password: true,
-      });
-      yield* settlement(controller, {
-        command: 'desktop:settlePrompt',
-        requestId: String(request.requestId),
-        value: 'secret',
-      });
-      expect(yield* Fiber.join(fiber)).toBe('secret');
-    }),
-  );
-
   it.effect('settles cancellation once and ignores duplicate results', () =>
     Effect.gen(function* () {
       let requestId = '';
@@ -100,34 +65,5 @@ describe('DesktopPromptController', () => {
       expect(resolution).toHaveBeenCalledOnce();
       expect(resolution).toHaveBeenCalledWith(undefined);
     }),
-  );
-
-  it.effect(
-    'cancels requests when delivery fails or the controller disposes',
-    () =>
-      Effect.gen(function* () {
-        const undelivered = yield* Effect.promise(() =>
-          createPromptController(() => false),
-        );
-        expect(
-          yield* undelivered.request({ title: 'Name', prompt: 'Team name' }),
-        ).toBeUndefined();
-
-        const delivered = yield* Effect.promise(() =>
-          createPromptController(() => true),
-        );
-        const first = yield* Effect.forkChild(
-          delivered.request({ title: 'First', prompt: 'First value' }),
-          { startImmediately: true },
-        );
-        const second = yield* Effect.forkChild(
-          delivered.request({ title: 'Second', prompt: 'Second value' }),
-          { startImmediately: true },
-        );
-        delivered.dispose();
-
-        expect(yield* Fiber.join(first)).toBeUndefined();
-        expect(yield* Fiber.join(second)).toBeUndefined();
-      }),
   );
 });

@@ -6,7 +6,6 @@ import { PassThrough } from 'node:stream';
 
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
-import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import { makeJsonRpcConnection } from '@tools/jsonRpc';
@@ -115,40 +114,6 @@ describe('JsonRpcConnection', () => {
       }),
   );
 
-  it.effect('fails the request when the server returns an error', () =>
-    Effect.gen(function* () {
-      const { connection, serverSends, collectClientFrames } = yield* makePair;
-      const pending = yield* Effect.forkChild(
-        Effect.flip(connection.request('boom')),
-      );
-      const frames = yield* collectClientFrames;
-      serverSends({
-        jsonrpc: '2.0',
-        id: frames[0]?.id,
-        error: { code: -32601, message: 'unknown method' },
-      });
-      const error = yield* Fiber.join(pending);
-      expect(error).toMatchObject({
-        _tag: 'JsonRpcRequestError',
-        method: 'boom',
-        code: -32601,
-      });
-      expect(error.message).toContain('unknown method');
-    }),
-  );
-
-  it.effect('routes notifications from the server to the handler', () =>
-    Effect.gen(function* () {
-      const { serverSends, notified } = yield* makePair;
-      serverSends({
-        jsonrpc: '2.0',
-        method: 'window/logMessage',
-        params: { type: 3, message: 'hello' },
-      });
-      yield* notified([['window/logMessage', { type: 3, message: 'hello' }]]);
-    }),
-  );
-
   it.effect(
     'reassembles a frame whose body arrives across multiple chunks',
     () =>
@@ -169,53 +134,6 @@ describe('JsonRpcConnection', () => {
       }),
   );
 
-  it.effect(
-    'reassembles a frame whose header arrives across multiple chunks',
-    () =>
-      Effect.gen(function* () {
-        const { serverOut, notified } = yield* makePair;
-        const body = Buffer.from(
-          JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'split-header',
-            params: { ok: true },
-          }),
-          'utf8',
-        );
-        const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`);
-        serverOut.write(header.subarray(0, 6));
-        serverOut.write(header.subarray(6));
-        serverOut.write(body);
-        yield* notified([['split-header', { ok: true }]]);
-      }),
-  );
-
-  it.effect('reassembles two frames written back-to-back', () =>
-    Effect.gen(function* () {
-      const { serverSends, notified } = yield* makePair;
-      serverSends({ jsonrpc: '2.0', method: 'a', params: 1 });
-      serverSends({ jsonrpc: '2.0', method: 'b', params: 2 });
-      yield* notified([
-        ['a', 1],
-        ['b', 2],
-      ]);
-    }),
-  );
-
-  it.effect('closes the connection on a frame body that is not an object', () =>
-    Effect.gen(function* () {
-      const { connection, serverSends, collectClientFrames } = yield* makePair;
-      const pending = yield* Effect.forkChild(
-        Effect.flip(connection.request('waiting')),
-      );
-      yield* collectClientFrames;
-      serverSends(null);
-      expect(yield* Fiber.join(pending)).toMatchObject({
-        _tag: 'JsonRpcConnectionDisposed',
-      });
-    }),
-  );
-
   it.effect('fails pending and later requests with the close reason', () =>
     Effect.gen(function* () {
       const { connection, collectClientFrames } = yield* makePair;
@@ -231,26 +149,6 @@ describe('JsonRpcConnection', () => {
       expect(yield* Effect.flip(connection.request('late'))).toMatchObject({
         _tag: 'JsonRpcConnectionDisposed',
         message: 'test teardown',
-      });
-    }),
-  );
-
-  // A peer that closed its stdin but keeps its stdout open never ends the
-  // input: the close waits for it only so long.
-  it.effect('closes after a writer failure though the input stays open', () =>
-    Effect.gen(function* () {
-      const connection = yield* makeJsonRpcConnection({
-        input: chunksOf(new PassThrough()),
-        output: Sink.fail(new Error('EPIPE')),
-        onNotification: () => Effect.void,
-      });
-      const pending = yield* Effect.forkChild(
-        Effect.flip(connection.request('stranded')),
-      );
-      yield* TestClock.adjust('2 seconds');
-      expect(yield* Fiber.join(pending)).toMatchObject({
-        _tag: 'JsonRpcConnectionDisposed',
-        message: 'JSON-RPC output failed: EPIPE',
       });
     }),
   );

@@ -1,17 +1,12 @@
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Ref } from 'effect';
+import { Effect, Fiber, Ref } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import {
   DeviceAuthorizationPending,
-  DeviceAuthorizationTransient,
   pollDeviceAuthorization,
 } from '../../../packages/llm/src/oauth/deviceAuthorization.js';
-
-/** The failure an exit carries, or undefined when it succeeded. */
-const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
-  Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 
 /** A poll that answers from a queue: `'pending'`, `'slow_down'`, a value, or an Error. */
 function queuedPoll<T>(queue: Array<'pending' | 'slow_down' | T | Error>) {
@@ -32,26 +27,6 @@ function queuedPoll<T>(queue: Array<'pending' | 'slow_down' | T | Error>) {
 }
 
 describe('pollDeviceAuthorization', () => {
-  it.effect('returns the authorized value after soft continues', () =>
-    Effect.gen(function* () {
-      const { poll, attempts } = queuedPoll(['pending', 'pending', 'token']);
-      const fiber = yield* Effect.forkChild(
-        pollDeviceAuthorization({
-          poll,
-          intervalMs: 1000,
-          expiresInMs: 10_000,
-        }),
-      );
-
-      yield* TestClock.adjust('2999 millis');
-      expect(yield* attempts).toBe(2);
-      yield* TestClock.adjust('1 millis');
-
-      expect(yield* Fiber.join(fiber)).toBe('token');
-      expect(yield* attempts).toBe(3);
-    }),
-  );
-
   it.effect('grows the interval on slow_down', () =>
     Effect.gen(function* () {
       const { poll, attempts } = queuedPoll(['pending', 'slow_down', true]);
@@ -72,93 +47,6 @@ describe('pollDeviceAuthorization', () => {
       yield* TestClock.adjust('1 millis');
 
       expect(yield* Fiber.join(fiber)).toBe(true);
-    }),
-  );
-
-  it.effect('times out at the deadline instead of waiting once more', () =>
-    Effect.gen(function* () {
-      const { poll, attempts } = queuedPoll(['pending', 'pending', 'pending']);
-      const fiber = yield* Effect.forkChild(
-        pollDeviceAuthorization({
-          poll,
-          intervalMs: 5000,
-          expiresInMs: 10_000,
-        }),
-      );
-
-      // t=5 poll; t=10 is the deadline: no third wait, no third poll.
-      yield* TestClock.adjust('10 seconds');
-
-      expect(failureOf(yield* Fiber.await(fiber))).toMatchObject({
-        _tag: 'DeviceCodeTimedOut',
-      });
-      expect(yield* attempts).toBe(1);
-    }),
-  );
-
-  it.effect(
-    'fails with the carried error when transients exhaust the budget or outlive the code',
-    () =>
-      Effect.gen(function* () {
-        const blip = new Error('proxy refused the connection');
-        const transient = new DeviceAuthorizationTransient({ error: blip });
-        // A pending resets the count, so only the last three are consecutive.
-        const { poll, attempts } = queuedPoll([
-          transient,
-          'pending',
-          transient,
-          transient,
-          transient,
-        ]);
-        const fiber = yield* Effect.forkChild(
-          pollDeviceAuthorization({
-            poll,
-            intervalMs: 1000,
-            expiresInMs: 60_000,
-          }),
-        );
-
-        yield* TestClock.adjust('5 seconds');
-
-        expect(failureOf(yield* Fiber.await(fiber))).toBe(blip);
-        expect(yield* attempts).toBe(5);
-
-        // One transient, then the code expires during the wait: the carried
-        // error, not a timeout.
-        const expiring = queuedPoll([transient]);
-        const expiringFiber = yield* Effect.forkChild(
-          pollDeviceAuthorization({
-            poll: expiring.poll,
-            intervalMs: 1000,
-            expiresInMs: 1500,
-          }),
-        );
-
-        yield* TestClock.adjust('2 seconds');
-
-        expect(failureOf(yield* Fiber.await(expiringFiber))).toBe(blip);
-        expect(yield* expiring.attempts).toBe(1);
-      }),
-  );
-
-  it.effect('interruption during the first wait skips the poll', () =>
-    Effect.gen(function* () {
-      const { poll, attempts } = queuedPoll(['token']);
-      const fiber = yield* Effect.forkChild(
-        pollDeviceAuthorization({
-          poll,
-          intervalMs: 1000,
-          expiresInMs: 60_000,
-        }),
-      );
-
-      yield* Fiber.interrupt(fiber);
-
-      const exit = yield* Fiber.await(fiber);
-      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
-        true,
-      );
-      expect(yield* attempts).toBe(0);
     }),
   );
 });

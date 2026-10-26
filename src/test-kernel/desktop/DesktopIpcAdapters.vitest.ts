@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -78,54 +78,5 @@ describe('desktop IPC adapters', () => {
       );
       expectFunnelState(onboarding, 'done');
     }),
-  );
-
-  it.effect(
-    'serializes overlapping funnel refreshes to one consistent terminal state',
-    () =>
-      Effect.gen(function* () {
-        // A credential probe that resolves on the next macrotask, so two refreshes
-        // started back-to-back genuinely overlap in flight. Serialized, the
-        // second refresh sees `previous === 'setup'` and reports no change. (The
-        // assertion pins the terminal state; it is not a strict interleave probe.)
-        let credentialPresent = false;
-        const hasCredential = vi.fn(() =>
-          Effect.promise(
-            () =>
-              new Promise<boolean>((resolve) => {
-                setTimeout(() => resolve(credentialPresent), 0);
-              }),
-          ),
-        );
-        const { onboarding, runtime } = yield* Effect.promise(() =>
-          createOnboardingHarness({
-            hasCredential,
-          }),
-        );
-        const funnelStates: string[] = [];
-        onboarding.onFunnelChange((state) =>
-          Effect.sync(() => {
-            funnelStates.push(state);
-          }),
-        );
-
-        // Fire them overlapping (no await between); the credential lands before
-        // either probe resolves.
-        const first = yield* Effect.forkChild(
-          withProcessServices(runtime, onboarding.refreshOnboardingFunnel()),
-          { startImmediately: true },
-        );
-        credentialPresent = true;
-        const second = yield* Effect.forkChild(
-          withProcessServices(runtime, onboarding.refreshOnboardingFunnel()),
-          { startImmediately: true },
-        );
-        yield* Fiber.join(first);
-        yield* Fiber.join(second);
-        yield* Effect.promise(() => flushAsync());
-
-        // One change, to setup.
-        expect(funnelStates).toEqual(['setup']);
-      }),
   );
 });

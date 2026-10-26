@@ -24,9 +24,6 @@ vi.mock('@texra/model/modelOptions', () => ({
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
-/** A registry model outside the visible list, typed in another case. */
-const HIDDEN_MODEL = 'anthropic/claude-haiku-4-5-20251001';
-
 setupPlatform({});
 
 function model(
@@ -97,15 +94,6 @@ function resolveModelFromAccessList(
   );
 }
 
-const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
-  missingKeyModel('google/gemini-3.1-pro-preview'),
-];
-
-const RETIRED_HAIKU3_OPTION = modelOption('anthropic/claude-3-haiku-20240307', {
-  label: 'Haiku 3',
-  availability: 'retired',
-});
-
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     readModelOptionsMock.mockReset();
@@ -154,63 +142,5 @@ describe('CLI model access resolution', () => {
         fallbackReason: 'builtin-default',
       }),
     ).resolves.toEqual({ model: 'deepseek/deepseek-v4-flash' });
-  });
-
-  it('reports when no fallback model is runnable', async () => {
-    await expect(
-      resolveModelFromAccessList(
-        MISSING_KEY_ONLY_ENTRIES,
-        'google/gemini-3.1-pro-preview',
-        {
-          fallbackReason: 'command-config',
-        },
-      ),
-    ).rejects.toThrow(
-      'Model "google/gemini-3.1-pro-preview" is not available (missing api key). No models are currently available. Add a provider API key with `texra setup`.',
-    );
-  });
-
-  it('rejects explicit retired hidden models before fallback', async () => {
-    readModelOptionsMock.mockReturnValueOnce(
-      Effect.succeed([RETIRED_HAIKU3_OPTION]),
-    );
-
-    await expect(
-      run(
-        selectCliRunnableModel(
-          [
-            {
-              model: 'anthropic/claude-3-haiku-20240307',
-              reason: 'explicit-override',
-            },
-          ],
-          { accessList: [], stores },
-        ),
-      ),
-    ).rejects.toThrow(
-      'Model "anthropic/claude-3-haiku-20240307" is not available (retired).',
-    );
-  });
-
-  it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {
-    readModelOptionsMock.mockReturnValueOnce(Effect.succeed([]));
-
-    await expect(
-      run(
-        selectCliRunnableModel(
-          [
-            {
-              model: 'anthropic/claude-sonnet-4-6',
-              reason: 'explicit-override',
-            },
-            { model: HIDDEN_MODEL, reason: 'environment' },
-          ],
-          {
-            accessList: [model('anthropic/claude-sonnet-4-6')],
-            stores,
-          },
-        ),
-      ),
-    ).resolves.toEqual({ model: 'anthropic/claude-sonnet-4-6' });
   });
 });

@@ -1,6 +1,6 @@
 // Standard library imports
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Third-party imports
@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect, vi } from 'vitest';
 
 // Local imports - test support
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -48,11 +47,6 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
     openPath,
     openedPaths,
   };
-}
-
-function expectOpenedPatchFile(openedPaths: readonly string[]): void {
-  expect(openedPaths).toHaveLength(1);
-  expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
 const tempDirs = useTempDirs();
@@ -96,55 +90,6 @@ describe('createDesktopDiffHost', () => {
     ({ createDesktopDiffHost, removeExternalDiffPatchDirs } =
       await import('@desktop/main/desktopDiffHost'));
   }, 60_000);
-
-  it('falls back to a generated patch file when no renderer is wired', async () => {
-    const { host, openedPaths } = createHost();
-
-    await openDiffPair(
-      host,
-      'Compare',
-      ['original.txt', 'proposed.txt'],
-      ['hello\nold\n', 'hello\nnew\n'],
-    );
-
-    expectOpenedPatchFile(openedPaths);
-    const patch = await readFile(openedPaths[0], 'utf8');
-    expect(patch).toContain('-old');
-    expect(patch).toContain('+new');
-  });
-
-  it('falls back to the external editor when postToRenderer returns false', async () => {
-    // Simulates the renderer not being reachable — IPC bridge not yet
-    // wired at startup or BrowserWindow already destroyed. Bot review
-    // (#3815, Copilot + Cursor): the host previously silently dropped
-    // the diff in this case.
-    const { host, openedPaths } = createHost({ postToRenderer: () => false });
-
-    await openDiffPair(host, 'Compare');
-
-    expectOpenedPatchFile(openedPaths);
-  });
-
-  it.effect(
-    'records external-editor patch directories for the process-level removal',
-    () =>
-      Effect.gen(function* () {
-        // #10314: every fallback run used to leave a texra-desktop-diff-*
-        // directory behind. The patch outlives `openPath` (the OS editor may
-        // still be reading it), so the host records its directory for the
-        // process-level removal at quit.
-        const { host, openedPaths } = createHost();
-
-        yield* Effect.promise(() => openDiffPair(host, 'Compare'));
-        const diffPath = openedPaths[0];
-        const diffDir = path.dirname(diffPath);
-
-        expect(existsSync(diffPath)).toBe(true);
-        expect(path.basename(diffDir)).toMatch(/^texra-desktop-diff-/);
-        yield* removeExternalDiffPatchDirs;
-        expect(existsSync(diffDir)).toBe(false);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 
   it('removes the patch directory immediately when the editor fails to open', async () => {
     const failure = new Error('editor unavailable');

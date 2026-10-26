@@ -11,9 +11,7 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
  * path was shared with every other checkout on the machine, so a store a
  * newer build wrote there (a later event format) failed the next run here.
  */
-export const testStorageRoot = mkdtempSync(
-  join(tmpdir(), 'texra-test-storage-'),
-);
+const testStorageRoot = mkdtempSync(join(tmpdir(), 'texra-test-storage-'));
 // A store's last file can land while the walk removes the directory
 // (ENOTEMPTY on Windows CI); `maxRetries` reruns the walk for that race.
 afterAll(() =>

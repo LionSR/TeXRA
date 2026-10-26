@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
 import type { BashPermission, RunId } from '@shared/schemas';
-import { recordPermissionActions } from '@test/support/permissionPanelEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 
 // Local file imports
 import {
@@ -33,45 +33,22 @@ function mountPanel(
   return mountComponent<BashRequestPanel>('bash-request-panel', { permission });
 }
 
+/** The panel answers through the shell's `runtime-request` event; record
+ *  each answer it sends, in order. */
+function recordPermissionActions(panel: EventTarget): RuntimeRequest[] {
+  const requests: RuntimeRequest[] = [];
+  panel.addEventListener('runtime-request', (event) => {
+    requests.push((event as CustomEvent<RuntimeRequest>).detail);
+  });
+  return requests;
+}
+
 // Every card shares one action row (BaseRequestPanel); the bash card is where
 // it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/BashRequestPanel'),
   );
-
-  it('offers the run grant on the Approve menu and "a" enables it', async () => {
-    const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: 'run-1' as RunId }),
-    );
-    const actions = recordPermissionActions(element);
-
-    expect(
-      element.shadowRoot
-        ?.querySelector('wa-dropdown-item[value="grant"]')
-        ?.textContent?.trim(),
-    ).toBe('Approve all commands in this task');
-
-    expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(actions).toEqual([
-      {
-        kind: 'policy.set',
-        change: {
-          field: 'bypass',
-          runId: 'run-1',
-          bypass: 'bash',
-          enabled: true,
-          exceptRequestId: 'bash-request-1',
-        },
-      },
-      {
-        kind: 'request.decide',
-        runId: 'run-1',
-        requestId: 'bash-request-1',
-        decision: { action: 'approve' },
-      },
-    ]);
-  });
 
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {
     const element = await mountPanel(

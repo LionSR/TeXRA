@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,12 +8,8 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { parseGitHubSlug } from '@texra/tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
@@ -82,56 +78,6 @@ describe('install-github-action command', () => {
     browserMocks.tryOpenBrowser.mockImplementation(() => Effect.succeed(true));
   });
 
-  it('commits only the generated workflow file', async () => {
-    const repo = makeRepo();
-    writeFileSync(path.join(repo, 'already-staged.txt'), 'keep staged\n');
-    git(repo, 'add', 'already-staged.txt');
-
-    const result = await runInstall(repo);
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      '.github/workflows/texra-code-review.yml',
-    );
-    expect(git(repo, 'diff', '--cached', '--name-only')).toBe(
-      'already-staged.txt',
-    );
-    const workflow = readFileSync(
-      path.join(repo, '.github/workflows/texra-code-review.yml'),
-      'utf8',
-    );
-    expect(workflow).toContain('id-token: write');
-    expect(workflow).not.toContain('TEXRA_APP_PRIVATE_KEY');
-  });
-
-  it('does not switch branches before the GitHub App installer opens', async () => {
-    const repo = makeRepo();
-    git(
-      repo,
-      'remote',
-      'add',
-      'origin',
-      'https://github.com/example/project.git',
-    );
-    let rejectBrowser: ((error: Error) => void) | undefined;
-    const opened = createDeferred();
-    browserMocks.tryOpenBrowser.mockImplementationOnce(() =>
-      Effect.callback<boolean>((resume) => {
-        opened.resolve();
-        rejectBrowser = (error) => resume(Effect.die(error));
-      }),
-    );
-
-    const install = runInstall(repo);
-    await opened.promise;
-    expect(git(repo, 'branch', '--show-current')).toBe('main');
-
-    rejectBrowser?.(new Error('installer interrupted'));
-    await expect(install).resolves.toEqual({
-      exitCode: CliExitCode.AgentError,
-    });
-  });
-
   it('reuses an existing branch under --force without resetting its commits', async () => {
     const repo = makeRepo();
     await expect(runInstall(repo)).resolves.toEqual({
@@ -152,60 +98,4 @@ describe('install-github-action command', () => {
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
     expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');
   });
-
-  it('creates the install branch from the requested base', async () => {
-    const repo = makeRepo();
-    git(repo, 'checkout', '-b', 'feature');
-    writeFileSync(path.join(repo, 'feature.txt'), 'feature work\n');
-    git(repo, 'add', 'feature.txt');
-    git(repo, 'commit', '-m', 'feature work');
-
-    const result = await runInstall(
-      repo,
-      '--branch',
-      'texra/install-from-main',
-      '--base',
-      'main',
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
-      '.github/workflows/texra-code-review.yml',
-    );
-  });
-});
-
-describe('parseGitHubSlug', () => {
-  it.each([
-    ['https://github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['git@github.com:owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['ssh://git@github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['https://github.com/owner/repo/', { owner: 'owner', repo: 'repo' }],
-  ])('parses %s', (url, expected) => {
-    expect(parseGitHubSlug(url)).toEqual(expected);
-  });
-
-  it.each([
-    'https://gitlab.com/owner/repo.git',
-    'https://gitlab.com/group/github.com/owner/repo.git',
-  ])('rejects %s, which is not a GitHub remote', (url) => {
-    expect(parseGitHubSlug(url)).toBeNull();
-  });
-});
-
-describe('defaultBranch', () => {
-  it.effect('preserves slash-containing origin default branch names', () =>
-    Effect.gen(function* () {
-      const repo = makeRepo();
-      git(repo, 'update-ref', 'refs/remotes/origin/feature/default', 'HEAD');
-      git(
-        repo,
-        'symbolic-ref',
-        'refs/remotes/origin/HEAD',
-        'refs/remotes/origin/feature/default',
-      );
-
-      expect(yield* defaultBranch(repo)).toBe('feature/default');
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
 });

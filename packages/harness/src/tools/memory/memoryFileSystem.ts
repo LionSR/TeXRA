@@ -368,19 +368,19 @@ export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
  * the remaining metadata reads never happen. Returns 0 if the storage root
  * does not exist.
  */
-export const countPinnedMemories = Effect.fn(
-  'memoryFileSystem.countPinnedMemories',
-)(function* (limit?: number) {
-  const exists = yield* memoryPathExists(WORKSPACE_STORAGE_LAYOUT.memory);
-  if (!exists) return 0;
+const countPinnedMemories = Effect.fn('memoryFileSystem.countPinnedMemories')(
+  function* (limit?: number) {
+    const exists = yield* memoryPathExists(WORKSPACE_STORAGE_LAYOUT.memory);
+    if (!exists) return 0;
 
-  const pinned = walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory).pipe(
-    Stream.filter((entry) => entry.meta?.pinned === true),
-  );
-  return yield* Stream.runCount(
-    limit === undefined ? pinned : Stream.take(pinned, limit),
-  );
-});
+    const pinned = walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory).pipe(
+      Stream.filter((entry) => entry.meta?.pinned === true),
+    );
+    return yield* Stream.runCount(
+      limit === undefined ? pinned : Stream.take(pinned, limit),
+    );
+  },
+);
 
 /**
  * What one pin/unpin attempt did. Module-local: every caller reads the

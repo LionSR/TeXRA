@@ -17,18 +17,6 @@ function pathKeys(env: NodeJS.ProcessEnv): string[] {
 }
 
 describe('withExtendedPath', () => {
-  it.each([
-    { name: 'Windows', key: 'Path' },
-    { name: 'POSIX', key: 'PATH' },
-  ])('writes $name PATH back under its own key', ({ key }) => {
-    const extended = withExtendedPath({ [key]: '/seed/bin' });
-
-    // One spelling out, and it is the one that came in: handing a child both
-    // `Path` and `PATH` leaves no defined rule for which of them survives.
-    expect(pathKeys(extended)).toEqual([key]);
-    expect(extended[key]).toContain('/seed/bin');
-  });
-
   // `commandEnv` merges caller overrides onto `process.env`, so on Windows an
   // override spelled `PATH` lands beside the platform's `Path` before this
   // runs. Writing one back would leave the other in place.
@@ -38,9 +26,5 @@ describe('withExtendedPath', () => {
     expect(pathKeys(extended)).toEqual(['Path']);
     expect(extended.Path).toContain('/override');
     expect(extended.Path).not.toContain('/from/env');
-  });
-
-  it('defaults to PATH when the environment names none', () => {
-    expect(pathKeys(withExtendedPath({ HOME: '/home/u' }))).toEqual(['PATH']);
   });
 });

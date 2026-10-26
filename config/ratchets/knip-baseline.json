@@ -2,46 +2,10 @@
   "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. A normal-run finding whose only consumer is a kernel suite loading the module through the computed file:// URL in src/test-kernel/desktop/loadSourceModule.ts is not recorded here: the ratchet resolves those consumers by name and reports the finding as live, because knip cannot follow that import (#12084). A suite is not a production consumer, so the production run keeps such a finding and it is recorded as production-dead. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
-      "file": "packages/cli/src/chat/tui/modals/ScrollableModalText.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modalTextDisplayLines"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildStaticTranscriptItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/render/DiffView.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "scrollBoundedDiffDisplayLines"
-    },
-    {
-      "file": "packages/cli/src/commands/team.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runTeam"
-    },
-    {
       "file": "packages/cli/src/commands/workflow.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "runHeadlessAgent"
-    },
-    {
-      "file": "packages/cli/src/runtime/cliContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveStreamColor"
-    },
-    {
-      "file": "packages/cli/src/runtime/doctor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "doctorNdjsonRecords"
     },
     {
       "file": "packages/cli/src/runtime/executeCli.ts",
@@ -50,40 +14,10 @@
       "name": "executeCliRequest"
     },
     {
-      "file": "packages/cli/src/runtime/initPlatform.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "installCliShutdownSignalHandlers"
-    },
-    {
       "file": "packages/cli/src/runtime/logSinks.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "NdjsonStdoutSink"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "detectInstallMethod"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "fetchLatestCliVersion"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "fetchLatestHomebrewFormulaVersion"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "probeOutputPathForTests"
     },
     {
       "file": "packages/desktop/src/main/desktopNavigationPolicy.ts",
@@ -92,34 +26,16 @@
       "name": "isAllowedExternalUrl"
     },
     {
+      "file": "packages/harness/src/tools/approval/toolEditApproval.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "prepareToolEditApprovalPrompt"
+    },
+    {
       "file": "packages/llm/src/oauth/oauthRequest.ts",
       "category": "unused",
       "kind": "exports",
       "name": "OAuthUnexpectedResponse"
-    },
-    {
-      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseChatGptUsage"
-    },
-    {
-      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseGlmCodingPlanUsage"
-    },
-    {
-      "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseKimiCodeUsage"
-    },
-    {
-      "file": "packages/texra/src/controllers/onboarding/onboardingFunnel.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "planOnboardingFunnelTransition"
     },
     {
       "file": "packages/texra/src/replacement/engine.ts",
@@ -138,36 +54,6 @@
       "category": "unused",
       "kind": "exports",
       "name": "packageCommandContributions"
-    },
-    {
-      "file": "packages/harness/src/tools/approval/toolEditApproval.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "prepareToolEditApprovalPrompt"
-    },
-    {
-      "file": "packages/texra/src/tools/claudeAgent.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runStreamedTurn"
-    },
-    {
-      "file": "packages/texra/src/tools/codex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runStreamedTurn"
-    },
-    {
-      "file": "packages/texra/src/tools/lean/direct/leanServerPool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveWorkspaceRoot"
-    },
-    {
-      "file": "packages/harness/src/tools/memory/memoryFileSystem.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "countPinnedMemories"
     }
   ]
 }

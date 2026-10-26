@@ -69,7 +69,7 @@ const GRANDCHILD_IDENTITY: RunIdentity = {
 };
 /** The root script's stage: its calls' cards carry it as their group. */
 const SCRIPT_STAGE = 'script-review';
-export const ROOT_POLICY: ApprovalGrants = {
+const ROOT_POLICY: ApprovalGrants = {
   own: { toolEdit: 'on' },
   goal: [],
 };

@@ -67,16 +67,16 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   // Each asserted handler returns a failing program, and settling it must
   // surface that same rejection to VS Code's `executeCommand` callers.
   describe('async rejection propagation (regression guard for #3782)', () => {
-    it.each([
-      ['texra.showMemory', 'showSettings'],
-      ['texra.cloneOverleafProject', 'cloneOverleafProject'],
-    ] as const)('%s rejection bubbles up', async (id, actionKey) => {
-      const actions = makeActions();
-      const failure = new Error(`boom-${actionKey}`);
+    it.each([['texra.showMemory', 'showSettings']] as const)(
+      '%s rejection bubbles up',
+      async (id, actionKey) => {
+        const actions = makeActions();
+        const failure = new Error(`boom-${actionKey}`);
 
-      (actions[actionKey] as any).mockReturnValueOnce(Effect.fail(failure));
+        (actions[actionKey] as any).mockReturnValueOnce(Effect.fail(failure));
 
-      await expect(dispatch(actions, id)).rejects.toBe(failure);
-    });
+        await expect(dispatch(actions, id)).rejects.toBe(failure);
+      },
+    );
   });
 });

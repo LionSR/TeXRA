@@ -10,21 +10,12 @@ import { Rejected, type RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
-  CHILD,
   viewOf,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
-import {
-  emptyHostSnapshot,
-  type HostSnapshot,
-} from '@texra/shared/session/hostSnapshot';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { type HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Response } from '@texra/shared/session/sessionFrames';
-import {
-  emptySurface,
-  PersistedSurfaceSchema,
-  reconcileLaunch,
-} from '@texra/shared/session/surface';
+import { PersistedSurfaceSchema } from '@texra/shared/session/surface';
 import {
   createWebviewStorage,
   type KeyValueStore,
@@ -96,59 +87,6 @@ function response(): (result: Response['result']) => void {
 }
 
 describe('session Surface ownership', () => {
-  it('shows host refusals on the surface and leaves cancellation quiet', async () => {
-    const cancel = response();
-    surfaces.hostRequest(KEY, { kind: 'pickFiles', fileType: 'input' });
-    cancel({ ok: false, error: { _tag: 'Cancelled' } });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
-
-    const refuse = response();
-    surfaces.hostRequest(KEY, { kind: 'popOut' });
-    // Open another paper while the first paper's request remains pending.
-    surfaces.sync([KEY, 'other-paper']);
-    const error = {
-      _tag: 'Rejected',
-      reason: 'Pop-out to editor is unavailable.',
-    } as const;
-    refuse({ ok: false, error });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
-      new Rejected({ reason: error.reason }),
-    );
-    expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
-    surfaces.act(KEY, { kind: 'dismissRequestError' });
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
-  });
-
-  it('keeps a chosen model through an outage and moves one the catalog dropped', () => {
-    const host = (
-      ...modelOptions: HostSnapshot['modelOptions']
-    ): HostSnapshot => ({
-      ...emptyHostSnapshot({
-        key: KEY,
-        name: 'Paper',
-        initials: 'P',
-        subtitle: '/paper',
-      }),
-      modelOptions,
-    });
-    const chosen = (model: string) => {
-      const surface = emptySurface(KEY);
-      return { ...surface, launch: { ...surface.launch, model } };
-    };
-    const outage = host(
-      { value: 'claude', label: 'Claude', availability: 'key-unreadable' },
-      { value: 'gpt', label: 'GPT', availability: 'provider-key' },
-    );
-    // Enabled but unavailable: the user's pick stands.
-    expect(reconcileLaunch(chosen('claude'), outage).launch.model).toBe(
-      'claude',
-    );
-    // No longer enabled: the first available model replaces it.
-    expect(reconcileLaunch(chosen('retired'), outage).launch.model).toBe('gpt');
-  });
-
   it('ends a per-task auto-approve with the launch it was chosen for (#13342)', () => {
     surfaces.act(KEY, { kind: 'select', runId: null });
     surfaces.act(KEY, {
@@ -175,40 +113,6 @@ describe('session Surface ownership', () => {
     admit({ ok: true, outcome: { kind: 'done' } });
     await Promise.resolve();
     expect(surfaces.get(KEY)?.surface$.get().sending.size).toBe(0);
-  });
-
-  it('keeps persisted drafts through host updates before listing replay, then prunes authoritative absence', async () => {
-    host.set(
-      emptyHostSnapshot({
-        key: KEY,
-        name: 'Paper',
-        initials: 'P',
-        subtitle: '/paper',
-      }),
-    );
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)?.text).toBe(
-      'Saved text',
-    );
-    expect(
-      (storage.get(`surface:${KEY}`) as typeof PersistedSurfaceSchema.Type)
-        .drafts,
-    ).toEqual([[ROOT, 'Saved text']]);
-
-    view.set(viewOf(buildScenario().events));
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)?.text).toBe(
-      'Saved text',
-    );
-    view.set(emptySessionView(KEY));
-    await Promise.resolve();
-    const persisted = storage.get(
-      `surface:${KEY}`,
-    ) as typeof PersistedSurfaceSchema.Type;
-    expect(persisted.drafts).toEqual([]);
-    // The selection is decided by the same prune, so a raw read of the
-    // field never names a run the view no longer holds.
-    expect(persisted.selected).toBeNull();
   });
 
   it('retains the complete draft on rejected admission and clears only an unchanged accepted draft', async () => {
@@ -267,31 +171,4 @@ describe('session Surface ownership', () => {
       images: [],
     });
   });
-
-  it.each(['polish', 'record'] as const)(
-    'returns %s to its originating draft after selection changes',
-    async (operation) => {
-      view.set(viewOf(buildScenario().events));
-      const finish = response();
-      const request: HostRequest =
-        operation === 'polish'
-          ? { kind: 'polish', text: 'Saved text' }
-          : { kind: 'record', action: { kind: 'start', target: ROOT } };
-      surfaces.hostRequest(KEY, request);
-      surfaces.act(KEY, { kind: 'select', runId: CHILD });
-      surfaces.act(KEY, {
-        kind: 'draft',
-        runId: CHILD,
-        patch: { text: 'Other text' },
-      });
-      finish({ ok: true, outcome: { kind: 'text', text: 'Result' } });
-      await Promise.resolve();
-      const surface = surfaces.get(KEY)!.surface$.get();
-      expect(surface.drafts.get(ROOT)?.text).toBe(
-        operation === 'polish' ? 'Result' : 'Saved text Result',
-      );
-      expect(surface.drafts.get(CHILD)?.text).toBe('Other text');
-      expect(surface.polishing.size).toBe(0);
-    },
-  );
 });

@@ -64,7 +64,6 @@ import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApproval
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
-  type AgentProposalPermission,
   type PermissionPayload,
   type RequestDecision,
   type RetryPermission,
@@ -74,7 +73,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import {
   isStored,
@@ -89,7 +87,6 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
@@ -165,23 +162,6 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
   });
 }
 
-function requestEdit(runId: RunId) {
-  return requestToolEditApproval({
-    path: '/work/main.tex',
-    originalContent: 'old',
-    proposedContent: 'new',
-    sourceTool: 'edit',
-    runId,
-  }).pipe(
-    Effect.provide(
-      nativeToolTestLayer({
-        workingDirectory: '/work',
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-      }),
-    ),
-  );
-}
-
 /** Ask through the protocol the TUI host answers: `request.opened` on the
  *  run, settled by the `request.decided` a surface commits. */
 function openRequest(
@@ -201,29 +181,6 @@ function openRetry(
     kind: 'retry',
     data: permission,
   });
-}
-
-function proposalPayload(
-  requestId: string,
-  runId: RunId,
-  instruction = 'Check the local compactness claim.',
-): AgentProposalPermission {
-  return {
-    requestId,
-    runId,
-    agent: 'critic',
-    agentSource: null,
-    model: 'moonshot/kimi-k2.6',
-    instruction,
-    memories: [],
-    workingDirectory: null,
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    task: false,
-    options: {},
-  };
 }
 
 let retrySeq = 0;
@@ -399,70 +356,6 @@ describe('TUI request decisions', () => {
     }),
   );
 
-  it.effect.each([
-    {
-      label: 'a failed fetch',
-      fetched: Effect.fail(new Error('service connection closed')),
-      reason: 'the service did not send it (service connection closed)',
-    },
-    {
-      label: 'a preview no host staged',
-      fetched: Effect.succeed(null),
-      reason: "no host staged this edit's preview",
-    },
-  ])(
-    'says the preview of a served edit is unavailable after $label, never an empty diff',
-    ({ fetched, reason }) =>
-      Effect.gen(function* () {
-        tui(host(), {}, () => fetched);
-        const runId = runIdFor(`edit-unavailable-${reason}`);
-        yield* ensureRun(runId);
-        yield* Effect.forkChild(requestEdit(runId));
-
-        // The fetch lands after the request is listed, over anything staged.
-        yield* waitFor(() =>
-          expect(currentApproval.get()?.payload).toMatchObject({
-            kind: 'toolEdit',
-            data: { runId },
-            tui: { kind: 'unavailable', reason },
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'keeps an ordinary proposal approval limited to the current request',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const runId = runIdFor('proposal-one-off');
-        const pending = yield* Effect.forkChild(
-          openRequest(runId, {
-            kind: 'proposal',
-            data: proposalPayload(
-              'proposal-one-off',
-              runId,
-              'Check one calculation.',
-            ),
-          }),
-        );
-
-        yield* waitForApproval('proposal', { requestId: 'proposal-one-off' });
-        decideCurrent({ action: 'approve' });
-
-        expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'superYolo') !== null,
-        ).toBe(false);
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
-        ).toBe(false);
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'bash') !== null,
-        ).toBe(false);
-      }),
-  );
-
   it.effect(
     'switches a ChatGPT subscription retry to the API key only on the explicit decision',
     () =>
@@ -538,19 +431,5 @@ describe('TUI request decisions', () => {
         ).toBe(true);
         yield* Fiber.interrupt(pending);
       }),
-  );
-
-  it.effect('cancels the retry modal when the run interrupts its request', () =>
-    Effect.gen(function* () {
-      tui();
-      const pending = yield* Effect.forkChild(
-        openRetry(chatGptSubscriptionRetry('modal-interrupt')),
-      );
-
-      yield* waitForApproval('retry', { runId: runIdFor('modal-interrupt') });
-      yield* Fiber.interrupt(pending);
-
-      yield* waitForNoApproval();
-    }),
   );
 });

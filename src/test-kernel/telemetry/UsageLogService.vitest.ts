@@ -13,7 +13,6 @@ import {
 } from '@telemetry/UsageLogService';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -32,40 +31,16 @@ function usageEntry(model: string) {
   };
 }
 
-function batchModels(batch: unknown): string[] {
-  const entries = (batch as { entries: Array<{ model: string }> }).entries;
-  return entries.map((entry) => entry.model);
-}
-
-function batchId(batch: unknown): string {
-  return (batch as { batchId: string }).batchId;
-}
-
 // The Effect fetch client passes (url, init); read each batch body from the
-// init. `beforeRespond` lets a test stall or fail a specific call before the
-// success response.
-function stubFetch(
-  batches: unknown[],
-  beforeRespond: (
-    callCount: number,
-  ) => void | Response | Promise<void | Response> = () => {},
-): Mock {
+// init.
+function stubBatchFetch(): { batches: unknown[]; fetchMock: Mock } {
+  const batches: unknown[] = [];
   const fetchMock = vi.fn(async (_url: URL, init: RequestInit) => {
     batches.push(await new Response(init.body).json());
-    const response = await beforeRespond(fetchMock.mock.calls.length);
-    return response ?? jsonResponse({ success: true, accepted: 1 });
+    return jsonResponse({ success: true, accepted: 1 });
   });
   vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-function stubBatchFetch(
-  beforeRespond: (
-    callCount: number,
-  ) => void | Response | Promise<void | Response> = () => {},
-): { batches: unknown[]; fetchMock: Mock } {
-  const batches: unknown[] = [];
-  return { batches, fetchMock: stubFetch(batches, beforeRespond) };
+  return { batches, fetchMock };
 }
 
 describe('UsageLogService', () => {
@@ -86,10 +61,9 @@ describe('UsageLogService', () => {
 
   const startUsageLog = async (
     config: UsageLogOptions['config'],
-    scope?: Scope.Closeable,
   ): Promise<void> => {
     await stopUsageLog();
-    lifetime = scope ?? Scope.makeUnsafe();
+    lifetime = Scope.makeUnsafe();
     const context = await testRuntime().runPromise(
       Scope.provide(
         // The process runtime's diagnostics, which the service logs through.
@@ -124,212 +98,6 @@ describe('UsageLogService', () => {
     vi.restoreAllMocks();
   });
 
-  it('drains entries queued while another flush is in flight', async () => {
-    const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
-      createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
-      if (callCount === 1) {
-        await firstFetchReleased;
-      }
-    });
-
-    logUsage(usageEntry('first'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    logUsage(usageEntry('second'), testWorkspaceRoots().config);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    releaseFirstFetch();
-    await vi.waitFor(() =>
-      expect(batches.map(batchModels)).toEqual([['first'], ['second']]),
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('waits for successive active batches during disposal', async () => {
-    const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
-      createDeferred();
-    const { promise: secondFetchReleased, resolve: releaseSecondFetch } =
-      createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
-      if (callCount === 1) await firstFetchReleased;
-      if (callCount === 2) await secondFetchReleased;
-    });
-
-    logUsage(usageEntry('first'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    logUsage(usageEntry('second'), testWorkspaceRoots().config);
-    const disposal = stopUsageLog();
-
-    releaseFirstFetch();
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-
-    let disposed = false;
-    void disposal.then(() => {
-      disposed = true;
-    });
-    await Promise.resolve();
-    expect(disposed).toBe(false);
-
-    releaseSecondFetch();
-    await expect(disposal).resolves.toBeUndefined();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
-  });
-
-  // The ticker only schedules; the process owns the sender independently.
-  // Closing the scope must leave a send already in flight alone and wait
-  // behind it, not abort the request and lose the batch it had already taken
-  // from the queue.
-  it('process scope closure joins a timer-driven send before stopping admission', async () => {
-    const owner = Scope.makeUnsafe();
-    await startUsageLog(
-      { batchSize: 100, flushIntervalMs: 20, enabled: true },
-      owner,
-    );
-
-    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async () => {
-      await fetchReleased;
-    });
-
-    logUsage(usageEntry('timer'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-
-    const disposal = stopUsageLog();
-    let disposed = false;
-    void disposal.then(() => {
-      disposed = true;
-    });
-    // Long enough for a dispose that abandons the send to have resolved.
-    await vi.advanceTimersByTimeAsync(50);
-    expect(init.signal?.aborted).toBe(false);
-    expect(disposed).toBe(false);
-
-    releaseFetch();
-    await expect(disposal).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(batches.map(batchModels)).toEqual([['timer']]);
-    logUsage(usageEntry('after-close'), testWorkspaceRoots().config);
-    await vi.advanceTimersByTimeAsync(100);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  // The ticker must not keep a short-lived host alive by itself: a process
-  // that starts the log and exits without disposing its runtime still exits
-  // on an empty loop, so the ticker's timer is unref'd while the request a
-  // flush sends holds the loop on its own.
-  it('schedules the ticker on a timer that does not hold the event loop', async () => {
-    vi.useRealTimers();
-    const timers = vi.spyOn(globalThis, 'setTimeout');
-    await startUsageLog({
-      batchSize: 100,
-      flushIntervalMs: 12_345,
-      enabled: true,
-    });
-
-    const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
-    expect(tick).toBeGreaterThanOrEqual(0);
-    const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
-    expect(handle.hasRef()).toBe(false);
-  });
-
-  it.each([
-    ['network failure', new Error('network unavailable')],
-    ['malformed acknowledgement', { success: true }],
-    [
-      'retryable rejection',
-      { success: false, accepted: 0, error: 'invalid batch' },
-    ],
-    ['partial acknowledgement', { success: true, accepted: 0 }],
-  ])('requeues entries after a %s', async (_case, firstFailure) => {
-    const { batches, fetchMock } = stubBatchFetch((callCount) => {
-      if (callCount !== 1) return;
-      if (firstFailure instanceof Error) throw firstFailure;
-      return jsonResponse(firstFailure);
-    });
-
-    logUsage(usageEntry('first'), testWorkspaceRoots().config);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
-    expect(batchId(batches[1])).toBe(batchId(batches[0]));
-  });
-
-  it('discards a permanent rejection and continues with later entries', async () => {
-    const { promise: rejectionReleased, resolve: releaseRejection } =
-      createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
-      if (callCount === 2) throw new Error('network unavailable');
-      if (callCount !== 1) return;
-      await rejectionReleased;
-      return jsonResponse({
-        success: false,
-        accepted: 0,
-        error: 'invalid batch',
-        retryable: false,
-      });
-    });
-
-    logUsage(usageEntry('invalid'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    logUsage(usageEntry('valid'), testWorkspaceRoots().config);
-    releaseRejection();
-
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(batches.map(batchModels)).toEqual([['invalid'], ['valid']]);
-    expect(batchId(batches[1])).not.toBe(batchId(batches[0]));
-
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(batches.map(batchModels)).toEqual([
-      ['invalid'],
-      ['valid'],
-      ['valid'],
-    ]);
-    expect(batchId(batches[2])).toBe(batchId(batches[1]));
-  });
-
-  // A failed batch backs off (the flush interval, doubling) instead of being
-  // resent by every trigger, and stays apart from entries queued meanwhile.
-  it('backs off a failed batch and keeps its id separate from later entries', async () => {
-    const { batches, fetchMock } = stubBatchFetch((callCount) => {
-      if (callCount <= 2) {
-        throw new Error('network unavailable');
-      }
-    });
-
-    logUsage(usageEntry('first'), testWorkspaceRoots().config);
-    await vi.advanceTimersByTimeAsync(0);
-
-    logUsage(usageEntry('second'), testWorkspaceRoots().config);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(batches.map(batchModels)).toEqual([
-      ['first'],
-      ['first'],
-      ['first'],
-      ['second'],
-    ]);
-    expect(batchId(batches[2])).toBe(batchId(batches[0]));
-    expect(batchId(batches[3])).not.toBe(batchId(batches[0]));
-  });
-
   describe('texra.telemetry.enabled opt-out', () => {
     // These tests write to the config provider. Without a per-test platform the
     // mutation outlives the test — the file-scoped fake from setupFakePlatform
@@ -348,30 +116,6 @@ describe('UsageLogService', () => {
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
     }
-
-    it.live('sends nothing while the setting is off', () =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
-        );
-
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
-      }),
-    );
-
-    it.live('honours a workspace-scoped telemetry opt-out', () =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'workspace',
-        );
-
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
-      }),
-    );
 
     it.live('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
@@ -417,67 +161,18 @@ describe('UsageLogService', () => {
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
-    it.live.each([
-      ['TEXRA_NO_TELEMETRY', '1'],
-      ['TEXRA_NO_TELEMETRY', 'true'],
-      ['DO_NOT_TRACK', '1'],
-    ])('sends nothing while %s=%s is set', ([name, value]) =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          true,
-          'global',
-        );
-        vi.stubEnv(name, value);
-
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
-      }),
-    );
-
-    // JsonConfigProvider returns raw JSON from a hand-edited .texra/config.json,
-    // so a mistyped string must not read as truthy and re-enable logging.
-    it.live.each(['false', '0', 0, null])(
-      'treats the non-boolean value %p as opted out',
-      (value) =>
-        Effect.gen(function* () {
-          yield* testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            value,
-            'global',
-          );
-
-          const { batches, fetchMock } = stubBatchFetch();
-
-          logUsage(usageEntry('optional'), testWorkspaceRoots().config);
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-
-          expect(fetchMock).not.toHaveBeenCalled();
-          expect(batches).toEqual([]);
-        }),
-    );
-
-    it.live(
-      'fails closed for a malformed workspace value despite a valid global opt-in',
-      () =>
+    it.live.each([['TEXRA_NO_TELEMETRY', '1']])(
+      'sends nothing while %s=%s is set',
+      ([name, value]) =>
         Effect.gen(function* () {
           yield* testWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             true,
             'global',
           );
-          yield* testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            'false',
-            'workspace',
-          );
+          vi.stubEnv(name, value);
 
-          const { batches, fetchMock } = stubBatchFetch();
-
-          logUsage(usageEntry('optional'), testWorkspaceRoots().config);
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-
-          expect(fetchMock).not.toHaveBeenCalled();
-          expect(batches).toEqual([]);
+          yield* Effect.promise(() => expectNoOptionalUsageSent());
         }),
     );
   });

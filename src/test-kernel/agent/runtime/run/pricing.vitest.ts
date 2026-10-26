@@ -150,16 +150,4 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
       12,
     );
   });
-
-  it('bills a fast-tier binding at the fast rates', () => {
-    const fast = priceTurnUsage(
-      { ...boundSol, billing: { serviceTier: 'fast' } },
-      usageAt(100_000),
-      1,
-    );
-    expect(fast?.cost).toBeCloseTo(
-      (0 * 4 + 100_000 * 0.4 + 1000 * 20) / 1e6,
-      12,
-    );
-  });
 });

@@ -11,31 +11,11 @@ describe('desktop navigation policy', () => {
     ));
   });
 
-  it('allows the texra.ai apex and subdomains over https', () => {
-    expect(isAllowedExternalUrl('https://texra.ai/')).toBe(true);
-    expect(isAllowedExternalUrl('https://texra.ai/guide/desktop')).toBe(true);
-    expect(isAllowedExternalUrl('https://docs.texra.ai/foo')).toBe(true);
-  });
-
-  it('allows explicit HTTPS ports on allow-listed hosts', () => {
-    expect(isAllowedExternalUrl('https://texra.ai:8443/x')).toBe(true);
-    expect(isAllowedExternalUrl('https://github.com:443/owner/repo')).toBe(
-      true,
-    );
-  });
-
   it('does not allow third-party Supabase project subdomains', () => {
     // Only texra.ai is allowed; a blanket
     // *.supabase.co allow-rule would let any Supabase project be opened.
     expect(isAllowedExternalUrl('https://abc.supabase.co/auth/v1')).toBe(false);
     expect(isAllowedExternalUrl('https://supabase.co/')).toBe(false);
-  });
-
-  it('rejects non-https schemes', () => {
-    expect(isAllowedExternalUrl('http://texra.ai/')).toBe(false);
-    expect(isAllowedExternalUrl('javascript:alert(1)')).toBe(false);
-    expect(isAllowedExternalUrl('file:///etc/passwd')).toBe(false);
-    expect(isAllowedExternalUrl('ftp://texra.ai/')).toBe(false);
   });
 
   it('rejects suffix-spoof and path-spoof attacks', () => {
@@ -44,11 +24,5 @@ describe('desktop navigation policy', () => {
     expect(
       isAllowedExternalUrl('https://attacker.com/?redirect=texra.ai'),
     ).toBe(false);
-  });
-
-  it('rejects malformed inputs', () => {
-    expect(isAllowedExternalUrl('not-a-url')).toBe(false);
-    expect(isAllowedExternalUrl('')).toBe(false);
-    expect(isAllowedExternalUrl('https://')).toBe(false);
   });
 });

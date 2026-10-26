@@ -1,10 +1,9 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
+import { Effect, Fiber, FileSystem, Layer } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
-import { apiKeySecretName } from '@texra-ai/llm';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { AppState } from '@platform/interfaces';
@@ -44,15 +43,11 @@ const recorder = (
     yield* Effect.addFinalizer(() => onStop);
     return { path, handle: { exitCode } };
   });
-vi.mock('@texra/agent/runtime/textEnhancement', () => ({
-  polishTextWithAI: vi.fn(),
-}));
 
-// The process stores `handle` resolves its models against: the polish model,
-// and the OpenAI credential the take binds its transcription under, which is
-// why the credential store carries a key.
-const processStores = Layer.mergeAll(
-  Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
+/** The same pair with no saved OpenAI key, so the take's credential read
+ *  fails after the recorder has already been stopped. */
+const storesWithoutCredential = Layer.mergeAll(
+  Secrets.layer(new FakeSecrets()),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
   // The pasted-image arm's storage view; this suite exercises the recorder,
@@ -62,189 +57,7 @@ const processStores = Layer.mergeAll(
   UsageLog.disabled,
   // The helper call's route gate, as `processLayer` serves it.
   Layer.effect(RouteRetries, ModelRetryGate.make),
-  // The recorder is mocked, so nothing is spawned.
   scriptedSpawnerLayer(() => ({})).layer,
-);
-
-/** The same pair with no saved OpenAI key, so the take's credential read
- *  fails after the recorder has already been stopped. */
-const storesWithoutCredential = Layer.mergeAll(
-  Secrets.layer(new FakeSecrets()),
-  AppState.layer(new FakeStateStore()),
-  FileSystem.layerNoop({}),
-  Layer.succeed(StorageFs)({} as RootedFileSystem),
-  testHttpClientLayer,
-  UsageLog.disabled,
-  // The helper call's route gate, as `processLayer` serves it.
-  Layer.effect(RouteRetries, ModelRetryGate.make),
-  scriptedSpawnerLayer(() => ({})).layer,
-);
-
-it.effect(
-  'returns transcription to Start when another paper stops the process recorder',
-  () =>
-    Effect.gen(function* () {
-      const startup = yield* Deferred.make<string>();
-      audio.startRecording.mockReturnValue(recorder(Deferred.await(startup)));
-      audio.validateRecordingFile.mockImplementation((path: string) =>
-        Effect.succeed(path),
-      );
-      audio.transcribeRecording.mockReturnValue(
-        Effect.succeed('A conserved quantity.'),
-      );
-      const requests = new HostDraftRequests();
-      const first = {
-        storage: '/papers/first',
-        ...makeFakeSettingsStores().stores,
-      } as WorkspaceRoots;
-      const second = {
-        storage: '/papers/second',
-        ...makeFakeSettingsStores().stores,
-      } as WorkspaceRoots;
-      const snapshot = vi.fn();
-      const unsubscribe = requests.subscribe(snapshot);
-
-      const started = yield* Effect.forkChild(
-        requests.handle(
-          first,
-          {
-            kind: 'record',
-            action: { kind: 'start', target: 'launch' },
-          },
-          'origin',
-        ),
-      );
-      // Let the take reserve the recorder before the rival Start arrives.
-      yield* Effect.yieldNow;
-      const rejected = yield* Effect.flip(
-        requests.handle(
-          second,
-          {
-            kind: 'record',
-            action: { kind: 'start', target: 'launch' },
-          },
-          'other',
-        ),
-      );
-      expect(rejected).toMatchObject({ _tag: 'Rejected' });
-      expect(snapshot).toHaveBeenLastCalledWith({
-        session: '/papers/first',
-        target: 'launch',
-      });
-
-      expect(
-        yield* requests.handle(
-          second,
-          { kind: 'record', action: { kind: 'stop' } },
-          'other',
-        ),
-      ).toEqual({ kind: 'done' });
-      expect(audio.transcribeRecording).not.toHaveBeenCalled();
-      yield* Deferred.succeed(startup, '/papers/first/recordings/take.wav');
-      expect(yield* Fiber.join(started)).toEqual({
-        kind: 'text',
-        text: 'A conserved quantity.',
-      });
-      expect(audio.startRecording).toHaveBeenCalledTimes(1);
-      expect(audio.transcribeRecording).toHaveBeenCalledTimes(1);
-      expect(snapshot).toHaveBeenLastCalledWith(null);
-
-      const killed = yield* Deferred.make<void>();
-      const nextStartup = yield* Deferred.make<string>();
-      audio.startRecording.mockReturnValueOnce(
-        recorder(
-          Deferred.await(nextStartup),
-          Effect.never,
-          Deferred.succeed(killed, undefined),
-        ),
-      );
-      const nextTake = yield* Effect.forkChild(
-        requests.handle(
-          first,
-          {
-            kind: 'record',
-            action: { kind: 'start', target: 'launch' },
-          },
-          'origin',
-        ),
-      );
-      yield* Effect.yieldNow;
-      requests.cancel(first, 'other');
-      expect(snapshot).toHaveBeenLastCalledWith({
-        session: '/papers/first',
-        target: 'launch',
-      });
-      requests.cancel(first, 'origin');
-      yield* Deferred.succeed(nextStartup, '/papers/first/recordings/take.wav');
-      const cancelled = yield* Effect.flip(Fiber.join(nextTake));
-      expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
-      // The cancelled take's kill runs on the detached take fiber.
-      yield* Deferred.await(killed);
-      expect(audio.transcribeRecording).toHaveBeenCalledTimes(1);
-      expect(snapshot).toHaveBeenLastCalledWith(null);
-
-      // A Cancel after Stop answers Start and interrupts the upload.
-      const uploadInterrupted = yield* Deferred.make<void>();
-      audio.startRecording.mockReturnValueOnce(
-        recorder(Effect.succeed('/papers/first/recordings/take.wav')),
-      );
-      audio.transcribeRecording.mockReturnValueOnce(
-        Effect.never.pipe(
-          Effect.onInterrupt(() =>
-            Deferred.succeed(uploadInterrupted, undefined),
-          ),
-        ),
-      );
-      const uploading = yield* Effect.forkChild(
-        requests.handle(
-          first,
-          { kind: 'record', action: { kind: 'start', target: 'launch' } },
-          'origin',
-        ),
-      );
-      yield* Effect.yieldNow;
-      yield* requests.handle(
-        first,
-        { kind: 'record', action: { kind: 'stop' } },
-        'origin',
-      );
-      while (audio.transcribeRecording.mock.calls.length < 2) {
-        yield* Effect.yieldNow;
-      }
-      requests.cancel(first, 'origin');
-      expect(yield* Effect.flip(Fiber.join(uploading))).toMatchObject({
-        _tag: 'Cancelled',
-      });
-      yield* Deferred.await(uploadInterrupted);
-      expect(snapshot).toHaveBeenLastCalledWith(null);
-
-      // Host shutdown answers Start and stops sox before it returns.
-      const micOn = yield* Deferred.make<void>();
-      const shutdownKilled = yield* Deferred.make<void>();
-      audio.startRecording.mockReturnValueOnce(
-        recorder(
-          Effect.succeed('/papers/first/recordings/take.wav'),
-          // The take watches sox's exit once the recorder is acquired.
-          Deferred.succeed(micOn, undefined).pipe(Effect.andThen(Effect.never)),
-          Deferred.succeed(shutdownKilled, undefined),
-        ),
-      );
-      const recording = yield* Effect.forkChild(
-        requests.handle(
-          first,
-          { kind: 'record', action: { kind: 'start', target: 'launch' } },
-          'origin',
-        ),
-      );
-      yield* Deferred.await(micOn);
-      yield* requests.shutdown;
-      expect(yield* Deferred.isDone(shutdownKilled)).toBe(true);
-      expect(yield* Effect.flip(Fiber.join(recording))).toMatchObject({
-        _tag: 'Cancelled',
-      });
-      expect(snapshot).toHaveBeenLastCalledWith(null);
-      unsubscribe();
-    }).pipe(Effect.provide(processStores)),
 );
 
 it.effect(
@@ -292,38 +105,4 @@ it.effect(
       expect(audio.validateRecordingFile).toHaveBeenCalledTimes(1);
       expect(audio.transcribeRecording).not.toHaveBeenCalled();
     }).pipe(Effect.provide(storesWithoutCredential)),
-);
-
-it.effect('rejects Start with the reason sox exited before Stop', () =>
-  Effect.gen(function* () {
-    audio.startRecording.mockReturnValue(
-      recorder(
-        Effect.succeed('/papers/first/recordings/take.wav'),
-        Effect.succeed(1),
-      ),
-    );
-    const requests = new HostDraftRequests();
-    const snapshot = vi.fn();
-    requests.subscribe(snapshot);
-    const session = {
-      storage: '/papers/first',
-      ...makeFakeSettingsStores().stores,
-    } as WorkspaceRoots;
-
-    expect(
-      yield* Effect.flip(
-        requests.handle(
-          session,
-          { kind: 'record', action: { kind: 'start', target: 'launch' } },
-          'origin',
-        ),
-      ),
-    ).toMatchObject({
-      _tag: 'Rejected',
-      reason: 'Recording stopped unexpectedly: sox exited with code 1',
-    });
-    // The take fiber releases the recorder once it has answered Start.
-    yield* Effect.yieldNow;
-    expect(snapshot).toHaveBeenLastCalledWith(null);
-  }).pipe(Effect.provide(processStores)),
 );

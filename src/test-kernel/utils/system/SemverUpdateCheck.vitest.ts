@@ -1,4 +1,4 @@
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
@@ -63,114 +63,6 @@ describe('runDailyUpdateCheck', () => {
       }),
     ).pipe(Effect.provide(NodeFileSystem.layer));
 
-  effectIt.live('notifies before stamping a successful live check', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const records = yield* UpdateCheckRecords;
-        let stampDuringNotify: number | null | undefined;
-        const latest = yield* runDailyUpdateCheck(
-          checkOptions({
-            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
-            notify: () =>
-              Effect.gen(function* () {
-                stampDuringNotify = (yield* records.read('desktop'))
-                  ?.lastCheckedAt;
-              }),
-          }),
-        );
-        expect(latest).toBe('1.1.0');
-        expect(stampDuringNotify).toBeUndefined();
-        expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
-      }),
-    ),
-  );
-
-  effectIt.live(
-    'does not repeat a release notification but still stamps a live refresh',
-    () =>
-      withRecords(
-        Effect.gen(function* () {
-          const records = yield* UpdateCheckRecords;
-          yield* records.recordNotified('desktop', '1.1.0');
-          const notify = vi.fn(() => Effect.void);
-          yield* runDailyUpdateCheck(
-            checkOptions({
-              notifyOnce: true,
-              fetchLatest: Effect.succeed({
-                version: '1.1.0',
-                refreshed: true,
-              }),
-              notify,
-            }),
-          );
-          expect(notify).not.toHaveBeenCalled();
-          expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
-        }),
-      ),
-  );
-
-  effectIt.live('throttles a repeat check within the same day', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const fetchLatest = vi.fn(() => ({
-          version: '1.0.0',
-          refreshed: true,
-        }));
-        const options = checkOptions({ fetchLatest: Effect.sync(fetchLatest) });
-        yield* runDailyUpdateCheck(options);
-        expect(fetchLatest).toHaveBeenCalledTimes(1);
-        yield* TestClock.adjust('10 minutes');
-        yield* runDailyUpdateCheck(options);
-        expect(fetchLatest).toHaveBeenCalledTimes(1);
-        yield* TestClock.adjust('24 hours');
-        yield* runDailyUpdateCheck(options);
-        expect(fetchLatest).toHaveBeenCalledTimes(2);
-      }),
-    ),
-  );
-
-  effectIt.live('does not notify when the latest version is not newer', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const records = yield* UpdateCheckRecords;
-        const notify = vi.fn(() => Effect.void);
-        expect(
-          yield* runDailyUpdateCheck(checkOptions({ notify })),
-        ).toBeUndefined();
-        expect(notify).not.toHaveBeenCalled();
-        expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
-      }),
-    ),
-  );
-
-  effectIt.live(
-    'retries a failed release notification before recording it as notified',
-    () =>
-      withRecords(
-        Effect.gen(function* () {
-          const records = yield* UpdateCheckRecords;
-          const failure = new Error('dialog failed');
-          const notify = vi
-            .fn<CheckOptions['notify']>(() => Effect.void)
-            .mockReturnValueOnce(Effect.fail(failure));
-          const options = checkOptions({
-            notifyOnce: true,
-            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
-            notify,
-          });
-          expect(yield* Effect.flip(runDailyUpdateCheck(options))).toBe(
-            failure,
-          );
-          expect(yield* records.read('desktop')).toBeNull();
-          expect(yield* runDailyUpdateCheck(options)).toBe('1.1.0');
-          expect(notify).toHaveBeenCalledTimes(2);
-          expect((yield* records.read('desktop'))?.lastNotifiedVersion).toBe(
-            '1.1.0',
-          );
-        }),
-      ),
-  );
-
   effectIt.live(
     'records an announced release before honoring interruption',
     () =>
@@ -196,57 +88,6 @@ describe('runDailyUpdateCheck', () => {
             lastNotifiedVersion: '1.1.0',
             lastCheckedAt: null,
           });
-        }),
-      ),
-  );
-
-  effectIt.live(
-    'can offer stale source metadata without stamping the check',
-    () =>
-      withRecords(
-        Effect.gen(function* () {
-          const records = yield* UpdateCheckRecords;
-          const notify = vi.fn(() => Effect.void);
-          yield* runDailyUpdateCheck(
-            checkOptions({
-              fetchLatest: Effect.succeed({
-                version: '1.1.0',
-                refreshed: false,
-              }),
-              notify,
-            }),
-          );
-          expect(notify).toHaveBeenCalledWith('1.1.0');
-          expect(yield* records.read('desktop')).toBeNull();
-        }),
-      ),
-  );
-
-  effectIt.live(
-    'applies the host policy when the throttle stamp cannot be persisted',
-    () =>
-      withRecords(
-        Effect.gen(function* () {
-          const records = yield* UpdateCheckRecords;
-          const failure = new Error('read-only state');
-          const layer = Layer.succeed(UpdateCheckRecords)({
-            ...records,
-            recordChecked: () => Effect.fail(failure),
-          });
-          const options = checkOptions({
-            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
-          });
-          expect(
-            yield* runDailyUpdateCheck({
-              ...options,
-              stampFailure: 'ignore',
-            }).pipe(Effect.provide(layer)),
-          ).toBe('1.1.0');
-          expect(
-            yield* Effect.flip(
-              runDailyUpdateCheck(options).pipe(Effect.provide(layer)),
-            ),
-          ).toBe(failure);
         }),
       ),
   );

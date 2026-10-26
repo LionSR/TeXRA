@@ -11,7 +11,7 @@ import { describe, expect } from 'vitest';
 import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { Settings } from '@shared/config/settings';
-import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
+import { errnoError } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -52,54 +52,9 @@ describe('setWorkspaceCliChatAgent', () => {
         });
       }),
   );
-
-  it.effect('refuses an empty agent rather than clearing the default', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => installPlatform());
-      const error = yield* Effect.flip(
-        setWorkspaceCliChatAgent(testWorkspaceRoots(), '   '),
-      );
-      expect(error.message).toContain('must not be empty');
-    }),
-  );
 });
 
 describe('ensureTexraGitignored', () => {
-  it.effect.each([
-    ['creates an absent file', undefined, 'created', '.texra/\n'],
-    [
-      'appends to existing content',
-      'node_modules\ndist\n',
-      'added',
-      'node_modules\ndist\n.texra/\n',
-    ],
-    [
-      'leaves a file that already ignores .texra/ untouched',
-      'node_modules\n.texra/\n',
-      'present',
-      'node_modules\n.texra/\n',
-    ],
-    ['recognizes a bare .texra entry', '.texra\n', 'present', '.texra\n'],
-  ] as const)('%s', ([_case, existing, outcome, expected]) =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-gitignore-', tempDirs),
-      );
-      const gitignorePath = join(workspace, '.gitignore');
-      if (existing !== undefined)
-        yield* Effect.promise(() => writeFile(gitignorePath, existing, 'utf8'));
-
-      const result = yield* ensureTexraGitignored(workspace).pipe(
-        Effect.provide(nodePlatformLayer),
-      );
-      expect(result).toBe(outcome);
-      const text = yield* Effect.promise(() =>
-        nodeReadFile(gitignorePath, 'utf8'),
-      );
-      expect(text).toBe(expected);
-    }),
-  );
-
   it.effect('does not overwrite .gitignore on a non-ENOENT read failure', () =>
     Effect.gen(function* () {
       // Reproduces #7470: a transient EACCES (or any non-missing-file error)

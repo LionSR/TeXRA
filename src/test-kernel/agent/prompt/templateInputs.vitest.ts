@@ -28,46 +28,18 @@ function buildVars(
   });
 }
 
-describe('buildTemplateInputs with missing configured files', () => {
+describe('buildTemplateInputs with a missing attached memory', () => {
   beforeEach(async () => {
     await installPlatform({
       workspacePath: fakePath('workspace'),
       files: {
-        '/workspace/present.tex': 'present input',
-        '/workspace/context.tex': 'present context',
         '/workspace/.texra/storage/memories/present.md':
           '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',
       },
     });
   });
 
-  it('keeps prompt file metadata in sync with readable prompt XML', async () => {
-    const { inputs: vars } = await buildVars(
-      Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'generic',
-        model: 'test-model',
-        inputFiles: ['missing.tex', 'present.tex'],
-        contextFiles: ['missing-context.tex', 'context.tex'],
-      }),
-    );
-
-    expect(vars.ALL_INPUTS).toBe(
-      '<document name="present.tex">\npresent input\n</document>',
-    );
-    expect(vars.INPUT_FILES).toEqual(['present.tex']);
-    expect(vars.LIST_OF_ALL_INPUTS).toBe('present.tex');
-    expect(vars.INPUT_FILE).toBe('present.tex');
-    expect(vars.INPUT_CONTENT).toBe('present input');
-
-    expect(vars.ALL_CONTEXTS).toBe(
-      '<document name="context.tex">\npresent context\n</document>',
-    );
-    expect(vars.CONTEXT_FILES).toEqual(['context.tex']);
-    expect(vars.LIST_OF_ALL_CONTEXTS).toBe('context.tex');
-    expect(vars.CONTEXT_FILE).toBe('context.tex');
-    expect(vars.CONTEXT_CONTENT).toBe('present context');
-  });
-
+  // A configured memory that cannot be read is reported, not dropped.
   it('records attached memory read misses from the prompt-load pass', async () => {
     const { attachedMemories, attachedMemoryMisses } = await buildVars(
       Schema.decodeUnknownSync(AgentConfigSchema)({

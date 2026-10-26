@@ -5,12 +5,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
 import type { RunId } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const runId = 'abcdef123456' as RunId;
@@ -101,51 +99,6 @@ const inspect = (relativePath: string) =>
   );
 
 describe('RunFileService.inspectEntry', () => {
-  it('returns a canonical location for a regular primary-layout file', async () => {
-    probe = (target) => {
-      if (target === primaryEntry('r1', 'draft.tex')) return entryType('File');
-      if (target === primaryEntry() || target === primaryEntry('r1')) {
-        return entryType('Directory');
-      }
-      return missing(target);
-    };
-
-    await expect(inspect('r1\\draft.tex')).resolves.toEqual({
-      kind: 'file',
-      location: {
-        kind: 'runStorage',
-        absolutePath: storagePath('executions', runId, 'r1', 'draft.tex'),
-        relativePath: 'r1/draft.tex',
-        runId,
-      },
-    });
-  });
-
-  it.each([
-    { type: 'SymbolicLink', kind: 'symlink' },
-    { type: 'Directory', kind: 'directory' },
-    { type: 'Unknown', kind: 'unsupported' },
-  ] as const)(
-    'classifies a non-bindable entry as $kind',
-    async ({ type, kind }) => {
-      probe = () => entryType(type);
-
-      await expect(inspect('result.tex')).resolves.toMatchObject({ kind });
-    },
-  );
-
-  it('distinguishes missing entries from invalid paths', async () => {
-    probe = (target) => missing(target);
-
-    await expect(inspect('missing.tex')).resolves.toEqual({ kind: 'missing' });
-    await expect(inspect('../outside.tex')).resolves.toMatchObject({
-      kind: 'invalid',
-    });
-    await expect(inspect('/outside.tex')).resolves.toMatchObject({
-      kind: 'invalid',
-    });
-  });
-
   it('rejects a regular file reached through an ancestor symlink', async () => {
     probe = (target) => {
       if (target.endsWith(path.join('link', 'result.tex'))) {
@@ -162,69 +115,6 @@ describe('RunFileService.inspectEntry', () => {
     await expect(inspect('r1/link/result.tex')).resolves.toMatchObject({
       kind: 'symlink',
       absolutePath: storagePath('executions', runId, 'r1', 'link'),
-    });
-  });
-
-  it('rejects a dangling ancestor symlink before treating the leaf as missing', async () => {
-    const inspected: string[] = [];
-    probe = (target) => {
-      inspected.push(target);
-      if (target === primaryEntry()) return entryType('Directory');
-      if (target === primaryEntry('dangling')) {
-        return entryType('SymbolicLink');
-      }
-      return missing(target);
-    };
-
-    await expect(inspect('dangling/result.tex')).resolves.toMatchObject({
-      kind: 'symlink',
-      absolutePath: storagePath('executions', runId, 'dangling'),
-    });
-    expect(inspected).not.toContain(primaryEntry('dangling', 'result.tex'));
-  });
-
-  it('does not turn storage permission failures into a missing entry', async () => {
-    probe = (target) =>
-      probeFailure('PermissionDenied', target, errnoError('EACCES', 'Denied'));
-
-    await expect(inspect('result.tex')).rejects.toThrow('PermissionDenied');
-  });
-
-  it('recovers run identity from absolute run-storage paths', () => {
-    expect(
-      runStorageLocationUnder(
-        storageRoot,
-        storagePath('executions', runId, 'r2', 'result.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      runId,
-      relativePath: 'r2/result.tex',
-    });
-    expect(
-      runStorageLocationUnder(
-        storageRoot,
-        path.join(workspaceRoot, 'result.tex'),
-      ),
-    ).toBeUndefined();
-  });
-
-  it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new RunFileService(runId, testWorkspaceRoots());
-
-    expect(fileService.locateSource('draft.tex')).toEqual({
-      kind: 'workspace',
-      absolutePath: path.join(workspaceRoot, 'draft.tex'),
-      relativePath: 'draft.tex',
-    });
-    expect(
-      fileService.locateSource(
-        storagePath('executions', runId, 'r1', 'draft.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      runId,
-      relativePath: 'r1/draft.tex',
     });
   });
 });

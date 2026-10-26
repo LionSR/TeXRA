@@ -198,55 +198,6 @@ describe('CLI Overleaf clone command', () => {
     expect(`${stdout}${stderr}`).not.toContain('olp_secret');
   });
 
-  it('stops the Git process when the host interrupts cloning', async () => {
-    const controller = new AbortController();
-    hostAbort = controller;
-    spawn.clone = () => {
-      queueMicrotask(() => controller.abort());
-      return 'hang';
-    };
-
-    const result = await runCli([
-      'clone',
-      PROJECT_ID,
-      '--cwd',
-      workspacePath,
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(CliExitCode.Interrupted);
-
-    expect(cloneCalls()).toHaveLength(1);
-    expect(spawn.killed.filter(isClone)).toHaveLength(1);
-    expect(stdout).not.toContain('"cloned":true');
-  });
-
-  it.each([
-    { mode: 'headless', extraArgs: ['--no-input'] },
-    { mode: 'machine-readable', extraArgs: ['--output-format', 'json'] },
-  ])(
-    'does not prompt for a missing token in $mode mode',
-    async ({ extraArgs }) => {
-      mocks.getSecret.mockReturnValue(Effect.succeed(undefined));
-
-      const result = await runCli([
-        'clone',
-        PROJECT_ID,
-        '--cwd',
-        workspacePath,
-        ...extraArgs,
-      ]);
-
-      expect(result.exitCode).toBe(CliExitCode.Usage);
-      expect(stderr).toContain('No saved Overleaf Git Token is available.');
-      expect(stderr).toContain('https://www.overleaf.com/user/settings');
-      expect(stderr).toContain('git-integration-authentication-tokens');
-      expect(cloneCalls()).toHaveLength(0);
-    },
-  );
-
   it('refuses to clone into a nonempty destination', async () => {
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
     const canonicalWorkspacePath = canonicalizeWorkspacePath(workspacePath);

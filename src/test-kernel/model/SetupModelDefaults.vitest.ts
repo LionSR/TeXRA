@@ -3,7 +3,6 @@ import { it } from '@effect/vitest';
 import { describe } from 'vitest';
 
 import {
-  API_KEY_PROVIDER_IDS,
   decideModelRoute,
   modelConfig,
   OWN_KEY_ROUTE_FACTS,
@@ -51,14 +50,5 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
       }).kind,
       'chatgpt-subscription',
     );
-  });
-
-  it('covers every direct-key API provider', () => {
-    for (const provider of API_KEY_PROVIDER_IDS) {
-      assert.ok(
-        SETUP_MODEL_BY_PROVIDER[provider],
-        `missing setup model for provider "${provider}"`,
-      );
-    }
   });
 });

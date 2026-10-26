@@ -117,7 +117,7 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
   return CliExitCode.Success;
 });
 
-export const runTeam = Effect.fn('runTeam')(function* (
+const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
   init: TeamRunInit,
 ): Effect.fn.Return<number, Error, ProcessServices> {

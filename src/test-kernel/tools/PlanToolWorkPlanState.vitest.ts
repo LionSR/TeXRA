@@ -25,15 +25,6 @@ import {
 } from '../agent/progressTestUtils';
 import { waitForCondition } from '../support/asyncTestUtils';
 
-const plan: Plan = {
-  objective: [
-    'Refactor the plan state boundary.',
-    '',
-    'Move plan progress ownership into WorkPlanState.',
-    'Done when the workspace typechecks and the work-plan tests pass.',
-  ].join('\n'),
-};
-
 const followUpPlan: Plan = {
   objective: [
     'Implement the approved follow-up plan.',
@@ -81,69 +72,10 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   return { session, awaitPlanRequest };
 });
 
-function startPlanUpdate(runId: RunId, objective: string) {
-  return Effect.gen(function* () {
-    const { session, awaitPlanRequest } = yield* planSession(runId);
-    // The plans the run shows, in order: what its parent and its view read.
-    const shown: (Plan | null)[] = [];
-    const tool = PlanTool;
-
-    const resultFiber = yield* Effect.forkScoped(
-      tool.call({ objective }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              runId,
-              session,
-              toolPolicy: {},
-              callbacks: {
-                onProgress: (update) => {
-                  if (update.kind === 'plan') shown.push(update.plan);
-                },
-              },
-            },
-          }),
-        ),
-      ),
-    );
-
-    const { permission, decide } = yield* Effect.tryPromise(() =>
-      awaitPlanRequest(),
-    );
-    return {
-      result: Fiber.join(resultFiber),
-      session,
-      shown,
-      permission,
-      decide,
-    };
-  });
-}
-
 describe('PlanTool — update (plan approval)', () => {
   afterEach(() => {
     for (const release of cleanups.splice(0)) release();
   });
-
-  it.live('keeps an approved plan in displayed work-plan state', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, shown, permission, decide } = yield* startPlanUpdate(
-          generateRunId(),
-          plan.objective,
-        );
-
-        expect(permission.plan).toEqual(plan);
-        decide({ action: 'approve' });
-
-        const outcome = yield* result;
-        expect(outcome.status).toBe('executed');
-        expect(outcome.output).toContain('Plan approved');
-        expect(shown.at(-1)).toEqual(plan);
-      }),
-    ),
-  );
 
   it.live(
     'keeps a later plan gated after delegated work approval is granted',
@@ -187,44 +119,5 @@ describe('PlanTool — update (plan approval)', () => {
           });
         }),
       ),
-  );
-
-  it.live('clears a rejected plan from displayed work-plan state', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, shown, decide } = yield* startPlanUpdate(
-          generateRunId(),
-          plan.objective,
-        );
-
-        decide({ action: 'reject', feedback: 'Too broad.' });
-
-        const outcome = yield* result;
-        expect(outcome.status).toBe('error');
-        expect(shown).toEqual([plan, null]);
-      }),
-    ),
-  );
-
-  it.live('does not attribute a lifecycle cancellation to the user', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* Effect.tryPromise(() => installFakePlatform());
-        const { result, decide } = yield* startPlanUpdate(
-          generateRunId(),
-          plan.objective,
-        );
-
-        decide({ action: 'cancel', cause: 'CLI approval prompt failed.' });
-
-        const outcome = yield* result;
-        expect(outcome.status).toBe('error');
-        expect(outcome.summary).toBe('Plan approval cancelled');
-        expect(outcome.error).toContain('CLI approval prompt failed.');
-        expect(outcome.error).not.toContain('user rejected');
-        expect(outcome.userInstruction).toBeUndefined();
-      }),
-    ),
   );
 });

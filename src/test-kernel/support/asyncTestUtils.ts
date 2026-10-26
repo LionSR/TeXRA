@@ -27,7 +27,7 @@ export async function waitForCondition(
 }
 
 /** Poll until a condition succeeds and report whether it met the deadline. */
-export async function pollForCondition(
+async function pollForCondition(
   predicate: () => boolean,
   { timeoutMs = 2000, intervalMs = 10 }: PollOptions = {},
 ): Promise<boolean> {

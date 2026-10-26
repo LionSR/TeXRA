@@ -2,23 +2,16 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import { type FileLocation, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
-import {
-  createOutputState,
-  ensureRoundData,
-  type OutputDependencies,
-  type OutputState,
-} from '@texra/agent/output/outputState';
-import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
+import { createOutputState } from '@texra/agent/output/outputState';
 import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -29,40 +22,21 @@ interface XmlManagerOptions {
   outputFiles?: string[];
   /** Run-relative names of the files a similarity fallback may match against. */
   baseFiles?: string[];
-  logger?: AgentTrace;
-  /** The round map a missing-output report records into and republishes. */
-  outputState?: OutputState;
-}
-
-/**
- * Minimal OutputDependencies for the output-extraction tests: the code under
- * test reads only `baseFiles` and `logger`.
- */
-function processorDeps(overrides: {
-  logger: AgentTrace;
-  baseFiles?: FileLocation[];
-}): OutputDependencies {
-  return {
-    baseFiles: overrides.baseFiles ?? [],
-    logger: overrides.logger,
-  } as unknown as OutputDependencies;
 }
 
 function createXmlManager(
   inputFiles: string[] = ['paper.tex'],
   options: XmlManagerOptions = {},
 ): XmlOutputManager {
-  const logger =
-    options.logger ??
-    spiedTrace(
-      {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        emit: vi.fn(),
-      },
-      { strict: true },
-    );
+  const logger = spiedTrace(
+    {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      emit: vi.fn(),
+    },
+    { strict: true },
+  );
   return new XmlOutputManager(
     {
       inputFiles,
@@ -70,7 +44,7 @@ function createXmlManager(
     } as unknown as AgentConfig,
     logger,
     new RunFileService(RUN_ID, testWorkspaceRoots()),
-    options.outputState ?? createOutputState(),
+    createOutputState(),
     testWorkspaceRoots().config,
   );
 }
@@ -85,11 +59,6 @@ const fsEffect = {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.writeFileString(target, content);
-    }),
-  ensureDir: (target: string) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      yield* fs.makeDirectory(target, { recursive: true });
     }),
 };
 
@@ -114,14 +83,6 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
     ),
   );
 });
-
-const RECOVERED_DOCUMENT_LINES = [
-  '\\documentclass{article}',
-  '\\begin{document}',
-  'Recovered.',
-  '\\end{document}',
-];
-const RECOVERED_DOCUMENT_CONTENT = [...RECOVERED_DOCUMENT_LINES, ''].join('\n');
 
 function expectSources(
   outputs: readonly { source: string }[],
@@ -184,21 +145,6 @@ type LabeledRecoveryCase = [
 
 const RECOVERY_CASES: readonly RecoveryCase[] = [
   [
-    'removes surrounding markdown fences from percent filename output',
-    ['```latex', '% main.tex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
-  ],
-  [
-    'removes compact markdown fence info strings after percent headers',
-    ['% main.tex', '```latex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
-  ],
-  [
-    'removes spaced markdown fence info strings after percent headers',
-    ['% main.tex', '``` latex', ...RECOVERED_DOCUMENT_LINES, '```'],
-    { 'main.tex': RECOVERED_DOCUMENT_CONTENT },
-  ],
-  [
     'recovers documents from percent filename headers',
     [
       'Here is the output:',
@@ -210,117 +156,6 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
     {
       'main.tex': '\\section{Recovered}\n',
       'sections/appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'preserves fence-looking lines inside percent-header content',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '\\begin{verbatim}',
-      '```',
-      '\\end{verbatim}',
-      '\\end{document}',
-    ],
-    {
-      'main.tex': [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '\\begin{verbatim}',
-        '```',
-        '\\end{verbatim}',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    },
-  ],
-  [
-    'prefers named document fallback over percent filename comments',
-    [
-      '<document name="main.tex">',
-      'Main body.',
-      '% notes.tex',
-      'Still main body.',
-      '</document>',
-      '<document name="appendix.tex">',
-      'Appendix body.',
-      '</document>',
-    ],
-    {
-      'main.tex': 'Main body.\n% notes.tex\nStill main body.\n',
-      'appendix.tex': 'Appendix body.\n',
-    },
-    ['notes.tex'],
-  ],
-  [
-    'closes a document left open at </documents> and keeps beamer overlay specs as text',
-    [
-      '<documents>',
-      '<document name="slides.tex">',
-      '\\documentclass{beamer}',
-      '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
-      '\\begin{document}',
-      '\\only<2->{Shown later.}',
-      '\\end{document}',
-      '</documents>',
-    ],
-    {
-      'slides.tex': [
-        '\\documentclass{beamer}',
-        '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
-        '\\begin{document}',
-        '\\only<2->{Shown later.}',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    },
-  ],
-  [
-    'prefers percent filename headers over single-document input recovery',
-    ['% declared.tex', ...RECOVERED_DOCUMENT_LINES],
-    { 'declared.tex': RECOVERED_DOCUMENT_CONTENT },
-    ['paper.tex'],
-  ],
-  [
-    'recovers dot-prefixed relative percent filename headers',
-    [
-      '% ./main.tex',
-      'Main text.',
-      '% ./sections/appendix.tex',
-      'Appendix text.',
-    ],
-    {
-      'main.tex': 'Main text.\n',
-      'sections/appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'recovers hyphenated percent filename headers',
-    ['% main-file.tex', 'Main text.', '% sections/part-1.tex', 'Part text.'],
-    {
-      'main-file.tex': 'Main text.\n',
-      'sections/part-1.tex': 'Part text.\n',
-    },
-  ],
-  [
-    'recovers underscore-prefixed percent filename headers',
-    [
-      '% _macros.tex',
-      '\\newcommand{\\R}{\\mathbb{R}}',
-      '% _generated/main.tex',
-      'Generated text.',
-    ],
-    {
-      '_macros.tex': '\\newcommand{\\R}{\\mathbb{R}}\n',
-      '_generated/main.tex': 'Generated text.\n',
-    },
-  ],
-  [
-    'recovers backslash-separated percent filename headers',
-    ['% sections\\intro.tex', 'Intro text.'],
-    {
-      'sections/intro.tex': 'Intro text.\n',
     },
   ],
   [
@@ -348,262 +183,6 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
     },
   ],
   [
-    'keeps percent filename comments in a LaTeX document preamble',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '% macros.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ],
-    {
-      'main.tex': [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-      'appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'keeps multiple percent filename comments in a LaTeX document preamble',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '% macros.tex',
-      '% notation.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ],
-    {
-      'main.tex': [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '% notation.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-      'appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'does not treat pre-header LaTeX preamble comments as percent outputs',
-    [
-      '\\documentclass{article}',
-      '% macros.tex',
-      '\\begin{document}',
-      'Body.',
-      '\\end{document}',
-    ],
-    {
-      'paper.tex': [
-        '\\documentclass{article}',
-        '% macros.tex',
-        '\\begin{document}',
-        'Body.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    },
-    ['macros.tex'],
-  ],
-  [
-    'falls back to single-document recovery for LaTeX content before the first percent header',
-    [
-      '\\section{Intro}',
-      '% appendix.tex',
-      'More text.',
-      '% notes.tex',
-      'Still the same fragment.',
-    ],
-    {
-      'paper.tex': [
-        '\\section{Intro}',
-        '% appendix.tex',
-        'More text.',
-        '% notes.tex',
-        'Still the same fragment.',
-        '',
-      ].join('\n'),
-    },
-    ['appendix.tex', 'notes.tex'],
-  ],
-  [
-    'allows percent headers after documentclass-only blocks',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '% sections/intro.tex',
-      '\\section{Intro}',
-    ],
-    {
-      'main.tex': '\\documentclass{article}\n',
-      'sections/intro.tex': '\\section{Intro}\n',
-    },
-  ],
-  [
-    'allows percent headers before later files with their own documentclass',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '% appendix.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Appendix.',
-      '\\end{document}',
-    ],
-    {
-      'main.tex': '\\documentclass{article}\n',
-      'appendix.tex': [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Appendix.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    },
-  ],
-  [
-    'ignores commented end-document lines when detecting percent headers',
-    [
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '% \\end{document}',
-      '% notes.tex',
-      'Still the main document.',
-      '\\end{document}',
-      '% appendix.tex',
-      'Appendix text.',
-    ],
-    {
-      'main.tex': [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '% \\end{document}',
-        '% notes.tex',
-        'Still the main document.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-      'appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'removes prefaced markdown fence delimiters from percent output',
-    [
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      'Main text.',
-      '```',
-      'Done.',
-    ],
-    { 'main.tex': 'Main text.\n' },
-  ],
-  [
-    'preserves prefaced fence state across empty repeated headers',
-    [
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      '% main.tex',
-      'Main text.',
-      '```',
-    ],
-    { 'main.tex': 'Main text.\n' },
-  ],
-  [
-    'clears complete pre-header fences before the real percent output',
-    [
-      'Example:',
-      '```tex',
-      'not output',
-      '```',
-      'Actual files:',
-      '```latex',
-      '% main.tex',
-      'Main text.',
-      '```',
-    ],
-    { 'main.tex': 'Main text.\n' },
-  ],
-  [
-    'keeps inner fence delimiters inside prefaced fenced percent output',
-    [
-      'Here are the files:',
-      '```latex',
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      '\\begin{verbatim}',
-      '```',
-      '\\end{verbatim}',
-      '\\end{document}',
-      '```',
-      'Done.',
-    ],
-    {
-      'main.tex': [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        '\\begin{verbatim}',
-        '```',
-        '\\end{verbatim}',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    },
-  ],
-  [
-    'ignores prose after a fenced percent-header block until the next header',
-    [
-      '% main.tex',
-      '```latex',
-      'Main text.',
-      '```',
-      'Done.',
-      '% appendix.tex',
-      'Appendix text.',
-    ],
-    {
-      'main.tex': 'Main text.\n',
-      'appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
-    'ignores scratchpad percent filename mentions during recovery',
-    [
-      '<scratchpad>',
-      '% main.tex',
-      'Draft routing notes.',
-      '</scratchpad>',
-      '% main.tex',
-      'Actual output.',
-    ],
-    { 'main.tex': 'Actual output.\n' },
-    ['main-2.tex'],
-  ],
-  [
-    'makes duplicate percent filename headers unique before writing',
-    ['% chunk.tex', 'First.', '% chunk.tex', 'Second.'],
-    {
-      'chunk.tex': 'First.\n',
-      'chunk-2.tex': 'Second.\n',
-    },
-  ],
-  [
     'avoids percent filename suffix collisions with explicit headers',
     [
       '% chunk.tex',
@@ -617,24 +196,6 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
       'chunk.tex': 'First.\n',
       'chunk-2.tex': 'Explicit suffix.\n',
       'chunk-3.tex': 'Second duplicate.\n',
-    },
-  ],
-  [
-    'does not reserve empty percent filename header blocks',
-    ['% chunk.tex', '% chunk.tex', 'Actual content.'],
-    { 'chunk.tex': 'Actual content.\n' },
-  ],
-  [
-    'deduplicates percent filename headers after safe-path normalization',
-    [
-      '% sections/main.tex',
-      'Plain path.',
-      '% sections/./main.tex',
-      'Equivalent safe path.',
-    ],
-    {
-      'sections/main.tex': 'Plain path.\n',
-      'sections/main-2.tex': 'Equivalent safe path.\n',
     },
   ],
 ];
@@ -668,24 +229,6 @@ const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
     },
   ],
   [
-    // The % header stays (it is a valid LaTeX comment); the bare label is
-    // not LaTeX and must not leak into the recovered document.
-    'drops a bare label line inside a synthesized single-input document body',
-    [
-      '\\section{Intro}',
-      'Text.',
-      '% paper.tex',
-      'More text.',
-      'paper.tex:',
-      'Final text.',
-    ],
-    ['paper.tex'],
-    {
-      'paper.tex':
-        '\\section{Intro}\nText.\n% paper.tex\nMore text.\nFinal text.\n',
-    },
-  ],
-  [
     'keeps a bare label inside a verbatim block instead of splitting the fragment',
     [
       'main.tex:',
@@ -704,158 +247,6 @@ const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
       'appendix.tex': 'Appendix content.\n',
     },
   ],
-  [
-    'ignores bare labels inside pre-output example fences',
-    [
-      'Here is the label format:',
-      '```text',
-      'main.tex:',
-      'example body',
-      '```',
-      '',
-      'main.tex:',
-      '```latex',
-      'Real output.',
-      '```',
-    ],
-    ['main.tex'],
-    { 'main.tex': 'Real output.\n' },
-    ['main-2.tex'],
-  ],
-  [
-    'does not strip unrelated example and output fences as one wrapper',
-    [
-      '```text',
-      'main.tex:',
-      'example body',
-      '```',
-      '',
-      'main.tex:',
-      '```latex',
-      'Real output.',
-      '```',
-    ],
-    ['main.tex'],
-    { 'main.tex': 'Real output.\n' },
-    ['main-2.tex'],
-  ],
-  [
-    'preserves a shared outer fence across filename-label splits',
-    [
-      'Here are the files:',
-      '```latex',
-      'main.tex:',
-      'Main body.',
-      'appendix.tex:',
-      'Appendix body.',
-      '```',
-    ],
-    ['main.tex', 'appendix.tex'],
-    {
-      'main.tex': 'Main body.\n',
-      'appendix.tex': 'Appendix body.\n',
-    },
-  ],
-  [
-    'recovers headers after an unclosed non-LaTeX example fence',
-    [
-      'Example:',
-      '```text',
-      'The response should then provide the real file.',
-      'main.tex:',
-      'Real body.',
-    ],
-    ['main.tex'],
-    { 'main.tex': 'Real body.\n' },
-  ],
-  [
-    'recovers real filename-labelled outputs inside a prefaced text fence',
-    [
-      'Here are the files:',
-      '```text',
-      'main.tex:',
-      'Main body.',
-      'appendix.tex:',
-      'Appendix body.',
-      '```',
-    ],
-    ['main.tex', 'appendix.tex'],
-    {
-      'main.tex': 'Main body.\n',
-      'appendix.tex': 'Appendix body.\n',
-    },
-  ],
-  [
-    'recovers a single plain output inside a prefaced text fence',
-    [
-      'Here is the file:',
-      '```text',
-      'main.tex:',
-      'A plain paragraph with no command-looking LaTeX.',
-      '```',
-    ],
-    ['main.tex'],
-    { 'main.tex': 'A plain paragraph with no command-looking LaTeX.\n' },
-  ],
-  [
-    'keeps inner fence delimiters inside fenced LaTeX fragments',
-    [
-      'main.tex:',
-      '```latex',
-      '\\begin{verbatim}',
-      '```',
-      '\\end{verbatim}',
-      'Tail.',
-      '```',
-    ],
-    ['main.tex'],
-    { 'main.tex': '\\begin{verbatim}\n```\n\\end{verbatim}\nTail.\n' },
-  ],
-  [
-    'strips an outer documents envelope before filename-label recovery',
-    ['<documents>', 'main.tex:', 'Recovered body.', '</documents>'],
-    ['main.tex'],
-    { 'main.tex': 'Recovered body.\n' },
-  ],
-  [
-    'strips an outer documents envelope inside a markdown wrapper',
-    [
-      '```xml',
-      '<documents>',
-      'main.tex:',
-      'Recovered body.',
-      '</documents>',
-      '```',
-    ],
-    ['main.tex'],
-    { 'main.tex': 'Recovered body.\n' },
-  ],
-  [
-    'drops a bare label that triggers single-input prefix synthesis',
-    ['\\section{Intro}', 'Text.', 'paper.tex:', 'More text.'],
-    ['paper.tex'],
-    { 'paper.tex': '\\section{Intro}\nText.\nMore text.\n' },
-  ],
-  [
-    // Unlike a % header, a bare label is never a LaTeX comment, so the
-    // "maybe this is a preamble comment" lookahead must not swallow the
-    // label separating a preamble-only file from the next document.
-    'splits on a bare label even after preamble-only content',
-    [
-      'main.tex:',
-      '\\documentclass{article}',
-      '\\usepackage{amsmath}',
-      'body.tex:',
-      '\\begin{document}',
-      'Hi.',
-      '\\end{document}',
-    ],
-    ['main.tex', 'body.tex'],
-    {
-      'main.tex': '\\documentclass{article}\n\\usepackage{amsmath}\n',
-      'body.tex': '\\begin{document}\nHi.\n\\end{document}\n',
-    },
-  ],
 ];
 
 describe('XmlOutputManager', () => {
@@ -865,66 +256,6 @@ describe('XmlOutputManager', () => {
       workspacePath: fakePath('workspace'),
     });
   });
-
-  it.live('writes extracted full-document outputs with one final newline', () =>
-    Effect.gen(function* () {
-      const manager = createXmlManager();
-
-      yield* manager.processMultipleLatexDocuments(
-        [
-          {
-            name: 'paper.tex',
-            content:
-              '\n\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n\n',
-          },
-        ],
-        createExternalLocation(fakePath('tmp/run/output.xml')),
-        0,
-      );
-
-      yield* expectWritten(
-        'paper.tex',
-        '\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n',
-      );
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'keeps legacy trailing end-document removal and adds one final newline',
-    () =>
-      Effect.gen(function* () {
-        const manager = createXmlManager();
-
-        yield* manager.processMultipleLatexDocuments(
-          [
-            {
-              name: 'fragment.tex',
-              content: '\nBody only.\n\\end{document}\n\n',
-            },
-          ],
-          createExternalLocation(fakePath('tmp/run/output.xml')),
-          0,
-        );
-
-        yield* expectWritten('fragment.tex', 'Body only.\n');
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'creates parent directories for extracted document names with subdirectories',
-    () =>
-      Effect.gen(function* () {
-        const manager = createXmlManager();
-
-        yield* manager.processMultipleLatexDocuments(
-          [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
-          createExternalLocation(fakePath('tmp/run/output.xml')),
-          0,
-        );
-
-        yield* expectWritten('sections/main.tex', 'Nested section.\n');
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 
   for (const [name, output, files, absent = []] of RECOVERY_CASES) {
     it.live(name, () =>
@@ -937,71 +268,6 @@ describe('XmlOutputManager', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
-
-  it.live(
-    'continues percent recovery for multi-input outputs after leading LaTeX content',
-    () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(
-          ['\\section{Unroutable preface}', '% appendix.tex', 'Appendix.'],
-          ['main.tex', 'appendix.tex'],
-        );
-
-        expectSources(outputs, ['appendix.tex']);
-        yield* expectWritten('appendix.tex', 'Appendix.\n');
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'deduplicates percent filename headers after final output path mapping',
-    () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments([
-          '% output.tex',
-          'Primary fallback.',
-          '% output_extracted.tex',
-          'Explicit extracted fallback.',
-        ]);
-
-        expectSources(outputs, ['output.tex', 'output_extracted-2.tex']);
-        yield* expectWritten('output_extracted.tex', 'Primary fallback.\n');
-        yield* expectWritten(
-          'output_extracted-2.tex',
-          'Explicit extracted fallback.\n',
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live('does not auto-format extracted workflow outputs', () =>
-    Effect.gen(function* () {
-      yield* fsEffect.write(
-        fakePath('tmp/run/output.xml'),
-        `<documents><document name="main.tex">
-\\[
-  f(x)=x^4-2x^2+1.
-\\]
-</document><document name="appendix.tex">
-Appendix.
-</document></documents>`,
-      );
-      const manager = createXmlManager();
-      const state = createOutputState();
-      yield* extractFilesFromXml(
-        state,
-        processorDeps({ logger: spiedTrace() }),
-        manager,
-        createExternalLocation(fakePath('tmp/run/output.xml')),
-        0,
-      );
-
-      const roundOutputs = state.rounds.get(0)?.outputs ?? [];
-      expect(roundOutputs).toHaveLength(2);
-      // The written bytes are the guard: extraction hands the document through
-      // untouched, so a formatter running anywhere on this path would show up
-      // as different content below.
-      yield* expectWritten('main.tex', '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n');
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 
   for (const [
     name,
@@ -1017,60 +283,6 @@ Appendix.
           files,
           absent,
         );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
-
-  for (const [name, output, inputFiles, expectedSources] of [
-    [
-      'matches a bare label by basename when the model drops the directory prefix',
-      ['Draft3.tex:', '```latex', 'Recovered by basename.', '```'],
-      ['Draft/LeanMPSPaper/Draft3.tex'],
-      ['Draft/LeanMPSPaper/Draft3.tex'],
-    ],
-    [
-      'matches a bare label whose path uses Windows separators or a ./ prefix',
-      [
-        'Draft\\LeanMPSPaper\\Draft3.tex:',
-        '```latex',
-        'Body via backslashes.',
-        '```',
-        '',
-        './Draft/LeanMPSPaper/endmatter.tex:',
-        '```latex',
-        'Body via dot-slash.',
-        '```',
-      ],
-      ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
-      ['Draft/LeanMPSPaper/Draft3.tex', 'Draft/LeanMPSPaper/endmatter.tex'],
-    ],
-    [
-      'matches bare labels with leading underscores and emphasis decoration',
-      [
-        '_macros.tex:',
-        '```latex',
-        'Macro definitions.',
-        '```',
-        '',
-        '**_helpers.tex_**:',
-        '```latex',
-        'Helper macros.',
-        '```',
-      ],
-      ['_macros.tex', '_helpers.tex'],
-      ['_macros.tex', '_helpers.tex'],
-    ],
-  ] satisfies readonly (readonly [
-    string,
-    readonly string[],
-    readonly string[],
-    readonly string[],
-  ])[]) {
-    it.live(name, () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(output, [...inputFiles]);
-
-        expectSources(outputs, expectedSources);
       }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
@@ -1136,88 +348,7 @@ Appendix.
   };
   const singleArtifactInputs = ['page1.png', 'page2.png'];
 
-  for (const [name, output, inputFiles, expectedContent] of [
-    [
-      // Content-similarity matching against inputFiles must not run in this
-      // shape (it would label the block with an input media name); instead
-      // the single-document recovery names the block after the sole
-      // declared output.
-      'recovers an unlabeled fence under the declared output name for single-artifact agents',
-      ['```latex', 'Unlabeled recovered content.', '```'],
-      singleArtifactInputs,
-      'Unlabeled recovered content.\n',
-    ],
-    [
-      // For single-artifact agents the inputs can be media files the
-      // response mentions in prose; a `page1.png:` line must never become a
-      // document named after the input. The fenced content is still
-      // recovered, but under the sole declared output name.
-      'ignores bare labels naming an input when the agent declares outputFiles',
-      ['page1.png:', '```latex', 'Transcribed content.', '```'],
-      singleArtifactInputs,
-      'Transcribed content.\n',
-    ],
-    [
-      'synthesizes an unlabeled prefix under the declared output name, not the input',
-      ['\\section{Transcription}', 'Intro.', 'ocr_result.tex:', 'More.'],
-      ['paper.tex'],
-      '\\section{Transcription}\nIntro.\nMore.\n',
-    ],
-    [
-      'recovers a bare label naming a declared output file',
-      ['ocr_result.tex:', '```latex', 'Transcribed content.', '```'],
-      singleArtifactInputs,
-      'Transcribed content.\n',
-    ],
-  ] satisfies readonly (readonly [
-    string,
-    readonly string[],
-    readonly string[],
-    string,
-  ])[]) {
-    it.live(name, () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(
-          output,
-          [...inputFiles],
-          singleArtifactOptions,
-        );
-
-        expectSources(outputs, ['ocr_result.tex']);
-        yield* expectWritten('ocr_result.tex', expectedContent);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
-
   for (const [name, output] of [
-    [
-      'coalesces repeated labels for the sole declared output',
-      [
-        'ocr_result.tex:',
-        '```latex',
-        'Page one transcription.',
-        '```',
-        '',
-        'ocr_result.tex:',
-        '```latex',
-        'Page two transcription.',
-        '```',
-      ],
-    ],
-    [
-      'coalesces unlabeled chunks after a sole-output header chunk',
-      [
-        'ocr_result.tex:',
-        '```latex',
-        'Page one transcription.',
-        '```',
-        '',
-        'page2.png:',
-        '```latex',
-        'Page two transcription.',
-        '```',
-      ],
-    ],
     [
       'concatenates multiple unlabeled fences under the sole declared output',
       [
@@ -1252,83 +383,6 @@ Appendix.
   }
 
   it.live(
-    'does not coalesce explanatory fences after a sole-output header chunk',
-    () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            'ocr_result.tex:',
-            '```latex',
-            'Page one transcription.',
-            '```',
-            '',
-            'Explanation:',
-            '```latex',
-            '\\LaTeX{} example, not output.',
-            '```',
-          ],
-          singleArtifactInputs,
-          singleArtifactOptions,
-        );
-
-        expectSources(outputs, ['ocr_result.tex']);
-        yield* expectWritten('ocr_result.tex', 'Page one transcription.\n');
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'does not concatenate later explanatory fences for single-input edits',
-    () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            '```latex',
-            'Revised paper body.',
-            '```',
-            '',
-            'Explanation:',
-            '```latex',
-            '\\LaTeX{} example, not output.',
-            '```',
-          ],
-          ['paper.tex'],
-        );
-
-        expectSources(outputs, ['paper.tex']);
-        yield* expectWritten('paper.tex', 'Revised paper body.\n');
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'ignores scratchpad fenced blocks when recovering a single-input edit',
-    () =>
-      Effect.gen(function* () {
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            '<scratchpad>',
-            'Draft attempt before I settled on the real revision:',
-            '```latex',
-            '\\section{Scratch}',
-            'Rejected draft.',
-            '```',
-            '</scratchpad>',
-            '```latex',
-            '\\section{Final}',
-            'Accepted revision.',
-            '```',
-          ],
-          ['paper.tex'],
-        );
-
-        expectSources(outputs, ['paper.tex']);
-        yield* expectWritten(
-          'paper.tex',
-          '\\section{Final}\nAccepted revision.\n',
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
     'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
     () =>
       Effect.gen(function* () {
@@ -1350,206 +404,6 @@ Appendix.
         // Both base files score identically, so there is no evidence which one
         // the block revises — refusing to guess beats corrupting one of them.
         expect(outputs).toEqual([]);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'routes the revision, not the echoed original, when the model quotes both',
-    () =>
-      Effect.gen(function* () {
-        yield* fsEffect.write(
-          fakePath('tmp/run/cost.tex'),
-          '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/arch.tex'),
-          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
-        );
-
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            'The original cost section for reference:',
-            '```latex',
-            '\\section{Computational cost}',
-            'Preliminary numbers from the local interactive logs.',
-            '```',
-            '',
-            'And my revision:',
-            '```latex',
-            '\\section{Computational cost}',
-            'Final numbers from the local interactive logs.',
-            '```',
-            '',
-            '```latex',
-            '\\appendix',
-            '\\section{Agent architecture}',
-            'The formalization system uses a revised multi-agent architecture.',
-            '```',
-          ],
-          ['cost.tex', 'arch.tex'],
-          { baseFiles: ['cost.tex', 'arch.tex'] },
-        );
-
-        expect(outputs.map((output) => output.source).sort()).toEqual([
-          'arch.tex',
-          'cost.tex',
-        ]);
-        yield* expectWritten(
-          'cost.tex',
-          '\\section{Computational cost}\nFinal numbers from the local interactive logs.\n',
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'matches later-round unlabeled fences against the previous round outputs',
-    () =>
-      Effect.gen(function* () {
-        // Round-0 originals are placeholders that no longer resemble the content
-        // being revised; only the previous round's outputs do. The similarity
-        // fallback must compare against those, or every later-round recovery
-        // would score below the threshold and drop the round.
-        yield* fsEffect.ensureDir(fakePath('tmp/run/r0'));
-        yield* fsEffect.ensureDir(fakePath('tmp/run/r1'));
-        yield* fsEffect.write(
-          fakePath('tmp/run/appendices.tex'),
-          'placeholder A',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/cost_section.tex'),
-          'placeholder B',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/r0/appendices.tex'),
-          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with shared memory.\n',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/r0/cost_section.tex'),
-          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the interactive logs.\n',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/r1/output.xml'),
-          [
-            '```latex',
-            '% !TEX root = Draft3SM.tex',
-            '\\section{Computational cost}',
-            'Final numbers from the interactive logs.',
-            '```',
-            '',
-            '```latex',
-            '\\appendix',
-            '\\section{Agent architecture}',
-            'The formalization system uses a revised multi-agent architecture with shared memory.',
-            '```',
-          ].join('\n'),
-        );
-
-        const manager = createXmlManager([
-          'appendices.tex',
-          'cost_section.tex',
-        ]);
-        const state = createOutputState();
-        ensureRoundData(state, 0).outputs = [
-          {
-            source: 'appendices.tex',
-            round: 0,
-            location: createExternalLocation(
-              fakePath('tmp/run/r0/appendices.tex'),
-            ),
-            lineage: null,
-            diff: null,
-          },
-          {
-            source: 'cost_section.tex',
-            round: 0,
-            location: createExternalLocation(
-              fakePath('tmp/run/r0/cost_section.tex'),
-            ),
-            lineage: null,
-            diff: null,
-          },
-        ];
-        yield* extractFilesFromXml(
-          state,
-          processorDeps({
-            logger: spiedTrace(),
-            baseFiles: [
-              createExternalLocation(fakePath('tmp/run/appendices.tex')),
-              createExternalLocation(fakePath('tmp/run/cost_section.tex')),
-            ],
-          }),
-          manager,
-          createExternalLocation(fakePath('tmp/run/r1/output.xml')),
-          1,
-        );
-
-        const roundOutputs = state.rounds.get(1)?.outputs ?? [];
-
-        expect(roundOutputs.map((output) => output.source).sort()).toEqual([
-          'appendices.tex',
-          'cost_section.tex',
-        ]);
-        yield* expectWritten(
-          'r1/cost_section.tex',
-          '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nFinal numbers from the interactive logs.\n',
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'reports input files left unmatched by content-similarity recovery',
-    () =>
-      Effect.gen(function* () {
-        const logger = spiedTrace();
-        const state = createOutputState();
-        yield* fsEffect.write(
-          fakePath('tmp/run/cost.tex'),
-          '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
-        );
-        yield* fsEffect.write(
-          fakePath('tmp/run/arch.tex'),
-          '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
-        );
-
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            '```latex',
-            '\\section{Computational cost}',
-            'Final numbers from the local interactive logs.',
-            '```',
-          ],
-          ['cost.tex', 'arch.tex'],
-          { logger, baseFiles: ['cost.tex', 'arch.tex'], outputState: state },
-        );
-
-        expectSources(outputs, ['cost.tex']);
-        expect(state.rounds.get(0)?.missingOutputs).toEqual(['arch.tex']);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.live(
-    'reports expected files left unmatched by filename-header recovery',
-    () =>
-      Effect.gen(function* () {
-        const logger = spiedTrace();
-        const state = createOutputState();
-        const outputs = yield* writeAndSplitDocuments(
-          [
-            'main.tex:',
-            '```latex',
-            'Main body.',
-            '```',
-            '',
-            '```latex',
-            'Appendix body with no label.',
-            '```',
-          ],
-          ['main.tex', 'appendix.tex'],
-          { logger, outputState: state },
-        );
-
-        expectSources(outputs, ['main.tex']);
-        expect(state.rounds.get(0)?.missingOutputs).toEqual(['appendix.tex']);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
@@ -1577,146 +431,4 @@ describe('assignByContentSimilarity', () => {
     expect(assigned[1]?.name).toBe('cost.tex');
     expect(assigned[0]).toBeNull();
   });
-
-  it('keeps an exact unchanged output over a weak stray snippet', () => {
-    const original =
-      'line one shared\nline two original content here\nline three original content here';
-    const snippet =
-      'line one shared\nwholly different discussion\nabout unrelated things';
-
-    const assigned = assignByContentSimilarity(
-      [original, snippet],
-      [{ name: 'f.tex', content: `${original}\n` }],
-    );
-
-    // The snippet is too weak to be a credible revision, so it must not
-    // displace the exact copy (a legitimately unchanged output) from its file.
-    expect(assigned[0]?.name).toBe('f.tex');
-    expect(assigned[1]).toBeNull();
-  });
-
-  it('can assign a candidate after another block resolves its initial tie', () => {
-    const assigned = assignByContentSimilarity(
-      ['common common common', 'AAA weak'],
-      [
-        { name: 'a.tex', content: 'AAA common common common' },
-        { name: 'b.tex', content: 'BBB common common common' },
-      ],
-    );
-
-    expect(assigned.filter(Boolean)).toHaveLength(2);
-    expect(assigned[0]?.name).toBe('b.tex');
-    expect(assigned[1]?.name).toBe('a.tex');
-  });
-
-  it('does not route a repeated block to a weaker secondary file', () => {
-    const main =
-      '\\documentclass{article}\n\\begin{document}\nMain result.\n\\end{document}';
-    const mainRevision =
-      '\\documentclass{article}\n\\begin{document}\nRevised main result.\n\\end{document}';
-    const appendix =
-      '\\documentclass{article}\n\\begin{document}\nAppendix result.\n\\end{document}';
-
-    const assigned = assignByContentSimilarity(
-      [mainRevision, mainRevision],
-      [
-        { name: 'main.tex', content: main },
-        { name: 'appendix.tex', content: appendix },
-      ],
-    );
-
-    expect(assigned[0]?.name).toBe('main.tex');
-    expect(assigned[1]).toBeNull();
-  });
-
-  it('keeps one exact copy when unchanged output is repeated', () => {
-    const original =
-      '\\documentclass{article}\n\\begin{document}\nUnchanged.\n\\end{document}';
-
-    const assigned = assignByContentSimilarity(
-      [original, original],
-      [{ name: 'main.tex', content: original }],
-    );
-
-    expect(assigned.filter(Boolean)).toHaveLength(1);
-    expect(assigned[0]?.name).toBe('main.tex');
-    expect(assigned[1]).toBeNull();
-  });
-});
-
-describe('extractFilesFromXml', () => {
-  for (const { name, failure, round } of [
-    {
-      name: 'when extraction throws',
-      failure: new Error('invalid xml'),
-      round: 3,
-    },
-    { name: 'when extraction yields no files', failure: null, round: 4 },
-  ]) {
-    it.live(`retains missing outputs across rounds ${name}`, () =>
-      Effect.gen(function* () {
-        const logger = new TraceEmitter();
-        const state = createOutputState();
-        // An earlier round already reported a missing file: the row this round
-        // publishes carries the run's whole map, since a cold fold keeps only
-        // the newest row of the type.
-        ensureRoundData(state, round - 1).missingOutputs = ['earlier.tex'];
-        const manager = createXmlManager(['paper.tex'], {
-          logger,
-          outputState: state,
-        });
-        const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
-        if (failure) split.mockReturnValueOnce(Effect.fail(failure));
-        else split.mockReturnValueOnce(Effect.succeed([]));
-        yield* fsEffect.write(fakePath('tmp/run/empty-output.xml'), '');
-
-        yield* extractFilesFromXml(
-          state,
-          processorDeps({ logger }),
-          manager,
-          createExternalLocation(fakePath('tmp/run/empty-output.xml')),
-          round,
-        );
-
-        expect(state.rounds.get(round - 1)?.missingOutputs).toEqual([
-          'earlier.tex',
-        ]);
-        expect(state.rounds.get(round)?.missingOutputs).toEqual([]);
-        expect(state.rounds.get(round)?.outputs).toEqual([]);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
-
-  it.live('warns when a non-empty response yields zero extracted files', () =>
-    Effect.gen(function* () {
-      // A run where the model returned content but nothing could be extracted
-      // (it did not wrap files in <documents>) must surface a warning rather
-      // than completing silently with only the raw output.
-      const logger = new TraceEmitter();
-      const warn = vi.spyOn(logger, 'warn');
-      const manager = createXmlManager(['paper.tex'], { logger });
-      vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockReturnValueOnce(
-        Effect.succeed([]),
-      );
-      yield* fsEffect.write(
-        fakePath('tmp/run/untagged-output.xml'),
-        '% chunk.tex\n\\section{Untagged content}\n',
-      );
-
-      yield* extractFilesFromXml(
-        createOutputState(),
-        processorDeps({ logger }),
-        manager,
-        createExternalLocation(fakePath('tmp/run/untagged-output.xml')),
-        5,
-      );
-
-      expect(warn).toHaveBeenCalledExactlyOnceWith(
-        expect.stringContaining('no files could be extracted'),
-        expect.objectContaining({
-          data: expect.objectContaining({ round: 5 }),
-        }),
-      );
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 });

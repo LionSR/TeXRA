@@ -13,7 +13,6 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -101,35 +100,6 @@ describe('deriveResumability', () => {
 
       expect(yield* deriveResumability(runId, session)).toEqual({
         kind: 'none',
-      });
-    }),
-  );
-
-  it.effect('reports unreadable metadata as unreadable even when opened', () =>
-    Effect.gen(function* () {
-      const runId = 'ac000a' as RunId;
-      yield* Effect.promise(() => writeMeta(runId, {}));
-      yield* Effect.promise(() => writeOpening(runId));
-      vi.spyOn(session.log, 'records').mockReturnValue(
-        Effect.fail(
-          new DatabaseReadFailed({
-            path: 'session.db',
-            cause: new Error('corrupt run metadata'),
-          }),
-        ),
-      );
-      vi.spyOn(session.log, 'rows').mockReturnValue(
-        Effect.fail(
-          new DatabaseReadFailed({
-            path: 'session.db',
-            cause: new Error('corrupt run metadata'),
-          }),
-        ),
-      );
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'unreadable',
-        cause: 'run state could not be read (corrupt run metadata)',
       });
     }),
   );

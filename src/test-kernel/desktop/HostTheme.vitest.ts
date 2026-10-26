@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-// Subject under test - the host-neutral theme helpers shared between the
-// VS Code webviews and the Electron renderer.
 import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 
 describe('resolvePostMessageTargetOrigin', () => {

@@ -42,7 +42,7 @@ import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 
-export const TEST_ORIGIN = {
+const TEST_ORIGIN = {
   protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',

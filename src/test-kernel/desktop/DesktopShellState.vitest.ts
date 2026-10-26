@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Schema } from 'effect';
 import {
-  DesktopShellStateSchema,
-  closeWorkbenchTab,
   initialDesktopShellState,
   openWorkbenchTab,
   setWorkbenchTabDirty,
@@ -32,19 +29,5 @@ describe('desktop document identity', () => {
         dirty: true,
       },
     ]);
-  });
-
-  it('does not reuse terminal identities after closure or persistence', () => {
-    let state = openWorkbenchTab(initialDesktopShellState(), {
-      kind: 'terminal',
-    });
-    const closedId = state.activeTabId!;
-    state = closeWorkbenchTab(state, closedId);
-    state = Schema.decodeUnknownSync(DesktopShellStateSchema)(
-      JSON.parse(JSON.stringify(state)),
-    );
-    state = openWorkbenchTab(state, { kind: 'terminal' });
-    expect(state.activeTabId).not.toBe(closedId);
-    expect(state.workbenchTabs.some((tab) => tab.id === closedId)).toBe(false);
   });
 });

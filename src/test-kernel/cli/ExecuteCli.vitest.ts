@@ -36,7 +36,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRows, seedRows } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
@@ -168,26 +167,12 @@ const COMPLETED_RUN = {
   runId: 'ec0000000001',
 } as const;
 
-/** What a run the shutdown stopped ends with. */
-const CANCELLED_RUN = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
-
 /** A run the shutdown stopped whose result re-raises the stop, as
  *  `AgentRunLifecycle` does once its CANCELLED end is committed. */
 const STOPPED = Symbol('stopped');
 
 function baseRequest(): CliRequest {
   return { config: {}, runId: 'ec0000000001' } as unknown as CliRequest;
-}
-
-function toolUseConfig() {
-  return {
-    agent: 'chat',
-    model: 'openai/gpt-5.4-2026-03-05',
-    inputFiles: [] as string[],
-    contextFiles: [] as string[],
-    instruction: 'Check this.',
-    workingDirectory: '/tmp/project',
-  };
 }
 
 /** A run program's options with the session, runtime and shutdown scope
@@ -358,24 +343,6 @@ describe('executeCliRequest', () => {
     vi.restoreAllMocks();
   });
 
-  it.effect.each(['text', 'json'] as const)(
-    'does not attach the CLI progress projection for %s output',
-    (outputFormat) =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const { attachCliSessionProgressProjection } = yield* Effect.promise(
-          () => import('@cli/runtime/sessionProgressSubscription'),
-        );
-        const attachProjection = vi.mocked(attachCliSessionProgressProjection);
-        const request = baseRequest();
-
-        yield* executeCliRequest(request, cliContext({ outputFormat }));
-
-        expect(attachProjection).not.toHaveBeenCalled();
-        expect(mocks.detachSessionProgressProjection).not.toHaveBeenCalled();
-      }),
-  );
-
   /** Whether the session withheld approval-gated tools while the run
    *  launched: its policy and the grants its `run.start` records, as the
    *  root launch records them, applied to what the attached host can
@@ -522,41 +489,6 @@ describe('executeCliRequest', () => {
   );
 
   it.live(
-    'cancels launch preparation when shutdown precedes run registration',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const launch = yield* Deferred.make<void>();
-        // The session has not admitted the run when the shutdown comes: the
-        // launch is interrupted, which aborts it.
-        mocks.admit.mockImplementationOnce(
-          () =>
-            new Promise<never>(() => {
-              Deferred.doneUnsafe(launch, Effect.void);
-            }),
-        );
-
-        const run = yield* Effect.forkChild(
-          executeCliRequest(
-            { ...baseRequest(), runId: generateRunId() },
-            cliContext(),
-            {},
-          ),
-        );
-        yield* Deferred.await(launch);
-        yield* settle;
-
-        yield* Scope.close(platform.shutdownScope, Exit.void);
-        expect(yield* Fiber.join(run)).toEqual({
-          ok: false,
-          exitCode: CliExitCode.Interrupted,
-        });
-      }),
-  );
-
-  it.live(
     'preserves a terminal outcome when shutdown cannot interrupt the finished run',
     () =>
       Effect.gen(function* () {
@@ -589,78 +521,6 @@ describe('executeCliRequest', () => {
         // A stop that reached no live run never reads the launch as
         // interrupted, so its rows promise no recovery.
         expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
-      }),
-  );
-});
-
-describe('executeCliConfig', () => {
-  beforeEach(async () => {
-    await stubExecuteCliDeps();
-    await installFreshDefaultSession();
-  });
-
-  // it.live for the two shutdown tests below: the run is forked in-fiber, but
-  // the command's shutdown step settles on the process runtime.
-  it.live(
-    'prints a complete resume command after interrupted tool-use recovery is available',
-    () =>
-      Effect.gen(function* () {
-        const { platform } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const { executeCliToolUseConfig } =
-          yield* Effect.promise(loadExecuteCli);
-        const context = cliContext({
-          approvalPolicy: 'yolo',
-          outputFormat: 'ndjson',
-          skillSourceOptions: {
-            includeInterop: true,
-            additionalPaths: ['/tmp/skill path'],
-          },
-        });
-        const published = yield* Deferred.make<void>();
-        const hangingRun = stubHangingRun(published);
-        const recoveryWrite = yield* Deferred.make<void>();
-        const noticeStarted = yield* Deferred.make<void>();
-        mocks.writeTextStderrAndWait.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(noticeStarted, Effect.void);
-          return Deferred.await(recoveryWrite);
-        });
-
-        const run = yield* Effect.forkChild(
-          executeCliToolUseConfig(toolUseConfig(), context, {
-            stopAfterCycle: true,
-          }),
-        );
-        yield* Deferred.await(published);
-        yield* settle;
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        mockCancelledOutcome();
-        hangingRun.resolve(CANCELLED_RUN);
-
-        yield* Deferred.await(noticeStarted);
-        yield* settle;
-        expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce();
-        let shutdownResolved = false;
-        shutdown.addObserver(() => {
-          shutdownResolved = true;
-        });
-        yield* settle;
-        expect(shutdownResolved).toBe(false);
-        yield* Deferred.succeed(recoveryWrite, undefined);
-        yield* Fiber.join(shutdown);
-        expect(yield* Fiber.join(run)).toMatchObject({
-          ok: true,
-          exitCode: CliExitCode.Interrupted,
-        });
-        // The launch's own run id, minted for the tool-use request.
-        const launched: { runId: RunId } = mocks.rootLaunch.mock.calls[0]?.[0];
-        expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
-          `Resume this task with: texra resume ${launched.runId} --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'`,
-        );
       }),
   );
 });

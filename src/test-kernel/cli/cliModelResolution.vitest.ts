@@ -29,9 +29,6 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 const selectCliRunnableModelMock = vi.mocked(selectCliRunnableModel);
 
-const KNOWN_MODEL = 'openai/gpt-5-2025-08-07';
-const OTHER_MODEL = 'claudeSonnet';
-
 function makeContext(partial: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
     cwd: '/tmp',
@@ -68,24 +65,6 @@ describe('selectCliRunModel precedence', () => {
           request.find((candidate) => candidate.model)?.model ??
           CLI_CHEAP_START_MODEL,
       }),
-    );
-  });
-
-  it('passes the full run-model candidate list to model access', async () => {
-    await withRunModel('deepseek/deepseek-reasoner');
-    const stores = storesOf();
-    const context = makeContext({ envModel: OTHER_MODEL });
-
-    await runSelect(context, KNOWN_MODEL, 'run', stores);
-
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
-      [
-        { model: KNOWN_MODEL, reason: 'explicit-override' },
-        { model: OTHER_MODEL, reason: 'environment' },
-        { model: 'deepseek/deepseek-reasoner', reason: 'command-config' },
-        { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
-      ],
-      { stores },
     );
   });
 

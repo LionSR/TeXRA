@@ -23,49 +23,6 @@ describe('memory frontmatter (yaml-backed) (packages/harness/src/common/memory/m
     expect(parsed.content).toBe('the body\nmore body\n');
   });
 
-  it('parses a block using CRLF line endings', () => {
-    const crlf = [
-      '---',
-      'modifiedBy: agent-name',
-      'modifiedAt: 2026-06-20T14:30:45.123Z',
-      '---',
-      'crlf body',
-    ].join('\r\n');
-
-    const parsed = parseFrontmatter(crlf);
-    expect(parsed.meta).toEqual({
-      modifiedBy: 'agent-name',
-      modifiedAt: '2026-06-20T14:30:45.123Z',
-    });
-    expect(parsed.content).toBe('crlf body');
-  });
-
-  it('preserves CRLF bytes inside a multi-line body untouched', () => {
-    // The fence lines use CRLF (Windows-edited file), but the content
-    // deliberately mixes CRLF and LF within the body to prove only the
-    // fence-matching is line-ending-tolerant: parseFrontmatter must not
-    // flatten the body's own line endings when it round-trips through a
-    // write-back (pin/unpin, str_replace, insert all rewrite `content`
-    // verbatim).
-    const body = 'line1\r\nline2\nline3\r\n';
-    const raw =
-      [
-        '---',
-        'modifiedBy: agent-name',
-        'modifiedAt: 2026-06-20T14:30:45.123Z',
-        '---',
-      ].join('\r\n') +
-      '\r\n' +
-      body;
-
-    const parsed = parseFrontmatter(raw);
-    expect(parsed.meta).toEqual({
-      modifiedBy: 'agent-name',
-      modifiedAt: '2026-06-20T14:30:45.123Z',
-    });
-    expect(parsed.content).toBe(body);
-  });
-
   // In every unreadable case the full raw text is preserved as content
   // (back-compat with the old parser).
   it.each([

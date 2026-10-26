@@ -74,7 +74,7 @@ export const testSessionOwner: Effect.Effect<SessionOwner['Service']> =
   );
 
 /** The sessions the harness's session graph serves. */
-export const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
+const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
   () =>
     graphSessions ??
     Effect.die(new Error('No test session graph is installed.')),

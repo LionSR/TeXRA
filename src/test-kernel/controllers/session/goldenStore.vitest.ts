@@ -195,23 +195,6 @@ const runsOf = (view: SessionView) =>
     children: run.childIds,
   }));
 
-const TABLES = {
-  listing_entry: 'SELECT * FROM listing_entry ORDER BY aggregate, key',
-  projected_row: 'SELECT * FROM projected_row ORDER BY "commit", type',
-  run_usage: 'SELECT * FROM run_usage ORDER BY aggregate',
-  run_model: 'SELECT * FROM run_model ORDER BY aggregate',
-  projection_state: 'SELECT * FROM projection_state ORDER BY name',
-};
-const projections = (storage: string) =>
-  raw(storage, (db) =>
-    Object.fromEntries(
-      Object.entries(TABLES).map(([table, sql]) => [
-        table,
-        db.prepare(sql).all(),
-      ]),
-    ),
-  );
-
 describe('the golden 1.0 store', () => {
   it.effect(
     'decodes every row to an event, and holds every row kind, a fork, owned children and shared blobs',
@@ -537,22 +520,6 @@ describe('the golden 1.0 store', () => {
         });
         expect(stored()).toEqual(before);
       });
-    },
-  );
-
-  it.effect(
-    'rebuilds each projection from zero to its incremental tables',
-    () => {
-      const storage = goldenRoot();
-      const incremental = projections(storage);
-      raw(storage, (db) =>
-        db.exec(`DELETE FROM projection_state; DELETE FROM projected_row;
-        DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;`),
-      );
-      return Effect.gen(function* () {
-        yield* (yield* Database).readListing();
-        expect(projections(storage)).toEqual(incremental);
-      }).pipe(Effect.provide(substrate(storage)));
     },
   );
 

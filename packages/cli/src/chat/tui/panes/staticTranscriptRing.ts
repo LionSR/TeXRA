@@ -528,7 +528,7 @@ interface BuildStaticTranscriptItemsOptions {
   readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
 
-export function buildStaticTranscriptItems(
+function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): RingTail {
   const {

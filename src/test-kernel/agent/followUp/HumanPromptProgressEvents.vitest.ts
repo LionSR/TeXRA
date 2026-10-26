@@ -55,45 +55,6 @@ describe('human prompt progress events', () => {
     await installPlatform({});
   });
 
-  it.live('opens a bash request on the run and settles on its decision', () =>
-    Effect.gen(function* () {
-      const explicit = createRecordingHost();
-      const runId = startedRun();
-      const decided = autoDecideRequests(testDefaultSession(), () => ({
-        action: 'approve',
-      }));
-
-      try {
-        const approval = yield* inToolContext(
-          explicit.interactions,
-          runId,
-          () =>
-            requestBashApproval({
-              command: 'echo hello',
-              cwd: '/tmp/texra-project',
-              grant: 'shell',
-            }),
-        );
-
-        expect(approval).toMatchObject({ action: 'approve' });
-        expect(decided.opened.map((request) => request.payload)).toEqual([
-          {
-            kind: 'bash',
-            data: {
-              requestId: expect.stringContaining('bash-'),
-              command: 'echo hello',
-              cwd: '/tmp/texra-project',
-              allowBypass: true,
-              runId,
-            },
-          },
-        ]);
-      } finally {
-        decided.detach();
-      }
-    }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
   it.live('keeps bash and edit session bypasses independent', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();

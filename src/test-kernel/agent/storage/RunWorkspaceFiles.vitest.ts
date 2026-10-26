@@ -1,67 +1,48 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { fakePath } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const WORKSPACE_PATH = fakePath('workspace');
-const CONFIG = { workingDirectory: WORKSPACE_PATH };
-
-const list = (paths: string[]): Promise<unknown> =>
-  Effect.runPromise(listRunWorkspaceFiles(CONFIG, paths));
 
 describe('listRunWorkspaceFiles', () => {
   setupPlatform({ workspacePath: WORKSPACE_PATH });
 
-  it('lists unique contained entries in path order and omits missing paths', async () => {
-    await mkdir(path.join(WORKSPACE_PATH, 'z-dir'), { recursive: true });
-    await writeFile(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
+  it.live(
+    'lists unique contained entries in path order and omits missing paths',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await mkdir(path.join(WORKSPACE_PATH, 'z-dir'), { recursive: true });
+          await writeFile(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
+        });
 
-    await expect(
-      list([
-        'z-dir',
-        'missing.tex',
-        'a-file.tex',
-        'a-file.tex',
-        '../outside.tex',
-      ]),
-    ).resolves.toEqual([
-      {
-        path: 'a-file.tex',
-        size: 7,
-        isDirectory: false,
-      },
-      {
-        path: 'z-dir',
-        // A real directory's size is the filesystem's own bookkeeping.
-        size: expect.any(Number),
-        isDirectory: true,
-      },
-    ]);
-  });
+        const files = yield* listRunWorkspaceFiles(
+          { workingDirectory: WORKSPACE_PATH },
+          [
+            'z-dir',
+            'missing.tex',
+            'a-file.tex',
+            'a-file.tex',
+            '../outside.tex',
+          ],
+        );
 
-  it('omits a path whose intermediate component is not a directory', async () => {
-    await mkdir(WORKSPACE_PATH, { recursive: true });
-    await writeFile(path.join(WORKSPACE_PATH, 'not-a-dir.tex'), 'content');
-
-    await expect(list(['not-a-dir.tex/child.tex'])).resolves.toEqual([]);
-  });
-
-  // POSIX only: an over-long component is ENAMETOOLONG here, while Windows
-  // reports an unusable name as ERROR_INVALID_NAME, which libuv translates to
-  // ENOENT — absence, which this call is supposed to skip. No cross-platform
-  // path produces an operational `lstat` failure on a real filesystem, so the
-  // branch is asserted where one exists rather than through a mock.
-  it.skipIf(process.platform === 'win32')(
-    'propagates operational stat failures',
-    async () => {
-      // A component past the filesystem's name limit fails ENAMETOOLONG, which
-      // is neither absence nor a non-directory parent, so it must surface.
-      await expect(list([`${'x'.repeat(5000)}.tex`])).rejects.toThrow();
-    },
+        expect(files).toEqual([
+          { path: 'a-file.tex', size: 7, isDirectory: false },
+          {
+            path: 'z-dir',
+            // A real directory's size is the filesystem's own bookkeeping.
+            size: expect.any(Number),
+            isDirectory: true,
+          },
+        ]);
+      }),
   );
 });

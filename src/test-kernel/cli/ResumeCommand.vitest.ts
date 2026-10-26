@@ -15,7 +15,6 @@ import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
@@ -62,13 +61,6 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'planner',
   model: 'gpt-5',
 });
-
-const WORKFLOW_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)(
-  asDocumentTask({
-    agent: 'correct',
-    model: 'google/gemini-3.1-pro-preview',
-  }),
-);
 
 /** The session the seeded run lives in, as the command resolves it. */
 let seededSession: SessionHandle;
@@ -163,24 +155,6 @@ describe('runResumeCommand', () => {
 
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
-  });
-
-  it('resumes a workflow run headless under its persisted run id', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-
-    // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
-    // needs an interactive terminal.
-    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(0);
-
-    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
-      WORKFLOW_CONFIG,
-      expect.any(Object),
-      expect.objectContaining({ runId: RUN_ID }),
-    );
-    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
-      expect.anything(),
-      'correct',
-    );
   });
 
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {

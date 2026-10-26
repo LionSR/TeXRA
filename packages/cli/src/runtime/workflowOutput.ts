@@ -143,8 +143,6 @@ const probeOutputPath = Effect.fn('probeOutputPath')(
     ),
 );
 
-export { probeOutputPath as probeOutputPathForTests };
-
 /** `--output-dir <path>` must point at a directory (or not exist yet). */
 export function assertOutputDirAvailable(
   outputDir: string | undefined,

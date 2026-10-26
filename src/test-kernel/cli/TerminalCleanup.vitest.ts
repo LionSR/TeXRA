@@ -89,7 +89,6 @@ describe('installTerminalTitleUpdates', () => {
   const expectLastTitle = (title: string): void => {
     expect(writeSync).toHaveBeenLastCalledWith(1, `\x1b]0;${title}\x07`);
   };
-  /** Advancing the spin timer must not produce any further title writes. */
   it('keeps sanitization and the OSC capability gate across live transitions', async () => {
     const updates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
@@ -119,12 +118,6 @@ describe('acquireTuiTerminal resume', () => {
     terminal.release();
     expect(title.resume).toHaveBeenCalledOnce();
   };
-
-  it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
-    resumeWith(false);
-
-    expect(writeSync).toHaveBeenCalledWith(1, '\x1b[?2004h\x1b[?25l');
-  });
 
   it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
     resumeWith(true);

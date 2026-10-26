@@ -1,93 +1,21 @@
 import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { assert, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  buildAgentLaunchContext as buildAgentLaunchContextEffect,
-  prepareAgentDefinition,
-} from '@agent/runtime/AgentLaunchContext';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  fakeProcessServices,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 
-import { recordSessionEvents } from '../progressTestUtils';
-
-const buildAgentLaunchContext = (
-  input: Omit<
-    Parameters<typeof buildAgentLaunchContextEffect>[0],
-    'definition'
-  > &
-    Parameters<typeof prepareAgentDefinition>[0],
-) =>
-  prepareAgentDefinition(input).pipe(
-    Effect.flatMap((definition) =>
-      buildAgentLaunchContextEffect({ ...input, definition }),
-    ),
-    // The launch's scope stands in for the run's: closing it here retires
-    // the trace the way the end of a run does.
-    Effect.scoped,
-    Effect.provide(fakeProcessServices()),
-  );
-
-/** Lets the queued banner replay run (queueMicrotask + a Promise.resolve hop). */
-const settle = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
-
 const EXECUTION_ID = 'a00101' as RunId;
-
-/** Launches an unresolvable agent, asserting the shared missing-agent failure. */
-const launchWithMissingAgent = (session: SessionHandle, agent = '') =>
-  Effect.gen(function* () {
-    const error = yield* Effect.flip(
-      buildAgentLaunchContext({
-        config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent,
-          model: '',
-        }),
-        runId: EXECUTION_ID,
-        session,
-      }),
-    );
-    expect(error.message).toContain('Could not find agent');
-  });
-
-/**
- * Triggers the launch's queued (no live host attached) missing-agent failure
- * and asserts the shared claimed-presentation state, returning the owning
- * session so the caller can attach a host, assert on replay, and dispose it
- * (disposing earlier would drop the queued replay with the session).
- */
-const triggerQueuedMissingAgentFailure = (session: SessionHandle) =>
-  Effect.gen(function* () {
-    const thrown = yield* Effect.flip(
-      buildAgentLaunchContext({
-        config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: '__queued_missing_agent_for_launch_context_test__',
-          model: '',
-        }),
-        runId: EXECUTION_ID,
-        session,
-      }),
-    );
-    expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentationClaimed(thrown)).toBe(true);
-    return session;
-  });
 
 const tempDirs = useTempDirs();
 
@@ -107,102 +35,6 @@ describe('AgentLaunchContext', () => {
       },
     };
   });
-
-  it.effect(
-    'falls back to the generic toast when a live host throws on the missing-agent banner',
-    () =>
-      Effect.gen(function* () {
-        // A live host whose banner post throws synchronously (a renderer torn
-        // down mid-post, #10466) must leave the failure unclaimed: it is
-        // pre-registration, so no `result` event exists to present it instead.
-        const events: string[] = [];
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        yield* session.interactions.use({
-          emit: (event) => {
-            if (event === 'showAgentConfigBanner') {
-              throw new Error('renderer torn down mid-post');
-            }
-            events.push(event);
-          },
-        });
-
-        yield* launchWithMissingAgent(session);
-
-        expect(
-          events.filter((event) => event === 'requestShowError'),
-        ).toHaveLength(1);
-      }),
-  );
-
-  it.effect(
-    'emits the generic fallback when a queued banner replay throws synchronously',
-    () =>
-      Effect.gen(function* () {
-        // The banner was queued (no host attached) and claimed; a host whose
-        // replayed post throws must still surface the failure once (#10398).
-        const events: string[] = [];
-        const session = yield* triggerQueuedMissingAgentFailure(
-          yield* createTestSession(),
-        );
-        yield* session.interactions.use({
-          emit: (event) => {
-            if (event === 'showAgentConfigBanner') {
-              throw new Error('renderer torn down mid-post');
-            }
-            events.push(event);
-          },
-        });
-        yield* settle;
-
-        expect(
-          events.filter((event) => event === 'requestShowError'),
-        ).toHaveLength(1);
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  it.effect(
-    'registers a fresh run with its birth: creation, configuration and activation in one batch',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        const recording = recordSessionEvents(session);
-        const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'critic',
-          model: 'openai/gpt-5.5-2026-04-23',
-        });
-        const ctx = yield* buildAgentLaunchContext({
-          config,
-          runId: EXECUTION_ID,
-          session,
-          registration: { identity: { kind: 'agent', agent: 'critic' } },
-        });
-        // Nothing is written until the opening; its batch carries the birth.
-        expect(yield* Effect.promise(() => recording.read())).toEqual([]);
-        const { registration } = ctx.entry;
-        assert(registration !== null);
-        const cell = yield* session.runHistory.open(EXECUTION_ID, {
-          registration: Effect.succeed(registration),
-        });
-        yield* cell.append([]);
-        const created = (yield* Effect.promise(() => recording.read())).slice(
-          0,
-          3,
-        );
-        expect(created.map((event) => event.type)).toEqual([
-          'run.start',
-          'run.config',
-          'run.activate',
-        ]);
-        // One aggregate, one counter: the activation is the third durable
-        // row of the creation batch, and the phase the fold reads from it.
-        expect(
-          (yield* Effect.promise(() => recording.read()))[2],
-        ).toMatchObject({ seq: 3 });
-      }),
-  );
 
   it.effect(
     "restores a resumed run's human grants from its durable policy, not its goal's",

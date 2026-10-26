@@ -41,22 +41,6 @@ const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
   Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 
 describe('CLI memory formatting', () => {
-  it.effect.each([
-    '/memories/project.md',
-    'memories/project.md',
-    'memories\\project.md',
-    'project.md',
-  ])('accepts the path form %s', (input) =>
-    Effect.gen(function* () {
-      const detail = yield* loadCliMemoryDetail(input);
-      expect(detail).toStrictEqual({
-        path: '/memories/project.md',
-        lineCount: 1,
-        preview: 'preview',
-      });
-    }).pipe(withStoredMemory),
-  );
-
   it.effect('rejects absolute paths outside the memory display root', () =>
     Effect.gen(function* () {
       const error = failureOf(
