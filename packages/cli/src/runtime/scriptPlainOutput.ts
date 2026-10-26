@@ -19,6 +19,7 @@ import {
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 
 import { claimRootRun } from './sessionViewFollow';
 import type { LocalSession } from '@texra-ai/harness';
@@ -46,7 +47,10 @@ function scriptPlainLines(
   for (const stage of scriptStages(run, view)) {
     for (const call of stage.calls) {
       if (call.phase !== null)
-        lines.set(`${stage.id}:phase:${call.phase}`, `◆ ${call.phase}`);
+        lines.set(
+          `${stage.id}:phase:${call.phase}`,
+          `${STATUS_DIAMOND} ${call.phase}`,
+        );
       lines.set(call.id, scriptCallLine(call));
     }
     // The stage's total once it has ended, its discarded attempts included.
