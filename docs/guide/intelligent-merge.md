@@ -5,15 +5,11 @@ import MergePanelHero from '../.vitepress/components/MergePanelHero.vue';
 
 # Intelligent Merge workflow
 
-## The problem: partial agent outputs
+## When you need a merge
 
-When running targeted agents like `correct` or `polish`, the model may focus its modifications on specific sections, emitting a revision (such as `r0/draft.tex` or `r1/draft.tex`) containing only the modified fragments rather than the entire document. While this conserves processing time and token budget, attempting to compare this excerpt directly against your complete original source using `latexdiff` yields syntactically broken or unreadable diffs.
+When an agent edits only one section of a long document, its output (`r0/draft.tex` or `r1/draft.tex`) may contain just the modified fragment rather than the full file. Running `latexdiff` directly between a partial fragment and the full original produces a broken diff.
 
-## The solution: Intelligent Merge button
-
-TeXRA's **Intelligent Merge** workflow solves this problem. It uses an LLM to combine your original **Base File** with the agent's (possibly partial) **Edited File** to generate a new, **complete** document that incorporates the AI's changes.
-
-This generated _full_ document can then be compared cleanly against your original base file with `latexdiff`.
+**Intelligent Merge** runs the `merge` agent to splice the edited fragment back into your full **Base File**, producing a complete `.tex` document that you can compile and compare cleanly with `latexdiff`.
 
 <MergeFlowHero />
 
@@ -41,28 +37,9 @@ file pickers and the ProgressBoard. The `texra run` CLI command takes only
 workflow is not available from the CLI.
 :::
 
-TeXRA then invokes the specialized `merge` agent:
+## Output
 
-- The agent receives the base file, the edited file, and the configured helper model.
-- It analyzes both versions to identify meaningful differences.
-- It generates a new merge output (`r0/<base filename>` inside the run folder) containing the content of the base file updated with the accepted changes from the edited file.
-- You can monitor the process and results in the [ProgressBoard](./progress-board.md).
-
-## What happens behind the scenes
-
-1. TeXRA sends both files to the configured helper model
-2. The model synthesizes a complete document preserving the Base File structure while incorporating Edited File changes
-3. TeXRA saves the result
-
-## The output: a complete, merged file
-
-The merge process generates a new file in run storage, named after the base file:
-
-`r0/<base filename>.tex`
-
-This merged file contains the complete document content, incorporating the changes from the agent's output.
-
-**This merged file is now ready to be compared against your original `basename.tex` with the `latexdiff` command (through the UI button, or automatically if configured) to visualize the changes the agent made.**
+The `merge` agent writes the combined document to run storage under the base file's name (`r0/<base filename>.tex`) and streams its progress in the [ProgressBoard](./progress-board.md). Once the run completes, compare `r0/<base filename>.tex` against your original file with `latexdiff` (or accept the merged file back into the workspace).
 
 ## Next steps
 

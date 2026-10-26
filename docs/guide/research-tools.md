@@ -6,7 +6,7 @@ import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
-Whether checking an intricate integral against a computer algebra system, tracking down a half-remembered reference from 2017, or importing twenty curated BibTeX entries directly from your Zotero collection, TeXRA's research agents conduct grounded verification and literature search without leaving your workspace.
+TeXRA's research agents connect to arXiv, Zotero, DuckDuckGo, WolframScript, and Lean 4 so you can search literature, manage BibTeX references, and check symbolic or formal math from your workspace.
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
@@ -24,18 +24,15 @@ Find recent papers on transformer architectures for document understanding.
 Focus on work from 2023-2024 that handles mathematical equations.
 ```
 
-**User story:** A postdoc is writing the related-work section of a NeurIPS submission. She opens the `search` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and asks for papers on "efficient self-attention for long documents." In seconds she has a table of relevant arXiv preprints with titles, authors, and abstracts, ready to cite.
-
 <SearchResultsHero />
 
 <p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, an arXiv source tag, and a one-click <strong>Cite</strong>. Every row is a real lookup, never fabricated.</p>
 
-The same search streams in a terminal, each lookup surfacing as a tool call
-you can watch:
+The same search streams in a terminal, with each lookup shown as a tool call:
 
 <CliSearchChatHero />
 
-<p class="hero-caption">The postdoc's search in <code>texra chat --agent search</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
+<p class="hero-caption">A search in <code>texra chat --agent search</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
 
 ### <wa-icon library="texra" name="cloud-download"></wa-icon> Download paper sources
 
@@ -72,8 +69,6 @@ Export the selected Zotero items as a .bib file for my project.
 ```
 Add this arXiv paper to my Zotero library.
 ```
-
-**User story:** A PhD student is collecting references for a thesis chapter. She asks the `search` agent to find key papers on graph neural networks, then says "add these to my Zotero and export them to `references.bib`." The agent handles the lookup, adds entries to her Zotero library, and writes the BibTeX file, all in one conversation.
 
 <ToolCallPanel
   title="zotero"

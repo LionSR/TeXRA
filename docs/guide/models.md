@@ -6,7 +6,7 @@ import CliModelsHero from '../.vitepress/components/CliModelsHero.vue';
 
 # AI models
 
-TeXRA connects directly to frontier reasoning models from leading providers—including Anthropic, OpenAI, Google, DeepSeek, Moonshot, and DashScope. You can assign flagship reasoning models to demanding mathematical proofs and autonomous loops, while reserving faster, cost-efficient variants for routine document polish and formatting. Select a model from the dropdown menu in the TeXRA UI or pass `--model` in the CLI. Hover over any option to inspect its context window and pricing.
+TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moonshot, DashScope, MiniMax, GLM, Meta, and xAI. Pick a model from the dropdown menu in the TeXRA UI or pass `--model` in the CLI; hover over any option in the picker to see its context window and token pricing.
 
 <ModelPickerHero />
 

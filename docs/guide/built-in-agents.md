@@ -6,7 +6,7 @@ import CliAgentsListHero from '../.vitepress/components/CliAgentsListHero.vue';
 
 # Built-in agent reference
 
-TeXRA ships with built-in agents tailored for rigorous research workflows and scientific exposition: deriving and verifying mathematical results, formalizing proofs, exploring scholarly literature, refining prose, diagnosing LaTeX compilation errors, synthesizing figures, and converting formats. Select an agent from the dropdown menu in the TeXRA interface or run it directly from the CLI.
+TeXRA includes built-in agents for derivations, formal proofs, literature search, manuscript editing, LaTeX debugging, figures, and slides. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI.
 
 <DropdownMenu
   label="Agent"
@@ -82,8 +82,6 @@ Enable it from the **Agents** tab to use it.
 :::
 
 A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
-
-> **User story:** You just got reviewer comments back. Instead of hunting through a 40-page paper by hand, you open `assistant` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2: add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
 **Best for:** General research assistance, literature search, code/LaTeX editing, computations, running compilations
 
@@ -173,7 +171,7 @@ informal outline, then produce Lean code and iterate until it compiles.
 
 ### `presenter`
 
-Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck in one pass, use the `paper2slide` agent (a document task).
+Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck without the back-and-forth, use the `paper2slide` agent (a document task).
 
 **Best for:** Conference talks, seminar presentations, lightning talks
 
@@ -210,15 +208,9 @@ A typical loop is `criticize` (or `firstread`, `logic`, `notation`), then
 
 ### `correct`
 
-The `correct` agent fixes errors without changing the style or content of your document.
+Fixes typos, grammatical errors, and LaTeX syntax issues without changing the style or technical content of your document.
 
-**Purpose:** Fix typos, grammatical errors, and LaTeX syntax issues.
-
-**Best for:**
-
-- Final proofreading before submission
-- Fixing errors in collaborative documents
-- Ensuring consistent formatting and notation
+**Best for:** Final proofreading before submission, fixing errors across collaborative drafts, standardizing notation and formatting
 
 **Example instruction:**
 
@@ -230,11 +222,9 @@ Don't change the technical content or writing style.
 
 ### `polish`
 
-The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning.
+Tightens prose and improves readability while preserving equations, citations, and technical meaning.
 
-> **User story:** Your draft is technically solid but the writing is rough. Select `polish`, tell it "Improve clarity for a CVPR audience: keep all equations and citations intact," and in a couple of minutes you have a version that reads like it went through a professional copyedit. Review the color-coded diff to accept or reject each change.
-
-Use it for drafts that are technically sound but need language improvements before submission.
+**Best for:** Drafts whose math and structure are settled but need clearer writing before submission
 
 #### Example output
 
@@ -279,15 +269,9 @@ Run `polish` on the [sample document](/examples/draft.pdf) to see a color-coded 
 
 ### `paper2slide`
 
-The `paper2slide` agent converts research papers into LaTeX beamer presentations.
+Converts a research paper into a LaTeX Beamer presentation in a two-pass document task (draft, then review and fix).
 
-**Purpose:** Create presentation slides from academic content.
-
-**Best for:**
-
-- Preparing conference presentations
-- Converting papers for teaching purposes
-- Creating seminar materials
+**Best for:** Conference talks, lecture slides, seminar decks from an existing manuscript
 
 **Example instruction:**
 
@@ -299,15 +283,9 @@ Use bullet points for clarity and add slide titles. Include the key figures and 
 
 ### `paper2poster`
 
-The `paper2poster` agent converts papers into academic conference posters.
+Converts a paper into an academic conference poster.
 
-**Purpose:** Create well-structured academic posters.
-
-**Best for:**
-
-- Conference poster preparation
-- Visual research summaries
-- Academic showcases
+**Best for:** Conference posters and visual research summaries
 
 **Example instruction:**
 
@@ -353,15 +331,9 @@ current revision (main.tex), highlighting additions and deletions.
 
 ### `ocr`
 
-The `ocr` agent converts handwritten mathematical content from images into LaTeX.
+Converts handwritten equations and notes from images into LaTeX that matches your document's notation.
 
-**Purpose:** Turn handwritten equations and notes into LaTeX code that matches your document's notation and style.
-
-**Best for:**
-
-- Converting handwritten derivations or lecture-board photos into LaTeX
-- Digitizing handwritten mathematical notes across multiple images
-- Keeping converted notation consistent with the existing document
+**Best for:** Handwritten derivations, whiteboard photos, scanned mathematical notes
 
 **Example instruction:**
 
@@ -371,15 +343,9 @@ Convert the handwritten derivation in [notes.png] into LaTeX, matching the notat
 
 ### `transcribe_audio`
 
-The `transcribe_audio` agent converts audio files (like lectures, podcasts, or personal notes) into text transcripts. It requires native audio support; read [Working with figures](./working-with-figures.md).
+Transcribes audio recordings (lectures, talks, voice notes) into text. Requires a model with native audio support; read [Working with figures](./working-with-figures.md).
 
-**Purpose:** Create searchable text versions of spoken audio content.
-
-**Best for:**
-
-- Transcribing recorded lectures or talks
-- Converting podcast episodes to text
-- Transcribing personal voice memos or notes
+**Best for:** Recorded lectures, seminar talks, voice memos
 
 **Example instruction:**
 

@@ -58,20 +58,12 @@ override. If the project directory is read-only, saving a project setting
 fails with an error; if `.texra/config.json` cannot be read (for example,
 malformed JSON), the host warns and ignores the file until it is fixed.
 
-Configuration files are ordinary JSON. Persistent application state—including
-session history, execution records, and run events—is stored separately in an
-authoritative local SQLite database (`texra.db`) in workspace storage.
-TeXRA 1.0 initializes fresh application state and does not import legacy JSON
-session stores or execution checkpoints.
-
-New releases begin with the current defaults. TeXRA does not import old values
-from `.vscode/settings.json`.
-
-SQLite is the authoritative store for persistent runtime application state
-(`texra.db` under workspace storage: sessions, executions, and run events). The
-JSON files described here are used strictly for workspace and user settings.
-TeXRA 1.0 does not import or migrate legacy JSON session stores, histories, or
-execution checkpoints.
+Configuration files are ordinary JSON and store only workspace and user settings.
+Persistent application state—session history, execution records, and run events—is
+stored separately in a local SQLite database (`texra.db`) in workspace storage.
+TeXRA 1.0 initializes fresh application state and does not import or migrate
+legacy JSON session stores, histories, execution checkpoints, or old values from
+`.vscode/settings.json`.
 
 The JSON files use flat `texra.*` keys. For example:
 
@@ -103,9 +95,10 @@ visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
 their provider rows with their usage meters. There is no TeXRA account; every
 agent ships bundled.
 
-Saved provider keys currently use each host's secure credential mechanism. They
-are not copied through the shared JSON configuration. Environment-variable keys
-are available to any TeXRA host launched with that environment.
+Saved provider keys and subscription tokens live in `~/.texra/secrets/` (an
+owner-only folder shared across the extension, desktop app, and CLI), never in
+the JSON configuration files. Environment-variable keys are available to any
+TeXRA host launched with that environment.
 
 ## Project instructions (AGENTS.md)
 
