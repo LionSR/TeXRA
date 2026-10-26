@@ -2,7 +2,7 @@
 
 import console from 'node:console';
 import process from 'node:process';
-import { chmod } from 'node:fs/promises';
+import { chmod, writeFile } from 'node:fs/promises';
 
 import { fileURLToPath, URL } from 'node:url';
 
@@ -43,6 +43,8 @@ const outfile = harness
       ? configuredOutfile || 'dist/bin/sdk-harness.js'
       : configuredOutfile ||
         (serve ? 'dist/bin/texra-serve.js' : 'dist/bin/texra.js');
+/** The `texra` command the package's `bin` names (see the build's end). */
+const LAUNCHER = 'dist/texra.js';
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 
@@ -121,6 +123,23 @@ try {
   });
 
   await chmod(outfile, 0o755);
+  if (outfile === 'dist/bin/texra.js') {
+    // The published command: a few lines that turn on Node's on-disk compile
+    // cache before the bundle loads, so a start after the first skips most of
+    // compiling it (about 230 ms of each start). The bundle stays at
+    // dist/bin/texra.js, so every path it resolves beside itself still holds.
+    await writeFile(
+      LAUNCHER,
+      [
+        '#!/usr/bin/env node',
+        "import module from 'node:module';",
+        'module.enableCompileCache?.();',
+        "await import('./bin/texra.js');",
+        '',
+      ].join('\n'),
+    );
+    await chmod(LAUNCHER, 0o755);
+  }
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[build-bundle] failed to build ${outfile}.`);

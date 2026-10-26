@@ -12,7 +12,7 @@ There are two supported paths. Pick based on whether you want the local build to
 ### Side-by-side as `texra-local` (recommended)
 
 Use the maintained workspace scripts. `texra-local:link` symlinks
-`~/.local/bin/texra-local` to `packages/cli/dist/bin/texra.js` once;
+`~/.local/bin/texra-local` to `packages/cli/dist/texra.js` once;
 `texra-local:build` overwrites that target in place, so the symlink always
 points at your latest build without relinking:
 
@@ -37,13 +37,13 @@ corepack pnpm --filter @texra-ai/cli build
 corepack pnpm setup    # one-time; then restart your shell or source its rc file
 PNPM_BIN="$(corepack pnpm bin -g)"
 mkdir -p "$PNPM_BIN"
-ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_BIN/texra"
+ln -sf "$(pwd)/packages/cli/dist/texra.js" "$PNPM_BIN/texra"
 ```
 
 The linked binary takes precedence over a globally-installed npm copy, so `texra`
 now runs your local build.
 
-The linked command points to `packages/cli/dist/bin/texra.js`. Rebuild after
+The linked command points to `packages/cli/dist/texra.js`. Rebuild after
 changing CLI code or shared runtime code:
 
 ```bash
@@ -64,13 +64,13 @@ After building, the generated binary can also be run directly without the
 symlink:
 
 ```bash
-node packages/cli/dist/bin/texra.js --help
-node packages/cli/dist/bin/texra.js agents list
-node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --print
+node packages/cli/dist/texra.js --help
+node packages/cli/dist/texra.js agents list
+node packages/cli/dist/texra.js run polish --input paper.tex --output paper.polished.tex --print
 ```
 
 All flags from the public guide work the same way — substitute
-`node packages/cli/dist/bin/texra.js` for `texra` in any example.
+`node packages/cli/dist/texra.js` for `texra` in any example.
 
 ## Validation
 
