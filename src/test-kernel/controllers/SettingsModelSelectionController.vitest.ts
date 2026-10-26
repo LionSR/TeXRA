@@ -21,7 +21,7 @@ import { SettingsModelSelectionController } from '@texra/controllers/settingsVie
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
 // Live (not deprecated): a stored preference for a deprecated model drops out at read.
 const SONNET55 = 'anthropic/claude-sonnet-5-5';
-const SONNET46 = 'anthropic/claude-sonnet-4-6';
+const OPUS55 = 'anthropic/claude-opus-5-5';
 
 /** The controller's deps are file-local; derive them from its constructor. */
 type SettingsModelSelectionControllerDeps = ConstructorParameters<
@@ -68,21 +68,21 @@ function createController(
   });
 }
 
-// A discovered Sonnet 4.6 Copilot route with the editor's context ceiling and
+// A discovered Opus 5.5 Copilot route with the editor's context ceiling and
 // subscription pricing, optionally with capabilities overridden.
-function sonnet46CopilotRoutes(
+function opus55CopilotRoutes(
   access: CopilotModelRoute['access'],
   capabilities?: CopilotModelRoute['effectiveConfig']['capabilities'],
 ): ReadonlyMap<string, CopilotModelRoute> {
   return new Map<string, CopilotModelRoute>([
     [
-      SONNET46,
+      OPUS55,
       {
         access,
-        reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+        reference: { vendor: 'copilot', id: 'claude-opus-5.5' },
         version: '2026-07',
         effectiveConfig: {
-          ...MODEL_CONFIGS[SONNET46],
+          ...MODEL_CONFIGS[OPUS55],
           ...(capabilities === undefined ? {} : { capabilities }),
           contextWindow: 200_000,
           inputPrice: 0,
@@ -246,7 +246,7 @@ describe('SettingsModelSelectionController', () => {
       Effect.gen(function* () {
         const controller = createController({
           copilotRoutes: Effect.succeed(
-            sonnet46CopilotRoutes('consent-required'),
+            opus55CopilotRoutes('consent-required'),
           ),
         });
 
@@ -255,8 +255,8 @@ describe('SettingsModelSelectionController', () => {
 
         expect(copilotModels).toEqual([
           {
-            name: SONNET46,
-            label: MODEL_CONFIGS[SONNET46].label,
+            name: OPUS55,
+            label: MODEL_CONFIGS[OPUS55].label,
             access: 'consent-required',
             preferred: false,
           },
@@ -269,9 +269,7 @@ describe('SettingsModelSelectionController', () => {
               model.name.startsWith('copilot:') || model.provider === 'copilot',
           ),
         ).toEqual([]);
-        expect(models.filter((model) => model.name === SONNET46)).toHaveLength(
-          1,
-        );
+        expect(models.filter((model) => model.name === OPUS55)).toHaveLength(1);
       }),
   );
 });

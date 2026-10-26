@@ -113,16 +113,16 @@ describe('CLI chat defaults', () => {
     });
 
     await expectChatDefaults(
-      { envModel: 'anthropic/claude-sonnet-4-6' },
+      { envModel: 'anthropic/claude-sonnet-5-5' },
       {
         agent: 'assistant',
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
         modelSource: 'environment',
       },
     );
     await expectChatDefaults(
       {
-        envModel: 'anthropic/claude-sonnet-4-6',
+        envModel: 'anthropic/claude-sonnet-5-5',
         modelOverride: 'openai/gpt-5.5-2026-04-23',
       },
       { model: 'openai/gpt-5.5-2026-04-23', modelSource: 'explicit-override' },
@@ -134,7 +134,7 @@ describe('CLI chat defaults', () => {
       workspace: {
         'texra.chat': {
           agent: 'simplifier',
-          model: 'anthropic/claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-5-5',
         },
       },
     });
@@ -142,7 +142,7 @@ describe('CLI chat defaults', () => {
     // Configured and environment tiers drop it; the explicit flag keeps it.
     await expectChatDefaults(
       {},
-      { agent: 'assistant', model: 'anthropic/claude-sonnet-4-6' },
+      { agent: 'assistant', model: 'anthropic/claude-sonnet-5-5' },
     );
     await expectChatDefaults(
       { envAgent: 'simplifier' },

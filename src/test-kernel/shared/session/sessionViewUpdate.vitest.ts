@@ -319,7 +319,7 @@ describe('session view update', () => {
       { id: CHILD, label: child.label },
     ]);
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
-    expect(child.model).toBe('claude-sonnet-4-5');
+    expect(child.model).toBe('claude-sonnet-5-5');
     expect(child.followUpSupport).toBe('nativeInteractive');
     expect(child.ownerId).toBe(OWNER);
     // Process runs carry the command, never a model.

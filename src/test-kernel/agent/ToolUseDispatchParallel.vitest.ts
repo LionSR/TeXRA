@@ -1194,7 +1194,7 @@ describe('tool-use dispatch', () => {
           } as ITool,
         },
         calls: [makeCall('fetch', 'fetch_papers', {})],
-        pendingSwitch: 'claude-sonnet-4',
+        pendingSwitch: 'claude-sonnet-5-5',
         bound: {
           ...boundModel(),
           model: uploading,

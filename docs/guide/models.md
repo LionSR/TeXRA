@@ -23,12 +23,12 @@ Thinking and non-thinking versions of a model are one entry, not separate models
 
 ## Anthropic models
 
-| Model                                 | Use Case                                  | Cost | Speed  |
-| :------------------------------------ | :---------------------------------------- | :--- | :----- |
-| `anthropic/claude-fable-5-1`          | Most capable, always-on adaptive thinking | $$$$ | Slow   |
-| `anthropic/claude-opus-5-5`           | Long-running agentic work                 | $$$  | Medium |
-| `anthropic/claude-sonnet-5-5`         | All-rounder, always-on adaptive thinking  | $$$  | Medium |
-| `anthropic/claude-haiku-4-5-20251001` | Fast; `@none` for fastest responses       | $$   | Fast   |
+| Model                         | Use Case                                  | Cost | Speed  |
+| :---------------------------- | :---------------------------------------- | :--- | :----- |
+| `anthropic/claude-fable-5-1`  | Most capable, always-on adaptive thinking | $$$$ | Slow   |
+| `anthropic/claude-opus-5-5`   | Long-running agentic work                 | $$$  | Medium |
+| `anthropic/claude-sonnet-5-5` | All-rounder, always-on adaptive thinking  | $$$  | Medium |
+| `anthropic/claude-haiku-5-5`  | Fast; `@none` for fastest responses       | $    | Fast   |
 
 Fable 5.1, Opus 5.5, and Sonnet 5.5 (and the older Opus 4.6 through Opus 5, Sonnet 4.6, and Sonnet 5) include the full 1M context window at standard pricing, with no opt-in or
 beta header required. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.

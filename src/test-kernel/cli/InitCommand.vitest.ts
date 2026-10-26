@@ -148,7 +148,7 @@ describe('CLI init command', () => {
     {
       name: 'disables init model rows without a usable credential',
       models: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
+        modelAccess('anthropic/claude-sonnet-5-5', {
           label: 'Sonnet',
           available: true,
           status: 'subscription',
@@ -161,7 +161,7 @@ describe('CLI init command', () => {
       ],
       expected: [
         {
-          value: 'anthropic/claude-sonnet-4-6',
+          value: 'anthropic/claude-sonnet-5-5',
           label: 'Sonnet',
           description: 'subscription',
           disabled: false,
@@ -177,7 +177,7 @@ describe('CLI init command', () => {
     {
       name: 'keeps all-unavailable init model rows selectable as a fallback',
       models: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
+        modelAccess('anthropic/claude-sonnet-5-5', {
           label: 'Sonnet',
           available: false,
           status: 'login required',
@@ -190,7 +190,7 @@ describe('CLI init command', () => {
       ],
       expected: [
         {
-          value: 'anthropic/claude-sonnet-4-6',
+          value: 'anthropic/claude-sonnet-5-5',
           label: 'Sonnet',
           description: 'login required (unavailable now)',
           disabled: false,
@@ -286,11 +286,11 @@ describe('CLI init command', () => {
     {
       name: 'points init at model recovery when the fallback default has no access entry',
       accessList: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
+        modelAccess('anthropic/claude-sonnet-5-5', {
           available: false,
           status: 'missing api key',
           model: {
-            value: 'anthropic/claude-sonnet-4-6',
+            value: 'anthropic/claude-sonnet-5-5',
             label: 'Sonnet',
             availability: 'missing-key',
           },

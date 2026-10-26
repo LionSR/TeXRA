@@ -127,7 +127,7 @@ describe('ChatExportController.exportAsHtml', () => {
         const runId = 'eec001' as RunId;
         const runConfigRecord = config({
           agent: 'review',
-          model: 'anthropic/claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-5-5',
         });
         publishTestRunStart(session, runId);
         yield* session.log.settled;

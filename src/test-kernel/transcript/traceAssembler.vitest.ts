@@ -109,7 +109,7 @@ describe('assembleTrace', () => {
       const runId = 'aa11bb22cc33' as RunId;
       const runConfigRecord = config({
         agent: 'review',
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
       });
 
       yield* Effect.promise(() =>
@@ -131,7 +131,7 @@ describe('assembleTrace', () => {
       expect(trace.runId).toBe(runId);
       expect(record).toMatchObject({
         agent: 'review',
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
       });
       // The creation row is authored, not copied: an exported file has no
       // producer, no siblings and no writable host.

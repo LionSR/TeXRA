@@ -12,7 +12,7 @@ describe('assertExplicitModelKnown', () => {
   );
 
   it.each([
-    ['anthropic/claude-sonnet-4-6', 'anthropic/claude-sonnet-4-6'],
+    ['anthropic/claude-sonnet-5-5', 'anthropic/claude-sonnet-5-5'],
     ['  deepseek/deepseek-flash@high  ', 'deepseek/deepseek-flash@high'],
     ['openai/gpt-5.6-sol@xhigh+pro', 'openai/gpt-5.6-sol@xhigh+pro'],
   ])('returns the trimmed value for a known model string (%s)', (input, id) => {
@@ -30,9 +30,7 @@ describe('assertExplicitModelKnown', () => {
     ['glm5.2', 'glm/glm-5.2'],
     ['GLM-5.2', 'glm/glm-5.2'],
     ['glm-5.2', 'glm/glm-5.2'],
-    // One entry per API id: the Opus 4.7 thinking variant is no longer a
-    // second registry key sharing this spelling.
-    ['claude-opus-4-7', 'anthropic/claude-opus-4-7'],
+    ['claude-opus-5-5', 'anthropic/claude-opus-5-5'],
   ])(
     'normalizes user-facing model name %s to model reference %s',
     (input, id) => {

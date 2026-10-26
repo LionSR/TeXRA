@@ -61,7 +61,7 @@ describe('ModelSelectionList provider key status', () => {
         { ...deepseekModel, enabled: false },
         {
           ...deepseekModel,
-          name: 'anthropic/claude-sonnet-5',
+          name: 'anthropic/claude-sonnet-5-5',
           label: 'Sonnet 5 (Thinking)',
           provider: 'anthropic',
           enabled: true,
@@ -74,7 +74,7 @@ describe('ModelSelectionList provider key status', () => {
       ...list.shadowRoot!.querySelectorAll('.helper-model-select wa-option'),
     ];
     expect(helperOptions.map((option) => option.getAttribute('value'))).toEqual(
-      ['deepseek/deepseek-v4-flash', 'anthropic/claude-sonnet-5'],
+      ['deepseek/deepseek-v4-flash', 'anthropic/claude-sonnet-5-5'],
     );
     expect(helperOptions[0]?.textContent?.trim()).toBe(
       'DeepSeek V4 Flash (deepseek/deepseek-v4-flash)',

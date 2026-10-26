@@ -9,8 +9,8 @@ import type { ModelOptionData } from '@shared/schemas';
 
 function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
   return {
-    value: 'anthropic/claude-sonnet-4-6',
-    label: 'Sonnet 4.6 (Thinking)',
+    value: 'anthropic/claude-sonnet-5-5',
+    label: 'Sonnet 5.5',
     provider: 'anthropic',
     context: '1.0M',
     cost: '$3.000/$15.000',
@@ -49,7 +49,7 @@ describe('CLI model JSON record', () => {
   it('exposes the model id under `id` only, for cross-resource addressability', () => {
     const record = cliModelRecord(model());
 
-    expect(record.id).toBe('anthropic/claude-sonnet-4-6');
+    expect(record.id).toBe('anthropic/claude-sonnet-5-5');
     // `id` is the single spelling; the internal `value` key does not leak.
     expect(record).not.toHaveProperty('value');
     // `id` must appear first so callers using `Object.keys()[0]`
@@ -78,10 +78,10 @@ describe('CLI model JSON record', () => {
 describe('CLI model list filtering', () => {
   it('does not recompute availability from model metadata', () => {
     const personalModeEntries = [
-      access('anthropic/claude-sonnet-4-6', {
+      access('anthropic/claude-sonnet-5-5', {
         available: false,
         model: model({
-          value: 'anthropic/claude-sonnet-4-6',
+          value: 'anthropic/claude-sonnet-5-5',
           availability: 'provider-key',
         }),
       }),
@@ -108,14 +108,14 @@ describe('CLI model list filtering', () => {
 
   it('keeps unavailable models for the explicit diagnostic view', () => {
     const entries = [
-      access('anthropic/claude-sonnet-4-6'),
-      unavailableAccess('anthropic/claude-opus-4-8'),
+      access('anthropic/claude-sonnet-5-5'),
+      unavailableAccess('anthropic/claude-opus-5-5'),
     ];
 
     expect(
       listableModelAccessEntries(entries, { includeUnavailable: true }).map(
         (entry) => entry.model.value,
       ),
-    ).toEqual(['anthropic/claude-sonnet-4-6', 'anthropic/claude-opus-4-8']);
+    ).toEqual(['anthropic/claude-sonnet-5-5', 'anthropic/claude-opus-5-5']);
   });
 });

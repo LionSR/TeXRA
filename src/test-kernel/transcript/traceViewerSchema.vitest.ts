@@ -48,7 +48,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
       const runId = 'abc12345' as RunId;
       const runConfigRecord = config({
         agent: 'review',
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
       });
 
       const session = yield* createTestSession();

@@ -45,8 +45,8 @@ describe('delegation model availability', () => {
       Effect.gen(function* () {
         mocks.readModelOptions.mockReturnValue(
           Effect.succeed([
-            model('anthropic/claude-sonnet-4-6'),
-            model('anthropic/claude-opus-4-8', { availability: 'retired' }),
+            model('anthropic/claude-sonnet-5-5'),
+            model('anthropic/claude-opus-5-5', { availability: 'retired' }),
             model('deepseek/deepseek-v4-flash', {
               availability: 'provider-key',
             }),
@@ -55,14 +55,14 @@ describe('delegation model availability', () => {
 
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
-            requestedModel: 'anthropic/claude-opus-4-8',
-            parentModel: 'anthropic/claude-sonnet-4-6',
+            requestedModel: 'anthropic/claude-opus-5-5',
+            parentModel: 'anthropic/claude-sonnet-5-5',
             settings: hostStores(),
           }),
         );
 
         expect(failure.message).toContain(
-          'Model "anthropic/claude-opus-4-8" is not currently available for delegation with the currently configured model access. Available models: anthropic/claude-sonnet-4-6, deepseek/deepseek-v4-flash.',
+          'Model "anthropic/claude-opus-5-5" is not currently available for delegation with the currently configured model access. Available models: anthropic/claude-sonnet-5-5, deepseek/deepseek-v4-flash.',
         );
       }).pipe(Effect.provide(fakeProcessServices())),
   );
@@ -72,20 +72,20 @@ describe('delegation model availability', () => {
       mocks.readModelOptions.mockReturnValue(
         Effect.succeed([
           model('deepseek/deepseek-v4-flash'),
-          model('anthropic/claude-sonnet-4-6'),
+          model('anthropic/claude-sonnet-5-5'),
         ]),
       );
 
       expect(
         yield* selectAvailableDelegationModel({
-          parentModel: 'anthropic/claude-sonnet-4-6',
+          parentModel: 'anthropic/claude-sonnet-5-5',
           settings: hostStores(),
         }),
-      ).toBe('anthropic/claude-sonnet-4-6');
+      ).toBe('anthropic/claude-sonnet-5-5');
 
       expect(
         yield* selectAvailableDelegationModel({
-          parentModel: 'anthropic/claude-opus-4-8',
+          parentModel: 'anthropic/claude-opus-5-5',
           settings: hostStores(),
         }),
       ).toBe('deepseek/deepseek-v4-flash');

@@ -85,7 +85,7 @@ describe('readClaudeCodeRun', () => {
       expect(openai.message).toMatch(
         /Claude Code cannot run "openai\/gpt-6\.1-sol".*Anthropic/,
       );
-      expect(yield* Effect.flip(claudeRun('claude-sonnet-5'))).toBeInstanceOf(
+      expect(yield* Effect.flip(claudeRun('claude-sonnet-5-5'))).toBeInstanceOf(
         ToolError,
       );
     }),

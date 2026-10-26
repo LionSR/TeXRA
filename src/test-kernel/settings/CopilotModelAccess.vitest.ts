@@ -27,8 +27,8 @@ type SubscriptionsTabElement = HTMLElement & {
 // Copilot routes are keyed by the canonical base model id (#9635); the
 // section renders route status, never picker rows of its own.
 const consentRoute: CopilotRouteInfo = {
-  name: 'anthropic/claude-sonnet-4-6@none',
-  label: 'Claude Sonnet 4.6',
+  name: 'anthropic/claude-haiku-5-5@none',
+  label: 'Claude Haiku 5.5',
   access: 'consent-required',
   preferred: false,
 };
@@ -77,7 +77,7 @@ describe('Copilot model access settings', () => {
     expect(mocks.postMessage.mock.calls).toEqual([
       [
         SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-        { modelName: 'anthropic/claude-sonnet-4-6@none' },
+        { modelName: 'anthropic/claude-haiku-5-5@none' },
       ],
     ]);
   });

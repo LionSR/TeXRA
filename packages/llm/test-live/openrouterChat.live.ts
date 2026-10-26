@@ -10,7 +10,7 @@ liveProtocol({
     openrouterChatModel(
       {
         protocol: 'openrouter-chat',
-        requestedModel: 'anthropic/claude-haiku-4.5',
+        requestedModel: 'anthropic/claude-haiku-5.5',
         deployment: {
           endpoint: 'https://openrouter.ai/api/v1',
           credentialScope: 'live',

@@ -30,7 +30,7 @@ vi.mock('@texra/model/modelOptions', () => ({
 }));
 
 /** A registry model outside the visible list, typed in another case. */
-const HIDDEN_MODEL = 'anthropic/claude-haiku-4-5-20251001';
+const HIDDEN_MODEL = 'anthropic/claude-haiku-5-5';
 /** A registry model reached by its API id (`grok-4.7`) or label. */
 const USER_FACING_MODEL = 'xai/grok-4.7';
 
@@ -215,8 +215,8 @@ describe('CLI model access resolution', () => {
         expect(
           yield* modelSelectItemsForCli(
             [
-              model('anthropic/claude-sonnet-4-6', {
-                model: modelOption('anthropic/claude-sonnet-4-6', {
+              model('anthropic/claude-sonnet-5-5', {
+                model: modelOption('anthropic/claude-sonnet-5-5', {
                   label: 'Sonnet',
                   reasoning: 'Low',
                   availability: 'provider-key',
@@ -233,14 +233,14 @@ describe('CLI model access resolution', () => {
             ],
             (candidate) =>
               Effect.succeed(
-                candidate === 'anthropic/claude-sonnet-4-6'
+                candidate === 'anthropic/claude-sonnet-5-5'
                   ? 'different conversation format; start new chat'
                   : undefined,
               ),
           ),
         ).toEqual([
           {
-            value: 'anthropic/claude-sonnet-4-6',
+            value: 'anthropic/claude-sonnet-5-5',
             label: 'Sonnet',
             description:
               'different conversation format; start new chat; api: api key set · reasoning setting: Low',
@@ -359,7 +359,7 @@ describe('CLI model access resolution', () => {
     readModelOptionsMock
       .mockReturnValueOnce(
         Effect.succeed([
-          modelOption('anthropic/claude-sonnet-4-6', {
+          modelOption('anthropic/claude-sonnet-5-5', {
             availability: 'provider-key',
           }),
         ]),
@@ -391,18 +391,18 @@ describe('CLI model access resolution', () => {
         selectCliRunnableModel(
           [
             {
-              model: 'anthropic/claude-sonnet-4-6',
+              model: 'anthropic/claude-sonnet-5-5',
               reason: 'explicit-override',
             },
             { model: HIDDEN_MODEL, reason: 'environment' },
           ],
           {
-            accessList: [model('anthropic/claude-sonnet-4-6')],
+            accessList: [model('anthropic/claude-sonnet-5-5')],
             stores,
           },
         ),
       ),
-    ).resolves.toEqual({ model: 'anthropic/claude-sonnet-4-6' });
+    ).resolves.toEqual({ model: 'anthropic/claude-sonnet-5-5' });
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
@@ -417,7 +417,7 @@ describe('CLI model access resolution', () => {
     await expect(
       run(
         loadCliModelAccessEntry(HIDDEN_MODEL.toUpperCase(), {
-          accessList: [model('anthropic/claude-sonnet-4-6')],
+          accessList: [model('anthropic/claude-sonnet-5-5')],
           stores,
         }),
       ),
@@ -450,7 +450,7 @@ describe('CLI model access resolution', () => {
     await expect(
       run(
         loadCliModelAccessEntry('Grok 4.7', {
-          accessList: [model('anthropic/claude-sonnet-4-6')],
+          accessList: [model('anthropic/claude-sonnet-5-5')],
           stores,
         }),
       ),
@@ -468,7 +468,7 @@ describe('CLI model access resolution', () => {
     readModelOptionsMock
       .mockReturnValueOnce(
         Effect.succeed([
-          modelOption('anthropic/claude-sonnet-4-6', {
+          modelOption('anthropic/claude-sonnet-5-5', {
             availability: 'provider-key',
           }),
         ]),

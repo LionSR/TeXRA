@@ -232,7 +232,7 @@ describe('CLI context config defaults', () => {
         'texra.chat': { agent: 'chat', model: 'deepseek/deepseek-v4-flash' },
         'texra.run': {
           agent: 'criticize',
-          model: 'anthropic/claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-5-5',
         },
       }),
     );
@@ -246,7 +246,7 @@ describe('CLI context config defaults', () => {
     expect(context.configWarnings).toEqual([]);
     expect(context.config.get('texra.run')).toEqual({
       agent: 'criticize',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'anthropic/claude-sonnet-5-5',
     });
   });
 
@@ -314,7 +314,7 @@ describe('CLI context config defaults', () => {
   it('ignores unknown TEXRA_MODEL values before they reach runtime', async () => {
     const context = await cliContext({
       ambient,
-      env: { TEXRA_MODEL: 'claude-opus-4-7' },
+      env: { TEXRA_MODEL: 'claude-opus-5-5' },
       globalArgs: { cwd: tmpdir() },
     });
 

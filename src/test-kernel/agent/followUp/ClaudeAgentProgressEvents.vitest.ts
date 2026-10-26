@@ -99,7 +99,7 @@ describe('claude agent progress events', () => {
           result: 'Lint passed.',
           usage: { input_tokens: 12, output_tokens: 4 },
           modelUsage: {
-            'claude-sonnet-4-6': {
+            'claude-sonnet-5-5': {
               inputTokens: 12,
               outputTokens: 4,
               cacheReadInputTokens: 0,
