@@ -73,14 +73,6 @@ Select the **Diff vs. edited** button (<wa-icon library="texra" name="diff-singl
 
 <p class="hero-caption">After you press a diff button, TeXRA runs latexdiff, writes the marked-up <code>.tex</code>, opens it, then (with LaTeX Workshop installed) builds and views the compiled diff PDF.</p>
 
-### Step 3: review changes
-
-The generated diff document highlights:
-
-- **Additions**: Usually in blue or underlined
-- **Deletions**: Usually in red or struck through
-- **Changes**: Shown as deletions followed by additions
-
 ## Git-based version comparison
 
 TeXRA can also compare documents with previous Git versions:

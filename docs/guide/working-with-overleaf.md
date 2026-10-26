@@ -77,15 +77,7 @@ accepted by the same command.
 
 ### 2. Edit locally with TeXRA in VS Code
 
-1.  Open `your-local-folder` in VS Code.
-2.  Use TeXRA as usual:
-    - Select files, agent, model.
-    - Write instructions.
-    - Execute (<wa-icon library="texra" name="play"></wa-icon>).
-    - Review outputs (`r0/<input filename>.tex`, for example `r0/main.tex`; each revision keeps the input filename) from run storage.
-    - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
-    - Use features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
-    - Optionally use LaTeX Workshop for local previews ([LaTeX compilation setup](./latex-compilation.md)).
+Open `your-local-folder` in VS Code and run your agents (`polish`, `correct`, `research`, `merge`, `latexdiff`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
 
 <OverleafEditActions />
 

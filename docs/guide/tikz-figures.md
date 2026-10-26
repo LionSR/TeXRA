@@ -19,33 +19,9 @@ looks right.
 For other figure types (standard images, PDFs) and media selection in the UI, read the [Working with figures](./working-with-figures.md) guide.
 :::
 
-## <wa-icon library="texra" name="info"></wa-icon> What is TikZ? (A brief intro)
-
-Instead of using a graphical editor, TikZ lets you describe graphics with commands inside your LaTeX document. For example:
-
-```latex
-\documentclass[tikz, border=2mm]{standalone}
-\usepackage{tikz}
-\begin{document}
-\begin{tikzpicture}
-  \draw[blue, thick] (0,0) circle (1cm);
-  \node at (0,0) {Hello!};
-\end{tikzpicture}
-\end{document}
-```
-
-This code draws a blue circle with text inside. TeXRA's tools help you manage and generate this kind of code.
-
 ## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with agents
 
-An agent with tools (`research` or `presenter`) acts as your graphics assistant for TikZ. It can:
-
-1. <wa-icon library="texra" name="add"></wa-icon> **Create new TikZ figures** from a textual description.
-2. <wa-icon library="texra" name="edit"></wa-icon> **Enhance existing figures** with improvements or additions.
-3. <wa-icon library="texra" name="wrench"></wa-icon> **Fix errors** in TikZ code.
-4. <wa-icon library="texra" name="comment"></wa-icon> **Add annotations** or labels to diagrams.
-
-Because these agents have tools, they can compile the figure and inspect the rendered PDF, then refine the code until it compiles cleanly and looks correct.
+Agents with tools (`research` or `presenter`) can create new TikZ figures from a description, refine existing diagrams, fix compilation errors, and inspect the rendered PDF in a loop until the layout is clean:
 
 <ToolCallPanel
   title="research"

@@ -88,13 +88,6 @@ Inside the list:
 
 The list is the only mode; there is no separate "single file" view. To work with one file, keep the list at length one.
 
-This works well for:
-
-- Processing several chapters of a book
-- Working with documents split across several files
-- Batch processing similar documents
-- Including several reference materials
-
 ### Output files
 
 For document tasks that edit documents, output filenames are the selected input
@@ -131,66 +124,19 @@ Subdirectories are preserved, so `chapters/intro.tex` lands at
 `r0/chapters/intro.tex`. The only fixed name is the raw model response,
 `r{round}/output.xml`.
 
-For example:
+## Run storage and file commands
 
-- Input: `paper.tex`
-- Agent: `polish`
-- Model: `anthropic/claude-sonnet-5-5`
-- Output: `r0/paper.tex`
-
-When the agent's task has a second (reflection) revision, you may also see:
-
-- Revision 2: `r1/paper.tex`
-
-## File management commands
-
-TeXRA provides several commands for managing generated files, available from the main interface or the ProgressBoard:
-
-### Pack
-
-The "Pack" button (<wa-icon library="texra" name="box-archive"></wa-icon>) snapshots the run folder into a structured history folder:
-
-1. Creates a timestamped directory in the "History" folder
-2. Copies all relevant output files, logs, and mirrored dependencies
-3. Preserves the relationship between input and output files
-
-Use this to keep a clean workspace while preserving previous outputs.
-
-### Clean
-
-The "Clean" button (<wa-icon library="texra" name="trash"></wa-icon>) removes output files for the selected run:
-
-1. Identifies the run folder for the current run
-2. Removes generated artifacts from the run folder
-3. Leaves original input files untouched
-
-Use this to remove generated artifacts from run storage after reviewing the results.
-
-### Opening generated files
-
-Document task outputs are listed in the ProgressBoard under **Generated Files**.
-Select a file name to preview it in VS Code. Files open using VS Code's default
-viewer, so PDFs and images display correctly while `.tex` documents open in the
-editor.
-
-To browse the whole run folder, use the
-<wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage** toolbar
-button. This reveals the run folder with generated files, compile
-logs, mirrored LaTeX dependencies, and intermediate artifacts. (From a
-terminal, `texra history show <id>` lists the same stored artifacts; see the
-card below.)
-
-### Run storage
-
-Every run gets an isolated run folder under TeXRA's
-workspace storage directory:
+Every run gets an isolated run folder under TeXRA's workspace storage directory:
 
 ```text
 executions/<executionId>/
 ```
 
-Document task outputs are written there first, not directly over your workspace
-files. Three commands then move that run's artifacts to three different places:
+Document task outputs are listed in the ProgressBoard under **Generated Files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+
+- **Accept**: Copies the reviewed output file into your workspace.
+- **Pack / Archive outputs** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run's output files, logs, and mirrored dependencies into a timestamped folder under `History/`.
+- **Clean / Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Removes the generated artifacts from the run folder while leaving your workspace input files untouched.
 
 <StorageLifecycleFlow />
 

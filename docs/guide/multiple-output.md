@@ -9,15 +9,6 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 When a paper is split across several files (`chapter1.tex`, `chapter2.tex`, `appendixA.tex`), a single document task run can read them together and write one revised file per input. Custom document tasks can also generate fixed output files from one or more inputs.
 
-## Why use multiple files?
-
-You need multiple files when:
-
-- Your source document is split (for example `chapter1.tex`, `chapter2.tex`, `appendixA.tex`).
-- You want consistent changes (such as polishing or correcting) across related documents.
-- You want an agent to modify only specific parts (for example, update only `chapter2.tex` and `appendixA.tex` based on the full context).
-- An agent needs to generate distinct outputs from a single input (less common, but possible).
-
 ## UI for multiple files
 
 The TeXRA UI provides dedicated sections for managing multiple input files.

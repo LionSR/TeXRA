@@ -45,8 +45,6 @@ the same toolchain:
 
 ## <wa-icon library="texra" name="symbol-keyword"></wa-icon> Formatting tools
 
-TeXRA uses formatters to keep LaTeX code consistent and readable.
-
 **Supported formatters:**
 
 - **`latexindent`**: the default formatter; highly configurable
@@ -58,14 +56,7 @@ Formatting does not run on its own after agent execution. The selected formatter
 
 ## <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison with `latexdiff`
 
-`latexdiff` shows changes between two versions of a document, producing a PDF with additions and deletions marked. TeXRA can generate diffs automatically after an agent runs.
-
-**Usage:**
-
-- After an agent modifies your document, a diff PDF shows what changed.
-- Use `latexdiff-vc` to compare the current file against a git commit: pick the commit from the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown.
-
-Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
+`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA runs it automatically after document tasks, or on demand against another file or a Git commit (`latexdiff-vc` via the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown). Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 
 ## <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics with `texcount`
 
@@ -119,21 +110,15 @@ Agents run Wolfram Language code through `wolframscript` in the shell (`wolframs
 
 The Wolfram row sits under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>). Requires a local [Wolfram Engine](https://www.wolfram.com/engine/) install.
 
-## <wa-icon library="texra" name="settings-gear"></wa-icon> Configuring tool usage
+## <wa-icon library="texra" name="settings-gear"></wa-icon> Per-run tool toggles
 
-Control how TeXRA uses these tools from the UI:
-
-- **Tool Config dropdown** (<wa-icon library="texra" name="tools"></wa-icon>): toggle the **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>) per-run helper. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface).
-- **Auto Extract dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): toggle automatic extraction of Figures or TikZ Figures. Read the [figures guide](./working-with-figures.md).
-- **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>): switch plugins on or off, view install guides, and run installers.
-
-Both per-run dropdowns live in the file-group headers, next to your input and media files:
+Both per-run helper menus sit in the file-group headers of the New task view:
 
 <ToolConfigHero />
 
 <p class="hero-caption">The <strong>Tool Config</strong> menu (<wa-icon library="texra" name="tools"></wa-icon> on the Input header) toggles <strong>Attach TeX Count</strong>; the <strong>Auto Extract</strong> menu (<wa-icon library="texra" name="wand"></wa-icon> on the Media header) toggles <strong>Figures</strong>, <strong>TikZ Figures</strong>, and <strong>Compile Input PDF</strong>. Active helpers tint their buttons.</p>
 
-For detailed tool settings (formatter paths, TikZ processing options, etc.), read the [configuration guide](./configuration.md).
+For formatter paths, TikZ templates, and compile settings, read the [configuration guide](./configuration.md).
 
 ## Next steps
 
