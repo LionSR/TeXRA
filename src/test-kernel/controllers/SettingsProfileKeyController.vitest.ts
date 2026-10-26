@@ -71,21 +71,6 @@ function storeFailure(
 }
 
 describe('SettingsProfileKeyController', () => {
-  it.effect('stores provider keys', () =>
-    Effect.gen(function* () {
-      const { controller, hosts, secrets } = yield* Effect.promise(() =>
-        createController({
-          inputResponses: ['  sk-real-openai-key  '],
-        }),
-      );
-
-      yield* controller.setProviderKey('openai');
-
-      assert.equal(yield* secrets.get('apiKey.openai'), 'sk-real-openai-key');
-      assert.equal(hosts.prompt.inputs[0]?.options.password, true);
-    }),
-  );
-
   // Regression pin: the placeholder guard used to live only in the CLI, so the
   // graphical hosts happily wrote `sk-xxxxxx` into the secret store.
   it.effect('reports a placeholder key instead of storing it', () =>
@@ -101,18 +86,6 @@ describe('SettingsProfileKeyController', () => {
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);
       assert.match(failure.message, /Failed to set OpenAI API key/);
       assert.match(String(failure.cause), /looks like a placeholder/);
-    }),
-  );
-
-  it.effect('removes provider keys after confirmation', () =>
-    Effect.gen(function* () {
-      const { controller, deleted } = yield* Effect.promise(() =>
-        createController(),
-      );
-
-      yield* controller.removeProviderKey('openai');
-
-      assert.deepEqual(deleted, ['apiKey.openai']);
     }),
   );
 

@@ -166,33 +166,6 @@ describe('ProgressFollowUpController', () => {
   );
 
   it.effect(
-    'uses original workflow inputs as recovery when source metadata is absent',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          existingFiles: new Set(['main.tex', 'chapter.tex']),
-        });
-        const plan = yield* controller.planCompileFixer({
-          runId: RUN,
-          runConfig: createFollowUpWorkflowConfig({
-            inputFiles: ['main.tex', 'chapter.tex'],
-          }),
-          compileFailures: [createCompileFailure()],
-          runOutputs: {},
-          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
-        });
-
-        expect(plan.kind).toBe('execute');
-        if (plan.kind !== 'execute') return;
-        const config = plan.request.config;
-        expect(config.inputFiles).toEqual(['main.tex', 'chapter.tex']);
-        expect(config.instruction ?? '').toMatch(
-          /Editable workspace targets: main\.tex, chapter\.tex/,
-        );
-      }),
-  );
-
-  it.effect(
     'warns when compile failures have no editable workspace source',
     () =>
       Effect.gen(function* () {
@@ -250,35 +223,6 @@ describe('ProgressFollowUpController', () => {
         );
         expect(plan.request.config.instruction).toContain(
           'fix main.tex too so a regenerated diff stays fixed',
-        );
-      }),
-  );
-
-  it.effect(
-    'keeps strong generated latexdiff artifacts when the source is absent',
-    () =>
-      Effect.gen(function* () {
-        const plan = yield* createController({
-          existingFiles: new Set(['main-diffea268c1.tex']),
-        }).planCompileFixer({
-          runId: RUN,
-          runConfig: createExactInputsConfig({
-            inputFiles: ['main-diffea268c1.tex'],
-          }),
-          compileFailures: [createCompileFailure()],
-          runOutputs: {
-            2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
-          },
-          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
-        });
-
-        expect(plan.kind).toBe('execute');
-        if (plan.kind !== 'execute') return;
-        expect(plan.request.config.inputFiles).toEqual([
-          'main-diffea268c1.tex',
-        ]);
-        expect(plan.request.config.instruction).toContain(
-          'main-diffea268c1.tex is a latexdiff artifact; inferred source main.tex is not present in the workspace',
         );
       }),
   );

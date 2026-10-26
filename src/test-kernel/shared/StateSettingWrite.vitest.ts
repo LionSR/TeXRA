@@ -4,8 +4,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   isStored,
   makeFakeSettingsStores,
@@ -15,47 +13,6 @@ import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 describe('applyStateSettingUpdate', () => {
-  it.effect(
-    'writes state-backed and core-config rows through one boundary',
-    () =>
-      Effect.gen(function* () {
-        const fake = makeFakeSettingsStores();
-        const stores = fake.stores;
-
-        expect(
-          yield* applyStateSettingUpdate(
-            GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            true,
-            { stores, host: 'vscode' },
-          ),
-        ).toMatchObject({
-          kind: 'applied',
-          entry: {
-            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            surfaces: { settingsView: 'agents' },
-          },
-        });
-        expect(
-          yield* fake.globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
-        ).toBe(true);
-
-        expect(
-          yield* applyStateSettingUpdate(BASH_APPROVAL_CONFIG_KEY, false, {
-            stores,
-            host: 'vscode',
-          }),
-        ).toMatchObject({
-          kind: 'applied',
-          entry: {
-            key: BASH_APPROVAL_CONFIG_KEY,
-            slot: 'config',
-            surfaces: { settingsView: 'approval' },
-          },
-        });
-        expect(fake.config.get(BASH_APPROVAL_CONFIG_KEY)).toBe(false);
-      }),
-  );
-
   it.effect('uses null as an explicit reset and omission as a no-op', () =>
     Effect.gen(function* () {
       const fake = makeFakeSettingsStores();

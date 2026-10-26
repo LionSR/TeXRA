@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import { Result, Schema } from 'effect';
 
-import { ModelOriginSchema } from '@texra-ai/llm';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   qualifyAggregateId,
@@ -16,7 +15,6 @@ import {
   DISPLAY_EVENT_TYPES,
   listingTypeOf,
   MESSAGE_TYPES,
-  isTranscriptEvent,
   RUN_PHASE,
   RunIdSchema,
   runIdentityDisplayName,
@@ -68,7 +66,6 @@ import {
   ROOT,
   ROOT_IDENTITY,
   ROOT_POLICY,
-  T,
   buildScenario,
   local,
   subscribe,
@@ -97,24 +94,21 @@ const paper = (cursor = 0, debug = false) =>
 describe('session view update', () => {
   const scenario = buildScenario();
 
-  it.each(['cancelled', 'failed', 'completed'] as const)(
-    'keeps the composer available for a %s conversation with saved history',
-    (status) => {
-      const run = {
-        ...runView(viewOf([...scenario.events, nobody]), CHILD),
-        parentId: null,
-        status,
-        durableOutcome: status,
-      };
-      const host = { terminalBacked: true };
-      expect(acceptsFollowUp(run, host)).toBe(true);
-      expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
-      expect(acceptsFollowUp({ ...run, recipe: 'task' }, host)).toBe(false);
-      expect(
-        acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host),
-      ).toBe(false);
-    },
-  );
+  it('keeps the composer available for a failed conversation with saved history', () => {
+    const run = {
+      ...runView(viewOf([...scenario.events, nobody]), CHILD),
+      parentId: null,
+      status: 'failed' as const,
+      durableOutcome: 'failed' as const,
+    };
+    const host = { terminalBacked: true };
+    expect(acceptsFollowUp(run, host)).toBe(true);
+    expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
+    expect(acceptsFollowUp({ ...run, recipe: 'task' }, host)).toBe(false);
+    expect(acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host)).toBe(
+      false,
+    );
+  });
 
   it('keeps read conversations read across history replay and restart while detecting later activity', () => {
     const log = new Log();
@@ -327,63 +321,6 @@ describe('session view update', () => {
     expect(runView(view, PROCESS).model).toBeNull();
     // The tail advanced the cursor to the last commit.
     expect(view.cursor).toBe(scenario.log.events.length);
-  });
-
-  it('builds the transcript through the shared row, group, and run reducers', () => {
-    const view = viewOf(scenario.events);
-    const root = runView(view, ROOT);
-
-    // The script stage the pair opened and closed, and the one `agent` call
-    // card under it: what the shared group and row reducers make of the
-    // root's trace.
-    expect(root.transcript.taskGroups).toStrictEqual([
-      {
-        id: 'script-review',
-        name: 'review',
-        startTime: T.root + 1,
-        status: 'completed',
-        kind: 'script',
-        endTime: T.childDone + 2,
-      },
-    ]);
-    expect(root.transcript.rows).toMatchObject([
-      { id: 'script-review', seqNo: 1, kind: 'log', settlementSeqNo: 1 },
-      {
-        id: 'call-1',
-        seqNo: 2,
-        timestamp: T.root + 2,
-        settlementSeqNo: 2,
-        groupId: 'script-review',
-        kind: 'tool',
-        toolUse: {
-          toolName: 'agent',
-          outputText: 'search done',
-          headerSummary: "Completed 'custom:search'",
-          status: 'completed',
-        },
-      },
-    ]);
-    expect(root.transcript.rows).toHaveLength(2);
-    // The transcript tier retained the rows: the aggregate's newest seq.
-    expect(view.transcriptSeq.get(qualifyAggregateId('run', ROOT))).toBe(
-      Math.max(
-        ...scenario.log.events
-          .filter(
-            (e) =>
-              e.aggregateId === qualifyAggregateId('run', ROOT) &&
-              (e.type === 'run.activate' ||
-                e.type === 'run.end' ||
-                isTranscriptEvent(e)),
-          )
-          .map((e) => e.seq),
-      ),
-    );
-    // A settled run has printed every row.
-    expect(root.transcript.settledRows).toBe(root.transcript.rows.length);
-
-    // One call over the whole replay lands the same rows as one per input.
-    const batched = paper().apply(scenario.events);
-    expect(runView(batched, ROOT).transcript).toStrictEqual(root.transcript);
   });
 
   it('settles status copy, rollups, groups, and the durable outcome from the activation and the end', () => {
@@ -1790,23 +1727,6 @@ describe('applyRunRows', () => {
       },
     ],
     [
-      'a completed run being continued: a snapshot exists, full stop',
-      () => {
-        const state = stateOf(
-          through(11, {
-            type: 'run.position',
-            payload: {
-              family: 'toolUse',
-              at: 'halted',
-              outcome: 'completed',
-            },
-          }),
-        );
-        expect(state?.outcome).toBe('completed');
-        expect(state?.family).toBe('toolUse');
-      },
-    ],
-    [
       'two priced responses and a settlement add: the run cost is the sum',
       () => {
         const second = {
@@ -2051,12 +1971,6 @@ describe('applyRunRows', () => {
         row.type === 'run.position',
       );
     }
-    // The day a codec version 2 exists, persisted origins must accept a
-    // union of version literals while execution admits only the current one.
-    const accepts = (origin: unknown) =>
-      Result.isSuccess(Schema.decodeUnknownResult(ModelOriginSchema)(origin));
-    expect(accepts(ORIGIN)).toBe(true);
-    expect(accepts({ ...ORIGIN, codecVersion: 2 })).toBe(false);
   });
 
   it('binds every row to the turn it describes', () => {

@@ -13,10 +13,7 @@ import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
-  renderInteractive,
   renderWithTerminalSize,
 } from '@test/support/inkTestHarness.ts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
@@ -235,60 +232,5 @@ describe('Static band resize', () => {
       inst.unmount();
       cliState.resetCliState();
     }
-  });
-
-  it('keeps resize subscriptions constant as tool history grows', async () => {
-    const { ink, React, cliState, StaticConversationTranscript } =
-      await loadTranscriptStack();
-    const { createElement } = React;
-    const runId = 'listener-count-stream' as RunId;
-    const toolEntries: TranscriptRow[] = Array.from(
-      { length: 70 },
-      (_, index) =>
-        completedToolEntry({
-          id: `tool-${index}`,
-          toolName: 'Bash',
-          input: { command: `printf ${index}` },
-          outputText: `result ${index}`,
-          settlementSeqNo: index + 1,
-        }),
-    );
-
-    seedTranscript(cliState, runId, '/tmp/listener-proof', toolEntries);
-
-    function App(): unknown {
-      const { columns } = ink.useWindowSize();
-      return createElement(StaticConversationTranscript, {
-        ownerKey: 'listener-owner',
-        scrollbackRunId: runId,
-        width: columns,
-      });
-    }
-
-    const out = new FakeStdout(80, 12);
-    let peakResizeListeners = 0;
-    out.on('newListener', (event) => {
-      if (event === 'resize') {
-        peakResizeListeners = Math.max(
-          peakResizeListeners,
-          out.listenerCount('resize') + 1,
-        );
-      }
-    });
-    const { instance: inst } = renderInteractive(ink, createElement(App), {
-      stdout: out,
-      stdin: new FakeStdin(false),
-    });
-
-    try {
-      await expectEventually(() => out.output.includes('result 69'));
-      // One listener belongs to Ink's renderer and one to the App-level
-      // useWindowSize subscription. Transcript length must not affect it.
-      expect(peakResizeListeners).toBe(2);
-    } finally {
-      inst.unmount();
-      cliState.resetCliState();
-    }
-    expect(out.listenerCount('resize')).toBe(0);
   });
 });

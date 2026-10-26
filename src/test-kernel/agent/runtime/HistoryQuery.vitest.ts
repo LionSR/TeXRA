@@ -1,7 +1,10 @@
 import '@test/support/sessionGraphTestSetup';
 
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -133,10 +136,23 @@ describe('HistoryQuery', () => {
       withSession((session) =>
         Effect.gen(function* () {
           publishTestRunStart(session);
-          const runaway = yield* query(
-            session,
-            'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
-          ).pipe(Effect.flip);
+          // The store is open and fed, so the runaway's only wait is its
+          // deadline, which the test clock steps through.
+          yield* query(session, 'SELECT count(*) FROM runs');
+          const runaway = yield* Effect.gen(function* () {
+            const stopped = yield* query(
+              session,
+              'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
+            ).pipe(Effect.flip, Effect.forkChild);
+            const stepping = yield* TestClock.adjust('1 second').pipe(
+              Effect.andThen(Effect.promise(() => delay(20))),
+              Effect.forever,
+              Effect.forkChild,
+            );
+            const refused = yield* Fiber.join(stopped);
+            yield* Fiber.interrupt(stepping);
+            return refused;
+          }).pipe(Effect.provide(TestClock.layer()));
           expect(runaway).toMatchObject({
             _tag: 'HistoryQueryRefused',
             reason: 'timeout',
@@ -145,7 +161,6 @@ describe('HistoryQuery', () => {
           expect(next.rows).toEqual([[1]]);
         }),
       ),
-    { timeout: 20_000 },
   );
 
   it.live('holds display rows only', () =>

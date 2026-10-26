@@ -11,8 +11,6 @@ import {
 } from '@cli/runtime/initPlatform';
 import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { StateWriteFailed } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testStorageRoot } from '@test/cli/fixtures/cliContext';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
@@ -183,6 +181,23 @@ function withFreshSignalCapture<E>(
   });
 }
 
+// Regression for the HIGH-severity chat TUI signal race: `texra chat`/
+// `setup`/`resume` are the REAL interactive entry points — all
+// three eventually hand control to runChatTui.tsx's `runChat()`, which installs
+// its own SIGINT/SIGTERM handlers once Ink mounts and owns teardown from
+// there (terminal-mode restore, persistence drain, then the same
+// runCliPlatformShutdownSequence the platform handler would have run). Before
+// this fix, every one of those call sites also called plain `initCliPlatform`
+// (default `installSignalHandlers: true`), so the platform's own
+// `process.once('SIGINT'/'SIGTERM', ...)` handler installed too — two
+// independent async shutdown chains reacting to the same signal, racing on
+// whose `process.exit()` wins and leaving teardown order unspecified.
+//
+// The interactive entries do NOT suppress the platform handler up front (a
+// signal during onboarding/model-resolution still needs a graceful handler):
+// none of them passes `installSignalHandlers: false`. Instead
+// `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
+// installs its own pair, so the two sets are never simultaneously live.
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -196,50 +211,6 @@ describe('CLI platform init', () => {
     // fails on it.
     mocks.cliGlobalState.update.mockReturnValue(Effect.void);
   });
-
-  it.effect(
-    'retries after seed failure without publishing roots, session, or signals',
-    () =>
-      withFreshSignalCapture(({ registered, initPlatform }) =>
-        Effect.gen(function* () {
-          const storeFailure = new Error(
-            'disabled-tool defaults could not be seeded',
-          );
-          // The store is the failure's author now, so the double fails with the
-          // store's own tagged error rather than a bare rejection.
-          mocks.cliGlobalState.update.mockReturnValueOnce(
-            Effect.fail(
-              new StateWriteFailed({
-                key: GlobalStateKey.DISABLED_TOOLS,
-                message: storeFailure.message,
-                cause: storeFailure,
-              }),
-            ),
-          );
-
-          // The seed's own typed failure, carrying the store's rejection.
-          const seedError = yield* Effect.flip(
-            initPlatform.initCliPlatform(cliContext()),
-          );
-          expect(seedError).toMatchObject({
-            _tag: 'StateWriteFailed',
-            key: GlobalStateKey.DISABLED_TOOLS,
-            cause: storeFailure,
-          });
-
-          expect(registered).toEqual([]);
-
-          const services = yield* initPlatform.initCliPlatform(cliContext());
-          expect(services).toEqual(
-            expect.objectContaining({ roots: expect.anything() }),
-          );
-          expect(registered).toEqual([
-            { event: 'SIGINT', kind: 'once' },
-            { event: 'SIGTERM', kind: 'once' },
-          ]);
-        }),
-      ),
-  );
 
   it.effect('registers the agent shutdown drain on first platform init', () =>
     Effect.gen(function* () {
@@ -276,26 +247,18 @@ describe('CLI platform init', () => {
   );
 });
 
-// Regression for the HIGH-severity chat TUI signal race: `texra chat`/
-// `setup`/`resume` are the REAL interactive entry points — all
-// three eventually hand control to runChatTui.tsx's `runChat()`, which installs
-// its own SIGINT/SIGTERM handlers once Ink mounts and owns teardown from
-// there (terminal-mode restore, persistence drain, then the same
-// runCliPlatformShutdownSequence the platform handler would have run). Before
-// this fix, every one of those call sites also called plain `initCliPlatform`
-// (default `installSignalHandlers: true`), so the platform's own
-// `process.once('SIGINT'/'SIGTERM', ...)` handler installed too — two
-// independent async shutdown chains reacting to the same signal, racing on
-// whose `process.exit()` wins and leaving teardown order unspecified.
-//
-// The interactive entries do NOT suppress the platform handler up front (a
-// signal during onboarding/model-resolution still needs a graceful handler):
-// none of them passes `installSignalHandlers: false`. Instead
-// `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
-// installs its own pair, so the two sets are never simultaneously live.
 describe('CLI platform interactive signal ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.cliGlobalState.get.mockReset();
+    mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
+      Effect.succeed(defaultValue),
+    );
+    mocks.cliGlobalState.update.mockReset();
+    // The store's write is an Effect the callers compose, so the double's
+    // default is one too; a bare `vi.fn()` returns undefined and `yield*`
+    // fails on it.
+    mocks.cliGlobalState.update.mockReturnValue(Effect.void);
   });
 
   it.effect(

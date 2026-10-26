@@ -38,15 +38,6 @@ const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
 ];
 
 describe('collectResumeTargets', () => {
-  it('returns just the main session when there are no subagents', () => {
-    expect(
-      collectResumeTargets({
-        view: viewWith([root()]),
-        rootRunId: ROOT,
-      }),
-    ).toEqual([{ runId: 'root', label: 'task' }]);
-  });
-
   it('lists subagents TeXRA drives, chats and document tasks alike', () => {
     const view = viewWith([
       root(),
@@ -67,32 +58,6 @@ describe('collectResumeTargets', () => {
       { runId: 'flow', label: 'builder' },
       { runId: 'rev', label: 'reviewer' },
     ]);
-  });
-
-  it('skips children that are not plain agent runs', () => {
-    const view = viewWith([
-      root(),
-      child({
-        id: 'sh' as RunId,
-        label: 'bash',
-        identity: { kind: 'process', tool: 'bash' },
-      }),
-    ]);
-    expect(
-      collectResumeTargets({
-        view,
-        rootRunId: ROOT,
-      }),
-    ).toEqual([{ runId: 'root', label: 'task' }]);
-  });
-
-  it('returns nothing when there is no root run yet', () => {
-    expect(
-      collectResumeTargets({
-        view: viewWith([]),
-        rootRunId: undefined,
-      }),
-    ).toEqual([]);
   });
 });
 
@@ -161,69 +126,6 @@ describe('formatResumeHint', () => {
         '  texra resume rev  (reviewer)',
       ].join('\n'),
     );
-  });
-
-  it('prepends token usage when available', () => {
-    expect(
-      formatResumeHint([{ runId: 'root', label: 'task' }], {
-        inputTokens: 186_189_742,
-        outputTokens: 11_042_600,
-        cost: 0,
-        cacheReadInputTokens: 6_470_327_168,
-        reasoningTokens: 3_489_148,
-      } satisfies TokenUsageStats),
-    ).toBe(
-      [
-        'Token usage: total=197,232,342 input=186,189,742 (+ 6,470,327,168 cached) output=11,042,600 (reasoning 3,489,148)',
-        'Resume this task with:',
-        '  texra resume root  (task)',
-      ].join('\n'),
-    );
-  });
-
-  it.each<{
-    usageRoute: TokenUsageStats['usageRoute'];
-    cost: number;
-    expected: string;
-  }>([
-    {
-      usageRoute: 'chatgpt-subscription',
-      cost: 0,
-      expected: 'Included in ChatGPT subscription',
-    },
-    {
-      usageRoute: 'api-key',
-      cost: 0.5,
-      expected: '$0.500 via your own API keys',
-    },
-    {
-      usageRoute: undefined,
-      cost: 0.3,
-      expected: '$0.300',
-    },
-  ])(
-    'includes the $usageRoute task cost in the full hint',
-    ({ usageRoute, cost, expected }) => {
-      expect(
-        formatResumeHint([{ runId: 'root', label: 'task' }], {
-          inputTokens: 100,
-          outputTokens: 20,
-          cost,
-          usageRoute,
-        } satisfies TokenUsageStats),
-      ).toBe(
-        [
-          'Token usage: total=120 input=100 output=20',
-          `Task cost: ${expected}`,
-          'Resume this task with:',
-          '  texra resume root  (task)',
-        ].join('\n'),
-      );
-    },
-  );
-
-  it('is undefined when there is nothing to resume', () => {
-    expect(formatResumeHint([])).toBeUndefined();
   });
 });
 

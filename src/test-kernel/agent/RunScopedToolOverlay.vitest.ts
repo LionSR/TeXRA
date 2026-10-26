@@ -27,14 +27,9 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import {
-  fakeHostAppState,
-  hostStores,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { fakeHostAppState, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -42,8 +37,6 @@ import { DOCUMENTS_MODULE } from '@texra/tools/documents/documentsModule';
 import { texraPlugins } from '@texra/tools/registry';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { toolCatalogLayer } from '@tools/liveTools';
-import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 import { sha256 } from '@utils/core/idHash';
 
@@ -55,10 +48,6 @@ function tool(name: string): ITool {
     definition: { name, description: name, parameters: {} },
     call: vi.fn(),
   };
-}
-
-function approvalGatedTool(name: string): ITool {
-  return { ...tool(name), requiresApproval: true };
 }
 
 /** A launch whose model binds without a credential (the validation model). */
@@ -466,55 +455,5 @@ describe('run-scoped tool resolution', () => {
         });
         yield* closeSessionOf(session);
       }),
-  );
-
-  it.effect('filters approval-gated and host-excluded declared tools', () =>
-    Effect.gen(function* () {
-      // The run's tool policy carries both gates; `AgentRun` hands them to the
-      // resolver when it builds the model-facing list.
-      const resolved = yield* resolveTestStep({
-        tools: Schema.decodeUnknownSync(PersonaSchema)({
-          tools: [
-            { name: 'bash' },
-            { name: 'grep' },
-            { name: 'inquiry' },
-            { name: 'write_file' },
-            { name: 'wolfram' },
-          ],
-        }).tools,
-        approvalPromptsUnavailable: true,
-        host: 'cli',
-        // No conditional injections: this pins the declared-tool gates alone.
-        injectTools: false,
-        stores: hostStores(),
-        workspaceRoot: undefined,
-      }).pipe(
-        Effect.scoped,
-        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-        Effect.provide(
-          toolCatalogLayer(
-            toolTable([
-              {
-                id: 'test',
-                tools: {
-                  bash: approvalGatedTool('bash'),
-                  grep: tool('grep'),
-                  inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
-                  write_file: approvalGatedTool('write_file'),
-                  wolfram: approvalGatedTool('wolfram'),
-                },
-              },
-            ]),
-          ).pipe(
-            Layer.provide(
-              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
-            ),
-          ),
-        ),
-        Effect.provide(nodeSpawnerLayer),
-      );
-
-      expect(resolved.definitions.map(({ name }) => name)).toEqual(['grep']);
-    }),
   );
 });

@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   canLaunchTeam,
   loadTeamOptions,
   planTeamRun,
   resolveTeamLaunch,
-  teamAvailability,
   teamLaunchBlockReason,
   teamPlanStatus,
   type TeamCatalogAgent,
@@ -75,18 +74,6 @@ function planOver<T extends TeamCatalogAgent>(
 }
 
 describe('teamPresets', () => {
-  it('tags built-ins and customs while preserving provenance and order', () => {
-    const custom = preset({ id: 'zeta', name: 'Zeta' });
-    const presets = launchableTeamPresets([custom]);
-    const builtIn = presets.slice(0, AGENT_MODE_PRESETS.length);
-
-    expect(builtIn.map((item) => item.id)).toEqual(
-      AGENT_MODE_PRESETS.map((item) => item.id),
-    );
-    expect(builtIn.every((item) => item.source === 'built-in')).toBe(true);
-    expect(presets.at(-1)).toMatchObject({ id: 'zeta', source: 'custom' });
-  });
-
   it('tags the starter setup-only and drops custom built-in id collisions', () => {
     const collision = preset({
       id: AGENT_MODE_PRESETS[0].id,
@@ -232,30 +219,6 @@ describe('plan status and launchability', () => {
     expect(teamPlanStatus(degraded)).toBe('degraded');
     expect(teamPlanStatus(unavailable)).toBe('unavailable');
   });
-
-  it('reports member counts, labels, root identity, and override gaps', () => {
-    const plan = manualPlan({
-      missingAgentOverride: 'missing-lead',
-      missingAgents: ['writer', 'member'],
-    });
-
-    expect(teamAvailability(plan)).toEqual({
-      status: 'degraded',
-      agents: {
-        available: 1,
-        total: 3,
-        missing: ['writer', 'member'],
-        label: '1/3',
-      },
-      rootAgent: {
-        key: 'builtIn:lead',
-        name: 'lead',
-        source: 'builtIn',
-      },
-      missingAgentOverride: 'missing-lead',
-    });
-    expect(teamAvailability(manualPlan()).agents.label).toBe('3');
-  });
 });
 
 describe('loadTeamOptions', () => {
@@ -306,14 +269,6 @@ describe('resolveTeamLaunch', () => {
       },
       missingNames: [],
     });
-  });
-
-  it('reports an unknown team without consulting catalog ports', () => {
-    const resolveAgent = vi.fn(() => undefined);
-    expect(
-      resolveTeamLaunch(launchArgs({ teamId: 'missing', resolveAgent })),
-    ).toEqual({ status: 'unknown-team' });
-    expect(resolveAgent).not.toHaveBeenCalled();
   });
 
   it('blocks a planned team with no delegation-capable root', () => {

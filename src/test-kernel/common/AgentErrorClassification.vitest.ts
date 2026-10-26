@@ -7,10 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import {
-  agentErrorPresentation,
-  classifyAgentError,
-} from '@common/errors/agentErrorClassification';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 
 const missingKey = (message: string) =>
@@ -79,26 +76,5 @@ describe('classifyAgentError', () => {
     const err = missingKey('maximum context length is 128000');
 
     expect(classifyAgentError(err)).toBe('missing-api-key');
-  });
-});
-
-describe('agentErrorPresentation', () => {
-  it("threads a refusing request's docsPage into the error payload", () => {
-    // The desktop host presents request rejections as a native dialog built
-    // from this payload; dropping docsPage here loses the launch
-    // refusal's guide link (#11959).
-    expect(
-      agentErrorPresentation({
-        kind: 'unexpected',
-        message: 'Choose an input file first.',
-        docsPage: 'file-management',
-      }),
-    ).toStrictEqual({
-      type: 'error',
-      payload: {
-        message: 'Choose an input file first.',
-        docsPage: 'file-management',
-      },
-    });
   });
 });

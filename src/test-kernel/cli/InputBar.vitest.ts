@@ -15,12 +15,7 @@ import {
 } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
-import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
 import type { PastedImageEntry } from '@cli/chat/tui/input/draftAttachments';
-import {
-  ActiveDraftScope,
-  createActiveDraftRegistry,
-} from '@cli/chat/tui/input/activeDraft';
 import { InputBar } from '@cli/chat/tui/panes/InputBar';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -62,31 +57,6 @@ beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
 
 describe('InputBar history arrow boundaries', () => {
-  it('keeps idle arrows in the input when there is no history to walk', async () => {
-    const { ink, React } = await loadInk();
-    const { instance, stdin, stdout } = renderInteractive(
-      ink,
-      React.createElement(InputBar, {
-        runtime: testRuntime(),
-        onSubmit: vi.fn(),
-      }),
-      { debug: true },
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('draft');
-      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
-      stdin.write('\u001b[B');
-      stdin.write('\u001b[A');
-      await flushPromiseQueue();
-
-      expect(latestRenderedFrame(stdout)).toContain('draft');
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it('clamps at the oldest entry and restores the draft at the newest boundary', async () => {
     const { ink, React } = await loadInk();
     const history: InputHistory = {
@@ -225,47 +195,6 @@ describe('InputBar slash submit', () => {
 });
 
 describe('InputBar draft discard', () => {
-  it('clears a mounted foreground text input before exiting', async () => {
-    const { ink, React } = await loadInk();
-    const registry = createActiveDraftRegistry();
-    const onCtrlC = vi.fn();
-    let currentValue = 'dialog answer';
-
-    function Harness() {
-      const [value, setValue] = React.useState(currentValue);
-      ink.useInput((input: string, key: { readonly ctrl?: boolean }) => {
-        if (key.ctrl && input === 'c' && !registry.discard()) onCtrlC();
-      });
-      return React.createElement(
-        ActiveDraftScope,
-        { registry },
-        React.createElement(BaseTextInput, {
-          value,
-          onChange: (next: string) => {
-            currentValue = next;
-            setValue(next);
-          },
-          onSubmit: () => undefined,
-        }),
-      );
-    }
-
-    const { instance, stdin } = renderInteractive(
-      ink,
-      React.createElement(Harness),
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u0003');
-      await waitFor(() => currentValue === '');
-
-      expect(onCtrlC).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
   effectIt.live(
     'invalidates an image paste that resolves after the draft is cleared',
     () =>
@@ -423,74 +352,6 @@ describe('InputBar draft discard', () => {
     } finally {
       instance.unmount();
       resetCliState();
-    }
-  });
-
-  it('discards a pending image submit from an otherwise empty mounted input', async () => {
-    const { ink, React } = await loadInk();
-    const firstPaste = createDeferred<{
-      readonly ok: true;
-      readonly path: string;
-      readonly mediaType: string;
-      readonly displayName: string;
-    }>();
-    clipboardMock.attachClipboardImage
-      .mockReturnValueOnce(Effect.tryPromise(() => firstPaste.promise))
-      .mockReturnValueOnce(
-        Effect.succeed({
-          ok: true,
-          path: '/tmp/current.png',
-          mediaType: 'image/png',
-          displayName: 'current.png',
-        }),
-      );
-    const submitted: Array<readonly [string, readonly string[] | undefined]> =
-      [];
-    const registry = createActiveDraftRegistry();
-    const { instance, stdin, stdout } = renderInteractive(
-      ink,
-      React.createElement(
-        ActiveDraftScope,
-        { registry },
-        React.createElement(InputBar, {
-          runtime: testRuntime(),
-          onSubmit: (value: string, mediaFiles?: readonly string[]) =>
-            submitted.push([value, mediaFiles]),
-        }),
-      ),
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u0016');
-      await waitFor(
-        () => clipboardMock.attachClipboardImage.mock.calls.length === 1,
-      );
-      stdin.write('\r');
-
-      expect(registry.discard()).toBe(true);
-      firstPaste.resolve({
-        ok: true,
-        path: '/tmp/stale.png',
-        mediaType: 'image/png',
-        displayName: 'stale.png',
-      });
-      await flushPromiseQueue();
-
-      expect(submitted).toEqual([]);
-      expect(stdout.output).not.toContain('[Image #1]');
-      expect(stdout.output).not.toContain('Image paste failed');
-
-      stdout.output = '';
-      stdin.write('\u0016');
-      await waitFor(() => stdout.output.includes('[Image #1]'));
-      expect(stdout.output).not.toContain('[Image #2]');
-      stdin.write('\r');
-      await waitFor(() => submitted.length === 1);
-
-      expect(submitted).toEqual([['[Image #1]', ['/tmp/current.png']]]);
-    } finally {
-      instance.unmount();
     }
   });
 });

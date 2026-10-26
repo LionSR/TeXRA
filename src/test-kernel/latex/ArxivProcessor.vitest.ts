@@ -17,6 +17,7 @@ import {
   Path,
 } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/http';
+import { TestClock } from 'effect/testing';
 import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
@@ -369,9 +370,7 @@ describe('arXiv source download filenames', () => {
 });
 
 describe('arXiv source download retry classification', () => {
-  // `it.live`: the 429 retry backoff sleeps on the effect clock, which the
-  // TestClock `it.effect` installs never advances on its own.
-  it.live('retries a 429 rate limit instead of aborting immediately', () =>
+  it.effect('retries a 429 rate limit instead of aborting immediately', () =>
     Effect.gen(function* () {
       const destBasePath = yield* tempSourceBase;
       let attempt = 0;
@@ -381,14 +380,20 @@ describe('arXiv source download retry classification', () => {
           ? new Response(null, { status: 429 })
           : sourceResponse();
       });
-      const downloadedPath = yield* ArxivProcessor.downloadFile(
+      const fiber = yield* ArxivProcessor.downloadFile(
         SOURCE_URL,
         destBasePath,
         5000,
-      ).pipe(onFetch(fetchMock));
+      ).pipe(onFetch(fetchMock), Effect.forkChild);
+      // Step the test clock past the backoff while the real fetch and file
+      // I/O between attempts settle.
+      while (fiber.pollUnsafe() === undefined) {
+        yield* Effect.promise(() => new Promise((r) => setTimeout(r, 1)));
+        yield* TestClock.adjust('1 second');
+      }
 
+      expect(yield* Fiber.join(fiber)).toBe(destBasePath);
       expect(attempt).toBe(2);
-      expect(downloadedPath).toBe(destBasePath);
     }).pipe(Effect.provide(httpPlatformLayer)),
   );
 

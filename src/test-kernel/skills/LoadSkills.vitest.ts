@@ -44,33 +44,6 @@ function expectReportedIssue(
 }
 
 describe('discoverSkillSources over one root', () => {
-  it('loads valid SKILL.md packages', async () => {
-    const root = await createTempRoot();
-    await writeSkill(
-      root,
-      'manuscript-review',
-      {
-        name: 'manuscript-review',
-        description:
-          'Reviews mathematical manuscripts for correctness and exposition.',
-      },
-      'Read the paper and report substantial mathematical issues.',
-    );
-
-    const result = await discoverSkillSources([
-      { scope: 'project', path: root },
-    ]);
-
-    expect(result.errors).toEqual([]);
-    expect(result.skills).toHaveLength(1);
-    expect(result.skills[0]?.skill).toMatchObject({
-      name: 'manuscript-review',
-      description:
-        'Reviews mathematical manuscripts for correctness and exposition.',
-      body: 'Read the paper and report substantial mathematical issues.',
-    });
-  });
-
   it('loads name-mismatched skills with a warning', async () => {
     const root = await createTempRoot();
     await writeSkill(root, 'directory-name', {

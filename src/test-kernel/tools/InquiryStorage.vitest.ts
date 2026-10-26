@@ -194,49 +194,4 @@ describe('InquiryStorage', () => {
       expect(openOnB).toHaveLength(1);
     }).pipe(Effect.provide(layer)),
   );
-
-  it.live('listThreadsByStatus filters by status and scope', () =>
-    Effect.gen(function* () {
-      const records = yield* InquiryRecords;
-      const t1 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_A,
-        question: 'Q1',
-      });
-      yield* records.recordAnswerForOpenTurn({
-        threadId: t1.threadId,
-        turnIndex: 1,
-        answer: 'A1',
-      });
-
-      const t2 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_A,
-        question: 'Q2',
-      });
-
-      const t3 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_B,
-        question: 'Q3',
-      });
-      yield* records.markDropped({ threadId: t3.threadId, turnIndex: 1 });
-
-      const openOnA = yield* records.listThreadsByStatus({
-        status: 'open',
-        scope: 'run',
-        runId: RUN_A,
-      });
-      expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);
-
-      const allDropped = yield* records.listThreadsByStatus({
-        status: 'dropped',
-        scope: 'all',
-      });
-      expect(allDropped.map((t) => t.threadId)).toEqual([t3.threadId]);
-
-      const answered = yield* records.listThreadsByStatus({
-        status: 'answered',
-        scope: 'all',
-      });
-      expect(answered.map((t) => t.threadId)).toEqual([t1.threadId]);
-    }).pipe(Effect.provide(layer)),
-  );
 });

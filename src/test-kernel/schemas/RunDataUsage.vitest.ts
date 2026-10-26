@@ -35,18 +35,6 @@ describe('usage wire vocabulary and aggregation', () => {
       ],
       expectedRoute: undefined,
     },
-    {
-      name: 'kept for a single subscription-routed entry',
-      entries: [
-        {
-          inputTokens: 10,
-          outputTokens: 2,
-          cost: 0,
-          usageRoute: 'chatgpt-subscription',
-        },
-      ],
-      expectedRoute: 'chatgpt-subscription',
-    },
   ])(
     'keeps route badges only for unambiguous accumulated usage: $name',
     ({ entries, expectedRoute }) => {

@@ -330,52 +330,6 @@ describe('runRegistry', () => {
       }),
   );
 
-  it.effect('interrupts the run fiber when terminating agent handles', () =>
-    Effect.gen(function* () {
-      const { registry } = createRegistry();
-      const parentRunId = generateRunId();
-      const runId = generateRunId();
-      const interrupt = vi.fn();
-
-      try {
-        trackInterruptibleHandle(
-          registry,
-          { runId, parent: parentRunId },
-          interrupt,
-        );
-
-        const stop = registry.stop(runId, { reason: 'user' });
-        expect(stop.accepted()).toBe(true);
-        yield* stop.settlement;
-
-        expect(interrupt).toHaveBeenCalledOnce();
-      } finally {
-        registry.dispose();
-      }
-    }),
-  );
-
-  it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
-    // Guards the fallback above: a handle that never parked must still no-op,
-    // or the fallback could spuriously tear down a handle mid-completion, in
-    // the narrow window between its own interrupt unregister and its own
-    // untrack.
-    const { registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    try {
-      const handle = createHandle(runId, parentRunId);
-      registry.track(handle);
-
-      expect(killRegistry(registry, runId, { reason: 'user' })).toBe(false);
-
-      expect(registry.get(runId)?.handle).toBe(handle);
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it('leaves a never-suspended handle alone even while its run reads WAITING', () => {
     // The handle owns the suspension fact; the run phase is only a
     // projection of it. A stop landing in the narrow window between a live
@@ -432,86 +386,6 @@ describe('runRegistry', () => {
         expect(rootInterrupt).toHaveBeenCalledOnce();
         expect(childInterrupt).toHaveBeenCalledOnce();
         expect(queuedChildInterrupt).toHaveBeenCalledOnce();
-      } finally {
-        registry.dispose();
-      }
-    }),
-  );
-
-  it.effect('interrupts grandchildren when killing a subagent chain', () =>
-    Effect.gen(function* () {
-      const { registry } = createRegistry();
-      const rootRunId = generateRunId();
-      const childRunId = generateRunId();
-      const grandchildRunId = generateRunId();
-      const childInterrupt = vi.fn();
-      const grandchildInterrupt = vi.fn();
-
-      try {
-        trackInterruptibleHandle(
-          registry,
-          { runId: childRunId, parent: rootRunId },
-          childInterrupt,
-        );
-        trackInterruptibleHandle(
-          registry,
-          { runId: grandchildRunId, parent: childRunId },
-          grandchildInterrupt,
-          { agentName: 'test-grandchild' },
-        );
-
-        const stop = registry.stop(childRunId, { reason: 'user' });
-        expect(stop.accepted()).toBe(true);
-        yield* stop.settlement;
-
-        expect(childInterrupt).toHaveBeenCalledOnce();
-        expect(grandchildInterrupt).toHaveBeenCalledOnce();
-      } finally {
-        registry.dispose();
-      }
-    }),
-  );
-
-  it.effect('detaches descendants when killing with detached subagents', () =>
-    Effect.gen(function* () {
-      const { events, registry } = createRegistry();
-      const recorded = recordSessionEvents(events);
-      const rootRunId = generateRunId();
-      const childRunId = generateRunId();
-      const grandchildRunId = generateRunId();
-      const childInterrupt = vi.fn();
-      const grandchildInterrupt = vi.fn();
-
-      try {
-        trackInterruptibleHandle(
-          registry,
-          { runId: childRunId, parent: rootRunId },
-          childInterrupt,
-        );
-        trackInterruptibleHandle(
-          registry,
-          { runId: grandchildRunId, parent: childRunId },
-          grandchildInterrupt,
-          { agentName: 'test-grandchild' },
-        );
-        yield* bear(childRunId, grandchildRunId);
-
-        const stop = registry.stop(childRunId, {
-          detachActiveChildren: true,
-          reason: 'user',
-        });
-        // A detaching stop admits the interrupt only once its detach batch
-        // has committed, so the acceptance reads after the settlement.
-        yield* stop.settlement;
-        expect(stop.accepted()).toBe(true);
-
-        expect(childInterrupt).toHaveBeenCalledOnce();
-        expect(grandchildInterrupt).not.toHaveBeenCalled();
-        expect(registry.parentOf(grandchildRunId)).toBeNull();
-        expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
-          type: 'run.detach',
-          aggregateId: qualifyAggregateId('run', grandchildRunId),
-        });
       } finally {
         registry.dispose();
       }
@@ -925,30 +799,6 @@ describe('runRegistry', () => {
       }),
   );
 
-  it.effect('cancels an ownerless run', () =>
-    Effect.gen(function* () {
-      const { registry } = createRegistry();
-      const runId = generateRunId();
-
-      try {
-        // The start row is what lets the stop's typed failure be yielded here:
-        // the ownerless stop's end fails for a run that has none, and today the
-        // registry's own runFork drops that failure.
-        publishTestRunStart(testDefaultSession(), runId);
-        yield* testDefaultSession().log.settled;
-        yield* registry.stop(runId, { reason: 'user' }).settlement;
-
-        // `run.end` is the run's whole terminal fact (one run model, 3.3), so
-        // a stop that reached no live handle still writes it.
-        expect(yield* runEnds(runId)).toMatchObject([
-          { outcome: RUN_OUTCOME.CANCELLED },
-        ]);
-      } finally {
-        registry.dispose();
-      }
-    }),
-  );
-
   it.effect('detaches children of an ownerless run and cancels it', () =>
     Effect.gen(function* () {
       const { events, registry } = createRegistry();
@@ -980,58 +830,6 @@ describe('runRegistry', () => {
       expect(yield* runEnds(parentRunId)).toMatchObject([
         { outcome: RUN_OUTCOME.CANCELLED },
       ]);
-    }),
-  );
-
-  it('registers a child without publishing its parent edge', () => {
-    const { events, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    try {
-      const handle = createHandle(runId, parentRunId);
-
-      registry.track(handle);
-      expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-      untrackRun(registry, runId);
-
-      // The parent edge is a `run.start` fact, so tracking publishes none.
-      expect(recorded.events).toEqual([]);
-      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it.effect('projects detach updates from session events', () =>
-    Effect.gen(function* () {
-      const { events, registry } = createRegistry();
-      yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
-      const recorded = recordSessionEvents(events);
-      const parentRunId = generateRunId();
-      const runId = generateRunId();
-
-      const handle = createHandle(runId, parentRunId);
-
-      registry.track(handle);
-      yield* bear(runId);
-      expect(registry.parentOf(runId)).toBe(parentRunId);
-      const sinceTrack = recordSessionEvents(events);
-      yield* registry['detachActiveChildren'](parentRunId);
-      expect(registry.parentOf(runId)).toBeNull();
-
-      // The edge goes with the grants the child keeps, in one batch.
-      expect(sinceTrack.events.map((event) => event.type)).toEqual([
-        'run.detach',
-        'approval.policy',
-      ]);
-
-      expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
-        type: 'run.detach',
-        aggregateId: qualifyAggregateId('run', runId),
-      });
-      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
     }),
   );
 

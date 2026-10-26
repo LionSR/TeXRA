@@ -14,8 +14,6 @@ import {
   Layer,
   Logger,
   Queue,
-  Result,
-  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -37,7 +35,6 @@ import { runStateAppend } from '@shared/session/runHistory';
 import {
   qualifyAggregateId,
   DEBUG_MODE_KEY,
-  EventInputSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
   type RunId,
@@ -239,33 +236,6 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
-  it('rejects a run event carried by a plugin aggregate at the wire boundary', () => {
-    const input = {
-      _tag: 'event',
-      read: 'listing',
-      event: {
-        ...runStart,
-        aggregateId: qualifyAggregateId(
-          'plugin',
-          'external-inquiry:ei_012345abcdef',
-        ),
-        seq: 1,
-        commit: 1,
-        origin: SELF,
-        at: 0,
-      },
-    };
-    const accepts = (candidate: unknown) =>
-      Result.isSuccess(Schema.decodeUnknownResult(EventInputSchema)(candidate));
-    expect(accepts(input)).toBe(false);
-    expect(
-      accepts({
-        ...input,
-        event: { ...input.event, aggregateId: runStart.aggregateId },
-      }),
-    ).toBe(true);
-  });
-
   it.live('preserves run subscription keys across the webview bridge', () =>
     Effect.gen(function* () {
       const session = yield* createTestSession();

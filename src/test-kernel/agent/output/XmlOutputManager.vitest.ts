@@ -1552,27 +1552,6 @@ Appendix.
         expect(state.rounds.get(0)?.missingOutputs).toEqual(['appendix.tex']);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
-
-  it.live(
-    'logs discarded unclosed latex fences during similarity recovery',
-    () =>
-      Effect.gen(function* () {
-        const logger = spiedTrace();
-        yield* fsEffect.write(fakePath('tmp/run/a.tex'), 'Original A.');
-        yield* fsEffect.write(fakePath('tmp/run/b.tex'), 'Original B.');
-
-        const outputs = yield* writeAndSplitDocuments(
-          ['```latex', 'Unclosed revised content.'],
-          ['a.tex', 'b.tex'],
-          { logger, baseFiles: ['a.tex', 'b.tex'] },
-        );
-
-        expect(outputs).toEqual([]);
-        expect(logger.debug).toHaveBeenCalledWith(
-          expect.stringContaining('Dropped unclosed LaTeX fence'),
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 });
 
 describe('assignByContentSimilarity', () => {

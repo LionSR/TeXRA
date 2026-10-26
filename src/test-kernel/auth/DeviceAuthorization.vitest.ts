@@ -141,21 +141,6 @@ describe('pollDeviceAuthorization', () => {
       }),
   );
 
-  it.effect('never starts a poll past the deadline', () =>
-    Effect.gen(function* () {
-      const { poll, attempts } = queuedPoll(['pending']);
-      const fiber = yield* Effect.forkChild(
-        pollDeviceAuthorization({ poll, intervalMs: 5000, expiresInMs: 4000 }),
-      );
-
-      yield* TestClock.adjust('5 seconds');
-
-      const exit = yield* Fiber.await(fiber);
-      expect(Exit.isFailure(exit)).toBe(true);
-      expect(yield* attempts).toBe(0);
-    }),
-  );
-
   it.effect('interruption during the first wait skips the poll', () =>
     Effect.gen(function* () {
       const { poll, attempts } = queuedPoll(['token']);

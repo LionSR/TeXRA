@@ -113,8 +113,8 @@ plans the second as its Execution port.
 The tests are the contract.
 
 - **The crash-point suite** (`src/test-kernel/support/crashConformance.ts`, run
-  by `crashConformanceBuiltins.vitest.ts` over the built-ins and
-  `crashConformanceTexra.vitest.ts` over TeXRA's plugins). A scripted model
+  by `crashConformanceTexra.vitest.ts` over TeXRA's plugins, which include
+  every harness built-in). A scripted model
   drives one run with a parallel tool batch, an approval, a retry, an awaited
   child, a fork and a compaction. For each commit point N of a clean run, it
   runs again, interrupts the process after commit N, reopens and resumes, and

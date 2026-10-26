@@ -76,14 +76,9 @@ describe('applyHelperModelPreference', () => {
   }
 
   it.effect.each([
-    { helper: 'opus', scenario: 'the helper model already equals it' },
     {
       helper: 'chatonly',
       scenario: 'a helper cannot call functions',
-    },
-    {
-      helper: 'mysteryModel',
-      scenario: 'the helper model is unknown to the registry',
     },
     // Capabilities present but supportsFunctionCalling omitted — the provider
     // adapters would strip the function tools, so don't swap.

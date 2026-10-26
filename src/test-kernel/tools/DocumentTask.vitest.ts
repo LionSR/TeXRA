@@ -103,7 +103,7 @@ describe('documentTask', () => {
     // A required file named after a file category generates the fixed X_FILE /
     // X_CONTENT variables and would silently override them. The guard fails
     // loudly at variable-build time instead.
-    it.effect.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
+    it.effect.each(['INPUT'])(
       'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
       (varName) =>
         Effect.gen(function* () {

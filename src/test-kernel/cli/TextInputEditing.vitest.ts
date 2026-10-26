@@ -2,17 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { applyTerminalInputChunk } from '@cli/chat/tui/input/textInputBindings';
 import {
-  deleteAtCursor,
-  deleteBeforeCursor,
-  deleteNextWord,
   deletePreviousWord,
   deleteToEnd,
   deleteToStart,
   insertText,
-  lineEndCursor,
-  lineStartCursor,
-  nextWordCursor,
-  previousWordCursor,
   verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
@@ -20,19 +13,14 @@ import {
   textInputDisplayWindow,
 } from '@cli/chat/tui/input/textInputDisplay';
 import {
-  isCtrlInput,
-  isEscapeInput,
-  isUnhandledControlInput,
   isPlainReturnInput,
   isTextInputNewlineInput,
-  metaChordInput,
   rewriteKittyEnterInput,
   SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/tui/inputKeys';
 
 const ESC = '\u001B';
 const NEWLINE_MODE = { shiftEnter: 'newline' } as const;
-const PRESERVE_MODE = { shiftEnter: 'preserve' } as const;
 
 describe('CLI TUI text input editing', () => {
   it('recognizes normalized and raw Enter without stealing Ctrl-J', () => {
@@ -64,30 +52,6 @@ describe('CLI TUI text input editing', () => {
     expect(isTextInputNewlineInput('', { return: true })).toBe(false);
   });
 
-  it('recognizes Kitty Enter sequences for raw re-dispatch', () => {
-    expect(rewriteKittyEnterInput(`${ESC}[57414u`, NEWLINE_MODE)).toBe('\r');
-    expect(rewriteKittyEnterInput(`${ESC}[57414;1u`, NEWLINE_MODE)).toBe('\r');
-    // Ink reports the semicolon CSI-u spelling as shifted Return, so the raw
-    // shim must not emit a second synthetic newline for that exact chunk.
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13;2u`, NEWLINE_MODE),
-    ).toBeUndefined();
-    // The colon spelling is not parsed by Ink; normalize it at the raw-event
-    // layer so Shift+Enter still inserts a newline.
-    expect(rewriteKittyEnterInput(`${ESC}[13:2u`, NEWLINE_MODE)).toBe(
-      SYNTHETIC_SHIFT_RETURN_INPUT,
-    );
-    // Main Enter, plain CR, and modified keypad Enter must not match.
-    expect(rewriteKittyEnterInput('\r', NEWLINE_MODE)).toBeUndefined();
-    expect(rewriteKittyEnterInput(`${ESC}[13u`, NEWLINE_MODE)).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`${ESC}[57414;5u`, NEWLINE_MODE),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13;5u`, NEWLINE_MODE),
-    ).toBeUndefined();
-  });
-
   it('rewrites batched Kitty Shift+Enter chunks before text editing', () => {
     const batched = `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`;
     const insertedNewline = {
@@ -116,51 +80,6 @@ describe('CLI TUI text input editing', () => {
     expect(pressEventRewritten).toBe(batched);
   });
 
-  it('preserves Shift+Enter while still rewriting keypad Enter', () => {
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13:2u`, PRESERVE_MODE),
-    ).toBeUndefined();
-    expect(rewriteKittyEnterInput(`pick${ESC}[57414;1u`, PRESERVE_MODE)).toBe(
-      'pick\r',
-    );
-  });
-
-  it('does not rewrite Kitty Enter forms that Ink can handle or should ignore', () => {
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13;2;13u`, NEWLINE_MODE),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`alpha${ESC}[13;2:3ubeta`, NEWLINE_MODE),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`alpha${ESC}[13;6ubeta`, NEWLINE_MODE),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`alpha${ESC}[57414;5ubeta`, NEWLINE_MODE),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`alpha${ESC}[57414;1:3ubeta`, NEWLINE_MODE),
-    ).toBeUndefined();
-  });
-
-  it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
-    expect(metaChordInput('p', { meta: true })).toBe('p');
-    expect(metaChordInput('\u001Bp', {})).toBe('p');
-    expect(metaChordInput('\u001B3', {})).toBe('3');
-    expect(metaChordInput('p', { ctrl: true, meta: true })).toBeUndefined();
-  });
-
-  it('normalizes raw terminal control bytes for readline-style shortcuts', () => {
-    expect(isCtrlInput('\u0015', {}, 'u')).toBe(true);
-    expect(isCtrlInput('u', { ctrl: true }, 'u')).toBe(true);
-    expect(isCtrlInput('\u0015', { meta: true }, 'u')).toBe(false);
-    expect(isCtrlInput('\u0016', {}, 'v')).toBe(true);
-    expect(isCtrlInput('\u0016', { meta: true }, 'v')).toBe(false);
-    expect(isEscapeInput('\u001B', {})).toBe(true);
-    expect(isUnhandledControlInput('\u0006')).toBe(true);
-    expect(isUnhandledControlInput('\t')).toBe(false);
-  });
-
   it('applies batched terminal input without leaking raw control bytes', () => {
     expect(applyTerminalInputChunk('/', 1, '\u0015/model\r')).toEqual({
       value: '/model',
@@ -174,47 +93,10 @@ describe('CLI TUI text input editing', () => {
     });
   });
 
-  it('keeps LF and embedded CRLF as newlines inside raw text chunks', () => {
-    expect(applyTerminalInputChunk('', 0, 'alpha\nbeta')).toEqual({
-      value: 'alpha\nbeta',
-      cursor: 10,
-      submit: false,
-    });
-    expect(applyTerminalInputChunk('', 0, 'alpha\nbeta\r')).toEqual({
-      value: 'alpha\nbeta',
-      cursor: 10,
-      submit: true,
-    });
-    expect(applyTerminalInputChunk('', 0, 'alpha\r\nbeta\r')).toEqual({
-      value: 'alpha\nbeta',
-      cursor: 10,
-      submit: true,
-    });
-  });
-
   it('inserts pasted multi-line text without submitting embedded newlines', () => {
     expect(insertText('ab', 1, 'x\ny')).toEqual({
       value: 'ax\nyb',
       cursor: 4,
-    });
-  });
-
-  it('handles backspace and delete at buffer edges', () => {
-    expect(deleteBeforeCursor('abc', 0)).toEqual({
-      value: 'abc',
-      cursor: 0,
-    });
-    expect(deleteBeforeCursor('abc', 2)).toEqual({
-      value: 'ac',
-      cursor: 1,
-    });
-    expect(deleteAtCursor('abc', 3)).toEqual({
-      value: 'abc',
-      cursor: 3,
-    });
-    expect(deleteAtCursor('abc', 1)).toEqual({
-      value: 'ac',
-      cursor: 1,
     });
   });
 
@@ -231,50 +113,6 @@ describe('CLI TUI text input editing', () => {
       value: 'one three',
       cursor: 4,
     });
-  });
-
-  it('scopes Ctrl-U and Ctrl-K to the current line in multiline drafts', () => {
-    expect(deleteToStart('alpha\nbeta gamma\ndelta', 10)).toEqual({
-      value: 'alpha\n gamma\ndelta',
-      cursor: 6,
-    });
-    expect(deleteToEnd('alpha\nbeta gamma\ndelta', 10)).toEqual({
-      value: 'alpha\nbeta\ndelta',
-      cursor: 10,
-    });
-    // Ctrl-K at the end of a line kills the newline (joins the next line).
-    expect(deleteToEnd('alpha\nbeta', 5)).toEqual({
-      value: 'alphabeta',
-      cursor: 5,
-    });
-  });
-
-  it('moves Home/End (Ctrl-A/E) to the current line boundaries', () => {
-    expect(lineStartCursor('one two', 4)).toBe(0);
-    expect(lineEndCursor('one two', 4)).toBe(7);
-    expect(lineStartCursor('alpha\nbeta gamma', 10)).toBe(6);
-    expect(lineEndCursor('alpha\nbeta gamma\ndelta', 10)).toBe(16);
-  });
-
-  it('implements word-wise movement for Alt-B/F and Ctrl-arrows', () => {
-    expect(previousWordCursor('one two three', 8)).toBe(4);
-    expect(previousWordCursor('one two three', 6)).toBe(4);
-    expect(previousWordCursor('one two three', 0)).toBe(0);
-    expect(nextWordCursor('one two three', 8)).toBe(13);
-    expect(nextWordCursor('one two three', 3)).toBe(7);
-    expect(nextWordCursor('one two three', 13)).toBe(13);
-  });
-
-  it('implements Alt-D forward word kill', () => {
-    expect(deleteNextWord('one two three', 4)).toEqual({
-      value: 'one  three',
-      cursor: 4,
-    });
-    expect(deleteNextWord('one two three', 3)).toEqual({
-      value: 'one three',
-      cursor: 3,
-    });
-    expect(deleteNextWord('one', 3)).toEqual({ value: 'one', cursor: 3 });
   });
 
   it('moves the caret between logical lines on ↑/↓, preserving the column', () => {

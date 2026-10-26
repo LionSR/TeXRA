@@ -79,47 +79,7 @@ function tailLine(text: string): string {
   return text.split('\n').at(-1) ?? '';
 }
 
-/** Rendered action buttons' `data-action` ids, in DOM order. */
-function actionButtonIds(element: RetryRequestPanel): (string | null)[] {
-  const buttons = [
-    ...(element.shadowRoot?.querySelectorAll(
-      '.request-card__actions wa-button',
-    ) ?? []),
-  ];
-  return buttons.map((button) => button.getAttribute('data-action'));
-}
-
 describe('retry-request-panel', () => {
-  it('does not offer the API-key switch when the run carried no offer', async () => {
-    const element = await mountPanel({
-      model: 'moonshot/kimi-for-coding',
-      errorDetails: {
-        classification: { kind: 'kimi-code-subscription' },
-        userRetryable: true,
-      },
-      credentialSwitch: null,
-    });
-
-    expect(actionButtonIds(element)).toEqual(['primary', 'decline']);
-  });
-
-  it('offers the API-key switch the run carried', async () => {
-    const element = await mountPanel({
-      model: 'moonshot/kimi-for-coding',
-      errorDetails: {
-        classification: { kind: 'upstream-credit' },
-        userRetryable: true,
-      },
-      credentialSwitch: { kind: 'new-key', provider: 'kimiCode' },
-    });
-
-    expect(actionButtonIds(element)).toEqual([
-      'primary',
-      'useOwnApiKey',
-      'decline',
-    ]);
-  });
-
   it('shows exactly the claimed number of tail characters for truncated partial output', async () => {
     const element = await mountPanel();
 

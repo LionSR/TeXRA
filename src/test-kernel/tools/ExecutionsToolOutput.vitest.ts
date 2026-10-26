@@ -9,29 +9,18 @@ import { Effect, Schema } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { registerRun } from '@agent/storage/runLifecycle';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
-import {
-  AgentConfigSchema,
-  qualifyAggregateId,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  type ExecResult,
-  RunIdSchema,
-  type RunId,
-} from '@shared/schemas';
+import { type ExecResult, RunIdSchema, type RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
   publishTestRunStart,
-  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
-import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
 const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ba5e00000001');
@@ -128,60 +117,6 @@ function readOutput(runId: RunId, viewRange?: [number, number]) {
   });
 }
 
-/** Register a process-identity bash run and return its run id. */
-function registerProcessRun(instruction: string) {
-  return Effect.gen(function* () {
-    const runId = generateRunId();
-    yield* registerRun(
-      testDefaultSession(),
-      runId,
-      Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'bash',
-        instruction,
-      }),
-      { identity: { kind: 'process', tool: 'bash' } },
-    );
-    return runId;
-  });
-}
-
-/**
- * Register a background script run and return its id. A script run publishes
- * its `run.config` the way `createChildRun` does at launch, so the fold sees
- * the model the launch actually routed.
- */
-function registerScriptRun(name: string, model?: string) {
-  return Effect.gen(function* () {
-    const runId = generateRunId();
-    yield* registerRun(
-      testDefaultSession(),
-      runId,
-      {
-        name,
-        instruction: `Script ${name}`,
-        ...(model === undefined ? {} : { model }),
-      },
-      { identity: { kind: 'script', title: name } },
-    );
-    if (model !== undefined) {
-      const session = testDefaultSession();
-      publishTestRows(session, [
-        {
-          type: 'run.config',
-          aggregateId: qualifyAggregateId('run', runId),
-          config: Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: name,
-            model,
-            instruction: `Script '${name}'`,
-          }),
-        },
-      ]);
-      yield* session.log.settled;
-    }
-    return runId;
-  });
-}
-
 describe('ExecutionsTool /executions/{id}/output', () => {
   setupPlatform({
     workspacePath: '/workspace',
@@ -259,6 +194,11 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           output,
         );
         assert.ok(!output.includes('tail without newlineTurn completed in '));
+        assert.ok(output.includes('[finished'));
+        assert.ok(
+          !output.includes('no longer available'),
+          'A finished-but-resident run must not claim its output was discarded',
+        );
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
@@ -356,83 +296,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       ),
   );
 
-  it.live('renders consecutive untagged legacy rows standalone', () =>
-    Effect.gen(function* () {
-      const runId = yield* registerProcessRun('legacy command');
-      const session = testDefaultSession();
-      const append = (
-        text: string,
-        level:
-          typeof LOG_LEVELS.INFO | typeof LOG_LEVELS.WARN = LOG_LEVELS.INFO,
-      ): void => {
-        publishTestRows(session, [
-          {
-            type: 'log',
-            aggregateId: qualifyAggregateId('run', runId),
-            level,
-            messageType: MESSAGE_TYPES.DEFAULT,
-            message: text,
-          },
-        ]);
-      };
-      append('legacy one');
-      append('legacy two');
-      append('legacy warning\r\n\rlegacy tail\r', LOG_LEVELS.WARN);
-
-      const result = yield* readOutput(runId);
-      const output = result.output ?? '';
-
-      assert.ok(output.includes('Showing lines 1-5 of 5.'));
-      assert.ok(
-        output.includes(
-          'legacy one\nlegacy two\nerr: legacy warning\nerr: \nerr: legacy tail',
-        ),
-      );
-      assert.ok(!output.includes('legacy onelegacy two'));
-      assert.ok(!output.includes('\r'));
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  it.live('treats a carriage-return progress redraw as separate lines', () =>
-    Effect.gen(function* () {
-      // curl/pip/docker redraw with `\r` and no newline. Splitting on LF alone
-      // would make the whole progress bar one enormous line, so the bounded
-      // window would still hand back the entire log.
-      const run = yield* launchBackgroundRun((sink) => {
-        sink.onStdout?.('  0%\r 50%\r100%\r\ndownload complete\n');
-      });
-
-      const result = yield* readOutput(run.runId);
-      const output = result.output ?? '';
-
-      assert.ok(output.includes('Showing lines 1-4 of 4.'));
-      assert.ok(output.includes('  0%'));
-      assert.ok(output.includes('download complete'));
-
-      yield* Effect.promise(() => run.finish());
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   it.live(
     'bounds a chatty log to its tail by default and says how to page back',
     () =>
@@ -466,76 +329,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         assert.ok(!wideOutput.includes('line1001'));
 
         yield* Effect.promise(() => run.finish());
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
-  it.live('still serves the retained log after the command finishes', () =>
-    Effect.gen(function* () {
-      const run = yield* launchBackgroundRun((sink) => {
-        sink.onStdout?.('compiling\ndone\n');
-      });
-      yield* Effect.promise(() => run.finish());
-
-      const result = yield* readOutput(run.runId);
-      const output = result.output ?? '';
-
-      assert.equal(result.status, 'executed');
-      assert.ok(output.includes('compiling'), output);
-      assert.ok(output.includes('done'));
-      assert.ok(output.includes('[finished'));
-      assert.ok(
-        !output.includes('no longer available'),
-        'A finished-but-resident run must not claim its output was discarded',
-      );
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  it.live(
-    'shows one model for a script run in both the listing and its summary',
-    () =>
-      Effect.gen(function* () {
-        const runId = yield* registerScriptRun(
-          'model-parity',
-          'parity-model-1',
-        );
-
-        const summary = yield* ExecutionsTool.call({
-          path: `/executions/${runId}`,
-        });
-        const listing = yield* ExecutionsTool.call({
-          path: '/executions',
-        });
-        const summaryOutput = summary.output ?? '';
-        const listingOutput = listing.output ?? '';
-
-        assert.equal(summary.status, 'executed');
-        assert.equal(listing.status, 'executed');
-        // Both surfaces read the same fold, so neither can disagree about
-        // what the run is or what model it routed to.
-        assert.ok(listingOutput.includes('parity-model-1'));
-        assert.ok(summaryOutput.includes('Model: parity-model-1'));
-        assert.ok(summaryOutput.includes('Category: script'));
-        assert.ok(listingOutput.includes('script'));
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

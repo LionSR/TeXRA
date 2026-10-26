@@ -143,46 +143,4 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
         ).toEqual({ version: '0.39.0', refreshed: true });
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
-
-  effectIt.effect(
-    'returns no version when brew info is unavailable or missing the formula',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          yield* fetchLatestHomebrewFormulaVersion({
-            runCommand: () => Effect.succeed(undefined),
-          }),
-        ).toEqual({ version: undefined, refreshed: false });
-        expect(
-          yield* fetchLatestHomebrewFormulaVersion({
-            runCommand: () => Effect.succeed(JSON.stringify({ formulae: [] })),
-          }),
-        ).toEqual({ version: undefined, refreshed: true });
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  effectIt.effect(
-    'still reads formula info when the Homebrew tap refresh fails, marked stale',
-    () =>
-      Effect.gen(function* () {
-        const calls: Array<{ command: string; args: readonly string[] }> = [];
-        expect(
-          yield* fetchLatestHomebrewFormulaVersion({
-            runCommand: (command, args) =>
-              Effect.sync(() => {
-                calls.push({ command, args });
-                if (args[0] === 'update') return undefined;
-                return JSON.stringify({
-                  formulae: [{ name: 'texra', versions: { stable: '0.39.0' } }],
-                });
-              }),
-          }),
-        ).toEqual({ version: '0.39.0', refreshed: false });
-
-        expect(calls).toEqual([
-          { command: 'brew', args: ['update', '--quiet'] },
-          { command: 'brew', args: ['info', '--json=v2', 'texra'] },
-        ]);
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
 });

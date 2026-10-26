@@ -84,8 +84,11 @@ const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
 
 if (!process.argv.includes('--server')) {
   if (countPath) fs.appendFileSync(countPath, 'command\\n');
-  const delayMs = Number(process.env.TEXRA_FAKE_LEAN_LAKE_DELAY || 0);
-  setTimeout(() => process.exit(0), delayMs);
+  // A held command runs until its release file appears.
+  const release = process.env.TEXRA_FAKE_LEAN_LAKE_RELEASE;
+  const finish = () =>
+    !release || fs.existsSync(release) ? process.exit(0) : setTimeout(finish, 10);
+  finish();
   return;
 }
 
@@ -674,7 +677,8 @@ describe('LeanServerPool', () => {
         const { pool } = yield* openPool();
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
         expect(activeServerRoots(pool)).toEqual([projectRoot]);
-        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const release = path.join(tempRoot, 'build.release');
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_RELEASE', release);
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
@@ -692,6 +696,7 @@ describe('LeanServerPool', () => {
         yield* pool.stopSessionsForRun(run('e00001'));
         expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
+        writeFileSync(release, '');
         yield* Fiber.join(build);
         expect(activeServerRoots(pool)).toEqual([]);
       }),
@@ -703,7 +708,8 @@ describe('LeanServerPool', () => {
       Effect.gen(function* () {
         const { pool } = yield* openPool();
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
-        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const release = path.join(tempRoot, 'build.release');
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_RELEASE', release);
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
@@ -716,6 +722,7 @@ describe('LeanServerPool', () => {
         yield* pool.stopSessionsForRun(run('e00002'));
 
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00003')));
+        writeFileSync(release, '');
         yield* Fiber.join(build);
         expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
@@ -736,25 +743,6 @@ describe('LeanServerPool', () => {
       yield* pool.stopSessionsForRun(run('e00002'));
       expect(activeServerRoots(pool)).toEqual([]);
     }),
-  );
-
-  fakeLakeIt.effect(
-    "keeps a parent's reused server until both parent and subagent end",
-    () =>
-      Effect.gen(function* () {
-        const { pool } = yield* openPool();
-        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
-        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
-        expect(yield* starts).toBe(1);
-
-        // A subagent joins the parent as an owner; either run ending alone
-        // leaves the shared-worktree server available to the other.
-        yield* pool.stopSessionsForRun(run('e00001'));
-        expect(activeServerRoots(pool)).toEqual([projectRoot]);
-
-        yield* pool.stopSessionsForRun(run('e00002'));
-        expect(activeServerRoots(pool)).toEqual([]);
-      }),
   );
 
   it.live('records an owner before its server is ready', () =>

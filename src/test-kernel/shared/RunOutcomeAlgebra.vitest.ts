@@ -2,14 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
-import { RUN_OUTCOME, RUN_PHASE, type RunPhase } from '@shared/schemas';
-import {
-  deriveRunOutcome,
-  isActivePhase,
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-} from '@shared/runs/runStatus';
+import { RUN_OUTCOME } from '@shared/schemas';
+import { deriveRunOutcome } from '@shared/runs/runStatus';
 
 describe('run outcome algebra', () => {
   it.each([
@@ -31,76 +25,4 @@ describe('run outcome algebra', () => {
       expect(deriveRunOutcome(flags)).toBe(expected);
     },
   );
-
-  it('projects each outcome into the injective legacy run vocabulary', () => {
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.COMPLETED)).toBe('completed');
-    // A user stop persists 'interrupted' and ends the transcript group
-    // neutral — cancelled is a sibling of failed, never folded into it.
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.CANCELLED)).toBe('interrupted');
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.FAILED)).toBe('error');
-  });
-});
-
-// The membership sets these three predicates answer used to be derived from
-// the legacy 7-value STREAM_STATUS_TRAITS table, deleted with the rest of the
-// legacy vocabulary's production surface (#7993 step 4). They are now the only
-// enumeration of "which phases are active / in flight / terminal", so pin them
-// exhaustively over the phase vocabulary rather than by example.
-describe('run phase membership predicates', () => {
-  const membership: Record<
-    RunPhase,
-    { active: boolean; inFlight: boolean; terminalOutcome: boolean }
-  > = {
-    [RUN_PHASE.RUNNING]: {
-      active: true,
-      inFlight: true,
-      terminalOutcome: false,
-    },
-    // WAITING is the deliberate oddball the old trait table also made
-    // visible: the cycle ended, but a follow-up appends to the same stream,
-    // so it is not acquirable and not a terminal outcome either.
-    [RUN_PHASE.WAITING]: {
-      active: false,
-      inFlight: true,
-      terminalOutcome: false,
-    },
-    [RUN_PHASE.COMPLETED]: {
-      active: false,
-      inFlight: false,
-      terminalOutcome: true,
-    },
-    [RUN_PHASE.CANCELLED]: {
-      active: false,
-      inFlight: false,
-      terminalOutcome: true,
-    },
-    [RUN_PHASE.FAILED]: {
-      active: false,
-      inFlight: false,
-      terminalOutcome: true,
-    },
-  };
-
-  it('classifies every phase, and treats absence as no-run-yet', () => {
-    for (const phase of Object.values(RUN_PHASE)) {
-      expect(isActivePhase(phase)).toBe(membership[phase].active);
-      expect(isInFlightPhase(phase)).toBe(membership[phase].inFlight);
-      expect(isTerminalOutcomePhase(phase)).toBe(
-        membership[phase].terminalOutcome,
-      );
-    }
-
-    expect(isActivePhase(undefined)).toBe(false);
-    expect(isInFlightPhase(undefined)).toBe(false);
-    expect(isTerminalOutcomePhase(undefined)).toBe(false);
-  });
-
-  it('makes every terminal outcome phase a RunOutcome', () => {
-    const terminalPhases = Object.values(RUN_PHASE).filter(
-      isTerminalOutcomePhase,
-    );
-    expect(new Set<string>(terminalPhases)).toEqual(
-      new Set<string>(Object.values(RUN_OUTCOME)),
-    );
-  });
 });

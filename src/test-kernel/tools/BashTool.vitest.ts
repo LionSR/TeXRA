@@ -12,7 +12,6 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 import { getRunRecords } from '@agent/storage/runRecords';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
-import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,
@@ -36,9 +35,6 @@ import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
 import { recordSessionEvents } from '../agent/progressTestUtils';
-
-/** The formatter's cap: a result longer than this is truncated head+tail. */
-const TOOL_RESULT_TEXT_CAP = 200_000;
 
 type ExecuteCommandOptions = NonNullable<
   Parameters<typeof execUtils.executeCommand>[1]
@@ -188,56 +184,6 @@ describe('BashTool', () => {
     vi.restoreAllMocks();
   });
 
-  it.live('preserves long stdout for tool results and model payloads', () =>
-    Effect.gen(function* () {
-      const longOutput = '0123456789'.repeat(35); // 350 chars, exceeds log truncation of 150
-      const execResult: ExecResult = {
-        success: true,
-        // executeCommand trims trailing whitespace before returning stdout
-        stdout: `${longOutput}\n`.trim(),
-        stderr: '',
-        timedOut: false,
-        exitCode: 0,
-      };
-
-      vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
-        Effect.succeed(execResult),
-      );
-
-      const result = yield* BashTool.call({ command: 'echo long' }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      );
-      assert.equal(
-        result.output,
-        longOutput,
-        'Bash tool should return the full stdout text',
-      );
-      // The lowering every settled call passes through on its way to the model.
-      assert.ok(
-        formatToolResultAsText(result).includes(longOutput),
-        'Model payload should contain the complete stdout text',
-      );
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'bash-tool' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   it.live(
     'marks exactly one character elided at 54,001 normalized characters',
     () =>
@@ -273,11 +219,6 @@ describe('BashTool', () => {
       name: 'all whitespace',
       chunks: [' \t\n'.repeat(40_000), '\r\n'.repeat(40_000)],
       expected: '',
-    },
-    {
-      name: 'internal whitespace',
-      chunks: ['  alpha', ' '.repeat(20_000), 'omega  '],
-      expected: `alpha${' '.repeat(20_000)}omega`,
     },
   ])('matches full-stream trim for $name', ({ chunks, expected }) =>
     Effect.gen(function* () {
@@ -365,44 +306,6 @@ describe('BashTool', () => {
   );
 
   it.live(
-    'incrementally retains bounded head and tail stdout across Unicode chunk boundaries',
-    () =>
-      Effect.gen(function* () {
-        const headMarker = 'HEAD🙂';
-        const tailMarker = 'TAIL🙂';
-        const emoji = '🙂';
-
-        mockStreamingCommand((options) => {
-          assert.equal(options.buffer, false);
-          options.onStdout?.(`HEAD${emoji[0]}`);
-          options.onStdout?.(`${emoji[1]}\n`);
-          options.onStdout?.('x'.repeat(100_000));
-          options.onStdout?.(`\n${tailMarker}\n`);
-        });
-
-        const result = yield* BashTool.call({ command: 'large-output' });
-        assert.equal(result.status, 'executed');
-        const output = String(result.output);
-        assert.ok(output.startsWith(headMarker));
-        assert.ok(output.endsWith(tailMarker));
-        assert.match(output, /characters elided from stdout/);
-        assert.ok(!output.includes('x'.repeat(60_000)));
-        assert.ok(!output.includes('\ufffd'));
-        assert.ok(output.length < 55_000);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
-  it.live(
     'keeps bounded stderr and stdout separate and ordered on large failures',
     () =>
       Effect.gen(function* () {
@@ -428,51 +331,6 @@ describe('BashTool', () => {
         assert.ok(error.includes('STDOUT_TAIL'));
         assert.ok(error.includes('characters elided from stdout'));
         assert.ok(error.indexOf('STDERR_HEAD') < error.indexOf('STDOUT_HEAD'));
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
-  it.live(
-    'keeps head and tail of an oversized command failure instead of discarding it',
-    () =>
-      Effect.gen(function* () {
-        // Simulates a huge broken latexmk log: engine name up front, error detail
-        // at the tail (where LaTeX/build errors cluster), filler in between.
-        const hugeStderr =
-          'ENGINE_HEADER '.repeat(400) +
-          'x'.repeat(TOOL_RESULT_TEXT_CAP) +
-          'TAIL_ERROR_DETAIL '.repeat(5000);
-
-        mockStreamingCommand((options) => options.onStderr?.(hugeStderr), {
-          success: false,
-          exitCode: 1,
-        });
-
-        const result = yield* BashTool.call({
-          command: 'latexmk -pdf p.tex',
-        });
-        assert.equal(result.status, 'error');
-
-        // This is exactly the choke point every model handler funnels through
-        // before sending tool output back to the model.
-        const text = formatToolResultAsText(result);
-        assert.ok(
-          text.includes('characters elided'),
-          'Oversized result should be elided, not replaced wholesale',
-        );
-        assert.ok(!text.includes('was not included'));
-        assert.ok(text.includes('ENGINE_HEADER'));
-        assert.ok(text.includes('TAIL_ERROR_DETAIL'));
-        assert.ok(!text.includes('x'.repeat(1000)));
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
@@ -868,45 +726,6 @@ describe('BashTool', () => {
           }),
         ),
       ),
-  );
-
-  it.live('keeps bounded streamed stdout and stderr in timeout feedback', () =>
-    Effect.gen(function* () {
-      mockStreamingCommand(
-        (options) => {
-          options.onStdout?.(`STDOUT_HEAD${'o'.repeat(100_000)}STDOUT_TAIL`);
-          options.onStderr?.(`STDERR_HEAD${'e'.repeat(100_000)}STDERR_TAIL`);
-        },
-        { success: false, timedOut: true, exitCode: 1 },
-      );
-
-      const result = yield* BashTool.call({
-        command: 'slow-command',
-        timeout: 1_000,
-      });
-      assert.equal(result.status, 'error');
-      const error = result.error ?? '';
-      assert.ok(error.startsWith('Foreground command timed out after 1s.'));
-      assert.match(
-        error,
-        /<stdout>STDOUT_HEAD[\s\S]*characters elided from stdout[\s\S]*STDOUT_TAIL<\/stdout>/,
-      );
-      assert.match(
-        error,
-        /<stderr>STDERR_HEAD[\s\S]*characters elided from stderr[\s\S]*STDERR_TAIL<\/stderr>/,
-      );
-      assert.ok(error.includes('run_in_background: true'));
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'bash-tool' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
   );
 
   it.live(

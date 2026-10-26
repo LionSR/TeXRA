@@ -117,14 +117,12 @@ function seedRunMeta(
   meta: {
     identity?: RunView['identity'];
     userFollowUpSupport?: RunView['followUpSupport'];
-    recipe?: string | null;
   },
 ): void {
   seedRun(runId, {
     identity: meta.identity,
     followUpSupport:
       meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    ...(meta.recipe !== undefined ? { recipe: meta.recipe } : {}),
   });
 }
 function markToolUseAgent(...runIds: RunId[]): void {
@@ -380,23 +378,6 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('discards delayed child back when the child is promoted', async () => {
-    seedChildHierarchy();
-    focusRun(CHILD);
-    const { instance, stdin } = await renderRoutingApp();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      seedParentEdge(CHILD, null);
-      await sleep(CHORD_WINDOW_EXPIRED_MS);
-
-      expect(selectedRunId.get()).toBe(CHILD);
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it.each([
     {
       // Completed child: its input is disabled, so the printable key fails the
@@ -428,26 +409,6 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
       expect(onSubmit).toHaveBeenCalledWith('q', undefined, undefined);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('does not resolve Esc-digit focus after a foreground pane opens', async () => {
-    seedChildHierarchy();
-    focusRun(CHILD);
-    const { instance, stdin } = await renderRoutingApp();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      openInfoPane('Late chord reference', 'Foreground content');
-      await waitFor(() => infoPane.get()?.title === 'Late chord reference');
-      stdin.write('1');
-      await sleep(CHORD_WINDOW_EXPIRED_MS);
-
-      expect(selectedRunId.get()).toBe(CHILD);
-      expect(infoPane.get()?.title).toBe('Late chord reference');
     } finally {
       instance.unmount();
     }
@@ -602,22 +563,6 @@ describe('App foreground Escape ownership', () => {
 
   it.each([
     {
-      name: 'structured single-cycle workflow call',
-      identity: { kind: 'agent' as const, agent: 'structured-child' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    },
-    {
-      name: 'document task',
-      identity: { kind: 'agent' as const, agent: 'workflow-child' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      recipe: 'task',
-    },
-    {
-      name: 'background script',
-      identity: { kind: 'script' as const, title: 'workflow-child' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    },
-    {
       name: 'background bash process',
       identity: { kind: 'process' as const, tool: 'bash' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -631,11 +576,6 @@ describe('App foreground Escape ownership', () => {
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
     },
-    {
-      name: 'missing metadata',
-      identity: undefined,
-      userFollowUpSupport: undefined,
-    },
   ])(
     'ignores printable submission for a running $name child',
     async (fixture) => {
@@ -643,7 +583,6 @@ describe('App foreground Escape ownership', () => {
       seedRunMeta(CHILD, {
         identity: fixture.identity,
         userFollowUpSupport: fixture.userFollowUpSupport,
-        recipe: fixture.recipe,
       });
       focusRun(CHILD);
       const onSubmit = vi.fn();

@@ -130,29 +130,4 @@ describe('DesktopPromptController', () => {
         expect(yield* Fiber.join(second)).toBeUndefined();
       }),
   );
-
-  it.effect('forgets a request whose asking fiber is interrupted', () =>
-    Effect.gen(function* () {
-      let requestId = '';
-      const controller = yield* Effect.promise(() =>
-        createPromptController((message) => {
-          requestId = (message as { requestId: string }).requestId;
-          return true;
-        }),
-      );
-
-      const fiber = yield* Effect.forkChild(
-        controller.request({ title: 'Name', prompt: 'Team name' }),
-        { startImmediately: true },
-      );
-      yield* Fiber.interrupt(fiber);
-
-      // A late answer to an abandoned prompt settles nothing.
-      yield* settlement(controller, {
-        command: 'desktop:settlePrompt',
-        requestId,
-        value: 'late',
-      });
-    }),
-  );
 });

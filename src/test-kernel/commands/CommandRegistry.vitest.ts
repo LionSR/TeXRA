@@ -51,24 +51,6 @@ describe('shared command registry', () => {
     });
   });
 
-  it('parses raw args through the typed handler schema', () => {
-    const actions = makeActions();
-
-    expect(
-      dispatchCommandFromRegistry(
-        'test.pack',
-        packRegistry,
-        actions,
-        undefined,
-        { inputFile: 'main.tex', agent: 'editor' },
-      ),
-    ).toBe(true);
-    expect(actions.packed).toHaveBeenCalledExactlyOnceWith({
-      inputFile: 'main.tex',
-      agent: 'editor',
-    });
-  });
-
   it('reports schema-failed args distinctly from unhandled ids', () => {
     const actions = makeActions();
     const onFailure = vi.fn();

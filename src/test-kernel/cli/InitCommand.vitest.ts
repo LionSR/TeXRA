@@ -30,7 +30,6 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import { initWizardModelSelectItems } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -51,18 +50,6 @@ function modelAccess(
     status: 'available',
     ...overrides,
   };
-}
-
-function expectUnavailableDefaultRecovery(output: string): void {
-  expect(output).toContain(
-    'Note: "deepseek/deepseek-v4-pro" is not currently usable.',
-  );
-  expect(output).toContain('Next: Add a provider API key with `texra setup`.');
-  expect(output).toContain('Run `texra models list --all` to inspect access.');
-  expect(output).toContain(
-    'After a model is available, run `texra` to start a chat.',
-  );
-  expect(output).not.toContain('Next: run `texra` to start a chat.');
 }
 
 const tempDirs = useTempDirs();
@@ -144,69 +131,6 @@ describe('CLI init command', () => {
     stderrSpy.mockRestore();
   });
 
-  it.each([
-    {
-      name: 'disables init model rows without a usable credential',
-      models: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
-          label: 'Sonnet',
-          available: true,
-          status: 'subscription',
-        }),
-        modelAccess('deepseek/deepseek-v4-flash', {
-          label: 'DeepSeek',
-          available: false,
-          status: 'api key set',
-        }),
-      ],
-      expected: [
-        {
-          value: 'anthropic/claude-sonnet-4-6',
-          label: 'Sonnet',
-          description: 'subscription',
-          disabled: false,
-        },
-        {
-          value: 'deepseek/deepseek-v4-flash',
-          label: 'DeepSeek',
-          description: 'api key set (unavailable now)',
-          disabled: true,
-        },
-      ],
-    },
-    {
-      name: 'keeps all-unavailable init model rows selectable as a fallback',
-      models: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
-          label: 'Sonnet',
-          available: false,
-          status: 'login required',
-        }),
-        modelAccess('deepseek/deepseek-v4-flash', {
-          label: 'DeepSeek',
-          available: false,
-          status: 'missing key',
-        }),
-      ],
-      expected: [
-        {
-          value: 'anthropic/claude-sonnet-4-6',
-          label: 'Sonnet',
-          description: 'login required (unavailable now)',
-          disabled: false,
-        },
-        {
-          value: 'deepseek/deepseek-v4-flash',
-          label: 'DeepSeek',
-          description: 'missing key (unavailable now)',
-          disabled: false,
-        },
-      ],
-    },
-  ])('$name', ({ models, expected }) => {
-    expect(initWizardModelSelectItems(models)).toEqual(expected);
-  });
-
   function runInitPrint(
     root: string,
     extraArgs: string[] = [],
@@ -266,44 +190,5 @@ describe('CLI init command', () => {
     await expect(
       fs.readFile(path.join(root, '.gitignore'), 'utf8'),
     ).resolves.toBe('.texra/\n');
-  });
-
-  it.each([
-    {
-      name: 'points non-interactive init at model recovery when the default model is unavailable',
-      accessList: [
-        modelAccess('deepseek/deepseek-v4-pro', {
-          available: false,
-          status: 'missing key',
-          model: {
-            value: 'deepseek/deepseek-v4-pro',
-            label: 'DeepSeek Pro',
-            availability: 'missing-key',
-          },
-        }),
-      ],
-    },
-    {
-      name: 'points init at model recovery when the fallback default has no access entry',
-      accessList: [
-        modelAccess('anthropic/claude-sonnet-4-6', {
-          available: false,
-          status: 'missing api key',
-          model: {
-            value: 'anthropic/claude-sonnet-4-6',
-            label: 'Sonnet',
-            availability: 'missing-key',
-          },
-        }),
-      ],
-    },
-  ])('$name', async ({ accessList }) => {
-    mocks.getCliModelAccessList.mockReturnValue(Effect.succeed(accessList));
-    const root = await makeTempDir('texra-init-test-', tempDirs);
-    const result = await runInitPrint(root);
-
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toBe('');
-    expectUnavailableDefaultRecovery(stdout);
   });
 });

@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type FileLocation } from '@shared/schemas';
 import {
   latexdiffDisplayName,
-  roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
-  type CompileFailure,
   type RoundOutput,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
@@ -35,19 +33,6 @@ function outputFile(overrides: Partial<OutputFileInfo> = {}): OutputFileInfo {
     round: 1,
     lineage: null,
     diff: null,
-    ...overrides,
-  };
-}
-
-function compileFailure(
-  overrides: Partial<CompileFailure> = {},
-): CompileFailure {
-  return {
-    round: 1,
-    displayName: 'main.tex',
-    output: workspace('out/main.pdf'),
-    log: workspace('logs/main.log'),
-    logRelativePath: 'logs/main.log',
     ...overrides,
   };
 }
@@ -117,25 +102,6 @@ describe('output summary transforms', () => {
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]?.round).toBe(4);
-  });
-
-  it('projects compile failures to flattened paths', () => {
-    const [workspaceSummary, externalSummary] =
-      roundOutputsToCompileFailureSummaries([
-        roundOutput({
-          compileFailures: [
-            compileFailure({
-              output: workspace('build/main.pdf', '/workspace/build/main.pdf'),
-            }),
-            compileFailure({ output: external('/tmp/main.pdf') }),
-          ],
-        }),
-      ]);
-
-    expect(workspaceSummary.outputPath).toBe('build/main.pdf');
-    expect(workspaceSummary.logPath).toBe('logs/main.log');
-    expect(workspaceSummary.logAbsolutePath).toBe('/workspace/logs/main.log');
-    expect(externalSummary.outputPath).toBe('/tmp/main.pdf');
   });
 
   it('names a latexdiff by its workspace document, else by its base', () => {

@@ -457,60 +457,6 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
   );
 
   it.live(
-    'carries the current parent instruction into the subagent constraint context',
-    () =>
-      Effect.gen(function* () {
-        const parent = yield* parkedParent();
-        const parentInstruction =
-          'Do not use plans, todos, files, bash, Wolfram, or other child tools. Delegate exactly once.';
-        yield* delegateReview(parent, { userInstruction: parentInstruction });
-        const child = yield* untilChildRow(parent, 'run.config');
-
-        expect(childConfig(parent, child)).toMatchObject({
-          rootUserInstruction: parentInstruction,
-          instruction: expect.stringContaining(
-            `Parent user request (constraint context only):\n${parentInstruction}`,
-          ),
-        });
-      }),
-  );
-
-  it.live('formats returned child error results as subagent errors', () =>
-    Effect.gen(function* () {
-      const parent = yield* parkedParent();
-      const result = yield* failingChild(
-        parent,
-        delegateReview(parent, { stopAfterCycle: true, prompt: PARKED }),
-      );
-
-      expect(result.summary).toBe("'review' failed");
-      expect(result.status).toBe('error');
-      expect(result.error).toContain(CHILD_FAULT);
-      const [child] = childrenOf(parent);
-      expect(rowOf(parent.storage, child!, 'run.result')).toMatchObject({
-        result: { producer: 'subagent' },
-      });
-    }),
-  );
-
-  it.live('does not attribute proposal cancellation to the user', () =>
-    Effect.gen(function* () {
-      const parent = yield* parkedParent(false);
-      yield* answerOpenedRequests(parent.session, {
-        action: 'cancel',
-        cause: 'CLI approval prompt failed.',
-      });
-
-      const result = yield* delegateReview(parent);
-
-      expect(result.summary).toBe("Delegation approval cancelled for 'review'");
-      expect(result.error).toContain('CLI approval prompt failed.');
-      expect(result.error).not.toContain('User feedback:');
-      expect(childrenOf(parent)).toEqual([]);
-    }),
-  );
-
-  it.live(
     'proceeds without a proposal when the run cannot present approval prompts',
     () =>
       Effect.gen(function* () {

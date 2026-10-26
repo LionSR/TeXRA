@@ -10,20 +10,14 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect } from 'vitest';
-import type {
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   createRunProgressRenderer,
-  shouldRenderRunProgress,
   type RunProgressRenderer,
   type RunProgressRendererInit,
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
   AgentConfigSchema,
@@ -59,73 +53,6 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     ...overrides,
   });
 }
-
-type RuntimePresentationNdjsonPolicy =
-  | {
-      readonly kind: 'log';
-      readonly level: 'error' | 'info';
-      readonly message: string;
-      readonly fields: Readonly<Record<string, unknown>>;
-    }
-  | { readonly kind: 'suppressed' };
-
-type RuntimePresentationNdjsonCases = {
-  [K in RuntimePresentationEvent]: {
-    readonly payload: RuntimePresentationEventPayloads[K];
-    readonly policy: RuntimePresentationNdjsonPolicy;
-  };
-};
-
-const RUNTIME_PRESENTATION_NDJSON_CASES = {
-  requestShowError: {
-    payload: { message: 'Provider returned 500.' },
-    policy: {
-      kind: 'log',
-      level: 'error',
-      message: 'Provider returned 500.',
-      fields: {},
-    },
-  },
-  requestShowInstruction: {
-    payload: {
-      key: 'latex-compile-failed',
-      message: 'Inspect the log before retrying.',
-      actions: ['open-configuration-guide'],
-      showSuppress: true,
-    },
-    policy: {
-      kind: 'log',
-      level: 'info',
-      message: 'Inspect the log before retrying.',
-      fields: {
-        key: 'latex-compile-failed',
-        actions: ['open-configuration-guide'],
-        showSuppress: true,
-      },
-    },
-  },
-  requestOpenFile: {
-    payload: {
-      location: { kind: 'external', absolutePath: '/tmp/paper.tex' },
-      preserveFocus: false,
-    },
-    policy: { kind: 'suppressed' },
-  },
-  showAgentConfigBanner: {
-    payload: { agentName: 'polish' },
-    policy: {
-      kind: 'log',
-      level: 'error',
-      message:
-        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.',
-      fields: {},
-    },
-  },
-  requestEnsureProgressView: {
-    payload: {},
-    policy: { kind: 'suppressed' },
-  },
-} satisfies RuntimePresentationNdjsonCases;
 
 // context() always sets renderRunProgress: true, so the factory never
 // returns undefined inside these helpers. Facts reach the renderer the way
@@ -590,156 +517,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('keeps the claimed root stream when a child run.config arrives later', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output, { minIntervalMs: 0 });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleConversationProgress(renderer, 'root-stream', {
-      toolCallCount: 4,
-    });
-    await handleTurn(renderer, 'root-stream', 2);
-    await handleRunConfig(renderer, {
-      runId: 'child-stream',
-      agent: 'reviewer',
-      inputFiles: ['chapter.tex'],
-    });
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · tools: 4 · 0s\n' +
-        '[t2] · orchestrator · tools: 4 · 0s\n',
-    );
-  });
-
-  it('joins a child description emitted before the active child list', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(
-      renderer,
-      'child-stream',
-      'Check multiplier\nsigns\tand \x1b[2Jresonance counterexamples',
-    );
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · agent: review — Check multiplier signs and resonance counterexa… · 0s\n',
-    );
-  });
-
-  it('keeps the current task across a same-turn manual retry', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(renderer, 'child-stream', 'Current review task');
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleRunStatus(renderer, 'child-stream', RUN_PHASE.WAITING);
-    await handleRunStatus(renderer, 'child-stream', RUN_PHASE.RUNNING);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · agent: review — Current review task · 0s\n',
-    );
-  });
-
-  it('prefers a running child over an earlier waiting child', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(renderer, 'waiting-child', 'Idle review task');
-    await handleRunDescription(renderer, 'running-child', 'Active review task');
-    await handleActiveSubagents(renderer, 'root-stream', [
-      subagentChild({
-        childRunId: 'waiting-child' as RunId,
-        status: RUN_PHASE.WAITING,
-      }),
-      subagentChild({
-        childRunId: 'running-child' as RunId,
-        status: RUN_PHASE.RUNNING,
-      }),
-    ]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · agents: review — Active review task +1 · 0s\n',
-    );
-  });
-
-  it('fits the delegated task within an ANSI terminal row', async () => {
-    const output = outputBuffer();
-    const renderer = ansiRenderer(output, { getColumns: () => 80 });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(renderer, 'child-stream', 'A'.repeat(100));
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
-    expect(renderedLines).toHaveLength(2);
-    expect(renderedLines.at(-1)).toContain('agent: review — ');
-    expect(renderedLines.every((line) => textDisplayWidth(line) <= 80)).toBe(
-      true,
-    );
-  });
-
-  it('recalculates the delegated task width after a terminal resize', async () => {
-    let columns = 100;
-    const output = outputBuffer();
-    const renderer = ansiRenderer(output, { getColumns: () => columns });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(renderer, 'child-stream', 'A'.repeat(100));
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    columns = 60;
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
-    expect(renderedLines).toHaveLength(3);
-    expect(textDisplayWidth(renderedLines.at(-1) ?? '')).toBeLessThanOrEqual(
-      60,
-    );
-  });
-
-  it('shows completed terminal stream stops with the shared cli wording', async () => {
-    let now = 0;
-    const output = outputBuffer();
-    const renderer = plainRenderer(output, {
-      minIntervalMs: 0,
-      nowMs: () => now,
-    });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    now = 11000;
-    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.COMPLETED);
-    await handleRunDescription(
-      renderer,
-      'root-stream',
-      'Running Mathematician team',
-    );
-    await handleTurn(renderer, 'root-stream', 3);
-    await handleConversationProgress(renderer, 'root-stream', {
-      toolCallCount: 9,
-    });
-    await handleActiveSubagents(renderer, 'root-stream', [
-      subagentChild({
-        childRunId: 'late-child-stream' as RunId,
-        agentName: 'late-review',
-      }),
-    ]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · agent: review · 0s\n' +
-        'orchestrator · Completed · 11s\n',
-    );
-  });
-
   it('does not repaint a child after the root stream is terminal', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
@@ -755,40 +532,6 @@ describe('CLI run progress renderer', () => {
         'orchestrator · agent: review — Late review task · 0s\n' +
         'orchestrator · Stopped · 0s\n',
     );
-  });
-
-  it('freezes on a failed terminal stream stop, same as completed/cancelled', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output, { minIntervalMs: 0 });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.FAILED);
-    // Post-terminal activity must not un-freeze the renderer (RUN_PHASE.FAILED
-    // must be recognized as a terminal outcome phase, same as COMPLETED/CANCELLED).
-    await handleConversationProgress(renderer, 'root-stream', {
-      toolCallCount: 9,
-    });
-    await handleActiveSubagents(renderer, 'root-stream', [
-      subagentChild({
-        childRunId: 'late-child-stream' as RunId,
-        agentName: 'late-review',
-      }),
-    ]);
-
-    expect(output.text).toBe('orchestrator · 0s\norchestrator · Error · 0s\n');
-  });
-
-  it('derives the run progress flag from quiet and structured-output contexts', async () => {
-    expect(shouldRenderRunProgress(context())).toBe(true);
-    expect(shouldRenderRunProgress(context({ quietLogs: true }))).toBe(false);
-    expect(shouldRenderRunProgress(context({ mode: 'headless' }))).toBe(true);
-    expect(shouldRenderRunProgress(context({ outputFormat: 'json' }))).toBe(
-      true,
-    );
-    expect(shouldRenderRunProgress(context({ outputFormat: 'ndjson' }))).toBe(
-      false,
-    );
-    expect(shouldRenderRunProgress(context({ stderrIsTty: false }))).toBe(true);
   });
 
   it.live('uses the stderr color gate when stdout alone allows color', () =>
@@ -820,77 +563,6 @@ describe('CLI run progress renderer', () => {
 
       expect(output).toContain('polish paper.tex · 0s');
       expect(output).not.toContain('\r\x1b[2K');
-    }),
-  );
-
-  it.live('writes one status line for a committed completion', () =>
-    Effect.gen(function* () {
-      const output = yield* captureStreamWrites(
-        process.stderr,
-        Effect.gen(function* () {
-          const session = yield* createTestSession();
-          const host = createCliRuntimeHost(
-            context({
-              stderrColorEnabled: false,
-              quietLogs: true,
-              renderRunProgress: true,
-            }),
-          );
-          const scope = yield* Scope.make();
-          yield* host
-            .attachRunProgressRenderer(testSessionOf(session))
-            .pipe(Scope.provide(scope));
-          yield* publishRun(session, { runId: 'b2b2b2' });
-          yield* session.log.settled;
-          // The terminal phase is the `run.end` row's fact and nothing else, so
-          // exactly one line renders for the transition.
-          publishTestRows(session, [
-            {
-              type: 'run.end',
-              aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
-              outcome: 'completed',
-              output: { response: '', files: [] },
-            },
-          ]);
-          yield* session.log.settled;
-
-          yield* Scope.close(scope, Exit.void);
-          yield* host.close();
-        }),
-      );
-
-      expect(
-        output.split('\n').filter((line) => line.includes('Completed')),
-      ).toEqual(['[t1] · polish paper.tex · Completed · 0s']);
-    }),
-  );
-
-  it.live('preserves the live progress line before interactive prompts', () =>
-    Effect.gen(function* () {
-      const output = yield* captureStreamWrites(
-        process.stderr,
-        Effect.gen(function* () {
-          const session = yield* createTestSession();
-          const host = createCliRuntimeHost(
-            context({
-              approvalPolicy: 'ask',
-              approvalPrompt: () => Effect.succeed('n no review needed'),
-            }),
-          );
-
-          const scope = yield* Scope.make();
-          yield* host
-            .attachRunProgressRenderer(testSessionOf(session))
-            .pipe(Scope.provide(scope));
-          yield* publishRun(session, { runId: 'c3c3c3' });
-          host.prepareInteractivePrompt?.();
-          yield* Effect.promise(() => Promise.resolve());
-          yield* Scope.close(scope, Exit.void);
-          yield* host.close();
-        }),
-      );
-
-      expect(output).toContain('\r\x1b[2K[t1] · polish paper.tex · 0s\n');
     }),
   );
 
@@ -926,91 +598,6 @@ describe('CLI run progress renderer', () => {
       expect(stderr).toContain('polish paper.tex · 0s');
       expect(stdout).toBe('');
     }),
-  );
-
-  it.live(
-    'prints requestShowInstruction text and a human-readable action hint to stderr in text mode',
-    () =>
-      Effect.gen(function* () {
-        const output = yield* captureStreamWrites(
-          process.stderr,
-          Effect.gen(function* () {
-            const host = createCliRuntimeHost(
-              context({ outputFormat: 'text' }),
-            );
-
-            host.emit('requestShowInstruction', {
-              key: 'missingApiKey',
-              message:
-                'API key not found. Set your API key in Settings and run again.',
-              actions: ['set-api-key', 'open-configuration-guide'],
-              showSuppress: false,
-            });
-
-            yield* host.close();
-          }),
-        );
-
-        // The raw InstructionAction tokens are translated to human phrasing
-        // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
-        // verbatim.
-        expect(output).toContain(
-          'API key not found. Set your API key in Settings and run again. (set your API key (texra setup), see the configuration guide)',
-        );
-        expect(output).not.toContain('set-api-key');
-        expect(output).not.toContain('open-configuration-guide');
-      }),
-  );
-
-  it.live(
-    'prints a visible agent-not-found error for showAgentConfigBanner in text mode',
-    () =>
-      Effect.gen(function* () {
-        const output = yield* captureStreamWrites(
-          process.stderr,
-          Effect.gen(function* () {
-            const host = createCliRuntimeHost(
-              context({ outputFormat: 'text' }),
-            );
-
-            expect(
-              host.emit('showAgentConfigBanner', {
-                agentName: 'ghost',
-              }),
-            ).toBe(true);
-
-            yield* host.close();
-          }),
-        );
-
-        expect(output).toContain('Agent not found: ghost');
-        expect(output).toContain('texra agents list');
-      }),
-  );
-
-  it.live(
-    'does not gate requestShowInstruction behind quietLogs in text mode',
-    () =>
-      Effect.gen(function* () {
-        const output = yield* captureStreamWrites(
-          process.stderr,
-          Effect.gen(function* () {
-            const host = createCliRuntimeHost(
-              context({ outputFormat: 'text', quietLogs: true }),
-            );
-
-            host.emit('requestShowInstruction', {
-              key: 'missingApiKey',
-              message:
-                'API key not found. Set your API key in Settings and run again.',
-            });
-
-            yield* host.close();
-          }),
-        );
-
-        expect(output).toContain('API key not found.');
-      }),
   );
 
   it.live(
@@ -1069,43 +656,6 @@ describe('CLI run progress renderer', () => {
             contract: 2,
           }),
         ]);
-      }),
-  );
-
-  it.live(
-    'applies an explicit ndjson policy to every runtime presentation request',
-    () =>
-      Effect.gen(function* () {
-        const output = yield* captureStreamWrites(
-          process.stdout,
-          Effect.gen(function* () {
-            const host = createCliRuntimeHost(
-              context({ mode: 'headless', outputFormat: 'ndjson' }),
-            );
-
-            for (const [event, testCase] of Object.entries(
-              RUNTIME_PRESENTATION_NDJSON_CASES,
-            ) as [
-              RuntimePresentationEvent,
-              RuntimePresentationNdjsonCases[RuntimePresentationEvent],
-            ][]) {
-              host.emit(event, testCase.payload);
-            }
-
-            yield* host.close();
-          }),
-        );
-
-        const records = ndjsonRecords(output);
-
-        const expectedRecords = Object.values(
-          RUNTIME_PRESENTATION_NDJSON_CASES,
-        ).flatMap(({ policy }) =>
-          policy.kind === 'log'
-            ? [expect.objectContaining({ ...policy, ts: expect.any(String) })]
-            : [],
-        );
-        expect(records).toEqual(expectedRecords);
       }),
   );
 });

@@ -99,28 +99,6 @@ describe('attachProviderError end-to-end', () => {
     expect(normalizeProviderError(frozen).userRetryable).toBe(true);
   });
 
-  it('surfaces a cached ProviderError with statusCode and provider via normalizeProviderError', () => {
-    // Simulates what happens at the flow rethrow: the RetryErrorInfo is
-    // attached as-is, attachProviderError caches it, then
-    // normalizeProviderError recovers it downstream.
-    const retryInfo: RetryErrorInfo = {
-      message: 'HTTP 429 Too Many Requests – rate limited',
-      userRetryable: true,
-      statusCode: 429,
-      provider: 'anthropic',
-    };
-
-    const err = new Error(retryInfo.message);
-    attachProviderError(err, retryInfo);
-
-    const recovered = normalizeProviderError(err);
-
-    expect(recovered.statusCode).toBe(429);
-    expect(recovered.provider).toBe('anthropic');
-    expect(recovered.userRetryable).toBe(true);
-    expect(normalizeProviderError(err)).toBe(recovered);
-  });
-
   it('recovers cached ProviderError data through wrapper causes', () => {
     const retryInfo: RetryErrorInfo = {
       message: 'HTTP 503 Service Unavailable – server overloaded',

@@ -440,7 +440,7 @@ describe(
           yield* untilStored(
             storage,
             () => activations(storage, runId) > 2,
-          ).pipe(Effect.timeoutOption('2 seconds'));
+          ).pipe(Effect.timeoutOption('500 millis'));
 
           expect(activations(storage, runId)).toBe(afterStop ? 3 : 2);
           if (!afterStop)

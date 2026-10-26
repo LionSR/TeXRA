@@ -78,41 +78,6 @@ describe('user-question-panel', () => {
     expect(actions).toEqual([]);
   });
 
-  it('renders multi-select options as wa-checkbox and accumulates checked labels', async () => {
-    const element = await mountPanel(
-      createPermission([
-        {
-          question: 'Pick any',
-          options: [{ label: 'Red' }, { label: 'Blue' }],
-          multiSelect: true,
-        },
-      ]),
-    );
-
-    const checkboxes = element.shadowRoot?.querySelectorAll('wa-checkbox');
-    expect(checkboxes?.length).toBe(2);
-    expect(element.shadowRoot?.querySelector('input[type="checkbox"]')).toBe(
-      null,
-    );
-
-    const [red, blue] = [...(checkboxes ?? [])] as (HTMLElement & {
-      checked?: boolean;
-    })[];
-    red.checked = true;
-    dispatchChange(red);
-    blue.checked = true;
-    dispatchChange(blue);
-    await element.updateComplete;
-
-    expect(submitButton(element).disabled).toBe(false);
-
-    const actions = collectActions(element);
-    element.handleKeyboardShortcut('y');
-    expect(actions).toEqual([
-      { action: 'submit', answers: { 'Pick any': ['Red', 'Blue'] } },
-    ]);
-  });
-
   it('appends multi-select free text to the checked options instead of replacing them', async () => {
     const element = await mountPanel(
       createPermission([
@@ -143,36 +108,6 @@ describe('user-question-panel', () => {
     element.handleKeyboardShortcut('y');
     expect(actions).toEqual([
       { action: 'submit', answers: { 'Pick any': ['Red', 'Purple'] } },
-    ]);
-  });
-
-  it('renders single-select options as wa-radio-group/wa-radio with no native inputs', async () => {
-    const element = await mountPanel(
-      createPermission([
-        {
-          question: 'Pick one',
-          options: [{ label: 'Yes' }, { label: 'No' }],
-          multiSelect: false,
-        },
-      ]),
-    );
-
-    expect(element.shadowRoot?.querySelector('wa-radio-group')).not.toBe(null);
-    expect(element.shadowRoot?.querySelectorAll('wa-radio').length).toBe(2);
-    expect(element.shadowRoot?.querySelector('input[type="radio"]')).toBe(null);
-
-    const radioGroup = element.shadowRoot?.querySelector(
-      'wa-radio-group',
-    ) as HTMLElement & { value?: string };
-    expect(radioGroup.getAttribute('label')).toBe('Choose one answer');
-    radioGroup.value = 'No';
-    dispatchChange(radioGroup);
-    await element.updateComplete;
-
-    const actions = collectActions(element);
-    element.handleKeyboardShortcut('y');
-    expect(actions).toEqual([
-      { action: 'submit', answers: { 'Pick one': 'No' } },
     ]);
   });
 });

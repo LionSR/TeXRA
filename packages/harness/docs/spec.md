@@ -772,52 +772,51 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ## 9. Crash guarantees
 
 The crash-point suite is the source of truth for this section
-(`src/test-kernel/support/crashConformance.ts:1-56`). It runs under the
-harness's built-ins and under a full app's plugins
-(`src/test-kernel/controllers/session/crashConformanceBuiltins.vitest.ts:9`,
-`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:9`).
+(`src/test-kernel/support/crashConformance.ts:1-55`). It runs under a full
+app's plugins, which include every harness built-in
+(`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:9`).
 
 Its method: drive a clean run over a real store, record the event commit each
 event-writing transaction ended at (claim-only writes leave no distinct point;
 the points are deduplicated by commit), and for each such commit N copy the
 store, cut it to commits 1..N, hand its claims to a dead owner, reopen it in a
 fresh session and resume the root run
-(`src/test-kernel/support/crashConformance.ts:8-27`).
+(`src/test-kernel/support/crashConformance.ts:7-26`).
 
 The guarantees, numbered as in the package README:
 
 - **I1**: Under the suite's deterministic model, recovery reaches the clean
   run's outcome: its answers, view edits, call results, owned children and fork.
-  Asserted by `src/test-kernel/support/crashConformance.ts:30-32`, `:752`.
+  Asserted by `src/test-kernel/support/crashConformance.ts:29-31`, `:756`.
 - **I2**: A call settled before the crash is not executed again, and no call
-  settles twice. Asserted by `src/test-kernel/support/crashConformance.ts:33`,
-  `:752`.
+  settles twice. Asserted by `src/test-kernel/support/crashConformance.ts:32`,
+  `:756`.
 - **I3**: One model invocation has at most one committed response. Asserted by
-  `src/test-kernel/support/crashConformance.ts:38`, `:752`.
+  `src/test-kernel/support/crashConformance.ts:37`, `:756`.
 - **I4**: A command subject to approval runs only after its approval; an
   unfinished call that is not replay-safe and that recovery classifies as
   outcome-unknown runs again only after a person's retry (a call rejoining a
   standing or newly decided request runs at once, section 9). Asserted by
-  `src/test-kernel/support/crashConformance.ts:34-35`, `:752`.
+  `src/test-kernel/support/crashConformance.ts:33-34`, `:756`.
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
   called again (`tools/delegation/childRun.ts:163-172`). Asserted by
-  `src/test-kernel/support/crashConformance.ts:39-40`, `:863`.
+  `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,
   or whose parent cannot take it, stays in the child's run report with a warning
   (`agent/runtime/childTurnResult.ts:226-234`, `:259-265`). Asserted by
-  `src/test-kernel/support/crashConformance.ts:855-876`.
+  `src/test-kernel/support/crashConformance.ts:859-880`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed. Asserted by
-  `src/test-kernel/support/crashConformance.ts:41`, `:752`.
+  `src/test-kernel/support/crashConformance.ts:40`, `:756`.
 - **I8**: A run's halt commits with its end; a stopped run never reads as
-  interrupted. Asserted by `src/test-kernel/support/crashConformance.ts:43-44`,
-  `:752`.
+  interrupted. Asserted by `src/test-kernel/support/crashConformance.ts:42-43`,
+  `:756`.
 - **I9**: Turning off a run's shell bypass is acknowledged only after its row is
-  durable. Asserted by `src/test-kernel/support/crashConformance.ts:53-54`,
-  `:752`.
+  durable. Asserted by `src/test-kernel/support/crashConformance.ts:52-53`,
+  `:756`.
 
 I1 is equality with a clean run because the suite's validation model is
 deterministic. Against a live model, a resent attempt (section 6) may answer
@@ -827,8 +826,8 @@ run opens, such as a retry request past the automatic budget. The suite also
 asserts that a crash between a request and its answer leaves the request pending
 and the resume answers that same request; that a crash between the answer and
 the body honours the answer; and that a crash inside one publisher job leaves
-neither half on disk (`src/test-kernel/support/crashConformance.ts:49-56`,
-`:1110`).
+neither half on disk (`src/test-kernel/support/crashConformance.ts:48-55`,
+`:1114`).
 
 What survives at each commit point follows from sections 2 to 8:
 
@@ -872,41 +871,40 @@ still issue a new command, which runs under I4
 These existing suites check the sections above.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1603` (pre-1.0
-  moved aside), `:1657`, `:1703` (foreign file refused), `:1737` (damaged file
-  moved aside), `:1976` (newer schema refused)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1479` (pre-1.0
+  moved aside), `:1533`, `:1579` (foreign file refused), `:1613` (damaged file
+  moved aside), `:1852` (newer schema refused)
 - **2.2 envelope**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2182` (dense seq,
-  one commit order), `:2221` (parent incarnation), `:2496` (ordinals never
-  reused), `:2547` (blobs)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2058` (dense seq,
+  one commit order), `:2097` (parent incarnation), `:2372` (ordinals never
+  reused), `:2423` (blobs)
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:429` (enqueue
-  order), `:2435` (a rejected batch rolls back whole), `:2000`, `:2098`;
-  `src/test-kernel/support/crashConformance.ts:1110` (one job, one transaction)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:414` (enqueue
+  order), `:2311` (a rejected batch rolls back whole), `:1876`, `:1974`;
+  `src/test-kernel/support/crashConformance.ts:1114` (one job, one transaction)
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts:114`, `:132`, `:166`;
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1770` (newer
-  build refused), `:1848` (undecodable row), `:1917` (earlier build's row);
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1646` (newer
+  build refused), `:1724` (undecodable row), `:1793` (earlier build's row);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:216`
 - **3 row kinds**:
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:216` (every golden
   row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:114`
-- **4 write points**: `src/test-kernel/support/crashConformance.ts:752`, `:1166`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:3442`
-  (live state equals reloaded state), `:3474` (batch contract);
+- **4 write points**: `src/test-kernel/support/crashConformance.ts:756`, `:1168`
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:3318`
+  (live state equals reloaded state), `:3350` (batch contract);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:389`
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:630`, `:708`,
-  `:872` (asks again after a stop), `:972` (budget), `:1004` (unchain once),
-  `:1088`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:119`
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:605`, `:683`,
+  `:847` (asks again after a stop), `:921` (budget), `:979` (unchain once),
+  `:1063`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:119`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:843`, `:924`,
-  `:2723`, `:2962` (another OS process), `:3074` (dead owner reclaimed), `:3146`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:675`, `:896`,
+  `:2599`, `:2838` (another OS process), `:2950` (dead owner reclaimed), `:3022`
   (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:97`
 - **8 requests**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:717`;
-  `src/test-kernel/support/crashConformance.ts:49-52`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:620`;
+  `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:
-  `src/test-kernel/controllers/session/crashConformanceBuiltins.vitest.ts`,
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:666`
 

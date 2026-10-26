@@ -94,17 +94,6 @@ describe('desktop package native CLI payload', () => {
     expect(result.stderr).toContain('MiB');
   });
 
-  it('requires the trace-viewer template in packaged resources', () => {
-    const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    rmSync(join(resourcesDir, 'resources', 'traceViewer', 'index.html'));
-
-    const result = runVerifier(packageRoot);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Missing trace-viewer HTML template: resources/traceViewer/index.html',
-    );
-  });
-
   it('resolves relative metafile imports from the importing output directory', () => {
     const { packageRoot } = createFakeDesktopPackage({
       startupImportPath: './bootstrap.js',

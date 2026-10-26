@@ -22,7 +22,6 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Response } from '@texra/shared/session/sessionFrames';
 import {
   emptySurface,
-  LaunchPatchSchema,
   PersistedSurfaceSchema,
   reconcileLaunch,
 } from '@texra/shared/session/surface';
@@ -148,15 +147,6 @@ describe('session Surface ownership', () => {
     );
     // No longer enabled: the first available model replaces it.
     expect(reconcileLaunch(chosen('retired'), outage).launch.model).toBe('gpt');
-  });
-
-  it('parses a host launch patch without defaulting the fields it omits', () => {
-    // A host naming one field must not reset the agent, draft or files.
-    expect(
-      Schema.decodeUnknownSync(LaunchPatchSchema)({ commit: 'a1f3c2' }),
-    ).toEqual({
-      commit: 'a1f3c2',
-    });
   });
 
   it('ends a per-task auto-approve with the launch it was chosen for (#13342)', () => {

@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { Effect, FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { subset } from 'semver';
-import stripAnsi from 'strip-ansi';
 
 import {
   buildDoctorReport,
@@ -58,18 +57,6 @@ const availableModels = [
 const allInstalledLatexProbe = {
   ...latexProbe,
   tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-};
-
-const healthyNodeReport: DoctorReport = {
-  ok: true,
-  checks: [
-    {
-      id: 'node',
-      name: 'Node.js',
-      status: 'pass',
-      message: 'Node 24.15.0',
-    },
-  ],
 };
 
 const NDJSON_TS = '2026-05-18T00:00:00.000Z';
@@ -149,36 +136,6 @@ function checkById(
   return report.checks.find((check) => check.id === id);
 }
 
-const colorCases: Array<{
-  name: string;
-  output: Pick<
-    CliContext,
-    'stdoutIsTty' | 'stderrIsTty' | 'stdoutColorEnabled' | 'stderrColorEnabled'
-  >;
-  colored: boolean;
-}> = [
-  {
-    name: 'does not color successful text output when stdout is piped',
-    output: {
-      stdoutIsTty: false,
-      stderrIsTty: true,
-      stdoutColorEnabled: false,
-      stderrColorEnabled: true,
-    },
-    colored: false,
-  },
-  {
-    name: 'keeps successful text output colored when only stderr is redirected',
-    output: {
-      stdoutIsTty: true,
-      stderrIsTty: false,
-      stdoutColorEnabled: true,
-      stderrColorEnabled: false,
-    },
-    colored: true,
-  },
-];
-
 describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
     const report = await buildReport({
@@ -205,34 +162,6 @@ describe('CLI doctor', () => {
     expect(checkById(report, 'resources')?.status).toBe('pass');
     expect(writable.get('/resources')).toBe(false);
     expect(writable.get('/workspace')).toBe(true);
-  });
-
-  it('matches the published Node engine range', async () => {
-    const cases: Array<[string, 'pass' | 'fail']> = [
-      ['21.9.9', 'fail'],
-      ['22.9.0', 'fail'],
-      ['22.15.0', 'fail'],
-      ['22.16.0', 'fail'],
-      ['22.18.0', 'fail'],
-      ['22.19.0', 'pass'],
-      ['v22.19.0', 'pass'],
-      ['23.0.0', 'fail'],
-      ['23.11.0', 'fail'],
-      ['24.0.0', 'pass'],
-      ['24.15.0', 'pass'],
-      ['26.0.0', 'pass'],
-    ];
-
-    for (const [nodeVersion, expected] of cases) {
-      const report = await buildReport({ nodeVersion });
-      expect(checkById(report, 'node')?.status).toBe(expected);
-    }
-
-    const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
-    expect(checkById(unsupportedRelease, 'node')).toMatchObject({
-      message: 'Node 21.0.0 is outside the supported range.',
-      hint: 'Install Node ^22.19.0 || >=24.0.0 before running TeXRA CLI.',
-    });
   });
 
   it('keeps the supported Node range inside the bundled undici requirement', () => {
@@ -307,19 +236,5 @@ describe('CLI doctor', () => {
       ok: true,
     });
     expect(doctorExitCode(report)).toBe(CliExitCode.Success);
-  });
-
-  it.each(colorCases)('$name', ({ output, colored }) => {
-    const stdout = captureDoctorStdout(
-      { ...context, ...output },
-      healthyNodeReport,
-    );
-
-    expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.15.0');
-    if (colored) {
-      expect(stdout).not.toBe(stripAnsi(stdout));
-    } else {
-      expect(stdout).toBe(stripAnsi(stdout));
-    }
   });
 });

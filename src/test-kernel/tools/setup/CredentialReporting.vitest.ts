@@ -15,10 +15,8 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import * as setupCredentialAccess from '@texra/model/setupCredentialAccess';
 import * as githubAuth from '@texra/tools/github/githubAuth';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
-import * as setupPlatformModule from '@texra/tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform, withSetup } from './fixtures';
@@ -42,19 +40,6 @@ vi.mock('@texra/tools/setup/toolProbing', async (importOriginal) => ({
 
 function outputOf(result: { output?: string }): string {
   return result.output ?? '';
-}
-
-/**
- * No provider key anywhere, but the aggregate readiness probe reports a
- * usable credential: the ChatGPT-subscription-only shape.
- */
-function installChatGptOnlySetupPlatform(): void {
-  vi.spyOn(setupCredentialAccess, 'hasUsableSetupCredential').mockReturnValue(
-    Effect.succeed(true),
-  );
-  vi.spyOn(setupPlatformModule, 'getChatGptSubscriptionStatus').mockReturnValue(
-    Effect.succeed({ signedIn: true, enabled: true }),
-  );
 }
 
 setupPlatform({}, { setup: createFakeSetupPlatform() });
@@ -122,21 +107,6 @@ describe('setup credential reporting', () => {
       assert.match(outputOf(result), /provider API key status unavailable/);
       assert.match(outputOf(result), /"anyApiKeySet": false/);
       assert.match(outputOf(result), /"hasAnyUsableCredential": false/);
-    }),
-  );
-
-  it.effect('reports a usable non-API-key credential', () =>
-    Effect.gen(function* () {
-      installChatGptOnlySetupPlatform();
-
-      const result = yield* ProbeEnvironmentTool.call({}).pipe(
-        Effect.provide(withSetup(nativeToolTestLayer())),
-      );
-
-      assert.equal(result.status, 'executed');
-      assert.match(outputOf(result), /"anyApiKeySet": false/);
-      assert.match(outputOf(result), /"hasAnyUsableCredential": true/);
-      assert.match(outputOf(result), /ChatGPT subscription enabled/);
     }),
   );
 

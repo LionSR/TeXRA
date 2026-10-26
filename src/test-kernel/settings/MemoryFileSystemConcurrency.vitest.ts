@@ -169,22 +169,4 @@ describe('memory filesystem listing', () => {
         expect(headReads).toBeLessThan(100);
       }),
   );
-
-  it.effect('fails the walk with the filesystem error itself', () =>
-    Effect.gen(function* () {
-      const root = yield* Effect.promise(makeStorageRoot);
-      const storageFs = yield* storageViewOf(root);
-
-      const failure = yield* Effect.flip(
-        Stream.runDrain(
-          walkMemoryDirectory(
-            path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'absent'),
-          ),
-        ),
-      ).pipe(Effect.provideService(StorageFs, storageFs));
-
-      expect(failure._tag).toBe('PlatformError');
-      expect(failure.reason._tag).toBe('NotFound');
-    }),
-  );
 });

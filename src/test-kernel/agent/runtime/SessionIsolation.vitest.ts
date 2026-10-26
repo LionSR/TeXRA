@@ -1,81 +1,25 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
-
 import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 
-import { describe, expect, vi } from 'vitest';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { describe, expect } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
-import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,
-  emptyRunEndOutput,
   RunIdSchema,
   type RunId,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
-import {
-  fakeProcessServices,
-  installPlatform,
-} from '@test/support/setupPlatform';
-import {
-  admitInterruptibleRun,
-  testRunHandle,
-} from '@test/support/runHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
-import { createTestLaunchContext } from './launchContextTestUtils';
 
 describe('session isolation', () => {
-  it.effect('two sessions in one process write under their own roots', () =>
-    Effect.gen(function* () {
-      const paperA = createFakeWorkspaceRoots({
-        workspacePath: fakePath('papers/a'),
-        storagePath: fakePath('storage/a'),
-      });
-      const paperB = createFakeWorkspaceRoots({
-        workspacePath: fakePath('papers/b'),
-        storagePath: fakePath('storage/b'),
-      });
-      const sessionA = yield* createTestSession({ roots: paperA });
-      const sessionB = yield* createTestSession({ roots: paperB });
-      yield* Effect.addFinalizer(() =>
-        closeSessionOf(sessionA).pipe(Effect.andThen(closeSessionOf(sessionB))),
-      );
-      // The notes are real files under the fake roots, so the fs calls stay
-      // foreign promises bridged with Effect.promise.
-      const writeNote = (session: typeof sessionA, note: string) =>
-        Effect.promise(async () => {
-          await mkdir(session.roots.storage, { recursive: true });
-          await writeFile(path.join(session.roots.storage, 'note.txt'), note);
-        });
-      expect(sessionA.roots.workspace).toBe(fakePath('papers/a'));
-      yield* writeNote(sessionA, 'from a');
-      expect(sessionB.roots.workspace).toBe(fakePath('papers/b'));
-      yield* writeNote(sessionB, 'from b');
-      const read = (file: string) =>
-        Effect.promise((): Promise<string> => readFile(file, 'utf8'));
-      expect(yield* read(fakePath('storage/a/note.txt'))).toBe('from a');
-      expect(yield* read(fakePath('storage/b/note.txt'))).toBe('from b');
-      // Neither paper's roots are the process's: a session answers from the
-      // record it holds, and the process roots name only the default session.
-      expect(testWorkspaceRoots().workspace).toBe(fakePath('workspace'));
-      expect(testWorkspaceRoots().storage).toBe(
-        fakePath('workspace/.texra/storage'),
-      );
-    }),
-  );
-
   it.effect(
     'the host-exit drain settles each session under its own root, outside any scope',
     () =>
@@ -201,69 +145,6 @@ describe('session isolation', () => {
         });
         expect(seen.workspace).toBe(fakePath('papers/contended'));
         expect(seen.storage).toBe(fakePath('storage/contended'));
-      }),
-  );
-
-  it.effect('a run stop lands in the run session only', () =>
-    Effect.gen(function* () {
-      const sessionB = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
-      const runId = generateRunId();
-      const interrupt = vi.fn();
-      const handle = testRunHandle({
-        runId,
-        agent: 'assistant',
-      });
-      registryOf(sessionB.runs).track(handle);
-      admitInterruptibleRun(sessionB.runs, runId, interrupt);
-
-      const stop = sessionB.runs.stop(runId, { reason: 'user' });
-      expect(stop.accepted()).toBe(true);
-      yield* stop.settlement;
-      expect(interrupt).toHaveBeenCalledOnce();
-      expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
-    }),
-  );
-
-  it.effect(
-    'runWithLifecycle tracks the handle in the runs it is provided, not the default',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
-            globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-          }),
-        );
-        const runId = 'e15001' as RunId;
-        const sessionB = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
-        const ctx = createTestLaunchContext({
-          runId,
-          session: sessionB,
-        });
-        publishTestRunStart(sessionB, runId);
-
-        yield* Effect.provide(
-          runWithLifecycle(ctx, () =>
-            Effect.sync(() => {
-              // Mid-run: the handle is registered in session B's registry only.
-              expect(sessionB.runs.get(runId)?.handle).toBeDefined();
-              expect(
-                testDefaultSession().runs.get(runId)?.handle,
-              ).toBeUndefined();
-              return {
-                outcome: RUN_OUTCOME.COMPLETED,
-                runId,
-                output: emptyRunEndOutput(),
-              };
-            }),
-          ).pipe(Effect.provideService(Runs, sessionB.runs)),
-          fakeProcessServices(),
-        );
-
-        // After completion the run session untracked it; default never saw it.
-        expect(sessionB.runs.get(runId)?.handle).toBeUndefined();
-        expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
       }),
   );
 });

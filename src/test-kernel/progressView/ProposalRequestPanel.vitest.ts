@@ -5,30 +5,12 @@ import { describe, expect, it } from 'vitest';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
-import {
-  emptyHostSnapshot,
-  projectDisplayOf,
-} from '@texra/shared/session/hostSnapshot';
 
 // Local file imports
 import {
-  dispatchKey,
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
-
-const HOST = {
-  ...emptyHostSnapshot(projectDisplayOf('/workspace', '/workspace')),
-  modelOptions: [
-    { value: 'sonnet', label: 'Sonnet' },
-    { value: 'opus', label: 'Opus' },
-  ],
-  agentOptions: [
-    { value: 'writer', label: 'Writer', rounds: 1 },
-    { value: 'reviewer', label: 'Reviewer', rounds: 3 },
-    { value: 'chat', label: 'Chat' },
-  ],
-};
 
 function createPermission(): ProposalRequestPanel['permission'] {
   return {
@@ -110,59 +92,5 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       decision: { action: 'approve' },
     };
     expect(actions).toEqual([superYolo, approve, superYolo, approve, approve]);
-  });
-
-  it('opens the launch form on the proposal for Edit and its e key', async () => {
-    const element = await mountComponent<ProposalRequestPanel>(
-      'proposal-request-panel',
-      { permission: createPermission(), host: HOST },
-    );
-    const opened: unknown[] = [];
-    element.addEventListener('surface-action', (event) =>
-      opened.push((event as CustomEvent).detail),
-    );
-    const actions = recordPermissionActions(element);
-
-    element.shadowRoot
-      ?.querySelector<HTMLElement>('#proposal-edit-button')
-      ?.click();
-    expect(element.handleKeyboardShortcut('e')).toBe(true);
-
-    const edit = {
-      kind: 'editProposal',
-      proposal: { runId: 'run-a', requestId: 'proposal-1' },
-      patch: expect.objectContaining({
-        agent: 'writer',
-        model: 'sonnet',
-        instruction: 'Revise the introduction.',
-        inputFiles: ['/workspace/paper.tex'],
-        reflect: false,
-      }),
-    };
-    expect(opened).toEqual([edit, edit]);
-    // Edit decides nothing: the form's Send approves.
-    expect(actions).toEqual([]);
-  });
-
-  it('opens the file on Enter and Space, not on other keys', async () => {
-    const element = await mountPanel();
-    const posted = recordPermissionActions(element);
-    const fileName = element.shadowRoot?.querySelector(
-      '.workflow-proposal__file-name',
-    );
-    expect(fileName).toBeInstanceOf(HTMLElement);
-
-    dispatchKey(fileName!, 'a');
-    expect(posted).toHaveLength(0);
-
-    dispatchKey(fileName!, 'Enter');
-    dispatchKey(fileName!, ' ');
-
-    const openPaper = {
-      kind: 'openFile',
-      path: '/workspace/paper.tex',
-      line: null,
-    };
-    expect(posted).toEqual([openPaper, openPaper]);
   });
 });

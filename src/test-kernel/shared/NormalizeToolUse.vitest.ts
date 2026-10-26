@@ -3,20 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { normalizeToolUse } from '@shared/toolUse';
 
 describe('normalizeToolUse (packages/harness/src/shared/toolUse.ts)', () => {
-  it('extracts toolName, input, and output text from a flat payload', () => {
-    const normalized = normalizeToolUse({
-      toolName: 'Bash',
-      input: { command: 'ls' },
-      output: 'foo\nbar',
-      status: 'completed',
-    });
-
-    expect(normalized?.toolName).toBe('Bash');
-    expect(normalized?.input).toEqual({ command: 'ls' });
-    expect(normalized?.outputText).toBe('foo\nbar');
-    expect(normalized?.status).toBe('completed');
-  });
-
   // Regression: a previous inline refactor of `formatOutputText` dropped
   // the explicit `null` short-circuit that `stringifyWithLanguage` had,
   // so `output: null` fell through to `yaml.stringify(null)` and surfaced

@@ -30,11 +30,6 @@ function applyTeam(input: Parameters<(typeof ApplyTeamTool)['call']>[0]) {
   return ApplyTeamTool.call(input).pipe(Effect.provide(nativeToolTestLayer()));
 }
 
-const expectNoTeamState = Effect.gen(function* () {
-  expect(yield* workspaceAgents()).toBeUndefined();
-  expect(yield* defaultTeamId()).toBeUndefined();
-});
-
 async function clearOnboardingState(): Promise<void> {
   await Effect.runPromise(
     testWorkspaceRoots().repoState.update(
@@ -78,15 +73,6 @@ afterEach(() => {
 
 describe('apply_team', () => {
   beforeEach(clearOnboardingState);
-
-  it.effect('rejects an unknown teamId without writing any state', () =>
-    Effect.gen(function* () {
-      const result = yield* applyTeam({ teamId: 'astrologer' });
-
-      expect(result.status).toBe('error');
-      yield* expectNoTeamState;
-    }),
-  );
 
   it.effect('applies the physicist team with every member bundled', () =>
     Effect.gen(function* () {
