@@ -48,7 +48,7 @@ const deps = [
         name="symbol-structure"
       ></wa-icon>
       <span class="mk-card-title tdh-head-name">TikZ pipeline</span>
-      <span class="mk-card-sub tdh-head-sub">Dashboard → Tools</span>
+      <span class="mk-card-sub tdh-head-sub">Settings → LaTeX</span>
     </div>
 
     <div class="tdh-list">

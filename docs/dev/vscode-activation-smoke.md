@@ -58,14 +58,13 @@ In the Extension Development Host:
 
 ## Packaged VSIX
 
+Using a fresh `SMOKE_ROOT` created the same way as in [Development Host](#development-host):
+
 ```bash
 npm run build:fast
 npm run check:vsix-contents
 
 VSIX="releases/texra-$(node -p "require('./packages/extension/package.json').version").vsix"
-SMOKE_ROOT="$(mktemp -d /tmp/vsh-XXXXXX)" # keep it short: VS Code's IPC socket path limit is ~100 chars
-mkdir -p "$SMOKE_ROOT/workspace" "$SMOKE_ROOT/user-data" "$SMOKE_ROOT/extensions"
-printf '\\documentclass{article}\n\\begin{document}\nSmoke\n\\end{document}\n' > "$SMOKE_ROOT/workspace/main.tex"
 
 code \
   --user-data-dir "$SMOKE_ROOT/user-data" \

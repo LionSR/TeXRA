@@ -62,7 +62,7 @@
           <span class="meta-dot">·</span>
           <span>9 lines</span>
           <span class="meta-dot">·</span>
-          <span>by chat</span>
+          <span>by assistant</span>
         </div>
       </div>
       <figcaption class="pin-cap">

@@ -15,14 +15,13 @@ Lean 4. It takes on open problems in long autonomous runs, with a team of
 specialist agents. Apache 2.0, and you bring your own model keys or
 subscriptions.
 
-Development on `main` targets **TeXRA 1.0**, with a redesigned interface
-organized around **projects** and a breaking change to stored application
-state. Version 1.0 will start with fresh state; it will not migrate previous
-JSON-based settings, session histories, or execution checkpoints. Existing
-research files are outside this storage change. The implementation follows
-the [1.0 development direction](AGENTS.md#texra-10-direction), using SQLite
-for application state and Effect for asynchronous execution. This describes
-work in progress, not the currently published release.
+Development on `main` targets **TeXRA 1.0** (work in progress, not the
+currently published release), which reorganizes the interface around
+**projects**, stores application state in SQLite, and runs asynchronous
+execution on Effect (see the [1.0 development direction](AGENTS.md#texra-10-direction)).
+Version 1.0 starts with fresh application state and does not migrate previous
+JSON settings, session histories, or execution checkpoints; research files in
+your project are untouched.
 
 ## Install
 
@@ -43,11 +42,11 @@ GLM Coding Plan subscription.
 
 ### Agents and teams
 
-Every agent ships bundled, including the workflow agents the
-Physicist, Mathematician and Computer Scientist teams use, so every
-team works offline with no sign-in. Each agent is a YAML file you can
-read, copy into a custom agent and change. There is no TeXRA account;
-model calls run on your configured model credential.
+Every agent ships bundled, including the document-task agents that the
+Physicist, Mathematician, and Computer Scientist teams delegate to. Each agent
+is a YAML file you can read, copy into a custom agent, and modify. There is no
+TeXRA account; model calls run directly against your configured provider
+credentials.
 
 TeXRA is sustained by the community. If TeXRA helps your
 research, consider supporting it via
@@ -88,21 +87,17 @@ run <preset>`. Or save the agents you have shown as your own team.
 
 ## Agents
 
-**Workflow agents** write to disk and produce reviewable diffs:
-`polish`, `correct`, `merge`, `ocr`, `transcribe_audio`, `paper2slide`,
-`paper2poster`.
+**Document tasks** process selected files and produce reviewable LaTeX diffs:
+`polish`, `correct`, `merge`, `ocr`, `transcribe_audio`, `paper2slide`, and
+`paper2poster`, plus the specialist task passes `apply`, `criticize`, `devise`,
+`enhance`, `firstread`, `generic`, `logic`, and `notation`.
 
-**Tool-use agents** work conversationally with file, shell, and search
-access: `research`, `numerics`, `review`, `presenter`, `latexFixer`,
-`latexDiff`, `creator`, `lean`, `assistant`, `setup`, plus a
-software-engineering line — `engineer`, `coder`, `codeReviewer`,
-`testEngineer`, `codeSimplifier`.
-
-**Other bundled agents**: the workflow passes `apply`, `criticize`,
-`devise`, `enhance`, `firstread`, `generic`, `logic` and `notation`, the
-tool-use agents `orchestrator`, `search`, `simplifier`, `prover` and
-`progressCheck`, and the Lean line, `leanOrchestrator`, `leanBlueprint`,
-`leanSearch` and `leanSimplifier`.
+**Chat agents** work conversationally with file, shell, and search tools:
+`orchestrator`, `assistant`, `research`, `numerics`, `review`, `search`,
+`simplifier`, `prover`, `progressCheck`, `presenter`, `latexFixer`,
+`latexDiff`, `creator`, `setup`, the Lean 4 line (`lean`, `leanOrchestrator`,
+`leanBlueprint`, `leanSearch`, `leanSimplifier`), and the software-engineering
+line (`engineer`, `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`).
 
 Every tool call is gated by per-stream approval. Optional YOLO mode
 skips approval for autonomous runs.

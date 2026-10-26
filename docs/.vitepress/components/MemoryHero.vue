@@ -66,9 +66,8 @@ function toggle(id) {
         <div class="reminder-body">
           <div class="reminder-title">Memory notes</div>
           <div class="reminder-desc">
-            The AI assistant can save notes here to remember important
-            information across conversations. These notes help the assistant
-            provide more contextual and personalized help.
+            Agents save notes here to retain project conventions and context
+            across sessions.
           </div>
           <div class="reminder-acts">
             <button type="button" class="r-btn">
@@ -89,7 +88,7 @@ function toggle(id) {
       </div>
 
       <!-- Memory list (mirrors MemoryList → MemoryItem). `by <agent>` uses
-           tool-use agents (research, review, chat) — workflow agents like
+           tool-use agents (research, review, assistant) — document tasks like
            polish/correct don't run the memory tool. -->
       <div class="mem-list">
         <!-- Item 1: pinned, expanded with markdown preview -->
@@ -240,7 +239,7 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>Updated yesterday</span>
             <span class="meta-dot">·</span>
-            <span>by chat</span>
+            <span>by assistant</span>
           </div>
           <button
             type="button"

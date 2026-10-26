@@ -17,16 +17,6 @@ The skills under `packages/extension/resources/skills/` are intended to stand on
 - Treat `references/` as optional supporting material the skill may load when needed.
 - Treat `agents/openai.yaml` as optional product metadata, not part of the core skill contract.
 
-## Reader-facing standard
-
-A user or agent opening a skill package in isolation should be able to answer:
-
-- What is this skill for?
-- When should I use it?
-- What workflow should I follow?
-- What quality bar am I aiming for?
-- Where do I look if I need the deeper checklist?
-
 ## Workspace availability
 
 The Skills tab in the extension and desktop settings lets you disable an
