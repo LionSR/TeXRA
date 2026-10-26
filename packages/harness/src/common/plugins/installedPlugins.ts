@@ -399,7 +399,8 @@ export interface PluginUpdate {
  * Update the named plugins, or every one. A fetched plugin refetches its ref
  * into its managed directory and pins the new commit; every plugin rereads
  * its manifest, so a changed `skills` path takes effect. Each plugin is
- * recorded as soon as it is updated, and one whose new commit cannot be read
+ * recorded as soon as it is updated (plugins update at once, and one that
+ * fails stops none of the others), and one whose new commit cannot be read
  * is checked back out at its recorded commit, so the record and the
  * directory never disagree. An enabled plugin stays enabled; a new version,
  * or a change to what it runs, loads only once the user trusts it.
@@ -413,8 +414,11 @@ function updatePlugins(names: readonly string[], env: PluginEnv) {
         : yield* Effect.forEach(names, (name) =>
             Effect.fromResult(findInstalled(installed, name)),
           );
-    const updates: PluginUpdate[] = [];
-    for (const plugin of targets) {
+    // Each plugin has its own directory and its record is written in one
+    // atomic modify, so plugins update at once. A failure does not stop the
+    // others mid-fetch (that could leave a directory ahead of its record);
+    // the first failure, in target order, is the answer.
+    const update = Effect.fnUntraced(function* (plugin: InstalledPlugin) {
       const dir = path.join(pluginsDir(env), plugin.name);
       const commit =
         plugin.commit === undefined
@@ -443,7 +447,17 @@ function updatePlugins(names: readonly string[], env: PluginEnv) {
         ...(commit ? { commit } : {}),
         skills,
       }));
-      updates.push({ name: plugin.name, from: plugin.commit, to: commit });
+      return { name: plugin.name, from: plugin.commit, to: commit };
+    });
+    const results = yield* Effect.forEach(
+      targets,
+      (plugin) => Effect.result(update(plugin)),
+      { concurrency: 4 },
+    );
+    const updates: PluginUpdate[] = [];
+    for (const result of results) {
+      if (Result.isFailure(result)) return yield* Effect.fail(result.failure);
+      updates.push(result.success);
     }
     return updates;
   });

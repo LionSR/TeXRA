@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Predicate, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -300,12 +300,17 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     MEDIA_FILE: null,
   };
 
-  for (const prefix of FILE_VAR_CATEGORIES) {
-    const allFiles = getCategoryFiles(agentConfig, prefix);
-    const { xml, readable, skipped } =
-      allFiles.length > 0
-        ? yield* getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
-        : { xml: null, readable: [], skipped: [] };
+  // The categories are read at once; their vars and warnings go in order.
+  const reads = yield* Effect.forEach(
+    FILE_VAR_CATEGORIES,
+    (prefix) =>
+      getXmlFormatFromReadableFiles(
+        workspaceRoot,
+        getCategoryFiles(agentConfig, prefix),
+      ).pipe(Effect.map((read) => ({ prefix, ...read }))),
+    { concurrency: 'unbounded' },
+  );
+  for (const { prefix, xml, readable, skipped } of reads) {
     const readableFiles = readable.map(({ file }) => file);
     // The first readable file fills the `*_FILE`/`*_CONTENT` pair from the
     // same read that built the list vars.
@@ -381,12 +386,8 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
       { concurrency: 'unbounded' },
     );
 
-    const parts = results
-      .map((result) => result.xml)
-      .filter(Predicate.isNotNull);
-    const misses = results
-      .map((result) => result.miss)
-      .filter(Predicate.isNotNull);
+    const parts = results.flatMap((result) => result.xml ?? []);
+    const misses = results.flatMap((result) => result.miss ?? []);
     return {
       xml:
         parts.length > 0
