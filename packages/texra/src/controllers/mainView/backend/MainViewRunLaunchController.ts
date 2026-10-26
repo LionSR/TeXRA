@@ -19,7 +19,7 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
-} from '@common/teams/TeamPlan';
+} from '@texra-ai/harness';
 import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,

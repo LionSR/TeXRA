@@ -4,6 +4,11 @@ import {
   toErrorMessage,
   agentName as bareAgentName,
 } from '@texra-ai/harness/schemas';
+import {
+  formatTeamLaunchBlockedMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+} from '@texra-ai/harness';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -23,11 +28,6 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import {
-  formatTeamLaunchBlockedMessage,
-  formatUnknownTeamMessage,
-  resolveTeamLaunch,
-} from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,

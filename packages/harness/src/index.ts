@@ -84,8 +84,41 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export type { TeamPreset } from '@common/teams/TeamPresets';
-export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export {
+  type TeamPreset,
+  findTeamPreset,
+  launchableTeamPresets,
+  teamPresets,
+} from '@common/teams/TeamPresets';
+export {
+  TEAM_SELECTION_REQUIRED_MESSAGE,
+  type TeamAvailability,
+  type TeamRunPlan,
+  availableTeamMemberCount,
+  canLaunchTeam,
+  formatTeamLaunchBlockedMessage,
+  formatUnknownTeamMessage,
+  loadTeamOptions,
+  planTeamRun,
+  planTeamRuns,
+  resolveTeamLaunch,
+  teamAvailability,
+  teamLaunchBlockReason,
+  teamPlanStatus,
+  type TeamAgentAvailability,
+  type TeamAgentResolver,
+  type TeamCatalogAgent,
+  type TeamLaunchResolution,
+  type TeamPlanStatus,
+  type TeamRunOptions,
+} from '@common/teams/TeamPlan';
+export {
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  PREFERRED_TOOL_USE_AGENTS,
+  SETUP_AGENT_NAME,
+  implicitDefaultToolUseAgents,
+  isImplicitDefaultEligible,
+} from '@shared/constants/agents';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,

@@ -15,9 +15,9 @@ import {
   type StateStore,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness';
-import { planTeamRun } from '@common/teams/TeamPlan';
-import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
+import { planTeamRun } from '@texra-ai/harness';
+import { findTeamPreset, type TeamPreset } from '@texra-ai/harness';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra-ai/harness';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { AgentModePreset } from '@texra-ai/harness/schemas';

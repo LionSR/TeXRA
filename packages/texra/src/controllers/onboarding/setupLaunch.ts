@@ -7,7 +7,7 @@ import {
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
