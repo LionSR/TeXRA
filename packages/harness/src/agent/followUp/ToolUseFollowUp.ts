@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
+import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { InboxItem } from './Inbox';
 
 /**
@@ -50,8 +51,12 @@ export interface RunInboxSendOptions {
   readonly fromParent?: boolean;
 }
 
-interface SubmitFollowUpOptions extends RunInboxSendOptions {
+interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
   readonly session: SessionHandle;
+  /** `'generation'` as {@link RunInboxSendOptions}; `'turn'`: a user's
+   *  message the run reads when its current turn ends, not at the turn's
+   *  next model request. */
+  readonly hold?: 'generation' | 'turn';
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -179,6 +184,15 @@ export function resumeOnSession(
   runId: RunId,
   session: SessionHandle,
 ): Effect.Effect<ResumeRunResult> {
+  return Effect.flatten(startResume(runId, session));
+}
+
+/** Start {@link resumeOnSession}'s attempt on the session's fork and give
+ *  back its join, so a caller that only needs it started does not wait. */
+function startResume(
+  runId: RunId,
+  session: SessionHandle,
+): Effect.Effect<Effect.Effect<ResumeRunResult>> {
   const attempt = Effect.suspend(() => {
     let runMissing = false;
     const isCancellationRequested = (): boolean => {
@@ -224,25 +238,26 @@ export function resumeOnSession(
   // only, so it stays interruptible even where the caller is masked (a
   // child's boundary settlement waits here for its parent's whole resumed
   // turn, and a stop of that child must land before the parent parks).
-  return Effect.flatMap(registryOf(session.runs).fork(attempt), (fiber) =>
+  return Effect.map(registryOf(session.runs).fork(attempt), (fiber) =>
     Effect.interruptible(Fiber.join(fiber)),
   );
 }
 
 /**
- * Resume a run whose follow-up row is already durable, for `Inbox.wake`: a
- * generation already live here reads the row at its next request or park,
- * and its exit owes the wake; otherwise the resume ({@link resumeOnSession})
- * runs, and tells the user whatever the run did not take, once.
+ * Start resuming a run whose follow-up row is already durable, for
+ * `Inbox.wake`, and give back the resume's end: a generation already live
+ * here reads the row at its next request or park, and its exit owes the
+ * wake; otherwise the resume ({@link resumeOnSession}) starts on the
+ * session's fork, and tells the user whatever the run did not take, once.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
-): Effect.Effect<void> {
+): Effect.Effect<Effect.Effect<void>> {
   return Effect.suspend(() =>
     session.runs.get(runId)?.live === true
-      ? Effect.void
-      : Effect.asVoid(resumeOnSession(runId, session)),
+      ? Effect.succeed(Effect.void)
+      : Effect.map(startResume(runId, session), Effect.asVoid),
   );
 }
 
@@ -266,35 +281,44 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const { session, hold, fromParent } = options;
-  const live = session.runs.get(runId);
-  if (live?.live === true) {
-    if (!live.readsMessages) return { status: 'failed', reason: 'one_shot' };
-  } else {
-    const rejection = yield* runRejection(runId, session).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.as({ kind: 'read_failed' } as const),
+  // From the checks to the row's commit, one send to a run at a time, so a
+  // run's messages commit in call order; the wake runs after, so a send that
+  // resumes the run does not hold later sends for the resumed turn.
+  const sent = yield* Effect.gen(function* () {
+    const live = session.runs.get(runId);
+    if (live?.live === true) {
+      if (!live.readsMessages)
+        return { status: 'failed', reason: 'one_shot' } as const;
+    } else {
+      const rejection = yield* runRejection(runId, session).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as({ kind: 'read_failed' } as const),
+          ),
         ),
-      ),
-    );
-    if (rejection !== null) return { status: 'failed', reason: rejection.kind };
-    if (hold !== undefined || item.from.kind !== 'user')
-      return { status: 'failed', reason: 'not_resumable' };
-  }
-  // A user's message to a run that is stopping continues it after the stop:
-  // its row lands after the run's end, which the wake reads.
-  if (item.from.kind === 'user' && live?.stopReason !== undefined)
-    yield* live.drained;
-  const sent = yield* session.followUps.send(runId, item, { hold, fromParent });
+      );
+      if (rejection !== null)
+        return { status: 'failed', reason: rejection.kind } as const;
+      if (hold === 'generation' || item.from.kind !== 'user')
+        return { status: 'failed', reason: 'not_resumable' } as const;
+    }
+    // A user's message to a run that is stopping continues it after the
+    // stop: its row lands after the run's end, which the wake reads.
+    if (item.from.kind === 'user' && live?.stopReason !== undefined)
+      yield* live.drained;
+    return yield* session.followUps.send(runId, item, { hold, fromParent });
+  }).pipe(withPerKeyLane(session.followUps.sendLanes, runId));
+  if ('status' in sent) return sent;
   // Another process holds the run, the sender is not its parent, its input
   // is closed (deleted, or torn down with nothing queued), or the session
   // is disposed.
   if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
   if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
-  const woken = yield* session.followUps.wake(runId);
-  if (!woken) return { status: 'queued', wake: 'failed' };
+  // The sender hears the resume start, not the resumed turn end.
+  if ((yield* session.followUps.wake(runId)) === false)
+    return { status: 'queued', wake: 'failed' };
   return { status: sent.kind === 'duplicate' ? 'sent' : 'queued' };
 });
 

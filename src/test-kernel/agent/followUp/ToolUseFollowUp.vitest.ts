@@ -70,7 +70,7 @@ function recordedFollowUps(
     claimRefused?: boolean;
     failWrites?: number;
     /** The port's resume; the default records the run and succeeds. */
-    resume?: (runId: RunId) => Effect.Effect<void>;
+    resume?: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
   } = {},
 ) {
   const rows: SessionEvent[] = [];
@@ -154,6 +154,7 @@ function recordedFollowUps(
       ((runId) =>
         Effect.sync(() => {
           if (!live.has(runId)) resumed.push(runId);
+          return Effect.void;
         })),
   });
   const queuedRows = (runId: RunId) =>
@@ -330,6 +331,33 @@ describe('submitFollowUp', () => {
     }),
   );
 
+  it.effect('commits concurrent sends to one run in call order', () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession('idle');
+      // The first send's read of whether the run can continue is the slow one.
+      const slowRead = yield* Deferred.make<void>();
+      vi.spyOn(resumability, 'deriveResumability').mockReturnValueOnce(
+        Effect.as(Deferred.await(slowRead), { kind: 'checkpoint' } as const),
+      );
+      const send = (text: string) =>
+        Effect.forkChild(
+          submitFollowUp(runId, user(text), { session }).pipe(
+            withResumePort(mockTryResume()),
+          ),
+        );
+      const first = yield* send('first');
+      const second = yield* send('second');
+
+      yield* settle;
+      expect(recorded.queued(runId)).toEqual([]);
+      yield* Deferred.succeed(slowRead, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(recorded.queued(runId)).toEqual(['first', 'second']);
+    }),
+  );
+
   it.effect(
     'keeps the input queued when the submitting fiber is interrupted mid-wake',
     () =>
@@ -490,7 +518,7 @@ describe('Inbox readers', () => {
           kind: 'queued',
           read: false,
         });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([id]);
 
         expect(queued(id)).toEqual([
@@ -514,7 +542,7 @@ describe('Inbox readers', () => {
         kind: 'queued',
         read: false,
       });
-      expect(yield* followUps.wake(id)).toBe(true);
+      expect(yield* followUps.wake(id)).not.toBe(false);
       expect(resumed).toEqual([]);
     }),
   );
@@ -668,7 +696,7 @@ describe('Inbox delivery identity (#9531)', () => {
         expect(yield* followUps.send(id, delivery)).toEqual({
           kind: 'duplicate',
         });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([id]);
         expect(queued(id)).toEqual(['child result']);
       }),
@@ -702,7 +730,7 @@ describe('Inbox visibility held on the row', () => {
         expect(
           yield* followUps.send(id, notice, { hold: 'instruction' }),
         ).toEqual({ kind: 'queued', read: false });
-        expect(yield* followUps.wake(id)).toBe(true);
+        expect(yield* followUps.wake(id)).not.toBe(false);
         expect(resumed).toEqual([]);
         const input = yield* followUps.open(id);
         expect(yield* input.hasPending('idle')).toBe(false);

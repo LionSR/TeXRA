@@ -408,7 +408,12 @@ describe('App foreground Escape ownership', () => {
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
-      expect(onSubmit).toHaveBeenCalledWith('q', undefined, undefined);
+      expect(onSubmit).toHaveBeenCalledWith(
+        'q',
+        undefined,
+        undefined,
+        undefined,
+      );
     } finally {
       instance.unmount();
     }
@@ -508,6 +513,7 @@ describe('App foreground Escape ownership', () => {
         'preserved root draft',
         undefined,
         undefined,
+        undefined,
       );
     } finally {
       instance.unmount();
@@ -554,6 +560,7 @@ describe('App foreground Escape ownership', () => {
           'child follow-up',
           undefined,
           undefined,
+          undefined,
         );
       } finally {
         instance.unmount();
@@ -566,15 +573,6 @@ describe('App foreground Escape ownership', () => {
       name: 'background bash process',
       identity: { kind: 'process' as const, tool: 'bash' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    },
-    {
-      name: 'terminal-backed agent',
-      identity: {
-        kind: 'agent' as const,
-        agent: 'codex',
-        tool: 'codex',
-      },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
     },
   ])(
     'ignores printable submission for a running $name child',

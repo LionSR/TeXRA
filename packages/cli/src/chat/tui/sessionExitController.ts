@@ -73,9 +73,9 @@ interface SessionExitControllerContext {
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
   readonly runtime: ProcessRuntime;
-  /** Settles once the follow-up delivery queue has drained; a graceful exit
-   *  waits on it before it returns. */
-  readonly followUpsIdle: Effect.Effect<void>;
+  /** Settles once every message the chat was sending is sent (or started
+   *  its run); a graceful exit waits on it before it returns. */
+  readonly submitted: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => ApprovalPolicy;
   /** Materialize buffered trace chunks and drain queued publications. */
@@ -313,12 +313,9 @@ export function createSessionExitController(
       ctx.interruptActive('shutdown');
       return true;
     };
-    // Interrupt an actively-running turn BEFORE draining the queue. A queued
-    // follow-up that already entered its recovery path awaits `dispatch.resume`
-    // (ToolUseFollowUp), which resolves only when the resumed turn finishes and
-    // never observes `stopRequested` — draining first would block the quit
-    // behind a long model turn. Re-check after the drain for a run the drain
-    // itself started.
+    // Interrupt an actively-running turn BEFORE waiting for the chat's sends:
+    // a message to a stopping run lands only once the stop finishes. Re-check
+    // after the wait for a run a send itself resumed.
     const drain = withProcessServices(
       ctx.runtime,
       Effect.gen(function* () {
@@ -334,7 +331,7 @@ export function createSessionExitController(
           }),
         );
         let interrupted = interruptPendingRun();
-        yield* ctx.followUpsIdle;
+        yield* ctx.submitted;
         interrupted = interruptPendingRun() || interrupted;
         const idle = session.isResumableIdle();
         // Only await a run we actually interrupted/finished. A resumableIdle

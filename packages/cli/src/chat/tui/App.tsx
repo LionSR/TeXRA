@@ -81,7 +81,6 @@ import {
   sessionView,
   runLabelOf,
   runViewOf,
-  CLI_FOLLOW_UP_HOST,
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
@@ -124,6 +123,7 @@ export interface AppProps {
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
+    holdUntil?: 'turn',
   ) => void;
   readonly commandName?: string;
   readonly onStaticTranscriptChange?: () => void;
@@ -183,7 +183,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childInputHidden =
     activeRun !== undefined &&
     activeRun.parentId !== null &&
-    !acceptsFollowUp(activeRun, CLI_FOLLOW_UP_HOST);
+    !acceptsFollowUp(activeRun);
   const unavailableDetail = activeRun?.readOnly
     ? (runNoticeText(activeRun.statusNotice) ??
       runStatusLabel(activeRun.statusKey))
@@ -596,8 +596,9 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Tab transfers keyboard ownership from the input to the child list.
-    if (key.tab) {
+    // Tab transfers keyboard ownership from the input to the child list;
+    // Shift-Tab is the input's (a message held for the turn's end).
+    if (key.tab && !key.shift) {
       focusChildList();
       return;
     }
@@ -634,10 +635,10 @@ export function App(props: AppProps): React.JSX.Element {
               roots={props.session.roots}
               controlRef={inputBarRef}
               holdsKeystroke={holdsKeystroke}
-              onSubmit={(line, mediaFiles, images) => {
+              onSubmit={(line, mediaFiles, images, holdUntil) => {
                 // Anything submitted passes over the open-time notice.
                 interruptedNoticeHidden.set(true);
-                props.onSubmit(line, mediaFiles, images);
+                props.onSubmit(line, mediaFiles, images, holdUntil);
               }}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}

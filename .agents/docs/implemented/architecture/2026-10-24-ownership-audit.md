@@ -1,3 +1,8 @@
+---
+created: 2026-10-24
+status: implemented
+---
+
 # Ownership audit: one fact, several deciders (harness, 2026-10-24)
 
 Baseline: worktree `coauthor-input`, branch `feat/run-input-one-owner`, HEAD
@@ -54,12 +59,13 @@ keeps a crashed owner's shell forever.
 ## Landed
 
 F1 and part of F2 and F3 landed in #14261 (`f5c5f063f3`), F5 in #14266
-(`3e474178c5`), the rest of F2, F3, F4 and F6 in the audit-leftovers PR
-(2026-10-26); each finding's section records what landed and what did not.
+(`3e474178c5`), the rest of F2, F3, F4 and F6 in #14291 (`527f17061e`,
+2026-10-26), the ratchet proposals in #14294 (`7464754d45`); each finding's
+section records what landed and what did not.
 
-## Still open
+## Kept on purpose
 
-- **F2, kept on purpose:** `refusalFor` classifies what a launch throws after
+- **F2:** `refusalFor` classifies what a launch throws after
   the resume's own check passed (a row kind the check did not read, a
   checkpoint that will not turn into state). It is the same fact read at a
   later moment from different evidence, so it stays.
@@ -129,7 +135,7 @@ shutdown stays `CANCELLED`); see R2 for what that costs `needsWake`.
 
 ### F2. Why a run cannot continue: three deciders per message, one union for all
 
-**Rest landed 2026-10-26 (audit-leftovers PR):** a refused automatic wake is
+**Rest landed 2026-10-26 (#14291):** a refused automatic wake is
 told once, by the resume (`resumeOnSession`), never again by the sender: the
 wake now answers `false` only when it could not read the run, so
 `wake: 'failed'` and its generic notice mean exactly that. A message to a
@@ -232,7 +238,7 @@ Deleted: `heldParks`' inline `since` (~5), `needsWake`'s own `findLast` (~3),
 `sweepLeftoverRuns`' `ended` map (~6). About 15 lines; the gain is one scope
 rule rather than lines.
 
-**Rest landed 2026-10-26 (audit-leftovers PR):** `lastLifecycleRow` and
+**Rest landed 2026-10-26 (#14291):** `lastLifecycleRow` and
 `runEndFromEvents` live in `shared/session/runFacts.ts`; `needsWake`,
 `heldParks` and `sweepLeftoverRuns` call `lastLifecycleRow`, and the storage
 readers import `runEndFromEvents` from there. The sweep now keeps a held park
@@ -246,7 +252,7 @@ rather than called from one shared `runEndFromEvents`.
 
 ### F4. A held result was delivered: one fact, two rows, an observer in between
 
-**Landed 2026-10-26 (audit-leftovers PR), a fourth design:** the delivery
+**Landed 2026-10-26 (#14291), a fourth design:** the delivery
 clears the child's waiting park in its own append whenever it can hold the
 child's claim (the child is held here, or its owner died, as `endIn` already
 takes it for a last turn). That is the common case: a result is held because
@@ -359,7 +365,7 @@ lines with the comments that explain the precedence.
 
 ### F6. Smaller instances, same species
 
-**Landed 2026-10-26 (audit-leftovers PR):** `Resumes.inFlight` was already
+**Landed 2026-10-26 (#14291):** `Resumes.inFlight` was already
 gone (`Resumes.running` is the one map). `runActionGuard.ts` is deleted: the
 host's `resuming` set and `idle` went (a second Resume joins the first in the
 session, `Resumes.once`, and a run live here is refused there; a pack or
@@ -479,7 +485,7 @@ duplicates then grew as fields _on_ that record (`stopReason` beside
 `stopping`) and as derived caches elsewhere (`unbornDetached`, `userStopped`,
 the CLI claim), which the rule's wording does not forbid.
 
-**Built 2026-10-26 (fact-owner ratchets PR):** proposals 1 and 2 are one
+**Built 2026-10-26 (#14294):** proposals 1 and 2 are one
 pure-tier suite, `src/test-kernel/architecture/factOwnerRatchet.vitest.ts`,
 with the baseline `config/ratchets/row-readers-baseline.json`.
 

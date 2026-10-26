@@ -22,7 +22,7 @@
   "packages/harness/src/shared/schemas/sessionEvent.ts": 570,
   "packages/harness/src/shared/session/database.ts": 409,
   "packages/harness/src/shared/session/runState.ts": 546,
-  "packages/harness/src/shared/session/sessionView.ts": 459,
+  "packages/harness/src/shared/session/sessionView.ts": 452,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1166,
   "packages/harness/src/tools/bash.ts": 542,
   "packages/harness/src/tools/delegation/AgentTool.ts": 601,

@@ -81,7 +81,6 @@ import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
-import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
@@ -153,7 +152,6 @@ setupPlatform(
  */
 interface SessionFixture {
   readonly runId?: RunId;
-  readonly interruptedRunId?: RunId;
   readonly runSettled?: RootRunSettled;
   readonly runCompleted?: boolean;
   readonly stopRequested?: boolean;
@@ -165,7 +163,6 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
   if (overrides.runCompleted && overrides.runSettled)
     session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
-  session.interruptedRunId = overrides.interruptedRunId;
   if (overrides.stopRequested) session.askStop('user');
   return session;
 }
@@ -266,7 +263,6 @@ function makeInit(
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
     shutdownScope: scope,
-    followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
     cwd: '/tmp/workspace',
     getSlashCommandContext: () => {
       throw new Error('slash commands are not exercised here');
@@ -495,26 +491,31 @@ describe('createChatSessionController', () => {
     rootRunId.set(undefined);
   });
 
-  it('does not surface an intentional stop as an error', async () => {
-    const run = createDeferred<never>();
-    const executed = createDeferred();
-    const session = makeSession();
-    mocks.executeAgent.mockImplementationOnce(() => {
-      executed.resolve();
-      return run.promise;
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
+  it.live('does not surface an intentional stop as an error', () =>
+    Effect.gen(function* () {
+      const run = createDeferred<never>();
+      const executed = createDeferred();
+      const session = makeSession();
+      mocks.executeAgent.mockImplementationOnce(() => {
+        executed.resolve();
+        return run.promise;
+      });
+      const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun(makeRunRequest('Check the draft.'));
-    await executed.promise;
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    ctrl.stop('user');
-    run.reject(new Error('run stopped'));
-    await awaitRunSettled(session);
+      yield* Effect.forkChild(
+        ctrl.startRootRun(makeRunRequest('Check the draft.')),
+        { startImmediately: true },
+      );
+      yield* Effect.promise(() => executed.promise);
+      expect(mocks.executeAgent).toHaveBeenCalledOnce();
+      ctrl.stop('user');
+      run.reject(new Error('run stopped'));
+      yield* Effect.promise(() => awaitRunSettled(session));
 
-    expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
-    expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
+      expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
+      expect(session.runExitCode).toBe(CliExitCode.Success);
+    }),
+  );
 
   it.live(
     'keeps detached-child approvals answerable after the stopped root finalizes',
@@ -576,7 +577,10 @@ describe('createChatSessionController', () => {
         const ctrl = createChatSessionController(
           makeInit({ session, disposables, shutdownScope }),
         );
-        ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
+        yield* Effect.forkChild(
+          ctrl.startRootRun(makeRunRequest('Delegate the calculation.')),
+          { startImmediately: true },
+        );
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
@@ -651,21 +655,24 @@ describe('createChatSessionController', () => {
       }),
   );
 
-  it('reports a fresh-run defect and settles its claimed run slot', async () => {
-    mocks.rootLaunch.mockReturnValueOnce(
-      Effect.die(new Error('launch defect')),
-    );
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
+  it.live('reports a fresh-run defect and settles its claimed run slot', () =>
+    Effect.gen(function* () {
+      mocks.rootLaunch.mockReturnValueOnce(
+        Effect.die(new Error('launch defect')),
+      );
+      const session = makeSession();
+      const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun(makeRunRequest('Check launch failure.'));
+      // A failed launch still answers: the start completes.
+      yield* ctrl.startRootRun(makeRunRequest('Check launch failure.'));
 
-    await expect(awaitRunSettled(session)).resolves.toBeUndefined();
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      'launch defect',
-    );
-    expect(session.runCompleted).toBe(true);
-  });
+      yield* Effect.promise(() => awaitRunSettled(session));
+      expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+        'launch defect',
+      );
+      expect(session.runCompleted).toBe(true);
+    }),
+  );
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = createDeferred<null>();
@@ -694,10 +701,7 @@ describe('createChatSessionController', () => {
     // session admits the run: a Ctrl-C in that window lands on the resumed
     // run, which ends cancelled, rather than leaving it running.
     const rehydrated = createDeferred<void>();
-    const session = makeSession({
-      interruptedRunId: 'e11111' as RunId,
-      runCompleted: true,
-    });
+    const session = makeSession({ runCompleted: true });
     const stops = recordStops();
     mocks.resumeRun.mockImplementationOnce((id: RunId) => {
       const run = stoppableRun(id, stops);
@@ -738,7 +742,6 @@ describe('createChatSessionController', () => {
 
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
     expect(session.runCompleted).toBe(true);
-    expect(session.interruptedRunId).toBe('aaaaaa');
   });
 
   it('marks the resumed run, not the previous one, for a Ctrl-C issued before adoption', async () => {
@@ -767,13 +770,11 @@ describe('createChatSessionController', () => {
     await resumeStarted.promise;
     expect(mocks.resumeRun).toHaveBeenCalledOnce();
     ctrl.stop('user');
-    expect(session.interruptedRunId).toBeUndefined();
 
     resumeReached.resolve();
     await resumed;
     await awaitRunSettled(session);
 
-    expect(session.interruptedRunId).toBe('aaaaaa');
     expect(mocks.request).not.toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'run.stop',
@@ -819,20 +820,17 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
-  it('continues the stopped conversation through the session, in order, once the stopped generation settles', async () => {
-    // Typed while the stop settles: the first waits for the stopped
-    // generation, then goes to the session's own admission for that run; the
-    // admission resumed it, so the second goes to the resumed run directly,
-    // never waiting on its drain. The chat keeps no copy of either. A served
-    // chat observes no resumes: the slot passes to the resumed run, so a
-    // later message cannot start a second root beside it.
+  it('sends messages typed while a stop settles to the session in order, and hands the slot to the continued run', async () => {
+    // Typed while the stop settles: both go to the session's own admission
+    // for that run at once, in order; the session waits for the stop and
+    // resumes the run. A served chat observes no resumes: once the stopped
+    // run's claim lets go, the slot passes to the continued run, so a later
+    // message cannot start a second root beside it.
     holdRun('a11111' as RunId);
-    // The stopped generation is no longer live here: the view says so.
     installSession({ view: installableViewRef() });
     const teardown = pendingRunClaim();
     const session = makeSession({
       runId: 'a11111' as RunId,
-      interruptedRunId: 'a11111' as RunId,
       runSettled: teardown.settled,
       stopRequested: true,
     });
@@ -853,32 +851,35 @@ describe('createChatSessionController', () => {
 
     await runSubmit(ctrl, 'Do not drop this message.');
     await runSubmit(ctrl, 'And this one.');
-    expect(sent).toEqual([]);
+    expect(sent).toEqual([
+      'a11111 Do not drop this message.',
+      'a11111 And this one.',
+    ]);
 
     session.markRunCompleted(teardown.settled);
     await teardown.settle();
-    await vi.waitFor(() =>
-      expect(sent).toEqual([
-        'a11111 Do not drop this message.',
-        'a11111 And this one.',
-      ]),
-    );
+    await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(false));
     expect(mocks.executeAgent).not.toHaveBeenCalled();
-    expect(session.interruptedRunId).toBeUndefined();
     expect(session.runId).toBe('a11111');
-    expect(chatTuiCanStartRootRun(session)).toBe(false);
   });
 
   it('frees the slot of a continuation that ended before the chat looked', async () => {
     // The resumed turn ran and ended before the chat's adoption read the
     // fold: no level it reads shows the run live, yet the run did continue.
-    holdRun('a11111' as RunId);
+    seedView(
+      viewWith([
+        makeRunView({
+          id: 'a11111' as RunId,
+          status: RUN_OUTCOME.CANCELLED,
+          turn: 1,
+          resumeBlocked: null,
+        }),
+      ]),
+    );
+    rootRunId.set('a11111' as RunId);
     const view = installableViewRef();
     installSession({ view });
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-      interruptedRunId: 'a11111' as RunId,
-    });
+    const session = makeSession({ runId: 'a11111' as RunId });
     const ctrl = createChatSessionController(
       makeInit({
         session,
@@ -905,7 +906,9 @@ describe('createChatSessionController', () => {
 
     await runSubmit(ctrl, 'Carry on.');
 
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'followUp.send', runId: 'a11111' }),
+    );
     await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(true));
-    expect(session.interruptedRunId).toBeUndefined();
   });
 });

@@ -536,9 +536,7 @@ export class SessionComposer extends LitElement {
     const text = this.text;
     const hasText = text.trim() !== '';
     // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
-    const canSend = run
-      ? canSendFollowUp(run, this.draft, { terminalBacked: true })
-      : hasText;
+    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
     let sendLabel = compact ? 'Send follow-up' : 'Start task';
     if (!compact && this.surface?.editing != null) sendLabel = 'Approve';
     const sending = this.surface?.sending.has(run?.id ?? 'launch') ?? false;

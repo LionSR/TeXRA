@@ -300,7 +300,7 @@ beforeEach(async () => {
   publishTestRunStart(session, PARENT_RUN_ID);
   await Effect.runPromise(session.log.settled);
   vi.clearAllMocks();
-  mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
+  mocks.startFollowUpWake.mockReturnValue(Effect.succeed(Effect.void));
 });
 
 afterEach(async () => {
@@ -540,8 +540,8 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           // The fixture's parent has no run to resume: the wake a user's
-          // message owes it is refused, and the resume tells the user.
-          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(false));
+          // message owes it starts nothing here, and the message stays queued.
+          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(Effect.void));
           expect(
             yield* submitFollowUp(
               PARENT_RUN_ID,
@@ -588,7 +588,7 @@ describe('childRunLoop E2E fixtures', () => {
           } finally {
             releaseNativeChild();
           }
-          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
+          mocks.startFollowUpWake.mockReturnValue(Effect.succeed(Effect.void));
           mocks.startFollowUpWake.mockClear();
 
           const queuedBefore = yield* queuedTexts(PARENT_RUN_ID);
@@ -682,7 +682,7 @@ describe('childRunLoop E2E fixtures', () => {
       mocks.startFollowUpWake.mockImplementation(() =>
         Effect.sync(() => {
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          return true;
+          return Effect.void;
         }),
       );
 
@@ -738,7 +738,7 @@ describe('childRunLoop E2E fixtures', () => {
               yield* Deferred.succeed(secondDelivery, undefined);
             yield* Deferred.succeed(deliveryStarted, undefined);
             yield* Deferred.await(deliveryCompleted);
-            return true;
+            return Effect.void;
           }),
         );
 
@@ -912,7 +912,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const delivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
-          Effect.as(Deferred.succeed(delivered, undefined), true),
+          Effect.as(Deferred.succeed(delivered, undefined), Effect.void),
         );
 
         const loop = yield* startLoop(runId, strategy);
@@ -942,7 +942,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const delivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
-          Effect.as(Deferred.succeed(delivered, undefined), true),
+          Effect.as(Deferred.succeed(delivered, undefined), Effect.void),
         );
         const loop = yield* startLoop(runId, strategy);
 
@@ -990,7 +990,7 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.gen(function* () {
             yield* Deferred.succeed(deliveryStarted, undefined);
             yield* Deferred.await(deliveryGate);
-            return true;
+            return Effect.void;
           }),
         );
 
@@ -1043,7 +1043,7 @@ describe('childRunLoop E2E fixtures', () => {
             handleAtWakeTime = session.runs.get(runId)?.handle;
             yield* Deferred.succeed(wakeReached, undefined);
             yield* Deferred.await(releaseWake);
-            return true;
+            return Effect.void;
           }),
         );
 
@@ -1070,7 +1070,7 @@ describe('childRunLoop E2E fixtures', () => {
           createFakeStrategy();
         const firstDelivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
-          Effect.as(Deferred.succeed(firstDelivered, undefined), true),
+          Effect.as(Deferred.succeed(firstDelivered, undefined), Effect.void),
         );
 
         const loop = yield* startLoop(runId, strategy);
