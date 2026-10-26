@@ -22,7 +22,6 @@ import {
   isModelOptionAvailable,
   type RunId,
   acceptsFollowUp,
-  type FollowUpHost,
   Rejected,
   type RequestError,
   type SessionView,
@@ -433,12 +432,8 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * whether its composer shows), the draft must not be empty, and every pasted
  * image must already be stored by the host.
  */
-export function canSendFollowUp(
-  run: RunView,
-  draft: Draft,
-  host: FollowUpHost,
-): boolean {
-  if (!acceptsFollowUp(run, host)) return false;
+export function canSendFollowUp(run: RunView, draft: Draft): boolean {
+  if (!acceptsFollowUp(run)) return false;
   if (draft.images.some((image) => image.path === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
 }

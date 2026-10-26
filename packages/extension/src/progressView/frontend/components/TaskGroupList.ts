@@ -269,11 +269,10 @@ export class TaskGroupList extends LitElement {
       this.scripts =
         this.run && this.view
           ? new Map(
-              // The progress view's composer takes a terminal-backed run's
-              // follow-up too (`ToolUseRunContent`).
-              scriptStages(this.run, this.view, {
-                terminalBacked: true,
-              }).map((stage) => [stage.id, stage]),
+              scriptStages(this.run, this.view).map((stage) => [
+                stage.id,
+                stage,
+              ]),
             )
           : new Map();
     }

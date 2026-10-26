@@ -257,24 +257,17 @@ export function rollupOf(
   return rollup;
 }
 
-/** What a host brings to `acceptsFollowUp`, its only input: whether it
- *  delivers a follow-up to a terminal-backed run (an agent CLI: codex). */
-export interface FollowUpHost {
-  readonly terminalBacked: boolean;
-}
-
 /**
  * Whether a run takes a follow-up at all, the one rule every host reads (it
- * decides whether the composer shows). A run with no follow-up support, a
- * terminal-backed run on a host that cannot drive one, and a run this process
- * may not act on take none; a run still going or waiting takes one, as does a
- * stopped native one with saved steps, which admission resumes from its
- * history.
+ * decides whether the composer shows). A run with no follow-up support and a
+ * run this process may not act on take none; a run still going or waiting
+ * takes one, as does a stopped native one with saved steps, which admission
+ * resumes from its history. A terminal-backed run (an agent CLI such as
+ * codex) reads its messages from the same inbox as any other run, so every
+ * host delivers to it alike.
  */
-export function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean {
+export function acceptsFollowUp(run: ReadRunView): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
-  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
-    return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
   return (
     run.followUpSupport === 'nativeInteractive' &&

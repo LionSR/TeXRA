@@ -378,7 +378,7 @@ describe('BashTool', () => {
         vi.spyOn(toolUseFollowUp, 'startFollowUpWake').mockImplementation(
           () => {
             Deferred.doneUnsafe(followUpDelivered, Effect.void);
-            return Effect.succeed(true);
+            return Effect.succeed(Effect.void);
           },
         );
 

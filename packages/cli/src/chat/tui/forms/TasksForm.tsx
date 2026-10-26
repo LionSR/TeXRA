@@ -305,12 +305,12 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const answering =
     presentable?.kind === 'modal' || presentable?.kind === 'edit';
   // The composer shows only for a run that takes a follow-up (the rule
-  // every host reads); a terminal-backed run takes none from here.
+  // every host reads).
   const composing =
     !answering &&
     !level.ended &&
     level.run !== undefined &&
-    acceptsFollowUp(level.run, { terminalBacked: false });
+    acceptsFollowUp(level.run);
   // The composer takes Esc while it shows; without one, Esc still
   // detaches.
   useInput((input, key) => {

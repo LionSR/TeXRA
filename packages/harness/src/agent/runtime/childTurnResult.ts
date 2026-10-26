@@ -379,10 +379,12 @@ export const wakeParent = (
 ): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
     if (delivery === undefined) return;
-    if (!(yield* session.followUps.wake(delivery.to)))
-      yield* warn(
-        trace,
-        'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
-        { parentRunId: delivery.to },
-      );
+    const woken = yield* session.followUps.wake(delivery.to);
+    // The child's boundary waits for its parent's resumed turn.
+    if (woken !== false) return yield* woken;
+    yield* warn(
+      trace,
+      'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',
+      { parentRunId: delivery.to },
+    );
   });

@@ -79,7 +79,6 @@ import {
   createChatSessionController,
   type ChatSessionController,
 } from '../chatSessionController';
-import { makeFollowUpDeliveryQueue } from '../followUpDeliveryQueue';
 import { App } from './App';
 import {
   applyCliModelSelection,
@@ -342,9 +341,6 @@ export async function runChat(
         defaults,
         firstRunSetupAgent,
         inputHistory,
-        // The drain lives as long as the process runtime; the graceful exit
-        // waits on `idle` before that runtime is disposed.
-        followUpQueue: yield* makeFollowUpDeliveryQueue(runtime.scope),
       };
     }).pipe(
       // A chat that ends at startup lets go of the service there.
@@ -358,7 +354,7 @@ export async function runChat(
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
   const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
   const { defaults } = startup;
-  const { inputHistory, followUpQueue, startupNotices } = startup;
+  const { inputHistory, startupNotices } = startup;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -568,7 +564,6 @@ export async function runChat(
     getSessionContext: currentSessionContext,
     disposables,
     shutdownScope: services.shutdownScope,
-    followUpQueue,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
     secrets: services.secrets,
@@ -594,7 +589,6 @@ export async function runChat(
 
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop('user');
-    followUpQueue.clear();
     chatController.clearPendingSkills();
     session.clearRunState();
     resetCliState(meta);
@@ -685,9 +679,11 @@ export async function runChat(
       stores={services}
       runtime={runtime}
       session={runSession}
-      onSubmit={(line, mediaFiles, images) => {
+      onSubmit={(line, mediaFiles, images, holdUntil) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
-        runtime.runFork(chatController.submit(line, { mediaFiles, images }));
+        runtime.runFork(
+          chatController.submit(line, { mediaFiles, images, holdUntil }),
+        );
       }}
       commandName={context.commandName}
       onStaticTranscriptChange={viewportController.repaintTranscript}
@@ -732,7 +728,7 @@ export async function runChat(
     disposables,
     terminal,
     runtime,
-    followUpsIdle: followUpQueue.idle,
+    submitted: chatController.submitted,
     getApprovalPolicy,
     // What the session's publisher still holds, drained before shutdown
     // within the close budget; one that does not drain is said on stderr.

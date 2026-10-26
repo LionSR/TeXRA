@@ -1,11 +1,12 @@
 ---
 created: 2026-10-23
-status: proposed
+status: implemented
 ---
 
 # Run input: one owner per fact, delivery at the next request
 
-Baseline: `main` at `a20cc39310`. Line references point into that tree.
+Baseline: `main` at `a20cc39310`. Line references point into that tree. Everything below has landed (see
+"Landed").
 Revised the same day after an adversarial review by a fresh agent; the
 "Review" section lists what it changed.
 
@@ -410,9 +411,8 @@ Checked beside the design: every export of the chain and its caller count.
   `sessionSurfaces.ts:446`, `TaskGroupList.ts:275`; `false` in
   `RunHeader.ts:362`), so a codex child's header says it cannot continue while
   its composer shows. `terminalBacked` has one setter
-  (`detachedChildRun.ts:216`) and this one reader. Second PR with the CLI
-  cut: `FollowUpHost` goes; `acceptsFollowUp` and `submitFollowUp` read the
-  same facts.
+  (`detachedChildRun.ts:216`) and this one reader. Removed in the second PR:
+  `acceptsFollowUp` takes the run alone.
 - `Inbox` methods with one caller: `resumeSettled` (`SessionRequests.ts:282`),
   `joined` (`effect/runHandle.ts:297`), `closeInput` (`resumeRun.ts:182`),
   `forget` (`sessionLayer.ts:258`), `sendDetached` (`childRunLoop.ts:424`),
@@ -500,25 +500,28 @@ the CLI's copies of a stop's reason and outside this design's steps, landed
 in #14266 (`3e474178c5`). The audit's own leftovers are listed in that note,
 not here.
 
-## Still open
+The second PR (the CLI delivery cut, 2026-10-26) did the three items left
+after #14261:
 
-The second PR, which none of #14261 started:
-
-1. **The CLI's own delivery bookkeeping.** `FollowUpDeliveryQueue`,
-   `interruptedRunId`, `claimPreparingRoot` and the `awaitRunFolded` race in
-   `packages/cli/src/chat/chatSessionController.ts`. `submitFollowUp` now
-   routes, refuses and waits for a stopping run to drain, so the CLI's copies
-   of those decisions go. The queue sends each message to the harness at
-   once, one at a time, which is why a message typed in the CLI is already
-   delivered at the next request (the hermetic validator's artifact shows
-   it).
-2. **`FollowUpHost`.** The constant each host passes to `acceptsFollowUp`
-   (`packages/harness/src/shared/session/sessionView.ts`) goes;
-   `acceptsFollowUp` and `submitFollowUp` read the same facts.
-3. **A key that holds a message for the turn's end.** The harness reads
-   `holdUntil: 'turn'` already; no host sends it. The key (Enter sends for
-   the next request, a second key holds for the turn's end) belongs to the
-   CLI's composer once item 1 is cut.
+1. **The CLI's own delivery bookkeeping is gone.** `FollowUpDeliveryQueue`,
+   `interruptedRunId`, `claimPreparingRoot` and the `awaitRunFolded` race
+   were deleted from `packages/cli/src/chat/chatSessionController.ts`. The CLI
+   still decides where a message goes (the focused agent, else the chat's
+   root, else a fresh root) and holds the messages typed before a fresh root
+   exists until `runSession.start` returns: those are its own facts.
+   `submitFollowUp` keeps one run's sends in order (a per-run
+   `withPerKeyLane` on the inbox, entered before anything awaits;
+   `followUp.send` skips the request handler's `admit`, which decided nothing
+   the admission does not decide again under the claim). A send answers once
+   its row commits and the resume it owes has started on the session's fork,
+   so a message typed while a stopped run resumes reaches it mid-turn.
+2. **`FollowUpHost` is gone.** Delivery to a terminal-backed run is the same
+   on every host (its process reads the same inbox), so `acceptsFollowUp`
+   takes the run alone.
+3. **Shift-Tab holds a message for the turn's end.** Tab already focuses the
+   agent list; Alt-Enter sends a plain CR in macOS terminals. The composer
+   sends `holdUntil: 'turn'` on the `followUp.send` request, and the status
+   bar shows the key while a run works.
 
 ## Plan
 
@@ -534,8 +537,8 @@ One PR, in this order, each step type-checked and `test:pure` green:
    `getToolUseFollowUpTarget`.
 4. One `consume`; `joinStopped` goes; the compaction text moves; the
    dispatcher reads the loop's controls; one presenter for the send result.
-5. Delivery at the next request; the blank-nudge test. The CLI key goes to
-   the second PR ("Still open", item 3).
+5. Delivery at the next request; the blank-nudge test. The CLI key went to
+   the second PR ("Landed", item 3).
 6. E2E: `validate-run.mjs` (the hermetic CLI validator every PR runs)
    drives a real `texra chat` under a PTY against the validation model: the
    agent's one command waits for a release file, the message is typed while

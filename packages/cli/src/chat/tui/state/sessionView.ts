@@ -18,7 +18,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
-  FollowUpHost,
   RunView,
   SessionView,
   TranscriptView,
@@ -105,11 +104,6 @@ export function resumableRunId(run: RunView | undefined): RunId | undefined {
     ? run.id
     : undefined;
 }
-
-/** This composer's capability for `acceptsFollowUp`: it does not address a
- *  terminal-backed run (an external agent CLI's session). Every other
- *  follow-up decision is the shared rule's. */
-export const CLI_FOLLOW_UP_HOST: FollowUpHost = { terminalBacked: false };
 
 /** The name a run goes by on this surface: `main` for a root, the
  *  fold's label below it. */

@@ -512,7 +512,9 @@ describe(
           });
           // The run ended: the wake its sender owes is refused, and the
           // resume tells the user; the wake itself read the run.
-          expect(yield* session.followUps.wake(runId)).toBe(true);
+          const woken = yield* session.followUps.wake(runId);
+          expect(woken).not.toBe(false);
+          if (woken !== false) yield* woken;
 
           expect(yield* resume(runId, { session })).toEqual({
             failed: 'finished',

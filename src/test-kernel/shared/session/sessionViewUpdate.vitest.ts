@@ -101,11 +101,10 @@ describe('session view update', () => {
       status: 'failed' as const,
       durableOutcome: 'failed' as const,
     };
-    const host = { terminalBacked: true };
-    expect(acceptsFollowUp(run, host)).toBe(true);
-    expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
-    expect(acceptsFollowUp({ ...run, recipe: 'task' }, host)).toBe(false);
-    expect(acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host)).toBe(
+    expect(acceptsFollowUp(run)).toBe(true);
+    expect(acceptsFollowUp({ ...run, readOnly: true })).toBe(false);
+    expect(acceptsFollowUp({ ...run, recipe: 'task' })).toBe(false);
+    expect(acceptsFollowUp({ ...run, turn: null, forkPoint: null })).toBe(
       false,
     );
   });

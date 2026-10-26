@@ -33,11 +33,11 @@ import {
   type Append,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
+import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { Resumes } from './ToolUseFollowUp';
 import { RunInput } from './RunInput';
-import { queuedRow } from './followUpMessages';
-import type { FollowUpSenderInput } from './followUpMessages';
+import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -71,9 +71,9 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Resume the run for the input it holds; what it does not take, the
-   *  resume tells the user. */
-  readonly resume: (runId: RunId) => Effect.Effect<void>;
+  /** Start resuming the run for its input (the resume tells the user what
+   *  it does not take) and give back the resume's end. */
+  readonly resume: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
 }
 
 /** One message a producer sends. */
@@ -90,14 +90,12 @@ export interface InboxItem {
   readonly control?: QueuedFollowUp['control'];
 }
 
-/** How a send landed. `queued.read`: a reader here takes it; otherwise the
- *  sender asks {@link Inbox.wake} whether the run owes a resume. */
+/** How a send landed. `queued.read`: a reader here takes it (else: `wake`). */
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean }
   | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input (or a disposed inbox), a run
- *  another live process holds, or a sender that is not the parent. */
+/** Why a send wrote nothing: a closed input, a foreign holder, a non-parent. */
 type Refusal = 'not_resumable' | 'owned_elsewhere' | 'not_parent';
 
 /** What a send asks of the row and of the run. */
@@ -121,6 +119,8 @@ export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
   /** The resumes in flight here: a sender that finds one joins it. */
   readonly resumes = new Resumes();
+  /** Each run's sends, admitted one at a time in call order. */
+  readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
 
@@ -206,27 +206,26 @@ export class Inbox {
     );
   }
 
-  /** Resume the run if its pending input obliges one (`needsWake`) and
-   *  nothing here will read it: no reader open, no resume in flight. Waits
-   *  for the publisher first, so a row still committing is seen. False only
-   *  when the input could not be read; a refused resume tells the user. */
-  wake(runId: RunId): Effect.Effect<boolean> {
+  /** Start resuming the run if its input obliges one (`needsWake`) and no
+   *  reader or resume here takes it, once the publisher settled. False only
+   *  if the input could not be read; else the resume's end, for a caller to
+   *  wait on (at once if none started). */
+  wake(runId: RunId): Effect.Effect<false | Effect.Effect<void>> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
-      // A reader here, or a resume in flight, reads the input.
-      if (this.disposed || this.readers.has(runId)) return true;
-      if (this.resumes.running.has(runId)) return true;
+      if (this.disposed || this.readers.has(runId)) return Effect.void;
+      if (this.resumes.running.has(runId)) return this.resumes.settled(runId);
       const input = yield* this.read(runId);
-      if (!input.closed && needsWake(input.rows, runId, this.port.run))
-        yield* this.port.resume(runId);
-      return true;
+      if (input.closed || !needsWake(input.rows, runId, this.port.run))
+        return Effect.void;
+      return yield* this.port.resume(runId);
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
           warnWith(
             `Run ${runId} was not woken; an explicit Resume delivers what is queued`,
           )(error),
-          false,
+          false as const,
         ),
       ),
     );
@@ -394,7 +393,6 @@ const warnWith =
       withLogChannel(CHANNEL),
     );
 
-/** Whether a message is queued: a request (`control`) and a notice of an
- *  ended child resume no run and keep no input open. */
+/** Whether a message is queued: not a request, nor an ended child's notice. */
 const queued = (input: InputRows, run: InboxPort['run']): boolean =>
   pendingMessages(input.followUps, run).length > 0;
