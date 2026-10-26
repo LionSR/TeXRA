@@ -14,8 +14,8 @@ reopening the question starts from facts instead of from memory.
 
 ## What was removed
 
-The last tree that holds the code is `527f17061e`, the parent of the removal.
-Read any file with `git show 527f17061e:<path>`.
+Every main commit before the removal (#14296) holds the code, for example
+`33895b7daa`. Read any file with `git show 33895b7daa:<path>`.
 
 - **Copilot as a model route.** A user could serve a canonical model, such as
   a Claude or GPT model, through the editor's Copilot access instead of a
