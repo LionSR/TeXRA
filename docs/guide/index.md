@@ -141,8 +141,9 @@ never leave your machine except to the provider endpoint.
 **Provider subscriptions** (ChatGPT, Grok, Kimi Code and the GLM Coding
 Plan). Requests still go straight from your machine to that provider:
 ChatGPT and Grok via OAuth sign-in, Kimi Code and the GLM Coding Plan via a
-plan-specific key. Connect one from the **Settings → Models → Subscriptions**
-tab, or with `texra auth chatgpt login` / `/login` in the CLI.
+plan-specific key. ChatGPT and Grok connect from the **Settings → Models →
+Subscriptions** tab (or `texra auth chatgpt login` / `/login` in the CLI); Kimi
+Code and the GLM Coding Plan take their key under **Models → API keys**.
 
 API keys, whichever mode you use, stay on your machine, in one owner-only
 `secrets/` folder under `~/.texra` that the extension, the desktop app and the
