@@ -17,9 +17,9 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';
-import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 
 import { claimRootRun } from './sessionViewFollow';
 import type { LocalSession } from '@texra-ai/harness';
