@@ -17,6 +17,7 @@ import {
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
 import {
+  formatCompactDuration,
   taskGroupDisplayStatus,
   pluralize,
   compareBySeqNo,
@@ -33,7 +34,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 
