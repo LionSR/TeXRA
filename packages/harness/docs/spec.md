@@ -180,7 +180,7 @@ after every job enqueued before it
 
 ### 2.4 Row versions and the store gate
 
-Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-153`).
+Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-155`).
 A row MUST be written at its kind's current version
 (`controllers/session/rowCodec.ts:173-178`). The `stored_kind` table records the
 highest version each kind was written at
@@ -201,7 +201,7 @@ retired; their rows fail only their own run's reads
 (`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:288`).
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
-older build's row would read wrong (`shared/schemas/rowVersions.ts:72-153`). A
+older build's row would read wrong (`shared/schemas/rowVersions.ts:72-155`). A
 plugin's arm versions its own `value` and may carry upcasters for it
 (`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:330`). A row is then
 classified by the reader (`controllers/session/rowCodec.ts:269-335`):
@@ -706,7 +706,7 @@ A process MUST NOT:
 
 A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:167-181`,
-`:295-300`, `shared/session/runHistory.ts:101-127`). A tool call that meets a
+`:293-298`, `shared/session/runHistory.ts:101-127`). A tool call that meets a
 storage refusal fails the dispatch instead of settling
 (`agent/runtime/loop/toolUseDispatch.ts:598-600`).
 
@@ -893,9 +893,9 @@ These existing suites check the sections above.
 - **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:3318`
   (live state equals reloaded state), `:3350` (batch contract);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:389`
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:605`, `:683`,
-  `:847` (asks again after a stop), `:921` (budget), `:979` (unchain once),
-  `:1063`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:119`
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:591`, `:669`,
+  `:833` (asks again after a stop), `:907` (budget), `:965` (unchain once),
+  `:1049`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:119`
 - **7 claims**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:675`, `:896`,
   `:2599`, `:2838` (another OS process), `:2950` (dead owner reclaimed), `:3022`
