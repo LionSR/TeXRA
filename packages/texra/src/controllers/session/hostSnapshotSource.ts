@@ -24,7 +24,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@common/teams/TeamPlan';
+import { loadTeamOptions } from '@texra-ai/harness';
 import type {
   FileOptions,
   HostSnapshot,

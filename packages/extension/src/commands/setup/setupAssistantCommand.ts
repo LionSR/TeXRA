@@ -10,13 +10,13 @@ import {
   isLiveRun,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import type {

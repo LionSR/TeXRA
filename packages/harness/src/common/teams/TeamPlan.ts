@@ -38,9 +38,9 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
  * The workspace agents' member identity rule (`AgentCatalog.get` in
  * production): a bare name matches by name, a `source:name` key exactly.
  */
-type TeamAgentResolver<T> = (identifier: string) => T | undefined;
+export type TeamAgentResolver<T> = (identifier: string) => T | undefined;
 
-interface TeamRunOptions<T extends TeamCatalogAgent> {
+export interface TeamRunOptions<T extends TeamCatalogAgent> {
   readonly resolveAgent: TeamAgentResolver<T>;
   readonly agentOverride?: string;
 }
@@ -112,14 +112,14 @@ export function canLaunchTeam<T extends TeamCatalogAgent>(
   return teamLaunchBlockReason(plan) === undefined;
 }
 
-type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
+export type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
 
 export function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus {
   if (teamLaunchBlockReason(plan)) return 'unavailable';
   return teamPlanHasGaps(plan) ? 'degraded' : 'available';
 }
 
-interface TeamAgentAvailability {
+export interface TeamAgentAvailability {
   readonly available: number;
   readonly total: number;
   readonly missing: readonly string[];
@@ -210,7 +210,7 @@ export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   );
 }
 
-type TeamLaunchResolution =
+export type TeamLaunchResolution =
   | {
       readonly status: 'ready';
       readonly fields: ReturnType<typeof teamExecutionFields>;

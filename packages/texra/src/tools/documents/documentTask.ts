@@ -32,7 +32,7 @@ import {
   type AgentOptionData,
   type FileListEntry,
 } from '@texra-ai/harness/schemas';
-import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
+import { PREFERRED_TOOL_USE_AGENTS } from '@texra-ai/harness';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,

@@ -16,7 +16,7 @@ import { AgentCatalog, defineTool, ToolContext } from '@texra-ai/harness';
 
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { agentName } from '@texra-ai/harness/schemas';
-import { teamPresets } from '@common/teams/TeamPresets';
+import { teamPresets } from '@texra-ai/harness';
 
 /**
  * The shared catalog's built-in teams (the setup starter included), so the
