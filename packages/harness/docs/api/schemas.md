@@ -5,14 +5,15 @@
 ## acceptsFollowUp
 
 Whether a run takes a follow-up at all, the one rule every host reads (it
-decides whether the composer shows). A run with no follow-up support, a
-terminal-backed run on a host that cannot drive one, and a run this process
-may not act on take none; a run still going or waiting takes one, as does a
-stopped native one with saved steps, which admission resumes from its
-history.
+decides whether the composer shows). A run with no follow-up support and a
+run this process may not act on take none; a run still going or waiting
+takes one, as does a stopped native one with saved steps, which admission
+resumes from its history. A terminal-backed run (an agent CLI such as
+codex) reads its messages from the same inbox as any other run, so every
+host delivers to it alike.
 
 ```ts
-function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean
+function acceptsFollowUp(run: ReadRunView): boolean
 ```
 
 ## ActiveSkillSourceScope
@@ -767,17 +768,6 @@ function fileLocationShortDisplayPath(location: FileLocation): string
 
 ```ts
 type FollowUpContent = typeof FollowUpContentSchema.Type;
-```
-
-## FollowUpHost
-
-What a host brings to `acceptsFollowUp`, its only input: whether it
-delivers a follow-up to a terminal-backed run (an agent CLI: codex).
-
-```ts
-interface FollowUpHost {
-  readonly terminalBacked: boolean;
-}
 ```
 
 ## FollowUpSender
@@ -2144,7 +2134,7 @@ Every request a surface issues to its session's runtime, one arm per
 `group.action` tag.
 
 ```ts
-const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildren: optional<NullOr<Boolean>>; readonly reason: Literals<readonly ["user", "shutdown"]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.stop">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.delete">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.compact">; }>, Struct<{ readonly title: Trim; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.rename">; }>, Struct<{ readonly at: optional<NullOr<Int>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.fork">; }>, Struct<{ readonly model: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.model">; }>, Struct<{ readonly files: Union<readonly [Struct<{ readonly op: Literal<"copy">; readonly to: String; }>, Struct<{ readonly op: Literal<"remove">; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.files">; }>, Struct<{ readonly text: String; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"followUp.send">; }>, Struct<{ readonly requestId: String; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.decide">; }>, Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.preview">; }>, Struct<{ readonly kind: Literal<"policy.set">; readonly change: Union<readonly [Struct<{ readonly bypass: Literals<readonly ["bash", "toolEdit", "superYolo"]>; readonly enabled: Boolean; readonly exceptRequestId: optional<String>; readonly runId: brand<String, "RunId">; readonly field: Literal<"bypass">; }>, Struct<{ readonly limit: Literals<readonly ["never", "ask"]>; readonly runId: brand<String, "RunId">; readonly field: Literal<"limit">; }>]>; }>]>
+const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildren: optional<NullOr<Boolean>>; readonly reason: Literals<readonly ["user", "shutdown"]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.stop">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.delete">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.compact">; }>, Struct<{ readonly title: Trim; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.rename">; }>, Struct<{ readonly at: optional<NullOr<Int>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.fork">; }>, Struct<{ readonly model: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.model">; }>, Struct<{ readonly files: Union<readonly [Struct<{ readonly op: Literal<"copy">; readonly to: String; }>, Struct<{ readonly op: Literal<"remove">; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.files">; }>, Struct<{ readonly text: String; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly holdUntil: optional<NullOr<Literal<"turn">>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"followUp.send">; }>, Struct<{ readonly requestId: String; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.decide">; }>, Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.preview">; }>, Struct<{ readonly kind: Literal<"policy.set">; readonly change: Union<readonly [Struct<{ readonly bypass: Literals<readonly ["bash", "toolEdit", "superYolo"]>; readonly enabled: Boolean; readonly exceptRequestId: optional<String>; readonly runId: brand<String, "RunId">; readonly field: Literal<"bypass">; }>, Struct<{ readonly limit: Literals<readonly ["never", "ask"]>; readonly runId: brand<String, "RunId">; readonly field: Literal<"limit">; }>]>; }>]>
 ```
 
 ## RunView

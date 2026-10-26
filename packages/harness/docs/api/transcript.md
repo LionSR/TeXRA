@@ -565,7 +565,6 @@ grouped by phase.
 function scriptStages(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
-  host: FollowUpHost,
 ): ScriptStageView[]
 ```
 
