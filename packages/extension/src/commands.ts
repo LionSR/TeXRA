@@ -25,7 +25,7 @@ export function registerCommands(
   roots: WorkspaceRoots,
   /** Where this window's runs run. */
   runSession: Session,
-): void {
+): SettingsViewProvider {
   const settingsViewProvider = new SettingsViewProvider(
     context,
     secrets,
@@ -60,4 +60,5 @@ export function registerCommands(
       },
     ),
   );
+  return settingsViewProvider;
 }

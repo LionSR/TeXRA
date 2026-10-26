@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
+import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'dialogs';
@@ -40,7 +40,7 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
   options: vscode.QuickPickOptions,
 ): Effect.Effect<T | undefined, HostPromptFailed> {
-  return ownedPrompt(
+  return withCancellationToken(
     async (token) =>
       (await vscode.window.showQuickPick(
         items as readonly vscode.QuickPickItem[],
@@ -54,7 +54,7 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
 export function inputBox(
   options: vscode.InputBoxOptions,
 ): Effect.Effect<string | undefined, HostPromptFailed> {
-  return ownedPrompt(
+  return withCancellationToken(
     (token) => vscode.window.showInputBox(options, token),
     hostPromptFailed,
   );

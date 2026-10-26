@@ -14,6 +14,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { scopedClient } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
+import type { SecretsFailed } from '@texra-ai/llm';
 import type { Headers, HttpClient } from 'effect/http';
 
 const API_ORIGIN = 'https://api.github.com';
@@ -53,6 +54,22 @@ export class GitHubPermanentError extends Schema.TaggedError<GitHubPermanentErro
   },
 ) {}
 
+/** A failure that may clear on retry: a transport error, a timeout, or a
+ *  status no other class claims (5xx, unclassified 4xx). */
+class GitHubTransientError extends Schema.TaggedError<GitHubTransientError>()(
+  'GitHubTransientError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+type GitHubRequestError =
+  | GitHubAuthError
+  | GitHubRateLimitError
+  | GitHubPermanentError
+  | GitHubTransientError;
+
 /**
  * GitHub error responses are `{ message, documentation_url, ... }` JSON
  * objects; fall back to a JSON-stringified form for any other shape.
@@ -78,7 +95,7 @@ function classifyFailure(
   responseHeaders: Headers.Headers,
   responseData: unknown,
   nowMs: number,
-): Error {
+): GitHubRequestError {
   const message = extractApiMessage(responseData, `HTTP ${status}`);
   if (status === StatusCodes.UNAUTHORIZED || status === StatusCodes.FORBIDDEN) {
     // Primary rate limit: x-ratelimit-remaining hits 0 with an
@@ -118,13 +135,19 @@ function classifyFailure(
       message: `GitHub returned ${status}: ${message}`,
     });
   }
-  return new Error(`GitHub request failed: ${message}`);
+  return new GitHubTransientError({
+    message: `GitHub request failed: ${message}`,
+  });
 }
 
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   etag?: string,
-): Effect.fn.Return<ConditionalResponse<T>, Error, GitHubServices> {
+): Effect.fn.Return<
+  ConditionalResponse<T>,
+  GitHubRequestError | SecretsFailed,
+  GitHubServices
+> {
   const secrets = yield* Secrets;
   const token = yield* getGitHubToken(secrets);
   const headers: Record<string, string> = {
@@ -165,18 +188,19 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
     // A transport failure carries its cause's message; SDK internals stay out.
     Effect.catchTag('HttpClientError', (error) =>
       Effect.fail(
-        new Error(
-          `GitHub request failed: ${toErrorMessage(error.cause ?? error)}`,
-        ),
+        new GitHubTransientError({
+          message: `GitHub request failed: ${toErrorMessage(error.cause ?? error)}`,
+          cause: error,
+        }),
       ),
     ),
     Effect.timeoutOrElse({
       duration: Duration.millis(TIMEOUT_MS),
       orElse: () =>
         Effect.fail(
-          new Error(
-            `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
-          ),
+          new GitHubTransientError({
+            message: `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
+          }),
         ),
     }),
   );

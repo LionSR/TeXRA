@@ -32,18 +32,28 @@ function inquiryOperations(
     Effect.gen(function* () {
       const timestamp = DateTime.formatIso(yield* DateTime.now);
       return yield* values.modify(INQUIRY_THREADS, id, (current) =>
-        Result.try({
-          try: () => {
-            const next = change(current ?? null, timestamp);
-            if (next === null) return [next] as const;
+        Result.flatMap(
+          // A transition rejects a request by throwing its ToolError.
+          Result.try({
+            try: () => change(current ?? null, timestamp),
+            catch: ensureError,
+          }),
+          (
+            next,
+          ): Result.Result<
+            readonly [A] | readonly [A, InquiryThreadRecord],
+            Error
+          > => {
+            if (next === null) return Result.succeed([next] as const);
             if (next.threadId !== id)
-              throw new Error(
-                'An inquiry transition cannot change its thread identity.',
+              return Result.fail(
+                new Error(
+                  'An inquiry transition cannot change its thread identity.',
+                ),
               );
-            return [next, next] as const;
+            return Result.succeed([next, next] as const);
           },
-          catch: ensureError,
-        }),
+        ),
       );
     });
 

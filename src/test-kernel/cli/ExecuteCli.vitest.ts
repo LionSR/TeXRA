@@ -49,7 +49,6 @@ const mocks = vi.hoisted(() => ({
   attachScriptPlainOutput: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
-  disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   rootLaunch: vi.fn(),
@@ -310,14 +309,14 @@ async function stubExecuteCliDeps(): Promise<void> {
   // The host answers the session's approval question the way the headless
   // adapter does: whether this context can answer a prompt.
   mocks.createHeadlessCliHostInteractions.mockImplementation(
-    (_session: unknown, _runtime: unknown, context: CliContext) => ({
-      emit: mocks.emit,
-      pending: vi.fn(() => []),
-      resolve: vi.fn(() => false),
-      cancel: vi.fn(),
-      dispose: mocks.disposeHostInteractions,
-      approvalPromptsUnavailable: context.mode !== 'interactive',
-    }),
+    (_session: unknown, context: CliContext) =>
+      Effect.succeed({
+        emit: mocks.emit,
+        pending: vi.fn(() => []),
+        resolve: vi.fn(() => false),
+        cancel: vi.fn(),
+        approvalPromptsUnavailable: context.mode !== 'interactive',
+      }),
   );
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,

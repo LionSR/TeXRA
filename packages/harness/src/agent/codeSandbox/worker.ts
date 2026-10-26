@@ -101,227 +101,222 @@ interface Realm {
   readonly settle: (message: typeof SettleMessageSchema.Type) => StepReportWire;
 }
 
-const openRealm = (
+const openRealm = Effect.fn('worker.openRealm')(function* (
   input: WorkerInput,
-): Effect.Effect<Realm, Error, Scope.Scope> =>
-  Effect.gen(function* () {
-    const quickJs = yield* Effect.tryPromise({
+): Effect.fn.Return<Realm, Error, Scope.Scope> {
+  const quickJs = yield* Effect.tryPromise({
+    try: () =>
+      newQuickJSWASMModuleFromVariant(
+        newVariant(quickJsReleaseVariant, { wasmModule: input.wasm }),
+      ),
+    catch: ensureError,
+  });
+  const interrupt = new Int32Array(input.interrupt);
+  let cpuUsedMs = 0;
+  let stepStartedAt: number | undefined;
+  let cpuExhausted = false;
+  const runtime = yield* Effect.acquireRelease(
+    Effect.try({
       try: () =>
-        newQuickJSWASMModuleFromVariant(
-          newVariant(quickJsReleaseVariant, { wasmModule: input.wasm }),
-        ),
+        quickJs.newRuntime({
+          memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
+          maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
+          interruptHandler: () => {
+            if (Atomics.load(interrupt, 0) !== 0) return true;
+            if (stepStartedAt === undefined) return false;
+            cpuExhausted ||=
+              cpuUsedMs + performance.now() - stepStartedAt >=
+              input.cpuBudgetMs;
+            return cpuExhausted;
+          },
+        }),
       catch: ensureError,
-    });
-    const interrupt = new Int32Array(input.interrupt);
-    let cpuUsedMs = 0;
-    let stepStartedAt: number | undefined;
-    let cpuExhausted = false;
-    const runtime = yield* Effect.acquireRelease(
-      Effect.try({
-        try: () =>
-          quickJs.newRuntime({
-            memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
-            maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
-            interruptHandler: () => {
-              if (Atomics.load(interrupt, 0) !== 0) return true;
-              if (stepStartedAt === undefined) return false;
-              cpuExhausted ||=
-                cpuUsedMs + performance.now() - stepStartedAt >=
-                input.cpuBudgetMs;
-              return cpuExhausted;
-            },
-          }),
-        catch: ensureError,
-      }),
-      (runtime) => Effect.sync(() => runtime.dispose()),
+    }),
+    (runtime) => Effect.sync(() => runtime.dispose()),
+  );
+  // A specifier names a module whole: one the host passed loads, any
+  // other (a relative path included) rejects the import.
+  const offered = Object.keys(input.modules).map((name) => `"${name}"`);
+  runtime.setModuleLoader((name) => {
+    const source = Object.hasOwn(input.modules, name)
+      ? input.modules[name]
+      : undefined;
+    return (
+      source ?? {
+        error: new Error(
+          `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
+        ),
+      }
     );
-    // A specifier names a module whole: one the host passed loads, any
-    // other (a relative path included) rejects the import.
-    const offered = Object.keys(input.modules).map((name) => `"${name}"`);
-    runtime.setModuleLoader((name) => {
-      const source = Object.hasOwn(input.modules, name)
-        ? input.modules[name]
-        : undefined;
-      return (
-        source ?? {
-          error: new Error(
-            `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
-          ),
-        }
-      );
-    });
-    const context = yield* Effect.acquireRelease(
-      Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
-      (context) => Effect.sync(() => context.dispose()),
-    );
+  });
+  const context = yield* Effect.acquireRelease(
+    Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
+    (context) => Effect.sync(() => context.dispose()),
+  );
 
-    // What the current step collects; reset as each report is taken.
-    let ops: StepReportWire['ops'][number][] = [];
-    let logs: string[] = [];
-    let logsDropped = 0;
-    let end: ScriptEndWire | undefined;
-    let nextSeq = 0;
+  // What the current step collects; reset as each report is taken.
+  let ops: StepReportWire['ops'][number][] = [];
+  let logs: string[] = [];
+  let logsDropped = 0;
+  let end: ScriptEndWire | undefined;
+  let nextSeq = 0;
 
-    yield* Effect.try({
-      try: () => {
-        defineHostFunction(context, '__csIssue', (name, json, phase) => {
-          const seq = nextSeq++;
-          ops.push({
-            seq,
-            name: context.getString(name),
-            input: context.getString(json),
-            phase:
-              context.typeof(phase) === 'string'
-                ? context.getString(phase)
-                : null,
-          });
-          return context.newNumber(seq);
+  yield* Effect.try({
+    try: () => {
+      defineHostFunction(context, '__csIssue', (name, json, phase) => {
+        const seq = nextSeq++;
+        ops.push({
+          seq,
+          name: context.getString(name),
+          input: context.getString(json),
+          phase:
+            context.typeof(phase) === 'string'
+              ? context.getString(phase)
+              : null,
         });
-        defineHostFunction(context, '__csLog', (text) => {
-          logs.push(
-            truncateSummary(context.getString(text), RUN_LOG_MAX_LINE_LENGTH),
-          );
-          if (logs.length > RUN_LOG_MAX_LINES) {
-            logs.shift();
-            logsDropped += 1;
-          }
-          return undefined;
-        });
-        defineHostFunction(context, '__csDone', (ok, payload) => {
-          const json =
-            context.typeof(payload) === 'string'
-              ? context.getString(payload)
-              : undefined;
-          end ??= context.dump(ok)
-            ? { _tag: 'Returned', value: json }
-            : endFromThrown(JSON.parse(json ?? 'null'));
-          return undefined;
-        });
-        const config = context.newString(
-          JSON.stringify({
-            tools: input.tools,
-            globals: input.globals,
-            maxFanout: MAX_FANOUT,
-          }),
+        return context.newNumber(seq);
+      });
+      defineHostFunction(context, '__csLog', (text) => {
+        logs.push(
+          truncateSummary(context.getString(text), RUN_LOG_MAX_LINE_LENGTH),
         );
-        context.setProp(context.global, '__csConfig', config);
-        config.dispose();
+        if (logs.length > RUN_LOG_MAX_LINES) {
+          logs.shift();
+          logsDropped += 1;
+        }
+        return undefined;
+      });
+      defineHostFunction(context, '__csDone', (ok, payload) => {
+        const json =
+          context.typeof(payload) === 'string'
+            ? context.getString(payload)
+            : undefined;
+        end ??= context.dump(ok)
+          ? { _tag: 'Returned', value: json }
+          : endFromThrown(JSON.parse(json ?? 'null'));
+        return undefined;
+      });
+      const config = context.newString(
+        JSON.stringify({
+          tools: input.tools,
+          globals: input.globals,
+          maxFanout: MAX_FANOUT,
+        }),
+      );
+      context.setProp(context.global, '__csConfig', config);
+      config.dispose();
+    },
+    catch: ensureError,
+  });
+  const bridge = yield* Effect.acquireRelease(
+    Effect.try({
+      try: () => {
+        const handle = evaluate(context, BRIDGE_PRELUDE, 'sandbox-bridge.js');
+        evaluate(context, DETERMINISM_PRELUDE, 'sandbox-prelude.js').dispose();
+        return handle;
       },
       catch: ensureError,
-    });
-    const bridge = yield* Effect.acquireRelease(
-      Effect.try({
-        try: () => {
-          const handle = evaluate(context, BRIDGE_PRELUDE, 'sandbox-bridge.js');
-          evaluate(
-            context,
-            DETERMINISM_PRELUDE,
-            'sandbox-prelude.js',
-          ).dispose();
-          return handle;
-        },
-        catch: ensureError,
-      }),
-      (handle) => Effect.sync(() => handle.dispose()),
-    );
-    const start = yield* Effect.acquireRelease(
-      Effect.sync(() => context.getProp(bridge, 'start')),
-      (handle) => Effect.sync(() => handle.dispose()),
-    );
-    const settle = yield* Effect.acquireRelease(
-      Effect.sync(() => context.getProp(bridge, 'settle')),
-      (handle) => Effect.sync(() => handle.dispose()),
-    );
+    }),
+    (handle) => Effect.sync(() => handle.dispose()),
+  );
+  const start = yield* Effect.acquireRelease(
+    Effect.sync(() => context.getProp(bridge, 'start')),
+    (handle) => Effect.sync(() => handle.dispose()),
+  );
+  const settle = yield* Effect.acquireRelease(
+    Effect.sync(() => context.getProp(bridge, 'settle')),
+    (handle) => Effect.sync(() => handle.dispose()),
+  );
 
-    /** Run `body` and the job queue it leaves, then take the step's report. */
-    const step = (body: () => void): StepReportWire => {
-      stepStartedAt = performance.now();
-      try {
-        body();
-        const drained = runtime.executePendingJobs();
-        if (drained.error) {
-          const thrown: unknown = context.dump(drained.error);
-          drained.error.dispose();
-          end ??= endFromThrown(thrown);
-        }
-      } catch (error) {
-        end ??= endFromThrown(error);
-      } finally {
-        cpuUsedMs += performance.now() - stepStartedAt;
-        stepStartedAt = undefined;
-      }
-      if (cpuExhausted) end = { _tag: 'CpuExhausted' };
-      const report: StepReportWire = {
-        ops,
-        logs,
-        logsDropped,
-        ...(end ? { end } : {}),
-      };
-      ops = [];
-      logs = [];
-      logsDropped = 0;
-      return report;
-    };
-
-    /** Call a bridge function; a value it throws becomes the script's end. */
-    const callBridge = (fn: QuickJSHandle, ...args: QuickJSHandle[]): void => {
-      const result = context.callFunction(fn, context.undefined, ...args);
-      for (const arg of args) arg.dispose();
-      if (result.error) {
-        const thrown: unknown = context.dump(result.error);
-        result.error.dispose();
+  /** Run `body` and the job queue it leaves, then take the step's report. */
+  const step = (body: () => void): StepReportWire => {
+    stepStartedAt = performance.now();
+    try {
+      body();
+      const drained = runtime.executePendingJobs();
+      if (drained.error) {
+        const thrown: unknown = context.dump(drained.error);
+        drained.error.dispose();
         end ??= endFromThrown(thrown);
-        return;
       }
-      result.value.dispose();
+    } catch (error) {
+      end ??= endFromThrown(error);
+    } finally {
+      cpuUsedMs += performance.now() - stepStartedAt;
+      stepStartedAt = undefined;
+    }
+    if (cpuExhausted) end = { _tag: 'CpuExhausted' };
+    const report: StepReportWire = {
+      ops,
+      logs,
+      logsDropped,
+      ...(end ? { end } : {}),
     };
+    ops = [];
+    logs = [];
+    logsDropped = 0;
+    return report;
+  };
 
-    return {
-      begin: () =>
-        step(() => {
-          // The prefix shares the script's first line, so reported line
-          // numbers match the script as written.
-          const body = context.evalCode(
-            `${SCRIPT_PREFIX}${input.source}\n})`,
-            'script.js',
-            { type: 'global', strict: true },
-          );
-          if (body.error) {
-            const thrown = endFromThrown(context.dump(body.error));
-            body.error.dispose();
-            end ??=
-              thrown._tag === 'Threw' && thrown.name === 'SyntaxError'
-                ? {
-                    _tag: 'SyntaxError',
-                    message: withLocation(
-                      thrown.message,
-                      thrown.stack,
-                      input.source,
-                    ),
-                  }
-                : thrown;
-            return;
-          }
-          callBridge(start, body.value);
-        }),
-      settle: (message) =>
-        step(() => {
-          // A failure crosses as `{ name, message }` JSON; a value with no
-          // JSON text resolves as undefined.
-          const payload = message.ok
-            ? message.json
-            : JSON.stringify({ name: message.name, message: message.message });
-          callBridge(
-            settle,
-            context.newNumber(message.seq),
-            message.ok ? context.true : context.false,
-            payload === undefined
-              ? context.undefined
-              : context.newString(payload),
-          );
-        }),
-    } satisfies Realm;
-  });
+  /** Call a bridge function; a value it throws becomes the script's end. */
+  const callBridge = (fn: QuickJSHandle, ...args: QuickJSHandle[]): void => {
+    const result = context.callFunction(fn, context.undefined, ...args);
+    for (const arg of args) arg.dispose();
+    if (result.error) {
+      const thrown: unknown = context.dump(result.error);
+      result.error.dispose();
+      end ??= endFromThrown(thrown);
+      return;
+    }
+    result.value.dispose();
+  };
+
+  return {
+    begin: () =>
+      step(() => {
+        // The prefix shares the script's first line, so reported line
+        // numbers match the script as written.
+        const body = context.evalCode(
+          `${SCRIPT_PREFIX}${input.source}\n})`,
+          'script.js',
+          { type: 'global', strict: true },
+        );
+        if (body.error) {
+          const thrown = endFromThrown(context.dump(body.error));
+          body.error.dispose();
+          end ??=
+            thrown._tag === 'Threw' && thrown.name === 'SyntaxError'
+              ? {
+                  _tag: 'SyntaxError',
+                  message: withLocation(
+                    thrown.message,
+                    thrown.stack,
+                    input.source,
+                  ),
+                }
+              : thrown;
+          return;
+        }
+        callBridge(start, body.value);
+      }),
+    settle: (message) =>
+      step(() => {
+        // A failure crosses as `{ name, message }` JSON; a value with no
+        // JSON text resolves as undefined.
+        const payload = message.ok
+          ? message.json
+          : JSON.stringify({ name: message.name, message: message.message });
+        callBridge(
+          settle,
+          context.newNumber(message.seq),
+          message.ok ? context.true : context.false,
+          payload === undefined
+            ? context.undefined
+            : context.newString(payload),
+        );
+      }),
+  } satisfies Realm;
+});
 
 function defineHostFunction(
   context: QuickJSContext,

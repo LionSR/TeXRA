@@ -124,55 +124,58 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     binding: call.binding,
     rebind: (credentials, failed) =>
       call.reacquire(failed, credentials === 'renewed'),
-    attempt: (bound, ref) =>
-      Effect.gen(function* () {
-        const prepared = yield* bound.model.prepareTurn(call.request);
-        if (prepared.mode !== 'foreground') {
-          return yield* Effect.die(
-            new Error(`A ${call.purpose} call prepared as background work.`),
-          );
-        }
-        yield* fold({
-          kind: 'attempt',
-          invocation: ref,
-          purpose: 'summary',
-          // A helper's request is recorded nowhere: its address is the
-          // prepared turn's own.
-          request:
-            call.record === null
-              ? sha256(prepared)
-              : yield* call.record.attempt(ref, bound, prepared),
-          origin: bound.origin,
-        });
-        const started = yield* Clock.currentTimeMillis;
-        const turn = yield* completedTurn(bound.model.streamTurn(prepared));
-        const usage = priceTurnUsage(
-          bound,
-          turn.usage,
-          (yield* Clock.currentTimeMillis) - started,
+    attempt: Effect.fn('modelCall.attempt')(function* (bound, ref) {
+      const prepared = yield* bound.model.prepareTurn(call.request);
+      if (prepared.mode !== 'foreground') {
+        return yield* Effect.die(
+          new Error(`A ${call.purpose} call prepared as background work.`),
         );
-        yield* reportUsage(
-          usageLog,
-          bound,
-          usage,
-          call.attribution,
-          call.settings,
-        );
-        return { turn, usage };
-      }),
-    failed: (ref, { error, unsent }, next, bound) =>
-      Effect.gen(function* () {
-        const info = failureInfo(error, bound.config.provider, { unsent });
-        if (call.record !== null) yield* call.record.failed(ref, info, next);
-        yield* fold({
-          kind: 'failed',
-          invocation: ref,
-          purpose: 'summary',
-          error: info,
-          next,
-        });
-        return info;
-      }),
+      }
+      yield* fold({
+        kind: 'attempt',
+        invocation: ref,
+        purpose: 'summary',
+        // A helper's request is recorded nowhere: its address is the
+        // prepared turn's own.
+        request:
+          call.record === null
+            ? sha256(prepared)
+            : yield* call.record.attempt(ref, bound, prepared),
+        origin: bound.origin,
+      });
+      const started = yield* Clock.currentTimeMillis;
+      const turn = yield* completedTurn(bound.model.streamTurn(prepared));
+      const usage = priceTurnUsage(
+        bound,
+        turn.usage,
+        (yield* Clock.currentTimeMillis) - started,
+      );
+      yield* reportUsage(
+        usageLog,
+        bound,
+        usage,
+        call.attribution,
+        call.settings,
+      );
+      return { turn, usage };
+    }),
+    failed: Effect.fn('modelCall.failed')(function* (
+      ref,
+      { error, unsent },
+      next,
+      bound,
+    ) {
+      const info = failureInfo(error, bound.config.provider, { unsent });
+      if (call.record !== null) yield* call.record.failed(ref, info, next);
+      yield* fold({
+        kind: 'failed',
+        invocation: ref,
+        purpose: 'summary',
+        error: info,
+        next,
+      });
+      return info;
+    }),
     asker: null,
     // The request carries no continuation.
     chains: () => Effect.succeed(false),

@@ -255,51 +255,50 @@ export function createScriptRunStrategy(
     launch: (_notify, turns) => native.launch(() => undefined, turns),
     stageLabel: `Script '${title}'`,
     deliveryId: `${runId}:script:delivery`,
-    formatDelivery: () =>
-      Effect.gen(function* () {
-        const { script } = yield* scriptRunCalls(session, runId);
-        if (script?.result.status === 'executed')
-          return formatDelivery({
-            tag: DELIVERY_TAG.scriptResult,
-            runId,
-            attributes,
-            response: script.result.output ?? '',
-            lines: [
-              scriptSummaryElement(
-                yield* scriptRunSummary(
-                  session,
-                  runId,
-                  title,
-                  'completed',
-                  null,
-                  startedAt,
-                ),
-              ),
-            ],
-          });
-        const cause =
-          script?.result.status === 'error'
-            ? script.result.error
-            : 'The script ended without a result.';
+    formatDelivery: Effect.fn('scriptRun.formatDelivery')(function* () {
+      const { script } = yield* scriptRunCalls(session, runId);
+      if (script?.result.status === 'executed')
         return formatDelivery({
-          tag: DELIVERY_TAG.scriptError,
+          tag: DELIVERY_TAG.scriptResult,
           runId,
           attributes,
+          response: script.result.output ?? '',
           lines: [
             scriptSummaryElement(
               yield* scriptRunSummary(
                 session,
                 runId,
                 title,
-                'failed',
-                cause,
+                'completed',
+                null,
                 startedAt,
               ),
             ),
           ],
-          message: cause,
         });
-      }),
+      const cause =
+        script?.result.status === 'error'
+          ? script.result.error
+          : 'The script ended without a result.';
+      return formatDelivery({
+        tag: DELIVERY_TAG.scriptError,
+        runId,
+        attributes,
+        lines: [
+          scriptSummaryElement(
+            yield* scriptRunSummary(
+              session,
+              runId,
+              title,
+              'failed',
+              cause,
+              startedAt,
+            ),
+          ),
+        ],
+        message: cause,
+      });
+    }),
     formatError: (_turn, err) =>
       formatDelivery({
         tag: DELIVERY_TAG.scriptError,
@@ -307,23 +306,22 @@ export function createScriptRunStrategy(
         attributes,
         message: `${toErrorMessage(err)}\n${resumeHint(runId)}`,
       }),
-    stopNotice: () =>
-      Effect.gen(function* () {
-        const summary = yield* scriptRunSummary(
-          session,
-          runId,
-          title,
-          'stopped',
-          null,
-          startedAt,
-        );
-        return formatDelivery({
-          tag: DELIVERY_TAG.scriptError,
-          runId,
-          attributes,
-          lines: [scriptSummaryElement(summary)],
-          message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
-        });
-      }),
+    stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
+      const summary = yield* scriptRunSummary(
+        session,
+        runId,
+        title,
+        'stopped',
+        null,
+        startedAt,
+      );
+      return formatDelivery({
+        tag: DELIVERY_TAG.scriptError,
+        runId,
+        attributes,
+        lines: [scriptSummaryElement(summary)],
+        message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
+      });
+    }),
   };
 }

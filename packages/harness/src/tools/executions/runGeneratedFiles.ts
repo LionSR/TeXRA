@@ -113,7 +113,7 @@ function walkRunStorage(
           (error) =>
             error.reason._tag === 'NotFound' ||
             error.reason._tag === 'BadResource',
-          () => Effect.succeed(undefined),
+          () => Effect.void,
         ),
       );
       if (!stat) continue;

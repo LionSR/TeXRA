@@ -106,21 +106,20 @@ const leanServers = Effect.map(
  *  setup capabilities (VS Code's; none elsewhere). */
 export const lean4Availability = (setup: SetupPlatformShape) =>
   prerequisitesChecks({
-    probe: (inputs) =>
-      Effect.gen(function* () {
-        const servers = yield* leanServers;
-        const extensionAvailable =
-          setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-        const lakeAvailable = (yield* findCommand('lake')) !== null;
-        // Only the VS Code build drives Lean through the extension.
-        const requiresExtension = inputs.host === 'vscode';
-        return {
-          extensionAvailable,
-          lakeAvailable,
-          requiresExtension,
-          servers,
-        };
-      }),
+    probe: Effect.fn('pluginAvailability.probe')(function* (inputs) {
+      const servers = yield* leanServers;
+      const extensionAvailable =
+        setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
+      const lakeAvailable = (yield* findCommand('lake')) !== null;
+      // Only the VS Code build drives Lean through the extension.
+      const requiresExtension = inputs.host === 'vscode';
+      return {
+        extensionAvailable,
+        lakeAvailable,
+        requiresExtension,
+        servers,
+      };
+    }),
     fallback: () =>
       Effect.map(leanServers, (servers) => ({
         extensionAvailable: false,

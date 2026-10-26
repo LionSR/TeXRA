@@ -268,19 +268,19 @@ const transaction =
  * Build one root's {@link SessionStore} in the session's scope. `storage`
  * names the root in what it logs.
  */
-export const makeSessionStore = (
-  storage: string,
-): Effect.Effect<
-  SessionStore,
-  DatabaseReadFailed,
-  | Scope.Scope
-  | SessionEvents
-  | Database
-  | ProcessIdentity
-  | SessionViewService
-  | TextChunkSource
-> =>
-  Effect.gen(function* () {
+export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
+  function* (
+    storage: string,
+  ): Effect.fn.Return<
+    SessionStore,
+    DatabaseReadFailed,
+    | Scope.Scope
+    | SessionEvents
+    | Database
+    | ProcessIdentity
+    | SessionViewService
+    | TextChunkSource
+  > {
     const events = yield* SessionEvents;
     const database = yield* Database;
     const { ownerId } = yield* ProcessIdentity;
@@ -396,4 +396,5 @@ export const makeSessionStore = (
       ),
       closed,
     };
-  });
+  },
+);

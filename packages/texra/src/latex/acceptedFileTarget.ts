@@ -185,14 +185,15 @@ export function commitAcceptedFile<E>(
 }
 
 /** The file's content, or `undefined` for a file that is not there. */
-const contentOrMissing = (
-  fs: FileSystem.FileSystem,
-  absolutePath: string,
-): Effect.Effect<string | undefined, PlatformError.PlatformError> =>
-  Effect.gen(function* () {
+const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
+  function* (
+    fs: FileSystem.FileSystem,
+    absolutePath: string,
+  ): Effect.fn.Return<string | undefined, PlatformError.PlatformError> {
     if (!(yield* fs.exists(absolutePath))) return undefined;
     return yield* fs.readFileString(absolutePath);
-  });
+  },
+);
 
 /**
  * Resolve the accept target beside the base file, confirm the write, then

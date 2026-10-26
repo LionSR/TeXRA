@@ -14,8 +14,7 @@ import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
  * The read that delivered a durable row: the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */
-export const EventInputSchema = Schema.Struct({
-  _tag: Schema.Literal('event'),
+export const EventInputSchema = Schema.TaggedStruct('event', {
   read: Schema.Literals(['listing', 'aggregate', 'all']),
   event: DisplaySessionEventSchema,
 });
@@ -28,8 +27,7 @@ export const EventInputSchema = Schema.Struct({
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
  * into one exactly. Never durable, never a seq.
  */
-export const TextChunkSchema = Schema.Struct({
-  _tag: Schema.Literal('chunk'),
+export const TextChunkSchema = Schema.TaggedStruct('chunk', {
   runId: RunIdSchema,
   rowId: Schema.String,
   from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
@@ -129,23 +127,19 @@ export type ExistenceReconciliation =
 const SessionViewInputSchema = Schema.Union([
   EventInputSchema,
   TextChunkSchema,
-  Schema.Struct({ _tag: Schema.Literal('debug'), enabled: Schema.Boolean }),
-  Schema.Struct({
-    _tag: Schema.Literal('local'),
+  Schema.TaggedStruct('debug', { enabled: Schema.Boolean }),
+  Schema.TaggedStruct('local', {
     local: LocalRuntimeStateSchema,
   }),
-  Schema.Struct({
-    _tag: Schema.Literal('subscriptions'),
+  Schema.TaggedStruct('subscriptions', {
     set: Schema.Array(TranscriptSubscriptionSchema),
   }),
   /** Cold reads have completed; apply current claims without adopting a later cursor. */
-  Schema.Struct({
-    _tag: Schema.Literal('replay.complete'),
+  Schema.TaggedStruct('replay.complete', {
     existence: ExistenceReconciliationSchema,
   }),
   /** A finite tail read has completed, including rows no longer materialized. */
-  Schema.Struct({
-    _tag: Schema.Literal('drained'),
+  Schema.TaggedStruct('drained', {
     cursor: CommitOrdinalSchema,
     existence: ExistenceReconciliationSchema,
   }),

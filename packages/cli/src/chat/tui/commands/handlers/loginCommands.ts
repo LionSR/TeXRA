@@ -101,50 +101,44 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
  * others' outcomes — the fold happens where each call settles, on the typed
  * channel.
  */
-const logoutLines = (
+const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
   target: CliLogoutTarget,
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<readonly string[], never, Secrets | AgentCatalogServices> =>
-  Effect.gen(function* () {
-    const lines: string[] = [];
+): Effect.fn.Return<readonly string[], never, Secrets | AgentCatalogServices> {
+  const lines: string[] = [];
 
-    for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
-      if (target !== providerId && target !== 'all') continue;
-      const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
-      yield* signOutCliSubscription(stores, providerId).pipe(
-        Effect.match({
-          onFailure: (error) => {
-            lines.push(
-              ACCOUNT_OUTCOME.signOutFailedWithReason(
-                label,
-                toErrorMessage(error),
-              ),
-            );
-          },
-          onSuccess: (update) => {
-            bumpCodexPreferenceVersion();
-            lines.push(ACCOUNT_OUTCOME.signedOut(label));
-            lines.push(
-              subscriptionSignOutPreferenceMessage(providerId, update),
-            );
-          },
-        }),
-      );
-    }
-
-    const overviewLines = yield* loadCliModelAccessOverview(
-      stores,
-      secrets,
-    ).pipe(
+  for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
+    if (target !== providerId && target !== 'all') continue;
+    const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
+    yield* signOutCliSubscription(stores, providerId).pipe(
       Effect.match({
-        onFailure: (error) => [toErrorMessage(error)],
-        onSuccess: (overview) => overview.lines,
+        onFailure: (error) => {
+          lines.push(
+            ACCOUNT_OUTCOME.signOutFailedWithReason(
+              label,
+              toErrorMessage(error),
+            ),
+          );
+        },
+        onSuccess: (update) => {
+          bumpCodexPreferenceVersion();
+          lines.push(ACCOUNT_OUTCOME.signedOut(label));
+          lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
+        },
       }),
     );
-    lines.push(...overviewLines);
-    return lines;
-  });
+  }
+
+  const overviewLines = yield* loadCliModelAccessOverview(stores, secrets).pipe(
+    Effect.match({
+      onFailure: (error) => [toErrorMessage(error)],
+      onSuccess: (overview) => overview.lines,
+    }),
+  );
+  lines.push(...overviewLines);
+  return lines;
+});
 
 export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
   target: CliLogoutTarget,

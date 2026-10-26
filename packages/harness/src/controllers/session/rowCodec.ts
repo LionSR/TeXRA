@@ -385,16 +385,15 @@ function readableVersion(type: string, arms: PluginArms): number {
  * this build does not read. Run at open and inside every write transaction,
  * so no build reads part of a store or writes beside rows it cannot read.
  */
-export const storeGate = <E>(
+export const storeGate = Effect.fn('rowCodec.storeGate')(function* <E>(
   exec: (statement: string) => Effect.Effect<readonly SqlRow[], E>,
   arms: PluginArms,
-): Effect.Effect<void, E | DatabaseStoreNewer> =>
-  Effect.gen(function* () {
-    for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
-      const { type, version } = Schema.decodeUnknownSync(
-        Schema.Struct({ type: Schema.String, version: Schema.Int }),
-      )(input);
-      if (version > readableVersion(type, arms))
-        return yield* Effect.fail(new DatabaseStoreNewer({ type, version }));
-    }
-  });
+): Effect.fn.Return<void, E | DatabaseStoreNewer> {
+  for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
+    const { type, version } = Schema.decodeUnknownSync(
+      Schema.Struct({ type: Schema.String, version: Schema.Int }),
+    )(input);
+    if (version > readableVersion(type, arms))
+      return yield* new DatabaseStoreNewer({ type, version });
+  }
+});

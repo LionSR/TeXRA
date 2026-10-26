@@ -212,30 +212,28 @@ const configAgentsCommand = defineCliCommand({
       description: 'Return chat-agent selection to the automatic default',
     },
   },
-  run: (context, ctx) =>
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
-      return yield* configureWorkspaceAgents(context, services, {
-        inherit: ctx.args.inherit === true,
-        all: ctx.args.all === true,
-        team: optString(ctx.args.team),
-        agents: optString(ctx.args.agents),
-        defaultTeam: optString(ctx.args['default-team']),
-        clearDefault: ctx.args['clear-default'] === true,
-        defaultAgent: optString(ctx.args['default-agent']),
-        clearDefaultAgent: ctx.args['clear-default-agent'] === true,
-      });
-    }),
+  run: Effect.fn('config.run')(function* (context, ctx) {
+    const services = yield* initCliPlatform(context);
+    return yield* configureWorkspaceAgents(context, services, {
+      inherit: ctx.args.inherit === true,
+      all: ctx.args.all === true,
+      team: optString(ctx.args.team),
+      agents: optString(ctx.args.agents),
+      defaultTeam: optString(ctx.args['default-team']),
+      clearDefault: ctx.args['clear-default'] === true,
+      defaultAgent: optString(ctx.args['default-agent']),
+      clearDefaultAgent: ctx.args['clear-default-agent'] === true,
+    });
+  }),
 });
 
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
   args: { ...GLOBAL_ARGS },
-  run: (context) =>
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
-      return yield* showConfig(context, services);
-    }),
+  run: Effect.fn('config.run')(function* (context) {
+    const services = yield* initCliPlatform(context);
+    return yield* showConfig(context, services);
+  }),
 });
 
 const configEditCommand = defineCliCommand({

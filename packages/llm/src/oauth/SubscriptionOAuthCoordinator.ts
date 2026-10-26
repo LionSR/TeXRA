@@ -11,7 +11,7 @@
  * secret store's own {@link SecretsFailed}.
  */
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Clock, Effect, Result, Schema } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
@@ -94,12 +94,6 @@ interface SubscriptionOAuthCoordinatorInit<S extends SubscriptionSession> {
   policy: SubscriptionOAuthPolicy<S>;
   /** Token grants; defaults to the policy's form endpoint. */
   client?: SubscriptionOAuthClient;
-  /** Wall clock, in epoch milliseconds, for the expiry decision; defaults to
-   *  `Date.now`. */
-  // Not Effect's `Clock`: the coordinator suites fix the time by injecting
-  // it here, and a `TestClock` would have to reach the process runtime those
-  // suites run on.
-  now?: () => number;
 }
 
 type MachineFailure = SubscriptionOAuthError | SecretsFailed;
@@ -147,7 +141,6 @@ export class SubscriptionOAuthCoordinator<
   private readonly storage: SubscriptionSessionStorage;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;
-  private readonly now: () => number;
   private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
@@ -156,7 +149,6 @@ export class SubscriptionOAuthCoordinator<
     this.storage = init.storage;
     this.policy = init.policy;
     this.client = init.client ?? formGrantClient(init.policy.tokenEndpoint);
-    this.now = init.now ?? Date.now;
   }
 
   /**
@@ -201,8 +193,9 @@ export class SubscriptionOAuthCoordinator<
     return authorizeRequest(this.policy, port);
   }
 
-  private isExpiringSoon(session: S): boolean {
-    return this.now() + REFRESH_BUFFER_MS >= session.expiresAtMs;
+  /** Whether `session` needs a refresh at `now`, a `Clock` reading. */
+  private isExpiringSoon(session: S, now: number): boolean {
+    return now + REFRESH_BUFFER_MS >= session.expiresAtMs;
   }
 
   /** The stored session, refreshed when expiring soon. */
@@ -231,8 +224,8 @@ export class SubscriptionOAuthCoordinator<
   ): Effect.Effect<S, SubscriptionOAuthError> {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     return refreshToken
-      ? Effect.succeed(
-          this.policy.buildSession(tokens, refreshToken, this.now(), previous),
+      ? Effect.map(Clock.currentTimeMillis, (now) =>
+          this.policy.buildSession(tokens, refreshToken, now, previous),
         )
       : Effect.fail(
           new SubscriptionOAuthError({
@@ -289,7 +282,10 @@ export class SubscriptionOAuthCoordinator<
     const replaced =
       session.accessToken !== previous.accessToken ||
       session.refreshToken !== previous.refreshToken;
-    if (replaced || !this.isExpiringSoon(session)) {
+    if (
+      replaced ||
+      !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
+    ) {
       return session;
     }
     return yield* Effect.fail(
@@ -355,7 +351,10 @@ export class SubscriptionOAuthCoordinator<
         }),
       );
     }
-    if (session.accessToken !== rejected && !this.isExpiringSoon(session))
+    if (
+      session.accessToken !== rejected &&
+      !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
+    )
       return session;
     return yield* this.refresh(session, generation);
   });

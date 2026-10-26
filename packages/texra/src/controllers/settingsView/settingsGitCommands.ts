@@ -50,8 +50,8 @@ export function settingsGitCommands(ports: {
   );
 
   const handlers = {
-    setGitHubToken: () =>
-      Effect.gen(function* () {
+    setGitHubToken: Effect.fn('settingsGitCommands.setGitHubToken')(
+      function* () {
         const token = yield* bindings.prompt.input({
           prompt: GITHUB_TOKEN_PROMPT,
           placeHolder: 'ghp_…',
@@ -69,7 +69,8 @@ export function settingsGitCommands(ports: {
             Effect.andThen(postGitHubTokenStatus),
           ),
         );
-      }),
+      },
+    ),
     removeGitHubToken: () =>
       reported(
         'Failed to remove GitHub token',

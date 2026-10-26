@@ -80,8 +80,7 @@ export const canResume = Effect.fn('canResume')(function* (
         `Failed to read the resume state of run ${runId}: ${decision.cause}`,
       ),
     );
-  if (decision.kind === 'earlierBuild')
-    return yield* Effect.fail(decision.refusal);
+  if (decision.kind === 'earlierBuild') return yield* decision.refusal;
   if (decision.kind === 'none')
     yield* Effect.logWarning(`Run ${runId} is not resumable`).pipe(
       withLogChannel(CHANNEL),

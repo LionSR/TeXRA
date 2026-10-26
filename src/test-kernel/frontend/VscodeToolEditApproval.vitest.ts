@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect, type FileSystem, type Path } from 'effect';
+import { Effect, type FileSystem, type Path, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
@@ -143,9 +143,11 @@ function createApprovalHarness(): ApprovalHarness {
     host: new VscodeToolEditApprovalHost(
       storageRoot,
       testRuntime(),
-      // The roots only back `openBuildDisplay`, which this suite never
-      // invokes; no shared fake exists that builds without a platform host.
+      // The roots and the scope only back `openBuildDisplay`, which this
+      // suite never invokes; no shared fake exists that builds without a
+      // platform host.
       {} as WorkspaceRoots,
+      Scope.makeUnsafe(),
     ),
     session: { request: decide },
   });

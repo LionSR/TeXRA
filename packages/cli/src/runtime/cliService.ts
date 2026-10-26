@@ -12,7 +12,6 @@ import {
   Duration,
   Effect,
   Exit,
-  Queue,
   Scope,
   Stream,
   type Context,
@@ -44,7 +43,7 @@ import {
   ownerIdentity,
   type OwnerId,
 } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { appSignalStream } from '@eventBus/AppSignals';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { EditorHostShape } from '@texra/tools/editorHost';
@@ -239,12 +238,8 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     storageRoot,
     editors,
     open,
-    filesWritten: Stream.callback<readonly string[]>((queue) =>
-      Effect.forkScoped(
-        onAppSignal('workspaceFilesWritten', ({ absolutePaths }) =>
-          Queue.offerUnsafe(queue, absolutePaths),
-        ),
-      ),
+    filesWritten: appSignalStream('workspaceFilesWritten').pipe(
+      Stream.map(({ absolutePaths }) => absolutePaths),
     ),
     opened: Effect.sync(
       () =>

@@ -199,12 +199,10 @@ const executeInBand = Effect.fn('executeInBand')(
     const finished = lastTurn();
     const resultMeta = finished?.resultMeta;
     if (!finished || !resultMeta || resultMeta.producer !== 'subagent') {
-      return yield* Effect.fail(
-        new SubagentDurabilityError({
-          message: `Subagent ${runId} ended without a finished typed result (interrupted before terminal persistence, or the run loop failed).`,
-          cause: loopFailure,
-        }),
-      );
+      return yield* new SubagentDurabilityError({
+        message: `Subagent ${runId} ended without a finished typed result (interrupted before terminal persistence, or the run loop failed).`,
+        cause: loopFailure,
+      });
     }
 
     // How the child ended is the `run.end` row's fact, written by the run's
@@ -260,25 +258,21 @@ const executeInBand = Effect.fn('executeInBand')(
       if (persisted === null) {
         if (childFailed) {
           const error = childError();
-          return yield* Effect.fail(
-            new SubagentDurabilityError({
-              message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-              cause: new AggregateError(
-                readFailure === undefined ? [error] : [error, readFailure],
-                `Subagent ${runId} run and persistence both failed.`,
-              ),
-            }),
-          );
+          return yield* new SubagentDurabilityError({
+            message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+            cause: new AggregateError(
+              readFailure === undefined ? [error] : [error, readFailure],
+              `Subagent ${runId} run and persistence both failed.`,
+            ),
+          });
         }
-        return yield* Effect.fail(
-          new SubagentDurabilityError({
-            message:
-              readFailure === undefined
-                ? `Failed to persist result for subagent ${runId}.`
-                : `Failed to verify the persisted result for subagent ${runId}.`,
-            cause: readFailure,
-          }),
-        );
+        return yield* new SubagentDurabilityError({
+          message:
+            readFailure === undefined
+              ? `Failed to persist result for subagent ${runId}.`
+              : `Failed to verify the persisted result for subagent ${runId}.`,
+          cause: readFailure,
+        });
       }
     }
 
@@ -288,12 +282,10 @@ const executeInBand = Effect.fn('executeInBand')(
       // The child did not fail, so the missing terminal row is an
       // infrastructure gap: the run's lifecycle never committed it, or the
       // read of it failed.
-      return yield* Effect.fail(
-        new SubagentDurabilityError({
-          message: `Subagent ${runId} ended without a terminal record.`,
-          cause: endFailure,
-        }),
-      );
+      return yield* new SubagentDurabilityError({
+        message: `Subagent ${runId} ended without a terminal record.`,
+        cause: endFailure,
+      });
     }
 
     // A caller stop landing here interrupts the join, not the child: the
@@ -368,25 +360,24 @@ export const resumeSubagentInBand = (
 
 /** Await one in-band child's program; interrupting the caller stops the
  *  child by its run id and waits for it to write its own record. */
-const awaitInBand = (
+const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   runId: RunId,
   program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,
-): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
-  Effect.gen(function* () {
-    const runs = registryOf(yield* Runs);
-    const child = yield* Effect.forkChild(program, { startImmediately: true });
-    return yield* Fiber.join(child).pipe(
-      Effect.onInterrupt(() =>
-        Effect.suspend(() =>
-          runs.interruptActive(runId)
-            ? Fiber.await(child)
-            : // No run to stop yet: a loop the launch's hand-off started
-              // meanwhile is stopped once it returns, and awaited to the end.
-              Fiber.interrupt(child).pipe(
-                Effect.andThen(Effect.sync(() => runs.interruptActive(runId))),
-                Effect.andThen(runs.awaitDrained(runId)),
-              ),
-        ),
+): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
+  const runs = registryOf(yield* Runs);
+  const child = yield* Effect.forkChild(program, { startImmediately: true });
+  return yield* Fiber.join(child).pipe(
+    Effect.onInterrupt(() =>
+      Effect.suspend(() =>
+        runs.interruptActive(runId)
+          ? Fiber.await(child)
+          : // No run to stop yet: a loop the launch's hand-off started
+            // meanwhile is stopped once it returns, and awaited to the end.
+            Fiber.interrupt(child).pipe(
+              Effect.andThen(Effect.sync(() => runs.interruptActive(runId))),
+              Effect.andThen(runs.awaitDrained(runId)),
+            ),
       ),
-    );
-  });
+    ),
+  );
+});

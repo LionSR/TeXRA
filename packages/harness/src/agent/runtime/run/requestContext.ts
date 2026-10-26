@@ -16,7 +16,7 @@
  * before a request leaves the process, that the rows it just committed,
  * read back from the store, rebuild that turn exactly.
  */
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 import {
   JsonObjectSchema,
@@ -347,12 +347,13 @@ export const checkRecordedRequest = Effect.fn('requestContext.check')(
       (yield* envFlag('VITEST'));
     if (!on) return;
     const state = yield* Effect.orDie(run.session.runHistory.load(run.runId));
-    let problem: string | null;
-    try {
-      problem = state === null ? 'the run has no rows' : mismatch(state, sent);
-    } catch (error) {
-      problem = toErrorMessage(error);
-    }
+    const problem = Result.merge(
+      Result.try({
+        try: () =>
+          state === null ? 'the run has no rows' : mismatch(state, sent),
+        catch: toErrorMessage,
+      }),
+    );
     if (problem !== null)
       return yield* Effect.die(
         new Error(

@@ -370,8 +370,8 @@ export const databaseLayer = (
       const withTransaction = SqlClient.makeWithTransaction({
         transactionService: sql.transactionService,
         spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: (restore) =>
-          Effect.gen(function* () {
+        acquireConnection: Effect.fn('Database.acquireConnection')(
+          function* (restore) {
             const mode = yield* TxMode;
             const connection = yield* restore(sql.reserve);
             // Runs before the release (added after it): a COMMIT is published
@@ -393,7 +393,8 @@ export const databaseLayer = (
                 : Effect.void,
             );
             return connection;
-          }),
+          },
+        ),
         begin: (connection) =>
           Effect.flatMap(TxMode, (mode) =>
             connection.executeUnprepared(
@@ -839,21 +840,20 @@ export const databaseLayer = (
             ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
           ),
         aggregateState: (ids) => query(readState(ids)),
-        claimOwner: (id) =>
-          Effect.gen(function* () {
-            const state = (yield* query(readState([id])))[0];
-            // A tombstoned row keeps the owner that closed it, but what it
-            // named is gone: nothing holds it, so it reads unclaimed.
-            const owner =
-              state?.closed === true ? null : (state?.ownerId ?? null);
-            if (owner === null) return { ownerId: null, liveness: null };
-            if (owner === identity.ownerId)
-              return { ownerId: owner, liveness: 'self' as const };
-            return {
-              ownerId: owner,
-              liveness: yield* liveness(owner),
-            };
-          }),
+        claimOwner: Effect.fn('Database.claimOwner')(function* (id) {
+          const state = (yield* query(readState([id])))[0];
+          // A tombstoned row keeps the owner that closed it, but what it
+          // named is gone: nothing holds it, so it reads unclaimed.
+          const owner =
+            state?.closed === true ? null : (state?.ownerId ?? null);
+          if (owner === null) return { ownerId: null, liveness: null };
+          if (owner === identity.ownerId)
+            return { ownerId: owner, liveness: 'self' as const };
+          return {
+            ownerId: owner,
+            liveness: yield* liveness(owner),
+          };
+        }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           projected(
             Effect.gen(function* () {
@@ -898,8 +898,8 @@ export const databaseLayer = (
                     .map((row) => row.aggregateId);
                 }),
               ),
-        prepareRunRemoval: (id, mode, expectedStartCommit) =>
-          Effect.gen(function* () {
+        prepareRunRemoval: Effect.fn('Database.prepareRunRemoval')(
+          function* (id, mode, expectedStartCommit) {
             const seen = yield* query(readDependents(id));
             const verdicts = yield* Effect.forEach(othersOf(seen), (owner) =>
               Effect.map(liveness(owner), (v) => [owner, v] as const),
@@ -933,7 +933,8 @@ export const databaseLayer = (
                 ),
               ),
             );
-          }),
+          },
+        ),
         deletions: {
           pending: () => query(decodedRows(pendingDeletions, [])),
           collect: (tombstone, cleanup) =>
@@ -988,17 +989,16 @@ export const databaseLayer = (
               ),
             body,
           ),
-        appendAll: (input) =>
-          Effect.gen(function* () {
-            if (input.length === 0) return [];
-            // Validate and encode before BEGIN IMMEDIATE. The batch shares one clock.
-            const prepared = yield* Effect.try({
-              try: () => input.map(prepareEventDraft),
-              catch: writeFailed,
-            });
-            const at = yield* Clock.currentTimeMillis;
-            return yield* transact(appendRows(prepared, at));
-          }),
+        appendAll: Effect.fn('Database.appendAll')(function* (input) {
+          if (input.length === 0) return [];
+          // Validate and encode before BEGIN IMMEDIATE. The batch shares one clock.
+          const prepared = yield* Effect.try({
+            try: () => input.map(prepareEventDraft),
+            catch: writeFailed,
+          });
+          const at = yield* Clock.currentTimeMillis;
+          return yield* transact(appendRows(prepared, at));
+        }),
       };
     }),
   ).pipe(Layer.provide(Reactivity.layer));

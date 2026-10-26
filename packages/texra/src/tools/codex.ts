@@ -238,7 +238,8 @@ export function runStreamedTurn(
       turnCard = null;
     };
 
-    const onEvent = (event: ThreadEvent): void => {
+    // A failed turn or stream error ends the run as a ToolError.
+    const onEvent = (event: ThreadEvent): Effect.Effect<void, ToolError> => {
       switch (event.type) {
         case 'thread.started':
           logger.openToolCard(buildCodexThreadToolLog(event));
@@ -274,11 +275,16 @@ export function runStreamedTurn(
           break;
         case 'turn.failed':
           finalizeTurnCard('failed', event.error.message);
-          throw new ToolError(event.error.message ?? 'Codex turn failed');
+          return Effect.fail(
+            new ToolError(event.error.message ?? 'Codex turn failed'),
+          );
         case 'error':
           finalizeTurnCard('failed', event.message);
-          throw new ToolError(event.message ?? 'Codex stream error');
+          return Effect.fail(
+            new ToolError(event.message ?? 'Codex stream error'),
+          );
       }
+      return Effect.void;
     };
 
     return Effect.tryPromise({
@@ -287,7 +293,7 @@ export function runStreamedTurn(
     }).pipe(
       Effect.flatMap(({ events }) =>
         Stream.runForEach(Stream.fromAsyncIterable(events, ensureError), (e) =>
-          Effect.try({ try: () => onEvent(e), catch: ensureError }),
+          Effect.suspend(() => onEvent(e)),
         ),
       ),
       Effect.map((): RunResult => {

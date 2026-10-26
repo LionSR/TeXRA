@@ -17,7 +17,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   SetupCommandFailed,
   SetupExtensionInstallFailed,
@@ -33,16 +33,16 @@ const INSTALL_EXTENSION_COMMAND = 'workbench.extensions.installExtension';
 export const vscodeSetupPlatform: SetupPlatformShape = {
   commands: {
     invoke: (commandId, ...args) =>
-      Effect.tryPromise({
-        try: () =>
-          Promise.resolve(vscode.commands.executeCommand(commandId, ...args)),
-        catch: (cause) =>
-          new SetupCommandFailed({
-            message: `VS Code could not run "${commandId}": ${toErrorMessage(cause)}`,
-            commandId,
-            cause,
-          }),
-      }),
+      executeVscodeCommand<unknown>(commandId, ...args).pipe(
+        Effect.mapError(
+          (cause) =>
+            new SetupCommandFailed({
+              message: `VS Code could not run "${commandId}": ${cause.message}`,
+              commandId,
+              cause,
+            }),
+        ),
+      ),
   },
   extensions: {
     // Also what the Lean 4 availability probe reads to see whether the
@@ -50,20 +50,17 @@ export const vscodeSetupPlatform: SetupPlatformShape = {
     isInstalled: (extensionId) =>
       vscode.extensions.getExtension(extensionId) !== undefined,
     install: (extensionId) =>
-      Effect.tryPromise({
-        try: async () => {
-          await vscode.commands.executeCommand(
-            INSTALL_EXTENSION_COMMAND,
-            extensionId,
-          );
-        },
-        catch: (cause) =>
-          new SetupExtensionInstallFailed({
-            message: `VS Code refused to install "${extensionId}": ${toErrorMessage(cause)}`,
-            extensionId,
-            cause,
-          }),
-      }),
+      executeVscodeCommand(INSTALL_EXTENSION_COMMAND, extensionId).pipe(
+        Effect.asVoid,
+        Effect.mapError(
+          (cause) =>
+            new SetupExtensionInstallFailed({
+              message: `VS Code refused to install "${extensionId}": ${cause.message}`,
+              extensionId,
+              cause,
+            }),
+        ),
+      ),
   },
   terminal: runTerminalCommand,
 };

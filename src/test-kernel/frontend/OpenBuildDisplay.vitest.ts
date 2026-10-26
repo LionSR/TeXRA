@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem, type Path } from 'effect';
+import { Effect, Fiber, FileSystem, type Path, type Scope } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
@@ -59,15 +59,15 @@ const roots = {
 /**
  * The host entry's provision for the programs under test: the real
  * filesystem service, with the existence probe this suite drives standing
- * in for the disk.
+ * in for the disk. A scheduled viewer runs in the test's scope.
  */
 const withHostFs = <A, E>(
   program: Effect.Effect<
     A,
     E,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner | Scope.Scope
   >,
-): Effect.Effect<A, E> =>
+): Effect.Effect<A, E, Scope.Scope> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     return yield* program.pipe(

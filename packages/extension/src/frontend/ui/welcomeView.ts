@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
 
 /**
@@ -136,7 +139,10 @@ function renderWelcomeHtml(): string {
 </html>`;
 }
 
-export function registerWelcomeView(context: vscode.ExtensionContext): void {
+export function registerWelcomeView(
+  context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
+): void {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'texra.mainView',
@@ -144,7 +150,18 @@ export function registerWelcomeView(context: vscode.ExtensionContext): void {
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       if (vscode.workspace.workspaceFolders?.length === 1) {
-        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+        // A refused reload leaves the window as it is: say so in the log,
+        // where a user asking why the panel did not open would look.
+        runtime.runFork(
+          executeVscodeCommand('workbench.action.reloadWindow').pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Could not reload the window into the opened folder: ${error.message}`,
+              ),
+            ),
+            withLogChannel('WelcomeView'),
+          ),
+        );
       }
     }),
   );

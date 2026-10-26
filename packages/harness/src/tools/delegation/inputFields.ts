@@ -250,7 +250,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       const storageRoot = yield* fs.realPath(storage).pipe(
         Effect.catchIf(
           (error) => error.reason._tag === 'NotFound',
-          () => Effect.succeed(undefined),
+          () => Effect.void,
         ),
       );
       const references = yield* Effect.forEach(

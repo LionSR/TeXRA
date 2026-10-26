@@ -93,37 +93,35 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
     suppressErrorNotification: true,
   });
   yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      yield* startDetachedChildRunLoop({
-        session,
-        runId,
-        parentRunId,
-        agentName: title,
-        buildLaunch: () =>
-          restore(Clock.currentTimeMillis).pipe(
-            Effect.map((startedAt) =>
-              createScriptRunStrategy({
-                definition,
-                // Registered with its opening, which its run commits.
-                registration: {
-                  identity: { kind: 'script', title },
-                  userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                  parentRunId,
-                  parentCard: call.logId,
-                  parentCallId: call.callId,
-                  description: childRunDescription(title),
-                  ...(grants !== undefined && { grants }),
-                },
-                runId,
+    startDetachedChildRunLoop({
+      session,
+      runId,
+      parentRunId,
+      agentName: title,
+      buildLaunch: () =>
+        restore(Clock.currentTimeMillis).pipe(
+          Effect.map((startedAt) =>
+            createScriptRunStrategy({
+              definition,
+              // Registered with its opening, which its run commits.
+              registration: {
+                identity: { kind: 'script', title },
+                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                 parentRunId,
-                session,
-                startedAt,
-                ...(workingDirectory != null && { workingDirectory }),
-                title,
-              }),
-            ),
+                parentCard: call.logId,
+                parentCallId: call.callId,
+                description: childRunDescription(title),
+                ...(grants !== undefined && { grants }),
+              },
+              runId,
+              parentRunId,
+              session,
+              startedAt,
+              ...(workingDirectory != null && { workingDirectory }),
+              title,
+            }),
           ),
-      });
+        ),
     }),
   );
   return receipt(title, runId, false);

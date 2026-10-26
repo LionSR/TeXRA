@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -96,7 +96,7 @@ function parseWindows(
 
 export function parseChatGptUsage(
   body: unknown,
-  fetchedAt = Date.now(),
+  fetchedAt: number,
 ): ParsedSubscriptionUsage {
   const root = asObject(body);
   const normalizedRateLimits = asObject(root?.rate_limits);
@@ -139,8 +139,11 @@ export function fetchChatGptUsage(
   if (credential.accountId) {
     headers['ChatGPT-Account-Id'] = credential.accountId;
   }
-  return Effect.map(
+  return Effect.flatMap(
     fetchSubscriptionUsage({ url: CHATGPT_USAGE_URL, headers, timeoutMs }),
-    (body) => parseChatGptUsage(body),
+    (body) =>
+      Effect.map(Clock.currentTimeMillis, (fetchedAt) =>
+        parseChatGptUsage(body, fetchedAt),
+      ),
   );
 }

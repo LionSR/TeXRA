@@ -1,5 +1,11 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, FiberHandle } from 'effect';
+import { TestClock } from 'effect/testing';
+import { beforeEach, describe, expect, vi } from 'vitest';
+
+// Local imports
+import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 
 // Type imports
 import type * as vscode from 'vscode';
@@ -19,8 +25,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-const { registerDiffRefresh, disposeDiffRefresh } =
-  await import('@frontend/ui/diffView');
+const { refreshDiffOnLayoutChange } = await import('@frontend/ui/diffView');
 
 function uri(fsPath: string): vscode.Uri {
   return { fsPath } as unknown as vscode.Uri;
@@ -28,33 +33,44 @@ function uri(fsPath: string): vscode.Uri {
 
 describe('diff refresh debounce', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    disposeDiffRefresh();
     mocks.executeCommand.mockClear();
+    mocks.fireViewColumnChange = null;
   });
 
-  it('refreshes once per burst, for the diff registered last', () => {
-    registerDiffRefresh(uri('a-left'), uri('a-right'), 'A');
-    // A column move fires several events within milliseconds: the burst
-    // settles into one refresh, and none of its events is dropped on the
-    // floor the way a leading-edge throttle dropped the trailing ones.
-    mocks.fireViewColumnChange?.();
-    mocks.fireViewColumnChange?.();
-    expect(mocks.executeCommand).not.toHaveBeenCalled();
+  it.effect('refreshes once per burst, for the diff registered last', () =>
+    Effect.gen(function* () {
+      const refresh = yield* FiberHandle.make();
+      yield* FiberHandle.run(
+        refresh,
+        refreshDiffOnLayoutChange(uri('a-left'), uri('a-right'), 'A'),
+      );
+      yield* TestClock.adjust(DIFF_REGISTRATION_DELAY_MS);
+      // A column move fires several events within milliseconds: the burst
+      // settles into one refresh, and none of its events is dropped on the
+      // floor the way a leading-edge throttle dropped the trailing ones.
+      mocks.fireViewColumnChange?.();
+      mocks.fireViewColumnChange?.();
+      yield* Effect.yieldNow;
+      expect(mocks.executeCommand).not.toHaveBeenCalled();
 
-    // A different diff registered inside the window takes the refresh over:
-    // the one that fires shows B, and A is never shown.
-    registerDiffRefresh(uri('b-left'), uri('b-right'), 'B');
-    mocks.fireViewColumnChange?.();
-    vi.runAllTimers();
+      // A different diff registered inside the window takes the refresh over:
+      // the one that fires shows B, and A is never shown.
+      yield* FiberHandle.run(
+        refresh,
+        refreshDiffOnLayoutChange(uri('b-left'), uri('b-right'), 'B'),
+      );
+      yield* TestClock.adjust(DIFF_REGISTRATION_DELAY_MS);
+      mocks.fireViewColumnChange?.();
+      yield* TestClock.adjust('1 second');
 
-    expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
-    expect(mocks.executeCommand).toHaveBeenLastCalledWith(
-      'vscode.diff',
-      uri('b-left'),
-      uri('b-right'),
-      'B',
-      { preserveFocus: true },
-    );
-  });
+      expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
+      expect(mocks.executeCommand).toHaveBeenLastCalledWith(
+        'vscode.diff',
+        uri('b-left'),
+        uri('b-right'),
+        'B',
+        { preserveFocus: true },
+      );
+    }),
+  );
 });

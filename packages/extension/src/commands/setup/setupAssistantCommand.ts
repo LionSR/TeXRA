@@ -12,7 +12,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   announce,
   showLoggedInfoMessage,
@@ -47,6 +46,8 @@ export function launchSetupAssistant(
   /** Bring the panel's "Connect a model" card into view: the one credential
    *  prompt, which the setup card follows once a credential lands. */
   connectModel: Effect.Effect<void, Error, ProcessServices>,
+  /** Reveal the task list, where a setup conversation already running is. */
+  showTasks: Effect.Effect<void, Error>,
 ) {
   return Effect.gen(function* () {
     // Every setup entry point funnels through here (command, status pill,
@@ -69,7 +70,9 @@ export function launchSetupAssistant(
           'The setup assistant is already running. Follow it in the TeXRA panel.',
         ),
       );
-      yield* safeExecuteCommand('texra.showProgressView', [], CHANNEL);
+      yield* showTasks.pipe(
+        Effect.ignore({ log: 'Warn', message: 'Revealing the task list' }),
+      );
       return 'already-running' as const;
     }
 

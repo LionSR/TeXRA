@@ -189,7 +189,7 @@ class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
   /** Scoped ticker; interrupting it never interrupts an active send. */
-  private flushTimer: Fiber.Fiber<never> | null = null;
+  private flushTimer: Fiber.Fiber<number> | null = null;
   private triggers: Queue.Queue<void> | null = null;
   /** One permit: batches leave in order, and the drain joins an active send. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
@@ -232,14 +232,20 @@ class UsageLogServiceImpl {
         Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
       ),
     );
-    const tick = Clock.clockWith((clock) =>
-      Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-        Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-      ),
-    );
+    // The first request waits one interval; the unref'd sleeps never keep
+    // the host process alive.
     this.flushTimer = yield* Effect.forkScoped(
-      Effect.forever(
-        tick.pipe(Effect.andThen(Effect.sync(() => this.requestFlush()))),
+      Clock.clockWith((clock) =>
+        Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
+          Effect.andThen(
+            Effect.sync(() => this.requestFlush()).pipe(
+              Effect.schedule(
+                Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
+              ),
+            ),
+          ),
+          Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+        ),
       ),
       { startImmediately: true },
     );

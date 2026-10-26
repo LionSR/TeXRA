@@ -52,7 +52,7 @@ import {
 } from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
-import { desktopSpawner } from './desktopWindows.js';
+import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { PlatformSecrets, AgentDirectoriesPort } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -143,7 +143,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     /** Each document/project owns one auxiliary transport and its resources.
      *  Callbacks capture the project before any asynchronous file or PTY work,
      *  and a released binding's late callbacks are dropped. */
-    const createProjectWorkspace = (project: DesktopProject) => {
+    const createProjectWorkspace = (
+      project: DesktopProject,
+      spawn: DesktopSpawn,
+    ) => {
       let released = false;
       const post = (message: DesktopWorkspaceReply) =>
         !released && host.post({ ...message, session: project.key });
@@ -166,14 +169,23 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const browserViews = createDesktopBrowserViews({
         getWindow: () => (host.window.isDestroyed() ? undefined : host.window),
         // Electron's window-open handler is the caller here, so the hand-off
-        // runs at this arm rather than reaching the view as a program.
+        // forks on the binding's spawner rather than reaching the view as a
+        // program. The reporting host has shown the user-facing error; the
+        // failure is recorded too.
         openExternalUrl: (url) =>
-          runtime.runPromise(host.previewHost.openExternal(url)),
+          spawn(
+            host.previewHost
+              .openExternal(url)
+              .pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => host.reportBackgroundError(error)),
+                ),
+              ),
+          ),
         onNavigated: (state) =>
           post({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE, ...state }),
         onError: host.reportAsyncError,
         onBlockedExternalUrl: host.reportBackgroundError,
-        onExternalOpenError: host.reportBackgroundError,
       });
       const workspace = createDesktopWorkspaceIpc(
         { postToRenderer: post },
@@ -209,8 +221,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       project: DesktopProject,
     ) {
       const spawn = desktopSpawner(runtime, yield* Scope.Scope, project.root);
-      const { workspace, browserViews, release } =
-        createProjectWorkspace(project);
+      const { workspace, browserViews, release } = createProjectWorkspace(
+        project,
+        spawn,
+      );
       const hosts = host.forProject(project);
       const files = createDesktopFileSelection({
         workspacePath: project.root,
@@ -334,6 +348,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       });
       const hostRequests = createDesktopHostRequests({
         runtime,
+        spawn,
         project,
         secrets: options.secrets,
         draftRequests: options.draftRequests,

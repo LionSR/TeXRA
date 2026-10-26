@@ -231,13 +231,12 @@ export const SelfTool = defineTool({
 
 Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts from \`prompt\` alone. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,
-  execute: (input: SelfInput) =>
-    Effect.gen(function* () {
-      const call = yield* requireToolRun('self');
-      const { script } = call;
-      if (script === null)
-        return errorResult('self() runs only inside a script.');
-      const budget = yield* scriptChildBudget(call.env.roots, script);
-      return yield* budget.withPermits(1)(runSelf(call, input, script));
-    }),
+  execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
+    const call = yield* requireToolRun('self');
+    const { script } = call;
+    if (script === null)
+      return errorResult('self() runs only inside a script.');
+    const budget = yield* scriptChildBudget(call.env.roots, script);
+    return yield* budget.withPermits(1)(runSelf(call, input, script));
+  }),
 });

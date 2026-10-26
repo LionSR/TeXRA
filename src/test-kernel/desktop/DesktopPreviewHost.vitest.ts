@@ -153,6 +153,9 @@ describe('desktop preview host', () => {
         });
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),
+          spawn: (program) => {
+            testRuntime().runFork(program);
+          },
           project: localTestProject(session),
           host: createStubDesktopAgentRunHost({
             ...preview,

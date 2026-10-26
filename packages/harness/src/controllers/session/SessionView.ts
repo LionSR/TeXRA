@@ -184,10 +184,12 @@ export class RemoteSessionView extends Context.Service<
  * `closed` is the session's: once its doors shut, a subscription or a mark
  * writes nothing.
  */
-export const makeSessionViewAccess = (
+export const makeSessionViewAccess = Effect.fn(
+  'SessionView.makeSessionViewAccess',
+)(function* (
   storage: string,
   closed: () => boolean,
-): Effect.Effect<
+): Effect.fn.Return<
   SessionViewAccess,
   DatabaseReadFailed,
   | Scope.Scope
@@ -197,94 +199,91 @@ export const makeSessionViewAccess = (
   | TranscriptSubscriptions
   | LocalRuntimeSource
   | ToolRegistry
-> =>
-  Effect.gen(function* () {
-    const { ref, changes } = yield* SessionViewService;
-    const inputs = yield* SessionInputs;
-    const subscriptions = yield* TranscriptSubscriptions;
-    const local = yield* LocalRuntimeSource;
-    // What the session's runs announce from here on, to this process's
-    // listeners, for the session's life: rows above the commit the store
-    // holds now, so a reopened session never replays history as news.
-    const database = yield* Database;
-    yield* announceRunFacts(
-      changes,
-      (runId) =>
-        database.readAggregate(qualifyAggregateId('run', runId), 1, [
-          'plugin.fact',
-        ]),
-      yield* database.currentCommit,
-      armsOf((yield* ToolRegistry).entries.values()),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(
-          `Session ${storage} stopped announcing its runs' facts`,
-        ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-      ),
-      Effect.forkScoped,
+> {
+  const { ref, changes } = yield* SessionViewService;
+  const inputs = yield* SessionInputs;
+  const subscriptions = yield* TranscriptSubscriptions;
+  const local = yield* LocalRuntimeSource;
+  // What the session's runs announce from here on, to this process's
+  // listeners, for the session's life: rows above the commit the store
+  // holds now, so a reopened session never replays history as news.
+  const database = yield* Database;
+  yield* announceRunFacts(
+    changes,
+    (runId) =>
+      database.readAggregate(qualifyAggregateId('run', runId), 1, [
+        'plugin.fact',
+      ]),
+    yield* database.currentCommit,
+    armsOf((yield* ToolRegistry).entries.values()),
+  ).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning(
+        `Session ${storage} stopped announcing its runs' facts`,
+      ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+    ),
+    Effect.forkScoped,
+  );
+  /** Update the local truth unless the session has closed. */
+  const updateLocal = (
+    next: (state: LocalRuntimeState) => LocalRuntimeState,
+  ): Effect.Effect<void> =>
+    Effect.suspend(() =>
+      closed() ? Effect.void : SubscriptionRef.update(local.ref, next),
     );
-    /** Update the local truth unless the session has closed. */
-    const updateLocal = (
-      next: (state: LocalRuntimeState) => LocalRuntimeState,
-    ): Effect.Effect<void> =>
-      Effect.suspend(() =>
-        closed() ? Effect.void : SubscriptionRef.update(local.ref, next),
-      );
-    return {
-      ref,
-      changes,
-      run: (runId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
-      read: (runIds) =>
-        inputs
-          .read(
-            runIds.map((id) => ({
-              id: qualifyAggregateId('run', id),
-              fromSeq: 0,
-            })),
-            0,
-            false,
-          )
-          .pipe(
-            Stream.runHead,
-            Effect.flatMap(
-              Option.match({
-                onNone: () =>
-                  Effect.die(
-                    new Error('Session input read produced no replay'),
-                  ),
-                onSome: (replay) =>
-                  Effect.sync(() =>
-                    makeSessionViewUpdater(storage).apply(replay),
-                  ),
-              }),
-            ),
+  return {
+    ref,
+    changes,
+    run: (runId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
+    read: (runIds) =>
+      inputs
+        .read(
+          runIds.map((id) => ({
+            id: qualifyAggregateId('run', id),
+            fromSeq: 0,
+          })),
+          0,
+          false,
+        )
+        .pipe(
+          Stream.runHead,
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.die(new Error('Session input read produced no replay')),
+              onSome: (replay) =>
+                Effect.sync(() =>
+                  makeSessionViewUpdater(storage).apply(replay),
+                ),
+            }),
           ),
-      inputs: inputs.read,
-      subscribe: (port, set) =>
-        Effect.suspend(() =>
-          closed() ? Effect.void : subscriptions.set(port, set),
         ),
-      markResumeBlocked: (runId, blocked) =>
-        updateLocal((state) => {
-          const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
-          if (blocked === null && rest.length === state.resumeBlocked.length)
-            return state;
-          // The same block again leaves the state, and the view, as it is.
-          const held = state.resumeBlocked.find((b) => b.runId === runId);
-          if (
-            blocked !== null &&
-            held !== undefined &&
-            held.retry === blocked.retry &&
-            held.reason.kind === blocked.reason.kind &&
-            held.reason.name === blocked.reason.name
-          )
-            return state;
-          return {
-            ...state,
-            resumeBlocked:
-              blocked === null ? rest : [...rest, { runId, ...blocked }],
-          };
-        }),
-      resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
-    };
-  });
+    inputs: inputs.read,
+    subscribe: (port, set) =>
+      Effect.suspend(() =>
+        closed() ? Effect.void : subscriptions.set(port, set),
+      ),
+    markResumeBlocked: (runId, blocked) =>
+      updateLocal((state) => {
+        const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
+        if (blocked === null && rest.length === state.resumeBlocked.length)
+          return state;
+        // The same block again leaves the state, and the view, as it is.
+        const held = state.resumeBlocked.find((b) => b.runId === runId);
+        if (
+          blocked !== null &&
+          held !== undefined &&
+          held.retry === blocked.retry &&
+          held.reason.kind === blocked.reason.kind &&
+          held.reason.name === blocked.reason.name
+        )
+          return state;
+        return {
+          ...state,
+          resumeBlocked:
+            blocked === null ? rest : [...rest, { runId, ...blocked }],
+        };
+      }),
+    resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
+  };
+});

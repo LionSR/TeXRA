@@ -205,22 +205,21 @@ export function buildTerminalTool(
     schema,
     // A repeated call and a malformed payload are the call's own failures,
     // the latter keeping its schema issues for the model's diagnostics.
-    execute: (input) =>
-      Effect.gen(function* () {
-        if (captured) {
-          return yield* Effect.fail(
-            new ToolError('submit_output can only be accepted once per run.'),
-          );
-        }
-        const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
-        captured = true;
-        return {
-          status: 'executed',
-          endTurn: true,
-          value,
-          summary: 'Structured output captured.',
-          output: 'Structured output captured.',
-        } satisfies ToolResult;
-      }),
+    execute: Effect.fn('structuredOutput.execute')(function* (input) {
+      if (captured) {
+        return yield* Effect.fail(
+          new ToolError('submit_output can only be accepted once per run.'),
+        );
+      }
+      const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
+      captured = true;
+      return {
+        status: 'executed',
+        endTurn: true,
+        value,
+        summary: 'Structured output captured.',
+        output: 'Structured output captured.',
+      } satisfies ToolResult;
+    }),
   });
 }

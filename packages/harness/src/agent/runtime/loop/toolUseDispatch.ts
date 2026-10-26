@@ -253,38 +253,36 @@ const makeScheduler = Effect.gen(function* () {
       Deferred.await(slot(finished, seq)),
     /** Take `seq`'s place in `lane` and run `body` once the calls it
      *  follows are done; `body` answers whether this call ended the turn. */
-    run: <E, R>(
+    run: Effect.fn('toolUseDispatch.run')(function* <E, R>(
       seq: number,
       lane: DispatchFacts['lane'],
       body: (endedBefore: boolean) => Effect.Effect<boolean, E, R>,
-    ): Effect.Effect<void, E, R> =>
-      Effect.gen(function* () {
-        yield* turn(seq);
-        const done = slot(finished, seq);
-        const after = yield* Ref.modify(lanes, (placed) =>
-          lane === 'barrier'
-            ? [[placed.barrier, ...placed.since], { barrier: done, since: [] }]
-            : [[placed.barrier], { ...placed, since: [...placed.since, done] }],
-        );
-        yield* Deferred.succeed(slot(taken, seq), undefined);
-        let endedBefore = false;
-        for (const call of after)
-          if (call !== null && (yield* Deferred.await(call)))
-            endedBefore = true;
-        const ran =
-          lane === 'parallel'
-            ? window.withPermits(1)(body(endedBefore))
-            : body(endedBefore);
-        // A call that did not finish (a stop, a durable write that failed)
-        // lets nothing after it run: what follows it is interrupted too.
-        yield* ran.pipe(
-          Effect.onExit((exit) =>
-            Exit.isSuccess(exit)
-              ? Deferred.succeed(done, endedBefore || exit.value)
-              : Deferred.interrupt(done),
-          ),
-        );
-      }),
+    ): Effect.fn.Return<void, E, R> {
+      yield* turn(seq);
+      const done = slot(finished, seq);
+      const after = yield* Ref.modify(lanes, (placed) =>
+        lane === 'barrier'
+          ? [[placed.barrier, ...placed.since], { barrier: done, since: [] }]
+          : [[placed.barrier], { ...placed, since: [...placed.since, done] }],
+      );
+      yield* Deferred.succeed(slot(taken, seq), undefined);
+      let endedBefore = false;
+      for (const call of after)
+        if (call !== null && (yield* Deferred.await(call))) endedBefore = true;
+      const ran =
+        lane === 'parallel'
+          ? window.withPermits(1)(body(endedBefore))
+          : body(endedBefore);
+      // A call that did not finish (a stop, a durable write that failed)
+      // lets nothing after it run: what follows it is interrupted too.
+      yield* ran.pipe(
+        Effect.onExit((exit) =>
+          Exit.isSuccess(exit)
+            ? Deferred.succeed(done, endedBefore || exit.value)
+            : Deferred.interrupt(done),
+        ),
+      );
+    }),
   };
 });
 
@@ -592,7 +590,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         );
       } else {
         const refused = findStorageRefusal(invoked.cause);
-        if (refused) return yield* Effect.fail(runRefusal(runId, refused));
+        if (refused) return yield* runRefusal(runId, refused);
         const { message, diagnostics } = normalizeToolCallError(
           fact.toolName,
           Cause.squash(invoked.cause),

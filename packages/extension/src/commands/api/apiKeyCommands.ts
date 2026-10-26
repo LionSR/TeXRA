@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Queue, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -8,6 +8,8 @@ import {
   type ApiKeyProviderId,
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
+import { withLogChannel } from '@texra-ai/harness';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -59,12 +61,31 @@ function promptForApiKey(
     location: vscode.QuickInputButtonLocation?.Input,
   };
   ib.buttons = [getKeyButton];
-  ib.onDidTriggerButton((button) => {
-    if (button === getKeyButton) {
-      if (keyUrl) void vscode.env.openExternal(vscode.Uri.parse(keyUrl));
-    }
-  });
-  return Effect.callback<string | undefined>((resume) => {
+  // The portal opens beside the prompt, for as long as it is open; a
+  // browser that will not open is logged, and the prompt stays.
+  const openKeyPortal = Stream.callback<void>((queue) =>
+    Effect.acquireRelease(
+      Effect.sync(() =>
+        ib.onDidTriggerButton((button) => {
+          if (button === getKeyButton) Queue.offerUnsafe(queue, undefined);
+        }),
+      ),
+      (listener) => Effect.sync(() => listener.dispose()),
+    ),
+  ).pipe(
+    Stream.runForEach(() =>
+      keyUrl === undefined
+        ? Effect.void
+        : new VscodeExternalOpener()
+            .openExternal(keyUrl)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(error.message).pipe(withLogChannel(CHANNEL)),
+              ),
+            ),
+    ),
+  );
+  const answer = Effect.callback<string | undefined>((resume) => {
     let settled = false;
     const accept = (value: string | undefined): void => {
       if (settled) return;
@@ -77,6 +98,9 @@ function promptForApiKey(
     ib.show();
     return Effect.sync(() => ib.dispose());
   });
+  return Effect.scoped(
+    Effect.forkScoped(openKeyPortal).pipe(Effect.andThen(answer)),
+  );
 }
 
 function pickApiProvider(

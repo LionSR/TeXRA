@@ -262,10 +262,10 @@ export const rejoin = (
  * dropped, and distinct cleanup defects stay in the scope's combined failure,
  * where Effect makes its typed failure a defect as well.
  */
-export const readerAbortSignal = (
-  reader: () => ReadableStreamDefaultReader<unknown> | undefined,
-): Effect.Effect<AbortSignal, never, Scope.Scope> =>
-  Effect.gen(function* () {
+export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
+  function* (
+    reader: () => ReadableStreamDefaultReader<unknown> | undefined,
+  ): Effect.fn.Return<AbortSignal, never, Scope.Scope> {
     yield* Effect.addFinalizer((exit) => {
       const body = reader();
       if (body === undefined) return Effect.void;
@@ -277,7 +277,8 @@ export const readerAbortSignal = (
     });
     const signal = yield* Effect.abortSignal;
     return signal;
-  });
+  },
+);
 
 /**
  * Run a promise-returning provider request under Effect's own abort signal,

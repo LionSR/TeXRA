@@ -264,26 +264,25 @@ function buildOverleafClonePorts(
           undefined,
         ),
       ).pipe(Effect.asVoid),
-    showAuthFailure: (r) =>
-      Effect.gen(function* () {
-        const detail = r.isOverleaf
-          ? 'Your git token may be invalid or expired.'
-          : 'Check your credentials.';
-        const selected = yield* announce(
-          CHANNEL,
-          vscodeUi.error(`Clone failed: authentication error. ${detail}`, {
-            items: r.isOverleaf
-              ? ['Get New Token', 'How to get a token']
-              : ['Retry'],
-          }),
-          undefined,
-        );
-        if (selected === 'Get New Token') {
-          yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
-        } else if (selected === 'How to get a token') {
-          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
-        }
-      }),
+    showAuthFailure: Effect.fn('gitCommands.showAuthFailure')(function* (r) {
+      const detail = r.isOverleaf
+        ? 'Your git token may be invalid or expired.'
+        : 'Check your credentials.';
+      const selected = yield* announce(
+        CHANNEL,
+        vscodeUi.error(`Clone failed: authentication error. ${detail}`, {
+          items: r.isOverleaf
+            ? ['Get New Token', 'How to get a token']
+            : ['Retry'],
+        }),
+        undefined,
+      );
+      if (selected === 'Get New Token') {
+        yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
+      } else if (selected === 'How to get a token') {
+        yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
+      }
+    }),
     showCloneFailed: (message) =>
       Effect.forkDetach(
         announce(CHANNEL, vscodeUi.showErrorMessage(message), undefined),

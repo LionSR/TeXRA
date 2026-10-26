@@ -114,7 +114,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { DisposableStore } from '@texra/platform/disposable';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
@@ -239,7 +238,15 @@ function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
   const scope = Scope.makeUnsafe();
-  onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
+  const chatScope = Scope.makeUnsafe();
+  onTestFinished(() =>
+    Effect.runPromise(
+      Effect.andThen(
+        Scope.close(chatScope, Exit.void),
+        Scope.close(scope, Exit.void),
+      ),
+    ),
+  );
   return {
     // Only when the test brings none: a new session resets the one claim.
     session: overrides.session ?? makeSession(),
@@ -261,7 +268,7 @@ function makeInit(
       };
     },
     getSessionContext: () => makeSessionContext(),
-    disposables: new DisposableStore(),
+    chatScope,
     shutdownScope: scope,
     cwd: '/tmp/workspace',
     getSlashCommandContext: () => {
@@ -572,10 +579,10 @@ describe('createChatSessionController', () => {
         );
 
         const session = makeSession();
-        const disposables = new DisposableStore();
+        const chatScope = Scope.makeUnsafe();
         const shutdownScope = Scope.makeUnsafe();
         const ctrl = createChatSessionController(
-          makeInit({ session, disposables, shutdownScope }),
+          makeInit({ session, chatScope, shutdownScope }),
         );
         yield* Effect.forkChild(
           ctrl.startRootRun(makeRunRequest('Delegate the calculation.')),
@@ -647,7 +654,7 @@ describe('createChatSessionController', () => {
         untrackRun(runs, childRun);
         expect(disposeAdapter).not.toHaveBeenCalled();
 
-        disposables.dispose();
+        yield* Scope.close(chatScope, Exit.void);
         expect(disposeAdapter).toHaveBeenCalledOnce();
         yield* Scope.close(shutdownScope, Exit.void);
         expect(mocks.presentationHostClose).toHaveBeenCalledOnce();

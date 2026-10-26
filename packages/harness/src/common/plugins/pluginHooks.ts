@@ -208,7 +208,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
         return yield* dynamic(`${word} is a path relative to the workspace`);
       const real = yield* fs
         .realPath(word)
-        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+        .pipe(Effect.catchIf(absentReason, () => Effect.void));
       if (real !== undefined && isPathWithin(realRoot, real)) continue;
       const info = real === undefined ? undefined : yield* fs.stat(real);
       files.push({

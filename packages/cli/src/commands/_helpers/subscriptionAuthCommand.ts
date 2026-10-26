@@ -137,28 +137,27 @@ export function defineSubscriptionAuthCommand(
       description: options.logoutDescription,
     },
     args: { ...GLOBAL_ARGS },
-    run: (context) =>
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform(context);
-        const signOutResult = yield* withCliAuthError(
-          signOutCliSubscription(services, options.providerId),
-        );
-        if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
-        const update = signOutResult.value;
-        const payload = {
-          authenticated: false,
-          preferSubscription: update.preferenceError ? null : false,
-          ...(update.preferenceError
-            ? { preferenceError: update.preferenceError }
-            : {}),
-        };
-        emitCliResult(context, {
-          json: payload,
-          ndjson: { kind: ndjsonKind, ...payload },
-          text: subscriptionSignOutOutcomeMessage(options.providerId, update),
-        });
-        return CliExitCode.Success;
-      }),
+    run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
+      const services = yield* initCliPlatform(context);
+      const signOutResult = yield* withCliAuthError(
+        signOutCliSubscription(services, options.providerId),
+      );
+      if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+      const update = signOutResult.value;
+      const payload = {
+        authenticated: false,
+        preferSubscription: update.preferenceError ? null : false,
+        ...(update.preferenceError
+          ? { preferenceError: update.preferenceError }
+          : {}),
+      };
+      emitCliResult(context, {
+        json: payload,
+        ndjson: { kind: ndjsonKind, ...payload },
+        text: subscriptionSignOutOutcomeMessage(options.providerId, update),
+      });
+      return CliExitCode.Success;
+    }),
   });
 
   const statusCommand = defineCliCommand({
@@ -167,23 +166,22 @@ export function defineSubscriptionAuthCommand(
       description: options.statusDescription,
     },
     args: { ...GLOBAL_ARGS },
-    run: (context) =>
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform(context);
-        const statusResult = yield* withCliAuthError(
-          provider.getStatus(services.secrets),
-        );
-        if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-        const { label, ...status } = statusResult.value;
-        emitCliResult(context, {
-          json: status,
-          ndjson: { kind: `${ndjsonKind}-status`, ...status },
-          text: status.signedIn
-            ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
-            : `Not signed in with ${provider.displayName}.`,
-        });
-        return CliExitCode.Success;
-      }),
+    run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
+      const services = yield* initCliPlatform(context);
+      const statusResult = yield* withCliAuthError(
+        provider.getStatus(services.secrets),
+      );
+      if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+      const { label, ...status } = statusResult.value;
+      emitCliResult(context, {
+        json: status,
+        ndjson: { kind: `${ndjsonKind}-status`, ...status },
+        text: status.signedIn
+          ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
+          : `Not signed in with ${provider.displayName}.`,
+      });
+      return CliExitCode.Success;
+    }),
   });
 
   return defineCommand({

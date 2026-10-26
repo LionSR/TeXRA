@@ -7,23 +7,24 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Result, Schema } from 'effect';
+import { Effect, Fiber, Result, Schema, Stream } from 'effect';
 
 import { Skills, hasExtension } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
+import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { syncInlineCriticism } from '@frontend/latex/inlineCriticism';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import {
+  executeVscodeCommand,
+  safeExecuteCommand,
+} from '@frontend/system/commandUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
@@ -127,14 +128,7 @@ export class SettingsViewMessageHandler {
               ).pipe(Effect.asVoid)
             : showDocument(() => vscode.workspace.openTextDocument(filePath)),
         revealPath: (filePath) =>
-          Effect.tryPromise({
-            try: () =>
-              vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(filePath),
-              ),
-            catch: ensureError,
-          }),
+          executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
         // An untitled buffer holds the text, so Ctrl+S prompts for a new
         // location instead of writing back over the source.
         showReadOnlyYaml: (_fileName, text) =>
@@ -166,9 +160,6 @@ export class SettingsViewMessageHandler {
         // The status-bar tooltip paints the approval policy outside this
         // view's round-trip, so it follows the policy on its own signal.
         stateSettingApplied: (key) => {
-          if (key === TexraStateKey.INLINE_CRITICISM_ENABLED) {
-            return syncInlineCriticism();
-          }
           if (key !== APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
           return Effect.sync(() =>
             emitAppSignal('approvalPolicyChanged', undefined),
@@ -199,9 +190,9 @@ export class SettingsViewMessageHandler {
           this.body.followToolAvailability,
           ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
             (signal) =>
-              onAppSignal(signal, (payload) => {
+              Stream.runForEach(appSignalStream(signal), (payload) => {
                 const work = repaintOn[signal](payload as never);
-                if (work) runtime.runFork(settle(work));
+                return work ? Effect.forkChild(settle(work)) : Effect.void;
               }),
           ),
         ],

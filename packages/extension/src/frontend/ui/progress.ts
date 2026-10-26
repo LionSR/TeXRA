@@ -22,14 +22,14 @@ type ProgressReporter = vscode.Progress<{
  * resolves the promise VS Code is waiting on and the notification cannot
  * outlive the work.
  */
-export const withVSCodeProgress = <A, E, R>(
-  options: vscode.ProgressOptions,
-  body: (
-    progress: ProgressReporter,
-    token: vscode.CancellationToken,
-  ) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.gen(function* () {
+export const withVSCodeProgress = Effect.fn('progress.withVSCodeProgress')(
+  function* <A, E, R>(
+    options: vscode.ProgressOptions,
+    body: (
+      progress: ProgressReporter,
+      token: vscode.CancellationToken,
+    ) => Effect.Effect<A, E, R>,
+  ): Effect.fn.Return<A, E, R> {
     let taskSettled!: () => void;
     const bodyDone = new Promise<void>((resolve) => {
       taskSettled = resolve;
@@ -52,4 +52,5 @@ export const withVSCodeProgress = <A, E, R>(
       yield* Effect.promise(() => dismissed);
       return yield* exit;
     }).pipe(Effect.ensuring(Effect.sync(() => taskSettled())));
-  });
+  },
+);

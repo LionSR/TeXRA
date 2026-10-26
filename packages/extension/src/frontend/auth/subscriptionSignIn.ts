@@ -94,8 +94,8 @@ function vscodePresenter(
         ),
         Effect.asVoid,
       ),
-    presentSignInUrl: (url) =>
-      Effect.gen(function* () {
+    presentSignInUrl: Effect.fn('subscriptionSignIn.presentSignInUrl')(
+      function* (url) {
         // `openExternal` always targets the system default browser. The
         // loopback callback accepts the redirect from *any* browser, so ask up
         // front instead of racing an auto-launched tab against a dismissible
@@ -123,7 +123,8 @@ function vscodePresenter(
           return yield* Effect.fail(new SubscriptionSignInCancelled());
         }
         yield* externalOpener.openExternal(url);
-      }),
+      },
+    ),
   };
 }
 

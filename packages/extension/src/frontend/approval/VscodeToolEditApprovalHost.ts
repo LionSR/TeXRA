@@ -7,7 +7,7 @@
  * it leaves the request pending on its card, where Open diff reopens it.
  */
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { pluralize } from '@texra-ai/harness/transcript';
@@ -41,12 +41,17 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
-    Effect.asVoid(openBuildDisplayIfTex(this.roots, location, options));
+    openBuildDisplayIfTex(this.roots, location, options).pipe(
+      Effect.asVoid,
+      Effect.provideService(Scope.Scope, this.scope),
+    );
 
   constructor(
     private readonly storageDirectory: string,
     private readonly runtime: ProcessRuntime,
     private readonly roots: WorkspaceRoots,
+    /** The view's scope, which a scheduled PDF viewer open runs in. */
+    private readonly scope: Scope.Scope,
   ) {}
 
   stagePreview(

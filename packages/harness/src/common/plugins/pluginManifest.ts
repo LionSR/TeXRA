@@ -137,7 +137,7 @@ export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(file).pipe(
-      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      Effect.catchIf(absentReason, () => Effect.void),
       Effect.mapError(ioError),
     );
     if (text === undefined) return undefined;

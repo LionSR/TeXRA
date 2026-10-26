@@ -299,23 +299,24 @@ export function createHostSnapshotSource(
       Effect.sync(() => {
         recording = next;
       }).pipe(Effect.andThen(publish)),
-    showAgentConfigBanner: (agentName) =>
-      Effect.gen(function* () {
-        // An unreadable setting is reported and the banner offers the agent
-        // settings, which always open, instead of a directory it cannot name.
-        const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
-          dirs.customConfigured(),
-        ).pipe(
-          Effect.catch((cause) =>
-            Effect.sync(() => {
-              options.onError(cause);
-              return false;
-            }),
-          ),
-        );
-        agentConfig = { visible: true, agentName, customDirSet };
-        yield* publish;
-      }),
+    showAgentConfigBanner: Effect.fn(
+      'hostSnapshotSource.showAgentConfigBanner',
+    )(function* (agentName) {
+      // An unreadable setting is reported and the banner offers the agent
+      // settings, which always open, instead of a directory it cannot name.
+      const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
+        dirs.customConfigured(),
+      ).pipe(
+        Effect.catch((cause) =>
+          Effect.sync(() => {
+            options.onError(cause);
+            return false;
+          }),
+        ),
+      );
+      agentConfig = { visible: true, agentName, customDirSet };
+      yield* publish;
+    }),
     clearAgentConfigBanner: Effect.suspend(() => {
       if (!agentConfig.visible) return Effect.void;
       agentConfig = { visible: false };

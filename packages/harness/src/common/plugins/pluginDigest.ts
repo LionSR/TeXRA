@@ -143,7 +143,7 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
       // An argument that names nothing is not a file; any other failure is.
       const real = yield* fs
         .realPath(candidate)
-        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+        .pipe(Effect.catchIf(absentReason, () => Effect.void));
       if (real === undefined || isPathWithin(realRoot, real)) continue;
       const info = yield* fs.stat(real);
       if (info.type === 'File')
@@ -171,30 +171,29 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
  * or names; and each hook's files outside the plugin, a script by its
  * content and a program on PATH by its path, size and date.
  */
-export const pluginDigest = (
+export const pluginDigest = Effect.fn('pluginDigest')(function* (
   root: string,
   plugin: ResolvedPlugin,
   key: string,
-) =>
-  Effect.gen(function* () {
-    const files = yield* pluginFiles(root);
-    const servers = yield* Effect.forEach(plugin.mcpServers, (server) =>
-      Effect.map(externalFiles(root, server), (external) => ({
-        name: server.name,
-        command: server.command,
-        args: server.args,
-        env: envDigest(key, server.env),
-        external,
-      })),
-    );
-    // Each hook's exact text, and what a static one runs outside the plugin.
-    const hooks = yield* Effect.forEach(plugin.hooks.hooks, (hook) =>
-      Effect.map(pinHook(root, hook), (pin) => ({
-        id: hook.id,
-        command: hook.command,
-        args: hook.args ?? null,
-        pin,
-      })),
-    );
-    return sha256Hex(stableStringify({ files, servers, hooks }) ?? '');
-  });
+) {
+  const files = yield* pluginFiles(root);
+  const servers = yield* Effect.forEach(plugin.mcpServers, (server) =>
+    Effect.map(externalFiles(root, server), (external) => ({
+      name: server.name,
+      command: server.command,
+      args: server.args,
+      env: envDigest(key, server.env),
+      external,
+    })),
+  );
+  // Each hook's exact text, and what a static one runs outside the plugin.
+  const hooks = yield* Effect.forEach(plugin.hooks.hooks, (hook) =>
+    Effect.map(pinHook(root, hook), (pin) => ({
+      id: hook.id,
+      command: hook.command,
+      args: hook.args ?? null,
+      pin,
+    })),
+  );
+  return sha256Hex(stableStringify({ files, servers, hooks }) ?? '');
+});
