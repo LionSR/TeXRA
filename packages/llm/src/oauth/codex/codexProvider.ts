@@ -22,7 +22,10 @@ import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
-import { SubscriptionSessionBaseSchema } from '../subscriptionSessionSchema.js';
+import {
+  SubscriptionSessionBaseSchema,
+  SubscriptionTokenResponseSchema,
+} from '../subscriptionSessionSchema.js';
 import type {
   CredentialStore,
   SecretsFailed,
@@ -96,20 +99,6 @@ const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 // Schema-first: define the schemas, derive the TS types. The stored bundle is
 // the canonical camelCase shape; the raw token-endpoint response is snake_case
 // and transformed at the entry point.
-
-/** Raw response from the OAuth token endpoint (code exchange + refresh). */
-const CodexTokenResponseSchema = Schema.Struct({
-  access_token: Schema.String.check(Schema.isMinLength(1)),
-  // Refresh responses may omit a new refresh_token; the coordinator keeps the
-  // previous one in that case.
-  refresh_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  id_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  expires_in: Schema.Number,
-});
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 const CodexSessionSchema = SubscriptionSessionBaseSchema.mapFields(
@@ -258,7 +247,7 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   tokenEndpoint: {
     tokenUrl: CODEX_TOKEN_URL,
     clientId: CODEX_CLIENT_ID,
-    tokenResponseSchema: CodexTokenResponseSchema,
+    tokenResponseSchema: SubscriptionTokenResponseSchema,
   },
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
   sessionChangedMessage: 'ChatGPT session changed while refreshing. Try again.',

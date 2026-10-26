@@ -36,3 +36,24 @@ export function firstEventOrTimeout<T>(
     return Effect.sync(dispose);
   }).pipe(Effect.timeoutOption(timeoutMs));
 }
+
+/**
+ * Complete once `token` is cancelled, at once when it already is. The token
+ * fires its event only once, at `cancel()`, so a cancel that came before this
+ * subscribed shows only on the flag. The listener is disposed on both exits.
+ */
+export function tokenCancelled(
+  token: vscode.CancellationToken,
+): Effect.Effect<void> {
+  return Effect.callback<void>((resume) => {
+    if (token.isCancellationRequested) {
+      resume(Effect.void);
+      return;
+    }
+    const listener = token.onCancellationRequested(() => {
+      listener.dispose();
+      resume(Effect.void);
+    });
+    return Effect.sync(() => listener.dispose());
+  });
+}

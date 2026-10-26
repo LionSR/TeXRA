@@ -6,7 +6,8 @@
  * top of this base rather than restated. The schema is the single source of
  * truth for the shape: the coordinator's `SubscriptionSession` is derived
  * from it, so a field added here reaches it without a hand-written mirror to
- * keep in step.
+ * keep in step. The same goes for the token-endpoint response the sign-in
+ * flows decode.
  */
 import { Schema } from 'effect';
 
@@ -17,4 +18,20 @@ export const SubscriptionSessionBaseSchema = Schema.Struct({
   idToken: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Absolute expiry (ms since epoch). */
   expiresAtMs: Schema.Number,
+});
+
+/**
+ * Raw token-endpoint response shared by the authorization-code and refresh
+ * grants. Refresh responses may omit a new `refresh_token`; the coordinator
+ * keeps the previous one in that case.
+ */
+export const SubscriptionTokenResponseSchema = Schema.Struct({
+  access_token: Schema.String.check(Schema.isMinLength(1)),
+  refresh_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  id_token: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
+  expires_in: Schema.Number,
 });

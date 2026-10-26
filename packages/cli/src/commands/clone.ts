@@ -51,9 +51,9 @@ function buildOverleafClonePorts(
           : spec.tokenHint;
         if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
           return yield* Effect.fail(
-            new CliUsageError(
-              `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
-            ),
+            new CliUsageError({
+              message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+            }),
           );
         }
         if (tokenGuidance) writeTextStderr(tokenGuidance);
@@ -181,15 +181,17 @@ export const cloneCommand = withUsageSections(
     run: (context, ctx) => {
       const remote = parseLatexGitUrl(ctx.args.project);
       if (!remote) {
-        throw new CliUsageError(
-          'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
-        );
+        throw new CliUsageError({
+          message:
+            'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
+        });
       }
 
       if (ctx.args.destination && ctx.args.cwd) {
-        throw new CliUsageError(
-          'Pass the clone destination either as the second argument or with --cwd, not both.',
-        );
+        throw new CliUsageError({
+          message:
+            'Pass the clone destination either as the second argument or with --cwd, not both.',
+        });
       }
       const workspacePath = ctx.args.destination
         ? resolve(context.cwd, ctx.args.destination)

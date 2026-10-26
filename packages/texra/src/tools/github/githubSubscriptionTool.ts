@@ -548,7 +548,9 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
   ) {
     yield* requireToken();
     const cwd =
-      parseWorkingDirectory(input.working_directory) ?? workingDirectory;
+      (yield* Effect.fromResult(
+        parseWorkingDirectory(input.working_directory),
+      )) ?? workingDirectory;
     if (!cwd) {
       return yield* Effect.fail(
         new ToolError(

@@ -16,7 +16,6 @@ import {
   Exit,
   Option,
   Queue,
-  Result,
   Schema,
   Scope,
   Semaphore,
@@ -163,28 +162,23 @@ function storeOps(rows: readonly DisplaySessionEvent[]): StoreOp[] {
   return ops;
 }
 
+/** Replaces an effect's failure with a `HistoryQueryFailed` carrying it. */
+const failedWith = (message: string) =>
+  Effect.mapError(
+    (cause: unknown) => new HistoryQueryFailed({ message, cause }),
+  );
+
 const request = Effect.fn('HistoryQuery.request')(function* (
   store: Store,
   message: Record<string, unknown>,
 ) {
   yield* Queue.offer(store.requests, JSON.stringify(message));
   const line = yield* Queue.take(store.replies).pipe(
-    Effect.mapError(
-      (cause) =>
-        new HistoryQueryFailed({
-          message: 'The history query process exited.',
-          cause,
-        }),
-    ),
+    failedWith('The history query process exited.'),
   );
-  const reply = Schema.decodeUnknownResult(ReplyLineSchema)(line);
-  if (Result.isFailure(reply)) {
-    return yield* new HistoryQueryFailed({
-      message: 'The history query process sent an unreadable reply.',
-      cause: reply.failure,
-    });
-  }
-  return reply.success;
+  return yield* Schema.decodeUnknownEffect(ReplyLineSchema)(line).pipe(
+    failedWith('The history query process sent an unreadable reply.'),
+  );
 });
 
 const failedStep =
@@ -357,14 +351,9 @@ export class HistoryQuery {
           message: reply.value.message,
         });
       }
-      const page = Schema.decodeUnknownResult(PageSchema)(reply.value.value);
-      if (!Result.isSuccess(page)) {
-        return yield* new HistoryQueryFailed({
-          message: 'The history query process sent an unreadable page.',
-          cause: page.failure,
-        });
-      }
-      return page.success;
+      return yield* Schema.decodeUnknownEffect(PageSchema)(
+        reply.value.value,
+      ).pipe(failedWith('The history query process sent an unreadable page.'));
     });
   }
 

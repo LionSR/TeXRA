@@ -6,7 +6,6 @@ import {
   executeCommand,
   envFlag,
 } from '@texra-ai/harness/node';
-import { parseJsonWith } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
   fetchJsonStringField,
@@ -190,7 +189,9 @@ function parseHomebrewFormulaVersion(
   stdout: string,
   formula: string,
 ): string | undefined {
-  const parsed = parseJsonWith(stdout, HomebrewInfoSchema);
+  const parsed = Schema.decodeUnknownResult(
+    Schema.fromJsonString(HomebrewInfoSchema),
+  )(stdout);
   if (Result.isFailure(parsed)) return undefined;
   const entry = parsed.success.formulae?.find((f) => f?.name === formula);
   return entry?.versions?.stable ?? undefined;

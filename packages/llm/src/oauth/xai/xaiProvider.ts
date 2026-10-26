@@ -20,7 +20,10 @@ import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
-import { SubscriptionSessionBaseSchema } from '../subscriptionSessionSchema.js';
+import {
+  SubscriptionSessionBaseSchema,
+  SubscriptionTokenResponseSchema,
+} from '../subscriptionSessionSchema.js';
 import type {
   CredentialStore,
   SecretsFailed,
@@ -99,30 +102,25 @@ export const XAI_DEVICE_DEFAULT_EXPIRES_SEC = 5 * 60;
 export const XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC = 5;
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
-export const XaiTokenResponseSchema = Schema.Struct({
-  access_token: Schema.String.check(Schema.isMinLength(1)),
-  refresh_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  id_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  // Provider-boundary guard: absent or non-positive expires_in is not a
-  // security decision — fall back to a short default and let JWT exp / 401
-  // drive the real refresh. Prefer access JWT exp in buildSession when present.
-  expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString])
-    .check(Schema.isGreaterThan(0))
-    .pipe(
-      Schema.catchDecoding(() =>
-        Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
+export const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
+  Struct.assign({
+    // Provider-boundary guard: absent or non-positive expires_in is not a
+    // security decision — fall back to a short default and let JWT exp / 401
+    // drive the real refresh. Prefer access JWT exp in buildSession when present.
+    expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString])
+      .check(Schema.isGreaterThan(0))
+      .pipe(
+        Schema.catchDecoding(() =>
+          Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
+        ),
+      )
+      .pipe(
+        Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
       ),
-    )
-    .pipe(
-      Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
-    ),
-  token_type: Schema.optional(Schema.NullOr(Schema.String)),
-  scope: Schema.optional(Schema.NullOr(Schema.String)),
-});
+    token_type: Schema.optional(Schema.NullOr(Schema.String)),
+    scope: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+);
 
 /** The persisted OAuth session bundle. */
 const XaiSessionSchema = SubscriptionSessionBaseSchema.mapFields(

@@ -31,7 +31,7 @@ export const completionCommand = defineCommand({
         ),
       );
     } catch (error) {
-      throw new CliUsageError(toErrorMessage(error));
+      throw new CliUsageError({ message: toErrorMessage(error) });
     }
     setExitCode(CliExitCode.Success);
   },

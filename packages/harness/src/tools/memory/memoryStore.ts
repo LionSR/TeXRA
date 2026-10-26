@@ -12,12 +12,12 @@
  * lane, as every memory tool command does, so an edit from a host never races
  * an agent's edit beneath it.
  */
-import { Effect, type PlatformError } from 'effect';
+import { Effect, Result, type PlatformError } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
+import { ToolError } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   deleteMemoryPath,
@@ -33,9 +33,9 @@ import {
   toDisplayPath,
 } from './memoryUtils';
 
-/** The storage path of a memory named in any of the three forms; throws on
+/** The storage path of a memory named in any of the three forms; fails on
  *  a path outside the memory root. */
-function storagePathOf(input: string): string {
+function storagePathOf(input: string): Result.Result<string, ToolError> {
   const named = normalizeFilePath(input);
   if (
     !named ||
@@ -54,8 +54,10 @@ function storagePathOf(input: string): string {
     );
   }
   if (named.startsWith('/') || /^[A-Za-z]:\//.test(named)) {
-    throw new Error(
-      `Invalid memory path "${named}". Use ${MEMORY_DISPLAY_ROOT}, ${MEMORY_DISPLAY_ROOT}/<file>, ${WORKSPACE_STORAGE_LAYOUT.memory}/<file>, or a filename relative to ${MEMORY_DISPLAY_ROOT}.`,
+    return Result.fail(
+      new ToolError(
+        `Invalid memory path "${named}". Use ${MEMORY_DISPLAY_ROOT}, ${MEMORY_DISPLAY_ROOT}/<file>, ${WORKSPACE_STORAGE_LAYOUT.memory}/<file>, or a filename relative to ${MEMORY_DISPLAY_ROOT}.`,
+      ),
     );
   }
   return displayToStoragePath(`${MEMORY_DISPLAY_ROOT}/${named}`);
@@ -63,7 +65,7 @@ function storagePathOf(input: string): string {
 
 /** A memory's storage path, or why the name is not one. */
 const storagePath = (input: string): Effect.Effect<string, Error> =>
-  Effect.try({ try: () => storagePathOf(input), catch: ensureError });
+  Effect.fromResult(storagePathOf(input));
 
 /** The storage path of one memory file a mutation acts on: the memory root
  *  itself is no memory, so a delete or pin of it is refused rather than

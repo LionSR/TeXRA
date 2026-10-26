@@ -443,10 +443,12 @@ export async function runChat(
   // when `useInput` mounts) caused capability discovery to flip raw mode off
   // ~250ms in, breaking input. Capability-gated notifications fall back to
   // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
-  const terminalCaps = await discoverTerminalCapabilities({
-    stdin: process.stdin,
-    stdout: process.stdout,
-  });
+  const terminalCaps = await runtime.runPromise(
+    discoverTerminalCapabilities({
+      stdin: process.stdin,
+      stdout: process.stdout,
+    }),
+  );
 
   const disposables = new DisposableStore();
   // The one session state the TUI renders (PRD 10.1): the session's fold

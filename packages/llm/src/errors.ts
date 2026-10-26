@@ -267,16 +267,6 @@ export const authOrRejectionKind = (
     : 'provider-rejection';
 
 /**
- * Parses JSON out of provider stream/error text, mapping a parse failure to
- * the caller's own `ModelError` instead of throwing a raw `SyntaxError`.
- */
-export const parseJsonOrModelError = (
-  text: string,
-  onMalformed: (cause: unknown) => ModelError,
-): Effect.Effect<unknown, ModelError> =>
-  Effect.try({ try: () => JSON.parse(text) as unknown, catch: onMalformed });
-
-/**
  * The delay one response asks the caller to wait, in milliseconds:
  * `retry-after-ms` where the provider sends it, else `retry-after` as
  * seconds or as an HTTP date. Undefined when the response says nothing —

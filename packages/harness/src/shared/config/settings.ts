@@ -279,23 +279,6 @@ function state<S extends Schema.Codec<unknown, unknown>>(
   ) as Effect.Effect<S['Type'], StateReadFailed>;
 }
 
-/**
- * {@link state} without the snap to the default, as {@link inspect} is for a
- * catalog row: a present value that fails the schema comes back `invalid`
- * with its cause. For a read-modify-write, where a write built from the
- * default would replace what is stored. Absence still reads as the default.
- */
-function inspectState<S extends Schema.Codec<unknown, unknown>>(
-  store: Pick<StateStore, 'get'>,
-  key: string,
-  schema: S,
-): Effect.Effect<StoredSetting<S['Type']>, StateReadFailed> {
-  // cast: a `value` is what `schema` parsed.
-  return Effect.map(store.get(key), (raw) =>
-    classifyStored(schema, raw),
-  ) as Effect.Effect<StoredSetting<S['Type']>, StateReadFailed>;
-}
-
 /** Every read and write of a setting; see the module comment. */
 export const Settings = Object.freeze({
   get,
@@ -304,5 +287,4 @@ export const Settings = Object.freeze({
   set,
   reset,
   state,
-  inspectState,
 } as const);

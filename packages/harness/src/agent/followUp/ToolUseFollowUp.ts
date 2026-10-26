@@ -121,9 +121,8 @@ export type Resumed = {
 
 /** The resumes in flight here, by run. */
 export class Resumes {
-  /** The runs whose resume is in flight here. */
-  readonly inFlight = new Set<RunId>();
-  private readonly running = new Map<
+  /** The resumes in flight here, by run; only `once` changes it. */
+  readonly running = new Map<
     RunId,
     { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
   >();
@@ -146,12 +145,10 @@ export class Resumes {
       }
       const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
       this.running.set(runId, { done, joiners: 0 });
-      this.inFlight.add(runId);
       return resume.pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
             this.running.delete(runId);
-            this.inFlight.delete(runId);
             Deferred.doneUnsafe(done, exit);
           }),
         ),

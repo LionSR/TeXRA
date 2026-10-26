@@ -12,7 +12,6 @@ import {
   resolveWritableTarget,
 } from '@tools/fileEditFlow';
 import { pluralize } from '@utils/text/stringUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -43,43 +42,40 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
 > {
   const { old_str, new_str, replace_all } = input;
-  const prepared = yield* resolveWritableTarget(input.path, {
-    validate: ({ displayPath }) => {
-      if (old_str.length === 0) {
-        throw new ToolError(
-          `old_str must not be empty for ${displayPath}. ` +
-            `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
-        );
-      }
-    },
-  });
+  const prepared = yield* resolveWritableTarget(input.path);
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
   const { path, displayPath, exists, originalContent } = prepared.target;
+  if (old_str.length === 0) {
+    return yield* Effect.fail(
+      new ToolError(
+        `old_str must not be empty for ${displayPath}. ` +
+          `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
+      ),
+    );
+  }
 
   // A missing or ambiguous match is the model's error to correct, so it stays
   // a failure the tool runner reports rather than a defect.
-  const replacement = yield* Effect.try({
-    try: () =>
-      replaceLiteralMatches({
-        content: originalContent,
-        search: old_str,
-        replacement: new_str,
-        mode: replace_all ? 'all' : 'unique',
-        notFoundError: () =>
-          `old_str not found in ${displayPath}.\n` +
-          `To fix:\n` +
-          `- Re-read the file: content may have changed since last read\n` +
-          `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
-        multipleMatchesError: ({ count }) =>
-          `old_str matches ${count} locations in ${displayPath}.\n` +
-          `To fix, either:\n` +
-          `- Include more surrounding context to make old_str unique\n` +
-          `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
-      }),
-    catch: ensureError,
-  });
+  const replacement = yield* Effect.fromResult(
+    replaceLiteralMatches({
+      content: originalContent,
+      search: old_str,
+      replacement: new_str,
+      mode: replace_all ? 'all' : 'unique',
+      notFoundError: () =>
+        `old_str not found in ${displayPath}.\n` +
+        `To fix:\n` +
+        `- Re-read the file: content may have changed since last read\n` +
+        `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
+      multipleMatchesError: ({ count }) =>
+        `old_str matches ${count} locations in ${displayPath}.\n` +
+        `To fix, either:\n` +
+        `- Include more surrounding context to make old_str unique\n` +
+        `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
+    }),
+  );
 
   const occurrenceWord = pluralize(replacement.count, 'occurrence');
   return yield* applyApprovedFileEdit({

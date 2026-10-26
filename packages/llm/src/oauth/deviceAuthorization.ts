@@ -15,7 +15,6 @@
  */
 import { Clock, Duration, Effect, Ref, Schedule, Schema } from 'effect';
 
-import { toErrorMessage } from './support.js';
 import type {
   SubscriptionCoordinator,
   SubscriptionSession,
@@ -66,12 +65,6 @@ const MAX_CONSECUTIVE_TRANSIENTS = 3;
 class DeviceCodeTimedOut extends Schema.TaggedError<DeviceCodeTimedOut>()(
   'DeviceCodeTimedOut',
   { message: Schema.String },
-) {}
-
-/** The coordinator rejected while persisting the approved session. */
-class SessionCompletionFailed extends Schema.TaggedError<SessionCompletionFailed>()(
-  'SessionCompletionFailed',
-  { message: Schema.String, cause: Schema.Defect() },
 ) {}
 
 const DEVICE_CODE_TIMED_OUT_MESSAGE =
@@ -202,15 +195,5 @@ export const completeDeviceSession = Effect.fn(
   'deviceAuthorization.completeDeviceSession',
 )(function* <Session, E, R>(complete: () => Effect.Effect<Session, E, R>) {
   yield* Effect.yieldNow;
-  return yield* Effect.uninterruptible(
-    complete().pipe(
-      Effect.mapError(
-        (cause) =>
-          new SessionCompletionFailed({
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      ),
-    ),
-  );
+  return yield* Effect.uninterruptible(complete());
 });

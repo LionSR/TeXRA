@@ -22,7 +22,11 @@ import {
   type ResultMeta,
   type RunId,
 } from '@shared/schemas';
-import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
+import type {
+  DatabaseClaimError,
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+} from '@shared/session/database';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runState';
@@ -186,29 +190,30 @@ export const parentAdmission = (
   trace: AgentTrace | undefined,
 ): Effect.Effect<
   { readonly rows: readonly RunInputDraft[]; readonly sent: Sent },
-  Error,
+  DatabaseClaimError,
   Scope.Scope
-> =>
-  session.followUps.admission(to, item, options).pipe(
-    Effect.catchIf(
-      (error) =>
-        (error instanceof DatabaseNotOwner && error.closed) ||
-        error instanceof DatabaseReadFailed,
-      (error) =>
-        Effect.as(
-          warnOnCommit(
-            session,
-            trace,
-            `Parent run ${to} is closed or cannot be read.`,
-            { parentRunId: to, error },
-          ),
-          {
-            rows: [],
-            sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
-          },
-        ),
-    ),
+> => {
+  const refused = (error: DatabaseNotOwner | DatabaseReadFailed) =>
+    Effect.as(
+      warnOnCommit(
+        session,
+        trace,
+        `Parent run ${to} is closed or cannot be read.`,
+        { parentRunId: to, error },
+      ),
+      {
+        rows: [],
+        sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
+      },
+    );
+  return session.followUps.admission(to, item, options).pipe(
+    Effect.catchTags({
+      DatabaseReadFailed: refused,
+      DatabaseNotOwner: (error) =>
+        error.closed ? refused(error) : Effect.fail(error),
+    }),
   );
+};
 
 /**
  * The parent's half of a turn result, appended with the child's rows; a

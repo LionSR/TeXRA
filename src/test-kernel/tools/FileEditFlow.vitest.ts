@@ -1,3 +1,4 @@
+import { Result } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { ToolError } from '@shared/schemas';
@@ -18,18 +19,18 @@ describe('replaceLiteralMatches', () => {
     '\\sum_{i=1}^{n} $x_i$',
   ] as const;
 
-  it('throws the not-found error for absent and empty needles', () => {
+  it('fails with the not-found error for absent and empty needles', () => {
     const request = {
       content: 'alpha',
       replacement: 'delta',
       mode: 'unique',
       notFoundError,
     } as const;
-    expect(() => replaceLiteralMatches({ ...request, search: 'zzz' })).toThrow(
-      new ToolError('missing'),
+    expect(replaceLiteralMatches({ ...request, search: 'zzz' })).toEqual(
+      Result.fail(new ToolError('missing')),
     );
-    expect(() => replaceLiteralMatches({ ...request, search: '' })).toThrow(
-      new ToolError('missing'),
+    expect(replaceLiteralMatches({ ...request, search: '' })).toEqual(
+      Result.fail(new ToolError('missing')),
     );
   });
 
@@ -43,13 +44,15 @@ describe('replaceLiteralMatches', () => {
           replacement,
           mode: 'unique',
           notFoundError,
-        }).content,
-      ).toBe(`before ${replacement} after`);
+        }),
+      ).toEqual(
+        Result.succeed({ content: `before ${replacement} after`, count: 1 }),
+      );
     },
   );
 
   it('reports every matching line through the declared ambiguity error', () => {
-    expect(() =>
+    expect(
       replaceLiteralMatches({
         content: 'same\nother same\nsame',
         search: 'same',
@@ -59,7 +62,7 @@ describe('replaceLiteralMatches', () => {
         multipleMatchesError: ({ count, lineNumbers }) =>
           `${count} matches on ${lineNumbers.join(',')}`,
       }),
-    ).toThrow(new ToolError('3 matches on 1,2,3'));
+    ).toEqual(Result.fail(new ToolError('3 matches on 1,2,3')));
   });
 
   it.each(dollarPatterns)(
@@ -73,7 +76,12 @@ describe('replaceLiteralMatches', () => {
           mode: 'all',
           notFoundError,
         }),
-      ).toEqual({ content: `${replacement} and ${replacement}`, count: 2 });
+      ).toEqual(
+        Result.succeed({
+          content: `${replacement} and ${replacement}`,
+          count: 2,
+        }),
+      );
     },
   );
 });

@@ -64,7 +64,7 @@ import type { RunsShape } from './runs';
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 
 /** A claim the store would not give this process. */
-type ClaimError = DatabaseReadFailed | DatabaseClaimError;
+export type ClaimError = DatabaseReadFailed | DatabaseClaimError;
 
 /** What one transaction's job holds: the ordered append (each in this
  *  transaction's order) and a registration's claim take-over. What must run

@@ -209,15 +209,15 @@ function launchOn(
   options: CliExecuteOptions,
 ): Effect.Effect<Run, Error> {
   if (options.runId !== undefined)
-    return session
-      .resume(options.runId)
-      .pipe(
-        Effect.catchTag('ResumeRefused', (refusal) =>
-          Effect.fail(
-            new CliUsageError(describeFollowUpFailure(refusal.reason)),
-          ),
+    return session.resume(options.runId).pipe(
+      Effect.catchTag('ResumeRefused', (refusal) =>
+        Effect.fail(
+          new CliUsageError({
+            message: describeFollowUpFailure(refusal.reason),
+          }),
         ),
-      );
+      ),
+    );
   const approval = launchApproval(runContext.requestedApprovalPolicy);
   return session.start({
     config: request.config,

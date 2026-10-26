@@ -29,7 +29,7 @@ export const resumeCommand = defineCliCommand({
   },
   setup(ctx) {
     if (!parseCliHistoryId(ctx.args.id)) {
-      throw new CliUsageError(`Invalid task id: ${ctx.args.id}`);
+      throw new CliUsageError({ message: `Invalid task id: ${ctx.args.id}` });
     }
   },
   // `setup` refused every id that does not parse.

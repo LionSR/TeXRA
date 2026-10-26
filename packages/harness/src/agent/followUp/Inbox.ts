@@ -6,7 +6,7 @@
  */
 import { Effect, Result, type Scope } from 'effect';
 
-import type { SessionLog } from '@agent/runtime/SessionHandle';
+import type { ClaimError, SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
@@ -140,7 +140,7 @@ export class Inbox {
     runId: RunId,
     item: InboxItem,
     options: SendOptions = {},
-  ): Effect.Effect<Sent, Error> {
+  ): Effect.Effect<Sent, ClaimError> {
     if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
       this.admit(runId, item, options, tx.append),
@@ -216,7 +216,7 @@ export class Inbox {
       yield* this.port.log.settled;
       // A reader here, or a resume in flight, reads the input.
       if (this.disposed || this.readers.has(runId)) return true;
-      if (this.resumes.inFlight.has(runId)) return true;
+      if (this.resumes.running.has(runId)) return true;
       const input = yield* this.read(runId);
       if (input.closed || !needsWake(input.rows, this.port.run)) return true;
       return yield* this.port.resume(runId);
@@ -288,7 +288,7 @@ export class Inbox {
     item: InboxItem,
     options: SendOptions,
     append: Append,
-  ): Effect.Effect<Sent, Error> {
+  ): Effect.Effect<Sent, ClaimError> {
     return Effect.gen({ self: this }, function* () {
       const { rows, sent } = yield* this.admission(runId, item, options);
       if (rows.length > 0) yield* append(rows);
@@ -302,7 +302,7 @@ export class Inbox {
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
-  ): Effect.Effect<Admission, Error, Scope.Scope> {
+  ): Effect.Effect<Admission, ClaimError, Scope.Scope> {
     const closed = (input: InputRows) =>
       this.disposed || (!this.readers.has(runId) && input.closed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });

@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import { ToolError } from '@shared/schemas';
@@ -56,14 +56,16 @@ interface OutsideRootCandidate {
 /** Trim and validate a working_directory value. Must be absolute if provided. */
 export function parseWorkingDirectory(
   raw: string | null | undefined,
-): string | undefined {
+): Result.Result<string | undefined, ToolError> {
   const trimmed = raw?.trim() || undefined;
   if (trimmed && !path.isAbsolute(trimmed)) {
-    throw new ToolError(
-      `working_directory must be an absolute path, got: ${trimmed}`,
+    return Result.fail(
+      new ToolError(
+        `working_directory must be an absolute path, got: ${trimmed}`,
+      ),
     );
   }
-  return trimmed;
+  return Result.succeed(trimmed);
 }
 
 /**
@@ -241,18 +243,19 @@ function annotateExternalPermission(
 }
 
 /**
- * Throw a ToolError when the resolved path points into a read-only external
+ * Fail with a ToolError when the resolved path points into a read-only external
  * root. Workspace paths and writable externals pass through. The run loop
  * calls this for the paths a tool declares in `ToolGuard.writes`, before the
  * body runs; a tool does not call it itself.
  */
-export function assertWritable(
+export const assertWritable = (
   resolved: WorkspacePathResolution,
   displayPath: string,
-): void {
-  if (resolved.external && !resolved.external.writable) {
-    throw new ToolError(
-      `Cannot write ${displayPath}: ${resolved.external.label} is read-only.`,
-    );
-  }
-}
+): Effect.Effect<void, ToolError> =>
+  resolved.external && !resolved.external.writable
+    ? Effect.fail(
+        new ToolError(
+          `Cannot write ${displayPath}: ${resolved.external.label} is read-only.`,
+        ),
+      )
+    : Effect.void;

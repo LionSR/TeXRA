@@ -75,10 +75,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   });
   for (const target of targets) {
     const path = yield* resolveToolPath(call.env, target);
-    yield* Effect.try({
-      try: () => assertWritable(path, path.display),
-      catch: ensureError,
-    });
+    yield* assertWritable(path, path.display);
   }
 
   if (!asks) return undefined;

@@ -1,4 +1,4 @@
-import { Effect, Predicate, Result, Schema } from 'effect';
+import { Effect, Option, Predicate, Schema } from 'effect';
 import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - agent config
@@ -126,45 +126,48 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
 const codexRouteEffortsByKey = new Map<string, readonly ReasoningEffort[]>();
 const codexRouteEffortLanes = new Map<string, PerKeyLane>();
 
-type BundledCodexModel = {
-  slug?: string;
-  supported_reasoning_levels?: Array<{ effort?: string }>;
-};
-
 /** Just the shape `catalogEfforts` depends on — a `models` array. Model
- *  entries stay `unknown` here and are duck-typed below, so one malformed
- *  entry elsewhere in the catalog can't take down a lookup for a model it
- *  doesn't concern. */
-const BundledCodexCatalogSchema = Schema.Struct({
-  models: Schema.Array(Schema.Unknown),
+ *  entries stay `unknown` here and only the one for the asked slug is
+ *  decoded, so one malformed entry elsewhere in the catalog can't take down
+ *  a lookup for a model it doesn't concern. */
+const BundledCodexCatalogSchema = Schema.fromJsonString(
+  Schema.Struct({ models: Schema.Array(Schema.Unknown) }),
+);
+
+/** One catalog entry. The levels stay `unknown` and a null list is allowed,
+ *  so a level with no recognised `effort` is filtered out rather than failing
+ *  the whole entry; only a list that is not an array makes it unreadable. */
+const BundledCodexModelSchema = Schema.Struct({
+  slug: Schema.String,
+  supported_reasoning_levels: Schema.optional(
+    Schema.NullOr(Schema.Array(Schema.Unknown)),
+  ),
 });
 
 const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
   EFFORT_SCALE.includes(value as ReasoningEffort);
 
 /**
- * The levels the catalog lists for `slug`: `undefined` when the catalog is
- * unreadable, the unprobed ceiling when the slug is absent or lists none.
+ * The levels the catalog lists for `slug`: `undefined` when the catalog or
+ * the slug's entry is unreadable, the unprobed ceiling when the slug is
+ * absent or lists none.
  */
 function catalogEfforts(
   stdout: string,
   slug: string,
 ): readonly ReasoningEffort[] | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    // The caller warns on `undefined`.
-    return undefined;
-  }
-  const catalog = Schema.decodeUnknownResult(BundledCodexCatalogSchema)(parsed);
-  if (!Result.isSuccess(catalog)) return undefined;
-  const entry = catalog.success.models.find(
-    (item): item is BundledCodexModel =>
-      Predicate.hasProperty(item, 'slug') && item.slug === slug,
+  const catalog = Schema.decodeUnknownOption(BundledCodexCatalogSchema)(stdout);
+  if (Option.isNone(catalog)) return undefined;
+  const raw = catalog.value.models.find(
+    (item) => Predicate.hasProperty(item, 'slug') && item.slug === slug,
   );
-  const efforts = (entry?.supported_reasoning_levels ?? [])
-    .map((level) => level.effort)
+  if (raw === undefined) return UNPROBED_ROUTE_EFFORTS;
+  const entry = Schema.decodeUnknownOption(BundledCodexModelSchema)(raw);
+  if (Option.isNone(entry)) return undefined;
+  const efforts = (entry.value.supported_reasoning_levels ?? [])
+    .map((level) =>
+      Predicate.hasProperty(level, 'effort') ? level.effort : undefined,
+    )
     .filter(isReasoningEffort);
   return efforts.length > 0 ? efforts : UNPROBED_ROUTE_EFFORTS;
 }

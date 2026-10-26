@@ -45,7 +45,9 @@ const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
       !isPathWithin(cwd, path.resolve(cwd, candidate))
     ) {
       return yield* Effect.fail(
-        new CliUsageError(`${flagLabel}: file is outside --cwd: ${candidate}`),
+        new CliUsageError({
+          message: `${flagLabel}: file is outside --cwd: ${candidate}`,
+        }),
       );
     }
     return normalizeCliInputPath(candidate, cwd);
@@ -101,9 +103,10 @@ const materializeStdinWorkflowInput = Effect.fn(
   const text = yield* readStdinText;
   if (text.trim().length === 0)
     return yield* Effect.fail(
-      new CliUsageError(
-        'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
-      ),
+      new CliUsageError({
+        message:
+          'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
+      }),
     );
   // Not makeTempDirectoryScoped: its release omits `force` and dies on a
   // directory that is already gone.
@@ -172,7 +175,9 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
     });
     if (matches.length === 0) {
       return yield* Effect.fail(
-        new CliUsageError(`${flagLabel}: no files matched: ${trimmed}`),
+        new CliUsageError({
+          message: `${flagLabel}: no files matched: ${trimmed}`,
+        }),
       );
     }
     return yield* normalizeMatches(matches);
@@ -192,7 +197,9 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
     });
     if (matches.length === 0) {
       return yield* Effect.fail(
-        new CliUsageError(`No .tex input files found in directory: ${trimmed}`),
+        new CliUsageError({
+          message: `No .tex input files found in directory: ${trimmed}`,
+        }),
       );
     }
     return yield* normalizeMatches(matches);
@@ -202,7 +209,9 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   // init + agent loading just to ENOENT inside the agent run (exit 1).
   if (!stats) {
     return yield* Effect.fail(
-      new CliUsageError(`${flagLabel}: file not found: ${trimmed}`),
+      new CliUsageError({
+        message: `${flagLabel}: file not found: ${trimmed}`,
+      }),
     );
   }
   return [yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
@@ -261,7 +270,7 @@ const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
     const deduped = [...new Set(expanded)];
     if (deduped.length === 0 && options.allowEmpty !== true) {
       return yield* Effect.fail(
-        new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE),
+        new CliUsageError({ message: WORKFLOW_INPUT_REQUIRED_MESSAGE }),
       );
     }
     return { files: deduped, stdinPath };
@@ -303,9 +312,10 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
     contextSpecs.some(isStdinWorkflowInputSpec)
   ) {
     return yield* Effect.fail(
-      new CliUsageError(
-        'Use `-` for either --input or --context, not both; stdin can only be read once.',
-      ),
+      new CliUsageError({
+        message:
+          'Use `-` for either --input or --context, not both; stdin can only be read once.',
+      }),
     );
   }
 

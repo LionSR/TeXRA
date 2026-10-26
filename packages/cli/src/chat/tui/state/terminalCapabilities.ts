@@ -14,6 +14,7 @@
 // input-layer features (Kitty keyboard).
 
 import { signal } from '@lit-labs/signals';
+import { Effect } from 'effect';
 
 interface TerminalCapabilities {
   /** Kitty keyboard progressive enhancement protocol (`CSI ? u`). */
@@ -66,54 +67,61 @@ interface DiscoveryStreams {
  *
  * Times out after ~250ms. A terminal that fails to answer DA1 is a serious
  * outlier; we degrade to "no advanced features" rather than block startup.
+ * Raw mode is restored however discovery ends.
  */
-export async function discoverTerminalCapabilities(
+export function discoverTerminalCapabilities(
   runs: DiscoveryStreams,
-): Promise<TerminalCapabilities> {
+): Effect.Effect<TerminalCapabilities> {
   if (!runs.stdin.isTTY || !runs.stdout.isTTY) {
-    terminalCapabilities.set(NONE);
-    return NONE;
+    return Effect.sync(() => {
+      terminalCapabilities.set(NONE);
+      return NONE;
+    });
   }
 
   const queryString = Object.values(QUERIES).join('') + DA1_SENTINEL;
 
-  const wasRaw = runs.stdin.isRaw;
-  runs.stdin.setRawMode?.(true);
-  runs.stdin.resume();
-
-  const result = await new Promise<string>((resolve) => {
-    let buffer = '';
-    let settled = false;
-    const onData = (chunk: Buffer): void => {
-      if (settled) return;
-      buffer += chunk.toString('utf8');
-      if (DA1_RESPONSE.test(buffer)) {
-        settled = true;
-        cleanup();
-        resolve(buffer);
-      }
-    };
-    const onTimeout = (): void => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(buffer);
-    };
-    const timer = setTimeout(onTimeout, 250);
-    const cleanup = (): void => {
-      clearTimeout(timer);
-      runs.stdin.off('data', onData);
-    };
-    runs.stdin.on('data', onData);
-    runs.stdout.write(queryString);
-  });
-
-  if (!wasRaw) runs.stdin.setRawMode?.(false);
-
-  const caps: TerminalCapabilities = {
-    kittyKeyboard: RESPONSE_MARKERS.kittyKeyboard.test(result),
-    oscColorReports: RESPONSE_MARKERS.oscColorReports.test(result),
-  };
-  terminalCapabilities.set(caps);
-  return caps;
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const wasRaw = runs.stdin.isRaw;
+      runs.stdin.setRawMode?.(true);
+      runs.stdin.resume();
+      return wasRaw;
+    }),
+    () => {
+      // What has arrived so far; the timeout answers with it.
+      let buffer = '';
+      return Effect.callback<string>((resume) => {
+        const onData = (chunk: Buffer): void => {
+          buffer += chunk.toString('utf8');
+          if (DA1_RESPONSE.test(buffer)) {
+            runs.stdin.off('data', onData);
+            resume(Effect.succeed(buffer));
+          }
+        };
+        runs.stdin.on('data', onData);
+        runs.stdout.write(queryString);
+        // Runs when the timeout interrupts the wait.
+        return Effect.sync(() => runs.stdin.off('data', onData));
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: 250,
+          orElse: () => Effect.succeed(buffer),
+        }),
+      );
+    },
+    (wasRaw) =>
+      Effect.sync(() => {
+        if (!wasRaw) runs.stdin.setRawMode?.(false);
+      }),
+  ).pipe(
+    Effect.map((result) => {
+      const caps: TerminalCapabilities = {
+        kittyKeyboard: RESPONSE_MARKERS.kittyKeyboard.test(result),
+        oscColorReports: RESPONSE_MARKERS.oscColorReports.test(result),
+      };
+      terminalCapabilities.set(caps);
+      return caps;
+    }),
+  );
 }

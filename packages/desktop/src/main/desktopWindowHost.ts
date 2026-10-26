@@ -258,22 +258,27 @@ export function createDesktopWindowHost(options: {
         },
         catch: ensureError,
       }),
-    openFileDialog: async (dialogOptions: {
+    /** The files the user picked, or undefined when they cancelled. */
+    openFileDialog: (dialogOptions: {
       title: string;
       defaultPath?: string;
       filters: Array<{ name: string; extensions: string[] }>;
       allowMultiple?: boolean;
-    }) => {
-      const result = await dialog.showOpenDialog(window, {
-        title: dialogOptions.title,
-        defaultPath: dialogOptions.defaultPath,
-        filters: dialogOptions.filters,
-        properties: dialogOptions.allowMultiple
-          ? ['openFile', 'multiSelections']
-          : ['openFile'],
-      });
-      return result.canceled ? undefined : result.filePaths;
-    },
+    }) =>
+      Effect.tryPromise({
+        try: async () => {
+          const result = await dialog.showOpenDialog(window, {
+            title: dialogOptions.title,
+            defaultPath: dialogOptions.defaultPath,
+            filters: dialogOptions.filters,
+            properties: dialogOptions.allowMultiple
+              ? ['openFile', 'multiSelections']
+              : ['openFile'],
+          });
+          return result.canceled ? undefined : result.filePaths;
+        },
+        catch: ensureError,
+      }),
     /**
      * What one project's runs present through: its dialogs name that project,
      * and its diff and build views are addressed by its own storage root,

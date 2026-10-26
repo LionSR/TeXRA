@@ -39,7 +39,7 @@ import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
@@ -137,7 +137,7 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 
     return yield* presentLaunchError(
       interactions,
-      new AgentError(`Model ${modelName} is not registered`),
+      new AgentError({ message: `Model ${modelName} is not registered` }),
       'requestShowInstruction',
       {
         key: 'modelNotRecognized',
@@ -188,7 +188,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
               Effect.catchTag('AgentNotFound', (missed) =>
                 presentLaunchError(
                   interactions,
-                  new AgentError(missed.message),
+                  new AgentError({ message: missed.message }),
                   'showAgentConfigBanner',
                   { agentName: fullConfig.agent },
                 ),
@@ -209,9 +209,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     );
     if (unknown.length > 0)
       return yield* Effect.fail(
-        new AgentError(
-          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
-        ),
+        new AgentError({
+          message: `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+        }),
       );
 
     // Validated before registration, so a typo'd model name registers no
@@ -275,7 +275,7 @@ const enterRun = Effect.fn('enterRun')(function* (
       : yield* registrationRows(session, runId, config, input.registration);
   if (registration !== null && registration[0]?.type !== 'run.start')
     return yield* Effect.fail(
-      new AgentError(`Run ${runId} already exists; resume it.`),
+      new AgentError({ message: `Run ${runId} already exists; resume it.` }),
     );
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter(
@@ -320,10 +320,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
     // and trusts it rather than re-validating.
-    const workingDirectory = yield* Effect.try({
-      try: () => parseWorkingDirectory(config.workingDirectory),
-      catch: ensureError,
-    });
+    const workingDirectory = yield* Effect.fromResult(
+      parseWorkingDirectory(config.workingDirectory),
+    );
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session

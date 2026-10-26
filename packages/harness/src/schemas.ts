@@ -243,7 +243,7 @@ export {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-export { parseJsonWith, safeParseJson } from '@common/parsing/safeParseJson';
+export { safeParseJson } from '@common/parsing/safeParseJson';
 // An exported run (`assembleTrace`), as a static viewer parses it back.
 export {
   readTraceFacts,

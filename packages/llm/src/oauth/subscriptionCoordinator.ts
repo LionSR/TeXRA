@@ -6,17 +6,16 @@
  */
 import type { SecretsFailed } from '../providers/credentials.js';
 import type { SubscriptionOAuthError } from './subscriptionOAuthError.js';
-import type { SubscriptionSessionBaseSchema } from './subscriptionSessionSchema.js';
+import type {
+  SubscriptionSessionBaseSchema,
+  SubscriptionTokenResponseSchema,
+} from './subscriptionSessionSchema.js';
 import type { Effect } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 /** Raw token-endpoint shape shared by authorization-code and refresh grants. */
-export interface SubscriptionTokenResponse {
-  access_token: string;
-  refresh_token?: string | null;
-  id_token?: string | null;
-  expires_in: number;
-}
+export type SubscriptionTokenResponse =
+  (typeof SubscriptionTokenResponseSchema)['Type'];
 
 /** Canonical stored session: the persisted base schema's shape (its single
  *  source of truth) plus the two optional identity fields the status read

@@ -9,11 +9,7 @@ import {
   pathToLocationIn,
   Settings,
 } from '@texra-ai/harness';
-import {
-  ensureError,
-  toErrorMessage,
-  type FileLocation,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -24,6 +20,7 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
+import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
@@ -107,17 +104,11 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  const pick = yield* Effect.tryPromise({
-    try: () =>
-      Promise.resolve(
-        vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
-          title: 'Latexdiff math markup',
-          placeHolder: 'Select math markup granularity for this diff run',
-          ignoreFocusOut: true,
-          prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
-        }),
-      ),
-    catch: ensureError,
+  const pick = yield* quickPick(prioritizedItems, {
+    title: 'Latexdiff math markup',
+    placeHolder: 'Select math markup granularity for this diff run',
+    ignoreFocusOut: true,
+    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
   });
   if (!pick) {
     yield* Effect.logDebug('Math markup selection cancelled by user');

@@ -31,12 +31,7 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
-import {
-  ensureError,
-  extractErrorMessage,
-  formatError,
-  toErrorMessage,
-} from '@utils/errors/errorMessage';
+import { ensureError, formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 
 /**
@@ -52,17 +47,10 @@ export const memoriesField = nullishWithDefault(
 ).check(
   Schema.makeFilter((memories) =>
     memories.flatMap((memory, i) => {
-      const parsed = Result.try(() => displayToStoragePath(memory));
+      const parsed = displayToStoragePath(memory);
       return Result.isSuccess(parsed)
         ? []
-        : [
-            {
-              path: [i],
-              issue:
-                extractErrorMessage(parsed.failure) ??
-                `Invalid memory path: ${memory}`,
-            },
-          ];
+        : [{ path: [i], issue: parsed.failure.message }];
     }),
   ),
 );
@@ -168,14 +156,12 @@ export const workingDirectoryField = Schema.optional(
         // this runs on the tool facade's one decode of a static schema, before
         // any call exists. Both run in `execute`, through
         // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
-        const parsed = Result.try(() =>
-          parseWorkingDirectory(Option.getOrUndefined(value)),
-        );
+        const parsed = parseWorkingDirectory(Option.getOrUndefined(value));
         return Result.isSuccess(parsed)
           ? Effect.succeed(Option.some(parsed.success))
           : Effect.fail(
               new SchemaIssue.InvalidValue(
-                { message: toErrorMessage(parsed.failure) },
+                { message: parsed.failure.message },
                 value,
               ),
             );

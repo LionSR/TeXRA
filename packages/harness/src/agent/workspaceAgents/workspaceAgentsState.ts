@@ -65,41 +65,14 @@ export function readWorkspaceAgentsSelection(repoState: StateStore) {
   );
 }
 
+/** The stored hidden agent keys; an absent value reads as none. */
+const HiddenKeysSchema = HiddenCustomAgentKeysSchema.pipe(
+  Schema.withDecodingDefault(Effect.succeed([])),
+);
+
 interface WorkspaceAgentEntry {
   readonly name: string;
   readonly source: AgentSource;
-}
-
-/** The hidden keys. To show the agents (`read`), a malformed value is
- *  reported and read as none, as the workspace agents selection is; to
- *  change them (`modify`), it fails, since a write from none would erase
- *  every stored choice. */
-function readHidden(
-  repoState: StateStore,
-  purpose: 'read' | 'modify',
-): Effect.Effect<Set<string>, StateReadFailed> {
-  const key = WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS;
-  const schema = HiddenCustomAgentKeysSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  );
-  if (purpose === 'read')
-    return Effect.map(
-      Settings.state(repoState, key, schema),
-      (hidden) => new Set(hidden),
-    );
-  return Effect.flatMap(
-    Settings.inspectState(repoState, key, schema),
-    (stored) =>
-      stored.kind === 'value'
-        ? Effect.succeed(new Set(stored.value))
-        : Effect.fail(
-            new StateReadFailed({
-              key,
-              message: `The hidden agents list is invalid and was not changed: ${stored.cause}`,
-              cause: stored.cause,
-            }),
-          ),
-  );
 }
 
 /** Whether a stored list names `entry`, by the workspace agents' identity rule: a
@@ -118,13 +91,23 @@ export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
   entries: readonly Entry[],
   listed: readonly string[],
 ): Effect.Effect<Entry[], StateReadFailed> {
-  return Effect.map(readHidden(repoState, 'read'), (hidden) =>
-    entries.filter(
-      (entry) =>
-        entry.source === AGENT_SOURCE.CUSTOM &&
-        !listNames(listed, entry) &&
-        !hidden.has(agentKeyOf(entry)),
+  // A malformed hidden list is reported and read as none, as the workspace
+  // agents selection is.
+  return Effect.map(
+    Settings.state(
+      repoState,
+      WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
+      HiddenKeysSchema,
     ),
+    (stored) => {
+      const hidden = new Set(stored);
+      return entries.filter(
+        (entry) =>
+          entry.source === AGENT_SOURCE.CUSTOM &&
+          !listNames(listed, entry) &&
+          !hidden.has(agentKeyOf(entry)),
+      );
+    },
   );
 }
 
@@ -142,18 +125,34 @@ export function recordCustomChoices(
   agents: readonly WorkspaceAgentEntry[],
   selection: readonly string[],
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-  return Effect.gen(function* () {
-    const hidden = yield* readHidden(repoState, 'modify');
-    for (const entry of agents) {
-      if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
-      const key = agentKeyOf(entry);
-      if (listNames(selection, entry)) hidden.delete(key);
-      else hidden.add(key);
-    }
-    yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
-      ...hidden,
-    ]);
-  });
+  const key = WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS;
+  // One step at the store, which other processes share. A malformed stored
+  // value fails and nothing is written, since a write from none would erase
+  // every stored choice.
+  return Effect.asVoid(
+    repoState.modify(key, (stored) =>
+      Result.match(Schema.decodeUnknownResult(HiddenKeysSchema)(stored), {
+        onFailure: (cause) =>
+          Result.fail(
+            new StateReadFailed({
+              key,
+              message: `The hidden agents list is invalid and was not changed: ${cause.message}`,
+              cause,
+            }),
+          ),
+        onSuccess: (keys) => {
+          const hidden = new Set(keys);
+          for (const entry of agents) {
+            if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
+            const agentKey = agentKeyOf(entry);
+            if (listNames(selection, entry)) hidden.delete(agentKey);
+            else hidden.add(agentKey);
+          }
+          return Result.succeed([...hidden]);
+        },
+      }),
+    ),
+  );
 }
 
 /**
