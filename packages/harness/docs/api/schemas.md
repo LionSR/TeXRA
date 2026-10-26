@@ -1876,6 +1876,14 @@ neither, whatever this says.
 const RESUME_ON_OPEN_SETTING: Readonly<{ readonly configKey: "texra.resumeOnOpen"; readonly values: readonly ["ask", "auto"]; readonly defaultValue: "ask"; readonly description: "On opening, when tasks stopped before they finished: list them so you can choose, or continue them all."; }>
 ```
 
+## ResumeRefusal
+
+One reason a resume is refused ({@link ResumeRefusalSchema}).
+
+```ts
+type ResumeRefusal = typeof ResumeRefusalSchema.Type;
+```
+
 ## RetryApprovalDecision
 
 ```ts

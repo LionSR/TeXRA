@@ -2465,26 +2465,15 @@ type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
 
 ## ResumeRefused
 
-A run `session.resume` will not continue, for the runtime's reason:
-`finished` (nothing left to continue), `owned_elsewhere` (another live
-process holds it), `blocked` (an agent or plugin it needs is missing
-here), `unusable_checkpoint` (its saved state cannot be continued), or
-`not_resumable` (it is running here, it was deleted, or it is a child an
-open call of its parent owns, which resumes with that parent).
+A run `session.resume` will not continue, for the runtime's reason
+(`ResumeRefusal`).
 
 ```ts
 class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
   'ResumeRefused',
   {
     runId: Schema.String,
-    reason: Schema.Literals([
-      'finished',
-      'owned_elsewhere',
-      'blocked',
-      'unusable_checkpoint',
-      'earlier_build',
-      'not_resumable',
-    ]),
+    reason: ResumeRefusalSchema,
     message: Schema.String,
   },
 )

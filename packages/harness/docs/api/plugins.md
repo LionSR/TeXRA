@@ -556,37 +556,21 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 ## FollowUpFailureReason
 
 Why a submission could not be admitted, worded for the user by
-{@link presentFollowUpResult}.
+{@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
+message to a run with no loop here is admitted only as a resume would be,
+and `not_resumable` there also covers a closed input, a disposed session,
+or a message that is not the user's own), or one of the message's alone:
 
-- `finished`: the run has no checkpoint left to continue from.
-- `unusable_checkpoint`: a checkpoint file is there but could not be turned
-  into resume state (malformed, a spent cursor, shared state the category
-  no longer accepts). A history listing advertises a run from the file
-  alone, so this is the refusal that cohort meets — never `finished`, which
-  would claim the run ended normally.
 - `read_failed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
-- `owned_elsewhere`: another process holds the run.
-- `not_resumable`: the run has no running loop here and the submission was
-  refused (a terminalized queue, a disposed session, or a message that
-  is not the user's own).
 - `one_shot`: the run's live loop ends after its current turn and reads
   no message (headless, or an in-band child), or the run has no loop of
   its own and its launch takes none (a background command).
-- `blocked`: the run's agent, or its agent's plugin, is missing, off or
-  not trusted here (`RunView.resumeBlocked` says which).
+- `not_parent`: the sender is not the run's parent.
 
 ```ts
 type FollowUpFailureReason =
-  | 'finished'
-  | 'unusable_checkpoint'
-  | 'earlier_build'
-  | 'read_failed'
-  | 'owned_elsewhere'
-  | 'not_resumable'
-  | 'one_shot'
-  | 'not_parent'
-  | 'blocked';
+  ResumeRefusal | 'read_failed' | 'one_shot' | 'not_parent';
 ```
 
 ## FollowUpSenderInput
@@ -1605,10 +1589,11 @@ interface StreamOptions {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for the next turn, or it was not admitted for a worded reason. A
-delivery the admission boundary had already accepted is `sent`.
-A queued input whose recovery resume did not reach the run is still
-queued (`wake: 'failed'`): the input belongs to the run, and an
-explicit Resume delivers it.
+delivery the admission boundary had already accepted is `sent`. A resume
+the input started that the run refused is told by the resume itself; a
+queued input whose run could not even be read for a wake is still queued
+(`wake: 'failed'`): the input belongs to the run, and an explicit Resume
+delivers it.
 
 ```ts
 type SubmitFollowUpResult =

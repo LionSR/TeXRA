@@ -7,6 +7,7 @@ const base = '/';
 // Shared by every page that should show the guide navigation, including the
 // root-level work page, which would otherwise render with no sidebar.
 const apiSidebar = [
+  { text: 'Overview', link: '/api/' },
   {
     text: '@texra-ai/harness',
     items: [
@@ -199,7 +200,7 @@ const baseConfig = {
       },
       { text: 'Launch', link: '/launch' },
       { text: 'Work', link: '/work-using-texra' },
-      { text: 'API', link: '/api/harness/', activeMatch: '/api/' },
+      { text: 'API', link: '/api/', activeMatch: '/api/' },
       { text: 'Changelog', link: '/changelog', activeMatch: '/changelog' },
       { text: 'GitHub', link: 'https://github.com/LionSR/TeXRA' },
     ],
