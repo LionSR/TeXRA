@@ -69,10 +69,13 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
 
     /** `force`: the sweep tolerates a file a sibling host already removed. */
     const discard = (files: Iterable<string>) =>
-      Effect.forEach(files, (file) =>
-        Effect.flatMap(filesystemFor(workspaceFs, file), (artifact) =>
-          artifact.fs.remove(artifact.absolutePath, { force: true }),
-        ),
+      Effect.forEach(
+        files,
+        (file) =>
+          Effect.flatMap(filesystemFor(workspaceFs, file), (artifact) =>
+            artifact.fs.remove(artifact.absolutePath, { force: true }),
+          ),
+        { concurrency: 8 },
       );
 
     if (mainFiles.size === 0 && tempFiles.size === 0) {

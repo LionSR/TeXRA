@@ -210,13 +210,18 @@ export function removeDeadSockets(
 ): Effect.Effect<void, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    for (const name of yield* fs.readDirectory(paths.socketDirectory)) {
-      const pid = Number(SOCKET_NAME.exec(name)?.[1]);
-      if (Number.isInteger(pid) && !processAlive(pid))
-        yield* fs.remove(path.join(paths.socketDirectory, name), {
-          force: true,
-        });
-    }
+    const dead = (yield* fs.readDirectory(paths.socketDirectory)).filter(
+      (name) => {
+        const pid = Number(SOCKET_NAME.exec(name)?.[1]);
+        return Number.isInteger(pid) && !processAlive(pid);
+      },
+    );
+    yield* Effect.forEach(
+      dead,
+      (name) =>
+        fs.remove(path.join(paths.socketDirectory, name), { force: true }),
+      { concurrency: 8, discard: true },
+    );
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning("Could not remove dead services' sockets").pipe(
