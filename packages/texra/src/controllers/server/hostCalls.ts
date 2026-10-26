@@ -1,22 +1,13 @@
 /**
  * What the service asks of a window: the host capabilities a run uses while
  * it runs in the service (a file's diagnostics, an inline criticism, a PDF
- * to open, a tool edit's preview to stage, a notice to show, the editor's
- * language models). A window
+ * to open, a tool edit's preview to stage, a notice to show). A window
  * offers the capabilities it has when it attaches (`host.attach`); each call
  * reaches it as a frame of that stream, and it answers with `host.answer`.
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
 import { Schema, Struct } from 'effect';
-
-import {
-  ModelErrorFieldsSchema,
-  ResolvedTurnSchema,
-  TurnEventSchema,
-  TurnRequestSchema,
-  VscodeLanguageModelConfigurationSchema,
-} from '@texra-ai/llm';
 
 import {
   ApprovalPolicySchema,
@@ -34,7 +25,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
-import type { LanguageModelInfo } from '@texra-ai/harness';
 
 /** What a window can do for a run. `notices` covers the runtime's notices
  *  and its approval-policy denials. */
@@ -44,7 +34,6 @@ const HOST_CAPABILITIES = [
   'openPdf',
   'toolEdits',
   'notices',
-  'languageModel',
 ] as const;
 export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
 export type HostCapability = typeof HostCapabilitySchema.Type;
@@ -155,16 +144,6 @@ const ToolEditStagingSchema = ToolEditContentSchema.mapFields(
   }),
 );
 
-const LanguageModelInfoSchema = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  family: Schema.String,
-  vendor: Schema.String,
-  version: Schema.String,
-  maxInputTokens: Schema.Number,
-  access: Schema.Literals(['allowed', 'consent-required', 'unavailable']),
-}) satisfies Schema.Codec<LanguageModelInfo, unknown>;
-
 /** One call of the service on a window. */
 const HostCallSchema = Schema.Union([
   Schema.Struct({
@@ -204,23 +183,6 @@ const HostCallSchema = Schema.Union([
     denial: ApprovalPolicyDenialSchema,
     runId: RunIdSchema,
   }),
-  // The editor's language models: list them, prepare a turn, and stream
-  // one (answered item by item, `more`), which `cancel` stops.
-  Schema.Struct({
-    kind: Schema.Literal('lmModels'),
-    vendor: Schema.NullOr(Schema.String),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('lmPrepare'),
-    configuration: VscodeLanguageModelConfigurationSchema,
-    request: TurnRequestSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('lmStream'),
-    configuration: VscodeLanguageModelConfigurationSchema,
-    turn: ResolvedTurnSchema,
-  }),
-  Schema.Struct({ kind: Schema.Literal('cancel'), call: Schema.String }),
 ]);
 export type HostCall = typeof HostCallSchema.Type;
 
@@ -237,10 +199,6 @@ export const CALL_CAPABILITY: Readonly<
   notice: 'notices',
   filesWritten: 'notices',
   approvalDenied: 'notices',
-  lmModels: 'languageModel',
-  lmPrepare: 'languageModel',
-  lmStream: 'languageModel',
-  cancel: 'languageModel',
 };
 
 /** What each call answers with, when it answers with a value. */
@@ -248,10 +206,6 @@ export const CallResultSchemas = {
   readDiagnostics: Schema.Array(GenericDiagnosticSchema),
   addCriticism: Schema.Boolean,
   approveToolEdit: Schema.Boolean,
-  lmModels: Schema.Array(LanguageModelInfoSchema),
-  lmPrepare: ResolvedTurnSchema,
-  /** Each item of a streamed `lmStream`. */
-  lmStream: TurnEventSchema,
 } as const;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
@@ -269,19 +223,15 @@ export const HostFrameSchema = Schema.Union([
 export type HostFrame = typeof HostFrameSchema.Type;
 
 /** A window's answer to one call. A failure says why in the window's
- *  words (a model's failure as its fields, rebuilt in the service); the
- *  service reports it as the capability's own failure. A streamed call
- *  answers each item with `more`, then once without. */
+ *  words; the service reports it as the capability's own failure. */
 export const HostAnswerSchema = Schema.Union([
   Schema.Struct({
     ok: Schema.Literal(true),
     value: Schema.Json,
-    more: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     ok: Schema.Literal(false),
     message: Schema.String,
-    model: Schema.optional(ModelErrorFieldsSchema),
   }),
 ]);
 export type HostAnswer = typeof HostAnswerSchema.Type;

@@ -65,9 +65,8 @@ const RULES: readonly {
     pattern: /yield\*\s*\(?\s*(?:yield\*\s*)?ToolCatalog\b/,
     notInStep: true,
     // The session layer, which builds each session's catalog and runs the
-    // shutdown protocol's plugin drain; the VS Code Copilot tools, which
-    // follow the built-in tools as the switches stand; the settings Git
-    // tab's read of the GitHub plugin's process services. None offers a run
+    // shutdown protocol's plugin drain; the settings Git tab's read of the
+    // GitHub plugin's process services. None offers a run
     // anything or pins a step's tools.
     also: [
       'packages/harness/src/controllers/session/sessionLayer.ts',
@@ -75,7 +74,6 @@ const RULES: readonly {
       // The availability probes, which run each plugin's probe with its
       // own process services while its layer is up; they pin nothing.
       'packages/harness/src/tools/toolAvailability.ts',
-      'packages/extension/src/frontend/lm/registerLanguageModelTools.ts',
     ],
   },
 ];

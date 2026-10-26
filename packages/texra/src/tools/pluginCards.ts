@@ -289,16 +289,4 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
       authNote: 'OAuth, OAuth token, or API key',
     },
   },
-  {
-    id: 'copilot',
-    name: 'Copilot Chat Tools',
-    category: 'ai-agents',
-    description:
-      'Expose arXiv search and web fetch to GitHub Copilot Chat and agent mode as #texra_arxiv_search and #texra_web_fetch. Each is exposed while its own plugin is on.',
-    unavailableHosts: ['cli', 'desktop', 'sdk'],
-    setup: {
-      configNotes:
-        'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
-    },
-  },
 ];

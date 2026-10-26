@@ -44,7 +44,6 @@ import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { AgentDirectories, AppState, AppStateStore } from './interfaces';
-import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 
@@ -107,7 +106,6 @@ export type ProcessServices =
   | HttpClient.HttpClient
   | Secrets
   | AppState
-  | LanguageModel
   | AgentDirectories
   | AgentCatalog
   | GlobalValues

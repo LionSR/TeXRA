@@ -63,7 +63,6 @@ import {
   ToolMissingReporter,
   type ToolMissingHandler,
 } from '@platform/interfaces';
-import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import {
@@ -186,14 +185,8 @@ const sessionHandleLayer = (key: SessionKey) =>
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const tools = yield* (yield* ToolCatalogOwner).session;
       const interactions = new SessionHostInteractions();
-      // Each run's `.env`, read as it launches, and its window's models.
-      const env = Layer.merge(
-        workspaceEnvironmentLayer(key.open.roots.workspace),
-        LanguageModel.layer(
-          yield* LanguageModel,
-          () => interactions.languageModel,
-        ),
-      );
+      // Each run's `.env`, read as it launches.
+      const env = workspaceEnvironmentLayer(key.open.roots.workspace);
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
@@ -587,11 +580,6 @@ export interface ProcessLayerOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /** The host's editor language-model bridge, served as `LanguageModel`: the
-   *  VS Code extension's bridge to the editor's language-model API, or
-   *  `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where discovery discovers
-   *  nothing and binding an editor model fails. */
-  readonly languageModel: LanguageModelPort;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
@@ -632,7 +620,6 @@ export function ownerProcessLayer({
   plugins,
   secrets,
   appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
-  languageModel,
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
@@ -654,7 +641,6 @@ export function ownerProcessLayer({
   ).pipe(Layer.provide(identity), Layer.orDie);
   const services = Layer.mergeAll(
     Secrets.layer(secrets),
-    LanguageModel.layer(languageModel),
     // The follower registers each plugin's agent directory off the catalog.
     Layer.provideMerge(
       agentCatalogFollower,

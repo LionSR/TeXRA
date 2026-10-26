@@ -56,10 +56,6 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
-import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
@@ -361,14 +357,7 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, logger, bound, binds)),
         UsageLog.disabled,
-        modelAccessLayer(hostStores()).pipe(
-          Layer.provide(
-            Layer.merge(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-              testHttpClientLayer,
-            ),
-          ),
-        ),
+        modelAccessLayer(hostStores()).pipe(Layer.provide(testHttpClientLayer)),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
@@ -386,12 +375,9 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
-    // the Node layer rather than the installed platform. `LanguageModel` is
-    // the unavailable port: a manual-retry rebind's catalogue discovery finds
-    // no editor models here.
+    // the Node layer rather than the installed platform.
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
-    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Effect.provide(testHttpClientLayer),
   );
 

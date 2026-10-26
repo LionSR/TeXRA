@@ -390,8 +390,8 @@ export function pruneSurface(
  * catalog no longer enables moves to the first available one (the first
  * enabled one when none is), and a working directory that is no longer an
  * open root clears to the default. A model the catalog still enables stays
- * chosen while it is unavailable (an unreadable key store, a pending
- * Copilot consent): the picker shows why, and a launch fails with that
+ * chosen while it is unavailable (an unreadable key store, a missing
+ * key): the picker shows why, and a launch fails with that
  * reason rather than running a model the user did not pick. Returns the
  * same record when both hold.
  */

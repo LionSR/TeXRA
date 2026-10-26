@@ -19,7 +19,6 @@ import {
   activePresetId,
   agentSelectionItems,
   applySettingsSnapshot,
-  copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
@@ -96,7 +95,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     modelSelectionItems.set(data.models);
     helperModel.set(data.helperModel);
     preferShortModelNames.set(data.preferShortModelNames);
-    copilotRouteInfos.set(data.copilotModels);
   },
 
   // Agent selection.

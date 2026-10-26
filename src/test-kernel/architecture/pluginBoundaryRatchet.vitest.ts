@@ -157,9 +157,8 @@ const roster = (plugins: readonly Plugin[]) =>
 
 /**
  * One case pins each list a host or embedder composes the
- * process from. Every TeXRA host passes `texraPlugins` (the extension adds
- * only Copilot's host layer to the `copilot` entry), and the SDK's examples
- * pass the harness's own lists. A plugin or tool that joins or leaves a list
+ * process from. Every TeXRA host passes `texraPlugins`, and the SDK's
+ * examples pass the harness's own lists. A plugin or tool that joins or leaves a list
  * changes what every agent on it can be offered, so it is a reviewed change
  * here, not a side effect of an import.
  */
@@ -211,7 +210,6 @@ describe('plugin rosters', () => {
           'apply_team',
         ],
       ],
-      ['copilot', []],
       [
         'documents',
         [

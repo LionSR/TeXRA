@@ -6,10 +6,6 @@ import { Effect } from 'effect';
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
@@ -69,9 +65,6 @@ describe('applyHelperModelPreference', () => {
       Effect.flatMap(({ applyHelperModelPreference }) =>
         applyHelperModelPreference(config, STORES),
       ),
-      // The real `readModelOptions` requires the service; the mock
-      // replaces it, but the requirement stays on the program's type.
-      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     );
   }
 

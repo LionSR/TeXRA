@@ -1,10 +1,9 @@
 // Third-party imports
-import { Result, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
   ModelOriginSchema,
-  OriginSchema,
   sameModelOrigin,
   type ModelOrigin,
   checkPreparedHistory,
@@ -111,14 +110,6 @@ const OutputPartSchema = Schema.Union([
 ]);
 
 export const ContentSchema = Schema.Array(OutputPartSchema);
-export const EditorContentSchema = Schema.Array(
-  Schema.Union([
-    MessagePartSchema.mapFields(Struct.omit(['evidence'])).mapFields(
-      Struct.assign({ content: Schema.Array(TextPartSchema) }),
-    ),
-    LocalCallPartSchema.mapFields(Struct.omit(['evidence'])),
-  ]),
-);
 export const EVIDENCE_PROTOCOL = {
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
@@ -199,17 +190,9 @@ export const AssistantMessageSchema = Schema.Struct({
   origin: Schema.NullOr(ModelOriginSchema),
   content: ContentSchema,
 }).check(
-  Schema.makeFilter((message) => {
-    const issues = validateAssistantContent(message.origin, message.content);
-    if (message.origin?.protocol === 'vscode-lm') {
-      const parsed = Schema.decodeUnknownResult(EditorContentSchema)(
-        message.content,
-      );
-      if (!Result.isSuccess(parsed))
-        issues.push({ path: ['content'], issue: parsed.failure.issue });
-    }
-    return issues;
-  }),
+  Schema.makeFilter((message) =>
+    validateAssistantContent(message.origin, message.content),
+  ),
 );
 /** The content one turn produced, stamped with the turn's origin. */
 export type AssistantMessage = typeof AssistantMessageSchema.Type;
@@ -313,7 +296,7 @@ const PrefixSchema = Schema.Struct({
 });
 export const GoogleContinuationSchema = PrefixSchema.mapFields(
   Struct.assign({
-    origin: OriginSchema.mapFields(
+    origin: ModelOriginSchema.mapFields(
       Struct.assign({
         protocol: Schema.Literal('google-interactions'),
       }),
@@ -330,7 +313,7 @@ const ResponsesAnchorSchema = Schema.Struct({
 });
 export const ResponsesContinuationSchema = PrefixSchema.mapFields(
   Struct.assign({
-    origin: OriginSchema.mapFields(
+    origin: ModelOriginSchema.mapFields(
       Struct.assign({
         protocol: Schema.Literal('openai-responses'),
       }),

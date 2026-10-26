@@ -13,14 +13,12 @@ import {
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
-import { LanguageModel } from '@platform/languageModel';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { isModelOptionAvailable, type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
-  fakeHostLanguageModel,
   hostStores,
   installPlatform,
   setupPlatform,
@@ -39,21 +37,10 @@ const GPT4O = 'openai/gpt-4o-2024-11-20';
 const KIMI_CODING = 'moonshot/kimi-for-coding';
 const HAIKU3 = 'anthropic/claude-3-haiku-20240307';
 const HAIKU35 = 'anthropic/claude-3-5-haiku-20241022';
-const GPT56_TERRA = 'openai/gpt-5.6-terra';
 const GPT56_PRO = 'openai/gpt-5.6-sol+pro';
 const GEMINI31P = 'google/gemini-3.1-pro-preview';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
-
-/**
- * The availability read over the installed fake host's language-model port:
- * the read's Copilot discovery yields the `LanguageModel` service, which the
- * bare `it.effect` runtime does not carry.
- */
-const availabilityInputs = (...args: Parameters<typeof readModelOptions>) =>
-  readModelOptions(...args).pipe(
-    Effect.provide(LanguageModel.layer(fakeHostLanguageModel)),
-  );
 
 /** The reason `model`'s option gives for not running, or `null` when it can. */
 const unavailableReasonOf = (
@@ -61,21 +48,6 @@ const unavailableReasonOf = (
   model: string,
 ): string | null =>
   options.find((option) => option.model === model)?.unavailableReason ?? null;
-
-/**
- * Global state that counts the Copilot-preference reads, the one live state
- * read the route ladder makes per model.
- */
-class CountingStateStore extends FakeStateStore {
-  copilotPreferenceReads = 0;
-
-  override get(key: string): Effect.Effect<unknown> {
-    if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
-      this.copilotPreferenceReads += 1;
-    }
-    return super.get(key);
-  }
-}
 
 /** A persisted selection with exactly `models` enabled. */
 function onlyEnabled(models: readonly string[]) {
@@ -137,7 +109,6 @@ describe('model catalogue direct-route key ownership', () => {
     for (const [modelId, config] of Object.entries(MODEL_CONFIGS)) {
       if (isUnservedModel(config)) continue;
       const route = decideModelRoute(config, OWN_KEY_ROUTE_FACTS);
-      if (route.kind === 'copilot') continue;
 
       expect(
         route.kind,
@@ -184,7 +155,7 @@ describe('model availability', () => {
         );
 
         const [option] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [model]),
+          yield* readModelOptions(hostStores(), [model]),
         );
 
         expect(option.reasoning).toBe(expected);
@@ -200,10 +171,10 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
+        yield* readModelOptions(hostStores(), [KIMI_CODING]),
       );
       const reason = unavailableReasonOf(
-        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
+        yield* readModelOptions(hostStores(), [KIMI_CODING]),
         KIMI_CODING,
       );
 
@@ -239,7 +210,7 @@ describe('model availability', () => {
         const logs = captureLogEntries();
 
         const [gpt55, gpt56] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55, GPT56]),
+          yield* readModelOptions(hostStores(), [GPT55, GPT56]),
         );
 
         // An unreadable store is not a missing key.
@@ -258,20 +229,17 @@ describe('model availability', () => {
   );
 
   it.effect(
-    'reads no provider key for a model the route ladder settles without one, and routes each model once',
+    'reads no provider key for a model the route ladder settles without one',
     () =>
       Effect.gen(function* () {
         // The key statuses are read once per provider the ladder actually
         // consults, so a row settled before the key step (retired, here) never
-        // turns into an Anthropic read — and never into its warning. Each row is
-        // also routed exactly once: the Copilot preference is a live state read
-        // inside the ladder, and the verdict finishes the decision it produced
-        // instead of running the ladder again over inputs that may have moved.
+        // turns into an Anthropic read — and never into its warning.
         const secrets = new FakeSecrets();
         vi.spyOn(secrets, 'get').mockReturnValue(
           Effect.fail(unreadableStore(new Error('unreadable store'))),
         );
-        const globalState = new CountingStateStore({
+        const globalState = new FakeStateStore({
           [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]),
         });
         yield* Effect.promise(() =>
@@ -280,7 +248,7 @@ describe('model availability', () => {
         const logs = captureLogEntries();
 
         const rows = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [HAIKU3, HAIKU35]),
+          yield* readModelOptions(hostStores(), [HAIKU3, HAIKU35]),
         );
 
         expect(rows.map((row) => row.availability)).toEqual([
@@ -289,65 +257,7 @@ describe('model availability', () => {
         ]);
         // Only the Kimi Code routing key every call resolves up front.
         expect(logs.at('WARN')).toHaveLength(1);
-
-        // Two models that do reach the Copilot branch: one preference read each.
-        const keyed = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55, GPT56]),
-        );
-
-        expect(keyed).toHaveLength(2);
-        expect(globalState.copilotPreferenceReads).toBe(2);
       }).pipe(withDiagnostics),
-  );
-
-  it.effect(
-    'finishes the rows without a further host read once the inputs are in',
-    () =>
-      Effect.gen(function* () {
-        // The seam callers now own: everything that touches a host happens in
-        // `readModelOptions`, and the rows and reasons are synchronous
-        // functions of its options — no store is consulted a second time while
-        // the rows are built, so a credential change mid-render cannot split
-        // one computation across two views of the host.
-        //
-        // GPT-5.6 Terra is preferred through Copilot with no route discovered, which
-        // is the case whose sentence used to be worded at finish time out of
-        // the live preference and catalogue: it is the arm that can leak a host
-        // read past this boundary, so it is the one the counting store watches.
-        const secrets = new FakeSecrets(OPENAI_KEY_SECRETS);
-        const secretReads = vi.spyOn(secrets, 'get');
-        const globalState = new CountingStateStore({
-          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]),
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GPT56_TERRA],
-        });
-        yield* Effect.promise(() =>
-          installPlatform({}, { secrets, globalState }),
-        );
-
-        const inputs = yield* availabilityInputs(hostStores(), [
-          GPT55,
-          GPT56_TERRA,
-        ]);
-        const readsAfterInputs = secretReads.mock.calls.length;
-        const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
-
-        const rows = modelOptionsFrom(inputs);
-        const available = unavailableReasonOf(inputs, GPT55);
-        const copilot = unavailableReasonOf(inputs, GPT56_TERRA);
-
-        expect(rows.map((row) => row.availability)).toEqual([
-          'provider-key',
-          'copilot-unavailable',
-        ]);
-        expect(available).toBeNull();
-        expect(copilot).toBe(
-          'No VS Code window offers "openai/gpt-5.6-terra" through Copilot: Copilot models run through a VS Code window of this project. Open the project in VS Code with GitHub Copilot, or stop using Copilot for this model.',
-        );
-        expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
-        expect(globalState.copilotPreferenceReads).toBe(
-          preferenceReadsAfterInputs,
-        );
-      }),
   );
 
   it.effect(
@@ -357,7 +267,7 @@ describe('model availability', () => {
         yield* Effect.promise(() => installAccessPlatform());
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['no-such-model']),
+          yield* readModelOptions(hostStores(), ['no-such-model']),
         );
 
         expect(model).toMatchObject({
@@ -373,10 +283,10 @@ describe('model availability', () => {
       yield* Effect.promise(() => installAccessPlatform());
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [HAIKU3]),
+        yield* readModelOptions(hostStores(), [HAIKU3]),
       );
       const reason = unavailableReasonOf(
-        yield* availabilityInputs(hostStores(), [HAIKU3]),
+        yield* readModelOptions(hostStores(), [HAIKU3]),
         HAIKU3,
       );
 
@@ -397,7 +307,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55]),
+          yield* readModelOptions(hostStores(), [GPT55]),
         );
 
         expect(model.availability).toBe('provider-key');
@@ -415,7 +325,7 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
+        yield* readModelOptions(hostStores(), [GPT56_PRO]),
       );
 
       expect(MODEL_CONFIGS['openai/gpt-5.6-sol'].modes).toContain('pro');
@@ -437,7 +347,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT56]),
+          yield* readModelOptions(hostStores(), [GPT56]),
         );
 
         expect(model.availability).toBe('subscription-access');
@@ -471,7 +381,7 @@ describe('model availability', () => {
           }),
         );
 
-        const options = yield* availabilityInputs(hostStores(), [GPT56]);
+        const options = yield* readModelOptions(hostStores(), [GPT56]);
         const [row] = modelOptionsFrom(options);
 
         expect(row.reasoning).toBe('Medium (High unavailable)');
@@ -494,7 +404,7 @@ describe('model availability', () => {
         }),
       );
 
-      const models = modelOptionsFrom(yield* availabilityInputs(hostStores()));
+      const models = modelOptionsFrom(yield* readModelOptions(hostStores()));
       const expected: string[] = [];
       for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
         if (
@@ -539,7 +449,7 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
         }),
       );
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [KIMI3]),
+        yield* readModelOptions(hostStores(), [KIMI3]),
       );
       return model;
     });

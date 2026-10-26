@@ -14,12 +14,6 @@
  * one request every codec admits is system text, messages and tools. A route
  * that needs more states it in its own configuration defaults.
  *
- * `vscode-lm` is absent by construction: it is
- * acquired through the extension host's `vscode.lm` API
- * (`packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`), so a
- * live check of it needs an Extension Development Host, not this Vitest
- * project.
- *
  * Model ids here are the cheapest generally available model on each route at
  * the time of writing. A provider retiring one fails its own suite and
  * nothing else; update the id in that suite.
@@ -105,7 +99,6 @@ const completeTurn = (model: Model, request: TurnRequest) =>
     const turn = yield* model.prepareTurn(request);
     assert(turn.mode === 'foreground');
     const result = yield* completedTurn(model.streamTurn(turn));
-    assert(result.kind === 'http');
     return result;
   });
 

@@ -21,7 +21,6 @@ The table below lists the AI model providers TeXRA supports, their headquarters,
 
 - **Personal API keys**: When you use your own API keys, requests go directly from your local TeXRA client (VS Code extension, CLI, or desktop app) to the provider. No data passes through TeXRA servers.
 - **Provider subscriptions**: When you connect a provider subscription (ChatGPT or Grok via OAuth sign-in, or a Kimi Code / GLM Coding Plan via its plan-specific key), requests still go directly from your local TeXRA client to that provider's endpoints. No data passes through TeXRA servers.
-- **GitHub Copilot in VS Code**: In the VS Code extension, models can also be served through a GitHub Copilot subscription via VS Code's language-model API. Those requests go from VS Code to GitHub/Microsoft's Copilot endpoints and are subject to GitHub's [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) and [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). No data passes through TeXRA servers.
 
 ## Your responsibility
 

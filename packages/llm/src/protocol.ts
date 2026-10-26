@@ -29,56 +29,29 @@ export const BindingSchema = Schema.Struct({
     credentialScope: Schema.String.check(Schema.isMinLength(1)),
   }),
 });
-/** The protocols a wire model speaks; the editor's `vscode-lm` is the other. */
-const WIRE_PROTOCOLS = [
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-] as const;
 /**
  * Every wire surface the package speaks. Usage is billed per surface, so a
  * usage record's provider is the protocol of the turn that produced it.
  */
 export const TurnProtocolSchema = Schema.Literals([
-  ...WIRE_PROTOCOLS,
-  'vscode-lm',
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
 ]);
 
-export const OriginSchema = BindingSchema.mapFields(
+/** Selected binding, distinct from an optional returned model version. */
+export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({
-    protocol: Schema.Literals(WIRE_PROTOCOLS),
+    protocol: TurnProtocolSchema,
     codecVersion: Schema.Literal(1),
   }),
 );
-export const EditorBindingSchema = BindingSchema.mapFields(
-  Struct.pick(['requestedModel']),
-).mapFields(
-  Struct.assign({
-    deployment: Schema.Struct({
-      vendor: Schema.String,
-      version: Schema.String,
-    }),
-  }),
-);
-export const EditorOriginSchema = EditorBindingSchema.mapFields(
-  Struct.assign({
-    protocol: Schema.Literal('vscode-lm'),
-    codecVersion: OriginSchema.fields.codecVersion,
-  }),
-);
-
-/** Selected binding, distinct from an optional returned model version. */
-export const ModelOriginSchema = Schema.Union([
-  OriginSchema,
-
-  EditorOriginSchema,
-]);
 /** The binding a turn was requested on: model, deployment and protocol. */
 export type ModelOrigin = typeof ModelOriginSchema.Type;
 
 /** The origin a wire model stamps on its turns: the one place `codecVersion` is written. */
-export const originOf = <P extends (typeof OriginSchema.Type)['protocol']>(
-  config: Pick<typeof OriginSchema.Type, 'requestedModel' | 'deployment'> & {
+export const originOf = <P extends ModelOrigin['protocol']>(
+  config: Pick<ModelOrigin, 'requestedModel' | 'deployment'> & {
     readonly protocol: P;
   },
 ) =>
@@ -102,14 +75,6 @@ export function sameModelOrigin(
     left.requestedModel !== right.requestedModel
   ) {
     return false;
-  }
-  if (left.protocol === 'vscode-lm' || right.protocol === 'vscode-lm') {
-    return (
-      left.protocol === 'vscode-lm' &&
-      right.protocol === 'vscode-lm' &&
-      left.deployment.vendor === right.deployment.vendor &&
-      left.deployment.version === right.deployment.version
-    );
   }
   return (
     left.deployment.endpoint === right.deployment.endpoint &&

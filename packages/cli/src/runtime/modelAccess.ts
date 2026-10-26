@@ -275,15 +275,11 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'retired':
       return 'Choose an active model.';
     case 'unserved':
-      return 'Only OpenRouter serves this model, which TeXRA no longer supports: choose another model.';
+      return 'Only OpenRouter or GitHub Copilot serves this model, which TeXRA no longer supports: choose another model.';
     case 'subscription-access':
     case 'xai-subscription-access':
-    case 'copilot-allowed':
     case undefined:
       return undefined;
-    case 'copilot-consent-required':
-    case 'copilot-unavailable':
-      return 'Use this model in VS Code through GitHub Copilot, or choose another model.';
     case 'unknown-model':
       return 'Choose a model that is available in the current registry.';
     default:

@@ -98,8 +98,7 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
     case 'accepted':
       return [p.operation.origin];
     case 'response': {
-      const continuation =
-        p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;
+      const continuation = p.turn.continuation ?? null;
       return continuation === null
         ? [p.turn.requestedOrigin]
         : [p.turn.requestedOrigin, continuation.origin];
@@ -117,7 +116,6 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
  * that violated it, never the endpoint the check keeps out of durable state.
  */
 function unsafeEndpoint(origin: ModelOrigin): string | null {
-  if (origin.protocol === 'vscode-lm') return null;
   const { endpoint } = origin.deployment;
   if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
   const url = new URL(endpoint);

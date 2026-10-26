@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import {
   type RequestRefusal,
-  LanguageModel,
   StateStore,
   StateWriteFailed,
   StateReadFailed,
@@ -20,7 +19,7 @@ import type { ProcessServices } from '@texra-ai/harness';
 
 /** How a card action fails: the funnel's flag write, plus whatever the
  *  sign-in program failed with. */
-type OnboardingAction<E = never, R = LanguageModel> = Effect.Effect<
+type OnboardingAction<E = never, R = never> = Effect.Effect<
   void,
   StateWriteFailed | StateReadFailed | E,
   R
@@ -35,7 +34,7 @@ interface DesktopOnboardingIpcOptions {
    * the funnel refresh below yields it on the runtime it already holds. A
    * check that cannot be answered fails, and the funnel keeps its state.
    */
-  hasCredential: () => Effect.Effect<boolean, Error, LanguageModel>;
+  hasCredential: () => Effect.Effect<boolean, Error>;
   /** Launch the setup conversation when the user clicks "Run Setup". The
    *  host reports its own failure, so the program never fails. */
   kickoffSetup: () => Effect.Effect<void>;

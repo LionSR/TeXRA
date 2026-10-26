@@ -76,10 +76,6 @@ export enum GlobalStateKey {
   GLM_CODING_PLAN = 'texra.glm.codingPlan',
   KIMI_CODE_PREFER = 'texra.kimiCode.prefer',
 
-  // Routing settings
-  /** Canonical base model ids the user prefers to serve through Copilot. */
-  COPILOT_ROUTE_MODELS = 'texra.copilotRouteModels',
-
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',
 

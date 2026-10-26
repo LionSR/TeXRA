@@ -1,11 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
-import {
-  MODEL_CONFIGS,
-  ModelProvider,
-  formatModelRef,
-  parseModelRef,
-} from 'llm-zoo';
+import { MODEL_CONFIGS, formatModelRef, parseModelRef } from 'llm-zoo';
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
@@ -60,8 +55,7 @@ export interface CliCommandDefaults {
 }
 
 export function isCliSupportedModelId(model: string): boolean {
-  const config = modelConfig(model);
-  return config != null && config.provider !== ModelProvider.COPILOT;
+  return modelConfig(model) != null;
 }
 
 export function knownCliModelIds(): string[] {

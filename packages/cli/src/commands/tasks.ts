@@ -236,7 +236,6 @@ const startCommand = defineCliCommand({
             config,
             continues: null,
             preferHelperModel: false,
-            ownApiKeyFallback: false,
             approvalPolicy: approval.approvalPolicy ?? null,
             approveDelegatedWork: approval.approveDelegatedWork,
           });

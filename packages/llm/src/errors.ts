@@ -3,8 +3,7 @@ import { Effect, Result, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
-  EditorOriginSchema,
-  OriginSchema,
+  ModelOriginSchema,
   sameModelOrigin,
   type ModelOrigin,
 } from './protocol.js';
@@ -13,7 +12,7 @@ import {
 
 /** Enough evidence to observe accepted remote work, without a second transcript. */
 const ResponsesOperationSchema = Schema.Struct({
-  origin: OriginSchema.mapFields(
+  origin: ModelOriginSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('openai-responses'),
     }),
@@ -29,7 +28,7 @@ export const RemoteOperationSchema = Schema.Union([
 
   ResponsesOperationSchema.mapFields(
     Struct.assign({
-      origin: OriginSchema.mapFields(
+      origin: ModelOriginSchema.mapFields(
         Struct.assign({
           protocol: Schema.Literal('google-interactions'),
         }),
@@ -54,10 +53,8 @@ export type PlanRoute = typeof PlanRouteSchema.Type;
 /** The route a binding bills through: a plan, or the caller's API key. */
 export type BillingRoute = PlanRoute | 'api-key';
 
-/** A model failure's fields as data: what crosses a process boundary (an
- *  editor's model served to the service) and is rebuilt there as a
- *  {@link ModelError}. */
-export const ModelErrorFieldsSchema = Schema.Struct({
+/** A model failure's fields as data: what {@link ModelError} carries. */
+const ModelErrorFieldsSchema = Schema.Struct({
   kind: Schema.Literals([
     'invalid-request',
     'unsupported',
@@ -105,15 +102,6 @@ export const ModelErrorFieldsSchema = Schema.Struct({
     }),
   ),
   operation: Schema.optional(RemoteOperationSchema),
-  providerEvidence: Schema.optional(
-    Schema.Union([
-      Schema.Struct({
-        kind: Schema.Literal('vscode-lm'),
-        origin: EditorOriginSchema,
-        code: Schema.Literals(['NoPermissions', 'Blocked', 'NotFound']),
-      }),
-    ]),
-  ),
 });
 /** A {@link ModelError}'s fields: the wire fields and the local `cause`. */
 export type ModelErrorFields = typeof ModelErrorFieldsSchema.Type & {

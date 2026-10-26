@@ -29,20 +29,16 @@ export const StoredProtocolSchema = Schema.Literals([
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
-  'vscode-lm',
 ]);
 
 /** The selected binding: protocol, deployment and model, never a secret. */
 export const StoredOriginSchema = Schema.Struct({
   protocol: StoredProtocolSchema,
   requestedModel: Schema.String.check(Schema.isMinLength(1)),
-  deployment: Schema.Union([
-    Schema.Struct({
-      endpoint: Schema.String.check(Schema.isMinLength(1)),
-      credentialScope: Schema.String.check(Schema.isMinLength(1)),
-    }),
-    Schema.Struct({ vendor: Schema.String, version: Schema.String }),
-  ]),
+  deployment: Schema.Struct({
+    endpoint: Schema.String.check(Schema.isMinLength(1)),
+    credentialScope: Schema.String.check(Schema.isMinLength(1)),
+  }),
   codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
 });
 
@@ -111,52 +107,38 @@ const TokenCount = Schema.NullOr(
   Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 );
 
-/** One completed provider turn. An editor turn reports no provider facts. */
-export const StoredTurnSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal('http'),
-    providerResponseId: Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)),
-    ),
-    requestedOrigin: StoredOriginSchema,
-    returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-    modelFingerprint: Schema.NullOr(Schema.String),
-    content: StoredContentSchema,
-    finishReason: Schema.Literals([
-      'stop',
-      'length',
-      'content-filter',
-      'tool-calls',
-      'stop-sequence',
-      'refusal',
-      'context-window-exceeded',
-    ]),
-    stopSequence: Schema.optional(Schema.String),
-    finishEvidence: Schema.optional(ProviderEvidenceSchema),
-    refusalEvidence: Schema.optional(Schema.NullOr(ProviderEvidenceSchema)),
-    usage: Schema.NullOr(
-      Schema.Struct({
-        inputTokens: TokenCount,
-        outputTokens: TokenCount,
-        totalTokens: TokenCount,
-        cachedInputTokens: TokenCount,
-        reasoningTokens: TokenCount,
-        providerUsage: Schema.optional(ProviderEvidenceSchema),
-      }),
-    ),
-    continuation: Schema.optional(ProviderEvidenceSchema),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('editor'),
-    requestedOrigin: StoredOriginSchema,
-    providerResponseId: Schema.Null,
-    returnedModel: Schema.Null,
-    modelFingerprint: Schema.Null,
-    finishReason: Schema.Null,
-    usage: Schema.Null,
-    content: StoredContentSchema,
-  }),
-]);
+/** One completed provider turn. */
+export const StoredTurnSchema = Schema.Struct({
+  kind: Schema.Literal('http'),
+  providerResponseId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  requestedOrigin: StoredOriginSchema,
+  returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  modelFingerprint: Schema.NullOr(Schema.String),
+  content: StoredContentSchema,
+  finishReason: Schema.Literals([
+    'stop',
+    'length',
+    'content-filter',
+    'tool-calls',
+    'stop-sequence',
+    'refusal',
+    'context-window-exceeded',
+  ]),
+  stopSequence: Schema.optional(Schema.String),
+  finishEvidence: Schema.optional(ProviderEvidenceSchema),
+  refusalEvidence: Schema.optional(Schema.NullOr(ProviderEvidenceSchema)),
+  usage: Schema.NullOr(
+    Schema.Struct({
+      inputTokens: TokenCount,
+      outputTokens: TokenCount,
+      totalTokens: TokenCount,
+      cachedInputTokens: TokenCount,
+      reasoningTokens: TokenCount,
+      providerUsage: Schema.optional(ProviderEvidenceSchema),
+    }),
+  ),
+  continuation: Schema.optional(ProviderEvidenceSchema),
+});
 
 /** One entry of canonical history. */
 export const StoredMessageSchema = Schema.Union([

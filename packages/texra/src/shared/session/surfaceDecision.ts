@@ -147,7 +147,6 @@ export function approvalDecisionArms(
             kind: 'useOwnApiKey',
             runId,
             requestId,
-            model: data.model,
             credentialSwitch: data.credentialSwitch,
           },
         },
