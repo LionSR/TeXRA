@@ -145,6 +145,9 @@ The package is split by where its code runs, not by topic.
 | `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s, `SharedAttempt`                                                                                                                                 | Node         |
 
 Every type a public signature names is exported from one of the two entries.
+Each entry's exports, with their TSDoc and declarations, are listed in
+[`docs/api/index.md`](./docs/api/index.md) and
+[`docs/api/node.md`](./docs/api/node.md), generated from the source.
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.

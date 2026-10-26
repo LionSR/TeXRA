@@ -1,7 +1,10 @@
-// Generates the public-surface report of each core package entry
-// (config/api-reports/<package>[.<subpath>].api.md): one line per export,
-// with its kind and type, so a change to the public surface shows up as a
-// diff in review. The entries are read from each package's `exports`.
+// Generates two documents for each core package entry, from one type-checked
+// program over the entries read from each package's `exports`:
+// - the public-surface report (config/api-reports/<package>[.<subpath>].api.md):
+//   one line per export, with its kind and type, so a change to the public
+//   surface shows up as a diff in review;
+// - the API reference (packages/<package>/docs/api/<entry>.md), shipped in the
+//   package: each export's TSDoc and declaration, for a reader of the package.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -34,12 +37,12 @@ export function coreEntries(rootDir) {
         subpath,
         file: path.join(rootDir, dir, 'src', `${source}.ts`),
         report: `${path.basename(dir)}${subpath === '.' ? '' : `.${subpath.slice(2)}`}.api.md`,
+        reference: `${dir}/docs/api/${subpath === '.' ? 'index' : subpath.slice(2)}.md`,
       };
     });
   });
 }
 
-/** One export's line in a report. */
 /** A markdown code span for `text`: its fence is one backtick longer than
  *  the longest backtick run inside (a type can carry a string literal that
  *  quotes code), so Prettier reads it as one span and leaves it alone. */
@@ -50,6 +53,7 @@ const codeSpan = (text) => {
   const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
   return `${fence}${pad}${text}${pad}${fence}`;
 };
+/** One export's line in a report. */
 const reportLine = (name, description) =>
   `- ${codeSpan(name)} — ${codeSpan(description)}`;
 
@@ -136,13 +140,8 @@ const typeText = (checker, type) =>
   printSorted(checker.typeToTypeNode(type, undefined, FULL));
 
 function describe(checker, symbol) {
-  const target =
-    symbol.flags & ts.SymbolFlags.Alias
-      ? checker.getAliasedSymbol(symbol)
-      : symbol;
-  const declaration = target.declarations?.[0];
+  const { target, declaration, kind } = exportTarget(checker, symbol);
   if (declaration == null) return `unknown ${symbol.name}`;
-  const kind = kindOf(declaration);
   if (kind === 'interface' || kind === 'type' || kind === 'enum') {
     const text = printer
       .printNode(
@@ -202,8 +201,72 @@ function describe(checker, symbol) {
   return `${kind} ${symbol.name}: ${typeText(checker, type)}`;
 }
 
-/** Report file name → `{ text }` (the report), one per core package
- *  entry. */
+/** The declaration an export names, and its kind. */
+function exportTarget(checker, symbol) {
+  const target =
+    symbol.flags & ts.SymbolFlags.Alias
+      ? checker.getAliasedSymbol(symbol)
+      : symbol;
+  const declaration = target.declarations?.[0];
+  return {
+    target,
+    declaration,
+    kind: declaration == null ? 'unknown' : kindOf(declaration),
+  };
+}
+
+/** An export's TSDoc as markdown: its comment, then its tags. */
+function docText(checker, target) {
+  const comment = ts.displayPartsToString(
+    target.getDocumentationComment(checker),
+  );
+  const tags = target.getJsDocTags(checker).map((tag) => {
+    const text = ts.displayPartsToString(tag.text);
+    return `- \`@${tag.name}\`${text === '' ? '' : ` ${text}`}`;
+  });
+  return [comment, tags.join('\n')].filter((part) => part !== '').join('\n\n');
+}
+
+/** An interface, type alias or enum as written; anything else as its
+ *  report line. */
+function declarationText(checker, symbol) {
+  const { declaration, kind } = exportTarget(checker, symbol);
+  return declaration != null &&
+    (kind === 'interface' || kind === 'type' || kind === 'enum')
+    ? declaration.getText().replace(/^export (?:declare )?/, '')
+    : describe(checker, symbol);
+}
+
+/** Each export's heading, TSDoc and declaration. */
+const referenceText = (checker, entry, source, exports) =>
+  [
+    `# \`${entry}\``,
+    '',
+    `<!-- Generated from \`${source}\` by \`npm run docgen\`; do not edit. -->`,
+    ...exports.flatMap((symbol) => {
+      const doc = docText(checker, exportTarget(checker, symbol).target);
+      return [
+        '',
+        `## ${symbol.name}`,
+        ...(doc === '' ? [] : ['', doc]),
+        '',
+        '```ts',
+        declarationText(checker, symbol),
+        '```',
+      ];
+    }),
+    '',
+  ].join('\n');
+
+/** Directories (repo-relative) whose files `apiReports` writes in full. */
+export const GENERATED_DIRS = [
+  'config/api-reports',
+  'packages/harness/docs/api',
+  'packages/llm/docs/api',
+];
+
+/** Repo-relative path → text: the report and the reference of each core
+ *  package entry. */
 export function apiReports(rootDir) {
   const list = coreEntries(rootDir);
   const configPath = path.join(rootDir, 'tsconfig.build.json');
@@ -215,7 +278,7 @@ export function apiReports(rootDir) {
   );
   const checker = program.getTypeChecker();
   return new Map(
-    list.map(({ name, subpath, file, report }) => {
+    list.flatMap(({ name, subpath, file, report, reference }) => {
       const sourceFile = program.getSourceFile(file);
       const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
       const exports = checker
@@ -225,20 +288,22 @@ export function apiReports(rootDir) {
         reportLine(symbol.name, describe(checker, symbol)),
       );
       const entry = subpath === '.' ? name : `${name}/${subpath.slice(2)}`;
+      const source = path.relative(rootDir, file);
       return [
-        report,
-        {
-          text: [
+        [
+          `config/api-reports/${report}`,
+          [
             `# \`${entry}\` API report`,
             '',
-            `Generated from \`${path.relative(rootDir, file)}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. A diff here is a change to the public surface.`,
+            `Generated from \`${source}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. A diff here is a change to the public surface.`,
             '',
             `Exports: ${exports.length}`,
             '',
             ...lines,
             '',
           ].join('\n'),
-        },
+        ],
+        [reference, referenceText(checker, entry, source, exports)],
       ];
     }),
   );
