@@ -71,13 +71,6 @@ environment, agents, and first task. Read the
 [Authentication section](./texra-cli.md#authentication) of the CLI guide.
 :::
 
-## Basic workflow
-
-Haven't run an agent yet? [First run](./first-run.md) walks through the
-whole loop (sample file, one `polish` run, read the diff) in five
-minutes, side by side for the extension and the CLI. The sections below
-cover the New task controls you'll use beyond that.
-
 ## The New task view in detail
 
 Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
@@ -322,11 +315,8 @@ folder per revision. Each revision holds three artifacts, and the document keeps
 
 <p class="hero-caption">One folder per revision under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. The second revision (and any further one) repeats the same trio in <code>r1/</code>, <code>r2/</code>, …</p>
 
-So if your input file is `draft.tex`, the first revision's output lands at
-`r0/draft.tex`, the filename you started with, never `output.tex`. The CLI
-writes the same per-revision tree under `executions/<run-id>/` in the
-workspace store. Read
-[First run](./first-run.md) for the terminal walkthrough.
+The CLI writes the same per-revision tree under `executions/<run-id>/` in the
+workspace store. Read [First run](./first-run.md) for the terminal walkthrough.
 
 ## Next steps
 

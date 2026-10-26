@@ -36,12 +36,6 @@ A credential is the one step no agent can do for you. Three ways in:
   access in the native VS Code prompt. No provider API key is needed. This
   source is unavailable in the terminal and desktop applications.
 
-## What you'll do
-
-1.  Get a sample `.tex` file.
-2.  Run the `polish` agent with one instruction.
-3.  Read the diff.
-
 ## Get a sample file
 
 If you already have a working draft, skip this step.

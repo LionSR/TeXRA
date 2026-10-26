@@ -19,13 +19,7 @@ Before creating a custom agent, it helps to understand the underlying concepts:
 - <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
   :::
 
-## <wa-icon library="texra" name="library"></wa-icon> Reference agents
-
-TeXRA includes ready-made reference agents you can use as starting points. Treat them as recipes: copy one into your custom agents directory, adjust it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles one input or several through the fixed `<documents>` container and emits one `<document name="...">` per input.
-
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a custom agent file
-
-Follow these steps to create a new custom agent.
 
 ### <wa-icon library="texra" name="folder-opened"></wa-icon> Step 1: locate or configure the custom agents directory
 
@@ -130,7 +124,6 @@ inlined as text (read [Working with figures](./working-with-figures.md)).
 **Custom variables (from `task.files`):**
 
 - Each file bound in `task.files` is available as `{{ VARNAME_FILE }}` (its path) and `{{ VARNAME_CONTENT }}` (its text); a binding `TEMPLATE: template.tex` gives `{{ TEMPLATE_CONTENT }}`.
-- When agents finish, TeXRA captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
 
 **Example usage in `task.prefix`:**
 
@@ -149,27 +142,15 @@ task:
     <instruction>{{ INSTRUCTION }}</instruction>
 ```
 
-**Key considerations:**
-
-- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture overview:** For the execution flow and how prompts and settings interact, read the [Document tasks: how they work](./agent-architecture.md) guide.
-- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Start from a copy:** Customizing a related built-in agent (for example `correct` or `polish`) gives you a full copy to edit, which saves effort.
-- <wa-icon library="texra" name="files"></wa-icon> **Multiple outputs:** If your agent needs to generate multiple distinct files, make sure your prompts generate the required XML structure. Read the [Handling multiple files](./multiple-output.md) guide.
-- <wa-icon library="texra" name="rocket"></wa-icon> **Start simple:** Begin with basic settings and prompts and add complexity incrementally.
-- <wa-icon library="texra" name="debug-alt"></wa-icon> **Test iteratively:** Test often and review logs in the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>).
-
 ### <wa-icon library="texra" name="link"></wa-icon> Chaining agents together
 
-After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. This is how multi-stage pipelines work: for example, an orchestrator agent can run `polish` with the `document_task` tool, then hand the result to a `correct` task, all in one session.
-
-You do not need to configure this yourself; it happens when an agent definition includes orchestration prompts. The reference agents contain working examples.
+After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. For example, an orchestrator agent can run `polish` with the `document_task` tool and pass the resulting files directly to a `correct` task in one session.
 
 ### <wa-icon library="texra" name="tools"></wa-icon> Agents with tools
 
-An agent without a `task` block works in a chat: instead of producing a single polished file, they hold a conversation and take actions on your behalf, such as reading and editing files, searching the web, and looking up papers.
+An agent without a `task` block works in a chat: instead of producing a single revised file, it holds a conversation and calls tools to read and edit files, run commands, search the web, and look up papers.
 
-**Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
-
-To create your own agent with tools, leave out the `task` block and list the tools you want to grant. Such an agent has no request template: what you type is sent as the user message. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
+To create an agent with tools, omit the `task` block and list the tools to grant under `tools:`. What you type in the composer is sent directly as the user message. TeXRA groups tools by plugin (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)); each chip below is a tool name you can place in `tools:`:
 
 <ToolCategoriesHero />
 
