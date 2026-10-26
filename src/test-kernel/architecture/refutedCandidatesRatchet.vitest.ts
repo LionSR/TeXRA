@@ -3,9 +3,9 @@
 // re-proposes them. config/ratchets/refuted-candidates.json holds them as
 // data; this suite pins each refused symbol's shape against it.
 //
-// It does not forbid the change. It requires the author to have read the
-// ruling: a candidate that lands on NEW evidence updates or deletes its entry
-// in the same PR, citing the ruling id.
+// It does not forbid the change: a candidate that lands on NEW evidence
+// updates or deletes its entry in the same PR, and by convention cites the
+// ruling id in the PR body.
 
 // Node imports
 import { readFileSync } from 'node:fs';

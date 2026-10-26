@@ -36,19 +36,15 @@ The architecture rulings ledger is prose, and an agent kept re-proposing
 `withPerKeyLane` onto `Semaphore` and `ModelRetryGate` onto `Schedule`.
 `config/ratchets/refuted-candidates.json` records each investigated, costed
 and refused candidate: an `id`, the `symbols` that carry its shape, and a
-`ruling` anchor. Two enforcement points, because a pure-tier suite has no
-PR body:
+`ruling` anchor. `src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts`
+pins every symbol's signature, so a symbol that changes shape fails until
+the baseline is updated in the same PR. Citing the candidate's `id` in the
+PR body is a convention; a PR-body check
+(`.github/workflows/refuted-candidates.yml`) once enforced it and was
+removed as low value. <!-- guidance-refs-ignore -->
 
-- `src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts` pins
-  every symbol's signature, so a symbol that changes shape fails until the
-  baseline is updated in the same PR.
-- `.github/workflows/refuted-candidates.yml`
-  (`scripts/check-refuted-candidates.mjs`) fails a pull request whose diff
-  touches a refuted symbol's declaration unless the PR body cites that
-  candidate's `id`.
-
-Neither forbids the change. A PR that lands a candidate on new evidence
-cites the id, says what changed, and deletes or rewrites the entry.
+The ratchet does not forbid the change. A PR that lands a candidate on new
+evidence cites the id, says what changed, and deletes or rewrites the entry.
 
 ## 3. Docs whose status is typed, not derived
 
