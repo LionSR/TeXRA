@@ -221,7 +221,8 @@ function docText(checker, target) {
     target.getDocumentationComment(checker),
   );
   const tags = target.getJsDocTags(checker).map((tag) => {
-    const text = ts.displayPartsToString(tag.text);
+    // Continuation lines stay inside the tag's bullet.
+    const text = ts.displayPartsToString(tag.text).replace(/\n/g, '\n  ');
     return `- \`@${tag.name}\`${text === '' ? '' : ` ${text}`}`;
   });
   return [comment, tags.join('\n')].filter((part) => part !== '').join('\n\n');
@@ -254,7 +255,8 @@ function declarationText(checker, symbol) {
       : checker.typeToString(
           checker.getTypeOfSymbolAtLocation(target, declaration),
           undefined,
-          ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope,
+          ts.TypeFormatFlags.NoTruncation |
+            ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope,
         );
   return `const ${symbol.name}: ${type}`;
 }

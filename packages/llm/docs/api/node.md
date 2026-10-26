@@ -87,7 +87,7 @@ the stored session once the user approves; fails on timeout or a hard
 failure with a tagged error whose `message` is the user-facing text.
 
 ```ts
-const codexLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<...>
+const codexLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## codexLoginWithLoopback
@@ -95,7 +95,7 @@ const codexLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessTo
 The browser sign-in, bound to the registered ChatGPT callback.
 
 ```ts
-const codexLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<...>
+const codexLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## CodexSession
@@ -380,7 +380,7 @@ the stored session once the user approves; fails with a tagged error whose
 `message` is the user-facing text.
 
 ```ts
-const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<...>
+const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## xaiLoginWithLoopback
@@ -388,7 +388,7 @@ const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToke
 The browser sign-in, bound to the registered Grok callback.
 
 ```ts
-const xaiLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<...>
+const xaiLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## XaiSession

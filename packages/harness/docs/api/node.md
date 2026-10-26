@@ -128,7 +128,7 @@ in its own group, on a lifeline that ends the group if this process dies
 without running the release.
 
 ```ts
-const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly exitCode: number; readonly timedOut: boolean; readonly stderr: string; readonly stdout: string; readonly outputLimitExceeded?: boolean | undefined; readonly noExitCode?: boolean | undefined; }, never, Chi...
+const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly exitCode: number; readonly timedOut: boolean; readonly stderr: string; readonly stdout: string; readonly outputLimitExceeded?: boolean | undefined; readonly noExitCode?: boolean | undefined; }, never, ChildProcessSpawner>
 ```
 
 ## ExecuteCommandBaseOptions

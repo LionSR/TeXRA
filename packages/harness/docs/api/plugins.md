@@ -200,7 +200,7 @@ function buildApprovalRejectedResult(
 Build a tool attachment by reading a workspace file and packaging metadata.
 
 ```ts
-const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly path: string; readonly mimeType: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<...> | undefined; }, ToolError, File...
+const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly path: string; readonly mimeType: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; }, ToolError, FileSystem | ToolContext>
 ```
 
 ## BuildFileAttachmentOptions
@@ -242,7 +242,7 @@ The fields every child launch takes beside its own: memories, the call's
 reuse id and card label, its time limit, and whether a script waits.
 
 ```ts
-const CALL_FIELDS: { memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<...>; id: optional<...>; label: optional<...>; timeoutMs: optional<...>; background: optional<...>; }
+const CALL_FIELDS: { memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }
 ```
 
 ## callerRun
@@ -873,7 +873,7 @@ The memory tree's host-facing reads and edits, over the caller's
 `StorageFs`.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly size: number; readonly displayPath: string; ... 6 more ...; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effe...
+const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly size: number; readonly displayPath: string; readonly storagePath: string; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string, pinned: boolean) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; }
 ```
 
 ## memoryWorkflow
@@ -1289,7 +1289,7 @@ the retry immediately and is the program's failure. Interruption stops both
 the active attempt and the backoff sleep.
 
 ```ts
-const retryTransientFetch: <T, E extends Error, R>(request: Effect<T, E, Scope | R>, options: RetryTransientFetchOptions<E>) => Effect<T, E | TimeoutError, Exclude<...>>
+const retryTransientFetch: <T, E extends Error, R>(request: Effect<T, E, Scope | R>, options: RetryTransientFetchOptions<E>) => Effect<T, E | TimeoutError, Exclude<R, Scope>>
 ```
 
 ## RetryTransientFetchOptions
