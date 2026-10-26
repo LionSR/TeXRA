@@ -231,16 +231,27 @@ export function createDesktopWindowHost(options: {
      *  releases page rather than any network-provided URL, so an
      *  unauthenticated API response can never influence what
      *  `shell.openExternal` opens. */
-    announceRelease: async (release: { version: string }) => {
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-        buttons: ['Download', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (response === 0) await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
-    },
+    announceRelease: (release: {
+      version: string;
+    }): Effect.Effect<void, Error> =>
+      Effect.gen(function* () {
+        const { response } = yield* Effect.tryPromise({
+          try: () =>
+            dialog.showMessageBox(window, {
+              type: 'info',
+              message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+              buttons: ['Download', 'Later'],
+              defaultId: 0,
+              cancelId: 1,
+            }),
+          catch: ensureError,
+        });
+        if (response === 0)
+          yield* Effect.tryPromise({
+            try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
+            catch: ensureError,
+          });
+      }),
     /** The folder the user picked, or undefined when they cancelled. */
     pickFolder: (
       title: string,

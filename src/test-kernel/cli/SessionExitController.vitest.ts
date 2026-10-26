@@ -1,11 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { DisposableStore } from '@texra/platform/disposable';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -57,7 +56,7 @@ describe('chat TUI session exit controller', () => {
       session,
       commandName: 'texra',
       cwd: '/tmp/project',
-      disposables: new DisposableStore(),
+      chatScope: Scope.makeUnsafe(),
       terminal,
       runtime: testRuntime(),
       submitted: Effect.void,

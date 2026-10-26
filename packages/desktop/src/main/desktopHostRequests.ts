@@ -75,6 +75,7 @@ import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { DesktopSpawn } from './desktopWindows.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
@@ -109,6 +110,8 @@ interface DesktopHostRequestsOptions {
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
+  /** The binding's spawner, which the recorder's notifications fork on. */
+  spawn: DesktopSpawn;
 }
 
 export interface DesktopHostRequests {
@@ -147,8 +150,11 @@ export function createDesktopHostRequests(
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
   const draftRequests = options.draftRequests.attach(roots, (recording) => {
-    // Recorder notifications can arrive outside a request fiber.
-    runtime.runFork(options.snapshot.setRecording(recording));
+    // Recorder notifications can arrive outside a request fiber; the first
+    // steps run in the caller's, so the snapshot takes them in order.
+    options.spawn(options.snapshot.setRecording(recording), {
+      startImmediately: true,
+    });
   });
   const runActions = runtime.runSync(
     createHostRunActions({

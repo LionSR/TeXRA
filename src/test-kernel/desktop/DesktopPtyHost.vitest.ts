@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -41,18 +42,25 @@ function loadFakePty(spawn: SpawnPty): LoadPty {
   return async () => ({ spawn });
 }
 
+type CreateInput = Parameters<
+  ReturnType<typeof createDesktopPtyHost>['create']
+>[0];
+
 const TERMINAL_ID = 'workbench:terminal:1';
 
-function createHost(
-  overrides: Partial<DesktopPtyHostOptions> = {},
-): ReturnType<typeof createDesktopPtyHost> {
-  return createDesktopPtyHost({
+function createHost(overrides: Partial<DesktopPtyHostOptions> = {}) {
+  const host = createDesktopPtyHost({
     cwd: '/workspace',
     onData: vi.fn(),
     onExit: vi.fn(),
     onError: vi.fn(),
     ...overrides,
   });
+  return {
+    ...host,
+    // Run at once: the handle is registered in the creation's first step.
+    create: (input: CreateInput) => Effect.runPromise(host.create(input)),
+  };
 }
 
 describe('desktop pty host', () => {

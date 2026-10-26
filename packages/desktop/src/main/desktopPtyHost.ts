@@ -15,13 +15,31 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
+
+import { Effect, Exit, Schema } from 'effect';
+
 import { withExtendedPath } from '@texra-ai/harness/node';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type
  * satisfies it structurally, and a test fakes only this much through
  * `loadPty`.
  */
+
+/** A terminal could not start: the native module would not load, or the
+ *  shell would not spawn. */
+class PtyStartFailed extends Schema.TaggedError<PtyStartFailed>()(
+  'PtyStartFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
+const startFailed = (cause: unknown) =>
+  new PtyStartFailed({ message: toErrorMessage(cause), cause });
+
 interface PtyProcess {
   onData(listener: (data: string) => void): void;
   onExit(
@@ -68,16 +86,17 @@ export interface DesktopPtyHostOptions {
 
 export interface DesktopPtyHost {
   /**
-   * Starts a session. Rejects when the native module is unavailable, so the
-   * caller can report "terminal unavailable" rather than hanging on a
-   * terminal that will never produce output. Returns `undefined` when resource
-   * disposal invalidates the request while the native module is loading.
+   * Starts a session. Fails when the native module is unavailable or the
+   * shell does not spawn, so the caller can report "terminal unavailable"
+   * rather than hanging on a terminal that will never produce output.
+   * Succeeds with `undefined` when resource disposal invalidates the request
+   * while the native module is loading.
    */
   create(input: {
     id: string;
     cols: number;
     rows: number;
-  }): Promise<PtySessionHandle | undefined>;
+  }): Effect.Effect<PtySessionHandle | undefined, PtyStartFailed>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -134,9 +153,9 @@ function ptyEnvironment(): Record<string, string> {
  * Fixed here rather than in a postinstall script so it survives any install
  * path, including a packaged app whose files were copied by the builder.
  */
-function ensureSpawnHelperExecutable(): void {
-  if (osPlatform() === 'win32') return;
-  try {
+const ensureSpawnHelperExecutable = Effect.try({
+  try: () => {
+    if (osPlatform() === 'win32') return;
     const require_ = createRequire(import.meta.url);
     const packageRoot = dirname(require_.resolve('node-pty/package.json'));
     const helper = join(
@@ -150,112 +169,149 @@ function ensureSpawnHelperExecutable(): void {
     // a pointless syscall, and on a read-only install it would throw.
     if ((mode & 0o111) === 0o111) return;
     chmodSync(helper, mode | 0o111);
-  } catch {
-    // A missing helper or read-only filesystem is not fatal here: the spawn
-    // below will fail with its own error, which the caller surfaces in the
-    // terminal as "Could not start a terminal".
-  }
-}
+  },
+  catch: ensureError,
+}).pipe(
+  // A missing helper or read-only filesystem is not fatal here: the spawn
+  // fails with its own error, which the caller surfaces in the terminal as
+  // "Could not start a terminal". The warning names why it may.
+  Effect.catch((error) =>
+    Effect.logWarning(
+      "node-pty's spawn-helper could not be made executable; a terminal may fail to start",
+      error,
+    ),
+  ),
+);
 
-let nodePtyLoad: Promise<NodePtyModule> | undefined;
+/** The loaded module, kept once a load succeeds so repeated terminals don't
+ *  re-resolve the addon; a failed load keeps nothing, so a later attempt
+ *  retries. */
+let nodePty: NodePtyModule | undefined;
 
-function loadNodePty(): Promise<NodePtyModule> {
-  // Cached so repeated terminals don't re-resolve the addon; a failure clears
-  // the cache so a later attempt can retry.
-  nodePtyLoad ??= import('node-pty')
-    .then((module) => {
-      ensureSpawnHelperExecutable();
-      return module;
-    })
-    .catch((error: unknown) => {
-      nodePtyLoad = undefined;
-      throw error;
-    });
-  return nodePtyLoad;
-}
+const loadNodePty: Effect.Effect<NodePtyModule, PtyStartFailed> =
+  Effect.suspend(() =>
+    nodePty !== undefined
+      ? Effect.succeed(nodePty)
+      : Effect.tryPromise({
+          try: () => import('node-pty'),
+          catch: startFailed,
+        }).pipe(
+          Effect.tap((module) =>
+            Effect.andThen(
+              ensureSpawnHelperExecutable,
+              Effect.sync(() => {
+                nodePty = module;
+              }),
+            ),
+          ),
+        ),
+  );
 
 export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
+  const loadPty =
+    options.loadPty === undefined
+      ? loadNodePty
+      : Effect.tryPromise({ try: options.loadPty, catch: startFailed });
 
   return {
-    async create({ id, cols, rows }) {
-      const existing = sessions.get(id);
-      if (existing) return existing;
+    create: ({ id, cols, rows }) =>
+      Effect.suspend(() => {
+        const existing = sessions.get(id);
+        if (existing) return Effect.succeed(existing);
 
-      // The handle is the session's one owner from this synchronous step on,
-      // before the native module load suspends: a close (or `disposeAll`)
-      // that lands while the load is pending finds it in the map and marks
-      // it disposed, so the shell is never spawned for a tab that is gone.
-      // Input typed before the shell exists is held and replayed to it.
-      let child: PtyProcess | undefined = undefined;
-      let disposed = false;
+        // The handle is the session's one owner from this synchronous step on,
+        // before the native module load suspends: a close (or `disposeAll`)
+        // that lands while the load is pending finds it in the map and marks
+        // it disposed, so the shell is never spawned for a tab that is gone.
+        // Input typed before the shell exists is held and replayed to it.
+        let child: PtyProcess | undefined = undefined;
+        let disposed = false;
 
-      let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
-      const heldInput: string[] = [];
-      const handle: PtySessionHandle = {
-        id,
-        write: (data) => {
-          if (child) child.write(data);
-          else heldInput.push(data);
-        },
-        resize: (nextCols, nextRows) => {
-          // A pty spawned at 0 columns makes shells emit unusable line
-          // wrapping, so clamp to a sane minimum until the renderer reports
-          // real bounds.
-          size = { cols: Math.max(nextCols, 20), rows: Math.max(nextRows, 5) };
-          if (!child) return;
-          try {
-            child.resize(size.cols, size.rows);
-          } catch (error) {
-            // Resizing a pty whose process already exited throws; the exit
-            // handler has cleaned up, so this is not actionable.
-            options.onError(error);
-          }
-        },
-        dispose: () => {
-          disposed = true;
-          if (sessions.get(id) === handle) sessions.delete(id);
-          if (!child) return;
-          try {
-            child.kill();
-          } catch (error) {
-            options.onError(error);
-          }
-        },
-      };
-      sessions.set(id, handle);
-      // Until a shell runs, a failure (the module load, or the spawn itself:
-      // a helper that cannot execute) gives the id back, so a later start
-      // for it spawns again rather than finding a handle no shell ever backs.
-      try {
-        const pty = await (options.loadPty?.() ?? loadNodePty());
-        if (disposed) return undefined;
-        child = pty.spawn(defaultShell(), [], {
-          name: 'xterm-256color',
-          cols: size.cols,
-          rows: size.rows,
-          cwd: options.cwd,
-          env: ptyEnvironment(),
-        });
-      } catch (error) {
-        if (sessions.get(id) === handle) sessions.delete(id);
-        if (disposed) return undefined;
-        throw error;
-      }
-      child.onData((data) => {
-        if (sessions.get(id) !== handle) return;
-        options.onData(id, data);
-      });
-      child.onExit(({ exitCode }) => {
-        if (sessions.get(id) !== handle) return;
-        sessions.delete(id);
-        options.onExit(id, exitCode);
-      });
-      for (const data of heldInput.splice(0)) child.write(data);
-      return handle;
-    },
+        let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
+        const heldInput: string[] = [];
+        const handle: PtySessionHandle = {
+          id,
+          write: (data) => {
+            if (child) child.write(data);
+            else heldInput.push(data);
+          },
+          resize: (nextCols, nextRows) => {
+            // A pty spawned at 0 columns makes shells emit unusable line
+            // wrapping, so clamp to a sane minimum until the renderer reports
+            // real bounds.
+            size = {
+              cols: Math.max(nextCols, 20),
+              rows: Math.max(nextRows, 5),
+            };
+            if (!child) return;
+            try {
+              child.resize(size.cols, size.rows);
+            } catch (error) {
+              // Resizing a pty whose process already exited throws; the exit
+              // handler has cleaned up, so this is not actionable.
+              options.onError(error);
+            }
+          },
+          dispose: () => {
+            disposed = true;
+            if (sessions.get(id) === handle) sessions.delete(id);
+            if (!child) return;
+            try {
+              child.kill();
+            } catch (error) {
+              options.onError(error);
+            }
+          },
+        };
+        sessions.set(id, handle);
+        return Effect.gen(function* () {
+          const pty = yield* loadPty;
+          if (disposed) return undefined;
+          const spawned = yield* Effect.try({
+            try: () =>
+              pty.spawn(defaultShell(), [], {
+                name: 'xterm-256color',
+                cols: size.cols,
+                rows: size.rows,
+                cwd: options.cwd,
+                env: ptyEnvironment(),
+              }),
+            catch: startFailed,
+          });
+          child = spawned;
+          spawned.onData((data) => {
+            if (sessions.get(id) !== handle) return;
+            options.onData(id, data);
+          });
+          spawned.onExit(({ exitCode }) => {
+            if (sessions.get(id) !== handle) return;
+            sessions.delete(id);
+            options.onExit(id, exitCode);
+          });
+          for (const data of heldInput.splice(0)) spawned.write(data);
+          return handle;
+        }).pipe(
+          // Until a shell runs, a failure (the module load, or the spawn
+          // itself: a helper that cannot execute) or an interruption gives the
+          // id back, so a later start for it spawns again rather than finding
+          // a handle no shell ever backs.
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit)
+              ? Effect.void
+              : Effect.sync(() => {
+                  if (sessions.get(id) === handle) sessions.delete(id);
+                }),
+          ),
+          // A creation the tab's close or `disposeAll` already invalidated
+          // ends quietly, whatever its load did.
+          Effect.catch((error) =>
+            disposed ? Effect.succeed(undefined) : Effect.fail(error),
+          ),
+        );
+      }),
 
     get: (id) => sessions.get(id),
 

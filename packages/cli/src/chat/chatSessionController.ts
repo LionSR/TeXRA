@@ -7,7 +7,6 @@ import {
   Cause,
   Deferred,
   Effect,
-  Exit,
   Fiber,
   FiberSet,
   Schema,
@@ -55,7 +54,6 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
-import type { DisposableStore } from '@texra/platform/disposable';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -214,8 +212,9 @@ export interface ChatSessionControllerInit {
    *  attaches one interaction host for the session's lifetime. */
   readonly getSessionContext: () => CliContext;
 
-  /** Disposable owner shared with the TUI session lifecycle. */
-  readonly disposables: DisposableStore;
+  /** The chat's scope: the host attachment and the resumed-root watch
+   *  close with it, which the exit drain awaits. */
+  readonly chatScope: Scope.Scope;
 
   /** The process's shutdown scope: the interaction host closes there, so
    *  every exit path, signal or graceful, awaits its close. */
@@ -294,7 +293,7 @@ export function createChatSessionController(
     runSession,
     served,
     getSessionContext,
-    disposables,
+    chatScope,
     shutdownScope,
     cwd,
     getSlashCommandContext,
@@ -464,14 +463,19 @@ export function createChatSessionController(
   // Attached to the chat's session for its lifetime: here, its requests'
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
-  const attached = runtime.runSync(Scope.make());
-  runtime.runFork(
-    runSession.attach(interactions).pipe(Scope.provide(attached)),
+  // The attachment closes after the interactions are disposed.
+  const attached = runtime.runSync(Scope.fork(chatScope));
+  runtime.runSync(
+    Scope.addFinalizer(
+      chatScope,
+      Effect.sync(() => interactions.dispose?.()),
+    ),
   );
-  disposables.add(() => {
-    interactions.dispose?.();
-    runtime.runFork(Scope.close(attached, Exit.void));
-  });
+  runtime.runSync(
+    runSession
+      .attach(interactions)
+      .pipe(Scope.provide(attached), Effect.forkIn(chatScope)),
+  );
 
   // -----------------------------------------------------------------------
   // startRootRun
@@ -481,24 +485,28 @@ export function createChatSessionController(
     config: AgentConfigPayload,
     runId: RunId = generateRunId(),
   ): Effect.Effect<void> =>
-    Effect.suspend(() => {
-      // The slot has to be claimed before the chain that settles it exists, so
-      // the claim holds the `await` of a `Deferred` the run chain completes.
-      // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
-      // node leaves the slot pending exactly as before.
-      const claimedRun = Deferred.makeUnsafe<void, Error>();
-      const claim = Deferred.await(claimedRun);
-      // Native launch may resolve its stream on this turn. Claim first so
-      // marking the run pending cannot erase that run or a reentrant stop.
-      session.markRunPending(claim, runId);
-      // Done once the session holds the run (or the launch failed): a message
-      // typed meanwhile waits for it, so it reaches a run that exists.
-      const launched = Deferred.makeUnsafe<void>();
-      const markLaunched = Effect.sync(() =>
-        Deferred.doneUnsafe(launched, Effect.void),
-      );
-      runtime.runFork(
-        recoverRun(
+    // The claim and the fork of the program that settles it are one
+    // uninterruptible step: an interrupted caller never leaves a claim that
+    // nothing will settle. Only the wait for the launch is interruptible.
+    Effect.uninterruptibleMask((restore) =>
+      Effect.suspend(() => {
+        // The slot has to be claimed before the chain that settles it exists, so
+        // the claim holds the `await` of a `Deferred` the run chain completes.
+        // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
+        // node leaves the slot pending exactly as before.
+        const claimedRun = Deferred.makeUnsafe<void, Error>();
+        const claim = Deferred.await(claimedRun);
+        // Native launch may resolve its stream on this turn. Claim first so
+        // marking the run pending cannot erase that run or a reentrant stop.
+        session.markRunPending(claim, runId);
+        // Done once the session holds the run (or the launch failed): a message
+        // typed meanwhile waits for it, so it reaches a run that exists.
+        const launched = Deferred.makeUnsafe<void>();
+        const markLaunched = Effect.sync(() =>
+          Deferred.doneUnsafe(launched, Effect.void),
+        );
+        // Owned by the process's shutdown scope, as the chat's sends are.
+        return recoverRun(
           Effect.gen(function* () {
             yield* adoptRunConfig(config);
             const registeredConfig =
@@ -539,10 +547,11 @@ export function createChatSessionController(
           // The claim settles with the run's own exit, so a waiter reads what
           // the run did rather than what a promise adapter made of it.
           settleClaimOnExit(claimedRun),
-        ),
-      );
-      return Deferred.await(launched);
-    });
+          Effect.forkIn(shutdownScope),
+          Effect.andThen(restore(Deferred.await(launched))),
+        );
+      }),
+    );
 
   // -----------------------------------------------------------------------
   // resume
@@ -640,35 +649,37 @@ export function createChatSessionController(
           focusRun(resumed);
         });
 
-        runtime.runFork(
-          Effect.gen(function* () {
-            const run = yield* runSession
-              .resume(id, { interactive: true })
-              .pipe(
-                // A refusal is the resume's answer, not a failure: the chat
-                // says it in the session's words and exits as a usage error.
-                Effect.catchTag('ResumeRefused', (refusal) =>
-                  Effect.sync(() => {
-                    if (session.stopRequested) {
-                      session.settleExitCode(claim, CliExitCode.Interrupted);
-                    } else {
-                      appendLocalErrorTranscript(refusal.message);
-                      session.settleExitCode(claim, CliExitCode.Usage);
-                    }
-                    return undefined;
-                  }),
-                ),
-              );
-            if (run === undefined) return;
-            yield* adoptResumedRun(run.runId);
-            // A root acknowledges at idle, so its result holds this chain,
-            // and the root-run slot it settles, until the run ends.
-            const { outcome } = yield* run.result;
-            session.settleExitCode(claim, runOutcomeExitCode(outcome));
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() => reportRunFailure(error, claim)),
-            ),
+        // A defect reaches the transcript as a failure does: nothing else
+        // reads this fiber's exit but the claim.
+        yield* Effect.forkIn(
+          recoverRun(
+            Effect.gen(function* () {
+              const run = yield* runSession
+                .resume(id, { interactive: true })
+                .pipe(
+                  // A refusal is the resume's answer, not a failure: the chat
+                  // says it in the session's words and exits as a usage error.
+                  Effect.catchTag('ResumeRefused', (refusal) =>
+                    Effect.sync(() => {
+                      if (session.stopRequested) {
+                        session.settleExitCode(claim, CliExitCode.Interrupted);
+                      } else {
+                        appendLocalErrorTranscript(refusal.message);
+                        session.settleExitCode(claim, CliExitCode.Usage);
+                      }
+                      return undefined;
+                    }),
+                  ),
+                );
+              if (run === undefined) return;
+              yield* adoptResumedRun(run.runId);
+              // A root acknowledges at idle, so its result holds this chain,
+              // and the root-run slot it settles, until the run ends.
+              const { outcome } = yield* run.result;
+              session.settleExitCode(claim, runOutcomeExitCode(outcome));
+            }),
+            (error) => reportRunFailure(error, claim),
+          ).pipe(
             Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),
             // The slot was claimed synchronously above; it settles with this
             // chain, so the exit drain blocks until the continued run actually
@@ -677,6 +688,7 @@ export function createChatSessionController(
             // the run finishes, fire-and-forget per the interface contract.
             settleClaimOnExit(claimedRun),
           ),
+          shutdownScope,
         );
       });
       return recoverRun(attemptResume, (error) => {
@@ -727,7 +739,7 @@ export function createChatSessionController(
     if (!session.tryClaimRootRunSlot(claim, runId)) return;
     rootRunId.set(runId);
     focusRun(runId);
-    runtime.runFork(
+    runtime.runSync(
       Effect.gen(function* () {
         yield* adoptRunRecord(runId);
         yield* resumed;
@@ -742,6 +754,7 @@ export function createChatSessionController(
       }).pipe(
         Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),
         settleClaimOnExit(adopted),
+        Effect.forkIn(shutdownScope),
       ),
     );
   };
@@ -762,12 +775,12 @@ export function createChatSessionController(
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
   if (!served) {
-    const resumedRoots = runtime.runFork(
-      Stream.runForEach(viewChanges, observeResumedRoots),
+    runtime.runSync(
+      Effect.forkIn(
+        Stream.runForEach(viewChanges, observeResumedRoots),
+        chatScope,
+      ),
     );
-    disposables.add(() => {
-      runtime.runFork(Fiber.interrupt(resumedRoots));
-    });
   }
 
   // -----------------------------------------------------------------------
@@ -943,7 +956,7 @@ export function createChatSessionController(
         // it once the stopped run's claim lets go, so the next message goes
         // to it rather than starting a second root beside it.
         if (continuing && outcome.value.wake == null)
-          runtime.runFork(
+          yield* Effect.forkIn(
             Effect.ignoreCause(stoppedClaim ?? Effect.void).pipe(
               Effect.andThen(
                 Effect.sync(() =>
@@ -951,6 +964,7 @@ export function createChatSessionController(
                 ),
               ),
             ),
+            shutdownScope,
           );
         const presentation = presentFollowUpResult(
           outcome.value.status === 'sent'

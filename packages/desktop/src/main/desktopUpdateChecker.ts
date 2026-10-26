@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { envFlag } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
   fetchJsonStringField,
@@ -57,7 +56,7 @@ interface CheckForDesktopUpdateOptions {
   currentVersion: string;
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */
   isPackaged: boolean;
-  notify: (release: DesktopLatestRelease) => Promise<void> | void;
+  notify: (release: DesktopLatestRelease) => Effect.Effect<void, Error>;
   fetchRelease?: Effect.Effect<
     DesktopLatestRelease | undefined,
     Error,
@@ -85,12 +84,6 @@ export const checkForDesktopUpdate = ({
           refreshed: release !== undefined,
         })),
       ),
-      notify: (version) =>
-        Effect.tryPromise({
-          try: async () => {
-            await notify({ version });
-          },
-          catch: ensureError,
-        }),
+      notify: (version) => notify({ version }),
     }).pipe(Effect.provide(updateCheckRecordsLayer));
   });

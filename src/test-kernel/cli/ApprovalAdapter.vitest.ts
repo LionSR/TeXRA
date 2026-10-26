@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
@@ -77,16 +77,23 @@ function useCliHostInteractions(
 ): void {
   detachHostInteractions();
   setTestApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = Effect.runSync(
+  // The host's view watch lives in this scope; detaching closes it.
+  const scope = Scope.makeUnsafe();
+  const detach = Effect.runSync(
     testDefaultSession().interactions.use(
-      createHeadlessCliHostInteractions(
-        testSessionOf(testDefaultSession()),
-        testRuntime(),
-        cliContext,
-        hooks,
+      testRuntime().runSync(
+        createHeadlessCliHostInteractions(
+          testSessionOf(testDefaultSession()),
+          cliContext,
+          hooks,
+        ).pipe(Scope.provide(scope)),
       ),
     ),
   );
+  detachHostInteractions = () => {
+    detach();
+    Effect.runFork(Scope.close(scope, Exit.void));
+  };
 }
 
 const ROOT_RUN = 'a00001' as RunId;

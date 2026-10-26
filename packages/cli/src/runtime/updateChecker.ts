@@ -316,18 +316,17 @@ export function notifyCliUpdate(
                 refreshed: version !== undefined,
               })),
             ),
-      notify: (latestVersion) =>
-        Effect.gen(function* () {
-          writeTextStderr(
-            `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
-          );
-          const answer = yield* askCliQuestion(
-            `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-          );
-          const normalized = answer.trim().toLowerCase();
-          confirmed =
-            normalized === '' || normalized === 'y' || normalized === 'yes';
-        }),
+      notify: Effect.fn('updateChecker.notify')(function* (latestVersion) {
+        writeTextStderr(
+          `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+        );
+        const answer = yield* askCliQuestion(
+          `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+        );
+        const normalized = answer.trim().toLowerCase();
+        confirmed =
+          normalized === '' || normalized === 'y' || normalized === 'yes';
+      }),
       stampFailure: 'ignore',
     }).pipe(
       Effect.provide(updateCheckRecordsLayer),

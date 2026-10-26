@@ -9,7 +9,7 @@
  * staged: the port it attaches presents events, mirrors bypass state, and
  * holds a tool edit's preview so the diff can be printed.
  */
-import { Effect, Exit, Fiber, Result, Stream } from 'effect';
+import { Effect, Exit, Result, Stream } from 'effect';
 
 import {
   withLogChannel,
@@ -48,7 +48,7 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import type { ProcessRuntime, Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.approval';
@@ -132,15 +132,14 @@ const askHeadlessUserQuestion = Effect.fn(
   return userQuestionDecision(answers);
 });
 
-/** `runtime` is the process runtime the headless run holds: the view
- *  subscription below is a fiber of it, interrupted on dispose. `session` is
- *  the headless run's session, threaded from the composition that opened it. */
+/** The view subscription below is forked into the caller's scope, which
+ *  interrupts it on close. `session` is the headless run's session, threaded
+ *  from the composition that opened it. */
 export function createHeadlessCliHostInteractions(
   session: Pick<Session, 'request' | 'view'>,
-  runtime: ProcessRuntime,
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
-): HostInteractions {
+) {
   /** Only an interactive run can answer a prompt. */
   const promptsUnavailable = context.mode !== 'interactive';
   /** Requests this host has taken on, pruned as the fold drops them. */
@@ -306,9 +305,7 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = runtime.runFork(Stream.runForEach(session.view.changes, take));
-
-  return {
+  const host: HostInteractions = {
     emit: hooks.emit,
     approvalPromptsUnavailable: promptsUnavailable,
     approvalDenied: (denial, runId) =>
@@ -324,8 +321,9 @@ export function createHeadlessCliHostInteractions(
       Effect.sync(() => {
         previews.delete(requestId);
       }),
-    dispose() {
-      runtime.runFork(Fiber.interrupt(fiber));
-    },
   };
+  return Effect.as(
+    Effect.forkScoped(Stream.runForEach(session.view.changes, take)),
+    host,
+  );
 }

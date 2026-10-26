@@ -7,7 +7,7 @@
 // A signal cause restores terminal modes synchronously before its first await,
 // then skips the graceful queue/run drain and exits with the signal code.
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readCliCwd } from '@cli/runtime/cliContext';
@@ -67,8 +67,9 @@ interface SessionExitControllerContext {
   readonly commandName: string;
   /** `context.cwd` — the launch directory shown in the resume hint. */
   readonly cwd: string;
-  /** Session-scoped subscriptions torn down on graceful exit. */
-  readonly disposables: DisposableStore;
+  /** The chat's scope: what the session holds, closed and awaited on
+   *  graceful exit. */
+  readonly chatScope: Scope.Closeable;
   /** The TUI's hold on the terminal, suspended, resumed and released here. */
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
@@ -266,8 +267,9 @@ export function createSessionExitController(
   // run; the returned program is the rest of the exit, run once by `teardown`.
   const beginTeardown = (cause: ExitCause): Effect.Effect<void, Error> => {
     detachSignals();
-    // Snapshot the view while it is still bound: disposing ctx.disposables
-    // below unbinds it, but the resume hint prints later.
+    // Snapshot the view while it is still bound: closing ctx.chatScope
+    // below ends the session's subscriptions, but the resume hint prints
+    // later.
     const resumeHint: ResumeHintSnapshot = {
       view: currentView(),
       rootRunId: rootRunIdSignal.get(),
@@ -321,15 +323,12 @@ export function createSessionExitController(
       Effect.gen(function* () {
         // A disposal failure does not stop the exit: it is reported and
         // rethrown once the session is persisted and the terminal restored.
-        const disposalFailure = yield* Effect.try({
-          try: () => ctx.disposables.dispose(),
-          catch: ensureError,
-        }).pipe(
-          Effect.match({
-            onFailure: (error) => error,
-            onSuccess: () => undefined,
-          }),
+        const closed = yield* Effect.exit(
+          Scope.close(ctx.chatScope, Exit.void),
         );
+        const disposalFailure = Exit.isFailure(closed)
+          ? ensureError(Cause.squash(closed.cause))
+          : undefined;
         let interrupted = interruptPendingRun();
         yield* ctx.submitted;
         interrupted = interruptPendingRun() || interrupted;

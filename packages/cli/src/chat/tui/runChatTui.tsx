@@ -9,7 +9,6 @@ import {
   Cause,
   Effect,
   Exit,
-  Fiber,
   FiberHandle,
   Result,
   Scope,
@@ -68,7 +67,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
-import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
@@ -94,7 +92,7 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
-import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
+import { followCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
   rootRunId,
@@ -445,13 +443,16 @@ export async function runChat(
     }),
   );
 
-  const disposables = new DisposableStore();
+  // From here on `chatScope` owns everything the session holds: what is
+  // added below closes before the service hold above, last in first out,
+  // and the exit drain awaits that close.
+  const onChatClose = (release: () => void): void =>
+    runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
   // The one session state the TUI renders (PRD 10.1): the session's fold
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
   const session = new TuiSession(runsElsewhere);
-  disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
   // A dead fold (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
@@ -466,17 +467,18 @@ export async function runChat(
   for (const notice of startupNotices) appendLocalNotice(notice);
   // Said when the login shell has answered, without holding the chat.
   if (runsElsewhere)
-    runtime.runFork(
+    runtime.runSync(
       serviceKeysNotice().pipe(
         Effect.tap((keys) =>
           Effect.sync(() => keys !== null && appendLocalNotice(keys)),
         ),
+        Effect.forkIn(chatScope),
       ),
     );
   // The service went away (retired by a newer build, or it died) and the
   // link reaches it again: the chat says so, rather than going quiet.
   if (link !== undefined)
-    runtime.runFork(
+    runtime.runSync(
       Stream.runForEach(
         SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
         (client) =>
@@ -487,7 +489,7 @@ export async function runChat(
                 : 'Reconnected to the TeXRA service.',
             ),
           ),
-      ).pipe(Scope.provide(chatScope)),
+      ).pipe(Effect.forkIn(chatScope)),
     );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
@@ -497,11 +499,12 @@ export async function runChat(
     kittyKeyboard: terminalCaps.kittyKeyboard,
     title: installTerminalTitleUpdates(context.cwd),
   });
-  disposables.add(announceForegroundApprovals());
-  disposables.add(subscribeCliCredentialChanges(runtime));
+  onChatClose(announceForegroundApprovals());
+  runtime.runSync(Effect.forkIn(followCliCredentialChanges, chatScope));
   // Keys another TeXRA window or the service saves reach this chat too.
-  const watchingKeys = runtime.runFork(cliSecrets(context.storageRoot).watch());
-  disposables.add(() => runtime.runFork(Fiber.interrupt(watchingKeys)));
+  runtime.runSync(
+    Effect.forkIn(cliSecrets(context.storageRoot).watch(), chatScope),
+  );
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
   // new set replaces the watch. The chat's scope ends it.
@@ -530,7 +533,7 @@ export async function runChat(
       ),
     );
   };
-  disposables.add(
+  onChatClose(
     subscribeToSignalChanges([paintedRunIds], syncTranscriptSubscriptions),
   );
   syncTranscriptSubscriptions();
@@ -562,7 +565,7 @@ export async function runChat(
     served: runsElsewhere,
     records: runtimeSession.records,
     getSessionContext: currentSessionContext,
-    disposables,
+    chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
@@ -725,7 +728,7 @@ export async function runChat(
     session,
     commandName: context.commandName,
     cwd: context.cwd,
-    disposables,
+    chatScope,
     terminal,
     runtime,
     submitted: chatController.submitted,
@@ -765,7 +768,7 @@ export async function runChat(
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news.
   let rootPhase = session.status();
-  disposables.add(
+  onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
       const previous = rootPhase;
       rootPhase = session.status();
@@ -784,11 +787,12 @@ export async function runChat(
     await ink.waitUntilExit();
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
-    // released the store, so the bridge outlives the session's disposables.
-    // A signal exit leaves the store to process.exit; releasing it here keeps
-    // the order on every path: nothing subscribed to the view outlives it.
+    // released the store, so the bridge outlives the chat's scope, which the
+    // graceful drain closes. A signal exit leaves the store to process.exit;
+    // closing the scope again here keeps the order on every path: nothing
+    // subscribed to the view outlives it.
     await exitController.gracefulTeardown();
-    disposables.dispose();
+    await runtime.runPromise(Scope.close(chatScope, Exit.void));
     unbindSessionView();
   }
   return { exitCode: session.runExitCode };

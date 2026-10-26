@@ -44,24 +44,23 @@ function buildOverleafClonePorts(
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
     secrets,
-    promptToken: (spec) =>
-      Effect.gen(function* () {
-        const tokenGuidance = remote.isOverleaf
-          ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
-          : spec.tokenHint;
-        if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
-          return yield* Effect.fail(
-            new CliUsageError({
-              message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
-            }),
-          );
-        }
-        if (tokenGuidance) writeTextStderr(tokenGuidance);
-        const token = yield* askCliQuestion(`${spec.tokenTitle}: `, {
-          hidden: true,
-        });
-        return token.trim() || null;
-      }),
+    promptToken: Effect.fn('clone.promptToken')(function* (spec) {
+      const tokenGuidance = remote.isOverleaf
+        ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
+        : spec.tokenHint;
+      if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
+        return yield* Effect.fail(
+          new CliUsageError({
+            message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+          }),
+        );
+      }
+      if (tokenGuidance) writeTextStderr(tokenGuidance);
+      const token = yield* askCliQuestion(`${spec.tokenTitle}: `, {
+        hidden: true,
+      });
+      return token.trim() || null;
+    }),
     showInvalidToken: (_spec, message) =>
       Effect.sync(() => {
         writeTextStderr(message);

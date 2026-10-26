@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
+import { Deferred, Effect, Exit, Schedule } from 'effect';
 
 import {
   entryChannel,
@@ -89,38 +89,37 @@ function runServe(context: CliContext, idleSeconds: number) {
       ),
     );
     const shutdown = yield* Deferred.make<void>();
-    const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
-    process.on('SIGINT', onSignal);
-    process.on('SIGTERM', onSignal);
-    const scope = yield* Scope.make();
     const sessions = yield* Sessions;
     const served = Effect.gen(function* () {
+      const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          process.on('SIGINT', onSignal);
+          process.on('SIGTERM', onSignal);
+        }),
+        () =>
+          Effect.sync(() => {
+            process.off('SIGINT', onSignal);
+            process.off('SIGTERM', onSignal);
+          }),
+      );
       // The registry the runtime's plugins read: windows attach their
-      // editors to it.
+      // editors to it. The stores its roots open live in this scope.
       const projects = yield* cliServiceProjects(
         context,
-        scope,
+        yield* Effect.scope,
         yield* CliEditors,
         sessions,
       );
+      // Finalizers run last-added first: the sessions close, their runs
+      // stopped and settled; then the stores their roots opened.
+      yield* Effect.addFinalizer(() => sessions.closeAll);
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
         settle: Effect.asVoid(sessions.closeAll),
       }).pipe(Effect.provideService(ServiceProjects, projects));
-    }).pipe(
-      // The sessions close first, their runs stopped and settled; then the
-      // stores their roots opened.
-      Effect.ensuring(
-        sessions.closeAll.pipe(Effect.andThen(Scope.close(scope, Exit.void))),
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          process.off('SIGINT', onSignal);
-          process.off('SIGTERM', onSignal);
-        }),
-      ),
-    );
+    }).pipe(Effect.scoped);
     return yield* served.pipe(
       Effect.as(CliExitCode.Success),
       Effect.catchTag(
@@ -240,15 +239,14 @@ const restartCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
-  run: (context) =>
-    Effect.gen(function* () {
-      yield* stopService;
-      const { info } = yield* Effect.scoped(
-        connectCliService(context.storageRoot),
-      );
-      emitStatus(context, info);
-      return CliExitCode.Success;
-    }),
+  run: Effect.fn('service.run')(function* (context) {
+    yield* stopService;
+    const { info } = yield* Effect.scoped(
+      connectCliService(context.storageRoot),
+    );
+    emitStatus(context, info);
+    return CliExitCode.Success;
+  }),
 });
 
 export const serviceCommand = defineCommand({

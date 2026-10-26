@@ -411,15 +411,18 @@ export function createDesktopWorkspaceIpc(
     initialCommand?: string,
   ) {
     return Effect.gen(function* () {
-      const session = yield* Effect.tryPromise({
-        try: () => options.ptyHost.create({ id: sessionId, cols, rows }),
-        catch: (cause) =>
-          new WorkspaceHostCallFailed({
-            member: 'ptyHost.create',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
+      const session = yield* options.ptyHost
+        .create({ id: sessionId, cols, rows })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new WorkspaceHostCallFailed({
+                member: 'ptyHost.create',
+                message: cause.message,
+                cause,
+              }),
+          ),
+        );
       if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);

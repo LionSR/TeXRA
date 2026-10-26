@@ -248,11 +248,10 @@ const teamListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: (context) =>
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
-      return yield* runTeamList(context, services);
-    }),
+  run: Effect.fn('team.run')(function* (context) {
+    const services = yield* initCliPlatform(context);
+    return yield* runTeamList(context, services);
+  }),
 });
 
 const teamShowCommand = defineCliCommand({
@@ -268,11 +267,10 @@ const teamShowCommand = defineCliCommand({
       description: 'Team id or name from `texra team list`',
     },
   },
-  run: (context, ctx) =>
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
-      return yield* runTeamShow(context, ctx.args.team, services);
-    }),
+  run: Effect.fn('team.run')(function* (context, ctx) {
+    const services = yield* initCliPlatform(context);
+    return yield* runTeamShow(context, ctx.args.team, services);
+  }),
 });
 
 const teamRunCommand = withUsageSections(
