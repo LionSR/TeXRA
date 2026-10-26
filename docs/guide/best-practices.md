@@ -8,32 +8,23 @@ import ModelTierMatrixCard from '../.vitepress/components/ModelTierMatrixCard.vu
 
 ## Effective prompting
 
-Specific instructions reduce ambiguity: the model doesn't have to guess your intent and spends its tokens on your actual goal.
+Specific instructions reduce ambiguity so the model spends its tokens on your actual goal rather than guessing scope or style.
 
-### Be specific
+### Name the target sections and goal
 
-Instead of "Make this better", try:
+Instead of `"Make this better"`, specify the section and what to tighten:
 
-> Improve the clarity of the methodology section by simplifying complex sentences and adding transition phrases. Maintain all technical terminology.
+> Tighten the methodology section (`\section{Variational Ansatz}`): remove hedging and redundant transition phrases, and keep every symbol definition anchored before its first use.
 
-### Define boundaries
+### State what to preserve
 
-State what should and should not change:
+Explicitly protect macros, labels, theorem numbering, and settled sections:
 
-> Enhance writing style in the introduction and discussion. Preserve all citations and mathematical expressions. Do not modify the results section.
+> Revise the introduction and discussion for clarity. Preserve all `\cite{}` keys, equation environments, `\label{}` tags, and custom macros. Do not modify the results section.
 
-### Provide context
+### Separate content derivations from prose polishing
 
-> Polish this abstract for submission to Nature Physics. Target audience: physicists with expertise in quantum field theory.
-
-### Use structured instructions
-
-For complex tasks:
-
-> 1. Fix grammatical errors throughout
-> 2. Make the introduction more engaging
-> 3. Ensure consistent terminology
-> 4. Improve transitions between sections
+Run derivation, proof, or literature tasks (`research`, `devise`, `prover`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, run `polish` or `correct` on the finished `.tex` file.
 
 ## Model selection
 
@@ -45,24 +36,22 @@ Match model capability to task complexity: overpowered models waste money, under
 
 Read the [AI models](./models.md) for detailed comparisons.
 
-## File management
-
-### Project structure
+## Project and LaTeX organization
 
 ```
 project/
+├── AGENTS.md
 ├── main.tex
 ├── chapters/
 ├── figures/
-├── build/
+├── refs.bib
 └── .texra/
 ```
 
-### Best practices
-
-- Include only the files the task needs in selections
-- Use the Pack button to preserve milestones
-- Clean unneeded outputs regularly
+- **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every agent session inherits them automatically.
+- **Attach only the files a document task needs**: put the target `.tex` file in **Input** and shared preamble or `.bib` files in **Context**.
+- **Format before running `latexdiff`**: run `latexindent` or `tex-fmt` before comparing revisions so line-wrapping differences do not obscure prose edits.
+- **Archive milestone revisions**: use **Archive outputs** in the ProgressBoard menu to move key revisions into `History/`, and delete stale run folders when no longer needed.
 
 ## Workflow integration
 
@@ -83,14 +72,6 @@ Review AI-generated content after every run, using the same checks each time:
 <p class="hero-caption">A short review pass after each run catches the errors automation cannot see for itself.</p>
 
 Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
-
-## LaTeX tips
-
-- Use a logical document structure with proper sectioning
-- Keep preambles clean
-- Use consistent label naming
-- Comment TikZ code for clarity
-- Use BibTeX consistently with a single bibliography file
 
 ## Next steps
 

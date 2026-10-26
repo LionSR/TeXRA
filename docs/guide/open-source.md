@@ -70,10 +70,6 @@ const anthropicModels = from(ModelProvider.ANTHROPIC);
 | `cost(model, usage)`          | Calculate exact usage costs                     |
 | `compareCosts(models, usage)` | Side-by-side cost comparison                    |
 
-::: tip Use Case
-TeXRA uses llm-zoo for model selection and cost estimation. If you build LLM-powered tools, routing logic, or cost dashboards, it saves you from maintaining your own model registry.
-:::
-
 [llm-zoo on GitHub](https://github.com/texra-ai/llm-zoo) · [llm-zoo on npm](https://www.npmjs.com/package/llm-zoo)
 
 ---
@@ -85,7 +81,7 @@ TeXRA uses llm-zoo for model selection and cost estimation. If you build LLM-pow
 [![GitHub](https://img.shields.io/github/stars/texra-ai/mcp-server-mathematica)](https://github.com/texra-ai/mcp-server-mathematica)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/mcp-server-mathematica/blob/main/LICENSE)
 
-Research in physics, mathematics, and engineering often requires symbolic computation. **mcp-server-mathematica** lets any MCP-compatible client (Cursor, Claude Desktop, and others) execute Mathematica code and verify mathematical derivations through a local `wolframscript` installation.
+While TeXRA's built-in agents call `wolframscript` directly through the shell, **mcp-server-mathematica** exposes the same symbolic computation and derivation-verification workflows to any MCP-compatible client (such as Cursor or Claude Desktop) over a local `wolframscript` installation.
 
 ### Highlights
 
@@ -135,10 +131,6 @@ node build/index.js
 
 Then configure your MCP client to connect to the running server.
 
-::: tip Use Case
-TeXRA's own agents run Mathematica by calling `wolframscript` through the shell. mcp-server-mathematica brings the same capability to other MCP clients such as Cursor and Claude Desktop. It is useful for physicists and mathematicians who want AI assistants to check symbolic derivations against a computer algebra system rather than rely on LLM arithmetic alone.
-:::
-
 [mcp-server-mathematica on GitHub](https://github.com/texra-ai/mcp-server-mathematica)
 
 ---
@@ -173,10 +165,6 @@ TeXRA's capabilities, packaged as portable agent skills. **texra-scientific-skil
 
 Skills use the standard `SKILL.md` format. You can also install them through Codex or by symlinking individual skill directories into your agent's skills location.
 
-::: tip Use Case
-These skills bring TeXRA's research workflows to any agent system that supports the `SKILL.md` format, so your own AI assistant can draft, review, and illustrate scientific work.
-:::
-
 [texra-scientific-skills on GitHub](https://github.com/texra-ai/texra-scientific-skills)
 
 ---
@@ -207,10 +195,6 @@ These skills bring TeXRA's research workflows to any agent system that supports 
 
 You can also install the skills through Codex or by symlinking individual skill directories into your agent's skills location.
 
-::: tip Use Case
-If you formalize mathematics in Lean 4, these skills let AI assistants search Mathlib, draft and debug proofs, reuse project-specific proof patterns across sessions, and keep blueprints in sync with formal declarations.
-:::
-
 [texra-lean-skills on GitHub](https://github.com/texra-ai/texra-lean-skills)
 
 ---
@@ -240,10 +224,6 @@ A working Zotero library accumulates errors. **zotcleanup** is a Claude Code / C
 ```
 
 The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python ≥ 3.10) and your Zotero credentials. Every command defaults to a dry run that previews changes before `--apply` writes them.
-
-::: tip Use Case
-A messy library is where AI agents hallucinate citations. A verified, deduplicated Zotero library gives TeXRA's research agents real DOIs and venues to cite, keeping [Research tools](./research-tools.md) grounded.
-:::
 
 [zotero-cleanup-skills on GitHub](https://github.com/texra-ai/zotero-cleanup-skills)
 

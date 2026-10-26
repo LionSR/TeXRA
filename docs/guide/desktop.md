@@ -4,16 +4,11 @@ import FlowSteps from '../.vitepress/components/FlowSteps.vue';
 
 # Desktop App
 
-The TeXRA desktop app is the standalone Electron host for TeXRA. It is intended
-for researchers who want the TeXRA agent workflow without installing VS Code.
-The desktop app shares the same agent runtime, model providers, LaTeX tools,
-settings UI, and Sessions view as the extension, but it stores credentials and
-state in desktop app storage.
+The TeXRA desktop app is the standalone Electron host for TeXRA, built for researchers who want the TeXRA agent workflow without installing VS Code. It shares the same agent runtime, model providers, LaTeX tools, settings UI, Sessions view, configuration locations (`.texra/config.json` and `~/.texra`), and credential store (`~/.texra/secrets/`) as the extension and CLI.
 
 ## Availability
 
-The desktop app is in beta development. Public signed installers are not
-published until the Phase 6 release pipeline is complete.
+The desktop app is in beta development; public signed installers are not published yet.
 
 Supported packaging targets:
 
@@ -46,15 +41,7 @@ For the system dependencies TeXRA needs, follow the same setup as the extension:
 
 ## First Run
 
-On first launch, configure the desktop app explicitly:
-
-- Open the same folder or Git repository you already use for your project.
-- Add model provider API keys in the Models tab, or configure workspace-local
-  `.env` variables.
-- Review agent visibility, tool approval settings, Git integration, and LaTeX
-  tool paths.
-- Run a small LaTeX or polish task and confirm the output appears in the
-  Sessions view.
+On first launch, point the app at your project and verify your setup:
 
 <FlowSteps :steps="[
   { n: 1, icon: 'folder-open', title: 'Open your project', desc: 'Point the desktop app at the same folder or Git repository you already use for your project.', chips: [{ text: 'folder or repo', variant: 'info', icon: 'folder-tree' }] },
@@ -103,8 +90,7 @@ API keys, unpublished manuscript text, or private file paths.
 
 ## Updates
 
-Automatic desktop updates are not available until the Phase 6 release pipeline
-lands. Beta users should install newer builds manually.
+Automatic desktop updates are not available during beta. Beta users should install newer builds manually.
 
 The intended update model is:
 
