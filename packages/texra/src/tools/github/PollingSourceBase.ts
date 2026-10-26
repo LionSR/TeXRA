@@ -27,6 +27,7 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
 import { emitAppSignal } from '@eventBus/AppSignals';
 
+import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import type { Disposable } from '@texra/platform/disposable';
 import {
@@ -549,19 +550,10 @@ export abstract class PollingSourceBase<
     function* (this: PollingSourceBase<K, S>) {
       const now = yield* Clock.currentTimeMillis;
       const entries = [...this.subscriptions.entries()];
-      const exits = yield* Effect.forEach(
-        entries,
-        ([key, state]) => Effect.exit(this.pollEntry(key, state, now)),
+      yield* allSettledVoid(
+        entries.map(([key, state]) => this.pollEntry(key, state, now)),
         { concurrency: this.config.maxConcurrent },
       );
-      const failures = exits.filter(Exit.isFailure);
-      if (failures.length > 0) {
-        return yield* Effect.failCause(
-          failures
-            .map((exit) => exit.cause)
-            .reduce((left, right) => Cause.combine(left, right)),
-        );
-      }
       yield* this.afterTick(entries, now).pipe(
         Effect.catchCause((cause) => {
           const reason = cause.reasons[0];

@@ -227,16 +227,17 @@ export const launchAgentCliSession = Effect.fn(
  * it would be launched with. Each tool declares this as its loop-side guard,
  * so the run loop opens the prompt and neither tool body does.
  */
-export const agentCliApprovalCommand = (
+export const agentCliApprovalCommand = Effect.fn(
+  'agentCliShared.agentCliApprovalCommand',
+)(function* (
   agentName: string,
   prompt: string,
   mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
-): Effect.Effect<string, Error, ToolContext> =>
-  Effect.gen(function* () {
-    const { roots } = (yield* ToolContext).env;
-    const resolved = yield* mode(roots);
-    return `[${agentName} ${resolved}] ${prompt}`;
-  });
+): Effect.fn.Return<string, Error, ToolContext> {
+  const { roots } = (yield* ToolContext).env;
+  const resolved = yield* mode(roots);
+  return `[${agentName} ${resolved}] ${prompt}`;
+});
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */

@@ -191,7 +191,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     usageProvider?: SubscriptionUsageProvider,
   ): HostEffect =>
     Effect.gen(function* () {
-      if (usageProvider) usage.invalidate(usageProvider);
+      if (usageProvider) yield* usage.invalidate(usageProvider);
       yield* bindings.refreshCredentialStatus;
       yield* allSettledVoid<Error, ProcessServices>([
         bindings.refreshCatalogs(),

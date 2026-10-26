@@ -156,12 +156,13 @@ function liveRoot(session: LocalSession, runId: RunId): RunId | null {
 
 /** A handler that died answers `Internal` under a reference the service
  *  log carries the cause under, as the session bridge does. */
-const internal = (cause: Cause.Cause<unknown>) =>
-  Effect.gen(function* () {
-    const ref = randomUUID();
-    yield* Effect.logError(`Service request ${ref} failed`, cause);
-    return new Internal({ ref });
-  });
+const internal = Effect.fn('handlers.internal')(function* (
+  cause: Cause.Cause<unknown>,
+) {
+  const ref = randomUUID();
+  yield* Effect.logError(`Service request ${ref} failed`, cause);
+  return new Internal({ ref });
+});
 
 /**
  * What `runId` ends with in `session`: once every owner of the run here has
@@ -367,19 +368,18 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ),
       );
     return {
-      'service.hello': () =>
-        Effect.gen(function* () {
-          return {
-            protocol: PROTOCOL_VERSION,
-            version: control.version,
-            pid: process.pid,
-            socket: control.socket,
-            startedAt: control.startedAt,
-            clients: yield* control.clients,
-            running: yield* runningTasks(projects),
-            draining: yield* control.draining,
-          } satisfies ServiceInfo;
-        }),
+      'service.hello': Effect.fn('handlers.service.hello')(function* () {
+        return {
+          protocol: PROTOCOL_VERSION,
+          version: control.version,
+          pid: process.pid,
+          socket: control.socket,
+          startedAt: control.startedAt,
+          clients: yield* control.clients,
+          running: yield* runningTasks(projects),
+          draining: yield* control.draining,
+        } satisfies ServiceInfo;
+      }),
       'service.stop': ({ drain }) => control.stop(drain),
       'tasks.list': ({ all }) =>
         Effect.gen(function* () {

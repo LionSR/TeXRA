@@ -1,4 +1,5 @@
 import { Effect, Result, Schema } from 'effect';
+import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,10 +11,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import {
-  SubscriptionUsageSnapshotsSchema,
-  type SubscriptionUsageSnapshot,
-} from '@texra/shared/model/subscriptionUsage';
+import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { parseKimiCodeUsage } from '@texra/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import {
@@ -72,14 +70,12 @@ function makeService(
   options: {
     readonly secrets?: PlatformSecrets;
     readonly stores?: SettingsStores;
-    readonly now?: () => number;
     readonly requestTimeoutMs?: number;
   } = {},
 ): SubscriptionUsageService {
   return new SubscriptionUsageService({
     secrets: options.secrets ?? new FakeSecrets(CODING_PLAN_KEYS),
     stores: options.stores ?? makeFakeSettingsStores().stores,
-    now: options.now ?? (() => 1_800_000_000_000),
     ...(options.requestTimeoutMs === undefined
       ? {}
       : { requestTimeoutMs: options.requestTimeoutMs }),
@@ -112,14 +108,10 @@ function glmRegionStores(useChina?: boolean): {
  * fake `fetch` is provided as the same reference the adapters read, so nothing
  * has to be threaded through the service to reach the transport.
  */
-function runUsage(
-  program: Effect.Effect<
-    SubscriptionUsageSnapshot,
-    never,
-    HttpClient.HttpClient
-  >,
+function runUsage<A>(
+  program: Effect.Effect<A, never, HttpClient.HttpClient>,
   http: UsageFetch,
-): Promise<SubscriptionUsageSnapshot> {
+): Promise<A> {
   return testRuntime().runPromise(
     Effect.provideService(
       program,
@@ -132,21 +124,24 @@ function runUsage(
 describe('subscription usage parsers', () => {
   it('parses ChatGPT primary and secondary rate-limit windows', () => {
     expect(
-      parseChatGptUsage({
-        plan_type: 'pro',
-        rate_limit: {
-          primary_window: {
-            used_percent: 25,
-            limit_window_seconds: 18_000,
-            reset_at: 1_800_000_100,
-          },
-          secondary_window: {
-            used_percent: 40,
-            limit_window_seconds: 604_800,
-            expiry_date: '2027-01-15T08:00:00Z',
+      parseChatGptUsage(
+        {
+          plan_type: 'pro',
+          rate_limit: {
+            primary_window: {
+              used_percent: 25,
+              limit_window_seconds: 18_000,
+              reset_at: 1_800_000_100,
+            },
+            secondary_window: {
+              used_percent: 40,
+              limit_window_seconds: 604_800,
+              expiry_date: '2027-01-15T08:00:00Z',
+            },
           },
         },
-      }),
+        1_800_000_000_000,
+      ),
     ).toStrictEqual({
       planName: 'pro',
       windows: [
@@ -208,15 +203,18 @@ describe('subscription usage parsers', () => {
   });
 
   it('falls back to normalized ChatGPT windows and names stable durations', () => {
-    const mixed = parseChatGptUsage({
-      rate_limit: {
-        primary_window: { used_percent: 'invalid' },
+    const mixed = parseChatGptUsage(
+      {
+        rate_limit: {
+          primary_window: { used_percent: 'invalid' },
+        },
+        rate_limits: {
+          primary: { used_percent: 10, limit_window_seconds: 2_592_000 },
+          secondary: { used_percent: 20, limit_window_seconds: 172_800 },
+        },
       },
-      rate_limits: {
-        primary: { used_percent: 10, limit_window_seconds: 2_592_000 },
-        secondary: { used_percent: 20, limit_window_seconds: 172_800 },
-      },
-    });
+      1_800_000_000_000,
+    );
 
     expect(mixed.windows.map((window) => window.name)).toStrictEqual([
       'thirty_day',
@@ -227,14 +225,17 @@ describe('subscription usage parsers', () => {
   it.each([0, -1, 1.5, Number.POSITIVE_INFINITY])(
     'omits invalid ChatGPT window metadata: %s',
     (limitWindowSeconds) => {
-      const parsed = parseChatGptUsage({
-        rate_limit: {
-          primary_window: {
-            used_percent: 10,
-            limit_window_seconds: limitWindowSeconds,
+      const parsed = parseChatGptUsage(
+        {
+          rate_limit: {
+            primary_window: {
+              used_percent: 10,
+              limit_window_seconds: limitWindowSeconds,
+            },
           },
         },
-      });
+        1_800_000_000_000,
+      );
 
       expect(parsed.windows).toStrictEqual([
         { name: 'primary', percentUsed: 10, percentRemaining: 90 },
@@ -707,22 +708,26 @@ describe('SubscriptionUsageService', () => {
   });
 
   it('uses the TTL cache and forced refresh bypasses it', async () => {
-    let now = 1000;
     const http = vi.fn<UsageFetch>(async () =>
       jsonResponse({ usage: { limit: 100, remaining: 50 } }),
     );
-    const service = makeService({ now: () => now });
+    const service = makeService();
 
-    const first = await runUsage(service.getUsage('kimiCode'), http);
-    expect(await runUsage(service.getUsage('kimiCode'), http)).toBe(first);
-    expect(http).toHaveBeenCalledTimes(1);
+    await runUsage(
+      Effect.gen(function* () {
+        const first = yield* service.getUsage('kimiCode');
+        expect(yield* service.getUsage('kimiCode')).toBe(first);
+        expect(http).toHaveBeenCalledTimes(1);
 
-    await runUsage(service.getUsage('kimiCode', { forceRefresh: true }), http);
-    expect(http).toHaveBeenCalledTimes(2);
+        yield* service.getUsage('kimiCode', { forceRefresh: true });
+        expect(http).toHaveBeenCalledTimes(2);
 
-    now += 30_001;
-    await runUsage(service.getUsage('kimiCode'), http);
-    expect(http).toHaveBeenCalledTimes(3);
+        yield* TestClock.adjust('30001 millis');
+        yield* service.getUsage('kimiCode');
+        expect(http).toHaveBeenCalledTimes(3);
+      }).pipe(Effect.provide(TestClock.layer())),
+      http,
+    );
   });
 
   // Pins the return path of an invalidated fetch: the caller
@@ -743,7 +748,7 @@ describe('SubscriptionUsageService', () => {
 
     const oldAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await firstRequest.promise;
-    service.invalidate('kimiCode');
+    await runUsage(service.invalidate('kimiCode'), http);
     const newAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await secondRequest.promise;
 

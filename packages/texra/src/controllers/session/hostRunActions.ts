@@ -265,546 +265,539 @@ export interface HostRunActions {
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
-export const createHostRunActions = (
+export const createHostRunActions = Effect.fn(
+  'hostRunActions.createHostRunActions',
+)(function* (
   ports: HostRunActionPorts,
-): Effect.Effect<
+): Effect.fn.Return<
   HostRunActions,
   never,
   FileSystem.FileSystem | Secrets | AgentCatalog
-> =>
-  Effect.gen(function* () {
-    const secrets = yield* Secrets;
-    // The catalog the merge's task resolves its agent against.
-    const catalog = yield* Effect.context<AgentCatalog>();
-    // Resolved once here and carried: the planner's workspace probes below
-    // read through this filesystem rather than taking one from whatever
-    // context each of its callers happens to run on.
-    const fs = yield* FileSystem.FileSystem;
-    const { roots, session } = ports;
-    const view = () => session.view.current();
-    const runView = (runId: RunId) => view().runs.get(runId);
-    /** The run's `actions` must still hold `action` as the request is
-     *  handled, not only as it was rendered; a run the view no longer holds
-     *  is left to the action's own read. A second Resume joins the first in
-     *  the session; a pack or clean is held by the session (`run.files`). */
-    const requireAction = (
-      runId: RunId,
-      action: RunAction,
-    ): Effect.Effect<void, Rejected> =>
-      Effect.suspend(() => {
-        const run = runView(runId);
-        return run === undefined || run.actions.includes(action)
-          ? Effect.void
-          : Effect.fail(
-              new Rejected({ reason: runActionRefusal(run, action) }),
-            );
-      });
-    const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
-      isRequestRefusal(cause)
-        ? cause
-        : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
+> {
+  const secrets = yield* Secrets;
+  // The catalog the merge's task resolves its agent against.
+  const catalog = yield* Effect.context<AgentCatalog>();
+  // Resolved once here and carried: the planner's workspace probes below
+  // read through this filesystem rather than taking one from whatever
+  // context each of its callers happens to run on.
+  const fs = yield* FileSystem.FileSystem;
+  const { roots, session } = ports;
+  const view = () => session.view.current();
+  const runView = (runId: RunId) => view().runs.get(runId);
+  /** The run's `actions` must still hold `action` as the request is
+   *  handled, not only as it was rendered; a run the view no longer holds
+   *  is left to the action's own read. A second Resume joins the first in
+   *  the session; a pack or clean is held by the session (`run.files`). */
+  const requireAction = (
+    runId: RunId,
+    action: RunAction,
+  ): Effect.Effect<void, Rejected> =>
+    Effect.suspend(() => {
+      const run = runView(runId);
+      return run === undefined || run.actions.includes(action)
+        ? Effect.void
+        : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
+    });
+  const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
+    isRequestRefusal(cause)
+      ? cause
+      : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
 
-    const runValidated: HostRunActions['runValidated'] = (
-      { config },
-      options,
-    ) =>
-      session.start({ config, ...options, interactive: true }).pipe(
-        // A failure before the run opens has no row to show it.
-        Effect.tapError((error) => presentRunFailure(ports.present, error)),
-        Effect.tap(ports.launched),
-        // Presentation reacts to the outcome the run committed; it never
-        // runs inside the run, so it cannot change that outcome.
-        Effect.tap((run) =>
-          Effect.forkIn(
-            run.result.pipe(
-              Effect.flatMap((result) => ports.openFinalOutput(config, result)),
-              Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
-            ),
-            ports.scope,
+  const runValidated: HostRunActions['runValidated'] = ({ config }, options) =>
+    session.start({ config, ...options, interactive: true }).pipe(
+      // A failure before the run opens has no row to show it.
+      Effect.tapError((error) => presentRunFailure(ports.present, error)),
+      Effect.tap(ports.launched),
+      // Presentation reacts to the outcome the run committed; it never
+      // runs inside the run, so it cannot change that outcome.
+      Effect.tap((run) =>
+        Effect.forkIn(
+          run.result.pipe(
+            Effect.flatMap((result) => ports.openFinalOutput(config, result)),
+            Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
           ),
+          ports.scope,
+        ),
+      ),
+    );
+  /** Validate a request an action built, then start it: one that does
+   *  not validate is refused before anything starts, a refusal the
+   *  launcher worded travels as itself, anything else is RunLaunchFailed. */
+  const startAgentRequest = (
+    request: RunRequest,
+    options?: RunValidatedOptions,
+  ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
+    const validated = validateRunRequest(request);
+    if (!validated.valid) {
+      return Effect.logError(validated.message).pipe(
+        Effect.annotateLogs({ data: validated.issue }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.fail(new Rejected({ reason: validated.message })),
         ),
       );
-    /** Validate a request an action built, then start it: one that does
-     *  not validate is refused before anything starts, a refusal the
-     *  launcher worded travels as itself, anything else is RunLaunchFailed. */
-    const startAgentRequest = (
-      request: RunRequest,
-      options?: RunValidatedOptions,
-    ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
-      const validated = validateRunRequest(request);
-      if (!validated.valid) {
-        return Effect.logError(validated.message).pipe(
-          Effect.annotateLogs({ data: validated.issue }),
+    }
+    return runValidated(validated.request, options).pipe(
+      Effect.mapError(launchFailed),
+    );
+  };
+  /** Start a request an action built and wait for its run to end. */
+  const runAgentRequest = (
+    request: RunRequest,
+    options?: RunValidatedOptions,
+  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
+    startAgentRequest(request, options).pipe(
+      Effect.flatMap((run) =>
+        run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
+      ),
+    );
+
+  const documentsOfRun = (runId: RunId) => {
+    const run = runView(runId);
+    return run === undefined ? undefined : documentsOf(run);
+  };
+  const runOutputs = {
+    getOutputFiles: (runId: RunId) => documentsOfRun(runId)?.files ?? {},
+    getCompileFailures: (runId: RunId) =>
+      documentsOfRun(runId)?.compileFailures ?? {},
+  };
+
+  const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
+    runId: RunId,
+  ) {
+    const config = yield* ports.readConfig(runId).pipe(
+      Effect.mapError(
+        (cause) =>
+          new RunConfigUnreadable({
+            runId,
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      ),
+    );
+    return config ?? undefined;
+  });
+
+  /** The saved config of a document task's run, or `undefined` when the
+   *  toolbar action does not apply. */
+  const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(function* (
+    runId: RunId,
+  ) {
+    const config = yield* readConfig(runId);
+    if (!config) {
+      // Record the refusal because this toolbar path has no messaging port.
+      yield* Effect.logWarning(
+        `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
+      ).pipe(withLogChannel(CHANNEL));
+      return undefined;
+    }
+    // `files` holds on every settled run: this is what keeps a stale
+    // request off a run that is not a document task.
+    return recipeBlockOf(config) === DOCUMENT_TASK_BLOCK.key
+      ? config
+      : undefined;
+  });
+
+  /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
+  const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
+    runId: RunId,
+    action: 'resume' | 'runAgain',
+  ) {
+    yield* requireAction(runId, action);
+    const config = yield* readConfig(runId);
+    if (!config) {
+      return yield* Effect.fail(
+        new Rejected({
+          reason: "This run's configuration was not saved.",
+        }),
+      );
+    }
+    return config;
+  });
+
+  const isRetryPending = (runId: RunId, requestId: string) =>
+    view().requests.some(
+      (request) =>
+        request.runId === runId &&
+        request.requestId === requestId &&
+        request.payload.kind === 'retry',
+    );
+
+  // A settle the session refuses fails with its refusal, which the host
+  // arm that took the request presents: a retry left parked must not look
+  // like one that went through. Defects go to that same boundary.
+  const settleRetry = (
+    runId: RunId,
+    requestId: string,
+    decision:
+      | { action: 'retry'; credentials: 'configured' | 'personal' }
+      | { action: 'cancel' },
+  ): Effect.Effect<void, RequestRefusal> =>
+    session
+      .request({
+        kind: 'request.decide',
+        runId,
+        requestId,
+        decision,
+      })
+      .pipe(
+        Effect.asVoid,
+        Effect.mapError((error): RequestRefusal =>
+          isRequestRefusal(error)
+            ? error
+            : new Unavailable({
+                runId,
+                reason: 'The retry could not be settled.',
+              }),
+        ),
+      );
+
+  const apiKeyRetry = new ProgressApiKeyRetryController({
+    readKey: (provider) => lookupApiKey(secrets, provider),
+    hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
+    // A host that could not ask returns the port's `ApiKeyPromptFailed`.
+    promptForApiKey: (provider) => ports.promptForApiKey(provider),
+    isRetryPending,
+    triggerRetry: (runId, requestId) =>
+      settleRetry(runId, requestId, {
+        action: 'retry',
+        credentials: 'personal',
+      }),
+  });
+
+  const followUp = new ProgressFollowUpController({
+    loadModelOptions: () => ports.loadModelOptions(),
+    state: runOutputs,
+    // The session's own folder, carried as data: the planner resolves and
+    // probes its candidates there rather than through the calling
+    // context's ambient roots.
+    workspace: {
+      locatePath: (target) => {
+        // With no folder open every path is outside it.
+        const location = roots.workspace
+          ? pathToLocationIn(roots.workspace, target)
+          : undefined;
+        return location?.kind === 'workspace'
+          ? location
+          : { kind: 'external' as const };
+      },
+      // Asked only of a path `locatePath` placed in the folder.
+      exists: (relativePath) =>
+        roots.workspace
+          ? Effect.map(
+              entryTypeIn(fs, path.join(roots.workspace, relativePath)),
+              (type) => type !== undefined,
+            )
+          : Effect.succeed(false),
+    },
+  });
+
+  /** Retry requests a Copilot fallback is switching here. */
+  const switching = new Set<string>();
+  /** The Copilot subscription's fallback: a replacement run on the user's
+   *  own key for the model Copilot served, then the pending retry is
+   *  cancelled in its favor. */
+  const copilotFallback = Effect.fn('HostRunActions.copilotFallback')(
+    function* (request: Extract<HostRequest, { kind: 'useOwnApiKey' }>) {
+      const { runId, requestId } = request;
+      if (!isRetryPending(runId, requestId)) return;
+      const chooseAnotherModel =
+        'Choose another model and start the agent again.';
+      if (!request.model) {
+        yield* ports.showInfo(
+          `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
+        );
+        return;
+      }
+      const fallback = CopilotRoutes.directFallback(request.model);
+      if (!fallback) {
+        yield* ports.showInfo(
+          `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
+        );
+        return;
+      }
+      // Key entry can outlive the retry panel: recheck the exact retry
+      // identity after the prompt so an old action cannot launch or alter
+      // a replacement request.
+      const prepared = yield* apiKeyRetry.ensureOwnApiKey(
+        fallback.provider,
+        false,
+      );
+      if (!prepared || !isRetryPending(runId, requestId)) return;
+      const config = yield* readConfig(runId);
+      if (!config) {
+        yield* ports.showInfo(
+          `The settings for this run are no longer available. ${chooseAnotherModel}`,
+        );
+        return;
+      }
+      const model = fallback.model;
+      // The replacement run carries the user's choice itself: it declines
+      // the Copilot route and every subscription route for its own
+      // bindings. No standing preference is rewritten, so a concurrent run
+      // keeps the routes its own user chose.
+      // The replacement is started, and the retry cancelled, once it is
+      // admitted; a failure after that is the run's own, presented by
+      // its result unless that already showed it.
+      const started = yield* Effect.suspend(() => {
+        if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
+        return startAgentRequest(
+          { config: { ...config, model } },
+          { ownKeyFallback: true },
+        ).pipe(
+          Effect.tap((run) =>
+            Effect.forkIn(
+              run.result.pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Own-key replacement of run ${runId} failed: ${error.message}`,
+                  ).pipe(
+                    Effect.andThen(
+                      presentRunFailure(
+                        ports.present,
+                        error,
+                        'Your own-key run failed: ',
+                      ),
+                    ),
+                    withLogChannel(CHANNEL),
+                  ),
+                ),
+              ),
+              ports.scope,
+            ),
+          ),
+          Effect.as(true),
+        );
+      });
+      if (!started) return;
+      yield* settleRetry(runId, requestId, { action: 'cancel' });
+    },
+  );
+
+  return {
+    runOutputs,
+    sendFollowUp(runId, text) {
+      const present = (message: string) => ports.showWarning(message);
+      const deliver = session
+        .request({ kind: 'followUp.send', runId, text })
+        .pipe(
+          Effect.flatMap((outcome) => {
+            if (outcome.kind !== 'followUp') return Effect.void;
+            const shown = presentFollowUpResult(
+              outcome.status === 'sent'
+                ? { status: 'sent' }
+                : { status: 'queued', wake: outcome.wake ?? undefined },
+            );
+            return shown.severity === 'none'
+              ? Effect.void
+              : present(shown.message);
+          }),
+          Effect.catchCause((cause) => {
+            const message = toErrorMessage(Cause.squash(cause));
+            return Effect.logWarning(
+              `Failed to submit follow-up for stream ${runId}: ${message}`,
+            ).pipe(
+              Effect.annotateLogs({ data: { runId, error: message } }),
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                present(`Could not send the follow-up: ${message}`),
+              ),
+              Effect.ignore({ log: 'Warn' }),
+            );
+          }),
+        );
+      // Detached: a recovery resume can run a whole model turn, so no host
+      // request waits on the outcome.
+      return Effect.forkDetach(deliver).pipe(Effect.asVoid);
+    },
+    /**
+     * Resume a settled run, of either category, on the session that holds
+     * it: it continues the run's own rows (a child's, with the parent
+     * that owns it). A run that does not take it refuses the request (its
+     * reason already told); one that waits for what blocks it is asked
+     * for, and its own line says what it waits for. A workflow settles
+     * with its whole run, whose output opens then.
+     */
+    resume: Effect.fn('HostRunActions.resume')(function* (runId) {
+      yield* nativeAgentRun(runId, 'resume');
+      const run = yield* session.resume(runId, { interactive: true }).pipe(
+        Effect.map((resumed): Run | null => resumed),
+        Effect.catch((refusal) =>
+          refusal._tag === 'ResumeRefused' && refusal.reason === 'blocked'
+            ? Effect.succeed(null)
+            : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
+        ),
+      );
+      if (run === null) return;
+      const config = yield* readConfig(run.runId);
+      if (config === undefined || !isTaskConfig(config)) return;
+      const result = yield* run.result.pipe(
+        Effect.mapError(
+          (failure) =>
+            new Unavailable({ runId: run.runId, reason: failure.message }),
+        ),
+      );
+      yield* ports
+        .openFinalOutput(config, result)
+        .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
+    }),
+    runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
+    runValidated,
+    merge: Effect.fn('HostRunActions.merge')(function* (baseFile, editedFile) {
+      // A launch that cannot be built (no catalog, no merge task) says
+      // why, beside the merge docs, and logs it.
+      const refuse = ({ message }: { readonly message: string }) =>
+        Effect.logWarning(message).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
-            Effect.fail(new Rejected({ reason: validated.message })),
+            ports.present.emit('requestShowError', {
+              message,
+              docsPage: 'intelligent-merge',
+            }),
           ),
+          Effect.as(null),
+        );
+      const config = yield* documentTaskConfig(
+        {
+          agent: 'merge',
+          model: yield* getHelperModelName(roots),
+          inputFiles: [baseFile],
+          editedFile,
+        },
+        roots,
+      ).pipe(
+        Effect.provideContext(catalog),
+        Effect.catchTags({
+          DocumentTaskRefused: refuse,
+          AgentCatalogLoadError: refuse,
+        }),
+      );
+      if (config !== null) yield* startAgentRequest({ config });
+    }),
+    readConfig,
+    workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
+      function* (runId) {
+        yield* requireAction(runId, 'files');
+        const config = yield* workflowConfig(runId);
+        return config ? { runId } : undefined;
+      },
+    ),
+    workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
+      function* (runId, operation) {
+        // `run.files` is gated and held by the session's request handler.
+        const config = yield* workflowConfig(runId);
+        if (!config) return undefined;
+        const inputFile = config.inputFiles[0] ?? '';
+        // A pack names its folder for the input; a clean needs none.
+        if (operation === 'pack' && !inputFile)
+          return { inputFile, result: { status: 'missingParams' } as const };
+        const outcome = yield* session
+          .request({
+            kind: 'run.files',
+            runId,
+            files:
+              operation === 'pack'
+                ? {
+                    op: 'copy',
+                    to: packDestination({
+                      runId,
+                      inputFile,
+                      agent: config.agent,
+                      model: config.model,
+                    }),
+                  }
+                : { op: 'remove' },
+          })
+          .pipe(
+            Effect.catchTag('NotOwner', () =>
+              Effect.fail(
+                new Rejected({
+                  reason: 'This run is running or held elsewhere.',
+                }),
+              ),
+            ),
+          );
+        if (outcome.kind !== 'runFiles')
+          return yield* Effect.die(
+            new Error(`run.files answered ${outcome.kind}`),
+          );
+        const { result } = outcome;
+        return {
+          inputFile,
+          result:
+            result.status === 'done'
+              ? { status: 'success', outputFolder: result.to }
+              : result,
+        };
+      },
+    ),
+    runCompileFixer: Effect.fn(function* (runId) {
+      if (!view().runs.has(runId)) {
+        return yield* Effect.fail(
+          new Unavailable({
+            runId,
+            reason: 'The run is no longer open.',
+          }),
         );
       }
-      return runValidated(validated.request, options).pipe(
-        Effect.mapError(launchFailed),
-      );
-    };
-    /** Start a request an action built and wait for its run to end. */
-    const runAgentRequest = (
-      request: RunRequest,
-      options?: RunValidatedOptions,
-    ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
-      startAgentRequest(request, options).pipe(
-        Effect.flatMap((run) =>
-          run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
-        ),
-      );
-
-    const documentsOfRun = (runId: RunId) => {
-      const run = runView(runId);
-      return run === undefined ? undefined : documentsOf(run);
-    };
-    const runOutputs = {
-      getOutputFiles: (runId: RunId) => documentsOfRun(runId)?.files ?? {},
-      getCompileFailures: (runId: RunId) =>
-        documentsOfRun(runId)?.compileFailures ?? {},
-    };
-
-    const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
-      runId: RunId,
-    ) {
-      const config = yield* ports.readConfig(runId).pipe(
-        Effect.mapError(
-          (cause) =>
-            new RunConfigUnreadable({
-              runId,
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        ),
-      );
-      return config ?? undefined;
-    });
-
-    /** The saved config of a document task's run, or `undefined` when the
-     *  toolbar action does not apply. */
-    const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(
-      function* (runId: RunId) {
-        const config = yield* readConfig(runId);
-        if (!config) {
-          // Record the refusal because this toolbar path has no messaging port.
-          yield* Effect.logWarning(
-            `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
-          ).pipe(withLogChannel(CHANNEL));
-          return undefined;
-        }
-        // `files` holds on every settled run: this is what keeps a stale
-        // request off a run that is not a document task.
-        return recipeBlockOf(config) === DOCUMENT_TASK_BLOCK.key
-          ? config
-          : undefined;
-      },
-    );
-
-    /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
-    const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
-      function* (runId: RunId, action: 'resume' | 'runAgain') {
-        yield* requireAction(runId, action);
-        const config = yield* readConfig(runId);
-        if (!config) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: "This run's configuration was not saved.",
-            }),
+      const config = yield* readConfig(runId);
+      const plan = yield* followUp.planCompileFixerForRun(runId, config);
+      if (plan.kind === 'warning') {
+        yield* ports.showWarning(plan.message);
+      } else if (plan.kind === 'info') {
+        yield* ports.showInfo(plan.message);
+      } else {
+        yield* runAgentRequest(plan.request, {
+          helperModel: true,
+        });
+      }
+    }),
+    useOwnApiKey(request) {
+      const offer = request.credentialSwitch;
+      if (offer.kind === 'copilot-fallback') {
+        // Checked and claimed in one step: a second click would otherwise
+        // pass the pending check while the first awaits admission, and
+        // start a second replacement before the first cancels the retry.
+        const claim = `${request.runId}/${request.requestId}`;
+        return Effect.suspend(() => {
+          if (switching.has(claim)) return Effect.void;
+          switching.add(claim);
+          return copilotFallback(request).pipe(
+            Effect.ensuring(Effect.sync(() => switching.delete(claim))),
           );
-        }
-        return config;
-      },
-    );
-
-    const isRetryPending = (runId: RunId, requestId: string) =>
-      view().requests.some(
-        (request) =>
-          request.runId === runId &&
-          request.requestId === requestId &&
-          request.payload.kind === 'retry',
-      );
-
-    // A settle the session refuses fails with its refusal, which the host
-    // arm that took the request presents: a retry left parked must not look
-    // like one that went through. Defects go to that same boundary.
-    const settleRetry = (
-      runId: RunId,
-      requestId: string,
-      decision:
-        | { action: 'retry'; credentials: 'configured' | 'personal' }
-        | { action: 'cancel' },
-    ): Effect.Effect<void, RequestRefusal> =>
-      session
-        .request({
-          kind: 'request.decide',
-          runId,
-          requestId,
-          decision,
-        })
+        });
+      }
+      return apiKeyRetry.useOwnApiKey({
+        stream: request.runId,
+        requestId: request.requestId,
+        provider: offer.provider,
+        requireNewKey: offer.kind === 'new-key',
+      });
+    },
+    fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
+      const outcome = yield* session
+        .request({ kind: 'run.fork', runId, at })
         .pipe(
-          Effect.asVoid,
           Effect.mapError((error): RequestRefusal =>
             isRequestRefusal(error)
               ? error
               : new Unavailable({
                   runId,
-                  reason: 'The retry could not be settled.',
+                  reason: 'The task could not be forked.',
                 }),
           ),
         );
-
-    const apiKeyRetry = new ProgressApiKeyRetryController({
-      readKey: (provider) => lookupApiKey(secrets, provider),
-      hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
-      // A host that could not ask returns the port's `ApiKeyPromptFailed`.
-      promptForApiKey: (provider) => ports.promptForApiKey(provider),
-      isRetryPending,
-      triggerRetry: (runId, requestId) =>
-        settleRetry(runId, requestId, {
-          action: 'retry',
-          credentials: 'personal',
-        }),
-    });
-
-    const followUp = new ProgressFollowUpController({
-      loadModelOptions: () => ports.loadModelOptions(),
-      state: runOutputs,
-      // The session's own folder, carried as data: the planner resolves and
-      // probes its candidates there rather than through the calling
-      // context's ambient roots.
-      workspace: {
-        locatePath: (target) => {
-          // With no folder open every path is outside it.
-          const location = roots.workspace
-            ? pathToLocationIn(roots.workspace, target)
-            : undefined;
-          return location?.kind === 'workspace'
-            ? location
-            : { kind: 'external' as const };
-        },
-        // Asked only of a path `locatePath` placed in the folder.
-        exists: (relativePath) =>
-          roots.workspace
-            ? Effect.map(
-                entryTypeIn(fs, path.join(roots.workspace, relativePath)),
-                (type) => type !== undefined,
-              )
-            : Effect.succeed(false),
-      },
-    });
-
-    /** Retry requests a Copilot fallback is switching here. */
-    const switching = new Set<string>();
-    /** The Copilot subscription's fallback: a replacement run on the user's
-     *  own key for the model Copilot served, then the pending retry is
-     *  cancelled in its favor. */
-    const copilotFallback = Effect.fn('HostRunActions.copilotFallback')(
-      function* (request: Extract<HostRequest, { kind: 'useOwnApiKey' }>) {
-        const { runId, requestId } = request;
-        if (!isRetryPending(runId, requestId)) return;
-        const chooseAnotherModel =
-          'Choose another model and start the agent again.';
-        if (!request.model) {
-          yield* ports.showInfo(
-            `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
-          );
-          return;
-        }
-        const fallback = CopilotRoutes.directFallback(request.model);
-        if (!fallback) {
-          yield* ports.showInfo(
-            `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
-          );
-          return;
-        }
-        // Key entry can outlive the retry panel: recheck the exact retry
-        // identity after the prompt so an old action cannot launch or alter
-        // a replacement request.
-        const prepared = yield* apiKeyRetry.ensureOwnApiKey(
-          fallback.provider,
-          false,
+      if (outcome.kind !== 'forked')
+        return yield* Effect.die(
+          new Error(`run.fork answered ${outcome.kind}`),
         );
-        if (!prepared || !isRetryPending(runId, requestId)) return;
-        const config = yield* readConfig(runId);
-        if (!config) {
-          yield* ports.showInfo(
-            `The settings for this run are no longer available. ${chooseAnotherModel}`,
-          );
-          return;
-        }
-        const model = fallback.model;
-        // The replacement run carries the user's choice itself: it declines
-        // the Copilot route and every subscription route for its own
-        // bindings. No standing preference is rewritten, so a concurrent run
-        // keeps the routes its own user chose.
-        // The replacement is started, and the retry cancelled, once it is
-        // admitted; a failure after that is the run's own, presented by
-        // its result unless that already showed it.
-        const started = yield* Effect.suspend(() => {
-          if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
-          return startAgentRequest(
-            { config: { ...config, model } },
-            { ownKeyFallback: true },
-          ).pipe(
-            Effect.tap((run) =>
-              Effect.forkIn(
-                run.result.pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning(
-                      `Own-key replacement of run ${runId} failed: ${error.message}`,
-                    ).pipe(
-                      Effect.andThen(
-                        presentRunFailure(
-                          ports.present,
-                          error,
-                          'Your own-key run failed: ',
-                        ),
-                      ),
-                      withLogChannel(CHANNEL),
-                    ),
-                  ),
-                ),
-                ports.scope,
-              ),
-            ),
-            Effect.as(true),
-          );
-        });
-        if (!started) return;
-        yield* settleRetry(runId, requestId, { action: 'cancel' });
-      },
-    );
-
-    return {
-      runOutputs,
-      sendFollowUp(runId, text) {
-        const present = (message: string) => ports.showWarning(message);
-        const deliver = session
-          .request({ kind: 'followUp.send', runId, text })
-          .pipe(
-            Effect.flatMap((outcome) => {
-              if (outcome.kind !== 'followUp') return Effect.void;
-              const shown = presentFollowUpResult(
-                outcome.status === 'sent'
-                  ? { status: 'sent' }
-                  : { status: 'queued', wake: outcome.wake ?? undefined },
-              );
-              return shown.severity === 'none'
-                ? Effect.void
-                : present(shown.message);
-            }),
-            Effect.catchCause((cause) => {
-              const message = toErrorMessage(Cause.squash(cause));
-              return Effect.logWarning(
-                `Failed to submit follow-up for stream ${runId}: ${message}`,
-              ).pipe(
-                Effect.annotateLogs({ data: { runId, error: message } }),
-                withLogChannel(CHANNEL),
-                Effect.andThen(
-                  present(`Could not send the follow-up: ${message}`),
-                ),
-                Effect.ignore({ log: 'Warn' }),
-              );
-            }),
-          );
-        // Detached: a recovery resume can run a whole model turn, so no host
-        // request waits on the outcome.
-        return Effect.forkDetach(deliver).pipe(Effect.asVoid);
-      },
-      /**
-       * Resume a settled run, of either category, on the session that holds
-       * it: it continues the run's own rows (a child's, with the parent
-       * that owns it). A run that does not take it refuses the request (its
-       * reason already told); one that waits for what blocks it is asked
-       * for, and its own line says what it waits for. A workflow settles
-       * with its whole run, whose output opens then.
-       */
-      resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-        yield* nativeAgentRun(runId, 'resume');
-        const run = yield* session.resume(runId, { interactive: true }).pipe(
-          Effect.map((resumed): Run | null => resumed),
-          Effect.catch((refusal) =>
-            refusal._tag === 'ResumeRefused' && refusal.reason === 'blocked'
-              ? Effect.succeed(null)
-              : Effect.fail(
-                  new Unavailable({ runId, reason: refusal.message }),
-                ),
-          ),
-        );
-        if (run === null) return;
-        const config = yield* readConfig(run.runId);
-        if (config === undefined || !isTaskConfig(config)) return;
-        const result = yield* run.result.pipe(
-          Effect.mapError(
-            (failure) =>
-              new Unavailable({ runId: run.runId, reason: failure.message }),
-          ),
-        );
-        yield* ports
-          .openFinalOutput(config, result)
-          .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
-      }),
-      runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
-      runValidated,
-      merge: Effect.fn('HostRunActions.merge')(
-        function* (baseFile, editedFile) {
-          // A launch that cannot be built (no catalog, no merge task) says
-          // why, beside the merge docs, and logs it.
-          const refuse = ({ message }: { readonly message: string }) =>
-            Effect.logWarning(message).pipe(
-              withLogChannel(CHANNEL),
-              Effect.andThen(
-                ports.present.emit('requestShowError', {
-                  message,
-                  docsPage: 'intelligent-merge',
-                }),
-              ),
-              Effect.as(null),
-            );
-          const config = yield* documentTaskConfig(
-            {
-              agent: 'merge',
-              model: yield* getHelperModelName(roots),
-              inputFiles: [baseFile],
-              editedFile,
-            },
-            roots,
-          ).pipe(
-            Effect.provideContext(catalog),
-            Effect.catchTags({
-              DocumentTaskRefused: refuse,
-              AgentCatalogLoadError: refuse,
-            }),
-          );
-          if (config !== null) yield* startAgentRequest({ config });
-        },
-      ),
-      readConfig,
-      workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
-        function* (runId) {
-          yield* requireAction(runId, 'files');
-          const config = yield* workflowConfig(runId);
-          return config ? { runId } : undefined;
-        },
-      ),
-      workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
-        function* (runId, operation) {
-          // `run.files` is gated and held by the session's request handler.
-          const config = yield* workflowConfig(runId);
-          if (!config) return undefined;
-          const inputFile = config.inputFiles[0] ?? '';
-          // A pack names its folder for the input; a clean needs none.
-          if (operation === 'pack' && !inputFile)
-            return { inputFile, result: { status: 'missingParams' } as const };
-          const outcome = yield* session
-            .request({
-              kind: 'run.files',
-              runId,
-              files:
-                operation === 'pack'
-                  ? {
-                      op: 'copy',
-                      to: packDestination({
-                        runId,
-                        inputFile,
-                        agent: config.agent,
-                        model: config.model,
-                      }),
-                    }
-                  : { op: 'remove' },
-            })
-            .pipe(
-              Effect.catchTag('NotOwner', () =>
-                Effect.fail(
-                  new Rejected({
-                    reason: 'This run is running or held elsewhere.',
-                  }),
-                ),
-              ),
-            );
-          if (outcome.kind !== 'runFiles')
-            return yield* Effect.die(
-              new Error(`run.files answered ${outcome.kind}`),
-            );
-          const { result } = outcome;
-          return {
-            inputFile,
-            result:
-              result.status === 'done'
-                ? { status: 'success', outputFolder: result.to }
-                : result,
-          };
-        },
-      ),
-      runCompileFixer: Effect.fn(function* (runId) {
-        if (!view().runs.has(runId)) {
-          return yield* Effect.fail(
-            new Unavailable({
-              runId,
-              reason: 'The run is no longer open.',
-            }),
-          );
-        }
-        const config = yield* readConfig(runId);
-        const plan = yield* followUp.planCompileFixerForRun(runId, config);
-        if (plan.kind === 'warning') {
-          yield* ports.showWarning(plan.message);
-        } else if (plan.kind === 'info') {
-          yield* ports.showInfo(plan.message);
-        } else {
-          yield* runAgentRequest(plan.request, {
-            helperModel: true,
-          });
-        }
-      }),
-      useOwnApiKey(request) {
-        const offer = request.credentialSwitch;
-        if (offer.kind === 'copilot-fallback') {
-          // Checked and claimed in one step: a second click would otherwise
-          // pass the pending check while the first awaits admission, and
-          // start a second replacement before the first cancels the retry.
-          const claim = `${request.runId}/${request.requestId}`;
-          return Effect.suspend(() => {
-            if (switching.has(claim)) return Effect.void;
-            switching.add(claim);
-            return copilotFallback(request).pipe(
-              Effect.ensuring(Effect.sync(() => switching.delete(claim))),
-            );
-          });
-        }
-        return apiKeyRetry.useOwnApiKey({
-          stream: request.runId,
-          requestId: request.requestId,
-          provider: offer.provider,
-          requireNewKey: offer.kind === 'new-key',
-        });
-      },
-      fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-        const outcome = yield* session
-          .request({ kind: 'run.fork', runId, at })
-          .pipe(
-            Effect.mapError((error): RequestRefusal =>
-              isRequestRefusal(error)
-                ? error
-                : new Unavailable({
-                    runId,
-                    reason: 'The task could not be forked.',
-                  }),
-            ),
-          );
-        if (outcome.kind !== 'forked')
-          return yield* Effect.die(
-            new Error(`run.fork answered ${outcome.kind}`),
-          );
-        // The fork waits for its host: continuing it parks it on the
-        // user's next message. A refusal is told by the resume itself, and
-        // the fork keeps its Resume.
-        yield* session
-          .resume(outcome.runId, { interactive: true })
-          .pipe(Effect.ignore({ log: 'Warn' }));
-        return outcome.runId;
-      }),
-    };
-  });
+      // The fork waits for its host: continuing it parks it on the
+      // user's next message. A refusal is told by the resume itself, and
+      // the fork keeps its Resume.
+      yield* session
+        .resume(outcome.runId, { interactive: true })
+        .pipe(Effect.ignore({ log: 'Warn' }));
+      return outcome.runId;
+    }),
+  };
+});

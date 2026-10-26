@@ -19,9 +19,10 @@ import { jsonResponse } from '@test/support/fetchTestUtils';
 import type { CredentialStore } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
-// The coordinator reads the wall clock for the expiry decision; every session
-// below is placed relative to it, far from the 5-minute refresh buffer's edge.
-const NOW = Date.now();
+// The coordinator reads `Clock` for the expiry decision, which `it.effect`
+// serves from a TestClock that starts at epoch zero; every session below is
+// placed relative to it, far from the 5-minute refresh buffer's edge.
+const NOW = 0;
 const FIVE_MIN = 5 * 60 * 1000;
 
 /** The secret store the ChatGPT coordinator binds; it reads one key. */

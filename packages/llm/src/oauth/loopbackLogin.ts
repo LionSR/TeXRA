@@ -185,7 +185,11 @@ function decideCallback(
       }
       return { kind: 'code', code: authCode };
     },
-    catch: (error) => error as Error,
+    catch: (cause) =>
+      new Error(
+        `Unreadable OAuth callback URL: ${cause instanceof Error ? cause.message : String(cause)}`,
+        { cause },
+      ),
   });
 }
 

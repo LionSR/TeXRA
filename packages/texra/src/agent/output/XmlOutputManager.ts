@@ -161,24 +161,22 @@ export class XmlOutputManager {
       const files = yield* Effect.forEach(
         baseFiles.slice(0, inputFiles.length),
         (loc, idx) =>
-          fs
-            .readFileString(loc.absolutePath)
-            .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')))
-            .pipe(
-              // An unreadable base file becomes '': it will score near-zero
-              // similarity against any real fenced block rather than aborting
-              // the whole recovery pass. The cause is named, so an empty
-              // score is never mistaken for an empty file.
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  this.logger.warn(
-                    `Base file ${loc.absolutePath} unreadable during similarity recovery: ${toErrorMessage(error)}`,
-                  );
-                  return '';
-                }),
-              ),
-              Effect.map((content) => ({ name: inputFiles[idx], content })),
+          fs.readFileString(loc.absolutePath).pipe(
+            Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
+            // An unreadable base file becomes '': it will score near-zero
+            // similarity against any real fenced block rather than aborting
+            // the whole recovery pass. The cause is named, so an empty
+            // score is never mistaken for an empty file.
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                this.logger.warn(
+                  `Base file ${loc.absolutePath} unreadable during similarity recovery: ${toErrorMessage(error)}`,
+                );
+                return '';
+              }),
             ),
+            Effect.map((content) => ({ name: inputFiles[idx], content })),
+          ),
         { concurrency: 'unbounded' },
       );
       if (files.length === 0) return null;

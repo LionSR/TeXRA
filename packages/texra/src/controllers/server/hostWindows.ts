@@ -588,33 +588,32 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       Effect.suspend(
         () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
       ),
-    adopt: (session, editors) =>
-      Effect.gen(function* () {
-        const key = session.roots.storage;
-        // A staged preview whose request the session listed and no longer
-        // lists has settled: it is dropped, and its window releases its
-        // view. One not listed yet is kept: staging precedes the row.
-        yield* Effect.forkScoped(
-          Stream.runForEach(session.view.changes, (view) =>
-            Effect.gen(function* () {
-              const held = staged.group(key);
-              if (held.size === 0) return;
-              const pending = new Set(view.requests.map((r) => r.requestId));
-              for (const [requestId, entry] of [...held]) {
-                if (pending.has(requestId)) entry.seen = true;
-                else if (entry.seen) {
-                  staged.delete(key, requestId);
-                  yield* tell(liveWindow(entry), {
-                    kind: 'releaseToolEdit',
-                    requestId,
-                  });
-                }
+    adopt: Effect.fn('hostWindows.adopt')(function* (session, editors) {
+      const key = session.roots.storage;
+      // A staged preview whose request the session listed and no longer
+      // lists has settled: it is dropped, and its window releases its
+      // view. One not listed yet is kept: staging precedes the row.
+      yield* Effect.forkScoped(
+        Stream.runForEach(session.view.changes, (view) =>
+          Effect.gen(function* () {
+            const held = staged.group(key);
+            if (held.size === 0) return;
+            const pending = new Set(view.requests.map((r) => r.requestId));
+            for (const [requestId, entry] of [...held]) {
+              if (pending.has(requestId)) entry.seen = true;
+              else if (entry.seen) {
+                staged.delete(key, requestId);
+                yield* tell(liveWindow(entry), {
+                  kind: 'releaseToolEdit',
+                  requestId,
+                });
               }
-            }),
-          ),
-        );
-        yield* session.attach(interactionsOf(session));
-        yield* editors.attach(key, editorOf(key));
-      }),
+            }
+          }),
+        ),
+      );
+      yield* session.attach(interactionsOf(session));
+      yield* editors.attach(key, editorOf(key));
+    }),
   };
 });

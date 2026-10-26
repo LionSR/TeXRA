@@ -70,17 +70,16 @@ export const ReadConfigTool = defineTool({
 
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
-  execute: (input: ReadConfigInput) =>
-    Effect.gen(function* () {
-      const call = yield* ToolContext;
-      const value = call.env.roots.config.get(input.key);
-      const json = JSON.stringify(value, null, 2) ?? 'undefined';
-      const description = TEXRA_SETTINGS.byKey(input.key)?.description;
-      return executed(
-        `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
-        `Read ${input.key}`,
-      );
-    }),
+  execute: Effect.fn('ConfigTools.execute')(function* (input: ReadConfigInput) {
+    const call = yield* ToolContext;
+    const value = call.env.roots.config.get(input.key);
+    const json = JSON.stringify(value, null, 2) ?? 'undefined';
+    const description = TEXRA_SETTINGS.byKey(input.key)?.description;
+    return executed(
+      `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
+      `Read ${input.key}`,
+    );
+  }),
 });
 
 const UpdateConfigInputSchema = Schema.Struct({

@@ -31,6 +31,7 @@ import {
   InquiryThreadIdSchema,
   type RunId,
   type ExternalInquiryPermission,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
   InquiryRecords,
@@ -280,7 +281,10 @@ function executeAsk(
       .pipe(
         Effect.mapError(
           (error) =>
-            new Error(`The inquiry request could not be opened: ${error}`),
+            new Error(
+              `The inquiry request could not be opened: ${toErrorMessage(error)}`,
+              { cause: error },
+            ),
         ),
         // The turn is committed in the global inquiry database before the
         // request that renders it, and the two stores cannot share a
