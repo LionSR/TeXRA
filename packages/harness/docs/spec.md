@@ -880,7 +880,7 @@ These existing suites check the sections above.
   reused), `:2423` (blobs)
 - **2.3 publisher**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:414` (enqueue
-  order), `:2311` (a rejected batch rolls back whole), `:1876`, `:2009`;
+  order), `:2311` (a rejected batch rolls back whole), `:1876`, `:1974`;
   `src/test-kernel/support/crashConformance.ts:1114` (one job, one transaction)
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts:114`, `:132`, `:166`;
@@ -898,7 +898,7 @@ These existing suites check the sections above.
   `:847` (asks again after a stop), `:921` (budget), `:979` (unchain once),
   `:1063`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:119`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:675`, `:912`,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:675`, `:896`,
   `:2599`, `:2838` (another OS process), `:2950` (dead owner reclaimed), `:3022`
   (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:97`
 - **8 requests**:

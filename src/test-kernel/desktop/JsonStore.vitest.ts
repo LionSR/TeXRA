@@ -53,6 +53,23 @@ describe('shared JsonStore', () => {
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
+  it.effect.each([
+    ['array', '[]'],
+    ['null', 'null'],
+    ['string', '"text"'],
+  ])('treats valid non-object JSON (%s) as corruption', ([_kind, content]) =>
+    Effect.gen(function* () {
+      const JsonStore = yield* Effect.promise(() => loadJsonStore());
+      const filePath = yield* Effect.promise(() =>
+        createTempFile('state.json', content),
+      );
+
+      const error = yield* Effect.flip(JsonStore.open(filePath));
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.message).toContain('to contain a JSON object');
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
   it.effect(
     'merges with a concurrent writer instead of flushing a stale open-time snapshot',
     () =>

@@ -152,6 +152,27 @@ describe('install-github-action command', () => {
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
     expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');
   });
+
+  it('creates the install branch from the requested base', async () => {
+    const repo = makeRepo();
+    git(repo, 'checkout', '-b', 'feature');
+    writeFileSync(path.join(repo, 'feature.txt'), 'feature work\n');
+    git(repo, 'add', 'feature.txt');
+    git(repo, 'commit', '-m', 'feature work');
+
+    const result = await runInstall(
+      repo,
+      '--branch',
+      'texra/install-from-main',
+      '--base',
+      'main',
+    );
+
+    expect(result.exitCode).toBe(CliExitCode.Success);
+    expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
+      '.github/workflows/texra-code-review.yml',
+    );
+  });
 });
 
 describe('parseGitHubSlug', () => {
