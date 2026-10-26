@@ -22,7 +22,7 @@ concurrency:
 # job repeats the cheap cached setup (~30s) to buy that parallelism.
 #
 # The nightly `schedule` run carries the two jobs nothing else covers: the
-# runtime-validation timing run, and the Windows kernel shards, which no PR or
+# runtime-validation timing run and the Windows kernel shards, which no PR or
 # push runs (see the `test` matrix). Every push to main already validates Linux,
 # so the remaining heavy jobs stay gated off `schedule` rather than
 # re-validating an unchanged tree nightly (the macOS jobs bill at 10x Linux
@@ -342,21 +342,18 @@ jobs:
           retention-days: 14
 
   vscode-host-e2e:
-    name: vscode host e2e (${{ matrix.vscode }})
+    name: vscode host e2e (stable)
     needs: changes
-    # It loads the built extension in a real VS Code and checks activation,
-    # command registration, the webview panels and the window's service
-    # (scripts/vscode-host-e2e-suite.cjs); `minimum` is engines.vscode. It
-    # runs on a macOS runner, so a pull request runs it only when it touches
+    # It loads the built extension in the latest stable VS Code and checks
+    # activation, command registration, the webview panels and the window's
+    # service (scripts/vscode-host-e2e-suite.cjs). The engines.vscode minimum
+    # is a by-hand check before a release (`--vscode minimum`): in CI it only
+    # ever failed alongside stable. It runs on a macOS runner, so a pull request runs it only when it touches
     # the VS Code host (`changes.vscode`), and `validate` requires it: off
     # pull requests it went red on main for days unseen.
     if: needs.changes.outputs.vscode == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        vscode: [stable, minimum]
 
     steps:
       - name: Checkout repository
@@ -369,13 +366,13 @@ jobs:
         run: pnpm run compile:fast
 
       - name: Run VS Code host e2e
-        run: pnpm run test:vscode -- --vscode ${{ matrix.vscode }}
+        run: pnpm run test:vscode -- --vscode stable
 
       - name: Upload VS Code host e2e screenshot
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: vscode-host-e2e-${{ matrix.vscode }}
+          name: vscode-host-e2e-stable
           path: artifacts/vscode-e2e/
           if-no-files-found: ignore
           retention-days: 7
@@ -449,9 +446,9 @@ jobs:
 
   runtime-validation:
     name: runtime validation (linux)
-    # Runs on push to main, the nightly schedule (whose whole purpose is this
-    # timing run), and manual dispatch; never on PRs.
-    if: github.event_name != 'pull_request'
+    # Runs on the nightly schedule (whose whole purpose is this timing run)
+    # and manual dispatch; never on PRs or pushes, where it never failed.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
