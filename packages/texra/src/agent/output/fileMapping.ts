@@ -146,39 +146,44 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
       return;
     }
 
-    for (const outputLocation of outputFiles) {
-      const outputPath = fileLocationDisplayPath(outputLocation);
+    // Each output is its own file, so they are rewritten concurrently.
+    yield* Effect.forEach(
+      outputFiles,
+      (outputLocation) => {
+        const outputPath = fileLocationDisplayPath(outputLocation);
 
-      yield* Effect.gen(function* () {
-        const content = (yield* fs.readFileString(
-          outputLocation.absolutePath,
-        )).replaceAll('\r\n', '\n');
-        const newContent = content.replaceAll(
-          /\\input{([^}]+)}/g,
-          (match, rawPath) => {
-            // `register` never stores an empty key, so an empty path misses.
-            const replacement = replacementLookup.get(
-              normalizeLatexPath(rawPath),
-            );
-            return replacement ? `\\input{${replacement}}` : match;
-          },
+        return Effect.gen(function* () {
+          const content = (yield* fs.readFileString(
+            outputLocation.absolutePath,
+          )).replaceAll('\r\n', '\n');
+          const newContent = content.replaceAll(
+            /\\input{([^}]+)}/g,
+            (match, rawPath) => {
+              // `register` never stores an empty key, so an empty path misses.
+              const replacement = replacementLookup.get(
+                normalizeLatexPath(rawPath),
+              );
+              return replacement ? `\\input{${replacement}}` : match;
+            },
+          );
+
+          if (newContent !== content) {
+            yield* fs.writeFileString(outputLocation.absolutePath, newContent);
+            logger?.debug(`Updated input commands in ${outputPath}`);
+          }
+        }).pipe(
+          // One unreadable or unwritable output must not stop the rewrite of the
+          // rest; the file keeps its original `\input{}` targets and says so.
+          Effect.catch((err) =>
+            Effect.sync(() => {
+              logger?.warn(
+                `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
+              );
+            }),
+          ),
         );
-
-        if (newContent !== content) {
-          yield* fs.writeFileString(outputLocation.absolutePath, newContent);
-          logger?.debug(`Updated input commands in ${outputPath}`);
-        }
-      }).pipe(
-        // One unreadable or unwritable output must not stop the rewrite of the
-        // rest; the file keeps its original `\input{}` targets and says so.
-        Effect.catch((err) =>
-          Effect.sync(() => {
-            logger?.warn(
-              `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
-            );
-          }),
-        ),
-      );
-    }
+      },
+      { concurrency: 8, discard: true },
+    );
   },
 );

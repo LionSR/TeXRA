@@ -97,8 +97,10 @@ export const provingOwners =
       Effect.catchDefect((defect) =>
         defect instanceof OwnersUnproven
           ? Effect.flatMap(
-              Effect.forEach(defect.owners, (owner) =>
-                Effect.map(prove(owner), (v) => [owner, v] as const),
+              Effect.forEach(
+                defect.owners,
+                (owner) => Effect.map(prove(owner), (v) => [owner, v] as const),
+                { concurrency: 'unbounded' },
               ),
               (verdicts) =>
                 provingOwners(prove)(

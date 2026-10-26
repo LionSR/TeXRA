@@ -133,19 +133,23 @@ export function vscodeLatexSettingsHandlers(
           const targets = data.field
             ? [LATEX_RECOMMENDED_SETTINGS[data.field]]
             : Object.values(LATEX_RECOMMENDED_SETTINGS);
-          for (const setting of targets) {
-            yield* Effect.tryPromise({
-              try: () =>
-                vscode.workspace
-                  .getConfiguration()
-                  .update(
-                    setting.key,
-                    resolveUpdateValue(setting, reset),
-                    vscode.ConfigurationTarget.Global,
-                  ),
-              catch: ensureError,
-            });
-          }
+          // Each setting is a distinct key, so the updates run at once.
+          yield* Effect.forEach(
+            targets,
+            (setting) =>
+              Effect.tryPromise({
+                try: () =>
+                  vscode.workspace
+                    .getConfiguration()
+                    .update(
+                      setting.key,
+                      resolveUpdateValue(setting, reset),
+                      vscode.ConfigurationTarget.Global,
+                    ),
+                catch: ensureError,
+              }),
+            { concurrency: 'unbounded', discard: true },
+          );
 
           yield* body.postLatexStatus;
           const verb = reset ? 'reset' : 'applied';

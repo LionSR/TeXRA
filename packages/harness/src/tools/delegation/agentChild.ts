@@ -215,13 +215,20 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
   paths: readonly (readonly string[])[],
 ) {
   const fs = yield* FileSystem.FileSystem;
+  // Read concurrently, then hash in the original order.
+  const contents = yield* Effect.forEach(
+    paths.flatMap((files, group) =>
+      files.map((file, index) => ({ group, index, file })),
+    ),
+    ({ group, index, file }) =>
+      Effect.map(fs.readFile(file), (bytes) => ({ group, index, bytes })),
+    { concurrency: 8 },
+  );
   const hash = createHash('sha256');
-  for (const [group, files] of paths.entries())
-    for (const [index, file] of files.entries()) {
-      const bytes = yield* fs.readFile(file);
-      hash.update(`${group}\0${index}\0${bytes.length}\0`);
-      hash.update(bytes);
-    }
+  for (const { group, index, bytes } of contents) {
+    hash.update(`${group}\0${index}\0${bytes.length}\0`);
+    hash.update(bytes);
+  }
   return hash.digest('hex');
 });
 

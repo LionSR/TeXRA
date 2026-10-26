@@ -36,12 +36,14 @@ export const deadOwners = Effect.fn('ownerLiveness.deadOwners')(function* (
   view: SessionView,
   self: OwnerId | null,
 ): Effect.fn.Return<OwnerId[], never, ProcessProbe> {
-  const dead: OwnerId[] = [];
-  for (const owner of foreignOwners(view, self)) {
-    const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
-    if (liveness === 'dead') dead.push(owner);
-  }
-  return dead;
+  // Owners are few, so every probe runs at once; results keep owner order.
+  const owners = foreignOwners(view, self);
+  const verdicts = yield* Effect.forEach(
+    owners,
+    (owner) => proveOwnerLiveness(ownerIdentity(owner)),
+    { concurrency: 'unbounded' },
+  );
+  return owners.filter((_, i) => verdicts[i] === 'dead');
 });
 
 /**

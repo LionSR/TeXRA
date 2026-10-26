@@ -100,40 +100,46 @@ function walkRunStorage(
       }),
     );
 
-    const files: RunGeneratedFile[] = [];
-    for (const name of entries) {
-      const rawRelative = relativePath ? path.join(relativePath, name) : name;
-      const childPath = path.join(basePath, rawRelative);
+    // Each entry is read concurrently; the caller sorts the listing.
+    const perEntry = yield* Effect.forEach(
+      entries,
+      (name) =>
+        Effect.gen(function* () {
+          const rawRelative = relativePath
+            ? path.join(relativePath, name)
+            : name;
+          const childPath = path.join(basePath, rawRelative);
 
-      const stat = yield* fs.stat(childPath).pipe(
-        // An entry that vanished, or whose path stopped naming something a
-        // stat can follow, between the listing and the stat is a benign race;
-        // anything else is a real fault and propagates.
-        Effect.catchIf(
-          (error) =>
-            error.reason._tag === 'NotFound' ||
-            error.reason._tag === 'BadResource',
-          () => Effect.void,
-        ),
-      );
-      if (!stat) continue;
+          const stat = yield* fs.stat(childPath).pipe(
+            // An entry that vanished, or whose path stopped naming something a
+            // stat can follow, between the listing and the stat is a benign race;
+            // anything else is a real fault and propagates.
+            Effect.catchIf(
+              (error) =>
+                error.reason._tag === 'NotFound' ||
+                error.reason._tag === 'BadResource',
+              () => Effect.void,
+            ),
+          );
+          if (!stat) return [];
 
-      // The entry's kind comes from the stat that already ran, which follows
-      // a symlink to what it points at — the classification the listing this
-      // replaced made from its own symlink-following type bits.
-      const entryIsDirectory = stat.type === 'Directory';
-      files.push({
-        path: toPosixPath(rawRelative),
-        size: Number(stat.size),
-        isDirectory: entryIsDirectory,
-      });
-
-      if (entryIsDirectory && maxDepth > 1) {
-        files.push(
-          ...(yield* walkRunStorage(basePath, rawRelative, maxDepth - 1)),
-        );
-      }
-    }
-    return files;
+          // The entry's kind comes from the stat that already ran, which follows
+          // a symlink to what it points at — the classification the listing this
+          // replaced made from its own symlink-following type bits.
+          const entryIsDirectory = stat.type === 'Directory';
+          const entry: RunGeneratedFile = {
+            path: toPosixPath(rawRelative),
+            size: Number(stat.size),
+            isDirectory: entryIsDirectory,
+          };
+          if (!entryIsDirectory || maxDepth <= 1) return [entry];
+          return [
+            entry,
+            ...(yield* walkRunStorage(basePath, rawRelative, maxDepth - 1)),
+          ];
+        }),
+      { concurrency: 8 },
+    );
+    return perEntry.flat();
   });
 }

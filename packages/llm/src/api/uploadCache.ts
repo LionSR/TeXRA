@@ -49,7 +49,24 @@ export interface UploadCache {
   readonly releaseUploads: () => Effect.Effect<readonly UnreleasedUpload[]>;
 }
 
-const digestOf = (base64: string): string => hash('sha256', base64, 'hex');
+/** Digests kept, so a document lowered on every turn (and twice in one, to
+ *  check then to send) is hashed once. */
+const DIGEST_MEMO_SIZE = 64;
+
+// Keyed by the base64 string itself: the history holds the same string turn
+// after turn, and comparing it is far cheaper than hashing it.
+const digests = new Map<string, string>();
+
+const digestOf = (base64: string): string => {
+  const known = digests.get(base64);
+  if (known !== undefined) return known;
+  const digest = hash('sha256', base64, 'hex');
+  const [oldest] = digests.keys();
+  if (digests.size >= DIGEST_MEMO_SIZE && oldest !== undefined)
+    digests.delete(oldest);
+  digests.set(base64, digest);
+  return digest;
+};
 
 /**
  * The upload cache over a provider whose Files API follows the shape the

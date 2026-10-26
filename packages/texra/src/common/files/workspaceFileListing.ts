@@ -41,37 +41,43 @@ export const listWorkspaceFiles = Effect.fn(
     return Effect.gen(function* () {
       const entries = yield* fs.readDirectory(directory);
 
-      for (const name of entries) {
-        const relativePath = normalizeFilePath(
-          relativeDirectory ? `${relativeDirectory}/${name}` : name,
-        );
-        const absolutePath = join(directory, name);
-        const info = yield* fs.stat(absolutePath).pipe(
-          // Absent (`absentReason`: NotFound / ENOTDIR), the rest of
-          // BadResource (`ELOOP`), and PermissionDenied skip this entry;
-          // any other failure is real. glob.ts drops NotFound and
-          // BadResource the same way; the platform listing swallowed every
-          // symlink-target stat error.
-          Effect.catchIf(
-            (error) =>
-              absentReason(error) ||
-              error.reason._tag === 'BadResource' ||
-              error.reason._tag === 'PermissionDenied',
-            () => Effect.succeed(undefined),
-          ),
-        );
+      // Results are sorted at the end, so entries are probed concurrently.
+      yield* Effect.forEach(
+        entries,
+        (name) =>
+          Effect.gen(function* () {
+            const relativePath = normalizeFilePath(
+              relativeDirectory ? `${relativeDirectory}/${name}` : name,
+            );
+            const absolutePath = join(directory, name);
+            const info = yield* fs.stat(absolutePath).pipe(
+              // Absent (`absentReason`: NotFound / ENOTDIR), the rest of
+              // BadResource (`ELOOP`), and PermissionDenied skip this entry;
+              // any other failure is real. glob.ts drops NotFound and
+              // BadResource the same way; the platform listing swallowed every
+              // symlink-target stat error.
+              Effect.catchIf(
+                (error) =>
+                  absentReason(error) ||
+                  error.reason._tag === 'BadResource' ||
+                  error.reason._tag === 'PermissionDenied',
+                () => Effect.succeed(undefined),
+              ),
+            );
 
-        if (info?.type === 'Directory') {
-          if (shouldVisitDirectory(relativePath, filters)) {
-            yield* visit(absolutePath, relativePath);
-          }
-        } else if (
-          info?.type === 'File' &&
-          passesFileFilters(relativePath, filters)
-        ) {
-          results.push(relativePath);
-        }
-      }
+            if (info?.type === 'Directory') {
+              if (shouldVisitDirectory(relativePath, filters)) {
+                yield* visit(absolutePath, relativePath);
+              }
+            } else if (
+              info?.type === 'File' &&
+              passesFileFilters(relativePath, filters)
+            ) {
+              results.push(relativePath);
+            }
+          }),
+        { concurrency: 8, discard: true },
+      );
     });
   }
 

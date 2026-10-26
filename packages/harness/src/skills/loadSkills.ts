@@ -121,34 +121,67 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
-    const skillDir = path.join(root, name);
-    const skillPath = path.join(skillDir, 'SKILL.md');
-    const realSkillPath: string | undefined = yield* fs
-      .realPath(skillPath)
-      .pipe(
+  // Resolve and load entries concurrently; dedupe and report in name order.
+  const resolved = yield* Effect.forEach(
+    names.toSorted((a, b) => a.localeCompare(b)),
+    (name) => {
+      const skillPath = path.join(root, name, 'SKILL.md');
+      return fs.realPath(skillPath).pipe(
+        Effect.map((realSkillPath) => ({
+          name,
+          skillPath,
+          realSkillPath,
+          issue: undefined,
+        })),
         Effect.catch((error) =>
-          Effect.sync(() => {
-            if (!absentReason(error)) {
-              errors.push(
-                issue('warning', 'read_error', error.message, {
+          Effect.succeed({
+            name,
+            skillPath,
+            realSkillPath: undefined,
+            issue: absentReason(error)
+              ? undefined
+              : issue('warning', 'read_error', error.message, {
                   path: skillPath,
                 }),
-              );
-            }
-            return undefined;
           }),
         ),
       );
-    if (realSkillPath === undefined) continue;
-
+    },
+    { concurrency: 8 },
+  );
+  const unique = resolved.map((entry) => {
+    const { realSkillPath } = entry;
+    if (realSkillPath === undefined) return entry;
     if (seenRealPaths.has(realSkillPath)) {
-      errors.push(dupRealpathIssue(realSkillPath, skillPath));
-      continue;
+      return {
+        ...entry,
+        realSkillPath: undefined,
+        issue: dupRealpathIssue(realSkillPath, entry.skillPath),
+      };
     }
     seenRealPaths.add(realSkillPath);
+    return entry;
+  });
+  const loadedAll = yield* Effect.forEach(
+    unique,
+    (entry) =>
+      Effect.gen(function* () {
+        const loaded =
+          entry.realSkillPath === undefined
+            ? undefined
+            : yield* loadSkillDirectory(
+                path.join(root, entry.name),
+                entry.name,
+              );
+        return { ...entry, loaded };
+      }),
+    { concurrency: 8 },
+  );
 
-    const loaded = yield* loadSkillDirectory(skillDir, name);
+  for (const entry of loadedAll) {
+    if (entry.issue !== undefined) errors.push(entry.issue);
+    const { loaded, realSkillPath } = entry;
+    if (loaded === undefined || realSkillPath === undefined) continue;
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
@@ -161,7 +194,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     skills.push({
       skill: loaded.skill,
       realPath: realSkillPath,
-      entryName: name,
+      entryName: entry.name,
     });
   }
 
@@ -267,21 +300,36 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
       }
     };
 
-    for (const tier of tiers) {
+    // Scan every source concurrently; accept results in precedence order.
+    const scannedTiers = yield* Effect.forEach(
+      tiers,
+      (tier) =>
+        Effect.forEach(
+          tier.sources,
+          Effect.fnUntraced(function* (source) {
+            if (source.required === true) {
+              const sourceError = yield* validateRequiredSource(source);
+              if (sourceError)
+                return { source, sourceError, scanned: undefined };
+            }
+            const scanned = source.command
+              ? yield* scanCommandFile(source.path)
+              : yield* scanSkillRoot(source.path);
+            return { source, sourceError: undefined, scanned };
+          }),
+          { concurrency: 8 },
+        ).pipe(Effect.map((sources) => ({ order: tier.order, sources }))),
+      { concurrency: 'unbounded' },
+    );
+
+    for (const tier of scannedTiers) {
       // A name-ordered tier accepts once, after every root is scanned.
       const pooled: (DiscoveredSkill & { source: SkillSource })[] = [];
-      for (const source of tier.sources) {
-        if (source.required === true) {
-          const sourceError = yield* validateRequiredSource(source);
-          if (sourceError) {
-            errors.push(sourceError);
-            continue;
-          }
+      for (const { source, sourceError, scanned } of tier.sources) {
+        if (scanned === undefined) {
+          errors.push(sourceError);
+          continue;
         }
-
-        const scanned = source.command
-          ? yield* scanCommandFile(source.path)
-          : yield* scanSkillRoot(source.path);
         const result =
           source.namespace === undefined
             ? scanned

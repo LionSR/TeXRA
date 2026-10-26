@@ -143,13 +143,16 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   logger: AgentTrace,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, never, FileSystem.FileSystem> {
-  const attachedMemories = yield* getAttachedMemories(
-    agentConfig.memories,
-    options.storageRoot,
+  const [attachedMemories, fileVars] = yield* Effect.all(
+    [
+      getAttachedMemories(agentConfig.memories, options.storageRoot),
+      getFileVars(agentConfig, logger, options.workspacePath),
+    ],
+    { concurrency: 'unbounded' },
   );
   const inputs: TemplateInputs = {
     ...getBasicVars(agentConfig, isAnthropicModel, options),
-    ...(yield* getFileVars(agentConfig, logger, options.workspacePath)),
+    ...fileVars,
     // `prepareAgentDefinition` normalized the list.
     ...(agentConfig.outputFiles.length > 0
       ? { OUTPUT_FILES: agentConfig.outputFiles }

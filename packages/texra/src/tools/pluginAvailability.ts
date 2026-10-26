@@ -163,13 +163,16 @@ export const lean4Availability = (setup: SetupPlatformShape) =>
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* (workspaceRoot: string | undefined) {
     const secrets = yield* Secrets;
-    const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
-    // The probe reports "not a repository" as `false` and never fails;
-    // interrupting a dashboard refresh kills its `git` process instead of
-    // abandoning it. An availability probe carries the workspace root and
-    // nothing else: `ToolAvailabilityChecks.probe` takes no setting slots.
-    const inGitRepo = yield* isGitRepository(workspaceRoot, undefined);
-    return { tokenPresent, inGitRepo };
+    // The token read and the git probe run at once. The probe reports "not a
+    // repository" as `false` and never fails; interrupting a dashboard
+    // refresh kills its `git` process instead of abandoning it. An
+    // availability probe carries the workspace root and nothing else:
+    // `ToolAvailabilityChecks.probe` takes no setting slots.
+    const [token, inGitRepo] = yield* Effect.all(
+      [getGitHubToken(secrets), isGitRepository(workspaceRoot, undefined)],
+      { concurrency: 'unbounded' },
+    );
+    return { tokenPresent: token !== undefined, inGitRepo };
   },
 );
 

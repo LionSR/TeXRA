@@ -48,10 +48,17 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
     return server !== undefined && servers.includes(server);
   };
 
-  const items = yield* buildToolDashboardItems(inputs, cachedResults);
-  const installed = yield* InstalledPlugins.list(inputs);
   const mcpConfigPath = mcpConfigPathOf(inputs.storageRoot);
-  const mcp = yield* readMcpConfig(yield* FileSystem.FileSystem, mcpConfigPath);
+  const fs = yield* FileSystem.FileSystem;
+  // The three loads are independent.
+  const [items, installed, mcp] = yield* Effect.all(
+    [
+      buildToolDashboardItems(inputs, cachedResults),
+      InstalledPlugins.list(inputs),
+      readMcpConfig(fs, mcpConfigPath),
+    ],
+    { concurrency: 'unbounded' },
+  );
 
   const rows: PluginRow[] = [
     ...items.map((item): PluginRow => ({
