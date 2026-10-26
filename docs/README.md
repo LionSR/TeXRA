@@ -33,7 +33,7 @@ Git repository.
 - `supabase/` currently holds TeXRA Cloud database and deployment material.
 
 This directory is excluded from the public website, not from the Git
-repository. Supabase material remains here until an approved private
-destination has been created, copied, hash-verified, access-checked, and tested
-with a restore or deployment dry run. Only a later, separate change may remove
-the verified source from a public release.
+repository. Supabase material remains here until it has been migrated to an
+approved private repository, hash-verified, access-checked, and verified with a
+deployment dry run. Only a later, separate change may remove the verified
+source from a public release.

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 
 import {
   formatInteractiveTerminalFailure,

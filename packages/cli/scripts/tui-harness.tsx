@@ -261,6 +261,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},
   stderrColorEnabled: HARNESS_COLOR_ENABLED,
+  renderRunProgress: false,
   stderrIsTty: true,
   stdoutColorEnabled: HARNESS_COLOR_ENABLED,
   stdoutIsTty: true,

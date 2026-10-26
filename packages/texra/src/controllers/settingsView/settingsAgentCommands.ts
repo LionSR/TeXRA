@@ -24,7 +24,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
+import { formatUnknownTeamMessage } from '@texra-ai/harness';
 import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,

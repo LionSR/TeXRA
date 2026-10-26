@@ -17,6 +17,7 @@ import {
   senderOf,
   type AgentTrace,
   type ProcessChildStrategy,
+  type ToolCardHandle,
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
@@ -28,6 +29,7 @@ import {
   type FollowUpContent,
   type RunId,
   type TokenUsageStats,
+  type ToolUseLog,
 } from '@texra-ai/harness/schemas';
 
 import type {
@@ -35,6 +37,52 @@ import type {
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
 import type { SettingsStores } from '@texra-ai/harness';
+
+/**
+ * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
+ * assigns each tool call. Both drivers (claudeAgent.ts, codex.ts) open a card
+ * when a tool call appears and update or close it as results arrive; on any
+ * turn teardown — a normal end, a stream error, or an abort — every card still
+ * open must be failed so no dead card keeps a "Running" spinner. This owns that
+ * keyed lifecycle and the fail-if-open teardown, so the invariant lives in one
+ * place rather than being re-counted in each driver's stream finalizer.
+ */
+export class StreamedToolCards {
+  private readonly cards = new Map<string, ToolCardHandle>();
+
+  constructor(private readonly logger: AgentTrace) {}
+
+  /** Open a card for `id` with its first log. */
+  open(id: string, log: ToolUseLog): void {
+    this.cards.set(id, this.logger.openToolCard(log));
+  }
+
+  /** Update the card for `id` if one is open, else open one. */
+  openOrUpdate(id: string, log: ToolUseLog): void {
+    const card = this.cards.get(id);
+    if (card) card.update(log);
+    else this.open(id, log);
+  }
+
+  /** The card open for `id`, if any — for a caller that merges onto its last log. */
+  get(id: string): ToolCardHandle | undefined {
+    return this.cards.get(id);
+  }
+
+  /** Show `id`'s final log and drop its card; a no-op when none is open for `id`. */
+  close(id: string, log: ToolUseLog): void {
+    const card = this.cards.get(id);
+    if (!card) return;
+    card.update(log);
+    this.cards.delete(id);
+  }
+
+  /** Fail every still-open card and clear. Call once when the turn tears down. */
+  failOpen(): void {
+    for (const card of this.cards.values()) card.failIfOpen();
+    this.cards.clear();
+  }
+}
 
 interface AgentCliResumeLabels {
   notActiveLabel: string;

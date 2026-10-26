@@ -5,11 +5,11 @@ import CliStorageHero from '../.vitepress/components/CliStorageHero.vue';
 
 # File management
 
-A scientific research project encompasses diverse assets: manuscripts, derivations, appendices, computational scripts, figures, bibliographies, and auxiliary style files. This guide explains how TeXRA organizes, scopes, and manages these files during agent execution.
+This guide explains how TeXRA organizes input files, read-only context, media attachments, and run-storage outputs.
 
 ## File categories
 
-TeXRA organizes files into three categories, each with its own accepted file types and read/write role:
+TeXRA groups files into three categories:
 
 <FeatureCards
   min="220px"
@@ -57,46 +57,11 @@ TeXRA organizes files into three categories, each with its own accepted file typ
 
 <p class="hero-caption">Three categories: Input is read + edited, Context is read-only, Media carries visual and audio content.</p>
 
-### Input files
+Read the [Working with figures](./working-with-figures.md) guide for supported media formats and automatic figure extraction.
 
-These are the primary files the agent reads and edits. They typically include:
+### Pasting images from the clipboard
 
-- LaTeX documents (`.tex`)
-- Text files (`.txt`)
-- Markdown files (`.md`)
-
-Input files can be a single main document or several related files (such as chapters of a book or sections of a paper).
-
-### Context files
-
-Read-only files the agent sees but does not modify. They can be:
-
-- Bibliographies (`.bib`/`.bbl`)
-- Style and macro files (`.sty`/`.cls`)
-- Reference papers or previous versions
-- Any document the output should match for formatting
-
-### Figure & media files
-
-Files containing visual or audio content, such as images, PDFs used as figures, or audio recordings. Read the [Working with figures](./working-with-figures.md) guide for supported types, UI controls, and automatic extraction.
-
-#### Pasting images from clipboard
-
-You can paste images from your clipboard directly into the instruction text area. This is useful for including screenshots, diagrams, or other visual content:
-
-1. **Copy an image** to your clipboard (for example, take a screenshot or copy from another application)
-2. **Place the cursor in the instruction text area** where you want to reference the image
-3. **Paste** (Ctrl/Cmd+V). The image is then:
-   - Saved to the workspace storage
-   - Referenced in the text as `[pasted_<timestamp>_<rand>.ext]`
-   - Added to the Media Files list
-   - Made available to the AI model
-
-Pasted images appear in the file selector like any other media file, so you can review or remove them before sending. If the selected model cannot read images, TeXRA warns you so you can switch to a vision-capable model.
-
-Clipboard paste accepts many image formats (JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, PSD), but the formats that can be processed depend on what the selected AI model supports. Most vision models support common formats like JPEG, PNG, GIF, and WebP.
-
-Note: Pasted images are stored in workspace storage and removed automatically after 3 days to save space.
+Paste an image (`Ctrl/Cmd+V`) into the instruction box to save it to workspace storage as `[pasted_<timestamp>_<rand>.ext]` and add it to the **Media** list automatically. If the selected model does not support vision, TeXRA warns you before running. Pasted images are cleaned up after 3 days.
 
 ## File selection interface
 
@@ -122,13 +87,6 @@ Inside the list:
 - Drag a row to reorder files. Input files are sent to the agent in this order.
 
 The list is the only mode; there is no separate "single file" view. To work with one file, keep the list at length one.
-
-This works well for:
-
-- Processing several chapters of a book
-- Working with documents split across several files
-- Batch processing similar documents
-- Including several reference materials
 
 ### Output files
 
@@ -166,66 +124,19 @@ Subdirectories are preserved, so `chapters/intro.tex` lands at
 `r0/chapters/intro.tex`. The only fixed name is the raw model response,
 `r{round}/output.xml`.
 
-For example:
+## Run storage and file commands
 
-- Input: `paper.tex`
-- Agent: `polish`
-- Model: `anthropic/claude-sonnet-5-5`
-- Output: `r0/paper.tex`
-
-When the agent's task has a second (reflection) revision, you may also see:
-
-- Revision 2: `r1/paper.tex`
-
-## File management commands
-
-TeXRA provides several commands for managing generated files, available from the main interface or the ProgressBoard:
-
-### Pack
-
-The "Pack" button (<wa-icon library="texra" name="box-archive"></wa-icon>) snapshots the run folder into a structured history folder:
-
-1. Creates a timestamped directory in the "History" folder
-2. Copies all relevant output files, logs, and mirrored dependencies
-3. Preserves the relationship between input and output files
-
-Use this to keep a clean workspace while preserving previous outputs.
-
-### Clean
-
-The "Clean" button (<wa-icon library="texra" name="trash"></wa-icon>) removes output files for the selected run:
-
-1. Identifies the run folder for the current run
-2. Removes generated artifacts from the run folder
-3. Leaves original input files untouched
-
-Use this to remove generated artifacts from run storage after reviewing the results.
-
-### Opening generated files
-
-Document task outputs are listed in the ProgressBoard under **Generated Files**.
-Select a file name to preview it in VS Code. Files open using VS Code's default
-viewer, so PDFs and images display correctly while `.tex` documents open in the
-editor.
-
-To browse the whole run folder, use the
-<wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage** toolbar
-button. This reveals the run folder with generated files, compile
-logs, mirrored LaTeX dependencies, and intermediate artifacts. (From a
-terminal, `texra history show <id>` lists the same stored artifacts; see the
-card below.)
-
-### Run storage
-
-Every run gets an isolated run folder under TeXRA's
-workspace storage directory:
+Every run gets an isolated run folder under TeXRA's workspace storage directory:
 
 ```text
 executions/<executionId>/
 ```
 
-Document task outputs are written there first, not directly over your workspace
-files. Three commands then move that run's artifacts to three different places:
+Document task outputs are listed in the ProgressBoard under **Generated Files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+
+- **Accept**: Copies the reviewed output file into your workspace.
+- **Pack / Archive outputs** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run's output files, logs, and mirrored dependencies into a timestamped folder under `History/`.
+- **Clean / Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Removes the generated artifacts from the run folder while leaving your workspace input files untouched.
 
 <StorageLifecycleFlow />
 
@@ -262,14 +173,6 @@ project/
 └── bibliography.bib    # Bibliography
 ```
 
-### Input file detection
-
-TeXRA detects appropriate input files based on:
-
-1. File extension (`.tex`, `.txt`, `.md`)
-2. Location in project hierarchy
-3. Content structure
-
 ### LaTeX Workshop integration
 
 If a LaTeX workspace does not have the
@@ -280,39 +183,13 @@ to inspect and apply the available workspace recommendations explicitly.
 
 ## Cross-computer syncing
 
-If you work on several computers, use a cloud storage service like Dropbox to sync the **History** folder, which holds packed versions of your documents.
-
-To keep your local directory structure while syncing this folder, use symbolic links. Store the actual folder in Dropbox and create a symbolic link in your local project directory. For example:
+If you work on several computers, you can sync the **History** folder (which holds packed document versions) via a cloud storage folder using a symlink:
 
 ```bash
 ln -s /path/to/Dropbox/texra-projects/ProjectName/History /path/to/local/ProjectName/History
 ```
 
-Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.
-
-## Best practices
-
-### Organizing input files
-
-- **Main document first**: When using several input files, list the main document first
-- **Logical order**: Arrange chapter files in reading order
-- **Consistency**: Keep file naming conventions consistent
-
-### Managing output files
-
-- **Regular cleanup**: Use the "Clean" command to remove unneeded outputs
-- **Version control**: Use "Pack" to preserve important milestones
-- **Diff review**: Use LaTeXdiff to review changes before accepting them
-
-### Reference materials
-
-- **Relevant examples**: Include only directly relevant reference files
-- **Context limits**: Keep model context limits in mind when adding references
-- **Format consistency**: Use reference materials with similar formatting styles
-
 ## Next steps
-
-Now that you know how to manage files in TeXRA, you may want to read about:
 
 - [Research tools](/guide/research-tools): how TeXRA uses external tools
 - [LaTeX Diff](/guide/latex-diff): how to compare document versions

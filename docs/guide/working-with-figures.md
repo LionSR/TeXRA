@@ -25,17 +25,14 @@ pull figures out of your documents with the built-in extraction tools.
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media section
 
-The main TeXRA panel includes a **Media** section for figure files. Its header carries the inline **Auto-extract options** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) plus a three-action toolbar, and each file is a row you can drag to reorder:
+The **Media** section in the TeXRA panel holds images, PDFs, and audio files for the run:
 
 <MediaSectionPanel />
 
-<p class="hero-caption">The Media group: the wand opens auto-extract options, the toolbar adds opened files / clears all / adds media files, and each row drags to reorder with a trailing trash icon.</p>
-
-- **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction.
-- **Add opened files as media** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a supported media type.
+- **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction (`Figures`, `TikZ Figures`, `Compile Input PDF`).
+- **Add opened files as media** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab with a supported media extension.
 - **Clear all media files** (<wa-icon library="texra" name="trash"></wa-icon>): empty the media list.
-- **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
-- **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
+- **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures, or drag and drop files directly onto the section. Drag rows to reorder them.
 
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported file types
 
@@ -87,20 +84,11 @@ TeXRA recognizes these media types by default:
   ]"
 />
 
-<p class="hero-caption">Three media categories with their accepted extensions: images and audio carry several formats, while PDFs use native multimodal support where the provider offers it.</p>
-
-PDFs use native multimodal support when the provider offers it. Otherwise TeXRA converts them with GraphicsMagick / ImageMagick + Ghostscript. The status of those system dependencies is on **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
+PDFs use native multimodal support when the provider offers it; otherwise TeXRA rasterizes pages with GraphicsMagick / ImageMagick + Ghostscript (check tool detection under **Settings → LaTeX**).
 
 ## <wa-icon library="texra" name="clippy"></wa-icon> Clipboard images
 
-Paste images directly into the instruction area:
-
-1. Copy any image to the clipboard.
-2. Paste with `Ctrl/Cmd+V`.
-3. The image is saved and referenced as `[pasted_timestamp_hash.ext]`.
-4. The **Media Files** list (<wa-icon library="texra" name="file-media"></wa-icon>) updates automatically.
-
-Pasted images are stored temporarily and cleaned up after 3 days.
+Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `[pasted_timestamp_hash.ext]`, adds it to the **Media** list automatically, and cleans up temporary pasted files after 3 days.
 
 ## <wa-icon library="texra" name="wand"></wa-icon> Automatic figure extraction
 

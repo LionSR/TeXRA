@@ -55,8 +55,8 @@ const rows = [
     <div class="api-pane">
       <h2 class="api-h2">API Configuration</h2>
       <p class="api-desc">
-        Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API
-        access — you need a key from the provider's developer platform.
+        Store provider API keys in <code>~/.texra/secrets/</code> or sign in
+        with a supported subscription.
       </p>
 
       <table class="api-table">

@@ -12,7 +12,7 @@
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const details = [
   { key: 'name', value: 'literature_review_generator' },
-  { key: 'category', value: 'workflow' },
+  { key: 'kind', value: 'document task' },
   { key: 'source', value: 'custom' },
   { key: 'path', value: '…/custom_agents/literature_review_generator.yaml' },
 ];

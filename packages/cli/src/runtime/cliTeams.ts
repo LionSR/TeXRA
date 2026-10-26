@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
   teamAvailability,
@@ -13,12 +12,13 @@ import {
   teamPlanStatus,
   type TeamAvailability,
   type TeamRunPlan,
-} from '@common/teams/TeamPlan';
+} from '@texra-ai/harness';
 import {
   findTeamPreset,
   launchableTeamPresets,
   type TeamPreset,
-} from '@common/teams/TeamPresets';
+} from '@texra-ai/harness';
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { AgentEntry, StateStore } from '@texra-ai/harness';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;

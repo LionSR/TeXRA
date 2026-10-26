@@ -32,15 +32,6 @@ TeXRA compares each revision of agent output to your original input and can also
 
 By default, TeXRA passes `--subtype=ONLYCHANGEDPAGE` to `latexdiff` so compiled diff PDFs show only pages with edits. Disable **Only changed pages in diff PDFs** in the LaTeX tab when you need a full-document diff PDF.
 
-## Understanding LaTeX diff
-
-Standard text diff tools can be hard to read when comparing LaTeX source. LaTeX diff understands LaTeX syntax and produces readable, compilable LaTeX documents with changes highlighted. This approach has several advantages:
-
-1. **Structural awareness**: Respects LaTeX environments, math syntax, and macro boundaries
-2. **Visual clarity**: Highlights changes directly within the compiled PDF
-3. **Compilable output**: Produces standard, standalone LaTeX markup
-4. **Scholarly focus**: Built specifically for research documents containing complex equations, figures, and citation networks
-
 ## The LaTeXDiffs section
 
 The LaTeX diff features live in the "LaTeXDiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) of the TeXRA interface, shown in the slice above.
@@ -81,14 +72,6 @@ Select the **Diff vs. edited** button (<wa-icon library="texra" name="diff-singl
 ]" />
 
 <p class="hero-caption">After you press a diff button, TeXRA runs latexdiff, writes the marked-up <code>.tex</code>, opens it, then (with LaTeX Workshop installed) builds and views the compiled diff PDF.</p>
-
-### Step 3: review changes
-
-The generated diff document highlights:
-
-- **Additions**: Usually in blue or underlined
-- **Deletions**: Usually in red or struck through
-- **Changes**: Shown as deletions followed by additions
 
 ## Git-based version comparison
 
@@ -131,131 +114,16 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 
 <p class="hero-caption">latexdiff's source commands and how they typeset: <code>\DIFadd{…}</code> renders as a blue underlined addition, <code>\DIFdel{…}</code> as a red struck-through deletion, and adjacent del+add forms a change.</p>
 
-### Interpreting complex changes
+### Math markup and multi-file projects
 
-For complex LaTeX structures, pay attention to:
-
-1. **Math environments**: How changes inside equations are marked is configurable. The **Math markup in diffs** setting in the Settings LaTeX tab (`texra.latexdiff.mathMarkup`) offers suppress markup, equation-level, within equations, or small changes inside equations, and applies to every diff route
-2. **Nested environments**: Changes within nested environments can be hard to read
-3. **Command arguments**: Changes to command arguments are marked specially
-4. **Whitespace changes**: May or may not be highlighted depending on settings
-
-## Advanced diff usage
-
-### Comparing multiple files
-
-For documents split across multiple files:
-
-1. Use the `merge` agent instead of the basic diff
-2. Select the multiple input files and their edited counterparts; the agent takes one or more original/edited file pairs, not a directory
-3. Review each merged output, then diff it against its original
-
-## Integration with workflow
-
-LaTeX diff fits into several TeXRA workflows:
-
-### Document review workflow
-
-1. Generate the initial document with a suitable agent
-2. Make manual edits or use another agent for revision
-3. Use latexdiff to compare original and revised versions
-4. Review and accept or reject changes
-5. Use merge to create the final version
-
-### Collaborative editing workflow
-
-1. Share the base document with collaborators
-2. Receive edited versions back
-3. Use latexdiff to visualize each contributor's changes
-4. Use merge to incorporate changes selectively
-5. Generate diffs of the merged document to confirm the result
-
-### Version control workflow
-
-1. Commit document versions regularly to Git
-2. Use latexdiff-vc to compare with previous versions
-3. Track how the document evolves over time
-4. Identify when specific changes were made
-5. Recover and merge content from previous versions as needed
-
-## Under the hood
-
-TeXRA's LaTeX diff builds on several tools:
-
-### latexdiff tool
-
-[latexdiff](https://ctan.org/pkg/latexdiff) is a Perl script that compares LaTeX files and generates a marked-up LaTeX document highlighting differences.
-
-TeXRA:
-
-1. Calls latexdiff with appropriate options
-2. Processes the output for consistency
-3. Applies additional formatting as needed
-
-### latexdiff-vc
-
-[latexdiff-vc](https://ctan.org/pkg/latexdiff) (version control) extends latexdiff to work with version control systems like Git.
-
-TeXRA:
-
-1. Retrieves file versions from Git history
-2. Passes them to latexdiff
-3. Manages the output files
-
-### Merge process
-
-The intelligent merge process:
-
-1. Analyzes both documents semantically
-2. Identifies substantive changes
-3. Creates a new document combining the best elements
-4. Optionally generates a diff showing applied changes
+- **Math environments**: The **Math markup in diffs** setting on **Settings → LaTeX** (`texra.latexdiff.mathMarkup`) controls how changes inside equations are marked (suppress markup, equation-level, within equations, or small changes inside equations) across every diff route.
+- **Comparing multiple files**: For documents split across several files, use the [`merge`](./intelligent-merge.md) agent on each original/edited file pair, then diff the merged output against its original.
 
 ## Troubleshooting
 
-### Common diff issues
-
-**Problem**: Missing or incomplete highlights
-
-**Solutions**:
-
-- Make sure both documents are valid LaTeX
-- Check for complex structures that might confuse latexdiff
-- Compare smaller sections of the document
-
-**Problem**: Diff document doesn't compile
-
-**Solutions**:
-
-- Look for conflicting markup in the preamble
-- Check for unclosed environments or commands
-- Remove complex custom commands that might interfere with diff markup
-
-**Problem**: Changes not aligned
-
-**Solutions**:
-
-- Keep the document structure similar between versions
-- Adjust the diff settings in the Settings LaTeX tab: **Math markup in diffs**, **Diff consecutive rounds**, and **Only changed pages in diff PDFs**. The latexdiff timeout is in the CLI's `/config`
-- Break large changes into smaller edits
-
-### Git integration issues
-
-**Problem**: No commits shown in dropdown
-
-**Solutions**:
-
-- Verify the document is in a Git repository
-- Refresh the commit list using the refresh icon (<wa-icon library="texra" name="refresh"></wa-icon>)
-- Check Git installation and configuration
-
-**Problem**: Error when comparing with commit
-
-**Solutions**:
-
-- Make sure the file existed in the selected commit
-- Check for file path changes or renames
-- Verify Git access permissions
+- **Missing or misaligned highlights**: Run a formatter (`latexindent` or `tex-fmt`) on both files first so line breaks match, or adjust **Math markup in diffs**, **Diff consecutive rounds**, and **Only changed pages in diff PDFs** on **Settings → LaTeX** (the `latexdiff` timeout is in the CLI's `/config`).
+- **Diff document fails to compile**: Complex custom macros or unclosed environments can conflict with `\DIFadd` / `\DIFdel` markup. Check that both input files compile cleanly on their own, or lower **Math markup in diffs** to equation-level or suppress markup.
+- **Git commit diff fails or shows no commits**: Confirm the workspace is a Git repository, click the refresh icon (<wa-icon library="texra" name="refresh"></wa-icon>) next to **Commit**, and verify the file existed at the selected commit under the same relative path.
 
 ## Best practices
 
@@ -368,15 +236,6 @@ The intelligent merge process:
   }
 }
 </style>
-
-### Version management
-
-Keep a clear version strategy:
-
-1. **Regular commits**: Commit document versions at meaningful milestones
-2. **Descriptive messages**: Write commit messages that describe the changes
-3. **Pack old diffs**: Use the "Pack" button to archive diff files
-4. **Clean unnecessary files**: Remove temporary diff files when no longer needed
 
 ## Next steps
 

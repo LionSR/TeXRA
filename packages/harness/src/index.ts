@@ -84,8 +84,9 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export type { TeamPreset } from '@common/teams/TeamPresets';
-export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export * from '@common/teams/TeamPresets';
+export * from '@common/teams/TeamPlan';
+export * from '@shared/constants/agents';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,

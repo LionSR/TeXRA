@@ -286,8 +286,7 @@ export function executeCliRequest(
     yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
     const renderWorkflowPlainProgress =
-      runContext.outputFormat === 'text' &&
-      runContext.renderRunProgress === true;
+      runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
       .attachRunProgressRenderer(session, { runId: request.runId })
       .pipe(Scope.provide(presentationScope));

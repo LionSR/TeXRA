@@ -47,8 +47,8 @@ const categories = [
   {
     icon: 'comment-discussion',
     name: 'Delegation',
-    desc: 'Delegate to Codex, consult another chat model',
-    tools: ['codex', 'inquiry'],
+    desc: 'Delegate to Codex or Claude Code, consult an external model',
+    tools: ['codex', 'claude_code', 'inquiry'],
   },
   {
     icon: 'beaker',
@@ -65,11 +65,12 @@ const categories = [
   {
     icon: 'type-hierarchy',
     name: 'Memory & Workflow',
-    desc: 'Persistent memory, plans, sub-agent delegation',
+    desc: 'Persistent memory, plans, sub-agent and task delegation',
     tools: [
       'memory',
       'plan',
       'agent',
+      'document_task',
       'script',
       'executions',
       'accept_run_files',
@@ -82,7 +83,7 @@ const categories = [
   <MockCard
     class="tcats"
     icon="tools"
-    title="Dashboard → Tools"
+    title="Settings → Plugins"
     sub="tools you can grant an agent"
   >
     <ul class="tcats-list">

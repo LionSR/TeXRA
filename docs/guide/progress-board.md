@@ -7,7 +7,7 @@ import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 
 # ProgressBoard
 
-The ProgressBoard is TeXRA's execution dashboard for tracking autonomous agents and inspecting their artifacts in real time. Whether supervising extended mathematical derivations or reviewing concise document edits, you can inspect streaming thoughts and tool calls, re-run tasks, or restore exact configurations with a single click.
+The ProgressBoard is TeXRA's live view in VS Code for watching running tasks, inspecting tool calls and reasoning, reviewing generated files, and resuming or forking past runs.
 
 ::: tip CLI
 The ProgressBoard is the VS Code extension's live view. The CLI shows the same
@@ -75,41 +75,22 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **One header row**: the Tasks button, the task's title, its status and
-  time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
-  A workflow task also shows which pass it is on, as **Pass 2 of 3**.
-  The menu holds the task's actions, then Open tasks in editor,
-  LaTeXDiffs, and Figures. Every task offers Rename. Workflow tasks offer
-  Run again… (the New task form, filled from the task, to change and start), Open task folder, Export, Copy diagnostics, latexdiff,
-  Archive outputs, and Delete output files; conversations offer Fork,
-  Compact, Open task folder, Export, and Copy diagnostics, and list the forks made from them. Export saves the
-  conversation as Markdown, HTML, or PDF.
-- **Once a task ends**: where the message box stood, the task says
-  it has ended and offers **Fork**, a new task holding the conversation.
-  An interrupted task, or a workflow with saved outputs, offers
-  **Resume** there, its one home. Each of your messages after the first
-  also offers **Fork from here** on hover: the fork holds the
-  conversation before it, and the message waits in its composer.
-- **Delete task**: at the end of the menu, for a task that has stopped.
-  It removes the conversation and its task folder.
-
-Each action in detail:
-
-- <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop**: Stops the running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call finishes before stopping.
-- <wa-icon library="texra" name="play"></wa-icon> **Run New**: Starts a fresh run of the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction), discarding previous outputs. Useful for retrying failed tasks or reproducing results.
-- <wa-icon library="texra" name="forward-step"></wa-icon> **Resume**: Continues the run from its saved outputs, picking up where it left off instead of starting over.
-- <wa-icon library="texra" name="code-branch"></wa-icon> **Fork**: A new task holding this conversation up to its last finished turn, opened and waiting for your message; the original is left as it was.
-- <wa-icon library="texra" name="code-compare"></wa-icon> **Diff**: Runs `latexdiff` to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA uses the original file. Requires `latexdiff` to be installed. Read the [LaTeX Diff guide](./latex-diff.md).
-- <wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage**:
-  Reveals the run folder under run storage so you can browse generated
-  files, compile logs, mirrored dependencies, and intermediate artifacts
-  yourself.
-- <wa-icon library="texra" name="copy"></wa-icon> **Copy diagnostics**: Copies
-  the task's title, agent, model, status and id, its output paths, and its
-  compile failures to the clipboard as plain text, for a bug report or to
-  paste into a new task. It is the one place the task's id is shown.
-- <wa-icon library="texra" name="box-archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. Read the [file management guide](./file-management.md).
-- <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the run folder associated with this stream.
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for multi-pass document tasks), **Stop** while running (aborts the active request immediately for providers supporting `AbortController`, or stops after the current API call finishes), **New task**, and the **More** menu (`⋯`).
+- **More menu (`⋯`)**:
+  - **All tasks**:
+    - **Rename**: Change the task title.
+    - **Open task folder**: Reveal the run folder in run storage (`executions/<run-id>/`) to inspect generated files, compile logs, mirrored dependencies, and intermediate artifacts.
+    - **Export**: Save the transcript as Markdown, HTML, or PDF.
+    - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
+    - **Delete task**: Remove the task once stopped.
+  - **Document tasks**:
+    - **Run again…**: Pre-fill the New task form with the same agent, model, files, and instruction to start a fresh run.
+    - **latexdiff**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
+    - **Archive outputs**: Move the run's output files and log into the `History` folder (read the [file management guide](./file-management.md)).
+    - **Delete output files**: Remove the run folder's generated files.
+  - **Chat tasks**: **Fork** (branch the conversation into a new task), **Compact** (summarize earlier turns), and links to any forks created from the conversation.
+  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs**.
+- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or workflows with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.

@@ -191,7 +191,8 @@ describe('session Surface ownership', () => {
       'Saved text',
     );
     expect(
-      storage.get<typeof PersistedSurfaceSchema.Type>(`surface:${KEY}`).drafts,
+      (storage.get(`surface:${KEY}`) as typeof PersistedSurfaceSchema.Type)
+        .drafts,
     ).toEqual([[ROOT, 'Saved text']]);
 
     view.set(viewOf(buildScenario().events));
@@ -201,9 +202,9 @@ describe('session Surface ownership', () => {
     );
     view.set(emptySessionView(KEY));
     await Promise.resolve();
-    const persisted = storage.get<typeof PersistedSurfaceSchema.Type>(
+    const persisted = storage.get(
       `surface:${KEY}`,
-    );
+    ) as typeof PersistedSurfaceSchema.Type;
     expect(persisted.drafts).toEqual([]);
     // The selection is decided by the same prune, so a raw read of the
     // field never names a run the view no longer holds.

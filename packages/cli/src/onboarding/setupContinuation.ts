@@ -6,7 +6,7 @@
 // Ink-free test kernel can cover it — callers read `firstRunDone` from
 // platform global state and pass it in.
 
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 
 interface FirstRunSetupContinuationInputs {

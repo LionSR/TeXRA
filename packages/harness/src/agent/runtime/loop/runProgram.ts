@@ -17,6 +17,7 @@ import {
   type RunOutcome,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { outcomeFromCause } from '@shared/runs/runStatus';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -108,14 +109,6 @@ export type RunExit = {
 };
 
 /**
- * The one verdict of a failure cause. Any interrupt in it is a stop, even
- * when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
- * already reports that run `CANCELLED`, so every terminal row agrees.
- */
-const failureOutcome = (cause: Cause.Cause<unknown>): RunOutcome =>
-  Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
-
-/**
  * The exit protocol, as the release arm of the run's acquireUseRelease:
  * the run's input lease, where it holds one. The halt is not written here:
  * it commits with the run's `run.end` (`finalizeRun`), so no reader ever
@@ -132,7 +125,7 @@ export const settleRun =
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,
-      onFailure: failureOutcome,
+      onFailure: outcomeFromCause,
     });
     return Effect.gen(function* () {
       const runs = registryOf(yield* Runs);
@@ -178,7 +171,7 @@ export const stagedBy =
           stage.end(
             Exit.match(exit, {
               onSuccess: outcomeOf,
-              onFailure: failureOutcome,
+              onFailure: outcomeFromCause,
             }),
           ),
         ),
