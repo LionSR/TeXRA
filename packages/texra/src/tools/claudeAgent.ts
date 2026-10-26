@@ -40,11 +40,7 @@ import {
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
 import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
-import {
-  formatDelivery,
-  type AgentTrace,
-  type ToolCardHandle,
-} from '@texra-ai/harness/plugins';
+import { formatDelivery, type AgentTrace } from '@texra-ai/harness/plugins';
 import {
   ToolError,
   type ProcessChildStrategy,
@@ -72,6 +68,7 @@ import {
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
+  StreamedToolCards,
 } from './agentCliShared';
 import {
   buildClaudeToolUseLog,
@@ -216,7 +213,7 @@ export function runStreamedTurn(params: {
     }
 
     const responseParts: string[] = [];
-    const toolCards = new Map<string, ToolCardHandle>();
+    const toolCards = new StreamedToolCards(logger);
     const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
     let usage: TurnResult['usage'] = null;
     let sessionId: string | undefined;
@@ -281,8 +278,7 @@ export function runStreamedTurn(params: {
         Effect.sync(() => {
           params.signal.removeEventListener('abort', forwardAbort);
           backgroundTasks.finish();
-          for (const card of toolCards.values()) card.failIfOpen();
-          toolCards.clear();
+          toolCards.failOpen();
         }),
       ),
     );
@@ -317,7 +313,7 @@ export function runStreamedTurn(params: {
 function handleAssistantBlocks(
   blocks: SDKAssistantMessage['message']['content'],
   logger: AgentTrace,
-  cards: Map<string, ToolCardHandle>,
+  cards: StreamedToolCards,
   responseParts: string[],
 ): void {
   for (const block of blocks) {
@@ -347,7 +343,7 @@ function handleAssistantBlocks(
           status: 'in_progress',
           trace: logger,
         });
-        cards.set(block.id, logger.openToolCard(toolLog));
+        cards.open(block.id, toolLog);
         break;
       }
     }
@@ -356,7 +352,7 @@ function handleAssistantBlocks(
 
 function handleToolResults(
   blocks: Exclude<SDKUserMessage['message']['content'], string>,
-  cards: Map<string, ToolCardHandle>,
+  cards: StreamedToolCards,
 ): void {
   for (const block of blocks) {
     if (block.type !== 'tool_result') continue;
@@ -374,12 +370,11 @@ function handleToolResults(
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
       }),
     };
-    card.update({
+    cards.close(id, {
       ...card.log,
       ...update,
       status: isError ? 'failed' : 'completed',
     });
-    cards.delete(id);
   }
 }
 
