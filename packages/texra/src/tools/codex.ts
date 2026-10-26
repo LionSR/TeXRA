@@ -63,6 +63,7 @@ import {
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
+  StreamedToolCards,
 } from './agentCliShared';
 import {
   CODEX_AGENT_NAME,
@@ -177,19 +178,14 @@ function buildCodexLiveToolLog(
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
-  logger: AgentTrace;
-  refs: Map<string, ToolCardHandle>;
+  cards: StreamedToolCards;
 }): boolean {
-  const { item, status, logger, refs } = params;
+  const { item, status, cards } = params;
 
   const toolLog = buildCodexLiveToolLog(item, status);
   if (!toolLog) return false;
 
-  // The card stays after it closes (re-ending is idempotent); it knows
-  // whether it is still open when the turn's finalizer asks.
-  const existing = refs.get(item.id);
-  if (existing) existing.update(toolLog);
-  else refs.set(item.id, logger.openToolCard(toolLog));
+  cards.openOrUpdate(item.id, toolLog);
   return true;
 }
 
@@ -218,7 +214,7 @@ export function runStreamedTurn(
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
-    const itemLogRefs = new Map<string, ToolCardHandle>();
+    const itemCards = new StreamedToolCards(logger);
 
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
@@ -258,8 +254,7 @@ export function runStreamedTurn(
           publishCodexItemProgress({
             item: event.item,
             status: 'in_progress',
-            logger,
-            refs: itemLogRefs,
+            cards: itemCards,
           });
           break;
         case 'item.completed': {
@@ -267,8 +262,7 @@ export function runStreamedTurn(
           const wasRenderedAsProgress = publishCodexItemProgress({
             item,
             status: 'completed',
-            logger,
-            refs: itemLogRefs,
+            cards: itemCards,
           });
           if (!wasRenderedAsProgress) logCodexItem(item, logger);
           if (item.type === 'agent_message') responseParts.push(item.text);
@@ -302,8 +296,7 @@ export function runStreamedTurn(
       }),
       Effect.ensuring(
         Effect.sync(() => {
-          for (const card of itemLogRefs.values()) card.failIfOpen();
-          itemLogRefs.clear();
+          itemCards.failOpen();
           finalizeTurnCard('failed');
         }),
       ),
