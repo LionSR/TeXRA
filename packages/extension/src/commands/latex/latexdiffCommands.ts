@@ -14,7 +14,9 @@ import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
 } from '@frontend/latex/openBuild';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
+  announce,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
@@ -418,7 +420,9 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
       );
 
       if (results.length === 0) {
-        vscode.window.showInformationMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(CHANNEL, NO_LATEXDIFF_OPERATIONS_MESSAGE),
+        );
         return;
       }
 
@@ -430,12 +434,21 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           latexdiffAllFailedMessage(mathMarkup),
         );
       } else if (successCount < results.length) {
-        vscode.window.showWarningMessage(
-          `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+        yield* Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showWarningMessage(
+              `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+            ),
+            undefined,
+          ),
         );
       } else {
-        vscode.window.showInformationMessage(
-          `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(
+            CHANNEL,
+            `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
+          ),
         );
       }
 

@@ -35,7 +35,6 @@ import {
   Hash,
   Option,
   RcMap,
-  Result,
   Schema,
   type Scope,
 } from 'effect';
@@ -104,14 +103,17 @@ export const readMcpConfig = (
       catch: (error) =>
         new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
     });
-    const parsed = Schema.decodeUnknownResult(McpConfigFileSchema)(json);
-    if (!Result.isSuccess(parsed))
-      return yield* Effect.fail(
-        new Error(
-          `${file} must be { "mcpServers": { ... } }: ${parsed.failure.message}`,
-        ),
-      );
-    return parseMcpServers(file, parsed.success.mcpServers);
+    const config = yield* Schema.decodeUnknownEffect(McpConfigFileSchema)(
+      json,
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(
+            `${file} must be { "mcpServers": { ... } }: ${error.message}`,
+          ),
+      ),
+    );
+    return parseMcpServers(file, config.mcpServers);
   }).pipe(
     Effect.catch((error) =>
       Effect.succeed({ servers: [], warnings: [error.message] }),

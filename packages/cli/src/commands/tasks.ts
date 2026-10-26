@@ -225,10 +225,8 @@ const startCommand = defineCliCommand({
         displayInstruction: instruction,
         workingDirectory: context.cwd,
       };
-      const config = yield* Effect.try({
-        try: () => Schema.decodeUnknownSync(AgentConfigSchema)(payload),
-        catch: ensureError,
-      });
+      const config =
+        yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
       const runId = yield* Effect.scoped(
         Effect.gen(function* () {
           const { client } = yield* connectCliService(context.storageRoot);
