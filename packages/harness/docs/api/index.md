@@ -534,6 +534,14 @@ type AvailabilityResults = ReadonlyMap<
 >;
 ```
 
+## availableTeamMemberCount
+
+Distinct member keys available to the run, excluding the root itself.
+
+```ts
+function availableTeamMemberCount(plan: TeamRunPlan): number
+```
+
 ## buildDiffHunks
 
 Unified-diff hunks between two texts — the one diff engine behind every
@@ -547,6 +555,15 @@ names the cause, and the caller that owns the edit reports it through
 
 ```ts
 function buildDiffHunks(oldText: string, newText: string): DiffHunks
+```
+
+## BUILTIN_TEAM_ROOT_AGENT_NAMES
+
+Bundled orchestrator roots that delegate to a team. They ship with every
+host and need no sign-in; UIs surface them first.
+
+```ts
+const BUILTIN_TEAM_ROOT_AGENT_NAMES: readonly ["orchestrator", "leanOrchestrator", "engineer"]
 ```
 
 ## BUNDLED_AGENTS_DIRECTORY
@@ -597,6 +614,14 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
   'Cancelled',
   {},
 )
+```
+
+## canLaunchTeam
+
+```ts
+function canLaunchTeam<T extends TeamCatalogAgent>(
+  plan: TeamRunPlan<T>,
+): plan is TeamRunPlan<T> & { readonly rootAgent: T }
 ```
 
 ## causeChain
@@ -1028,6 +1053,15 @@ interface ExternalToolCheckResult {
 }
 ```
 
+## findTeamPreset
+
+```ts
+function findTeamPreset(
+  presets: readonly TeamPreset[],
+  query: string,
+): TeamPreset | undefined
+```
+
 ## formatConversationMessage
 
 Render one conversation node as the role and text conversation views show.
@@ -1048,6 +1082,21 @@ so a crash dialog is never the one surface that shows a secret unredacted.
 
 ```ts
 function formatFatalErrorDetail(error: unknown): string
+```
+
+## formatTeamLaunchBlockedMessage
+
+```ts
+function formatTeamLaunchBlockedMessage(
+  teamId: string,
+  reason: string,
+): string
+```
+
+## formatUnknownTeamMessage
+
+```ts
+function formatUnknownTeamMessage(teamId: string): string
 ```
 
 ## getEnabledModels
@@ -1294,6 +1343,16 @@ interface HostRequestFailure extends Error {
 }
 ```
 
+## implicitDefaultToolUseAgents
+
+The subset of `agents` eligible to be the implicit default.
+
+```ts
+function implicitDefaultToolUseAgents<
+  T extends { readonly name: string },
+>(agents: readonly T[]): T[]
+```
+
 ## InstalledPlugin
 
 ```ts
@@ -1339,6 +1398,14 @@ Check if an error represents a file-not-found condition.
 
 ```ts
 function isFileNotFoundError(err: unknown): boolean
+```
+
+## isImplicitDefaultEligible
+
+Whether `agent` may be chosen as the implicit default agent.
+
+```ts
+function isImplicitDefaultEligible(agent: string): boolean
 ```
 
 ## isModuleNotFoundError
@@ -1564,6 +1631,14 @@ interface LanguageModelReference {
 }
 ```
 
+## launchableTeamPresets
+
+The catalog's launchable teams: every preset but the setup starter.
+
+```ts
+function launchableTeamPresets(customRaw: unknown): TeamPreset[]
+```
+
 ## LaunchError
 
 What a launch refuses before any model work: the two an embedder
@@ -1586,6 +1661,15 @@ walks the storage of the session it names.
 
 ```ts
 const listRunGeneratedFiles: (runId: string & Brand<"RunId">, storage: string) => Effect<RunGeneratedFile[], PlatformError, FileSystem>
+```
+
+## loadTeamOptions
+
+```ts
+function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
+  customPresetsRaw: unknown;
+  resolveAgent: TeamAgentResolver<T>;
+}): TeamOptionData[]
 ```
 
 ## LocalSession
@@ -1908,6 +1992,24 @@ interface PerKeyLanes<Key> {
 }
 ```
 
+## planTeamRun
+
+```ts
+function planTeamRun<T extends TeamCatalogAgent>(
+  preset: TeamPreset,
+  options: TeamRunOptions<T>,
+): TeamRunPlan<T>
+```
+
+## planTeamRuns
+
+```ts
+function planTeamRuns<T extends TeamCatalogAgent>(
+  presets: readonly TeamPreset[],
+  options: TeamRunOptions<T>,
+): TeamRunPlan<T>[]
+```
+
 ## PlatformSecrets
 
 Provider for secure secret storage (API keys, tokens).
@@ -2126,6 +2228,15 @@ interface PluginUpdate {
   readonly from?: string;
   readonly to?: string;
 }
+```
+
+## PREFERRED_TOOL_USE_AGENTS
+
+Preferred agents for dropdown fallback and sorting.
+Orchestrators come first, then general and task-flavored fallbacks.
+
+```ts
+const PREFERRED_TOOL_USE_AGENTS: readonly ["orchestrator", "leanOrchestrator", "engineer", "assistant", "research", "review"]
 ```
 
 ## PresentationEventHandlers
@@ -2452,6 +2563,16 @@ tag is `Internal`.
 
 ```ts
 type RequestRefusal = Cancelled | Unavailable | Rejected;
+```
+
+## resolveTeamLaunch
+
+```ts
+function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
+  teamId: string;
+  customPresetsRaw: unknown;
+  resolveAgent: TeamAgentResolver<T>;
+}): TeamLaunchResolution
 ```
 
 ## ResumeInput
@@ -3137,6 +3258,14 @@ interface SettingsStores {
 }
 ```
 
+## SETUP_AGENT_NAME
+
+Bundled agent that runs the agent-led setup conversation.
+
+```ts
+const SETUP_AGENT_NAME: "setup"
+```
+
 ## SkillIssueCode
 
 ```ts
@@ -3392,6 +3521,53 @@ its write in the scope that controls it (`set`).
 const SubscriptionPreference: Readonly<{ get: (provider: "chatgpt" | "grok", stores: SettingsStores) => boolean; set: (provider: "chatgpt" | "grok", stores: SettingsStores, enabled: boolean) => Effect<void, Error | ConfigWriteFailed, never>; }>
 ```
 
+## TEAM_SELECTION_REQUIRED_MESSAGE
+
+```ts
+const TEAM_SELECTION_REQUIRED_MESSAGE: "Team selection required."
+```
+
+## TeamAgentAvailability
+
+```ts
+interface TeamAgentAvailability {
+  readonly available: number;
+  readonly total: number;
+  readonly missing: readonly string[];
+  readonly label: string;
+}
+```
+
+## TeamAgentResolver
+
+The workspace agents' member identity rule (`AgentCatalog.get` in
+production): a bare name matches by name, a `source:name` key exactly.
+
+```ts
+type TeamAgentResolver<T> = (identifier: string) => T | undefined;
+```
+
+## teamAvailability
+
+```ts
+function teamAvailability(plan: TeamRunPlan): TeamAvailability
+```
+
+## TeamAvailability
+
+```ts
+interface TeamAvailability {
+  readonly status: TeamPlanStatus;
+  readonly agents: TeamAgentAvailability;
+  readonly rootAgent?: {
+    readonly key: string;
+    readonly name: string;
+    readonly source: AgentSource;
+  };
+  readonly missingAgentOverride?: string;
+}
+```
+
 ## TeamCatalogAgent
 
 ```ts
@@ -3400,6 +3576,37 @@ interface TeamCatalogAgent {
   readonly source: AgentSource;
   readonly tools?: string[];
 }
+```
+
+## teamLaunchBlockReason
+
+```ts
+function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined
+```
+
+## TeamLaunchResolution
+
+```ts
+type TeamLaunchResolution =
+  | {
+      readonly status: 'ready';
+      readonly fields: ReturnType<typeof teamExecutionFields>;
+      readonly missingNames: readonly string[];
+    }
+  | { readonly status: 'unknown-team' }
+  | { readonly status: 'blocked'; readonly reason: string };
+```
+
+## teamPlanStatus
+
+```ts
+function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus
+```
+
+## TeamPlanStatus
+
+```ts
+type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
 ```
 
 ## TeamPreset
@@ -3411,6 +3618,26 @@ interface TeamPreset extends AgentModePreset {
   readonly source: 'built-in' | 'custom';
   /** The setup starter: an agent list a workspace can select, never a launch. */
   readonly setupOnly?: true;
+}
+```
+
+## teamPresets
+
+The one team preset catalog, in display order: the setup starter (tagged
+`setupOnly`), the built-in teams, then the workspace's custom presets.
+Built-in ids are reserved: a custom preset with the same id is dropped so
+the built-in always wins.
+
+```ts
+function teamPresets(customRaw: unknown): TeamPreset[]
+```
+
+## TeamRunOptions
+
+```ts
+interface TeamRunOptions<T extends TeamCatalogAgent> {
+  readonly resolveAgent: TeamAgentResolver<T>;
+  readonly agentOverride?: string;
 }
 ```
 
