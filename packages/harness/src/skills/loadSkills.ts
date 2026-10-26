@@ -49,9 +49,10 @@ export interface SkillSource {
 }
 
 /**
- * One precedence tier of sources. A `source` tier scans its roots one after
- * another; a `name` tier pools its roots and orders their skills by directory
- * name, the order one root holding all of them would give.
+ * One precedence tier of sources. A `source` tier takes its roots' skills
+ * in root order (the roots are read at once); a `name` tier pools its roots
+ * and orders their skills by directory name, the order one root holding all
+ * of them would give.
  */
 export interface SkillSourceTier {
   readonly order: 'source' | 'name';
