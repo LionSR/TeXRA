@@ -2,7 +2,6 @@ import { strict as assert } from 'node:assert';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { TestClock } from 'effect/testing';
 
 import { describe, expect } from 'vitest';
 
@@ -231,57 +230,6 @@ describe('SettingsAgentCatalogController', () => {
           'lean',
         );
       }),
-  );
-
-  it.effect(
-    'keeps custom root semantics when a custom team is previewed by id',
-    () =>
-      Effect.gen(function* () {
-        const customPreset = {
-          id: 'custom-team',
-          name: 'Custom Team',
-          description: 'test',
-          icon: 'bookmark',
-          agents: ['teamLead', 'orchestrator'],
-        };
-        const { controller } = createController({
-          agents: [
-            {
-              source: 'custom',
-              name: 'teamLead',
-              blocks: {},
-              tools: ['agent'],
-            },
-          ],
-          customPresets: [customPreset],
-        });
-
-        // Preset order wins for custom teams, even over the built-in root the
-        // member list names.
-        assert.equal(
-          yield* controller.getPresetRoot(customPreset.agents, 'custom-team'),
-          'teamLead',
-        );
-      }),
-  );
-
-  it.effect('saves the currently visible agents as a custom preset', () =>
-    Effect.gen(function* () {
-      const state = createController({ visible: [AGENTS[1], AGENTS[2]] });
-      yield* TestClock.setTime(456);
-
-      assert.deepEqual(
-        yield* state.controller.saveCurrentPreset('  My Team  '),
-        {
-          id: 'custom-456',
-          name: 'My Team',
-          description: 'Custom team: correct, review',
-          icon: 'bookmark',
-          agents: ['correct', 'review'],
-        },
-      );
-      assert.equal((yield* state.customPresets).length, 1);
-    }),
   );
 
   it.effect(

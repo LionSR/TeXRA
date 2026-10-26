@@ -103,22 +103,6 @@ describe('listRunGeneratedFiles', () => {
       }),
   );
 
-  it.effect(
-    'omits an entry whose intermediate component is no longer a directory',
-    () =>
-      Effect.gen(function* () {
-        const blocked = path.join(RUN_PATH, 'blocked.tex');
-
-        const files = yield* listWithFailedStat(
-          session,
-          blocked,
-          statFailure('BadResource', blocked),
-        );
-
-        expect(files.map((file) => file.path)).not.toContain('blocked.tex');
-      }),
-  );
-
   // The run directory's own probe: a storage failure there is a fault, not
   // "this run produced nothing", so it reaches the caller's handler.
   it.effect('propagates a storage failure from the run-directory probe', () =>

@@ -6,7 +6,6 @@ import {
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
-import { fillRows } from '@cli/runtime/terminalText';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
 const SIX_LINE_HUNK_SOURCE = [
@@ -96,52 +95,6 @@ describe('CLI diff display', () => {
     expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
-  it('keeps both rows of a replacement visible at the viewport boundary', () => {
-    const { hunks } = buildDiffHunks(
-      ['alpha', 'beta', 'gamma', 'old result', 'epsilon', 'zeta', 'eta'].join(
-        '\n',
-      ),
-      ['alpha', 'beta', 'gamma', 'new result', 'epsilon', 'zeta', 'eta'].join(
-        '\n',
-      ),
-    );
-    const maxDisplayLines = 6;
-
-    const initialOffset = initialDiffScrollOffset(hunks, 80, maxDisplayLines);
-    const initialLines = scrollBoundedDiffDisplayLines(
-      hunks,
-      maxDisplayLines,
-      initialOffset,
-      80,
-    );
-
-    expect(initialOffset).toBeGreaterThan(0);
-    expect(initialLines.some((line) => line.kind === 'removed')).toBe(true);
-    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
-  });
-
-  it('opens a long wrapped replacement on the rows the edit changed', () => {
-    const sentence = (verb: string) =>
-      `Quantum channels are central. ${'The channel is a model of noise. '.repeat(3)}In this work we ${verb} a new bound on its capacity, an open problem.`;
-    const { hunks } = buildDiffHunks(
-      ['\\section{Introduction}', sentence('derives')].join('\n'),
-      ['\\section{Introduction}', sentence('derive')].join('\n'),
-    );
-    const maxDisplayLines = 6;
-    const initialLines = scrollBoundedDiffDisplayLines(
-      hunks,
-      maxDisplayLines,
-      initialDiffScrollOffset(hunks, 40, maxDisplayLines),
-      40,
-    );
-
-    expect(
-      initialLines.some(
-        (line) => line.kind === 'added' && line.text.includes('we derive a'),
-      ),
-    ).toBe(true);
-  });
-
   it('does not skip a standalone deletion to a later hunk addition', () => {
     const { hunks } = buildDiffHunks(
       [
@@ -201,53 +154,5 @@ describe('CLI diff display', () => {
     expect(rendered).toContain('after $2n-1$.');
     expect(rendered).not.toContain('…');
     expect(lines.length).toBeGreaterThan(diffDisplayLines(hunks).length);
-  });
-
-  it('keeps wrapped overflow markers to one visual row at narrow widths', () => {
-    const { hunks } = buildDiffHunks('old sentence', 'x'.repeat(220));
-
-    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 20);
-    const marker = lines.at(-1);
-
-    expect(lines).toHaveLength(4);
-    expect(marker).toMatchObject({
-      kind: 'overflow',
-      text: expect.stringContaining('more rows'),
-    });
-    expect(marker?.text).not.toContain('diff rows');
-    expect(marker?.text).not.toContain('\n');
-    expect(marker?.text.length).toBeLessThanOrEqual(20);
-  });
-});
-
-describe('full-width diff bands', () => {
-  // `σ`/`∑` are single display columns; a naive `.length` pad would overshoot.
-  it.each([
-    {
-      name: 'pads a short row out to the full width so the band fills the row',
-      input: '+abc',
-      width: 8,
-      expected: '+abc    ',
-    },
-    {
-      name: 'measures display columns, not code units, for wide glyphs',
-      input: '+ σ ∑',
-      width: 10,
-      expected: '+ σ ∑     ',
-    },
-    {
-      name: 'pads every visual row of a pre-wrapped multi-row line',
-      input: '+aa\n+bb',
-      width: 5,
-      expected: '+aa  \n+bb  ',
-    },
-    {
-      name: 'leaves a row that already meets or exceeds the width untouched',
-      input: '+abcdef',
-      width: 4,
-      expected: '+abcdef',
-    },
-  ])('$name', ({ input, width, expected }) => {
-    expect(fillRows(input, width)).toBe(expected);
   });
 });

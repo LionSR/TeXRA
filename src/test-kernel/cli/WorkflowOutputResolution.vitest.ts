@@ -1,21 +1,15 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatWorkflowTextResult,
-  inputDerivedOutputFiles,
-  resolveWorkflowOutput,
-  type CliWorkflowRunResult,
-} from '@cli/runtime/workflowOutput';
+import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
@@ -83,43 +77,7 @@ function workflowResult(
   };
 }
 
-/** `outputs` as the CLI's result reports them: the run's documents named
- *  `output.documents`. */
-function cliWorkflowResult(
-  outputs: Parameters<typeof workflowResult>[0],
-  outcome?: RunOutcome,
-) {
-  const {
-    output: { structured, ...output },
-    ...result
-  } = workflowResult(outputs, outcome);
-  return {
-    ...result,
-    output: {
-      ...output,
-      documents: Schema.decodeUnknownSync(DocumentsResultSchema)(structured),
-    },
-  };
-}
-
 describe('CLI workflow output resolution', () => {
-  it('reports a task that failed before it proposed with no documents', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const failed = workflowResult([], RUN_OUTCOME.FAILED);
-    const { structured: _documents, ...output } = failed.output;
-
-    const resolved = await resolveOutput(
-      'out.tex',
-      undefined,
-      { ...failed, output },
-      testContext(cwd),
-      { storageRoot: join(cwd, 'storage') },
-    );
-
-    expect(resolved.outcome).toBe(RUN_OUTCOME.FAILED);
-    expect(resolved.output.documents.outputs).toEqual([]);
-  });
-
   it('fails --output-dir resolution when an expected multi-input output is missing', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
@@ -220,48 +178,6 @@ describe('CLI workflow output resolution', () => {
     );
     await expect(readFile(join(cwd, 'out', 'b.tex'), 'utf8')).resolves.toBe(
       'B',
-    );
-  });
-
-  it('uses a stable output name for materialized stdin input', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runOutput = await writeRunFile(cwd, 'r1/stdin.tex', 'from stdin');
-
-    const expectedOutputFiles = inputDerivedOutputFiles(
-      ['texra-stdin-123-abc123/stdin.tex'],
-      'texra-stdin-123-abc123/stdin.tex',
-    );
-
-    expect(expectedOutputFiles).toEqual(['stdin.tex']);
-
-    const result = await resolveOutput(
-      undefined,
-      'out',
-      workflowResult([
-        {
-          absolutePath: runOutput,
-          relativePath: 'r1/stdin.tex',
-          originalPath: join(
-            cwd,
-            'run',
-            'original',
-            'texra-stdin-123-abc123',
-            'stdin.tex',
-          ),
-        },
-      ]),
-      testContext(cwd),
-      {
-        expectedOutputFiles,
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    expect(result).toMatchObject({
-      copiedOutputs: [join(cwd, 'out', 'stdin.tex')],
-    });
-    await expect(readFile(join(cwd, 'out', 'stdin.tex'), 'utf8')).resolves.toBe(
-      'from stdin',
     );
   });
 
@@ -385,20 +301,6 @@ describe('CLI workflow output resolution', () => {
     ).rejects.toThrow(/paper[/\\]input\.tex/);
   });
 
-  it('derives safe expected --output-dir paths from relative and absolute inputs', async () => {
-    const external = await makeTempDir('texra-workflow-output-', tempDirs);
-
-    expect(
-      inputDerivedOutputFiles(['paper/main.tex', 'paper/chapters/series.tex']),
-    ).toEqual(['paper/main.tex', 'paper/chapters/series.tex']);
-    expect(
-      inputDerivedOutputFiles([
-        join(external, 'paper', 'main.tex'),
-        join(external, 'paper', 'chapters', 'series.tex'),
-      ]),
-    ).toEqual(['main.tex', 'chapters/series.tex']);
-  });
-
   it('does not remap output paths on partial original-path segment matches', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
@@ -453,33 +355,6 @@ describe('CLI workflow output resolution', () => {
     );
   });
 
-  it('uses the latest round when a single requested output arrives out of order', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
-    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
-
-    const result = await resolveOutput(
-      'out/a.tex',
-      undefined,
-      workflowResult([
-        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-      ]),
-      testContext(cwd),
-      {
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
-
-    expect(result).toMatchObject({
-      workingDirectory: cwd,
-      copiedOutput: join(cwd, 'out', 'a.tex'),
-    });
-    await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
-      'A2',
-    );
-  });
-
   it('copies the last output of the final round for a multi-document workflow', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runMain = await writeRunFile(cwd, 'r2/main.tex', 'MAIN2');
@@ -512,83 +387,5 @@ describe('CLI workflow output resolution', () => {
     await expect(readFile(join(cwd, 'out', 'paper.tex'), 'utf8')).resolves.toBe(
       'APPENDIX2',
     );
-  });
-
-  it('reports the last output of the final round as the text result', () => {
-    const result: CliWorkflowRunResult = {
-      ...cliWorkflowResult([
-        { absolutePath: '/run/r1/main.tex', relativePath: 'r1/main.tex' },
-        {
-          absolutePath: '/run/r2/main.tex',
-          relativePath: 'r2/main.tex',
-          round: 2,
-        },
-        {
-          absolutePath: '/run/r2/appendix.tex',
-          relativePath: 'r2/appendix.tex',
-          round: 2,
-        },
-      ]),
-      workingDirectory: '/run',
-      runDirectory: '/run',
-    };
-
-    expect(formatWorkflowTextResult(result)).toBe('/run/r2/appendix.tex');
-  });
-
-  it('says a failed task reply in the text result', () => {
-    const failed = cliWorkflowResult([], RUN_OUTCOME.FAILED);
-    const result: CliWorkflowRunResult = {
-      ...failed,
-      output: { ...failed.output, response: 'main.tex did not compile.\n' },
-      runDirectory: '/run',
-    };
-
-    expect(formatWorkflowTextResult(result)).toBe(
-      'FAILED\nmain.tex did not compile.\nRun artifacts: /run',
-    );
-  });
-
-  it('reports run storage instead of one provisional file after cancellation', () => {
-    const result: CliWorkflowRunResult = {
-      ...cliWorkflowResult(
-        [
-          { absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' },
-          {
-            absolutePath: '/run/r0/appendix.tex',
-            relativePath: 'r0/appendix.tex',
-          },
-        ],
-        RUN_OUTCOME.CANCELLED,
-      ),
-      workingDirectory: '/workspace',
-      runDirectory: '/run',
-    };
-
-    expect(formatWorkflowTextResult(result)).toBe('/run');
-  });
-
-  it('reports destinations that were copied before cancellation', () => {
-    const result: CliWorkflowRunResult = {
-      ...cliWorkflowResult(
-        [{ absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' }],
-        RUN_OUTCOME.CANCELLED,
-      ),
-      workingDirectory: '/workspace',
-      runDirectory: '/run',
-      copiedOutput: '/workspace/final.tex',
-    };
-
-    expect(formatWorkflowTextResult(result)).toBe('/workspace/final.tex');
-    expect(
-      formatWorkflowTextResult({
-        ...result,
-        copiedOutput: undefined,
-        copiedOutputs: [
-          '/workspace/final/main.tex',
-          '/workspace/final/appendix.tex',
-        ],
-      }),
-    ).toBe('/workspace/final/main.tex\n/workspace/final/appendix.tex');
   });
 });

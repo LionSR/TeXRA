@@ -1,9 +1,8 @@
 /**
  * The crash-point conformance suite: the durability
- * contract checked at every commit point of one run, under the plugin list
- * the importing file installed its process runtime with
- * (`sessionGraphTestSetup` for TeXRA's, `builtinSessionGraphTestSetup` for
- * the harness's built-ins alone).
+ * contract checked at every commit point of one run, under TeXRA's plugins
+ * (`sessionGraphTestSetup`), a superset of the harness's built-ins: every
+ * scenario but the document task runs only harness code.
  *
  * A clean pass drives `golden_crash` (`goldenTurn` in the validation model)
  * in-process over a persistent store: a response with two calls (a read and
@@ -690,9 +689,9 @@ const resumeFrom = (
           roots: { ...roots, storage },
         });
         yield* approveAll(session, n);
-        // What the prefix left pending is answered a beat after the resume
-        // starts: a resume that retired it instead does so as it loads the
-        // run, so the answer then finds it cancelled.
+        // What the prefix left pending is answered once the resume has
+        // activated the request's run: a resume that retired it instead does
+        // so as it loads the run, so the answer then finds it cancelled.
         const pending = prefix.filter(
           (row) =>
             row.type === 'request.opened' &&
@@ -702,20 +701,25 @@ const resumeFrom = (
                 json(decided).requestId === json(row).requestId,
             ),
         );
-        yield* Effect.sleep('1 second').pipe(
-          Effect.andThen(
-            Effect.forEach(pending, (row) =>
+        yield* Effect.forEach(pending, (row) =>
+          until(storage, (rows) =>
+            rows.some(
+              (activate) =>
+                activate.commit > n &&
+                activate.run === row.run &&
+                activate.type === 'run.activate',
+            ),
+          ).pipe(
+            Effect.andThen(
               session.requests
                 // cast: the store's logical id of a run aggregate is its RunId.
                 .decide(row.run as RunId, String(json(row).requestId), {
                   action: 'approve',
-                })
-                .pipe(Effect.ignore),
+                }),
             ),
+            Effect.ignore,
           ),
-          Effect.when(Effect.succeed(pending.length > 0)),
-          Effect.forkScoped,
-        );
+        ).pipe(Effect.forkScoped);
         if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
           const resumed = yield* withProcessServices(
             testRuntime(),
@@ -739,8 +743,8 @@ const resumeFrom = (
     return { prefix, final: rowsOf(storage), refused, effects };
   });
 
-export function crashConformanceSuite(plugins: string): void {
-  describe(`crash-point conformance (${plugins})`, () => {
+export function crashConformanceSuite(): void {
+  describe('crash-point conformance', () => {
     validationHost('texra-crash-');
     beforeEach(() => {
       writeFileSync(
@@ -1107,54 +1111,53 @@ export function crashConformanceSuite(plugins: string): void {
      * leaves neither on disk. The cut is the store's files copied while the
      * job holds its transaction open, which is what a kill there leaves.
      */
-    if (plugins === 'harness built-ins')
-      it.live('a crash between two appends of one job leaves neither', () =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const session = yield* openTestDefaultSession({ roots });
-            const run = qualifyAggregateId('run', generateRunId());
-            const titled = (description: string) => [
-              {
-                type: 'run.description' as const,
-                aggregateId: run,
-                description,
-                by: 'user' as const,
-              },
-            ];
-            yield* session.log.transact([
-              {
-                type: 'run.start',
-                aggregateId: run,
-                identity: { kind: 'agent', agent: 'chat' },
-                userFollowUpSupport: 'unsupported',
-                parent: null,
-                provenance: null,
-              },
-            ]);
-            const cut = join(roots.storage, 'cut');
-            yield* session.log.transact((tx) =>
-              Effect.gen(function* () {
-                yield* tx.append(titled('first half'));
-                yield* Effect.sync(() => {
-                  mkdirSync(cut);
-                  for (const file of ['texra.db', 'texra.db-wal'])
-                    cpSync(join(roots.storage, file), join(cut, file));
-                });
-                yield* tx.append(titled('second half'));
-              }),
-            );
-            const types = (storage: string) =>
-              rowsOf(storage).map((row) => row.type);
-            expect(types(cut)).toEqual(['run.start']);
-            expect(types(roots.storage)).toEqual([
-              'run.start',
-              'run.description',
-              'run.description',
-            ]);
-          }).pipe(Effect.ensuring(closeTestDefaultSession)),
-        ),
-      );
+    it.live('a crash between two appends of one job leaves neither', () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const session = yield* openTestDefaultSession({ roots });
+          const run = qualifyAggregateId('run', generateRunId());
+          const titled = (description: string) => [
+            {
+              type: 'run.description' as const,
+              aggregateId: run,
+              description,
+              by: 'user' as const,
+            },
+          ];
+          yield* session.log.transact([
+            {
+              type: 'run.start',
+              aggregateId: run,
+              identity: { kind: 'agent', agent: 'chat' },
+              userFollowUpSupport: 'unsupported',
+              parent: null,
+              provenance: null,
+            },
+          ]);
+          const cut = join(roots.storage, 'cut');
+          yield* session.log.transact((tx) =>
+            Effect.gen(function* () {
+              yield* tx.append(titled('first half'));
+              yield* Effect.sync(() => {
+                mkdirSync(cut);
+                for (const file of ['texra.db', 'texra.db-wal'])
+                  cpSync(join(roots.storage, file), join(cut, file));
+              });
+              yield* tx.append(titled('second half'));
+            }),
+          );
+          const types = (storage: string) =>
+            rowsOf(storage).map((row) => row.type);
+          expect(types(cut)).toEqual(['run.start']);
+          expect(types(roots.storage)).toEqual([
+            'run.start',
+            'run.description',
+            'run.description',
+          ]);
+        }).pipe(Effect.ensuring(closeTestDefaultSession)),
+      ),
+    );
     /**
      * A document task's documents are its recipe script's settled value: a
      * resume from any commit point ends `completed` with the clean run's
@@ -1162,126 +1165,122 @@ export function crashConformanceSuite(plugins: string): void {
      * is not run again. The polish persona and the documents plugin are
      * TeXRA's.
      */
-    if (plugins === 'TeXRA plugins')
-      it.live(
-        "resumes a document task from every commit point to the clean run's documents",
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const root = generateRunId();
-            writeFileSync(
-              join(roots.workspace!, 'paper.tex'),
-              '\\section{Draft}\nA short draft.\n',
+    it.live(
+      "resumes a document task from every commit point to the clean run's documents",
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const root = generateRunId();
+          writeFileSync(
+            join(roots.workspace!, 'paper.tex'),
+            '\\section{Draft}\nA short draft.\n',
+          );
+          // The persona answers with the validation document, not the echo.
+          delete process.env.TEXRA_INTERNAL_VALIDATE_ECHO;
+          const ended = (storage: string) =>
+            until(storage, (rows) =>
+              rows.some((row) => row.run === root && row.type === 'run.end'),
             );
-            // The persona answers with the validation document, not the echo.
-            delete process.env.TEXRA_INTERNAL_VALIDATE_ECHO;
-            const ended = (storage: string) =>
-              until(storage, (rows) =>
-                rows.some((row) => row.run === root && row.type === 'run.end'),
-              );
-            const { points, clean } = yield* cleanPass(
-              roots,
-              (session) =>
-                withProcessServices(
-                  testRuntime(),
-                  session.runs.launch({
-                    request: {
-                      config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                        asDocumentTask({
-                          agent: 'polish',
-                          agentSource: 'builtIn',
-                          model: 'gpt56',
-                          instruction: 'Polish the draft.',
-                          inputFiles: ['paper.tex'],
-                          workingDirectory: roots.workspace,
-                        }),
-                      ),
-                      runId: root,
-                    },
-                    options: {},
-                  }),
-                ),
-              () => ended(roots.storage),
+          const { points, clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
+                testRuntime(),
+                session.runs.launch({
+                  request: {
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)(
+                      asDocumentTask({
+                        agent: 'polish',
+                        agentSource: 'builtIn',
+                        model: 'gpt56',
+                        instruction: 'Polish the draft.',
+                        inputFiles: ['paper.tex'],
+                        workingDirectory: roots.workspace,
+                      }),
+                    ),
+                    runId: root,
+                  },
+                  options: {},
+                }),
+              ),
+            () => ended(roots.storage),
+          );
+          /** How the root ended, and the documents its end carries. */
+          const end = (rows: readonly Row[]) => {
+            const row = rows.find(
+              (row) => row.run === root && row.type === 'run.end',
             );
-            /** How the root ended, and the documents its end carries. */
-            const end = (rows: readonly Row[]) => {
-              const row = rows.find(
-                (row) => row.run === root && row.type === 'run.end',
-              );
-              if (row === undefined) return null;
-              const { outcome, output } = json(row) as {
-                readonly outcome: string;
-                readonly output: RunEndOutput;
-              };
-              return {
-                outcome,
-                outputs: (
-                  documentsResultOf(output.structured)?.outputs ?? []
-                ).map((file) => `${file.round} ${file.relativePath}`),
-              };
+            if (row === undefined) return null;
+            const { outcome, output } = json(row) as {
+              readonly outcome: string;
+              readonly output: RunEndOutput;
             };
-            const cleanRows = rowsOf(roots.storage);
-            const expected = end(cleanRows);
-            const childCalls = (rows: readonly Row[]) =>
-              rows
+            return {
+              outcome,
+              outputs: (
+                documentsResultOf(output.structured)?.outputs ?? []
+              ).map((file) => `${file.round} ${file.relativePath}`),
+            };
+          };
+          const cleanRows = rowsOf(roots.storage);
+          const expected = end(cleanRows);
+          const childCalls = (rows: readonly Row[]) =>
+            rows
+              .filter((row) => row.type === 'run.start' && row.parent === root)
+              .map((row) => (json(row).parent as { callId: string }).callId);
+          // Two revisions, each its own persona child, and both documents.
+          expect(expected).toEqual({
+            outcome: 'completed',
+            outputs: expect.arrayContaining([expect.any(String)]),
+          });
+          expect(new Set(childCalls(cleanRows)).size).toBe(2);
+
+          const broken: string[] = [];
+          for (const n of points) {
+            const { prefix, final, refused } = yield* resumeFrom(
+              roots,
+              clean,
+              n,
+              root,
+              (_, storage) => ended(storage),
+            );
+            // A call whose child ended before the crash.
+            const endedBefore = new Set(
+              prefix
                 .filter(
                   (row) => row.type === 'run.start' && row.parent === root,
                 )
-                .map((row) => (json(row).parent as { callId: string }).callId);
-            // Two revisions, each its own persona child, and both documents.
-            expect(expected).toEqual({
-              outcome: 'completed',
-              outputs: expect.arrayContaining([expect.any(String)]),
-            });
-            expect(new Set(childCalls(cleanRows)).size).toBe(2);
-
-            const broken: string[] = [];
-            for (const n of points) {
-              const { prefix, final, refused } = yield* resumeFrom(
-                roots,
-                clean,
-                n,
-                root,
-                (_, storage) => ended(storage),
-              );
-              // A call whose child ended before the crash.
-              const endedBefore = new Set(
-                prefix
-                  .filter(
-                    (row) => row.type === 'run.start' && row.parent === root,
-                  )
-                  .filter((child) =>
-                    prefix.some(
-                      (row) => row.run === child.run && row.type === 'run.end',
-                    ),
-                  )
-                  .map(
-                    (child) =>
-                      (json(child).parent as { callId: string }).callId,
+                .filter((child) =>
+                  prefix.some(
+                    (row) => row.run === child.run && row.type === 'run.end',
                   ),
-              );
-              const relaunched = childCalls(
-                final.filter((row) => row.commit > n),
-              ).filter((call) => endedBefore.has(call));
-              const got = end(final);
-              const found = [
-                ...(refused === null ? [] : [refused]),
-                JSON.stringify(got) === JSON.stringify(expected)
-                  ? null
-                  : `the run ended ${JSON.stringify(got)}`,
-                relaunched.length === 0
-                  ? null
-                  : `a settled revision's child launched again: ${relaunched.join(', ')}`,
-                new Set(childCalls(final)).size === 2
-                  ? null
-                  : `the revisions' children came to ${new Set(childCalls(final)).size} calls`,
-              ].filter((violation) => violation !== null);
-              if (found.length > 0)
-                broken.push(`after commit ${n}: ${found.join('; ')}`);
-            }
-            expect(broken).toEqual([]);
-          }),
-        600_000,
-      );
+                )
+                .map(
+                  (child) => (json(child).parent as { callId: string }).callId,
+                ),
+            );
+            const relaunched = childCalls(
+              final.filter((row) => row.commit > n),
+            ).filter((call) => endedBefore.has(call));
+            const got = end(final);
+            const found = [
+              ...(refused === null ? [] : [refused]),
+              JSON.stringify(got) === JSON.stringify(expected)
+                ? null
+                : `the run ended ${JSON.stringify(got)}`,
+              relaunched.length === 0
+                ? null
+                : `a settled revision's child launched again: ${relaunched.join(', ')}`,
+              new Set(childCalls(final)).size === 2
+                ? null
+                : `the revisions' children came to ${new Set(childCalls(final)).size} calls`,
+            ].filter((violation) => violation !== null);
+            if (found.length > 0)
+              broken.push(`after commit ${n}: ${found.join('; ')}`);
+          }
+          expect(broken).toEqual([]);
+        }),
+      600_000,
+    );
   });
 }

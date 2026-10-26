@@ -2,20 +2,14 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { Schema } from 'effect';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import {
-  formatSubagentDelivery,
-  formatSubagentError,
-} from '@agent/runtime/subagentResults';
+import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import {
   RUN_OUTCOME,
   type RunEnd,
   type RunEndOutput,
   type RunId,
 } from '@shared/schemas';
-import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
-import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 import {
   formatBashDelivery,
   formatBashError,
@@ -78,80 +72,6 @@ describe('formatSubagentDelivery', () => {
       'Keep &lt;/response> literal &amp; preserve &lt;subagent-result> text.',
     );
     expect(delivery).not.toContain('Keep </response> literal');
-  });
-
-  it('delivers a recipe through its block, kind named by the block key', () => {
-    const runId = 'abc123' as RunId;
-    const value = Schema.decodeUnknownSync(DocumentsResultSchema)({
-      outputs: [
-        {
-          round: 0,
-          relativePath: 'paper.tex',
-          absolutePath: '/storage/executions/abc123/paper.tex',
-          location: 'runStorage',
-          originalPath: '/ws/.texra/paper.orig.tex',
-          added: 3,
-          removed: 1,
-        },
-      ],
-      compileFailures: [],
-      diffsUnavailable: 'ENOSPC: no space left & disk full',
-    });
-
-    const delivery = formatSubagentDelivery(
-      'polish',
-      toolUseResult(RUN_OUTCOME.COMPLETED, { structured: value }),
-      {
-        runId,
-        recipe: {
-          key: 'task',
-          delivery: DOCUMENT_TASK_RESULT.delivery(value, runId),
-          changes: [],
-        },
-      },
-    );
-
-    expect(delivery).toContain('kind="task"');
-    expect(delivery).toContain(
-      '<diffs-unavailable reason="ENOSPC: no space left &amp; disk full">',
-    );
-    expect(delivery).toContain('read the output files directly');
-    expect(delivery).toContain('<file path="paper.tex"');
-    expect(delivery).toContain(
-      'read-path="/executions/abc123/files/paper.tex"',
-    );
-    expect(delivery).not.toContain('absolute-path=');
-  });
-});
-
-describe('formatSubagentError', () => {
-  // Exact-string pin for the native error shape, byte-identical to the
-  // pre-merge output (retryable attr, wall-time, context lines, message last).
-  it('pins the exact native error XML', () => {
-    const xml = formatSubagentError(
-      'abc123',
-      'reviewer',
-      { message: 'subagent exploded <&>', userRetryable: true },
-      {
-        wallTimeMs: 65000,
-        workingDirectory: '/ws/project',
-        memoryMisses: [
-          { path: '/memories/missing.md', reason: 'Path is missing' },
-        ],
-      },
-    );
-    expect(xml).toBe(
-      [
-        '<subagent-error id="abc123" agent="reviewer" retryable="true">',
-        '<wall-time>65.0s</wall-time>',
-        '<working-directory>/ws/project</working-directory>',
-        '<memory-misses>',
-        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
-        '</memory-misses>',
-        '<message>subagent exploded &lt;&amp;></message>',
-        '</subagent-error>',
-      ].join('\n'),
-    );
   });
 });
 

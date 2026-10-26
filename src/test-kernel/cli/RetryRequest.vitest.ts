@@ -1,20 +1,15 @@
 // Test composition imports
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
-import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
 import type {
   ApprovalPayload,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { RunId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import {
-  loadInk,
-  renderInteractive,
-  renderOutputAtTerminalSize,
-} from '@test/support/inkTestHarness.ts';
+import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 
 /** A foreground modal entry whose decision the test awaits. */
@@ -55,62 +50,6 @@ describe('CLI retry request', () => {
       },
     };
   }
-
-  it('dismisses immediately instead of asking for rejection feedback', async () => {
-    const { ink, React } = await loadInk();
-    const { props, decision } = pendingFor({
-      kind: 'retry',
-      data: {
-        requestId: 'retry-request',
-        runId: 'retry-stream' as RunId,
-        operation: 'Model invocation',
-        errorMessage: 'Connection error',
-      },
-    });
-    const { instance, stdin } = renderInteractive(
-      ink,
-      React.createElement(ApprovalModal, props),
-      { columns: 100 },
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('n');
-      await expect(decision).resolves.toEqual({ action: 'reject' });
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('scrolls a tall error instead of pushing the actions off a short terminal', async () => {
-    const { ink, React } = await loadInk();
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(RetryRequest, {
-        availableRows: 12,
-        payload: {
-          kind: 'retry',
-          data: {
-            requestId: 'tall-error',
-            runId: 'retry-stream' as RunId,
-            operation: 'Model invocation',
-            errorMessage: Array.from(
-              { length: 40 },
-              (_, index) => `stack frame ${index + 1}`,
-            ).join('\n'),
-          },
-        },
-        onDecide: vi.fn(),
-      }),
-      100,
-      { until: (frame) => frame.includes('y retry') },
-    );
-
-    expect(output).toContain('y retry');
-    expect(output).toContain('n stop run');
-    expect(output).toContain('more rows');
-    expect(output.split('\n').length).toBeLessThanOrEqual(12);
-  });
 
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();

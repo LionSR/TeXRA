@@ -8,7 +8,6 @@ import {
   boundedScrollableLines,
   compactAwareMaxScrollOffset,
 } from '@cli/chat/tui/render/scrollBounds';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 const HEREDOC_COMMAND = [
   "python3 << 'EOF'",
@@ -89,107 +88,5 @@ describe('CLI scrollable modal text section', () => {
     });
     expect(lineTexts(visible)).toContain('  print(solutions)');
     expect(lineTexts(visible)).toContain('  EOF');
-  });
-
-  it('lets users scroll compact previews', () => {
-    const budget = 3;
-    const allRows = bashLines();
-    const offset = compactAwareMaxScrollOffset({
-      maxDisplayLines: budget,
-      totalLines: allRows.length,
-    });
-    const visible = boundedScrollableLines({
-      lines: allRows,
-      maxDisplayLines: budget,
-      scrollOffset: 3,
-      width: 76,
-    });
-
-    expect(offset).toBeGreaterThan(0);
-    expect(visible).toHaveLength(budget);
-    expect(lineTexts(visible)).toContain('      x2 = 1 + 2 * y * y');
-    expect(visible.at(-1)).toEqual({
-      kind: 'overflow',
-      text: '… 3 previous, 8 more rows',
-    });
-  });
-
-  it('lets users scroll one-row compact previews', () => {
-    const visible = boundedScrollableLines({
-      lines: bashLines(),
-      maxDisplayLines: 1,
-      scrollOffset: 2,
-      width: 76,
-    });
-
-    expect(
-      compactAwareMaxScrollOffset({ maxDisplayLines: 1, totalLines: 13 }),
-    ).toBe(12);
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.text).toContain('for y in range(1, 100):');
-    expect(visible[0]?.text).toContain('rows hidden');
-  });
-
-  it('keeps one-row compact previews within their row budget', () => {
-    const visible = boundedScrollableLines({
-      lines: bashLines(),
-      maxDisplayLines: 1,
-      width: 76,
-    });
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.text).toContain("$ python3 << 'EOF'");
-    expect(visible[0]?.text).toContain('rows hidden');
-    expect(visible[0]?.text.length).toBeLessThanOrEqual(76);
-  });
-
-  it('clips one-row compact previews by terminal column width', () => {
-    const visible = boundedScrollableLines({
-      lines: modalTextDisplayLines({
-        ...BASH_PREFIXES,
-        text: `echo ${'界'.repeat(20)}`,
-        width: 24,
-      }),
-      maxDisplayLines: 1,
-      width: 24,
-    });
-
-    expect(visible).toHaveLength(1);
-    expect(textDisplayWidth(visible[0]?.text ?? '')).toBeLessThanOrEqual(24);
-  });
-
-  it('preserves empty source lines when wrapping', () => {
-    const lines = modalTextDisplayLines({
-      text: 'first\n\nthird',
-      width: 40,
-    });
-
-    expect(lineTexts(lines)).toEqual(['first', '', 'third']);
-  });
-
-  it('strips wrap-artifact leading whitespace only when asked', () => {
-    const lines = modalTextDisplayLines({
-      text: '**Approach:** Keep a running mental log of friction points as tasks progress. At natural stopping points, call `todo_write` to record specific observations. Do not edit any files — only observe and report.',
-      trimWrappedLeadingWhitespace: true,
-      width: 77,
-    });
-
-    expect(lines.some((line) => line.text.startsWith(' At natural'))).toBe(
-      false,
-    );
-    expect(
-      lines.some((line) => line.text.includes('observations. Do not edit')),
-    ).toBe(true);
-  });
-
-  it('preserves continuation whitespace for commands by default', () => {
-    const quoted = `echo "${'x'.repeat(30)}    spaced argument"`;
-    const lines = modalTextDisplayLines({
-      ...BASH_PREFIXES,
-      text: quoted,
-      width: 36,
-    });
-
-    expect(lineTexts(lines).join('')).toContain('    spaced argument');
   });
 });

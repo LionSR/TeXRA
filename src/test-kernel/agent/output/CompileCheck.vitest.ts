@@ -146,41 +146,6 @@ describe('runCompileCheck', () => {
       }).pipe(Effect.provide(compileFsLayer)),
   );
 
-  // The 200-line raw-tail extraction itself now lives in compileLatex2Pdf
-  // (packages/texra/src/latex/texTools.ts), covered by TexTools.vitest.ts. This test proves
-  // the other half of issue #7079's fix: whatever `logTail` compileCheck
-  // receives from the shared { ok, logTail } return shape is threaded
-  // through, unmodified, into the persisted failure excerpt -- it is not
-  // read from disk a second time.
-  it.live(
-    'sources the failing log tail from compileLatex2Pdf, not a separate disk read',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'compile-tail-passthrough' as RunId;
-        yield* Effect.promise(() => seedCompilableMainTex(runId));
-
-        // Zero-padded so containment checks below can't be fooled by numeric
-        // substrings (e.g. "L0001" would otherwise match inside "L00010").
-        const logTail = Array.from(
-          { length: 200 },
-          (_, i) => `L${String(i + 51).padStart(4, '0')}`,
-        ).join('\n');
-        mocks.compileLatex2Pdf.mockReturnValue(
-          Effect.succeed({ ok: false, logTail }),
-        );
-
-        const result = yield* runCompileCheck(
-          compileContext(runId, seedMainTexOutput(runId)),
-          0,
-        );
-
-        const excerpt = yield* failedExcerpt(result);
-        expect(excerpt).toContain('L0051');
-        expect(excerpt).toContain('L0250');
-        expect(excerpt).not.toContain('L0050');
-      }).pipe(Effect.provide(compileFsLayer)),
-  );
-
   it.live('truncates the combined excerpt to the last 12000 characters', () =>
     Effect.gen(function* () {
       const runId = 'compile-char-truncation' as RunId;

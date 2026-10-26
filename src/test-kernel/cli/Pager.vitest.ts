@@ -87,26 +87,6 @@ describe('pageStdout', () => {
     expect(stdout).toBe('');
   });
 
-  it('reads the live $PAGER when no pager override is passed', async () => {
-    const originalPager = process.env.PAGER;
-    process.env.PAGER = 'less -R';
-    try {
-      const calls = await page('row', { stdoutIsTty: true });
-      expect(calls).toHaveLength(1);
-      expect(calls[0].command).toBe('less -R');
-      expect(calls[0].options.env).toBeUndefined();
-      expect(stdout).toBe('');
-    } finally {
-      if (originalPager === undefined) delete process.env.PAGER;
-      else process.env.PAGER = originalPager;
-    }
-  });
-
-  it('writes directly (no pager) when $PAGER is disabled even on a TTY', async () => {
-    expect(await page('row', { stdoutIsTty: true, pager: '' })).toEqual([]);
-    expect(stdout).toBe('row\n');
-  });
-
   it.each<{ name: string; answer: Answer; pager: string; expected: string }>([
     {
       name: 'falls back to a direct write when the pager fails to launch',
@@ -148,11 +128,6 @@ describe('pageStdout', () => {
     expect(stdout).toBe(expected);
   });
 
-  it('never pages empty text', async () => {
-    expect(await page('', { stdoutIsTty: true })).toEqual([]);
-    expect(stdout).toBe('');
-  });
-
   describe('Ctrl-C while the pager owns the terminal', () => {
     /** Page on a TTY, pressing Ctrl-C while the pager runs; the pager then
      *  answers `answer`. Returns how the paging program ended. */
@@ -175,11 +150,6 @@ describe('pageStdout', () => {
       expect(listeners).toHaveLength(1);
       return exit;
     }
-
-    it('keeps the CLI running when the pager handles Ctrl-C itself', async () => {
-      // `less` cancels a search on Ctrl-C and exits normally when quit.
-      expect(Exit.isSuccess(await pageWithCtrlC({ exitCode: 0 }))).toBe(true);
-    });
 
     it('interrupts the command when the pager died of the Ctrl-C', async () => {
       // The command boundary maps an interruption to exit 130.

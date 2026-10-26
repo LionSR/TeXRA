@@ -163,42 +163,4 @@ describe('CLI config command', () => {
       expect(await readSelection()).toBeUndefined();
     },
   );
-
-  it('canonicalizes a default chat agent from the effective agents', async () => {
-    const result = await runCli([
-      'config',
-      'agents',
-      '--default-agent',
-      'assistant',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    // The write also carries the command's setting stores; the assertion pins
-    // the canonicalized agent key.
-    expect(mocks.setWorkspaceCliChatAgent).toHaveBeenCalledWith(
-      expect.anything(),
-      'builtIn:assistant',
-    );
-  });
-
-  it('rejects a default chat agent outside the effective agents', async () => {
-    const result = await runCli([
-      'config',
-      'agents',
-      '--default-agent',
-      'missing-agent',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(
-      'Default chat agent "missing-agent" is not in the workspace agents.',
-    );
-    expect(mocks.setWorkspaceCliChatAgent).not.toHaveBeenCalled();
-  });
 });

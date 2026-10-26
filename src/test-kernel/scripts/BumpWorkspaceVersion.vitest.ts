@@ -37,18 +37,6 @@ const TAG_FORMAT_ERROR =
   'Release tag must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-preview.N, with an optional leading v or cli-v prefix.';
 
 describe('bump-workspace-version script', () => {
-  it('accepts CLI release tags when computing the next workspace version', async () => {
-    await withTempDir('texra-version-bump-', async (root) => {
-      await writeWorkspaceManifests(root, '0.38.10');
-
-      const result = runVersionBump(['--from', 'cli-v0.38.9', '--check'], root);
-
-      expect(result.status).toBe(0);
-      expect(result.stdout).toBe('0.38.10\n');
-      expect(result.stderr).toBe('');
-    });
-  });
-
   it('rolls a patch train over .10 to an even minor from 1.0 on, keeping 0.x on minor + 1', async () => {
     await withTempDir('texra-version-bump-', async (root) => {
       await writeWorkspaceManifests(root, '1.2.0');

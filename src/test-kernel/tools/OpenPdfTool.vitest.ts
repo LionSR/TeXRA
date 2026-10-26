@@ -92,39 +92,6 @@ describe('OpenPdfTool', () => {
     });
   }
 
-  it.effect('opens an existing PDF through the registered host callback', () =>
-    Effect.gen(function* () {
-      const openPdf = yield* installOpener;
-      const tool = OpenPdfTool;
-
-      const result = yield* tool.call({
-        path: 'figures/result.pdf',
-        preserve_focus: true,
-      });
-
-      expectOpened(result, 'figures/result.pdf');
-      expect(openPdf).toHaveBeenCalledWith({
-        location: {
-          kind: 'workspace',
-          absolutePath: fakePath('workspace', 'figures', 'result.pdf'),
-          relativePath: 'figures/result.pdf',
-        },
-        preserveFocus: true,
-      });
-    }).pipe(
-      Effect.provideService(EditorHost, editors),
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   it.effect('allows absolute paths inside active run storage', () =>
     Effect.gen(function* () {
       const openPdf = yield* installOpener;

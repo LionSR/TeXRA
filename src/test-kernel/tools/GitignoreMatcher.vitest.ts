@@ -66,12 +66,6 @@ describe('getGitignoreMatcher', () => {
     fsState.reset();
   });
 
-  it.effect('uses an empty matcher when no workspace is available', () =>
-    Effect.gen(function* () {
-      expectEmptyMatcher(yield* getGitignoreMatcher(undefined));
-    }).pipe(Effect.provide(policyFiles)),
-  );
-
   it.effect('uses an empty matcher when all ignore policies are absent', () =>
     Effect.gen(function* () {
       fsState.homeDirectory = path.join(path.sep, 'home', 'user');

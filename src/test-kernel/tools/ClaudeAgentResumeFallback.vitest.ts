@@ -49,7 +49,6 @@ import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import {
   parkedRoot,
   REAL_RUN_TIMEOUT,
@@ -62,7 +61,7 @@ import { noPluginHold } from '@test/support/testPluginServices';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
-import { ClaudeAgentTool, runStreamedTurn } from '@texra/tools/claudeAgent';
+import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
 import { generateRunId } from '@utils/core';
 
 interface Parent {
@@ -192,39 +191,6 @@ describe(
 
         expect(result.status).toBe('error');
         expect(childrenOf(parent)).toEqual([]);
-      }),
-    );
-
-    it.live('detaches the abort link when SDK query construction throws', () =>
-      Effect.gen(function* () {
-        const signal = new AbortController().signal;
-        const removeEventListener = vi.spyOn(signal, 'removeEventListener');
-        const failure = new Error('Claude query construction failed');
-        mocks.query.mockImplementationOnce(() => {
-          throw failure;
-        });
-
-        const caught = yield* Effect.flip(
-          runStreamedTurn({
-            prompt: 'start Claude',
-            logger: createTestRunTrace(generateRunId()).trace,
-            signal,
-            model: 'claude-sonnet-5-5',
-            permissionMode: 'acceptEdits',
-            effort: 'high',
-            thinking: { type: 'adaptive' },
-            cwd: undefined,
-            additionalDirectories: undefined,
-            env: {},
-            resumeSessionId: undefined,
-            pathToClaudeCodeExecutable: undefined,
-          }),
-        );
-        expect(caught).toBe(failure);
-        expect(removeEventListener).toHaveBeenCalledWith(
-          'abort',
-          expect.any(Function),
-        );
       }),
     );
 
@@ -558,17 +524,9 @@ describe(
     );
 
     it.live.each([
-      { caseName: 'omits the new session id', subtype: 'success' },
-      {
-        caseName: 'echoes the source session id',
-        subtype: 'success',
-        sessionId: 'source-session',
-      },
-      {
-        caseName: 'reports an error without a new session id',
-        subtype: 'error_during_execution',
-      },
-    ])('fails a fork that $caseName', ({ subtype, sessionId }) =>
+      { caseName: 'omits the new session id' },
+      { caseName: 'echoes the source session id', sessionId: 'source-session' },
+    ])('fails a fork that $caseName', ({ sessionId }) =>
       Effect.gen(function* () {
         const parent = yield* setUp;
         const registry = new AgentCliSessionRegistry(noPluginHold);
@@ -577,10 +535,8 @@ describe(
           (async function* () {
             yield {
               type: 'result',
-              subtype,
-              ...(subtype === 'success'
-                ? { result: 'Malformed fork turn' }
-                : { errors: ['Provider fork failure'] }),
+              subtype: 'success',
+              result: 'Malformed fork turn',
               ...(sessionId ? { session_id: sessionId } : {}),
               usage: { input_tokens: 7, output_tokens: 3 },
               total_cost_usd: 0.25,

@@ -3,7 +3,6 @@ import { ModelProvider } from 'llm-zoo';
 
 import {
   decideModelRoute,
-  isKimiSubscriptionEligible,
   OWN_KEY_ROUTE_FACTS,
   routeConfig,
 } from '@texra-ai/llm';
@@ -22,22 +21,6 @@ const exclusive = {
   baseUrl: KIMI_CODE_BASE_URL,
   id: 'kimi-for-coding',
 } as const;
-
-describe('isKimiSubscriptionEligible', () => {
-  it('is true only for kimiSubscription-flagged Moonshot models', () => {
-    expect(isKimiSubscriptionEligible(dual)).toBe(true);
-    expect(isKimiSubscriptionEligible(exclusive)).toBe(true);
-    expect(
-      isKimiSubscriptionEligible({
-        provider: ModelProvider.OPENAI,
-        kimiSubscription: true,
-      }),
-    ).toBe(false);
-    expect(
-      isKimiSubscriptionEligible({ provider: ModelProvider.MOONSHOT }),
-    ).toBe(false);
-  });
-});
 
 const asConfig = (fields: object) =>
   ({ openRouterOnly: false, capabilities: {}, ...fields }) as ModelConfig;

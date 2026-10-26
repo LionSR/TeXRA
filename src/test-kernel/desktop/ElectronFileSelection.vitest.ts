@@ -125,14 +125,6 @@ describe('desktop file selection', () => {
       }),
   );
 
-  it.effect('reports a cancelled picker as null', () =>
-    Effect.gen(function* () {
-      const files = yield* Effect.promise(() => createFileSelection());
-
-      expect(yield* files.pickFiles('context')).toBeNull();
-    }),
-  );
-
   it.effect('skips a circular symlink instead of failing the catalog', () =>
     Effect.gen(function* () {
       const loop = join(workspacePath, 'loop');

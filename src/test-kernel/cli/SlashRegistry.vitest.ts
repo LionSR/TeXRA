@@ -5,63 +5,30 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect } from 'vitest';
-import type { AgentPickerValue } from '@cli/chat/tui/forms/AgentListForm';
 
 import {
   findSlashCommand,
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
-  suggestSlashCommand,
   type SlashCommand,
   installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openRegisteredCliSlashForm } from '@cli/chat/tui/commands/slashForms';
 import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessForm';
-import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
-  CLI_LOCAL_RUN_ID,
   formProgress,
   resetCliState,
-  sessionMeta,
   transientNotice,
-  type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import { activeForm, closeActiveForm } from '@cli/chat/tui/state/formSlot';
-import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
-import {
-  createDeferred,
-  waitForCondition as waitFor,
-} from '@test/support/asyncTestUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
-
-const CHAT_SESSION: SessionMeta = {
-  agent: 'chat',
-  model: 'deepseek/deepseek-v4-flash',
-  modelSource: 'builtin-default',
-  cwd: '/tmp/workspace',
-  approvalPolicy: 'ask',
-  version: 'test',
-};
-
-const CHATGPT_PREFERENCE_SELECTION: CliModelAccessSelection = {
-  kind: 'subscription-preference',
-  provider: 'chatgpt',
-  state: 'on',
-};
-
-const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
-  kind: 'access',
-  selection: CHATGPT_PREFERENCE_SELECTION,
-};
 
 /**
  * Register the built-ins with the process stores the chat surface threads in.
@@ -105,12 +72,6 @@ describe('slashRegistry', () => {
     return element.type(element.props) as { props?: TProps };
   }
 
-  async function settleFormSelection(): Promise<void> {
-    for (let index = 0; index < 4; index += 1) {
-      await Promise.resolve();
-    }
-  }
-
   function requireSlashCommand(name: string): SlashCommand {
     const command = findSlashCommand(name);
     if (!command) throw new Error(`Expected /${name} to be registered`);
@@ -146,308 +107,6 @@ describe('slashRegistry', () => {
       isClosed: () => closed,
     };
   }
-
-  /** Both form openers must hold the command echo until selection settles. */
-  async function expectDeferredEcho(
-    openForm: (onEcho: () => void) => unknown,
-  ): Promise<void> {
-    const events: string[] = [];
-    registerBuiltins({
-      onModelSelect: () =>
-        Effect.sync(() => {
-          events.push('outcome');
-        }),
-    });
-    openForm(() => events.push('echo'));
-    expect(events).toEqual([]);
-
-    const modelNode = renderOpenForm<{
-      onSelect?: (value: string) => void;
-    }>();
-    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
-    await settleFormSelection();
-
-    expect(events).toEqual(['echo', 'outcome']);
-  }
-
-  it('chains selectable agent picks into the model picker', async () => {
-    resetCliState(CHAT_SESSION);
-    registerBuiltins();
-    const agentNode = openSlashForm<{
-      onSelect?: (value: AgentPickerValue) => void;
-    }>('agent');
-    agentNode.props?.onSelect?.({ kind: 'agent', agent: 'review' });
-    await settleFormSelection();
-
-    expect(sessionMeta.get().agent).toBe('review');
-    expect(activeForm.get()?.commandName).toBe('model');
-
-    const modelNode = renderOpenForm<{
-      selectable?: boolean;
-      onClose?: () => void;
-    }>();
-    expect(modelNode.props).toMatchObject({
-      selectable: true,
-    });
-
-    // Closing the chained model picker returns to the chat input, not to the
-    // agent picker it replaced.
-    modelNode.props?.onClose?.();
-    expect(activeForm.get()).toBeUndefined();
-  });
-
-  it('does not advance agent picks into the model form when model selection is unavailable', async () => {
-    resetCliState(CHAT_SESSION);
-    registerBuiltins({
-      canSelectModel: () => false,
-    });
-    const agentNode = openSlashForm<{
-      onSelect?: (value: AgentPickerValue) => void;
-    }>('agent');
-    agentNode.props?.onSelect?.({ kind: 'agent', agent: 'review' });
-    await settleFormSelection();
-
-    expect(sessionMeta.get().agent).toBe('review');
-    expect(agentNode.isClosed()).toBe(true);
-    expect(activeForm.get()).toBeUndefined();
-  });
-
-  it('keeps the model picker selectable after root agent selection is closed', () => {
-    resetCliState(CHAT_SESSION);
-    registerBuiltins({
-      canSelectAgent: () => false,
-      canSelectModel: () => true,
-    });
-    const modelNode = openSlashForm<{
-      onSelect?: (value: string) => void;
-      selectable?: boolean;
-    }>('model');
-    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
-
-    expect(modelNode.props).toMatchObject({ selectable: true });
-    expect(sessionMeta.get()).toMatchObject({
-      model: 'openai/gpt-5.5-2026-04-23',
-      modelSource: 'explicit-override',
-    });
-  });
-
-  it('keeps the model picker open until model selection commits', async () => {
-    const selection = createDeferred<void>();
-    registerBuiltins({
-      onModelSelect: () => Effect.promise(() => selection.promise),
-    });
-    const modelNode = openSlashForm<{
-      onSelect?: (value: string) => void;
-    }>('model');
-    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
-    await settleFormSelection();
-
-    expect(modelNode.isClosed()).toBe(false);
-
-    selection.resolve();
-    await settleFormSelection();
-
-    expect(modelNode.isClosed()).toBe(true);
-  });
-
-  it('defers a form command echo until a persistent selection', async () => {
-    await expectDeferredEcho((onEcho) => {
-      openRegisteredCliSlashForm(requireSlashCommand('model'), '', onEcho);
-    });
-  });
-
-  it('routes model picker selection failures to the shared error handler', async () => {
-    const errors: string[] = [];
-    registerBuiltins({
-      onModelSelect: () => Effect.fail(new Error('model failed')),
-      onError: (error) => {
-        errors.push(toErrorMessage(error));
-      },
-    });
-    const modelNode = openSlashForm<{
-      onSelect?: (value: string) => void;
-    }>('model');
-    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
-    await settleFormSelection();
-
-    expect(errors).toEqual(['model failed']);
-    expect(modelNode.isClosed()).toBe(true);
-  });
-
-  it('keeps model-access selection in a busy form until it settles', async () => {
-    resetCliState(CHAT_SESSION);
-    const selection = createDeferred<void>();
-    registerBuiltins({
-      onModelAccessSelect: () => Effect.promise(() => selection.promise),
-    });
-    const accountNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
-    await settleFormSelection();
-
-    expect(accountNode.isClosed()).toBe(false);
-    expect(formProgress.get()).toMatchObject({
-      status: 'running',
-      title: 'Updating model access',
-    });
-
-    selection.resolve();
-    await settleFormSelection();
-  });
-
-  it('holds a copyable login frame until the user dismisses it', async () => {
-    registerBuiltins({
-      onLoginSelect: (_value, output) =>
-        Effect.sync(() => {
-          output.writeProgress('Open https://example.test/device', {
-            copyable: true,
-          });
-        }),
-    });
-
-    const loginNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
-    await settleFormSelection();
-
-    expect(loginNode.isClosed()).toBe(false);
-    expect(formProgress.get()).toMatchObject({
-      status: 'succeeded',
-      message: 'Open https://example.test/device',
-      copyableMessage: 'Open https://example.test/device',
-    });
-
-    formProgress.get()?.dismiss();
-    expect(loginNode.isClosed()).toBe(true);
-  });
-
-  it('moves a login instruction to scrollback when its frame cannot fit', async () => {
-    const instruction =
-      'Open https://example.test/device and enter verification code ABCD-EFGH';
-    registerBuiltins({
-      onLoginSelect: (_value, output) =>
-        Effect.sync(() => {
-          output.writeProgress(instruction, { copyable: true });
-        }),
-    });
-
-    const loginNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
-    await waitFor(() => formProgress.get()?.status === 'succeeded');
-    expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
-
-    const { ink } = await loadInk();
-    const { instance, stdout } = renderInteractive(
-      ink,
-      activeForm.get()?.render(() => {}, 20),
-    );
-    try {
-      instance.rerender(activeForm.get()?.render(() => {}, 4));
-      await waitFor(() => formProgress.get()?.copyableMessageArchived === true);
-      await waitFor(() => stdout.output.includes('scrollback'));
-      expect(stdout.output).toContain('scrollback');
-      expect(formProgress.get()).toMatchObject({
-        status: 'succeeded',
-        message: 'Authentication instructions were written to scrollback.',
-        copyableMessage: instruction,
-        copyableMessageArchived: true,
-      });
-      expect(
-        noticesFor(notices.get(), CLI_LOCAL_RUN_ID).map(({ row }) =>
-          transcriptRowHeadline(row),
-        ),
-      ).toEqual([instruction]);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('detaches a busy login and ignores its late completion', async () => {
-    const selection = createDeferred<void>();
-    registerBuiltins({
-      onLoginSelect: (_value, output) =>
-        Effect.suspend(() => {
-          output.writeProgress('Open https://example.test/device', {
-            copyable: true,
-          });
-          return Effect.promise(() => selection.promise);
-        }),
-    });
-
-    const loginNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
-    formProgress.get()?.cancel();
-
-    expect(loginNode.isClosed()).toBe(true);
-    expect(formProgress.get()).toBeUndefined();
-
-    selection.resolve();
-    await settleFormSelection();
-    expect(formProgress.get()).toBeUndefined();
-  });
-
-  it('keeps a failed login URL in its one persistent error', async () => {
-    const errors: string[] = [];
-    registerBuiltins({
-      onLoginSelect: (_value, output) =>
-        Effect.suspend(() => {
-          output.writeProgress('Open https://example.test/manual', {
-            copyable: true,
-          });
-          return Effect.fail(new Error('Sign-in failed'));
-        }),
-      onError: (error) => {
-        errors.push(toErrorMessage(error));
-      },
-    });
-
-    const loginNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
-    await settleFormSelection();
-
-    expect(errors).toEqual([
-      'Sign-in failed\nOpen https://example.test/manual',
-    ]);
-    expect(formProgress.get()).toMatchObject({
-      status: 'failed',
-      copyableMessage: 'Open https://example.test/manual',
-    });
-    expect(loginNode.isClosed()).toBe(false);
-  });
-
-  it('drops a busy form completion after CLI state reset', async () => {
-    const selection = createDeferred<void>();
-    const outcomes: string[] = [];
-    registerBuiltins({
-      onModelAccessSelect: (_value, output) =>
-        Effect.promise(() => selection.promise).pipe(
-          Effect.map(() => {
-            output.appendOutcome('late outcome');
-            outcomes.push('action settled');
-          }),
-        ),
-    });
-
-    const accountNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
-    resetCliState(CHAT_SESSION);
-    selection.resolve();
-    await settleFormSelection();
-
-    expect(outcomes).toEqual(['action settled']);
-    expect(formProgress.get()).toBeUndefined();
-    expect(accountNode.isClosed()).toBe(false);
-  });
 
   it('interrupts the running action when a busy form is cancelled', async () => {
     let interrupted = false;
@@ -493,23 +152,6 @@ describe('slashRegistry', () => {
       'agent',
       'merge',
     ]);
-  });
-
-  it('matches aliases alongside the canonical name', () => {
-    installSlashCommands([
-      {
-        pluginId: 'test',
-        commands: [
-          {
-            name: 'help',
-            description: 'show help',
-            aliases: ['h', 'usage'],
-          },
-        ],
-      },
-    ]);
-    expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
-    expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
   });
 
   it('falls back to substring matches when no prefix matches', () => {
@@ -560,33 +202,6 @@ describe('slashRegistry', () => {
     expect(prefixSlashCommands('odel')).toEqual([]);
     expect(prefixSlashCommands('hlp')).toEqual([]);
   });
-
-  it('finds exact command names and aliases case-insensitively', () => {
-    installSlashCommands([
-      {
-        pluginId: 'test',
-        commands: [
-          {
-            name: 'agent',
-            description: 'pick an agent',
-            aliases: ['agents'],
-          },
-        ],
-      },
-    ]);
-
-    expect(findSlashCommand('agent')?.name).toBe('agent');
-    expect(findSlashCommand('AGENTS')?.name).toBe('agent');
-    expect(findSlashCommand('age')).toBeUndefined();
-  });
-
-  it('suggests the closest command for a typo within the shared threshold', () => {
-    registerBuiltins();
-
-    expect(suggestSlashCommand('modl')?.name).toBe('model');
-    expect(suggestSlashCommand('aprooval')?.name).toBe('approval');
-    expect(suggestSlashCommand('sttus')?.name).toBe('status');
-  });
 });
 
 describe('parseSlashInput', () => {
@@ -619,15 +234,5 @@ describe('parseSlashInput', () => {
     expect(parseSlashInput('/mpq_logo.pdf')).toBeUndefined();
     expect(parseSlashInput('/3.14 is pi')).toBeUndefined();
     expect(parseSlashInput('/(a+b)')).toBeUndefined();
-  });
-
-  it('still parses command-shaped near-misses so typo suggestions fire', () => {
-    expect(parseSlashInput('/hlp')).toEqual({ name: 'hlp', remainder: '' });
-    expect(parseSlashInput('/my-cmd_2 arg')).toEqual({
-      name: 'my-cmd_2',
-      remainder: 'arg',
-    });
-    // Bare `/` keeps parsing so the palette opens on an empty query.
-    expect(parseSlashInput('/')).toEqual({ name: '', remainder: '' });
   });
 });

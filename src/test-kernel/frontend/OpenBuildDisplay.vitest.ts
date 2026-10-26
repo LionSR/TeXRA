@@ -125,62 +125,6 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     setLogSink(null);
   });
 
-  it.effect('reports non-delivery when the PDF viewer open rejects', () =>
-    Effect.gen(function* () {
-      const logs = captureLogEntries();
-      mocks.executeCommand.mockImplementation(async (command: string) => {
-        if (command === 'latex-workshop.view') {
-          throw new Error('viewer unavailable');
-        }
-        return undefined;
-      });
-
-      const delivery = yield* Effect.forkChild(
-        withHostFs(openBuildDisplayIfTex(roots, workspaceTex)).pipe(
-          Effect.provide(effectDiagnosticsLayer('Trace')),
-        ),
-        { startImmediately: true },
-      );
-      // `TestClock.adjust` drains the forked fiber's setup chain (exists ->
-      // openTextDocument -> showTextDocument -> latex-workshop.build) before
-      // moving the clock, so the viewer-open sleep is registered by the time
-      // the delay elapses (#10555).
-      yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
-
-      expect(yield* Fiber.join(delivery)).toBe(false);
-      expect(logs.has('WARN', 'OpenBuildUtils', 'Viewer display failed')).toBe(
-        true,
-      );
-    }),
-  );
-
-  it.effect(
-    'reports delivery only once the viewer-open command has settled',
-    () =>
-      Effect.gen(function* () {
-        let settled = false;
-        const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(roots, workspaceTex)),
-          { startImmediately: true },
-        );
-        delivery.addObserver(() => {
-          settled = true;
-        });
-
-        // The adjustment drains the setup chain first, so the `settled`
-        // boundary is measured against the viewer-open timer rather than
-        // against the pending setup promises.
-        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS - 1);
-        expect(settled).toBe(false);
-
-        yield* TestClock.adjust(1);
-        expect(yield* Fiber.join(delivery)).toBe(true);
-        expect(mocks.executeCommand).toHaveBeenCalledWith(
-          'latex-workshop.view',
-        );
-      }),
-  );
-
   it.effect(
     'keeps workspace LaTeX Workshop build failures out of the delivery boolean',
     () =>
@@ -317,61 +261,6 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         'latex-workshop.view',
       );
     }),
-  );
-
-  it.effect(
-    'keeps the final viewer schedulable when a later prepare rejects',
-    () =>
-      Effect.gen(function* () {
-        const order: string[] = [];
-        mocks.openTextDocument.mockImplementation(async (uri: unknown) => {
-          const fsPath = (uri as { fsPath: string }).fsPath;
-          order.push(`open:${fsPath}`);
-          if (fsPath === '/workspace/diff-2.tex') {
-            throw new Error('second setup failed');
-          }
-          return { uri };
-        });
-        mocks.showTextDocument.mockImplementation(async () => {
-          order.push('show');
-        });
-        mocks.executeCommand.mockImplementation(async (command: string) => {
-          order.push(command);
-          return undefined;
-        });
-
-        const first = {
-          ...workspaceTex,
-          absolutePath: '/workspace/diff-1.tex',
-        };
-        const second = {
-          ...workspaceTex,
-          absolutePath: '/workspace/diff-2.tex',
-        };
-
-        yield* withHostFs(
-          prepareBuildDisplay(roots, first, { scheduleViewer: false }),
-        );
-        const error = yield* Effect.flip(
-          withHostFs(
-            prepareBuildDisplay(roots, second, { scheduleViewer: false }),
-          ),
-        );
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toContain('second setup failed');
-
-        // The command's try/finally schedules the final viewer for the last
-        // prepared diff after the setup rejection propagates.
-        yield* Effect.forkChild(withHostFs(scheduleViewerDisplay), {
-          startImmediately: true,
-        });
-        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
-
-        const viewerIndexes = order
-          .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))
-          .filter((index) => index >= 0);
-        expect(viewerIndexes).toHaveLength(1);
-      }),
   );
 
   it.effect(

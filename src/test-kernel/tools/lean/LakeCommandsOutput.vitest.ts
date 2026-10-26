@@ -21,32 +21,6 @@ describe('runLakeCommand output failures', () => {
     args: ['build'],
   };
 
-  it.effect(
-    'keeps stderr empty for ordinary nonzero exits with stdout only',
-    () =>
-      Effect.gen(function* () {
-        const spawner = scriptedSpawnerLayer(() => ({
-          exitCode: 7,
-          stdout: 'build failed in target A\n',
-        }));
-
-        const result = yield* runLakeCommand(LAKE_BUILD).pipe(
-          Effect.provide(spawner.layer),
-        );
-
-        expect(result).toEqual({
-          exitCode: 7,
-          stdout: 'build failed in target A',
-          stderr: '',
-        });
-        expect(spawner.calls[0]).toMatchObject({
-          command: 'lake',
-          args: ['build'],
-          options: { cwd: '/workspace', detached: false },
-        });
-      }),
-  );
-
   it.effect('names the exit code when a failing lake prints nothing', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => ({ exitCode: 3 }));

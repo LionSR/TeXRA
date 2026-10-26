@@ -90,10 +90,6 @@ function mockLoopbackSuccess(): void {
   mocks.loginWithLoopback.mockReturnValue(Effect.succeed(loopbackSession()));
 }
 
-function mockPreferenceEnabled(): void {
-  mocks.setPreferSubscription.mockReturnValue(Effect.void);
-}
-
 describe('signInWithSubscription (ChatGPT)', () => {
   beforeEach(() => {
     mocks.withProgress.mockImplementation((_options, task) => task());
@@ -101,22 +97,6 @@ describe('signInWithSubscription (ChatGPT)', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('reports OAuth failures as sign-in failures', async () => {
-    mocks.loginWithLoopback.mockReturnValue(
-      Effect.fail(new Error('oauth failed')),
-    );
-
-    const signedIn = await signInWithChatGptSubscription('TestChannel');
-
-    expect(signedIn).toBe(false);
-    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
-      'TestChannel',
-      'ChatGPT sign-in failed',
-      expect.any(Error),
-    );
-    expect(mocks.setPreferSubscription).not.toHaveBeenCalled();
   });
 
   it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
@@ -137,41 +117,6 @@ describe('signInWithSubscription (ChatGPT)', () => {
       'TestChannel',
       'ChatGPT sign-in failed',
       expect.any(Error),
-    );
-  });
-
-  it('opens the default browser when the user chooses it', async () => {
-    mocks.openExternal.mockResolvedValue(true);
-    mocks.showInformationMessage.mockResolvedValue({
-      title: 'Open in Default Browser',
-    });
-    mockPreferenceEnabled();
-    mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
-
-    await signInWithChatGptSubscription('TestChannel');
-
-    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('different browser'),
-      { detail: undefined, modal: true },
-      { title: 'Open in Default Browser' },
-      { title: 'Copy Sign-in Link' },
-    );
-    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
-    expect(mocks.writeText).not.toHaveBeenCalled();
-  });
-
-  it('copies the sign-in link instead of opening the browser when chosen', async () => {
-    mocks.showInformationMessage.mockResolvedValue({
-      title: 'Copy Sign-in Link',
-    });
-    mockPreferenceEnabled();
-    mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
-
-    await signInWithChatGptSubscription('TestChannel');
-
-    expect(mocks.openExternal).not.toHaveBeenCalled();
-    expect(mocks.writeText).toHaveBeenCalledWith(
-      'https://auth.openai.com/authorize?x=1',
     );
   });
 

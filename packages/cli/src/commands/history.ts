@@ -100,7 +100,7 @@ function runHistoryShow(
  * fonts all inlined, so `> out.html` opens correctly via `file://` with no
  * server).
  */
-export function runHistoryExport(
+function runHistoryExport(
   context: CliContext,
   id: RunId,
   format: 'html' | 'md',

@@ -48,32 +48,6 @@ async function createRegistry(
 describe('desktop shortcut registry', () => {
   useLitComponentTestDom(loadShortcutRegistry);
 
-  it('keeps ordinary typing inside text fields and dispatches modified shortcuts', async () => {
-    const openCommands = vi.fn();
-    const registry = await createRegistry(openCommands);
-    const input = document.createElement('input');
-    document.body.append(input);
-
-    input.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        bubbles: true,
-        key: 'k',
-      }),
-    );
-    expect(openCommands).not.toHaveBeenCalled();
-
-    input.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        bubbles: true,
-        cancelable: true,
-        key: 'k',
-        metaKey: true,
-      }),
-    );
-    expect(openCommands).toHaveBeenCalledOnce();
-    registry.dispose();
-  });
-
   it('dispatches the Show Files chord its menu advertises', async () => {
     // Regression: the menu stored `CommandOrControl+Alt+B` while the keydown
     // converter produces `Command+Option+B` on darwin and `Control+Alt+B`

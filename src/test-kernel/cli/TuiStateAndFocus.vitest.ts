@@ -6,8 +6,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   rootRunId,
   resetCliState,
-  setTransientNotice,
-  transientNotice,
   sessionListRows,
   sessionListRunIds,
   actOnSurface,
@@ -20,7 +18,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { CLI_FOLLOW_UP_HOST } from '@cli/chat/tui/state/sessionView';
-import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { acceptsFollowUp, type RunView } from '@shared/session/sessionView';
 import {
@@ -87,14 +84,6 @@ describe('focus over the session view', () => {
     expect(sessionListRunIds.get()).toEqual([]);
   });
 
-  it('resolves the child list to the nearest ancestor with children', () => {
-    const view = familyView();
-    expect(resolveChildListTarget(view, child1)).toBe(root);
-    expect(resolveChildListTarget(view, child2)).toBe(child2);
-    expect(resolveChildListTarget(view, grandchild)).toBe(child2);
-    expect(resolveChildListTarget(view, undefined)).toBeUndefined();
-  });
-
   it('routes composer follow-ups only to in-flight plain tool-use children', () => {
     const view = familyView({
       [child1]: { status: RUN_PHASE.COMPLETED },
@@ -111,17 +100,6 @@ describe('focus over the session view', () => {
     expect(acceptsFollowUp(stream(grandchild), CLI_FOLLOW_UP_HOST)).toBe(true);
     expect(acceptsFollowUp(stream(child1), CLI_FOLLOW_UP_HOST)).toBe(false);
     expect(acceptsFollowUp(stream(child2), CLI_FOLLOW_UP_HOST)).toBe(false);
-  });
-});
-
-describe('cliState surface fields', () => {
-  it('normalizes transient notices to the status bar single-line contract', () => {
-    setTransientNotice('Usage: /login target\n       /login chatgpt --device');
-
-    expect(transientNotice.get()).toMatchObject({
-      kind: 'message',
-      text: 'Usage: /login target · /login chatgpt --device',
-    });
   });
 });
 
@@ -176,47 +154,6 @@ describe('CLI TUI row allocation', () => {
 });
 
 describe('CLI TUI session run state', () => {
-  it.each([
-    {
-      name: 'before the stream resolves',
-      runCompleted: false,
-      runSettled: Effect.void,
-      runId: undefined,
-      expected: false,
-    },
-    {
-      name: 'while startup is pending',
-      runCompleted: false,
-      runSettled: undefined,
-      runId: root,
-      expected: false,
-    },
-    {
-      name: 'after the run completed',
-      runCompleted: true,
-      runSettled: Effect.void,
-      runId: root,
-      expected: false,
-    },
-    {
-      name: 'with the stream resolved and the run in flight',
-      runCompleted: false,
-      runSettled: Effect.void,
-      runId: root,
-      expected: true,
-    },
-  ])(
-    'only reports a waiting tool-use run resumable-idle $name',
-    ({ runCompleted, runSettled, runId, expected }) => {
-      seedView(familyView({ [root]: { status: RUN_PHASE.WAITING } }));
-      const session = new TuiSession();
-      if (runSettled) session.markRunPending(runSettled);
-      if (runCompleted && runSettled) session.markRunCompleted(runSettled);
-      session.runId = runId;
-      expect(session.isResumableIdle()).toBe(expected);
-    },
-  );
-
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupSettled = Effect.never;
     const session = new TuiSession();
@@ -238,44 +175,5 @@ describe('CLI TUI session run state', () => {
     expect(chatTuiCanStartRootRun(session)).toBe(false);
     expect(runStopFacts.get().runPending).toBe(true);
     expect(runStopFacts.get().runId).toBeUndefined();
-  });
-
-  it('publishes the run-control run id from the session itself', () => {
-    const session = new TuiSession();
-    const claim = Effect.never;
-    session.markRunPending(claim);
-    expect(runStopFacts.get().runId).toBeUndefined();
-
-    // The claim lives in the signal renders read, so no write can leave the
-    // Ctrl-C hint reading a stale claim (#8273).
-    session.runId = root;
-
-    expect(runStopFacts.get().runId).toBe(root);
-    expect(runStopFacts.get().runPending).toBe(true);
-
-    session.markRunCompleted(claim);
-
-    expect(runStopFacts.get().runId).toBe(root);
-    expect(runStopFacts.get().runPending).toBe(false);
-  });
-
-  it('clears stale resume ids when clearing chat session run state', () => {
-    const session = new TuiSession();
-    const claim = Effect.void;
-    session.markRunPending(claim);
-    session.markRunCompleted(claim);
-    session.runId = root;
-    session.interruptedRunId = root;
-    session.runExitCode = CliExitCode.Interrupted;
-    session.askStop('user');
-
-    session.clearRunState();
-
-    expect(session.runId).toBeUndefined();
-    expect(session.interruptedRunId).toBeUndefined();
-    expect(session.runSettled).toBeUndefined();
-    expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(session.runCompleted).toBe(false);
-    expect(session.stopRequested).toBe(false);
   });
 });

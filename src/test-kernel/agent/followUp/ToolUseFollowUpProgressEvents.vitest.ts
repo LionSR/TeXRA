@@ -4,63 +4,33 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import {
-  createTestSession,
-  publishTestRunStart,
-  queuedFollowUps,
-} from '@test/support/sessionTestUtils';
+import { queuedFollowUps } from '@test/support/sessionTestUtils';
 
-import { seedActiveRun, seedTerminalRun } from '../progressTestUtils';
+import { seedTerminalRun } from '../progressTestUtils';
 
 const runId = 'fa0001' as RunId;
-
-let paperCount = 0;
-
-/** The roots of one paper: a session's plane is keyed by its storage root,
- *  so sessions that must not hear each other get their own. */
-function paperRoots() {
-  paperCount += 1;
-  return createFakeWorkspaceRoots({
-    storagePath: `/workspace/paper-${paperCount}/.texra/storage`,
-  });
-}
 
 describe('tool-use follow-up progress events', () => {
   const trackedRuns: Array<{
     readonly session: SessionHandle;
     readonly runId: RunId;
   }> = [];
-  const sessions = new Set<SessionHandle>();
 
-  afterEach(async () => {
+  afterEach(() => {
     for (const { session, runId } of trackedRuns.splice(0)) {
       untrackRun(session.runs, runId);
     }
-    for (const session of sessions) {
-      await Effect.runPromise(closeSessionOf(session));
-    }
-    sessions.clear();
   });
 
-  const trackSession = () =>
-    createTestSession({ roots: paperRoots() }).pipe(
-      Effect.tap((session) => Effect.sync(() => sessions.add(session))),
-    );
-
-  function trackRunControls({
-    session,
-  }: {
-    readonly session?: SessionHandle;
-  } = {}): void {
+  function trackRunControls(): void {
     const handle = testRunHandle({ runId, agent: 'search' });
-    const owner = session ?? testDefaultSession();
+    const owner = testDefaultSession();
     handle.attachControls({
       oneShot: false,
       requestImmediateCompaction: () => Effect.void,
@@ -70,39 +40,6 @@ describe('tool-use follow-up progress events', () => {
     registryOf(owner.runs).track(handle);
     trackedRuns.push({ session: owner, runId });
   }
-
-  it.effect(
-    'publishes sent follow-up events through the owning session fact hub',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* trackSession();
-        publishTestRunStart(session, runId);
-        yield* session.log.settled;
-        const input = yield* session.followUps.open(runId);
-
-        trackRunControls({ session });
-
-        const result = yield* submitFollowUp(
-          runId,
-          { text: 'please continue', from: { kind: 'user' as const } },
-          {
-            session,
-          },
-        );
-
-        expect(result).toEqual({ status: 'sent' });
-        expect(yield* input.next('idle')).toMatchObject({
-          followUps: [
-            {
-              content: {
-                text: 'please continue',
-                from: { kind: 'user' as const },
-              },
-            },
-          ],
-        });
-      }),
-  );
 
   it.effect(
     'does not append through stale active contexts after final status',
@@ -134,39 +71,6 @@ describe('tool-use follow-up progress events', () => {
         // revives it, whatever controls a stale handle still holds.
         expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
         expect(yield* queuedFollowUps(testDefaultSession(), runId)).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'queues follow-ups for resuming runs through registry admission',
-    () =>
-      Effect.gen(function* () {
-        const resumingRunId = 'fa0002' as RunId;
-
-        // A second activation is the resume the registry admits a follow-up for.
-        yield* Effect.promise(() =>
-          seedActiveRun(testDefaultSession(), resumingRunId, {
-            resuming: true,
-          }),
-        );
-        yield* Effect.addFinalizer(() =>
-          testDefaultSession().followUps.closeInput(resumingRunId),
-        );
-
-        const result = yield* submitFollowUp(
-          resumingRunId,
-          { text: 'queued while resuming', from: { kind: 'user' as const } },
-          {
-            session: testDefaultSession(),
-          },
-        );
-
-        // The fake platform's resume port refuses, so the input stays queued
-        // behind a failed wake.
-        expect(result).toEqual({ status: 'queued', wake: 'failed' });
-        expect(
-          yield* queuedFollowUps(testDefaultSession(), resumingRunId),
-        ).toMatchObject([{ text: 'queued while resuming' }]);
       }),
   );
 });

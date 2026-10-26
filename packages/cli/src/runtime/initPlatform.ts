@@ -52,18 +52,24 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // (the chat TUI) is about to install its own. Undefined means no platform
 // handlers are currently installed.
 let shutdownHandlers: DisposableStore | undefined;
-// The one memoized open of the process session (`CliPlatformServices.session`),
-// built by the first init beside the roots it installs.
-let sessionOpen: Effect.Effect<LocalSession, SessionOpenError> | undefined;
-// The process's shutdown scope, made by the first init: its close is the
-// CLI's shutdown, run once whichever exit path asks first (`shutdown`).
-let shutdownScope: Scope.Closeable | undefined;
-let shutdown: Effect.Effect<void> | undefined;
+// What the first init installed, set in one assignment once its fallible
+// setup has succeeded; later inits return it rather than building a second
+// set. `session` is the one memoized open of the process session
+// (`CliPlatformServices.session`). `shutdownScope`'s close is the CLI's
+// shutdown, run once whichever exit path asks first (`shutdown`).
+let installed:
+  | {
+      readonly roots: WorkspaceRoots;
+      readonly session: Effect.Effect<LocalSession, SessionOpenError>;
+      readonly shutdownScope: Scope.Closeable;
+      readonly shutdown: Effect.Effect<void>;
+    }
+  | undefined;
 
 /** The CLI's shutdown: every session closes, then the project scope, then
  *  the process runtime. Nothing to do before a platform came up. */
 export const cliPlatformShutdown: Effect.Effect<void> = Effect.suspend(
-  () => shutdown ?? Effect.void,
+  () => installed?.shutdown ?? Effect.void,
 );
 
 type CliPlatformInitOptions = Pick<
@@ -253,10 +259,6 @@ export function setCliHelperModel(
   return model ? state.update(GlobalStateKey.HELPER_MODEL, model) : Effect.void;
 }
 
-/** The process roots the first init installed; later inits return them
- *  rather than building a second set. */
-let installedRoots: WorkspaceRoots | undefined;
-
 /**
  * Bring the CLI platform up, as the program it is: every entry runs it on
  * the process runtime it installed or joined (`installCliProcessRuntime`), so
@@ -319,13 +321,13 @@ export function initCliPlatform(
     // `Effect.ensuring`, never a fiber on that runtime. Keep the roots and
     // lazy session private until the fallible setup has succeeded: their
     // ports have no reset operation.
-    const { globalState, roots } = yield* withProcessServices(
+    const { globalState, platform } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
         // The three setting slots this process answers a catalog row from:
         // the roots an earlier init built.
-        if (installedRoots) return { globalState, roots: installedRoots };
+        if (installed) return { globalState, platform: installed };
         const sessions = yield* Sessions;
 
         const projectScope = yield* Scope.make();
@@ -421,15 +423,17 @@ export function initCliPlatform(
             closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
           );
           yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
-          shutdownScope = scope;
-          shutdown = yield* Effect.cached(Scope.close(scope, Exit.void));
-
-          installedRoots = roots;
-          sessionOpen = openSession;
+          const platform = {
+            roots,
+            session: openSession,
+            shutdownScope: scope,
+            shutdown: yield* Effect.cached(Scope.close(scope, Exit.void)),
+          };
+          installed = platform;
           if (context.installSignalHandlers !== false) {
             installCliShutdownSignalHandlers(context.quietLogs);
           }
-          return { globalState, roots };
+          return { globalState, platform };
         }).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit) ? closeProject : Effect.void,
@@ -437,6 +441,8 @@ export function initCliPlatform(
         );
       }),
     );
+
+    const { roots } = platform;
 
     // The stores this root opened, handed back rather than read off a
     // process-wide singleton: the secret store and the application state are
@@ -457,10 +463,8 @@ export function initCliPlatform(
       globalStorage: resolveGlobalStoragePath(context.storageRoot),
       globalState,
       secrets,
-      session:
-        sessionOpen ??
-        Effect.die(new Error('The CLI process session was never opened.')),
-      shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
+      session: platform.session,
+      shutdownScope: platform.shutdownScope,
       roots,
     };
 

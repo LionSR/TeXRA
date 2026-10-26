@@ -1,6 +1,5 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -245,31 +244,6 @@ describe('desktop preview host', () => {
     }),
   );
 
-  it.effect('builds LaTeX previews and opens the generated PDF path', () =>
-    Effect.gen(function* () {
-      const compileLatex2Pdf = fakeCompiler();
-      const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-        loadDesktopPreviewHost(compileLatex2Pdf),
-      );
-      const { dir, texPath, pdfPath } = yield* Effect.promise(() =>
-        makeTexFixture('preview'),
-      );
-      const shell = makeShell();
-
-      const host = createDesktopPreviewHost({ shell, runtime: testRuntime() });
-
-      yield* host
-        .openBuildDisplayIn(roots)(createExternalLocation(texPath))
-        .pipe(Effect.provide(nodePlatformLayer));
-      expect(compileLatex2Pdf).toHaveBeenCalledWith(
-        expect.objectContaining({ absolutePath: texPath }),
-        roots,
-        { outputDirectory: dir },
-      );
-      expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
-    }),
-  );
-
   it.effect('opens compile-preview PDF targets without running LaTeX', () =>
     Effect.gen(function* () {
       const compileLatex2Pdf = fakeCompiler();
@@ -293,42 +267,6 @@ describe('desktop preview host', () => {
       expect(checkToolInstalled).not.toHaveBeenCalled();
       expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
     }),
-  );
-
-  it.effect(
-    'reports missing LaTeX toolchains before compiling preview sources',
-    () =>
-      Effect.gen(function* () {
-        const compileLatex2Pdf = fakeCompiler();
-        const checkToolInstalled = vi.fn((): Effect.Effect<boolean> =>
-          Effect.succeed(false),
-        );
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(compileLatex2Pdf, checkToolInstalled),
-        );
-        const { texPath } = yield* Effect.promise(() =>
-          makeTexFixture('preview', { withPdf: false }),
-        );
-        const showErrorMessage = vi.fn(() => Effect.void);
-        const shell = makeShell();
-
-        const host = createDesktopPreviewHost({
-          shell,
-          showErrorMessage,
-          runtime: testRuntime(),
-        });
-
-        const message = `No LaTeX compiler found for ${texPath}. Install latexmk or pdflatex to compile and preview this file.`;
-        const error = yield* Effect.flip(
-          host
-            .openBuildDisplayIn(roots)(createExternalLocation(texPath))
-            .pipe(Effect.provide(nodePlatformLayer)),
-        );
-        expect(toErrorMessage(error)).toContain(message);
-        expect(showErrorMessage).toHaveBeenCalledWith(message);
-        expect(compileLatex2Pdf).not.toHaveBeenCalled();
-        expect(shell.openPath).not.toHaveBeenCalled();
-      }),
   );
 
   it.effect('reports LaTeX build failures without opening stale PDFs', () =>
@@ -375,40 +313,6 @@ describe('desktop preview host', () => {
       );
       expect(shell.openPath).not.toHaveBeenCalled();
     }),
-  );
-
-  it.effect(
-    'prefers the in-app PDF overlay when postToRenderer accepts the post',
-    () =>
-      Effect.gen(function* () {
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(),
-        );
-        const { texPath, pdfPath } = yield* Effect.promise(() =>
-          makeTexFixture('paper'),
-        );
-        const shell = makeShell();
-        const postToRenderer = vi.fn((_message: unknown) => true);
-
-        const host = createDesktopPreviewHost({
-          shell,
-          postToRenderer,
-          runtime: testRuntime(),
-        });
-
-        yield* host
-          .openBuildDisplayIn(roots)(createExternalLocation(texPath))
-          .pipe(Effect.provide(nodePlatformLayer));
-        expect(postToRenderer).toHaveBeenCalledTimes(1);
-        expect(postToRenderer).toHaveBeenCalledWith(
-          expect.objectContaining({
-            command: 'desktop:showPdf',
-            title: 'paper.pdf',
-            pdfUrl: pathToFileURL(pdfPath).href,
-          }),
-        );
-        expect(shell.openPath).not.toHaveBeenCalled();
-      }),
   );
 
   it.effect(

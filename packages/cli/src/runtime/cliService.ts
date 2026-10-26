@@ -4,7 +4,7 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { homedir, hostname } from 'node:os';
+import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
@@ -358,15 +358,15 @@ export function connectCliService(
  * reach the task. Null when every such key is the login shell's own.
  */
 export const serviceKeysNotice = Effect.fn('serviceKeysNotice')(
-  function* (): Effect.fn.Return<string | null> {
+  function* (): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
     const own = (name: string) => cliEnvValue(name)?.trim() || undefined;
     const set = API_KEY_ENV_NAMES.filter((name) => own(name) !== undefined);
     if (set.length === 0) return null;
     // Best effort, for a notice only: a login shell that does not answer
     // leaves the service without those keys too.
-    const login = yield* loginShellEnvironment(
-      cliEnvValue('HOME') ?? homedir(),
-    ).pipe(Effect.orElseSucceed((): Readonly<Record<string, string>> => ({})));
+    const login = yield* loginShellEnvironment().pipe(
+      Effect.orElseSucceed((): Readonly<Record<string, string>> => ({})),
+    );
     const unseen = set.filter((name) => login[name]?.trim() !== own(name));
     if (unseen.length === 0) return null;
     const one = unseen.length === 1;

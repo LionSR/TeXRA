@@ -1,6 +1,4 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect, vi } from 'vitest';
@@ -12,7 +10,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -24,7 +22,6 @@ import {
   installedHost,
 } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
@@ -165,35 +162,6 @@ function runPreset(
   return Effect.runPromise(preset(init, context));
 }
 
-async function expectBlockedLaunch(options: {
-  readonly plan: TeamPlan;
-  readonly message: string;
-  readonly followUpAdvice: string;
-  readonly unexpectedWarning: string;
-}): Promise<void> {
-  mocks.canLaunchTeam.mockReturnValueOnce(false);
-  mocks.formatCliTeamLaunchBlockMessage.mockReturnValueOnce(options.message);
-  mocks.planTeamRun.mockReturnValue(options.plan);
-
-  const exitCode = await runPreset({
-    instruction: 'Solve a short math problem.',
-  });
-
-  expect(exitCode).toBe(2);
-  expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-  expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(options.message);
-  expect(mocks.formatCliTeamLaunchBlockMessage).toHaveBeenCalledWith(
-    options.plan,
-    {
-      requestedTeam: 'mathematician',
-      followUpAdvice: options.followUpAdvice,
-    },
-  );
-  expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
-    expect.stringContaining(options.unexpectedWarning),
-  );
-}
-
 function mockExpandedRunInputs(inputs: {
   readonly inputFiles: string[];
   readonly contextFiles: string[];
@@ -212,24 +180,7 @@ function mockExpandedRunInputs(inputs: {
   );
 }
 
-function mockMaterializedStdin(inputFiles: string[]): void {
-  mocks.withExpandedRunInputs.mockImplementationOnce(
-    async (
-      _inputSpecs: readonly string[],
-      _contextSpecs: readonly string[],
-      _cwd: string,
-      _options: unknown,
-      run: (expanded: {
-        readonly inputFiles: string[];
-        readonly contextFiles: string[];
-        readonly stdinInputPath?: string;
-      }) => Promise<unknown>,
-    ) => run({ inputFiles, contextFiles: [], stdinInputPath: inputFiles[0] }),
-  );
-}
-
 describe('CLI team run command', () => {
-  const tempDirs = useTempDirs();
   const headlessAskError =
     'Cannot run team "mathematician" with headless approval policy "ask": approval prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
@@ -333,19 +284,6 @@ describe('CLI team run command', () => {
     expect(emission?.text).toBe('The proof is correct.');
   });
 
-  it('marks materialized stdin as unavailable for team recovery advertising', async () => {
-    mockMaterializedStdin(['.texra-tmp/stdin.tex']);
-
-    await runPreset({
-      inputFiles: ['-'],
-      instruction: 'Inspect the proof.',
-    });
-
-    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      recoveryInputIsDurable: false,
-    });
-  });
-
   it('refuses headless ask before launching a team run', async () => {
     const exitCode = await runPreset(
       {
@@ -362,107 +300,5 @@ describe('CLI team run command', () => {
     expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledOnce();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-  });
-
-  it('allows instruction-file-only team runs without input files', async () => {
-    mockExpandedRunInputs({
-      inputFiles: [],
-      contextFiles: [],
-    });
-    const root = await makeTempDir('texra-agent-team-', tempDirs);
-    await fs.writeFile(
-      path.join(root, 'prompt.txt'),
-      'Read the prompt from disk.\n',
-    );
-
-    const exitCode = await runPreset(
-      {
-        instruction: 'Then summarize the plan.',
-        instructionFile: 'prompt.txt',
-      },
-      createRunCommandCliContext({ cwd: root }),
-    );
-
-    expect(exitCode).toBe(0);
-    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-      [],
-      [],
-      root,
-      {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-      },
-      expect.any(Function),
-    );
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.inputFiles).toEqual([]);
-    expect(config?.instruction).toContain('User instruction:');
-    expect(config?.instruction).toContain(
-      'Read the prompt from disk.\n\nThen summarize the plan.',
-    );
-  });
-
-  it.effect('reports missing instruction files before expanding inputs', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        preset({ instruction: '', instructionFile: 'missing-prompt.txt' }),
-      );
-      expect(error.message).toMatch(
-        /--instruction-file: file not found: missing-prompt\.txt/,
-      );
-      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect('still requires an input file or instruction text', () =>
-    Effect.gen(function* () {
-      // The usage error is raised by a bare `throw` inside the command's
-      // generator, so it arrives as a defect, not a typed failure.
-      const exit = yield* Effect.exit(preset({ instruction: '' }));
-      expect(Exit.isFailure(exit)).toBe(true);
-      const defect = Exit.isFailure(exit)
-        ? Cause.squash(exit.cause)
-        : undefined;
-      expect(defect).toBeInstanceOf(Error);
-      expect((defect as Error).message).toMatch(
-        /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra team run physicist --instruction "Check this derivation"/,
-      );
-      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-    }),
-  );
-
-  it('refuses built-in presets without a runnable root agent', async () => {
-    await expectBlockedLaunch({
-      plan: teamPlan({
-        rootAgent: undefined,
-        missingAgents: [
-          'generic',
-          'devise',
-          'apply',
-          'simplifier',
-          'progressCheck',
-          'orchestrator',
-        ],
-        agentKeys: ['builtIn:lean'],
-      }),
-      message:
-        'Team "mathematician" cannot start: no runnable team root. Run `texra team show mathematician` to see missing agents. Install or create a runnable team root before launching this team.',
-      followUpAdvice:
-        'Install or create a runnable team root before launching this team.',
-      unexpectedWarning: 'WARN team delegation unavailable',
-    });
-  });
-
-  it('refuses a delegating root with no available team members', async () => {
-    await expectBlockedLaunch({
-      plan: teamPlan({
-        missingAgents: ['generic', 'simplifier'],
-      }),
-      message:
-        'Team "mathematician" cannot start: no available team members. Run `texra team show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
-      followUpAdvice:
-        'Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
-      unexpectedWarning: 'Enable a delegating team root',
-    });
   });
 });

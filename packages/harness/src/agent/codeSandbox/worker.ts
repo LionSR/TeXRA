@@ -344,10 +344,8 @@ function evaluate(
 }
 
 const program = Effect.gen(function* () {
-  const input = yield* Effect.try({
-    try: () => Schema.decodeUnknownSync(WorkerInputSchema)(workerData),
-    catch: ensureError,
-  });
+  const input =
+    yield* Schema.decodeUnknownEffect(WorkerInputSchema)(workerData);
   const realm = yield* openRealm(input);
   const runner = yield* (yield* WorkerRunnerPlatform).start<
     StepReportWire,

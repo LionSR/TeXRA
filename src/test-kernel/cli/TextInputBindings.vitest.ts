@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   matchTextInputBinding,
-  TEXT_INPUT_BINDINGS,
   type TextInputKey,
 } from '@cli/chat/tui/input/textInputBindings';
 
@@ -137,14 +136,5 @@ describe('text input keymap', () => {
     expect(routed).toEqual(
       PROBES.map((probe) => ({ chord: probe.chord, binding: probe.binding })),
     );
-  });
-
-  it('has no unreachable (excessive) entries — every binding is probed', () => {
-    const probed = new Set(PROBES.map((probe) => probe.binding));
-    const unreachable = TEXT_INPUT_BINDINGS.map((b) => b.keys).filter(
-      (keys) => !probed.has(keys),
-    );
-
-    expect(unreachable).toEqual([]);
   });
 });

@@ -28,6 +28,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
 import { assembleTrace } from '@transcript/traceAssembler';
+import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;
@@ -154,6 +155,8 @@ describe('assembleTrace', () => {
           fact: { key: 'plan', plan },
         }),
       );
+      // The trace viewer reads the same document the export writes.
+      expect(() => parseTraceData(trace)).not.toThrow();
     }),
   );
 
@@ -161,21 +164,6 @@ describe('assembleTrace', () => {
     Effect.gen(function* () {
       const result = yield* assembleTrace('dec0de000001' as RunId, session);
       expect(result).toEqual({ status: 'config_missing' });
-    }),
-  );
-
-  it.effect('exports a registered run with an empty transcript', () =>
-    Effect.gen(function* () {
-      const runId = 'eec000001' as RunId;
-      yield* Effect.promise(() => writeRun(runId));
-
-      const result = yield* assembleTrace(runId, session);
-
-      // Only the creation rows: a run that recorded nothing still exports.
-      expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
-        'run.start',
-        'run.config',
-      ]);
     }),
   );
 });

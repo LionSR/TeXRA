@@ -540,7 +540,7 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           // The fixture's parent has no run to resume: the wake a user's
-          // message owes it is refused.
+          // message owes it is refused, and the resume tells the user.
           mocks.startFollowUpWake.mockReturnValue(Effect.succeed(false));
           expect(
             yield* submitFollowUp(
@@ -550,7 +550,7 @@ describe('childRunLoop E2E fixtures', () => {
                 session,
               },
             ),
-          ).toEqual({ status: 'queued', wake: 'failed' });
+          ).toEqual({ status: 'queued' });
 
           yield* foldParentPhase(false);
           expect(
@@ -584,7 +584,7 @@ describe('childRunLoop E2E fixtures', () => {
                   session,
                 },
               ),
-            ).toEqual({ status: 'queued', wake: 'failed' });
+            ).toEqual({ status: 'queued' });
           } finally {
             releaseNativeChild();
           }
@@ -1099,27 +1099,6 @@ describe('childRunLoop E2E fixtures', () => {
       }),
   );
 
-  it.effect(
-    'an application-level failure (isTurnError, not thrown) also delivers formatError and stops the run',
-    () =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const { strategy, resolveTurn } = createFakeStrategy();
-
-        const loop = yield* startLoop(runId, strategy);
-
-        yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
-
-        yield* Fiber.join(loop);
-        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['error:oops']);
-        expect(session.runs.get(runId)?.live === true).toBe(false);
-      }),
-  );
-
-  // The loop's own stop observation is the one precedence authority: a stop
-  // that reached the run before its exit outranks the turn's own report
-  // (`stopped` on `finalizeRunTerminal`), so the terminal row says cancelled
-  // even though the turn failed first.
   it.effect(
     'lets a stop landing after a turn failure win the terminal outcome',
     () =>

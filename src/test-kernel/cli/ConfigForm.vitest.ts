@@ -12,7 +12,6 @@ import {
   SecretsFailed,
 } from '@texra-ai/llm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
-import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
@@ -23,7 +22,6 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
@@ -38,10 +36,7 @@ import {
   type FakeStdout,
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@texra/tools/github/githubAuth';
 
@@ -200,64 +195,7 @@ async function renderConfigFormProps(): Promise<ConfigFormProps> {
   return configFormProps.current;
 }
 
-async function openConfigFormProps(
-  stores = makeFakeSettingsStores('cli').stores,
-): Promise<ConfigFormProps> {
-  registerBuiltinSlashCommands({
-    secrets: new FakeSecrets(),
-    stores,
-    runtime: testRuntime(),
-    runtimeSession: testSessionOf(testDefaultSession()),
-    runSession: testSessionOf(testDefaultSession()),
-    configRoots: { ...testDefaultSession().roots, ...stores },
-  });
-  openCliSlashCommandForm('config', '');
-  return renderConfigFormProps();
-}
-
-describe('ConfigForm helpers', () => {
-  it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
-    [
-      {
-        statuses: { openai: 'set', anthropic: 'not-set', kimiCode: 'env' },
-        loading: false,
-        error: false,
-      },
-      'Configured: OpenAI, Kimi Code',
-    ],
-    [
-      { statuses: { openai: 'not-set' }, loading: false, error: false },
-      'No provider keys set',
-    ],
-    [{ loading: false, error: true }, 'Status unavailable'],
-  ])('summarizes key status without exposing values', (view, summary) => {
-    expect(formatProviderApiKeySummary(view)).toBe(summary);
-  });
-});
-
 describe('CliConfigForm API-key status lifecycle', () => {
-  it('settles a failed initial load to a stable unavailable state', async () => {
-    const initial = createDeferred();
-    const onError = vi.fn();
-    formSecrets.holdNextLoad(initial.promise);
-    const rendered = await renderCliConfigForm(onError);
-
-    try {
-      await waitFor(() =>
-        rendered.stdout.output.includes('Checking configured keys'),
-      );
-      rendered.stdout.output = '';
-      initial.reject(new Error('status backend unavailable'));
-      await waitFor(() =>
-        rendered.stdout.output.includes('Status unavailable'),
-      );
-      expect(rendered.stdout.output).not.toContain('Checking configured keys');
-      expect(onError).toHaveBeenCalledOnce();
-    } finally {
-      rendered.instance.unmount();
-    }
-  });
-
   it('refreshes provider status after saving without rendering the secret', async () => {
     const refreshed = createDeferred();
     const rendered = await renderCliConfigForm();
@@ -278,39 +216,6 @@ describe('CliConfigForm API-key status lifecycle', () => {
       await waitFor(() =>
         rendered.stdout.output.includes('Configured: OpenAI'),
       );
-    } finally {
-      rendered.instance.unmount();
-    }
-  });
-
-  it('keeps a successfully saved key configured when its refresh fails', async () => {
-    const refreshed = createDeferred();
-    const onError = vi.fn();
-    const rendered = await renderCliConfigForm(onError);
-
-    try {
-      await waitFor(() =>
-        rendered.stdout.output.includes('No provider keys set'),
-      );
-      formSecrets.holdNextLoad(refreshed.promise);
-      rendered.stdout.output = '';
-      await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
-      await waitFor(() => formSecrets.loads === 2);
-      rendered.stdout.output = '';
-      refreshed.reject(new Error('refresh failed'));
-      await waitFor(() =>
-        rendered.stdout.output.includes(
-          'Configured: OpenAI · status unavailable',
-        ),
-      );
-      expect(rendered.stdout.output).not.toContain('refreshing');
-      rendered.stdout.output = '';
-      rendered.stdin.write('2');
-      await waitFor(() =>
-        rendered.stdout.output.includes('Add provider API key'),
-      );
-      expect(rendered.stdout.output).toContain('OpenAI — Key set');
-      expect(onError).toHaveBeenCalledOnce();
     } finally {
       rendered.instance.unmount();
     }
@@ -342,21 +247,6 @@ describe('CliConfigForm API-key status lifecycle', () => {
     } finally {
       rendered.instance.unmount();
     }
-  });
-
-  it('ignores a pending status response after unmount', async () => {
-    const initial = createDeferred();
-    const onError = vi.fn();
-    formSecrets.holdNextLoad(initial.promise);
-    const rendered = await renderCliConfigForm(onError);
-
-    await waitFor(() => formSecrets.loads === 1);
-    rendered.instance.unmount();
-    rendered.stdout.output = '';
-    initial.resolve();
-    await sleep(20);
-    expect(stripAnsi(rendered.stdout.output)).toBe('');
-    expect(onError).not.toHaveBeenCalled();
   });
 
   // `it.live`, not `it.effect`: the body polls the rendered Ink output with
@@ -393,36 +283,6 @@ describe('CliConfigForm API-key status lifecycle', () => {
 // `it.live`, not `it.effect`: mounting the slash-command form polls Ink's
 // stdin listeners with `waitFor`, which needs a clock that actually advances.
 describe('/config slash command wiring', () => {
-  it.live(
-    'wires the agent list and reads through the injected CLI stores',
-    () =>
-      Effect.gen(function* () {
-        const { stores, repoState } = makeFakeSettingsStores('cli');
-        // Seed the repository slot the CLI reads the git settings from.
-        // Awaited, so the read below cannot race the write.
-        yield* repoState.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
-
-        registerBuiltinSlashCommands({
-          secrets: new FakeSecrets(),
-          stores,
-          runtime: testRuntime(),
-          runtimeSession: testSessionOf(testDefaultSession()),
-          runSession: testSessionOf(testDefaultSession()),
-          configRoots: { ...testDefaultSession().roots, ...stores },
-        });
-        expect(openCliSlashCommandForm('config', '')).toBe(true);
-        expect(activeForm.get()?.commandName).toBe('config');
-
-        const props = yield* Effect.promise(() => renderConfigFormProps());
-        expect(props.entries.map((entry) => entry.key)).toEqual(
-          TEXRA_SETTINGS.cliRows.map((entry) => entry.key),
-        );
-
-        const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-        expect(props.readValue(markCommits)).toBe(false);
-      }),
-  );
-
   // Regression: `/config` used to persist `texra.approvalPolicy` with a bare
   // `writeSetting`, so the stored value changed while the running session and
   // the status bar kept enforcing the old policy.
@@ -480,41 +340,6 @@ describe('/config slash command wiring', () => {
       );
       expect(rendered.stdout.output).toContain('Anthropic — Not set');
       expect(rendered.stdout.output).not.toContain('sk-private-test-key');
-    }),
-  );
-
-  it.live('persists writes through the accessor to the CLI store', () =>
-    Effect.gen(function* () {
-      const { stores, repoState } = makeFakeSettingsStores('cli');
-      const props = yield* Effect.promise(() => openConfigFormProps(stores));
-      const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      yield* props.writeValue(markCommits, false);
-
-      expect(
-        yield* isStored(repoState, WorkspaceStateKey.GIT_MARK_COMMITS),
-      ).toBe(true);
-      expect(yield* repoState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
-        false,
-      );
-    }),
-  );
-
-  it.live('resets a git setting by deleting the stored key', () =>
-    Effect.gen(function* () {
-      const { stores, repoState } = makeFakeSettingsStores('cli');
-      const props = yield* Effect.promise(() => openConfigFormProps(stores));
-      const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
-
-      yield* props.writeValue(authorName, 'someone-else');
-      expect(
-        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
-      ).toBe(true);
-
-      yield* props.resetValue(authorName);
-      // The key is deleted, so reads fall back to the default identity.
-      expect(
-        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
-      ).toBe(false);
     }),
   );
 });

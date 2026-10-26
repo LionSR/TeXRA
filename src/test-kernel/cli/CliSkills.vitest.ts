@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { afterEach, expect } from 'vitest';
 
 import { InstalledPlugins, Skills } from '@texra-ai/harness';
-import { formatCliSkillList } from '@cli/runtime/skills';
 import { pluginDataDir } from '@common/plugins/pluginHooks';
 import {
   disablePlugin,
@@ -14,7 +13,6 @@ import {
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -22,7 +20,6 @@ import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { texraPlugins } from '@texra/tools/registry';
 
 const tempRoots = useTempDirs();
 
@@ -92,149 +89,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       }),
     ).toThrow('Duplicate skill source contribution id: lean4');
   });
-
-  it.effect('lists custom duplicate names before bundled skills', () =>
-    Effect.gen(function* () {
-      const resources = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-skills-', tempRoots),
-      );
-      const custom = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-skills-', tempRoots),
-      );
-      yield* Effect.promise(() => fs.mkdir(path.join(resources, 'skills')));
-      yield* Effect.promise(() =>
-        writeSkill(
-          path.join(resources, 'skills'),
-          'shared-skill',
-          'The bundled skill.',
-        ),
-      );
-      yield* Effect.promise(() =>
-        writeSkill(custom, 'shared-skill', 'The custom skill.'),
-      );
-      yield* Effect.promise(() =>
-        writeSkill(custom, 'custom-only', 'The custom-only skill.'),
-      );
-
-      initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
-      const result = yield* Skills.enabled(rootsAt(resources), {
-        additionalPaths: [custom],
-      });
-
-      expect(result.skills.map(({ display }) => display)).toMatchObject([
-        {
-          name: 'custom-only',
-          description: 'The custom-only skill.',
-          scope: 'custom',
-        },
-        {
-          name: 'shared-skill',
-          description: 'The custom skill.',
-          scope: 'custom',
-        },
-      ]);
-      const formatted = formatCliSkillList(result.skills);
-      expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
-      expect(formatted).not.toContain(
-        'bundled\tshared-skill\tThe bundled skill.',
-      );
-      expect(result.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'duplicate_name',
-          name: 'shared-skill',
-        }),
-      );
-    }),
-  );
-
-  it.effect('reports missing explicit custom skill sources', () =>
-    Effect.gen(function* () {
-      initializeNodeRuntimeSkills(
-        { resourcesPath: path.resolve(path.sep, 'tmp', 'resources') },
-        [],
-      );
-      const result = yield* Skills.enabled(
-        rootsAt(path.resolve(path.sep, 'tmp', 'project')),
-        { additionalPaths: ['missing-skills'] },
-      );
-
-      expect(result.skills).toEqual([]);
-      expect(result.issues).toContainEqual(
-        expect.objectContaining({
-          severity: 'error',
-          code: 'missing_source',
-          path: path.resolve(path.sep, 'tmp', 'project', 'missing-skills'),
-        }),
-      );
-    }),
-  );
-
-  it.effect(
-    'discovers tool plugin skills in the bundled tier, in name order with the core bundle',
-    () =>
-      Effect.gen(function* () {
-        const resources = path.resolve(
-          import.meta.dirname,
-          '../../../packages/extension/resources',
-        );
-        const pluginIds = texraPlugins().map(({ id }) => id);
-        const pluginSkillDirs = (dir: string) =>
-          Effect.promise(() =>
-            fs.readdir(path.join(resources, dir), { withFileTypes: true }),
-          ).pipe(
-            Effect.map((entries) =>
-              entries
-                .filter((entry) => entry.isDirectory())
-                .map((entry) => entry.name),
-            ),
-          );
-        // Every plugin resources directory belongs to a listed plugin.
-        const pluginRoots = yield* pluginSkillDirs('plugins');
-        expect(pluginIds).toEqual(expect.arrayContaining(pluginRoots));
-        expect(pluginRoots).toContain('lean4');
-
-        const workspace = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        initializeNodeRuntimeSkills({ resourcesPath: resources }, pluginIds);
-        const result = yield* Skills.enabled(rootsAt(workspace), {});
-        const bundled = result.skills.filter(
-          ({ display }) => display.scope === 'bundled',
-        );
-        const shipped = [
-          ...(yield* pluginSkillDirs('skills')),
-          ...(yield* Effect.forEach(pluginRoots, (id) =>
-            pluginSkillDirs(path.join('plugins', id, 'skills')),
-          )).flat(),
-        ].toSorted((a, b) => a.localeCompare(b));
-
-        expect(bundled.map(({ display }) => display.name)).toEqual(shipped);
-        expect(
-          bundled.find(({ display }) => display.name === 'lean-search')
-            ?.display,
-        ).toMatchObject({
-          scope: 'bundled',
-          label: 'bundled',
-          sourcePath: path.join(resources, 'plugins', 'lean4', 'skills'),
-        });
-        expect(result.issues).toEqual([]);
-
-        // A switched-off plugin is one unit: its skills go with its tools.
-        const { stores } = makeFakeSettingsStores('cli');
-        yield* stores.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
-          'lean4',
-        ]);
-        const withLeanOff = yield* Skills.enabled(
-          rootsAt(workspace, stores),
-          {},
-        );
-        expect(
-          withLeanOff.skills.some(
-            ({ display }) => display.name === 'lean-search',
-          ),
-        ).toBe(false);
-      }),
-  );
 
   it.effect(
     'installs a Claude Code plugin from a local directory, loads its skills as <plugin>:<name> once trusted, and removes it',

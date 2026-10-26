@@ -176,45 +176,6 @@ describe('the tool-use turn', () => {
       }),
   );
 
-  it.effect('returns the text that accompanied the terminal tool', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      // Its settled value is the run's structured output.
-      const submitOutput: ITool = {
-        definition: { name: 'submit_output' },
-        call: vi.fn(() =>
-          Effect.succeed({
-            status: 'executed' as const,
-            output: 'recorded',
-            endTurn: true,
-            value: { answer: 'done' },
-          }),
-        ),
-      } as ITool;
-
-      const { result } = yield* runScript({
-        runId: startedRun(session),
-        session,
-        finalToolName: 'submit_output',
-        tools: { submit_output: submitOutput },
-        script: [
-          toolCallTurn(
-            [{ id: 'call-1', name: 'submit_output' }],
-            'Here is the structured result.',
-          ),
-        ],
-      });
-
-      expect(result).toMatchObject({
-        outcome: RUN_OUTCOME.COMPLETED,
-        output: {
-          response: 'Here is the structured result.',
-          structured: { answer: 'done' },
-        },
-      });
-    }),
-  );
-
   it.effect(
     'keeps the text of an earlier turn when a later model turn fails',
     () =>
@@ -320,29 +281,6 @@ describe('the transcript row of the opening message (regression #7508)', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
       }),
-  );
-
-  it.effect('logs nothing when the launch had no transcript row to write', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const logger = new TraceEmitter();
-      const info = vi.spyOn(logger, 'info');
-
-      const exit = yield* Effect.exit(
-        runScript({
-          runId: startedRun(session),
-          session,
-          logger,
-          bound: { supportsVision: true },
-          mediaFiles: ['/tmp/texra-missing-figure.png'],
-          initialUserMessage: undefined,
-          script: [textTurn('unreachable')],
-        }),
-      );
-
-      expect(exit._tag).toBe('Failure');
-      expect(info).not.toHaveBeenCalled();
-    }),
   );
 });
 

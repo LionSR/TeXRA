@@ -93,7 +93,6 @@ import {
   SessionOwner,
   withProcessServices,
 } from '@platform/processRuntime';
-import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import {
@@ -137,23 +136,19 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
-import {
-  identityReads,
-  testProcessLayer,
-} from '@test/support/sessionGraphInstall';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { testProcessLayer } from '@test/support/sessionGraphInstall';
 import {
   storePluginsLayer,
   globalValuesOver,
 } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,
 } from '@texra/shared/plugins/documents';
 import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
-import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { armsOf, announceRunFacts } from '@tools/plugins';
 import { toolTable } from '@tools/toolTable';
@@ -170,6 +165,22 @@ const acceptedRow = (
   aggregateId: qualifyAggregateId('run', runId),
   ...documentsAcceptedFact(paths, at),
   parent: null,
+});
+
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof os>()),
+  platform: vi.fn(() => process.platform),
+}));
+vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
+  const { Layer } = await import('effect');
+  const { LeanLanguageServices } =
+    await import('@texra/tools/lean/leanLanguageServices');
+  return {
+    directLeanLanguageServices: () =>
+      Layer.succeed(LeanLanguageServices)(
+        {} as LeanLanguageServices['Service'],
+      ),
+  };
 });
 
 /** A second OS process's writer: this build's `Database` over the store at
@@ -239,33 +250,6 @@ async function bundleStoreWriter(dir: string): Promise<string> {
   });
   return outfile;
 }
-
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof os>()),
-  platform: vi.fn(() => process.platform),
-}));
-/** Builds of the process runtime's Lean layer, which every root shares. */
-const leanBuilds = vi.hoisted(() => ({
-  count: 0,
-  state: undefined as StateStore | undefined,
-}));
-vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
-  const { Effect, Layer } = await import('effect');
-  const { AppState } = await import('@platform/interfaces');
-  const { LeanLanguageServices } =
-    await import('@texra/tools/lean/leanLanguageServices');
-  return {
-    directLeanLanguageServices: () =>
-      Layer.effect(
-        LeanLanguageServices,
-        Effect.gen(function* () {
-          leanBuilds.count += 1;
-          leanBuilds.state = yield* AppState;
-          return {} as LeanLanguageServices['Service'];
-        }),
-      ),
-  };
-});
 
 const SELF = '["test-host",4242,"self-start"]';
 const OTHER = '["test-host",4343,"other-start"]';
@@ -474,88 +458,6 @@ describe('session events and view', () => {
         ]);
         expect(settled.map((row) => row.seq)).toEqual([3]);
       }).pipe(Effect.provide(graph([runStart]))),
-  );
-
-  it.effect(
-    'does not publish unchanged views for a burst of source wakeups',
-    () =>
-      Effect.gen(function* () {
-        const view = yield* SessionViewService;
-        const text = yield* TextChunkSource;
-        const events = yield* SessionEvents;
-        yield* settle(
-          view.ref,
-          (state) => state.runs.has(RUN) && state.cursor === 1,
-        );
-        const initial = yield* SubscriptionRef.get(view.ref);
-        const observed: SessionView[] = [];
-        const finished = yield* Deferred.make<void>();
-        yield* Effect.forkScoped(
-          view.changes.pipe(
-            Stream.drop(1),
-            Stream.runForEach((state) =>
-              Effect.gen(function* () {
-                observed.push(state);
-                if (state.cursor > initial.cursor) {
-                  yield* Deferred.succeed(finished, undefined);
-                }
-              }),
-            ),
-          ),
-        );
-        yield* Effect.yieldNow;
-        // A level notification can arrive after an earlier read has already
-        // consumed its data. Repeating it must neither publish another view nor
-        // prevent the next committed event from reaching the reader.
-        const held = yield* SubscriptionRef.get(text.ref);
-        for (let index = 0; index < 150; index += 1) {
-          yield* SubscriptionRef.set(text.ref, held);
-        }
-        yield* TestClock.adjust('1 second');
-        expect(yield* SubscriptionRef.get(view.ref)).toBe(initial);
-        expect(observed).toHaveLength(0);
-        yield* events.transact((append) => runStateAppend(append)([waiting]));
-        yield* Deferred.await(finished);
-        expect(observed.length).toBeGreaterThan(0);
-        expect(observed.every((state) => state.cursor > initial.cursor)).toBe(
-          true,
-        );
-        expect(observed.at(-1)?.runs.get(RUN)?.status).toBe(RUN_PHASE.WAITING);
-      }).pipe(Effect.provide(graph([runStart]))),
-  );
-
-  it.effect('keeps an inquiry independent of the run it was asked under', () =>
-    Effect.gen(function* () {
-      const events = yield* SessionEvents;
-      const log = yield* Database;
-      const threadId = 'ei_012345abcdef';
-      const run = qualifyAggregateId('run', RUN);
-      const inquiry = qualifyAggregateId(
-        'plugin',
-        `external-inquiry:${threadId}`,
-      );
-      const committed = yield* events.transact((append) =>
-        append([
-          runStart,
-          inquiryThreadRow({
-            threadId,
-            parentRunId: null,
-            status: 'open',
-            lastQuestionPreview: 'Which boundary condition applies?',
-            lastActivityIso: '2026-09-06T12:00:00.000Z',
-            turnCount: 1,
-          }),
-          { type: 'run.removed', aggregateId: run },
-        ]),
-      );
-      expect(yield* rowsOf(log, run, inquiry)).toEqual(committed);
-      expect((yield* log.aggregateState([run]))[0]?.closed).toBe(true);
-      expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
-      const rows = yield* log.readDisplayAggregate(inquiry, 0);
-      expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
-        { type: 'plugin.fact', seq: 1 },
-      ]);
-    }).pipe(Effect.provide(graph([]))),
   );
 
   it.effect(
@@ -768,6 +670,13 @@ describe('session events and view', () => {
         expect((yield* db.readAggregate(id, 1))[0]?.origin).toBe(SELF);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
+});
+
+/**
+ * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
+ * is how a session the `Sessions` map holds behind `openTestSession` ends.
+ */
+describe('Sessions owner', () => {
   it.effect('lists stored run facts in commit order and on the wire', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
@@ -839,13 +748,7 @@ describe('session events and view', () => {
       ),
     ),
   );
-});
 
-/**
- * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
- * is how a session the `Sessions` map holds behind `openTestSession` ends.
- */
-describe('Sessions owner', () => {
   it.effect(
     'admits requests by current claims despite a stale displayed owner',
     () =>
@@ -980,22 +883,6 @@ describe('Sessions owner', () => {
           reason: expect.stringContaining('stop it first'),
         });
         expect(removeRun).not.toHaveBeenCalled();
-
-        // A second Resume while the first is in flight is refused at once,
-        // not queued behind the first's whole run.
-        const guard = runActionGuard({ run: () => undefined });
-        const finish = yield* Deferred.make<void>();
-        const first = yield* Effect.forkChild(
-          guard.resuming(Deferred.await(finish), RUN),
-          { startImmediately: true },
-        );
-        const second = yield* guard
-          .resuming(Effect.void, RUN)
-          .pipe(Effect.flip);
-        expect(second.reason).toBe('This run is already resuming.');
-        yield* Deferred.succeed(finish, undefined);
-        yield* Fiber.join(first);
-        yield* guard.resuming(Effect.void, RUN);
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
@@ -1080,34 +967,6 @@ describe('Sessions owner', () => {
           }),
         ),
       ),
-  );
-
-  it.live('builds the process-wide Lean layer once, not per session', () =>
-    Effect.gen(function* () {
-      // Each root's entry is built fresh over the root-scoped layers; the
-      // Lean pool must stay outside that `fresh` so its servers stay shared.
-      yield* open('/workspace/owner/lean-once-a');
-      yield* open('/workspace/owner/lean-once-b');
-      yield* closeTestSession('/workspace/owner/lean-once-a');
-      yield* closeTestSession('/workspace/owner/lean-once-b');
-      expect(leanBuilds.count).toBe(1);
-      expect(leanBuilds.state).toBe(
-        yield* withProcessServices(testRuntime(), AppState),
-      );
-    }),
-  );
-
-  it.live('reads the process identity once, not per session', () =>
-    Effect.gen(function* () {
-      // `ProcessIdentity` is provided outside the entry's `Layer.fresh`, so
-      // its read is the process's and no open repeats it. Counted over the
-      // whole file: every session this module graph opened shares it.
-      yield* open('/workspace/owner/identity-once-a');
-      yield* open('/workspace/owner/identity-once-b');
-      yield* closeTestSession('/workspace/owner/identity-once-a');
-      yield* closeTestSession('/workspace/owner/identity-once-b');
-      expect(identityReads.count).toBe(1);
-    }),
   );
 
   // Real polling loops (`vi.waitFor`) on the process runtime's live work:

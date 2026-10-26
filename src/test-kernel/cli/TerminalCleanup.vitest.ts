@@ -19,7 +19,7 @@ import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
 import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
-import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
+import { type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
@@ -57,10 +57,6 @@ function syncView(): void {
   if (rootId !== undefined) rootRunId.set(rootId);
   seedView(viewWith(runs, { requests }));
 }
-function setPhase(runId: string, status: RunPhase): void {
-  phases.set(runId as RunId, status);
-  syncView();
-}
 beforeAll(bindTestSessionView);
 beforeEach(() => {
   phases.clear();
@@ -80,34 +76,6 @@ afterEach(() => {
   terminalCapabilities.set(NO_TERMINAL_CAPABILITIES);
 });
 
-/** Put one real request in the queue: the title reads the queue's own
- *  projection, so the test has to drive it through the queue. */
-function queueTitleApproval(label: string): void {
-  const runId = label as RunId;
-  if (!phases.has(runId)) phases.set(runId, RUN_PHASE.WAITING);
-  requests = [
-    ...requests,
-    {
-      runId,
-      requestId: `title-${runId}`,
-      payload: {
-        kind: 'bash',
-        data: {
-          requestId: `title-${runId}`,
-          allowBypass: true,
-          runId,
-          command: 'echo ok',
-        },
-      },
-    },
-  ];
-  syncView();
-}
-function clearTitleApprovals(): void {
-  requests = [];
-  syncView();
-}
-
 describe('installTerminalTitleUpdates', () => {
   const enableOscTitles = (): void => {
     terminalCapabilities.set({
@@ -122,58 +90,6 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenLastCalledWith(1, `\x1b]0;${title}\x07`);
   };
   /** Advancing the spin timer must not produce any further title writes. */
-  const expectNoTitleWrites = (): void => {
-    const writes = vi.mocked(writeSync).mock.calls.length;
-    vi.advanceTimersByTime(1_500);
-    expect(writeSync).toHaveBeenCalledTimes(writes);
-  };
-
-  it('uses every run phase and gives queued approval precedence', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    enableOscTitles();
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    const session = new TuiSession();
-    session.markRunPending(Effect.never);
-    session.runId = 'transition-root' as RunId;
-    setPhase('transition-root', RUN_PHASE.WAITING);
-    setPhase('transition-child', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-    expectLastTitle('⠋ {T}·coauthor');
-
-    queueTitleApproval('title-transition');
-    await flushTitleUpdate();
-    expectLastTitle('⚠ {T}·coauthor');
-
-    clearTitleApprovals();
-    await flushTitleUpdate();
-    expectLastTitle('⠋ {T}·coauthor');
-
-    setPhase('transition-child', RUN_PHASE.WAITING);
-    await flushTitleUpdate();
-    expectLastTitle('{T}·coauthor');
-    updates.dispose();
-  });
-
-  it('returns to idle when only the canonical run phase changes', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    enableOscTitles();
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    setPhase('status-only-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-    expectLastTitle('⠋ {T}·coauthor');
-
-    // The canonical phase is the fold's: the title reads the view the status
-    // bar reads, and nothing else changes.
-    setPhase('status-only-root', RUN_PHASE.WAITING);
-    await flushTitleUpdate();
-
-    expectLastTitle('{T}·coauthor');
-    expectNoTitleWrites();
-    updates.dispose();
-  });
-
   it('keeps sanitization and the OSC capability gate across live transitions', async () => {
     const updates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',

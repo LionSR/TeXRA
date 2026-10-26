@@ -74,7 +74,9 @@ function readBaseline(file, text) {
   try {
     data = JSON.parse(text);
   } catch (error) {
-    throw new Error(`${file}: invalid baseline JSON: ${error.message}`);
+    throw new Error(`${file}: invalid baseline JSON: ${error.message}`, {
+      cause: error,
+    });
   }
   if (!isObject(data)) fail('$');
   const rows = new Map();
@@ -106,16 +108,17 @@ function readBaseline(file, text) {
         fail(`${shape}.${key}`);
       add(key, entry.count);
     }
-  } else if (shape === 'hosts') {
+  } else if (shape === 'hosts' || shape === 'readers') {
+    // A list per key: the deep imports per host, the files per row type.
     if (!isObject(entries)) fail(shape);
-    for (const [host, items] of Object.entries(entries)) {
+    for (const [key, items] of Object.entries(entries)) {
       if (
         !Array.isArray(items) ||
         !items.every((item) => typeof item === 'string')
       )
-        fail(`${shape}.${host}`);
+        fail(`${shape}.${key}`);
       for (const item of items)
-        add(JSON.stringify([host, item]), `host:${host}`);
+        add(JSON.stringify([key, item]), `${shape}:${key}`);
     }
   } else {
     if (!Array.isArray(entries)) fail(shape);

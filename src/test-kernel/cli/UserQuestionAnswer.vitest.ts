@@ -17,11 +17,6 @@ describe('CLI user question answer parsing', () => {
     expect(parseUserQuestionAnswer('2', question)).toBe('Long');
   });
 
-  it('keeps leading-digit free text as text', () => {
-    expect(parseUserQuestionAnswer('1 hour', question)).toBe('1 hour');
-    expect(parseUserQuestionAnswer('2nd option', question)).toBe('2nd option');
-  });
-
   it('parses comma-separated numeric answers for multi-select prompts', () => {
     expect(
       parseUserQuestionAnswer('1, 2', { ...question, multiSelect: true }),

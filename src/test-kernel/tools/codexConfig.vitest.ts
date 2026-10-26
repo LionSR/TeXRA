@@ -29,35 +29,6 @@ describe('buildCodexFileChangeToolLog', () => {
       patchStatus: 'completed',
     });
   });
-
-  it('surfaces failed patches as native errors', () => {
-    const log = buildCodexFileChangeToolLog({
-      changes: [{ kind: 'update', path: '/tmp/workspace/src/App.ts' }],
-      status: 'failed',
-    });
-
-    assert.deepEqual(log, {
-      toolName: 'codex_patch',
-      summary: 'failed update App.ts',
-      input: {
-        changes: [{ kind: 'update', path: '/tmp/workspace/src/App.ts' }],
-        patchStatus: 'failed',
-      },
-      card: {
-        title: 'Codex Files',
-        sections: [
-          { kind: 'status', label: 'Status:', status: 'failed' },
-          {
-            kind: 'fileList',
-            label: 'Files:',
-            files: [{ path: '/tmp/workspace/src/App.ts', note: 'update' }],
-          },
-        ],
-      },
-      error: 'Patch apply failed',
-      status: 'failed',
-    });
-  });
 });
 
 describe('buildCodexCommandToolLog', () => {

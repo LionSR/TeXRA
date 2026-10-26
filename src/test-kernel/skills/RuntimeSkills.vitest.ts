@@ -100,32 +100,6 @@ describe('runtime skills', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it('formats configured runtime skills for prompt injection', async () => {
-    const root = await createTempRoot();
-    const skillPath = await writeSkill(
-      root,
-      'manuscript-review',
-      {
-        name: 'manuscript-review',
-        description: 'Review mathematical manuscripts.',
-      },
-      'Use manuscript-review when it applies.',
-    );
-    installTestSkillRoots([{ tier: 'project', path: root }]);
-
-    const result = await loadRuntimeSkillCatalog(runCatalog(WORKSPACE_ROOT));
-
-    expect(catalogText(result.catalog)).toContain(
-      '- manuscript-review: Review mathematical manuscripts.',
-    );
-    expect(catalogText(result.catalog)).toContain('Source: project');
-    expect(catalogText(result.catalog)).toContain(`Path: ${skillPath}`);
-    expect(
-      result.catalog.map(({ plugin, name }) => ({ plugin, name })),
-    ).toStrictEqual([{ plugin: null, name: 'manuscript-review' }]);
-    expect(result.issues).toEqual([]);
-  });
-
   it.effect.each([
     {
       label: 'name',

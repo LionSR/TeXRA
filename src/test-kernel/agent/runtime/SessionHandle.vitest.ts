@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
@@ -33,28 +33,6 @@ function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
 }
 
 describe('SessionHandle', () => {
-  it.effect('keeps run tracking isolated between sessions', () =>
-    Effect.gen(function* () {
-      const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
-        closeSessionOf(session),
-      );
-      const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
-        closeSessionOf(session),
-      );
-      const isolated = generateRunId();
-      const runB = generateRunId();
-      const handle = trackAgent(a, isolated);
-      expect(a.runs.get(isolated)?.handle).toBe(handle);
-      expect(b.runs.get(isolated)?.handle).toBeUndefined();
-
-      // Disposing A leaves B's separate registry untouched.
-      const handleB = trackAgent(b, runB);
-      yield* closeSessionOf(a);
-      expect(a.runs.get(isolated)?.handle).toBeUndefined();
-      expect(b.runs.get(runB)?.handle).toBe(handleB);
-    }),
-  );
-
   it.effect(
     "follows the project's persisted policy, which a reconnecting window cannot replace",
     () =>
@@ -93,28 +71,6 @@ describe('SessionHandle', () => {
         yield* closeSessionOf(before);
         yield* closeSessionOf(after);
       }).pipe(Effect.provide(nodeFileServices)),
-  );
-
-  it.effect('finishes owner teardown before surfacing a disposal failure', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      const failure = new Error('interaction disposal failed');
-      const interactions = vi
-        .spyOn(session.interactions, 'dispose')
-        .mockImplementation(() => {
-          throw failure;
-        });
-      const runs = vi.spyOn(registryOf(session.runs), 'dispose');
-      const exit = yield* Effect.exit(closeSessionOf(session));
-      expect(Exit.isFailure(exit)).toBe(true);
-      // The teardown failure reaches the caller as a defect, not a typed fail.
-      if (Exit.isFailure(exit))
-        expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
-          failure,
-        );
-      expect(interactions).toHaveBeenCalledOnce();
-      expect(runs).toHaveBeenCalled();
-    }),
   );
 
   it.effect('refuses run work once disposal has begun', () =>

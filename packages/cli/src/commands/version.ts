@@ -1,7 +1,8 @@
 import { defineCommand } from 'citty';
+import { Schema } from 'effect';
 
 import {
-  CLI_OUTPUT_FORMATS,
+  CliOutputFormatSchema,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
@@ -11,12 +12,7 @@ import { emitCliResult } from './_helpers/output';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
-function isCliOutputFormat(value: unknown): value is CliOutputFormat {
-  return (
-    typeof value === 'string' &&
-    (CLI_OUTPUT_FORMATS as readonly string[]).includes(value)
-  );
-}
+const isCliOutputFormat = Schema.is(CliOutputFormatSchema);
 
 function parseVersionOutputFormat(flagValue: unknown): CliOutputFormat {
   if (isCliOutputFormat(flagValue)) return flagValue;

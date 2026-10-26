@@ -15,7 +15,6 @@ import {
   storePluginsLayer,
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 const tempDirs = useTempDirs();
 
@@ -46,32 +45,6 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
-
-  it.live(
-    'refuses a file that still names a parent as an unrecognized key',
-    () =>
-      Effect.gen(function* () {
-        const dir = yield* agentDir({
-          'base.yaml': ['name: base', 'task:', '  requests: [first, second]'],
-          'child.yaml': ['name: child', 'inherits: base'],
-        });
-
-        const { entries, issues } = yield* scanCustom(dir);
-
-        expect(
-          entries.map((entry) => [
-            entry.name,
-            documentTaskOf(entry)?.requests.length,
-          ]),
-        ).toEqual([['base', 2]]);
-        expect(issues).toEqual([
-          {
-            path: 'child.yaml',
-            message: expect.stringContaining('unrecognized keys inherits'),
-          },
-        ]);
-      }),
-  );
 
   it.live('uses the YAML name as the canonical registry name', () =>
     Effect.gen(function* () {

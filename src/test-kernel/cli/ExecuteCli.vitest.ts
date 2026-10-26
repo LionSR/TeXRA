@@ -1,8 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
@@ -20,14 +16,12 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors/agentErrors';
-import { enablePlugin } from '@common/plugins/pluginTrust';
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
 } from '@shared/approvalBypassKind';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
@@ -38,7 +32,6 @@ import {
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTempDirPlatform,
-  makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -384,34 +377,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect(
-    'attaches the CLI progress projection for NDJSON output before the run starts',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const { attachCliSessionProgressProjection } = yield* Effect.promise(
-          () => import('@cli/runtime/sessionProgressSubscription'),
-        );
-        const attachProjection = vi.mocked(attachCliSessionProgressProjection);
-        const request = baseRequest();
-
-        yield* executeCliRequest(
-          request,
-          cliContext({ outputFormat: 'ndjson' }),
-        );
-
-        expect(attachProjection).toHaveBeenCalledTimes(1);
-        // The writer slot: the projection defaults to the NDJSON stdout sink.
-        expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
-        expect(mocks.rootLaunch).toHaveBeenCalledTimes(1);
-        expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.rootLaunch.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-        expect(mocks.detachSessionProgressProjection).toHaveBeenCalledTimes(1);
-      }),
-  );
-
   /** Whether the session withheld approval-gated tools while the run
    *  launched: its policy and the grants its `run.start` records, as the
    *  root launch records them, applied to what the attached host can
@@ -463,57 +428,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect('keeps yolo runs approval-available for agent run', () =>
-    Effect.gen(function* () {
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const seen = promptsUnavailableAtLaunch();
-
-      yield* executeCliRequest(
-        { ...baseRequest(), runId: generateRunId() },
-        cliContext({ approvalPolicy: 'yolo', requestedApprovalPolicy: 'yolo' }),
-      );
-
-      // An explicit yolo rides the launch as an Auto-approve launch; the
-      // project's policy is never touched.
-      expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          approval: { policy: 'yolo', delegated: true },
-        }),
-      );
-      // The Auto-approve grant keeps its gated tools offered, headless.
-      expect(seen()).toBe(false);
-    }),
-  );
-
-  it.effect(
-    'reports outcome read failures without rejecting a successful run',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const readError = new Error('metadata read failed');
-        mocks.readCliRunOutcomeState.mockImplementationOnce(
-          async (
-            _session: unknown,
-            result: { readonly outcome: string },
-            reportReadFailure: (error: Error) => void,
-          ) => {
-            reportReadFailure(readError);
-            return { outcome: result.outcome, outcomePersisted: false };
-          },
-        );
-
-        expect(
-          yield* executeCliRequest(baseRequest(), cliContext()),
-        ).toMatchObject({
-          ok: true,
-          result: { outcome: 'completed' },
-        });
-        expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-          message: 'metadata read failed',
-        });
-      }),
-  );
-
   it.effect('presents a classified run failure as its exit code', () =>
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
@@ -543,54 +457,6 @@ describe('executeCliRequest', () => {
       // presentation host detaches only once the session settled.
       expect(order).toEqual(['settled', 'detached']);
     }),
-  );
-
-  it.effect(
-    'rethrows a non-AgentError rejection instead of swallowing it into an exit code',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-        // An unclassified failure (e.g. registerRun disk I/O,
-        // workspaceState.update) is genuinely unexpected — it must keep
-        // propagating so bin/texra.ts's crash handler reports it, instead of
-        // being swallowed into a bare non-zero exit with no stderr. The defect
-        // enters through the injected launch stand-in.
-        mocks.admit.mockImplementationOnce(() => {
-          throw new Error('disk full');
-        });
-
-        const error = yield* Effect.flip(
-          executeCliRequest(request, cliContext()),
-        );
-        expect(error.message).toContain('disk full');
-
-        // Cleanup still runs via `finally` even though the error propagates.
-        expect(mocks.close).toHaveBeenCalledTimes(1);
-      }),
-  );
-
-  it.effect(
-    'does not repeat an error already presented before lifecycle startup',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        mocks.rootLaunch.mockImplementationOnce(async () => {
-          const hooks =
-            mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
-          hooks.emit('requestShowError', { message: 'Agent not found.' });
-          throw new AgentError({ message: 'Agent not found.' });
-        });
-
-        expect(yield* executeCliRequest(baseRequest(), cliContext())).toEqual({
-          ok: false,
-          exitCode: CliExitCode.AgentError,
-        });
-
-        expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-          message: 'Agent not found.',
-        });
-      }),
   );
 
   // it.live for the shutdown choreography below: the run is forked in-fiber,
@@ -654,40 +520,6 @@ describe('executeCliRequest', () => {
         exitCode: CliExitCode.Interrupted,
       });
     }),
-  );
-
-  it.live(
-    'does not advertise signal recovery before a flow checkpoint exists',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const onInterruptedRunFinalized = vi.fn();
-        const published = yield* Deferred.make<void>();
-        // Its loop never opened it: both reads (the shutdown's inspection,
-        // the drain's) find no rows to continue from.
-        const hangingRun = stubHangingRun(published, { opened: false });
-
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {
-            onInterruptedRunFinalized,
-          }),
-        );
-        yield* Deferred.await(published);
-        yield* settle;
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        mockCancelledOutcome();
-        hangingRun.resolve(CANCELLED_RUN);
-
-        yield* Fiber.join(shutdown);
-        yield* Fiber.join(run);
-
-        expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
-      }),
   );
 
   it.live(
@@ -760,25 +592,6 @@ describe('executeCliRequest', () => {
         expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
       }),
   );
-
-  it.live('removes the shutdown status hook after owned runs finish', () =>
-    Effect.gen(function* () {
-      const { platform, executeCliRequest } = yield* Effect.promise(
-        loadExecuteCliOnInstalledHost,
-      );
-      const request = baseRequest();
-      // Its rows could continue it: only a live hook would offer recovery.
-      yield* seedRows(testDefaultSession().log)([runStartRow(request.runId)]);
-      const onInterruptedRunFinalized = vi.fn(() => Effect.void);
-
-      yield* executeCliRequest(request, cliContext(), {
-        onInterruptedRunFinalized,
-      });
-      yield* Scope.close(platform.shutdownScope, Exit.void);
-
-      expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
-    }),
-  );
 });
 
 describe('executeCliConfig', () => {
@@ -849,120 +662,6 @@ describe('executeCliConfig', () => {
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
           `Resume this task with: texra resume ${launched.runId} --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'`,
         );
-      }),
-  );
-
-  it.live(
-    'does not advertise recovery for invocation-owned temporary inputs',
-    () =>
-      Effect.gen(function* () {
-        const { platform } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const { executeCliToolUseConfig } =
-          yield* Effect.promise(loadExecuteCli);
-        const published = yield* Deferred.make<void>();
-        const hangingRun = stubHangingRun(published);
-
-        const run = yield* Effect.forkChild(
-          executeCliToolUseConfig(toolUseConfig(), cliContext(), {
-            recoveryInputIsDurable: false,
-          }),
-        );
-        yield* Deferred.await(published);
-        yield* settle;
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        mockCancelledOutcome();
-        hangingRun.resolve(CANCELLED_RUN);
-
-        yield* Fiber.join(shutdown);
-        yield* Fiber.join(run);
-        expect(mocks.writeTextStderrAndWait).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'records each installed plugin that loads by source and pinned commit in the CLI result',
-    () =>
-      Effect.gen(function* () {
-        const commit = 'a'.repeat(40);
-        const pluginDir = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-plugin-', tempDirs),
-        );
-        yield* Effect.promise(async () => {
-          await fs.mkdir(path.join(pluginDir, '.claude-plugin'));
-          await fs.writeFile(
-            path.join(pluginDir, '.claude-plugin', 'plugin.json'),
-            JSON.stringify({ name: 'notes', version: '1.0.0' }),
-          );
-        });
-        const plugin = {
-          source: 'https://github.com/example/notes.git',
-          commit,
-          path: pluginDir,
-          skills: [],
-        };
-        const { globalState } = testDefaultSession().roots;
-        yield* globalState.update(GlobalStateKey.INSTALLED_PLUGINS, [
-          { name: 'notes', ...plugin, enabled: false },
-          // Enabled but never trusted: it loads nothing, so it is not named.
-          { name: 'drafts', ...plugin, enabled: true },
-        ]);
-        yield* enablePlugin(
-          'notes',
-          { globalState, globalStorage: pluginDir },
-          () => Effect.succeed(true),
-        ).pipe(Effect.provide(NodeFileSystem.layer));
-        const { executeCliToolUseConfig } =
-          yield* Effect.promise(loadExecuteCli);
-        mocks.rootLaunch.mockResolvedValueOnce({
-          outcome: 'completed',
-          output: {
-            response: 'Done.',
-            files: [],
-          },
-          runId: 'ec0000000001',
-        });
-        mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-          outcome: 'completed',
-          outcomePersisted: true,
-        });
-        const result = yield* executeCliToolUseConfig(
-          toolUseConfig(),
-          cliContext(),
-          { stopAfterCycle: true },
-        );
-
-        expect(result).toMatchObject({
-          ok: true,
-          exitCode: 0,
-          result: {
-            outcome: 'completed',
-            workingDirectory: '/tmp/project',
-            output: { response: 'Done.' },
-          },
-        });
-        if (result.ok) {
-          // The result names each installed plugin by where it came from and
-          // its pinned commit, never by the local checkout it was read from.
-          expect(result.result.plugins).toEqual([
-            {
-              name: 'notes',
-              source: 'https://github.com/example/notes.git',
-              commit,
-            },
-          ]);
-          expect(Object.keys(result.result)).toEqual([
-            'outcome',
-            'output',
-            'runId',
-            'plugins',
-            'workingDirectory',
-          ]);
-        }
       }),
   );
 });

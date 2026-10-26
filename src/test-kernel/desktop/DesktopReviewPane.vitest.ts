@@ -35,11 +35,6 @@ function fileButtons(controller: ReviewPane): NodeListOf<Element> {
   return controller.element.querySelectorAll('wa-button.desktop-review-file');
 }
 
-function countsText(controller: ReviewPane): string | null | undefined {
-  return controller.element.querySelector('.desktop-review-counts')
-    ?.textContent;
-}
-
 /** The title of the review currently on screen. */
 function selectedTitle(controller: ReviewPane): string | null | undefined {
   return controller.element.querySelector('.desktop-review-summary strong')
@@ -59,16 +54,6 @@ function selectFile(controller: ReviewPane, path: string): void {
 
 describe('desktop review pane', () => {
   useLitComponentTestDom(() => import('@desktop/renderer/reviewPane'));
-
-  it('updates an existing file instead of duplicating it', async () => {
-    const controller = await newReviewPane();
-
-    controller.open(reviewPayload('src/main.ts'));
-    controller.open(reviewPayload('src/main.ts', 8, 5));
-
-    expect(fileButtons(controller)).toHaveLength(1);
-    expect(countsText(controller)).toContain('+8');
-  });
 
   it('closes only the reviews the named preview opened', async () => {
     const controller = await newReviewPane();

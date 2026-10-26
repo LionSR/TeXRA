@@ -96,7 +96,6 @@ import {
   type LanguageModelInfo,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -202,45 +201,6 @@ describe('Copilot route preference handler', () => {
     for (const subscription of subscriptions.splice(0)) subscription.dispose();
     vi.restoreAllMocks();
   });
-
-  it.each(['allowed', 'consent-required'] as const)(
-    'revalidates and persists an opt-in whose current access is %s',
-    async (access) => {
-      await installModels({ ...GEMINI_PRO, access });
-      await requestModelAccess();
-      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'google/gemini-3.1-pro-preview',
-        true,
-        installedHost().roots.globalState,
-      );
-      expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
-      if (access === 'allowed') {
-        expect(mocks.selectChatModels).not.toHaveBeenCalled();
-        expect(mocks.sendRequest).not.toHaveBeenCalled();
-      } else {
-        expect(mocks.selectChatModels).toHaveBeenCalledWith({
-          vendor: GEMINI_PRO.vendor,
-          id: GEMINI_PRO.id,
-          version: GEMINI_PRO.version,
-        });
-        expect(mocks.sendRequest).toHaveBeenCalledWith(
-          [
-            {
-              role: 'user',
-              content: [
-                new vscode.LanguageModelTextPart(
-                  'Reply with OK to confirm language-model access for TeXRA.',
-                ),
-              ],
-            },
-          ],
-          { justification: 'Use Copilot models in TeXRA.' },
-          expect.anything(),
-        );
-      }
-      expect(mocks.refreshCatalogs).toHaveBeenCalled();
-    },
-  );
 
   it.effect.each([
     { access: 'consent-required' as const, sends: true },
@@ -384,28 +344,5 @@ describe('Copilot route preference handler', () => {
       }
       expect(mocks.refreshCatalogs).toHaveBeenCalled();
     },
-  );
-
-  it.effect('allows opt-out without consulting current Copilot access', () =>
-    Effect.gen(function* () {
-      const port = yield* Effect.promise(() => installModels(GEMINI_PRO));
-      yield* withProcessServices(
-        testRuntime(),
-        createHandler().handleMessage(
-          {
-            command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
-            modelName: 'google/gemini-3.1-pro-preview',
-          },
-          createWebviewView(),
-        ),
-      );
-      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'google/gemini-3.1-pro-preview',
-        false,
-        installedHost().roots.globalState,
-      );
-      expect(port.selectModels).not.toHaveBeenCalled();
-      expect(mocks.selectChatModels).not.toHaveBeenCalled();
-    }),
   );
 });

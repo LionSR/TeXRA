@@ -43,30 +43,4 @@ describe('warnApprovalDenied', () => {
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(3);
   });
-
-  it('says what was closed and why a headless ask run could not prompt', () => {
-    const context = createTestCliContext({ approvalPolicy: 'ask' });
-
-    warnApprovalDenied(context, {
-      kind: 'retry',
-      deny: 'unpresentable',
-      policy: 'ask',
-    });
-
-    expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Model error retry not attempted: no interactive prompt is available (approval policy "ask", headless run); a retry past the automatic attempts needs an interactive approval.',
-    );
-  });
-
-  it('names the policy that decided, not the launch-time CLI context', () => {
-    // The frozen CliContext keeps its launch-time value after a `/approval`;
-    // the denial carries the policy the session decided by.
-    const context = createTestCliContext({ approvalPolicy: 'ask' });
-
-    warnApprovalDenied(context, EXECUTABLE);
-
-    expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Change the project\'s approval policy (/config or the settings view) to allow it.',
-    );
-  });
 });

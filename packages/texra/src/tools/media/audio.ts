@@ -18,6 +18,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness';
 import {
+  inheritedEnv,
   withExtendedPath,
   findCommand,
   type FoundCommand,
@@ -176,7 +177,7 @@ export function startRecording(
       soxCommand.command,
       [...soxCommand.args, ...soxArgs],
       {
-        env: withExtendedPath(process.env),
+        env: withExtendedPath(yield* inheritedEnv()),
         extendEnv: false,
         stdin: 'ignore',
         stdout: 'ignore',

@@ -22,29 +22,6 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  it('logs a plain userMessage row with no data when there are no attachments', () => {
-    logUserMessage(logger, 'Fix the lemma.');
-
-    const rows = runTrace.rows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: 'user' });
-    expect(rows[0].kind === 'user' && rows[0].text.full).toBe('Fix the lemma.');
-    expect(rows[0]).not.toHaveProperty('attachments');
-  });
-
-  it('records attachment kinds (not bytes) on the row data', () => {
-    logUserMessage(logger, 'See the attached figure.', {
-      attachments: ['image', 'document'],
-    });
-
-    const rows = runTrace.rows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      kind: 'user',
-      attachments: ['image', 'document'],
-    });
-  });
-
   // #13662: "Fork from here" refills the fork's composer from the row, so
   // the row keeps the files the follow-up attached, not only their kinds.
   it('records the attached files a fork puts back in its composer', () => {

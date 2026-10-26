@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Random, Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Random } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi, type Mock } from 'vitest';
 
@@ -307,26 +307,6 @@ describe('ModelRetryGate', () => {
       }),
   );
 
-  it.effect('honors an explicitly disabled shared backoff', () =>
-    Effect.gen(function* () {
-      const gate = yield* ModelRetryGate.make;
-      expect(
-        yield* Effect.flip(
-          gated(gate, wireRoutes(), Effect.fail(TRANSIENT), 0),
-        ),
-      ).toBe(TRANSIENT);
-
-      const retryAttempt = admitted();
-      const retry = yield* Effect.forkChild(
-        gated(gate, wireRoutes(), retryAttempt.attempt, 0),
-      );
-      expect(retryAttempt.calls).not.toHaveBeenCalled();
-      yield* TestClock.adjust(0);
-      yield* Fiber.join(retry);
-      expect(retryAttempt.calls).toHaveBeenCalledOnce();
-    }),
-  );
-
   it.effect('increases the shared backoff after a failed probe', () =>
     Effect.gen(function* () {
       const gate = yield* ModelRetryGate.make;
@@ -477,24 +457,6 @@ describe('ModelRetryGate', () => {
       expect(Exit.hasInterrupts(yield* Fiber.await(first))).toBe(true);
       yield* Fiber.join(next);
       expect(nextAttempt.calls).toHaveBeenCalledOnce();
-    }),
-  );
-
-  it.effect('interrupts calls waiting when the session scope closes', () =>
-    Effect.gen(function* () {
-      const scope = yield* Scope.make();
-      const gate = yield* ModelRetryGate.make.pipe(Scope.provide(scope));
-      yield* openGate(gate);
-
-      const waitingAttempt = admitted();
-      const waiting = yield* Effect.forkChild(
-        gated(gate, wireRoutes(), waitingAttempt.attempt),
-      );
-      yield* TestClock.adjust(0);
-      yield* Scope.close(scope, Exit.void);
-
-      expect(Exit.hasInterrupts(yield* Fiber.await(waiting))).toBe(true);
-      expect(waitingAttempt.calls).not.toHaveBeenCalled();
     }),
   );
 

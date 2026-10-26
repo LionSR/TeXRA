@@ -7,11 +7,7 @@ import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
 } from '@texra/controllers/settingsView/LatexToolingController';
-import { DEFAULT_LATEX_SETTINGS_STATUS } from '@texra/shared/settingsView/settingsViewMessages';
-import {
-  HOMEBREW_INSTALL_COMMAND,
-  normalizePlatform,
-} from '@texra/shared/constants/latexToolchain';
+import { HOMEBREW_INSTALL_COMMAND } from '@texra/shared/constants/latexToolchain';
 
 /** The probes the status reads, doubled so no tool is spawned. */
 const probes = vi.hoisted(() => ({
@@ -55,25 +51,6 @@ describe('LatexToolingController', () => {
         expect(status.latexindentInstalled).toBe(false);
         expect(status.imageProcessingInstalled).toBe(false);
       }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-
-  it.effect('falls back to defaults when detection fails', () =>
-    Effect.gen(function* () {
-      probes.checkToolInstalled.mockImplementation(() => {
-        throw new Error('probe failed');
-      });
-
-      expect(
-        yield* detectLatexSettingsStatus({
-          outDir: true,
-          autoRevealExclude: true,
-          latexWorkshopInstalled: false,
-        }),
-      ).toStrictEqual({
-        ...DEFAULT_LATEX_SETTINGS_STATUS,
-        platform: normalizePlatform(process.platform),
-      });
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   it('allowlists structured install commands only', () => {

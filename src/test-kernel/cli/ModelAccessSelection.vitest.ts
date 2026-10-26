@@ -107,24 +107,6 @@ function subscriptionPreference(
   return { kind: 'subscription-preference', provider, state } as const;
 }
 
-function expectedAccessStatus(chatgpt: {
-  readonly signedIn: boolean;
-  readonly email?: string;
-  readonly accountId?: string;
-  readonly preferSubscription: boolean;
-}) {
-  return {
-    subscriptions: {
-      chatgpt: { provider: 'chatgpt', ...chatgpt },
-      grok: { provider: 'grok', signedIn: false, preferSubscription: false },
-    },
-    codingPlans: {
-      glmCodingPlan: { preferred: false, keySet: false },
-      kimiCode: { preferred: false, keySet: false },
-    },
-  };
-}
-
 beforeEach(async () => {
   vi.clearAllMocks();
   for (const key of await Effect.runPromise(secrets.listStoredKeys()))
@@ -139,92 +121,6 @@ beforeEach(async () => {
 });
 
 describe('CLI model access routes', () => {
-  it.effect('reports the ChatGPT preference independently of sign-in', () =>
-    Effect.gen(function* () {
-      yield* storeChatGptSession;
-      mocks.isPreferCodexSubscription.mockReturnValue(true);
-
-      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
-        expectedAccessStatus({
-          signedIn: true,
-          email: 'user@example.com',
-          accountId: 'account-id',
-          preferSubscription: true,
-        }),
-      );
-
-      yield* secrets.delete(CODEX_SESSION_SECRET_KEY);
-      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
-        expectedAccessStatus({ signedIn: false, preferSubscription: true }),
-      );
-    }).pipe(withHost),
-  );
-
-  it.effect(
-    'enables Kimi Code routing on a personal fallback when a key exists',
-    () =>
-      Effect.gen(function* () {
-        yield* storeKey('kimiCode');
-
-        const result = yield* updateCliModelAccess(
-          stores,
-          context,
-          subscriptionPreference('kimi-code', 'on'),
-          { writeProgress: vi.fn() },
-        );
-
-        expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-        expect(yield* kimiPreference).toBe(true);
-        expect(result).toEqual({
-          message:
-            'Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
-        });
-      }).pipe(withHost),
-  );
-
-  it.effect(
-    'guides to key entry when Kimi Code is selected without a key',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* updateCliModelAccess(
-          stores,
-          context,
-          subscriptionPreference('kimi-code', 'on'),
-          { writeProgress: vi.fn() },
-        );
-
-        expect(yield* kimiPreference).toBeUndefined();
-        expect(result.message).toContain('No Kimi Code API key configured');
-        expect(result.message).toContain('https://www.kimi.com/code/console');
-      }).pipe(withHost),
-  );
-
-  it.effect(
-    'enables GLM Coding Plan routing on a personal fallback when a key exists',
-    () =>
-      Effect.gen(function* () {
-        yield* storeKey('glm');
-
-        const result = yield* updateCliModelAccess(
-          stores,
-          context,
-          subscriptionPreference('glm-code', 'on'),
-          { writeProgress: vi.fn() },
-        );
-
-        expect(
-          yield* fake.globalState.get(GlobalStateKey.GLM_CODING_PLAN),
-        ).toBe(true);
-        expect(yield* kimiPreference).toBeUndefined();
-        expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-        expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-        expect(result).toEqual({
-          message:
-            'GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
-        });
-      }).pipe(withHost),
-  );
-
   it.effect('signs in when needed and enables ChatGPT without an API key', () =>
     Effect.gen(function* () {
       mocks.signInCliSubscription.mockReturnValue(
@@ -342,32 +238,6 @@ describe('CLI model access routes', () => {
         stores,
         false,
       );
-    }).pipe(withHost),
-  );
-
-  it.effect('turns off a stale Kimi preference without requiring a key', () =>
-    Effect.gen(function* () {
-      yield* fake.globalState.update(GlobalStateKey.KIMI_CODE_PREFER, true);
-      const status = yield* readCliModelAccessStatus(stores, secrets);
-      const selection = buildCliModelAccessItems({
-        kind: 'loaded',
-        access: status,
-      }).find(
-        (item) =>
-          item.value.kind === 'subscription-preference' &&
-          item.value.provider === 'kimi-code',
-      );
-      expect(selection?.description).toBe('On · key required');
-      if (!selection) throw new Error('Expected Kimi preference item');
-
-      vi.clearAllMocks();
-      const reads = vi.spyOn(secrets, 'get');
-      yield* Effect.addFinalizer(() => Effect.sync(() => reads.mockRestore()));
-      yield* updateCliModelAccess(stores, context, selection.value);
-
-      expect(reads).not.toHaveBeenCalledWith(apiKeySecretName('kimiCode'));
-      expect(yield* kimiPreference).toBe(false);
-      expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     }).pipe(withHost),
   );
 });

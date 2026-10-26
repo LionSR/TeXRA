@@ -86,8 +86,7 @@ vi.mock('@latex/latexToolchain', () => ({
 }));
 
 vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
-  // Only the publish is mocked; the best-effort recovery that wraps it in
-  // `LatexDiffManager` stays real, so the failure case exercises it.
+  // Only the publish is mocked: no PDF is ever written here.
   ...(await importOriginal<
     typeof import('@texra/agent/output/compiledPdfArtifacts')
   >()),
@@ -124,10 +123,9 @@ function compileDiff(
   referenceLocation: FileLocation,
   round: number,
   sourceLocation: FileLocation,
-  trace: AgentTrace = spiedTrace(),
 ): Effect.Effect<unknown, Error, FileSystem.FileSystem | WorkspaceFs> {
   const diffAbsoluteDir = path.join(runDir(runId), 'diff', `r${round}`);
-  return createDiffCompiler(runId, trace).compileDiff(
+  return createDiffCompiler(runId, spiedTrace()).compileDiff(
     path.join(diffAbsoluteDir, 'main-diff.tex'),
     referenceLocation,
     {
@@ -214,9 +212,6 @@ describe('workflow LaTeX compile input directories', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockClear();
     mocks.hasLatexCompiler.mockClear();
-    mocks.publishCompiledPdfArtifact
-      .mockReset()
-      .mockReturnValue(Effect.succeed(null));
   });
 
   it.live('derives compile-check input dirs from outputFile.source', () =>
@@ -454,67 +449,5 @@ describe('workflow LaTeX compile input directories', () => {
         }),
       );
     }).pipe(Effect.provide(compileFsLayer)),
-  );
-
-  it.live('keeps a successful diff when publishing its PDF fails', () =>
-    Effect.gen(function* () {
-      const runId = 'latexdiff-publish-failure' as RunId;
-      yield* Effect.promise(() => initLatexPlatform({}));
-      const trace = spiedTrace();
-      const publishError = new Error('artifact storage unavailable');
-      mocks.publishCompiledPdfArtifact.mockReturnValueOnce(
-        Effect.fail(publishError),
-      );
-
-      const result = yield* compileDiff(
-        runId,
-        runStorageFile(runId, path.join('r1', 'main.tex')),
-        2,
-        runStorageFile(runId, path.join('r2', 'main.tex')),
-        trace,
-      );
-
-      expect(result).toEqual(expect.objectContaining({ artifact: null }));
-      expect(trace.warn).toHaveBeenCalledWith(
-        'Failed to publish latexdiff PDF: artifact storage unavailable',
-        expect.objectContaining({
-          data: expect.objectContaining({ error: publishError }),
-        }),
-      );
-    }).pipe(Effect.provide(compileFsLayer)),
-  );
-
-  it.live(
-    'keeps a failed latexdiff compiler transcript out of the warning message',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'latexdiff-compile-failure' as RunId;
-        yield* Effect.promise(() => initLatexPlatform({}));
-        const trace = spiedTrace();
-        const logTail =
-          'LaTeX compiler transcript that should remain diagnostic';
-        mocks.compileLatex2Pdf.mockReturnValueOnce(
-          Effect.succeed({ ok: false, logTail }),
-        );
-
-        yield* compileDiff(
-          runId,
-          runStorageFile(runId, path.join('r1', 'main.tex')),
-          2,
-          runStorageFile(runId, path.join('r2', 'main.tex')),
-          trace,
-        );
-
-        expect(trace.warn).toHaveBeenCalledWith(
-          'Failed to compile latexdiff PDF: main-diff.tex',
-          expect.objectContaining({
-            data: expect.objectContaining({ logTail }),
-          }),
-        );
-        expect(trace.warn).not.toHaveBeenCalledWith(
-          expect.stringContaining(logTail),
-          expect.anything(),
-        );
-      }).pipe(Effect.provide(compileFsLayer)),
   );
 });

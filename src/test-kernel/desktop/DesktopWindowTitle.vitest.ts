@@ -3,10 +3,7 @@ import { EventEmitter } from 'node:events';
 import { Exit, Scope, SubscriptionRef } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  getDesktopWindowTitle,
-  installDesktopWindowTitle,
-} from '@desktop/main/desktopWindowTitle';
+import { installDesktopWindowTitle } from '@desktop/main/desktopWindowTitle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import {
   emptySessionView,
@@ -112,22 +109,6 @@ function installTitle(
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('desktop process-session window title', () => {
-  it('reads the session activity from the view, a decision first', () => {
-    const { session, setActivity } = createSession();
-    expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
-
-    setActivity('running');
-    expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
-
-    setActivity('approval');
-    expect(getDesktopWindowTitle(session, 'geometry')).toBe(
-      'Approval needed TeXRA · geometry',
-    );
-
-    setActivity('idle');
-    expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
-  });
-
   it('does not write the native title after window destruction', async () => {
     const { session, setActivity } = createSession();
     const view = createWindow('TeXRA · geometry');

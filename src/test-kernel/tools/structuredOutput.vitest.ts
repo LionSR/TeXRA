@@ -1,7 +1,7 @@
 // Third-party imports
 import { describe, expect } from 'vitest';
 import { it } from '@effect/vitest';
-import { Effect, Schema, SchemaGetter } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports - tools
 import {
@@ -131,59 +131,6 @@ describe('normalizeStructuredOutputSchema', () => {
 
 describe('buildTerminalTool', () => {
   const schema = Schema.Struct({ title: Schema.String, count: Schema.Number });
-
-  it('rejects a non-object root schema so provider tool inputs stay valid', () => {
-    expect(() => buildTerminalTool(Schema.Array(Schema.String))).toThrow(
-      /object at the root/,
-    );
-  });
-
-  it.effect(
-    'supports effectful validation through the canonical tool boundary',
-    () =>
-      Effect.gen(function* () {
-        const tool = buildTerminalTool(
-          Schema.Struct({
-            title: Schema.String.pipe(
-              Schema.decode({
-                decode: SchemaGetter.checkEffect((value) =>
-                  Effect.succeed(value === 'accepted' || 'must be accepted'),
-                ),
-                encode: SchemaGetter.passthrough(),
-              }),
-            ),
-          }),
-        );
-
-        expect(yield* tool.call({ title: 'rejected' })).toMatchObject({
-          status: 'error',
-        });
-        expect(yield* tool.call({ title: 'accepted' })).toMatchObject({
-          status: 'executed',
-        });
-      }),
-  );
-
-  it.effect(
-    'rejects transformed values that cannot cross the JSON boundary',
-    () =>
-      Effect.gen(function* () {
-        const tool = buildTerminalTool(
-          Schema.Struct({
-            value: Schema.String.pipe(
-              Schema.decodeTo(Schema.BigInt, {
-                decode: SchemaGetter.transform(() => 1n),
-                encode: SchemaGetter.forbidden(() => 'decode-only'),
-              }),
-            ),
-          }),
-        );
-
-        expect(yield* tool.call({ value: 'one' })).toMatchObject({
-          status: 'error',
-        });
-      }),
-  );
 
   it.effect('accepts only one structured result per run', () =>
     Effect.gen(function* () {

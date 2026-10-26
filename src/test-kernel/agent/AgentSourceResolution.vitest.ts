@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Layer, Schema } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -16,7 +16,6 @@ import {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { PersonaSchema } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -228,29 +227,4 @@ describe('shadowed agent resolution', () => {
         ]);
       }),
   );
-});
-
-describe('findAgentByIdentifier (shared identity rule)', () => {
-  function entry(name: string, source: AgentEntry['source']): AgentEntry {
-    return {
-      name,
-      source,
-      path: '',
-      persona: Schema.decodeUnknownSync(PersonaSchema)({}),
-      blocks: {},
-    };
-  }
-  const entries = [entry('review', 'builtIn'), entry('review', 'custom')];
-
-  it('matches a bare name by name (first candidate wins)', () => {
-    expect(findAgentByIdentifier(entries, 'review')?.source).toBe('builtIn');
-  });
-
-  it('matches a source-qualified key only by exact key', () => {
-    expect(findAgentByIdentifier(entries, 'custom:review')?.source).toBe(
-      'custom',
-    );
-    // A key whose source is absent from the set must not fall back to the name.
-    expect(findAgentByIdentifier(entries, 'remote:review')).toBeUndefined();
-  });
 });

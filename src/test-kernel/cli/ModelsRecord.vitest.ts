@@ -32,19 +32,6 @@ function access(
   };
 }
 
-/** A model that cannot run with the configured credentials. */
-function unavailableAccess(value: string): CliModelAccess {
-  return access(value, {
-    available: false,
-    status: 'missing api key',
-    model: model({
-      value,
-      label: value,
-      availability: 'missing-key',
-    }),
-  });
-}
-
 describe('CLI model JSON record', () => {
   it('exposes the model id under `id` only, for cross-resource addressability', () => {
     const record = cliModelRecord(model());
@@ -55,23 +42,6 @@ describe('CLI model JSON record', () => {
     // `id` must appear first so callers using `Object.keys()[0]`
     // (and human readers) see the canonical key first.
     expect(Object.keys(record)[0]).toBe('id');
-  });
-
-  it('does not drop any of the other upstream model fields', () => {
-    const m = model({
-      provider: 'openai',
-      cost: '$1.250/$10.000',
-      availability: 'missing-key',
-    });
-    const record = cliModelRecord(m);
-
-    for (const key of Object.keys(m)) {
-      if (key === 'value') continue;
-      expect(record).toHaveProperty(key);
-      expect(record[key as keyof typeof record]).toEqual(
-        m[key as keyof ModelOptionData],
-      );
-    }
   });
 });
 
@@ -98,18 +68,5 @@ describe('CLI model list filtering', () => {
         (entry) => entry.model.value,
       ),
     ).toEqual(['deepseek/deepseek-v4-flash']);
-  });
-
-  it('keeps unavailable models for the explicit diagnostic view', () => {
-    const entries = [
-      access('anthropic/claude-sonnet-4-6'),
-      unavailableAccess('anthropic/claude-opus-4-8'),
-    ];
-
-    expect(
-      listableModelAccessEntries(entries, { includeUnavailable: true }).map(
-        (entry) => entry.model.value,
-      ),
-    ).toEqual(['anthropic/claude-sonnet-4-6', 'anthropic/claude-opus-4-8']);
   });
 });

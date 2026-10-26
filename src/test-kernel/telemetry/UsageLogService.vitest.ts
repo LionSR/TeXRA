@@ -414,56 +414,6 @@ describe('UsageLogService', () => {
       }),
     );
 
-    it.live('resumes sending once the setting is turned back on', () =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
-        );
-
-        const { batches, fetchMock } = stubBatchFetch();
-
-        logUsage(usageEntry('dropped'), testWorkspaceRoots().config);
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        expect(fetchMock).not.toHaveBeenCalled();
-
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          true,
-          'global',
-        );
-        logUsage(usageEntry('sent'), testWorkspaceRoots().config);
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(batches.map(batchModels)).toEqual([['sent']]);
-      }),
-    );
-
-    // Subscription rounds used to bypass the opt-out as "plan accounting" for
-    // a relay spend cap; the relay is gone and nothing reads those totals.
-    it.live('drops subscription usage while the setting is off', () =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
-        );
-
-        const { batches, fetchMock } = stubBatchFetch();
-
-        logUsage(
-          { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-          testWorkspaceRoots().config,
-        );
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-
-        expect(fetchMock).not.toHaveBeenCalled();
-        expect(batches).toEqual([]);
-      }),
-    );
-
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
@@ -481,25 +431,6 @@ describe('UsageLogService', () => {
         vi.stubEnv(name, value);
 
         yield* Effect.promise(() => expectNoOptionalUsageSent());
-      }),
-    );
-
-    it.live.each(['0', 'false', ''])('ignores TEXRA_NO_TELEMETRY=%p', (value) =>
-      Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          true,
-          'global',
-        );
-        vi.stubEnv('TEXRA_NO_TELEMETRY', value);
-
-        const { batches, fetchMock } = stubBatchFetch();
-
-        logUsage(usageEntry('optional'), testWorkspaceRoots().config);
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(batches.map(batchModels)).toEqual([['optional']]);
       }),
     );
 

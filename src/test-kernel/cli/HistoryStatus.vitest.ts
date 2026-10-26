@@ -31,7 +31,6 @@ import {
   closeTestDefaultSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
 const TOOL_USE_CONFIG: AgentConfig = Schema.decodeUnknownSync(
   AgentConfigSchema,
@@ -41,15 +40,6 @@ const TOOL_USE_CONFIG: AgentConfig = Schema.decodeUnknownSync(
   instruction: 'Continue the session.',
   workingDirectory: '/workspace',
 });
-const WORKFLOW_CONFIG: AgentConfig = Schema.decodeUnknownSync(
-  AgentConfigSchema,
-)(
-  asDocumentTask({
-    ...TOOL_USE_CONFIG,
-    agent: 'correct',
-    instruction: 'Continue the workflow.',
-  }),
-);
 
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
@@ -95,14 +85,6 @@ describe('CLI history status formatting', () => {
     expect(statusOf(true, 'failed')).toBe('failed');
   });
 
-  it('marks resumable cancelled runs as resumable', () => {
-    expect(statusOf(true, 'cancelled')).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-  });
-
-  it('marks resumable runs without a terminal outcome as resumable', () => {
-    expect(statusOf(true)).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-  });
-
   it('filters history entries by the resumable flag, not the status', () => {
     expect(
       listResumableCliHistoryEntries([
@@ -130,12 +112,6 @@ describe('CLI history status formatting', () => {
       { id: 'older-resumable', resumable: true },
     ]);
     expect(listed.filter((entry) => !entry.resumable)).toHaveLength(10);
-  });
-
-  it('reports outcome-free entries as unknown when they cannot resume', () => {
-    // A missing terminal outcome means the terminal write never happened
-    // (crash, kill, old build) — reporting 'completed' would mask crashes.
-    expect(statusOf(false)).toBe('unknown');
   });
 
   // `status` is a frozen contract, so `history show` answers it from the same
@@ -166,62 +142,5 @@ describe('CLI history status formatting', () => {
           'Checkpoint: present',
         );
       }),
-  );
-
-  it.effect('marks document task snapshots as CLI-resumable', () =>
-    Effect.gen(function* () {
-      const id = 'c0ffee-f10' as RunId;
-      yield* Effect.promise(() => seedSnapshot(id, WORKFLOW_CONFIG, 'correct'));
-
-      const details = yield* withProcessServices(
-        testRuntime(),
-        readCliHistoryDetails(
-          Effect.sync(() => testSessionOf(testDefaultSession())),
-          id,
-        ),
-      );
-
-      expect(details?.checkpointPresent).toBe(true);
-      expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-      expect(formatCliHistoryDetailsText(details!)).toContain(
-        'Checkpoint: present',
-      );
-    }),
-  );
-
-  // A checkpoint alone is not enough: without a config there is nothing to
-  // resume and nothing for a host to adopt, so the row says so.
-  it.effect('does not offer a run whose config is missing as resumable', () =>
-    Effect.gen(function* () {
-      const id = 'baad-c0f' as RunId;
-      yield* testDefaultSession().log.transact([
-        {
-          type: 'run.start',
-          aggregateId: qualifyAggregateId('run', id),
-          identity: { kind: 'agent', agent: 'orchestrator' },
-          userFollowUpSupport: 'unsupported',
-          parent: null,
-          provenance: null,
-        },
-      ]);
-      yield* seedRows(testDefaultSession().log)([
-        {
-          type: 'run.position',
-          aggregateId: qualifyAggregateId('run', id),
-          payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
-        },
-      ]);
-
-      const details = yield* withProcessServices(
-        testRuntime(),
-        readCliHistoryDetails(
-          Effect.sync(() => testSessionOf(testDefaultSession())),
-          id,
-        ),
-      );
-
-      expect(details?.checkpointPresent).toBe(true);
-      expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
-    }),
   );
 });

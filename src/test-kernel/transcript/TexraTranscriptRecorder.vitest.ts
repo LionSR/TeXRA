@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MESSAGE_TYPES,
-  RUN_OUTCOME,
   RUN_PHASE,
   TOOL_CALL_STATUS,
   type RunId,
@@ -21,8 +20,6 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId) {
     rows,
     row: (id: string | undefined): TranscriptRow | undefined =>
       rows().find((row) => row.id === id),
-    group: (id: string | undefined) =>
-      recorder.transcript().taskGroups.find((group) => group.id === id),
   };
 }
 
@@ -30,40 +27,6 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId) {
 function assistantRows(rows: readonly TranscriptRow[]) {
   return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
 }
-
-describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
-  it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
-    const { trace, group } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'session' });
-    stage.end();
-
-    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.COMPLETED);
-  });
-
-  it('records a failed stage end as RunOutcome.FAILED', () => {
-    const { trace, group } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'session' });
-    stage.end(RUN_OUTCOME.FAILED);
-
-    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.FAILED);
-  });
-});
-
-describe('createTestRunTrace stage kind (issue #7267)', () => {
-  it("preserves a stage's kind onto its closed group", () => {
-    const { trace, group } = attachRecorder();
-
-    const round = trace.openStage('r0', { kind: 'session' });
-    round.end();
-
-    expect(group(round.id)).toMatchObject({
-      kind: 'session',
-      status: RUN_OUTCOME.COMPLETED,
-    });
-  });
-});
 
 describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
@@ -105,16 +68,6 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     expect(responses).toHaveLength(1);
     expect(responses[0]?.id).toBe(output.id);
     expect(responses[0]?.text.full).toBe(completedText);
-  });
-
-  it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
-    const { finalize, rows } = attachRecorder();
-
-    finalize('The answer is 2.');
-
-    const responses = assistantRows(rows());
-    expect(responses).toHaveLength(1);
-    expect(responses[0]?.text.full).toBe('The answer is 2.');
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {

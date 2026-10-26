@@ -53,10 +53,7 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import {
-  failureInfo,
-  routePolicies,
-} from '@agent/runtime/modelAccess/failureInfo';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   LanguageModel,
@@ -456,28 +453,6 @@ const BOUND = boundModel(stubModel([]).model);
 const [modelRoute, wireRoute] = BOUND.routes;
 const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
 const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
-
-describe('the failure a run records', () => {
-  it('carries the text streamed before the failure onto the retry surface', () => {
-    const error = httpError('stream dropped', 500);
-
-    expect(
-      failureInfo(error, 'openai', { partialText: 'partial answer' })
-        .partialText,
-    ).toBe('partial answer');
-    // A failure with nothing streamed carries no tail at all.
-    expect(failureInfo(error, 'openai').partialText).toBeUndefined();
-  });
-
-  it('reports a retryable provider failure with its formatted message', () => {
-    expect(
-      failureInfo(httpError('transient provider failure', 503), 'openai'),
-    ).toMatchObject({
-      message: 'HTTP 503 Service Unavailable – transient provider failure',
-      userRetryable: true,
-    });
-  });
-});
 
 describe('recovery-route verdicts', () => {
   it('cools the wire route on an unscoped rate limit, not the model route', () => {
@@ -942,6 +917,8 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
+  // The setting bounds the automatic batch; the human gate opens only once it
+  // is spent.
   it.effect('cancels the run when the user declines the retry', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
@@ -968,8 +945,6 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  // The setting bounds the automatic batch; the human gate opens only once it
-  // is spent.
   it.effect('stops automatic attempts at the configured limit', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>

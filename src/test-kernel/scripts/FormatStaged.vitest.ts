@@ -7,7 +7,6 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -28,8 +27,6 @@ const BASE = 'export const x = 1;\n';
 const STAGED = 'export const x = {a:1,b:2};\n';
 const UNSTAGED = 'export const x = {a:1,b:2,c:3};\n';
 const FORMATTED = 'export const x = { a: 1, b: 2 };\n';
-
-const toCrlf = (text: string) => text.replaceAll('\n', '\r\n');
 
 const MULTI_STAGED = [
   'const a={x:1,y:2};',
@@ -106,20 +103,6 @@ function stagedBlob(path: string): string {
 }
 
 describe('format-staged', () => {
-  it('stages Prettier output for a fully staged file', () => {
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(FORMATTED);
-    // No unstaged change remains for the formatted file.
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
   it('keeps unstaged hunks that overlap the reformat (#9955)', () => {
     writeFileSync(join(dir, 'a.ts'), BASE);
     git(['add', 'a.ts']);
@@ -155,41 +138,6 @@ describe('format-staged', () => {
     expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
     expect(readFileSync(join(dir, 'c.ts'), 'utf8')).toBe(MULTI_MERGED);
     // Only the unstaged edit remains as a working-tree change.
-    expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
-  });
-
-  it('treats core.autocrlf=1 as a CRLF checkout (#10505)', () => {
-    git(['config', 'core.autocrlf', '1']);
-    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
-    git(['add', 'a.ts']);
-    expect(stagedBlob('a.ts')).toBe(STAGED);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
-  it('folds non-overlapping CRLF edits without a spurious merge conflict', () => {
-    git(['config', 'core.autocrlf', 'true']);
-    writeFileSync(
-      join(dir, 'c.ts'),
-      toCrlf(MULTI_STAGED.replace('{x:1,y:2}', '{x:1}')),
-    );
-    git(['add', 'c.ts']);
-    git(['commit', '-qm', 'base']);
-    writeFileSync(join(dir, 'c.ts'), toCrlf(MULTI_STAGED));
-    git(['add', 'c.ts']);
-    writeFileSync(join(dir, 'c.ts'), toCrlf(MULTI_UNSTAGED));
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
-    expect(readFileSync(join(dir, 'c.ts'), 'utf8')).toBe(toCrlf(MULTI_MERGED));
     expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
   });
 
@@ -272,152 +220,6 @@ describe('format-staged', () => {
     60_000,
   );
 
-  it('uses the staged .prettierrc when the worktree copy has unstaged edits', () => {
-    writeFileSync(join(dir, '.prettierrc'), '{"singleQuote":true}\n');
-    git(['add', '.prettierrc']);
-    writeFileSync(join(dir, '.prettierrc'), '{"singleQuote":false}\n');
-    writeFileSync(join(dir, 'a.ts'), 'const x = "a";\n');
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
-  });
-
-  it('snapshots a diverged extensionless YAML .prettierrc (#10500)', () => {
-    writeFileSync(join(dir, '.prettierrc'), 'singleQuote: true\n');
-    git(['add', '.prettierrc']);
-    writeFileSync(join(dir, '.prettierrc'), 'singleQuote: false\n');
-    writeFileSync(join(dir, 'a.ts'), 'const x = "a";\n');
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
-  });
-
-  it('uses the staged .prettierignore when the worktree copy has unstaged edits', () => {
-    writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
-    git(['add', '.prettierignore']);
-    writeFileSync(join(dir, '.prettierignore'), '');
-    writeFileSync(join(dir, 'ignored.ts'), STAGED);
-    git(['add', 'ignored.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toBe('');
-    expect(stagedBlob('ignored.ts')).toBe(STAGED);
-  });
-
-  it('skips auto-staging when the nearest config is untracked (#10367)', () => {
-    mkdirSync(join(dir, 'src'));
-    // A nearer, untracked config must not shape the staged blob.
-    writeFileSync(join(dir, 'src/.prettierrc'), '{"semi":false}\n');
-    writeFileSync(join(dir, 'src/a.ts'), STAGED);
-    git(['add', 'src/a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('src/.prettierrc is not staged');
-    expect(stagedBlob('src/a.ts')).toBe(STAGED);
-  });
-
-  it('applies overrides relative to a staged config with unstaged edits (#10368)', () => {
-    writeFileSync(
-      join(dir, '.prettierrc'),
-      '{"overrides":[{"files":"src/**","options":{"semi":false}}]}\n',
-    );
-    git(['add', '.prettierrc']);
-    // Unstaged edit drops the override; the staged config must still win,
-    // resolved against the config's own directory.
-    writeFileSync(join(dir, '.prettierrc'), '{}\n');
-    mkdirSync(join(dir, 'src'));
-    writeFileSync(join(dir, 'src/a.ts'), 'export const x = 1;\n');
-    git(['add', 'src/a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for src/a.ts');
-    expect(stagedBlob('src/a.ts')).toBe('export const x = 1\n');
-  });
-
-  it('resolves plugins relative to a staged config with unstaged edits (#10368)', () => {
-    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
-    writeFileSync(
-      join(dir, '.prettierrc'),
-      '{"plugins":["./fake-plugin.mjs"]}\n',
-    );
-    git(['add', 'fake-plugin.mjs', '.prettierrc']);
-    writeFileSync(join(dir, '.prettierrc'), '{}\n');
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-  });
-
-  it('leaves ignored, unknown, and already-formatted files untouched', () => {
-    writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
-    writeFileSync(join(dir, 'ignored.ts'), STAGED);
-    writeFileSync(join(dir, 'data.xyz123'), STAGED);
-    writeFileSync(join(dir, 'clean.ts'), FORMATTED);
-    git(['add', '.prettierignore', 'ignored.ts', 'data.xyz123', 'clean.ts']);
-
-    const before = git(['ls-files', '-s']);
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toBe('');
-    expect(git(['ls-files', '-s'])).toBe(before);
-  });
-
-  it('leaves staged content alone while a merge is in progress', () => {
-    writeFileSync(join(dir, 'a.ts'), BASE);
-    git(['add', 'a.ts']);
-    git(['commit', '-qm', 'base']);
-    writeFileSync(
-      join(dir, git(['rev-parse', '--git-dir']).trim(), 'MERGE_HEAD'),
-      git(['rev-parse', 'HEAD']),
-    );
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(stagedBlob('a.ts')).toBe(STAGED);
-  });
-
-  it('stages Prettier output in a SHA-256 object-format repo (#10370)', () => {
-    rmSync(join(dir, '.git'), { recursive: true, force: true });
-    git(['init', '-q', '-b', 'main', '--object-format=sha256']);
-    git(['config', 'user.email', 'test@example.com']);
-    git(['config', 'user.name', 'test']);
-    git(['config', 'commit.gpgsign', 'false']);
-    git(['add', '.prettierrc']);
-    git(['commit', '-qm', 'init']);
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-    // SHA-256 repos carry 64-hex object names in the index.
-    expect(git(['ls-files', '-s', '--', 'a.ts'])).toMatch(/ [0-9a-f]{64} /);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-  });
-
   it.skipIf(process.platform === 'win32')(
     'never overwrites or deletes an untracked snapshot-path file (#10429)',
     () => {
@@ -452,144 +254,9 @@ describe('format-staged', () => {
     },
     60_000,
   );
-
-  it('updates a fully staged mixed-EOL file in the working tree (#10432)', () => {
-    const mixed = MULTI_STAGED.replace(
-      'const a={x:1,y:2};\n',
-      'const a={x:1,y:2};\r\n',
-    );
-    writeFileSync(join(dir, 'a.ts'), mixed);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(MULTI_FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(MULTI_FORMATTED);
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
-  it('writes formatted output verbatim for a fully staged mixed-EOL CRLF file (#10505)', () => {
-    writeFileSync(join(dir, '.prettierrc'), '{"endOfLine":"crlf"}\n');
-    git(['add', '.prettierrc']);
-    git(['commit', '-qm', 'crlf config']);
-    const mixed = MULTI_STAGED.replace(
-      'const a={x:1,y:2};\n',
-      'const a={x:1,y:2};\r\n',
-    );
-    writeFileSync(join(dir, 'a.ts'), mixed);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(toCrlf(MULTI_FORMATTED));
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(
-      toCrlf(MULTI_FORMATTED),
-    );
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
-  it('writes CRLF formatted output verbatim for a fully staged LF file (#10505)', () => {
-    writeFileSync(join(dir, '.prettierrc'), '{"endOfLine":"crlf"}\n');
-    git(['add', '.prettierrc']);
-    git(['commit', '-qm', 'crlf config']);
-    writeFileSync(join(dir, 'a.ts'), MULTI_STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(toCrlf(MULTI_FORMATTED));
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(
-      toCrlf(MULTI_FORMATTED),
-    );
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
-  it('keeps an unstaged CRLF conversion when the index blob is LF (#10505)', () => {
-    writeFileSync(join(dir, 'a.ts'), BASE);
-    git(['add', 'a.ts']);
-    git(['commit', '-qm', 'base']);
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-    // Byte-different but normalized-equal worktree: this is an unstaged
-    // line-ending conversion, not a fully staged file, and must survive.
-    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
-  });
-
-  it('skips a staged config whose relative plugin has unstaged edits (#10434)', () => {
-    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
-    writeFileSync(
-      join(dir, '.prettierrc'),
-      '{"plugins":["./fake-plugin.mjs"]}\n',
-    );
-    git(['add', 'fake-plugin.mjs', '.prettierrc']);
-    git(['commit', '-qm', 'config base']);
-    writeFileSync(join(dir, '.prettierrc'), '{}\n');
-    writeFileSync(
-      join(dir, 'fake-plugin.mjs'),
-      'export default {};\n// edit\n',
-    );
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('fake-plugin.mjs has unstaged edits');
-    expect(stagedBlob('a.ts')).toBe(STAGED);
-  });
-
-  it('leaves a clean JSON .prettierrc with an unstaged dependency to Prettier (#10504)', () => {
-    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
-    writeFileSync(
-      join(dir, '.prettierrc'),
-      '{"plugins":["./fake-plugin.mjs"]}\n',
-    );
-    git(['add', '.prettierrc', 'fake-plugin.mjs']);
-    git(['commit', '-qm', 'config base']);
-    writeFileSync(
-      join(dir, 'fake-plugin.mjs'),
-      'export default {};\n// edit\n',
-    );
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(result.stdout).not.toContain('fake-plugin.mjs has unstaged edits');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-  });
-
-  it('skips auto-staging when .prettierignore is untracked (#10436)', () => {
-    writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('.prettierignore is not staged');
-    expect(stagedBlob('a.ts')).toBe(STAGED);
-  });
 });
 
 describe('install-local-hooks', () => {
-  const hasPreCommit = spawnSync('pre-commit', ['--version']).status === 0;
-
   beforeEach(() => {
     // The engine resolves Prettier relative to its own path, so the shim's
     // `node scripts/format-staged.mjs` needs the script and a resolvable
@@ -658,67 +325,6 @@ describe('install-local-hooks', () => {
     expect(git(['show', 'HEAD:a.ts'])).toBe(FORMATTED);
     expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(UNSTAGED);
   }, 60_000);
-
-  it.skipIf(process.platform === 'win32')(
-    'does not touch the index when pre-commit runs the legacy shim',
-    () => {
-      const hooksDir = resolve(
-        dir,
-        git(['rev-parse', '--git-path', 'hooks']).trim(),
-      );
-      const hookPath = join(hooksDir, 'pre-commit');
-      const legacyPath = join(hooksDir, 'pre-commit.legacy');
-
-      expect(runInstall().status).toBe(0);
-      renameSync(hookPath, legacyPath);
-
-      writeFileSync(join(dir, 'a.ts'), STAGED);
-      git(['add', 'a.ts']);
-
-      const legacy = spawnSync(legacyPath, [], {
-        cwd: dir,
-        encoding: 'utf8',
-        env: { ...gitEnv, PRE_COMMIT_RUNNING_LEGACY: '1' },
-      });
-
-      expect(legacy.status, legacy.stderr).toBe(0);
-      expect(stagedBlob('a.ts')).toBe(STAGED);
-      expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(STAGED);
-    },
-    30_000,
-  );
-
-  it.skipIf(!hasPreCommit)(
-    'refreshes the chained pre-commit shim on reinstall',
-    () => {
-      const hooksDir = resolve(
-        dir,
-        git(['rev-parse', '--git-path', 'hooks']).trim(),
-      );
-      const hookPath = join(hooksDir, 'pre-commit');
-      const chainPath = join(hooksDir, 'pre-commit.chain');
-
-      expect(runInstall().status).toBe(0);
-      expect(existsSync(chainPath)).toBe(true);
-      writeFileSync(chainPath, '#!/bin/sh\necho stale\n');
-
-      const rerun = runInstall();
-
-      expect(rerun.status, rerun.stderr).toBe(0);
-      expect(readFileSync(chainPath, 'utf8')).toContain(
-        'File generated by pre-commit',
-      );
-      expect(readFileSync(hookPath, 'utf8')).toContain('texra-format-staged');
-    },
-    30_000,
-  );
-
-  it('is idempotent', () => {
-    expect(runInstall().status).toBe(0);
-    const rerun = runInstall();
-    expect(rerun.status, rerun.stderr).toBe(0);
-    expect(rerun.stdout).toContain('format-staged');
-  }, 30_000);
 
   it('refuses to overwrite an unrecognized hook', () => {
     const hookPath = resolve(

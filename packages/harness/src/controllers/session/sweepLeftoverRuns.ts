@@ -6,15 +6,17 @@ import {
   type SessionEvent,
   type RunId,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/runs/runStatus';
+import { lastLifecycleRow } from '@shared/session/runFacts';
 
 const CHANNEL = 'LeftoverRunSweep';
 
-/** Runs this process is running right now, by handle or by in-flight phase. */
+/** Runs still going: held by this process, or listed by the view as
+ *  running or waiting (a run whose owner process died is listed as
+ *  interrupted, so it is swept). */
 function runningRuns(session: SessionHandle): Set<RunId> {
   const running = new Set(session.runs.get().map((run) => run.runId));
   for (const run of SubscriptionRef.getUnsafe(session.view.ref).runs.values()) {
-    if (isInFlightPhase(run.status)) running.add(run.id);
+    if (run.group === 'running' || run.group === 'waiting') running.add(run.id);
   }
   return running;
 }
@@ -24,22 +26,18 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
   rows: readonly SessionEvent[],
 ) {
-  // A shell parked holding its result for its parent (no end after the
-  // park) stays until that result is delivered.
-  const ended = new Map(
-    rows.flatMap((row) =>
-      row.type === 'run.end' ? [[row.aggregateId, row.commit] as const] : [],
-    ),
-  );
+  // A shell parked holding its result for its parent in its current
+  // lifecycle stays until that result is delivered.
+  const holds = (row: SessionEvent): boolean => {
+    if (row.type !== 'child.park' || row.heldFor === undefined) return false;
+    const target = aggregateTarget(row.aggregateId);
+    if (target.kind !== 'run') return false;
+    const since = lastLifecycleRow(rows, target.id);
+    return since?.type !== 'run.end' && row.commit > (since?.commit ?? 0);
+  };
   const removed = new Set(
     rows
-      .filter(
-        (row) =>
-          row.type === 'run.removed' ||
-          (row.type === 'child.park' &&
-            row.heldFor !== undefined &&
-            (ended.get(row.aggregateId) ?? 0) < row.commit),
-      )
+      .filter((row) => row.type === 'run.removed' || holds(row))
       .map((row) => row.aggregateId),
   );
   const running = runningRuns(session);

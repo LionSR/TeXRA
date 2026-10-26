@@ -58,6 +58,7 @@ import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
+import { announce } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
@@ -457,9 +458,13 @@ export function createExtensionHostRequests(
               patch: { commit: parsed.commitHash },
             });
           } else {
-            runtime.runFork(
-              vscodeUi.showInfoMessage(
-                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+            yield* Effect.forkDetach(
+              announce(
+                CHANNEL,
+                vscodeUi.showInfoMessage(
+                  `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
+                ),
+                undefined,
               ),
             );
           }
@@ -476,9 +481,13 @@ export function createExtensionHostRequests(
             yield* snapshot.refreshFiles;
             return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
-          runtime.runFork(
-            vscodeUi.showInfoMessage(
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+          yield* Effect.forkDetach(
+            announce(
+              CHANNEL,
+              vscodeUi.showInfoMessage(
+                `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+              ),
+              undefined,
             ),
           );
         }

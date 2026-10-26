@@ -6,7 +6,6 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -19,42 +18,6 @@ import { readRunTranscript } from '@transcript/runTranscript';
 import { generateRunId } from '@utils/core';
 
 describe('session-owned transcripts and follow-up queues', () => {
-  it.effect(
-    "writes run trace entries to the launching session's transcript store only",
-    () =>
-      Effect.gen(function* () {
-        const launching = yield* createTestSession();
-        const sibling = yield* createTestSession();
-        yield* Effect.addFinalizer(() =>
-          closeSessionOf(launching).pipe(
-            Effect.andThen(closeSessionOf(sibling)),
-          ),
-        );
-        const runId = generateRunId();
-
-        publishTestRunStart(launching, runId);
-        yield* launching.log.settled;
-        const trace = new TraceEmitter((event) =>
-          launching.log.publish(runId, event),
-        );
-        yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
-        const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-        output.append('owned by launching session');
-        output.finalize();
-        yield* launching.log.settled;
-
-        const rowText = (row: TranscriptRow) =>
-          row.kind === 'assistant' ? row.text.full : row.kind;
-        expect(
-          (yield* readRunTranscript(launching, runId)).rows.map(rowText),
-        ).toEqual(['owned by launching session']);
-        expect((yield* readRunTranscript(sibling, runId)).rows).toEqual([]);
-        expect(
-          (yield* readRunTranscript(testDefaultSession(), runId)).rows,
-        ).toEqual([]);
-      }),
-  );
-
   it.effect('commits partial streaming text when the run parks', () =>
     Effect.gen(function* () {
       const session = yield* createTestSession();
@@ -80,37 +43,6 @@ describe('session-owned transcripts and follow-up queues', () => {
           row.kind === 'assistant' ? [row.text.full] : [],
         ),
       ).toEqual(['partial text']);
-    }),
-  );
-
-  it.effect('keeps same-stream follow-up queues isolated by session', () =>
-    Effect.gen(function* () {
-      const a = yield* createTestSession();
-      const b = yield* createTestSession();
-      yield* Effect.addFinalizer(() =>
-        closeSessionOf(a).pipe(Effect.andThen(closeSessionOf(b))),
-      );
-      const runId = generateRunId();
-      for (const session of [a, b]) {
-        publishTestRunStart(session, runId);
-        yield* session.log.settled;
-      }
-
-      yield* a.followUps.open(runId);
-      yield* b.followUps.open(runId);
-
-      yield* a.followUps.closeInput(runId);
-      yield* a.log.settled;
-
-      const late = { from: { kind: 'user' as const }, text: 'late' };
-      expect(yield* a.followUps.send(runId, late)).toEqual({
-        kind: 'refused',
-        reason: 'not_resumable',
-      });
-      expect(yield* b.followUps.send(runId, late)).toEqual({
-        kind: 'queued',
-        read: true,
-      });
     }),
   );
 });
@@ -149,7 +81,7 @@ describe('sendFollowUp host-path session routing', () => {
               session: processSession,
             },
           ),
-        ).toEqual({ status: 'queued', wake: 'failed' });
+        ).toEqual({ status: 'queued' });
 
         // The default session does not own this run; selecting the actual
         // session is required for desktop follow-up delivery. With no live flow

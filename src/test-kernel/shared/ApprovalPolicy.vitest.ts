@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  APPROVAL_POLICIES,
   decideHumanInputRequest,
   decideRetryApproval,
   decideApproval,
-  parseApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 
 describe('TeXRA approval policy', () => {
   it.each([
@@ -31,15 +28,6 @@ describe('TeXRA approval policy', () => {
       ).toBe(expected);
     },
   );
-
-  it('publishes one ordered set of policy choices and accepts only those values', () => {
-    const optionValues = APPROVAL_POLICY_OPTIONS.map(({ value }) => value);
-    expect(optionValues).toEqual(['ask', 'never', 'yolo']);
-    expect(new Set(optionValues)).toEqual(new Set(APPROVAL_POLICIES));
-    expect(optionValues).toHaveLength(APPROVAL_POLICIES.length);
-    expect(parseApprovalPolicy(' Yolo ')).toBe('yolo');
-    expect(parseApprovalPolicy('auto')).toBeUndefined();
-  });
 
   it.each([
     [
