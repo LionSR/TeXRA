@@ -126,14 +126,19 @@ try {
   if (outfile === 'dist/bin/texra.js') {
     // The published command: a few lines that turn on Node's on-disk compile
     // cache before the bundle loads, so a start after the first skips most of
-    // compiling it (about 230 ms of each start). The bundle stays at
-    // dist/bin/texra.js, so every path it resolves beside itself still holds.
+    // compiling it (about 230 ms of each start). The cache lives under the
+    // user's own ~/.texra, not Node's default shared temp directory, where
+    // another user could plant code for this process to load. The bundle
+    // stays at dist/bin/texra.js, so every path it resolves beside itself
+    // still holds.
     await writeFile(
       LAUNCHER,
       [
         '#!/usr/bin/env node',
         "import module from 'node:module';",
-        'module.enableCompileCache?.();',
+        "import { homedir } from 'node:os';",
+        "import { join } from 'node:path';",
+        "module.enableCompileCache?.(join(homedir(), '.texra', 'compile-cache'));",
         "await import('./bin/texra.js');",
         '',
       ].join('\n'),
