@@ -227,14 +227,36 @@ function docText(checker, target) {
   return [comment, tags.join('\n')].filter((part) => part !== '').join('\n\n');
 }
 
-/** An interface, type alias or enum as written; anything else as its
- *  report line. */
+/** An export's declaration as written, without bodies: a function's
+ *  signature, a class's heading, a constant's declared or inferred type. */
 function declarationText(checker, symbol) {
-  const { declaration, kind } = exportTarget(checker, symbol);
-  return declaration != null &&
-    (kind === 'interface' || kind === 'type' || kind === 'enum')
-    ? declaration.getText().replace(/^export (?:declare )?/, '')
-    : describe(checker, symbol);
+  const { target, declaration, kind } = exportTarget(checker, symbol);
+  if (declaration == null) return `unknown ${symbol.name}`;
+  const upTo = (node) =>
+    declaration
+      .getText()
+      .slice(0, node.getStart() - declaration.getStart())
+      .trimEnd();
+  const written = (text) =>
+    text.replace(/^export (?:declare )?(?:default )?/, '');
+  if (ts.isFunctionDeclaration(declaration) && declaration.body != null)
+    return written(upTo(declaration.body));
+  if (ts.isClassDeclaration(declaration)) {
+    const open = declaration
+      .getChildren()
+      .find((child) => child.kind === ts.SyntaxKind.OpenBraceToken);
+    return written(open == null ? declaration.getText() : upTo(open));
+  }
+  if (kind !== 'const') return written(declaration.getText());
+  const type =
+    ts.isVariableDeclaration(declaration) && declaration.type != null
+      ? declaration.type.getText()
+      : checker.typeToString(
+          checker.getTypeOfSymbolAtLocation(target, declaration),
+          undefined,
+          ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope,
+        );
+  return `const ${symbol.name}: ${type}`;
 }
 
 /** Each export's heading, TSDoc and declaration. */
