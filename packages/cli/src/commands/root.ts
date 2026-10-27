@@ -179,8 +179,7 @@ export async function runCli(
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
   // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
   if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
-    const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
-    await showUsage(resolved.command, resolved.parent, resolved);
+    await showUsage(await resolveDeepestSubCommand(rootCommand, rawArgs));
     return { exitCode: CliExitCode.Success };
   }
 

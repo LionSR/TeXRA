@@ -491,11 +491,6 @@ interface UsageSection {
   readonly rows: readonly (readonly [label: string, description: string])[];
 }
 
-interface UsageRenderContext {
-  readonly parentPath?: readonly string[];
-  readonly rootCommand?: AnyCommand;
-}
-
 const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
 
 let usageColorOverride: boolean | undefined;
@@ -546,44 +541,25 @@ function usageColorEnabled(stream: 'stdout' | 'stderr'): boolean | undefined {
     : ambient.stderrColorEnabled;
 }
 
-async function usageParentWithFullPath(
-  parent: AnyCommand | undefined,
-  context: UsageRenderContext | undefined,
-): Promise<AnyCommand | undefined> {
-  if (!parent || !context?.parentPath || context.parentPath.length <= 1) {
-    return parent;
-  }
+async function usageParentWithFullPath({
+  parent,
+  parentPath,
+  rootCommand,
+}: ResolvedCliCommand): Promise<AnyCommand | undefined> {
+  if (!parent || parentPath.length <= 1) return parent;
 
   const [parentMeta, rootMeta] = await Promise.all([
     commandMeta(parent),
-    context.rootCommand ? commandMeta(context.rootCommand) : undefined,
+    commandMeta(rootCommand),
   ]);
   return {
     ...parent,
     meta: {
       ...parentMeta,
-      name: context.parentPath.join(' '),
-      version: parentMeta.version ?? rootMeta?.version,
+      name: parentPath.join(' '),
+      version: parentMeta.version ?? rootMeta.version,
     },
   };
-}
-
-async function renderUsageWithSections(
-  cmd: AnyCommand,
-  parent?: AnyCommand,
-  context?: UsageRenderContext,
-): Promise<string> {
-  const usage = await renderUsage(
-    cmd,
-    await usageParentWithFullPath(parent, context),
-  );
-  const sections = usageSections.get(cmd);
-  const usageWithSections = sections?.length
-    ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
-    : usage;
-  return usageColorEnabled('stdout') === false
-    ? stripAnsi(usageWithSections)
-    : usageWithSections;
 }
 
 /**
@@ -603,10 +579,21 @@ export function formatCliArgumentError(
   return `${text}\nRun \`${resolved.commandPath.join(' ')} --help\` for usage.`;
 }
 
-export async function showUsage(
-  cmd: AnyCommand,
-  parent?: AnyCommand,
-  context?: UsageRenderContext,
-): Promise<void> {
-  writeRawStdout(`${await renderUsageWithSections(cmd, parent, context)}\n\n`);
+/** Print the usage of the deepest command `--help` resolved, with its parent
+ *  named by the full command path and its extra usage sections. */
+export async function showUsage(resolved: ResolvedCliCommand): Promise<void> {
+  const { command } = resolved;
+  const usage = await renderUsage(
+    command,
+    await usageParentWithFullPath(resolved),
+  );
+  const sections = usageSections.get(command);
+  const usageWithSections = sections?.length
+    ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
+    : usage;
+  const text =
+    usageColorEnabled('stdout') === false
+      ? stripAnsi(usageWithSections)
+      : usageWithSections;
+  writeRawStdout(`${text}\n\n`);
 }
