@@ -66,7 +66,7 @@ import {
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
-import { appendRow, offeredRow, SCRIPT_TOOL_NAME } from './rows';
+import { appendRow, rowAggregate, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
@@ -137,10 +137,8 @@ function describedAtFreeze<T extends ResolvedTools>(
       scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
     }));
   const recorded = (name: string) => {
-    const shown =
-      state.offeredContext === null
-        ? undefined
-        : state.offeredTools?.find((tool) => tool.name === name)?.shown;
+    if (state.offeredContext === null) return undefined;
+    const shown = state.offeredTools?.find((tool) => tool.name === name)?.shown;
     return shown === undefined
       ? undefined
       : stored(state, shown, Schema.Struct({ description: Schema.String }))
@@ -385,14 +383,18 @@ const openStep = Effect.fn('Step.open')(function* (
             ...toolDefinitionsFor(step.tools.definitions),
             ...Object.values(step.tools.modules),
           ]),
-          offeredRow(run.runId, {
-            tools: step.tools.offered,
-            skills,
-            system: system === undefined ? null : sha256(system),
-            context: sha256(context),
-            hooks: step.hooks,
-            modules,
-          }),
+          {
+            type: 'tools.offered' as const,
+            aggregateId: rowAggregate(run.runId),
+            payload: {
+              tools: step.tools.offered,
+              skills,
+              system: system === undefined ? null : sha256(system),
+              context: sha256(context),
+              hooks: step.hooks,
+              modules,
+            },
+          },
           ...(update === ''
             ? []
             : [appendRow(run.runId, [{ role: 'system', text: update }])]),
@@ -402,15 +404,14 @@ const openStep = Effect.fn('Step.open')(function* (
 });
 
 /**
- * The step the loop's next action runs under. A request opens a new step,
- * whose rows record its offered set when it changed. A dispatch runs the
- * calls against the step that offered them; for a response a resume found
- * pending, against a step pinned for the dispatch and held to the record,
- * which records nothing. A call to a tool whose identity changed or that
- * left since it was offered is stale: its result is `tool_unavailable`,
- * like a name the run was never offered, and the step names the tool. A
- * wait opens a step too, recorded like a request's, so a waiting run holds
- * only what its plugins offer now. The
+ * The step the loop's next action runs under. A request opens a new step, whose
+ * rows record its offered set when it changed. A dispatch runs the calls
+ * against the step that offered them; for a response a resume found pending,
+ * against a step pinned for the dispatch and held to the record, which records
+ * nothing. A call to a tool whose identity changed or that left since it was
+ * offered is stale: its result is `tool_unavailable`, like a name the run was
+ * never offered, and the step names the tool. A wait opens a step too, recorded
+ * like a request's, so a waiting run holds only what its plugins offer now. The
  * first request or dispatch step a resumed activation opens is held to the
  * record, and so is every wait before it, which leaves the hold unspent.
  */
@@ -449,10 +450,9 @@ export const offeredBy = (
 
 /**
  * The skills of `names` a user just activated that `run`'s current step
- * resolves: discovered by the same catalog read as its own, over the
- * plugins it accepted, and shipped by a core source or a plugin it draws
- * on. Before any step opens they are kept as named, and the first step
- * resolves them.
+ * resolves: discovered by the same catalog read as its own, over the plugins it
+ * accepted, and shipped by a core source or a plugin it draws on. Before any
+ * step opens they are kept as named, and the first step resolves them.
  */
 export const resolveActivations = Effect.fn('Step.resolveActivations')(
   function* (run: AgentRunShape, names: readonly string[]) {

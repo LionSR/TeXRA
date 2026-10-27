@@ -82,7 +82,7 @@ export const ProvenOwners = Context.Reference<
 /** A claim met owners its attempt has no verdict for. Raised as a defect,
  *  so no body's error handling swallows it: the outermost transaction rolls
  *  back whole, proves them ({@link provingOwners}), and runs again. */
-export class OwnersUnproven {
+class OwnersUnproven {
   readonly owners: readonly OwnerId[];
   constructor(owners: readonly OwnerId[]) {
     this.owners = owners;

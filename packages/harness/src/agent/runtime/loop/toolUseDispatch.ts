@@ -234,16 +234,16 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
 
 /** What one script's calls share while it runs (`ScriptScope.shared`). */
 const sharedValues = (): ScriptScope['shared'] => {
-  const values = new Map<string, Effect.Effect<unknown, unknown>>();
+  const values = new Map<string, Deferred.Deferred<unknown, unknown>>();
   return <A, E, R>(key: string, make: Effect.Effect<A, E, R>) =>
     Effect.suspend((): Effect.Effect<A, E, R> => {
       // One map holds every key's value; each key is asked for at the type
       // its first caller made it at (the `ScriptScope.shared` contract).
       // cast: no map type carries a value type per key.
-      const existing = values.get(key) as Effect.Effect<A, E> | undefined;
-      if (existing !== undefined) return existing;
+      const existing = values.get(key) as Deferred.Deferred<A, E> | undefined;
+      if (existing !== undefined) return Deferred.await(existing);
       const made = Deferred.makeUnsafe<A, E>();
-      values.set(key, Deferred.await(made));
+      values.set(key, made as Deferred.Deferred<unknown, unknown>); // cast: erased the same way
       return make.pipe(Effect.onExit((exit) => Deferred.done(made, exit)));
     });
 };

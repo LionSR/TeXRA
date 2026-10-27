@@ -2323,7 +2323,14 @@ const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildr
 One stream of the {@link SessionView}.
 
 ```ts
-type RunView = ReadonlyDeep<FoldRunView>;
+type RunView = ReadonlyDeep<
+  (typeof SessionViewSchema.Type)['runs'] extends ReadonlyMap<
+    unknown,
+    infer Run
+  >
+    ? Run
+    : never
+>;
 ```
 
 ## safeParseJson
@@ -2419,7 +2426,7 @@ type SessionTitleState = 'idle' | 'running' | 'approval';
 One published level of the session's fold: an immutable value.
 
 ```ts
-type SessionView = ReadonlyDeep<FoldSessionView>;
+type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
 ```
 
 ## settingsCatalog

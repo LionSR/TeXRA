@@ -137,15 +137,6 @@ export function configRow(
   };
 }
 
-/** The `tools.offered` row recording what a step offers, written when it
- *  differs from what the run last recorded (`step.ts`). */
-export function offeredRow(
-  runId: RunId,
-  payload: Extract<RunHistoryDraft, { type: 'tools.offered' }>['payload'],
-): RunHistoryDraft {
-  return { type: 'tools.offered', aggregateId: rowAggregate(runId), payload };
-}
-
 /** What a tool call's rows name of it, whichever origin issued it: a
  *  response's dispatch fact, or a script's `script.call`, which commits
  *  with the call's first row. */
