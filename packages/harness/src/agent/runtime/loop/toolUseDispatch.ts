@@ -110,7 +110,7 @@ import {
 } from '../run/toolResultText';
 import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
-import { appendRow, displayRow, positionRow, type Message } from './rows';
+import { appendRow, displayRow, positionRow } from './rows';
 import { Runs } from '../runRegistry';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
@@ -1098,7 +1098,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       }),
     );
   }
-  const group: Message = { role: 'tool', results };
+  const group = { role: 'tool' as const, results };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], { sourceResponse: responseId }),
     positionRow(runId, state, 'results.ready'),

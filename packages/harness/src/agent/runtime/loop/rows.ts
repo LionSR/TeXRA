@@ -32,9 +32,6 @@ import { addressedMessages, type AppendedMessage } from '../storedTurn';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** A message the loop appends (`addressedMessages`). */
-export type Message = AppendedMessage;
-
 /** The row making `text` the response shown as final: a row of the run's
  *  history, awaited, never a detached trace row. */
 export const finalizedRows = (
@@ -48,13 +45,10 @@ export const finalizedRows = (
   },
 ];
 
-/** The coordinates a `run.position` row is stamped with. */
-export type PositionCoordinates = Pick<RunState, 'turn'>;
-
 /** Where the loop stands; a run's first one opens it. */
 export function positionRow(
   runId: RunId,
-  state: PositionCoordinates,
+  state: Pick<RunState, 'turn'>,
   at: Exclude<PositionAt, 'halted'>,
 ): RunHistoryDraft {
   return {
@@ -84,7 +78,7 @@ export function haltedPositionRow(
  *  itself (`model.message` `append`). */
 export function appendRow(
   runId: RunId,
-  messages: readonly Message[],
+  messages: readonly AppendedMessage[],
   options: {
     readonly sourceResponse?: string | null;
     readonly input?: RunInput;
