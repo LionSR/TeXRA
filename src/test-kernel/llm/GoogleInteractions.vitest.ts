@@ -15,7 +15,23 @@ import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInt
 
 const REQUEST: TurnRequest = {
   system: 'Use both tools.',
-  messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { kind: 'text', text: 'go' },
+        {
+          kind: 'image',
+          mimeType: 'image/png',
+          base64: 'AA==',
+          detail: 'high',
+        },
+        { kind: 'audio', mimeType: 'audio/mp3', base64: 'TQ==' },
+        { kind: 'video', mimeType: 'video/mp4', base64: 'Vg==' },
+        { kind: 'document', mimeType: 'application/pdf', base64: 'UA==' },
+      ],
+    },
+  ],
   tools: ['search', 'fetch'].map((name) => ({
     name,
     description: name,
@@ -106,11 +122,40 @@ describe('canonical Google Interactions protocol', () => {
           operation,
           returnedModel: 'gemini-returned',
         });
-        expect(
-          yield* Effect.promise(() =>
-            (fetchModel.mock.calls[0][0] as Request).json(),
-          ),
-        ).toMatchObject({ background: true, stream: false, store: true });
+        const submitted = yield* Effect.promise(() =>
+          (fetchModel.mock.calls[0][0] as Request).json(),
+        );
+        expect(submitted).toMatchObject({
+          background: true,
+          stream: false,
+          store: true,
+          input: [
+            {
+              type: 'user_input',
+              content: [
+                { type: 'text', text: 'go' },
+                {
+                  type: 'image',
+                  data: 'AA==',
+                  mime_type: 'image/png',
+                  resolution: 'high',
+                },
+                { type: 'audio', data: 'TQ==', mime_type: 'audio/mp3' },
+                {
+                  type: 'video',
+                  data: 'Vg==',
+                  mime_type: 'video/mp4',
+                  processing: 'static',
+                },
+                {
+                  type: 'document',
+                  data: 'UA==',
+                  mime_type: 'application/pdf',
+                },
+              ],
+            },
+          ],
+        });
         fetchModel.mockImplementationOnce(async () =>
           Response.json({
             id: 'int_1',
@@ -206,7 +251,15 @@ describe('canonical Google Interactions protocol', () => {
               results: [0, 1].map((callOrdinal) => ({
                 callOrdinal,
                 status: 'success' as const,
-                content: [{ kind: 'text' as const, text: 'ok' }],
+                content: [
+                  { kind: 'text' as const, text: 'ok' },
+                  {
+                    kind: 'image' as const,
+                    mimeType: 'image/png',
+                    base64: 'AQ==',
+                    detail: 'ultra-high' as const,
+                  },
+                ],
               })),
             },
           ],
@@ -216,16 +269,27 @@ describe('canonical Google Interactions protocol', () => {
         // The observed turn anchors the next round: its steps are the ones
         // the interaction already holds, so the replay sends only what
         // follows them.
-        expect(
-          yield* Effect.promise(() =>
-            (fetchModel.mock.calls[3][0] as Request).json(),
-          ),
-        ).toMatchObject({
+        const replayed = yield* Effect.promise(() =>
+          (fetchModel.mock.calls[3][0] as Request).json(),
+        );
+        expect(replayed).toMatchObject({
           background: false,
           stream: true,
           previous_interaction_id: 'int_1',
           input: [
-            { type: 'function_result', call_id: 'call_1' },
+            {
+              type: 'function_result',
+              call_id: 'call_1',
+              result: [
+                { type: 'text', text: 'ok' },
+                {
+                  type: 'image',
+                  data: 'AQ==',
+                  mime_type: 'image/png',
+                  resolution: 'ultra_high',
+                },
+              ],
+            },
             { type: 'function_result', call_id: 'call_2' },
           ],
         });
