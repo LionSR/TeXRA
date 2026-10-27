@@ -55,14 +55,6 @@ import {
 } from './pluginMessages';
 import type { ModelProvider } from 'llm-zoo';
 
-// Re-export what settings consumers need from the view-message modules, so
-// they keep one import site; the schemas themselves stay unexported here.
-export {
-  type ProviderKeyStatus,
-  type ProviderSetting,
-  type UpdateProfileMessage,
-} from './profileViewMessages';
-
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
   Schema.makeFilter((value) => URL.canParse(value), { message: 'a URL' }),
