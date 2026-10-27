@@ -312,17 +312,6 @@ function decideModelRoute(
 ): ModelRoute
 ```
 
-## defaultReasoningLevel
-
-The level a run uses for this model when nothing names one: `none` when it
-does not think by default, `undefined` when it thinks without levels.
-
-```ts
-function defaultReasoningLevel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-): ReasoningEffort | undefined
-```
-
 ## EndpointProviderId
 
 Providers with an HTTP endpoint of their own, which a host may override.
@@ -679,14 +668,6 @@ type PreparedHistoryEntry =
     };
 ```
 
-## PreparedHistorySchema
-
-The history a turn sends, under the prepared-history rules.
-
-```ts
-const PreparedHistorySchema: $Array<Union<readonly [Struct<{ readonly role: Literal<"user">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>, Struct<{ readonly role: Literal<"assistant">; readonly origin: NullOr<Struct<{ readonly requestedModel: String; readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly protocol: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly codecVersion: Literal<1>; }>>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"message">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"refusal">; readonly text: String; }>]>>; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-message">; readonly itemId: String; readonly status: Literals<readonly ["completed", "incomplete"]>; readonly phase: optional<NullOr<Literals<readonly ["commentary", "final_answer"]>>>; }>>; }>, Struct<{ readonly kind: Literal<"reasoning">; readonly summary: $Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>; readonly content: optional<$Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>>; readonly evidence: NullOr<Union<readonly [Struct<{ readonly kind: Literal<"google-interactions-thought-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"openai-responses-reasoning">; readonly itemId: String; readonly encryptedContent: optional<NullOr<String>>; readonly status: optional<Literals<readonly ["completed", "incomplete"]>>; }>, Struct<{ readonly kind: Literal<"anthropic-thinking-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"anthropic-redacted-thinking">; readonly data: String; }>]>>; }>, Struct<{ readonly kind: Literal<"local-call">; readonly providerCallId: String; readonly name: String; readonly argumentsText: String; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-function-call">; readonly itemId: optional<String>; readonly status: optional<Literal<"completed">>; }>>; }>]>>; }>, Struct<{ readonly role: Literal<"tool">; readonly results: $Array<Struct<{ readonly callOrdinal: Int; readonly status: Literals<readonly ["success", "error"]>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>>; }>, Struct<{ readonly role: Literal<"system">; readonly text: String; }>]>>
-```
-
 ## providerDisplayName
 
 A provider's own name, the one people know it by, falling back to the id
@@ -965,14 +946,6 @@ The model and reasoning request a stored model string names, or `undefined` when
 function selectModel(id: string): SelectedModel | undefined
 ```
 
-## systemUpdateText
-
-A mid-conversation system message as the user text any protocol takes.
-
-```ts
-const systemUpdateText: (text: string) => string
-```
-
 ## turnCost
 
 The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
@@ -1015,14 +988,6 @@ A turn as the caller asks for it, before the binding's defaults apply.
 
 ```ts
 type TurnRequest = typeof TurnRequestSchema.Type;
-```
-
-## TurnRequestSchema
-
-Materialized input; no SDK value, credential, file path or storage reference.
-
-```ts
-const TurnRequestSchema: Struct<{ readonly mode: optional<Literals<readonly ["foreground", "background"]>>; readonly system: optional<String>; readonly messages: $Array<Union<readonly [Struct<{ readonly role: Literal<"user">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>, Struct<{ readonly role: Literal<"assistant">; readonly origin: NullOr<Struct<{ readonly requestedModel: String; readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly protocol: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly codecVersion: Literal<1>; }>>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"message">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"refusal">; readonly text: String; }>]>>; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-message">; readonly itemId: String; readonly status: Literals<readonly ["completed", "incomplete"]>; readonly phase: optional<NullOr<Literals<readonly ["commentary", "final_answer"]>>>; }>>; }>, Struct<{ readonly kind: Literal<"reasoning">; readonly summary: $Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>; readonly content: optional<$Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>>; readonly evidence: NullOr<Union<readonly [Struct<{ readonly kind: Literal<"google-interactions-thought-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"openai-responses-reasoning">; readonly itemId: String; readonly encryptedContent: optional<NullOr<String>>; readonly status: optional<Literals<readonly ["completed", "incomplete"]>>; }>, Struct<{ readonly kind: Literal<"anthropic-thinking-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"anthropic-redacted-thinking">; readonly data: String; }>]>>; }>, Struct<{ readonly kind: Literal<"local-call">; readonly providerCallId: String; readonly name: String; readonly argumentsText: String; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-function-call">; readonly itemId: optional<String>; readonly status: optional<Literal<"completed">>; }>>; }>]>>; }>, Struct<{ readonly role: Literal<"tool">; readonly results: $Array<Struct<{ readonly callOrdinal: Int; readonly status: Literals<readonly ["success", "error"]>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>>; }>, Struct<{ readonly role: Literal<"system">; readonly text: String; }>]>>; readonly tools: optional<$Array<Struct<{ readonly name: String; readonly description: String; readonly parameters: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>; }>>>; readonly toolChoice: optional<Union<readonly [Literal<"auto">, Struct<{ readonly name: String; }>]>>; readonly maxOutputTokens: optional<Int>; readonly store: optional<Boolean>; readonly continuation: optional<Union<readonly [Struct<{ readonly coveredMessages: Int; readonly prefixFingerprint: String; readonly origin: Struct<{ readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly requestedModel: String; readonly codecVersion: Literal<1>; readonly protocol: Literal<"google-interactions">; }>; readonly anchor: Struct<{ readonly interactionId: String; readonly coveredSteps: Int; }>; }>, Struct<{ readonly coveredMessages: Int; readonly prefixFingerprint: String; readonly origin: Struct<{ readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly requestedModel: String; readonly codecVersion: Literal<1>; readonly protocol: Literal<"openai-responses">; }>; readonly anchor: Struct<{ readonly responseId: String; readonly coveredItems: Int; readonly kind: Literal<"stored">; }>; }>]>>; readonly cacheKey: optional<String>; }>
 ```
 
 ## TurnResult
@@ -1069,21 +1034,4 @@ function wireEffort(
   config: ModelConfig,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null
-```
-
-## zeroCostAccessOverrides
-
-The config fields of a route billed by subscription, not per token, over
-the context window the caller resolved for that route. A covered route
-bills no tier either: a long-prompt or fast-tier rate left on the config
-would price a request the subscription paid for.
-
-```ts
-function zeroCostAccessOverrides(contextWindow: number): {
-  readonly inputPrice: 0;
-  readonly outputPrice: 0;
-  readonly contextWindow: number;
-  readonly longContextPricing: undefined;
-  readonly tiers: undefined;
-}
 ```

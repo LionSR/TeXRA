@@ -198,7 +198,7 @@ export function resolveModelSource(
  * bills no tier either: a long-prompt or fast-tier rate left on the config
  * would price a request the subscription paid for.
  */
-export function zeroCostAccessOverrides(contextWindow: number): {
+function zeroCostAccessOverrides(contextWindow: number): {
   readonly inputPrice: 0;
   readonly outputPrice: 0;
   readonly contextWindow: number;

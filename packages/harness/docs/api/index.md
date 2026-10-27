@@ -2109,12 +2109,6 @@ class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 )
 ```
 
-## PluginTrust
-
-```ts
-type PluginTrust = typeof PluginTrustSchema.Type;
-```
-
 ## PluginUpdate
 
 One plugin's update: the commit it moved from and to, when fetched.
@@ -2383,21 +2377,6 @@ The orphaned stores and aside copies under `storageRoot`.
 
 ```ts
 const readStorageInventory: (storageRoot: string) => Effect<{ orphans: { readonly directory: string; readonly bytes: number; readonly why: string; }[]; asides: { readonly path: string; readonly bytes: number; }[]; skipped: { readonly path: string; readonly message: string; }[]; }, DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
-```
-
-## reasoningEffortOverrides
-
-The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
-keyed by model reference (`provider/id`).
-
-This is the one boundary between the persisted `texra.reasoningLevels`
-record and the runtime: the stored strings are parsed here, so no caller
-carries a bare string and an entry that is not an effort is reported rather
-than quietly disappearing. Reads only; the write path keeps the stored
-record verbatim so an unreadable entry is never dropped from storage.
-
-```ts
-function reasoningEffortOverrides(state: StateStore)
 ```
 
 ## redactSecrets

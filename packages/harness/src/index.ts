@@ -253,11 +253,7 @@ export {
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
-export {
-  reasoningEffortOverrides,
-  type RouteReasoning,
-  type SentReasoning,
-} from '@model/reasoningLevel';
+export type { RouteReasoning, SentReasoning } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.
 export type { RouteRetries } from '@agent/runtime/run/invocation';
@@ -317,7 +313,7 @@ export {
 } from '@common/plugins/pluginManifest';
 export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
 export type { ConfiguredHook } from '@common/plugins/hookConfig';
-export type { InstalledPlugin, PluginTrust } from '@shared/schemas';
+export type { InstalledPlugin } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {
