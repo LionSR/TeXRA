@@ -14,7 +14,7 @@
   "packages/harness/src/agent/runtime/runRegistry.ts": 864,
   "packages/harness/src/agent/runtime/SessionHandle.ts": 408,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 413,
-  "packages/harness/src/controllers/session/Database.ts": 1064,
+  "packages/harness/src/controllers/session/Database.ts": 1060,
   "packages/harness/src/controllers/session/sessionLayer.ts": 723,
   "packages/harness/src/controllers/session/SessionRequests.ts": 492,
   "packages/harness/src/controllers/session/storeSchema.ts": 410,

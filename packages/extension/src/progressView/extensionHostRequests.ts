@@ -238,44 +238,43 @@ export function createExtensionHostRequests(
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
 
-  const runActions = runtime.runSync(
-    createHostRunActions({
-      ...records,
-      session: runSession,
-      scope: options.scope,
-      launched: (run) =>
-        Effect.sync(() => options.presentLaunchedRun(run.runId)),
-      openFinalOutput: (config, result) =>
-        withProcessServices(
-          runtime,
-          openFinalOutputIfAvailable(roots, config)(result),
-        ),
-      loadModelOptions: () =>
-        withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
-      // The set-key prompt either runs or faults, so its failure is the one
-      // failure, as `ApiKeyPromptFailed`.
-      promptForApiKey: (provider) =>
-        runHandler('setApiKey', setApiKey(roots, secrets, provider)).pipe(
-          Effect.mapError(
-            (failure) =>
-              new ApiKeyPromptFailed({
-                provider,
-                message: 'The host could not ask for a provider API key.',
-                cause: failure,
-              }),
+  // One run builds the run actions and the window's one comparison refresh
+  // (a newer comparison replaces it, and the view's scope ends it).
+  const [runActions, diffRefresh] = runtime.runSync(
+    Effect.all([
+      createHostRunActions({
+        ...records,
+        session: runSession,
+        scope: options.scope,
+        launched: (run) =>
+          Effect.sync(() => options.presentLaunchedRun(run.runId)),
+        openFinalOutput: (config, result) =>
+          withProcessServices(
+            runtime,
+            openFinalOutputIfAvailable(roots, config)(result),
           ),
-        ),
-      showInfo: (message) => vscodeUi.showInfoMessage(message),
-      showWarning: (message) => vscodeUi.showWarningMessage(message),
-    }),
+        loadModelOptions: () =>
+          withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
+        // The set-key prompt either runs or faults, so its failure is the one
+        // failure, as `ApiKeyPromptFailed`.
+        promptForApiKey: (provider) =>
+          runHandler('setApiKey', setApiKey(roots, secrets, provider)).pipe(
+            Effect.mapError(
+              (failure) =>
+                new ApiKeyPromptFailed({
+                  provider,
+                  message: 'The host could not ask for a provider API key.',
+                  cause: failure,
+                }),
+            ),
+          ),
+        showInfo: (message) => vscodeUi.showInfoMessage(message),
+        showWarning: (message) => vscodeUi.showWarningMessage(message),
+      }),
+      FiberHandle.make().pipe(Scope.provide(options.scope)),
+    ]),
   );
-
   const { runOutputs } = runActions;
-  // The window's one comparison refresh: a newer comparison replaces it,
-  // and the view's scope ends it.
-  const diffRefresh = runtime.runSync(
-    FiberHandle.make().pipe(Scope.provide(options.scope)),
-  );
   /** A file action that schedules a PDF viewer opens it in the view's
    *  scope, so a close of the view cancels a delayed open. */
   const inViewScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>

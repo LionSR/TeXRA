@@ -417,16 +417,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // window of the service is its project's window there: the service's
     // runs ask it for the same and stage their tool edits here.
     if (windowSession.service === undefined) {
+      // One run: both attach to the provider's scope, in this order.
       this.runtime.runSync(
-        this.editors
-          .attach(roots.storage, editor)
-          .pipe(Scope.provide(this.scope)),
-      );
-      this.runtime.runSync(
-        attachSessionHost(
-          windowSession.session,
-          this.toolEditApprovals,
-          presentation,
+        Effect.andThen(
+          this.editors.attach(roots.storage, editor),
+          attachSessionHost(
+            windowSession.session,
+            this.toolEditApprovals,
+            presentation,
+          ),
         ).pipe(Scope.provide(this.scope)),
       );
     }
@@ -662,15 +661,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** VS Code disposables as finalizers of the provider's scope. */
-  private own(...disposables: vscode.Disposable[]): void {
-    for (const disposable of disposables)
-      this.runtime.runSync(
-        Scope.addFinalizer(
-          this.scope,
-          Effect.sync(() => disposable.dispose()),
-        ),
-      );
+  /** A VS Code disposable as a finalizer of the provider's scope. */
+  private own(disposable: vscode.Disposable): void {
+    this.runtime.runSync(
+      Scope.addFinalizer(
+        this.scope,
+        Effect.sync(() => disposable.dispose()),
+      ),
+    );
   }
 
   /** The agent, team, and model catalogs. */
