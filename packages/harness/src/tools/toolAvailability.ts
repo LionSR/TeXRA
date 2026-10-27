@@ -30,6 +30,7 @@ import {
   Layer,
   Option,
   Queue,
+  Result,
   Scope,
   Semaphore,
   SubscriptionRef,
@@ -75,29 +76,28 @@ const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
 /**
  * Seed the disabled-tool list for first-time users only, on every host and
- * in the agent package.
- *
- * Every plugin of `plugins` whose switch starts `off` is seeded as disabled
- * on a fresh install. Callers pass
- * the global state store they already hold. DISABLED_TOOLS is its own
- * fresh-install signal, because this seed is the only thing that writes it
- * before the user does: an absent value means neither the seed nor the user
- * has ever set the list, and a present one (an empty list included) means the
- * user's choices are already recorded, so re-seeding would silently disable
- * tools they had enabled. A recorded id that names no plugin of `plugins` is
- * kept: one composition's list is not every list that shares the store, and
- * an id no plugin has switches nothing.
+ * in the agent package: every plugin of `plugins` whose switch starts `off`.
+ * DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
+ * before the user does, so an absent value means the list was never set, and
+ * a present one (an empty list included) holds the user's choices, which a
+ * re-seed would silently undo. The read and the seed are one `modify`, so a
+ * switch another process records between them is kept. A recorded id that
+ * names no plugin of `plugins` is kept: one composition's list is not every
+ * list that shares the store, and an id no plugin has switches nothing.
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore, plugins: readonly Plugin[]) {
-    const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
-    const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
-    if (recorded !== undefined) return;
-
     const defaults = plugins
       .filter((plugin) => plugin.toggle === 'off')
       .map((plugin) => plugin.id);
-    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
+    let seeded = false;
+    yield* state.modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+      Result.map(storedDisabledTools(stored), (recorded) => {
+        seeded = recorded === undefined;
+        return seeded ? defaults : stored;
+      }),
+    );
+    if (!seeded) return;
     yield* Effect.logInfo(
       `First install: plugins switched off by default: ${defaults.join(', ')}`,
     ).pipe(withLogChannel(CHANNEL));
