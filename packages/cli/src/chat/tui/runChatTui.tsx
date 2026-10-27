@@ -45,7 +45,7 @@ import {
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
+import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -156,16 +156,13 @@ const CHAT_STARTUP_MODEL_RECOVERY = {
   configureKeyAction: 'add a provider API key with `texra setup`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
+/** `runtime` is the one the command entry installed and ran its program on;
+ *  platform signals hand off before Ink mounts. */
 export async function runChat(
+  runtime: CliProcessRuntime,
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  // Platform signals hand off before Ink mounts; chat keeps the entry runtime.
-  const runtime = installCliProcessRuntime(context.storageRoot, {
-    resourcesPath: context.resourcesPath,
-    minimumLogLevel: context.minimumLogLevel,
-    workspace: context.cwd,
-  });
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
   const chatScope = Scope.makeUnsafe();
