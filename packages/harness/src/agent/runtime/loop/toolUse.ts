@@ -26,7 +26,7 @@
 
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
-import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
+import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -225,7 +225,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        const prompts = yield* buildInitialToolUsePrompts(
+        openingSystem = yield* buildOpeningSystemPrompt(
           run.persona.prompt,
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
           {
@@ -234,9 +234,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             textOnly: bound.textOnly,
           },
         );
-        openingSystem = [prompts.systemPrompt, prompts.instructionSuffix]
-          .filter(Boolean)
-          .join('\n');
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
         // The user's task is the user message.
