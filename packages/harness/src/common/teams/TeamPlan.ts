@@ -7,10 +7,6 @@ import {
   type AgentSource,
   type TeamOptionData,
 } from '@shared/schemas';
-import {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  implicitDefaultToolUseAgents,
-} from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 
 import {
@@ -42,6 +38,13 @@ export type TeamAgentResolver<T> = (identifier: string) => T | undefined;
 
 export interface TeamRunOptions<T extends TeamCatalogAgent> {
   readonly resolveAgent: TeamAgentResolver<T>;
+  /**
+   * The agents a built-in team runs as its root, in preference order: the
+   * first one among the team's delegating members leads it, and a built-in
+   * team with none of them has no root. A custom team is led by its first
+   * delegating member. The app owns these names.
+   */
+  readonly rootAgentNames: readonly string[];
   readonly agentOverride?: string;
 }
 
@@ -58,10 +61,7 @@ export function planTeamRun<T extends TeamCatalogAgent>(
     : undefined;
   const rootAgent =
     overrideAgent ??
-    selectTeamRootAgent(members, {
-      presetOrder: preset.agents,
-      presetSource: preset.source,
-    });
+    selectTeamRootAgent(members, preset.source, options.rootAgentNames);
   // A preset-chosen root is one of the resolved members; only an override
   // root can sit outside the list, and it joins the delegation scope.
   const keys = members.map(agentKeyOf);
@@ -200,14 +200,13 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
-export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
-  customPresetsRaw: unknown;
-  resolveAgent: TeamAgentResolver<T>;
-}): TeamOptionData[] {
+export function loadTeamOptions<T extends TeamCatalogAgent>(
+  ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
+    customPresetsRaw: unknown;
+  },
+): TeamOptionData[] {
   const presets = launchableTeamPresets(ports.customPresetsRaw);
-  return buildTeamOptions(
-    planTeamRuns(presets, { resolveAgent: ports.resolveAgent }),
-  );
+  return buildTeamOptions(planTeamRuns(presets, ports));
 }
 
 export type TeamLaunchResolution =
@@ -219,18 +218,19 @@ export type TeamLaunchResolution =
   | { readonly status: 'unknown-team' }
   | { readonly status: 'blocked'; readonly reason: string };
 
-export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
-  teamId: string;
-  customPresetsRaw: unknown;
-  resolveAgent: TeamAgentResolver<T>;
-}): TeamLaunchResolution {
+export function resolveTeamLaunch<T extends TeamCatalogAgent>(
+  args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
+    teamId: string;
+    customPresetsRaw: unknown;
+  },
+): TeamLaunchResolution {
   const preset = findTeamPreset(
     launchableTeamPresets(args.customPresetsRaw),
     args.teamId,
   );
   if (!preset) return { status: 'unknown-team' };
 
-  const plan = planTeamRun(preset, { resolveAgent: args.resolveAgent });
+  const plan = planTeamRun(preset, args);
   if (!canLaunchTeam(plan)) {
     return { status: 'blocked', reason: teamLaunchBlockReason(plan)! };
   }
@@ -259,27 +259,24 @@ export function formatTeamLaunchBlockedMessage(
   return `Team "${teamId}" cannot run: ${reason}.`;
 }
 
+/** The root a team's resolved `members` (in preset order) run under, as
+ *  {@link TeamRunOptions.rootAgentNames} describes. */
 function selectTeamRootAgent<T extends TeamCatalogAgent>(
-  agents: readonly T[],
-  options: {
-    readonly presetOrder: readonly string[];
-    readonly presetSource: TeamPreset['source'];
-  },
+  members: readonly T[],
+  source: TeamPreset['source'],
+  rootAgentNames: readonly string[],
 ): T | undefined {
-  const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
-    (agent) => hasDelegationTool(agent.tools),
+  const delegatingAgents = members.filter((agent) =>
+    hasDelegationTool(agent.tools),
   );
-  const searchOrder =
-    options.presetSource === 'built-in'
-      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
-      : [...options.presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
-  for (const identifier of searchOrder) {
-    const preferredRoot = delegatingAgents.find((agent) =>
+  if (source === 'custom') return delegatingAgents[0];
+  for (const identifier of rootAgentNames) {
+    const root = delegatingAgents.find((agent) =>
       agentMatchesIdentifier(agent, identifier),
     );
-    if (preferredRoot) return preferredRoot;
+    if (root) return root;
   }
-  return options.presetSource === 'built-in' ? undefined : delegatingAgents[0];
+  return undefined;
 }
 
 /** Distinct member keys available to the run, excluding the root itself. */

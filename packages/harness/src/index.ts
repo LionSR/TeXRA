@@ -86,7 +86,6 @@ export {
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 export * from '@common/teams/TeamPresets';
 export * from '@common/teams/TeamPlan';
-export * from '@shared/constants/agents';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,

@@ -43,6 +43,7 @@ import {
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -309,6 +310,7 @@ function openProjectSession(
       // artifacts flushed, its entry released.
       (opened) => Effect.asVoid(sessions.close(opened.roots)),
     );
+    yield* recordFirstCompletedRun(session);
     // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
     // extension and the CLI say it.
     if (session.storeMovedAside)

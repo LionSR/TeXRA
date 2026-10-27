@@ -4,6 +4,7 @@ import { defineCommand } from 'citty';
 import { AgentCatalog, type ProcessServices } from '@texra-ai/harness';
 import { canLaunchTeam, planTeamRun, planTeamRuns } from '@texra-ai/harness';
 import { findTeamPreset } from '@texra-ai/harness';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import { failUsage, type CliContext } from '../runtime/cliContext';
@@ -65,6 +66,7 @@ const loadTeamRunPlan = Effect.fn('loadTeamRunPlan')(function* (
   if (!team) return yield* failUsage(missingTeamMessage(init.team));
   return planTeamRun(team, {
     resolveAgent: (yield* AgentCatalog).get,
+    rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
     agentOverride: init.agent,
   });
 });
@@ -92,6 +94,7 @@ const runTeamList = Effect.fn('runTeamList')(function* (
 ) {
   const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
     resolveAgent: (yield* AgentCatalog).get,
+    rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
   });
 
   emitCliResult(context, {

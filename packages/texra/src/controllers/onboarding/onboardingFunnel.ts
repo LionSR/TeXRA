@@ -18,12 +18,18 @@
  * `OnboardingFunnelRefresher`, which the webview hosts own one of each.
  */
 
-import { Effect, Schema, Semaphore } from 'effect';
+import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
 
-import { Settings, StateReadFailed } from '@texra-ai/harness';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import { Settings, StateReadFailed, withLogChannel } from '@texra-ai/harness';
+import {
+  agentName,
+  GlobalStateKey,
+  RUN_PHASE,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { StateStore, StateWriteFailed } from '@texra-ai/harness';
+import type { Session, StateStore, StateWriteFailed } from '@texra-ai/harness';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
@@ -53,6 +59,55 @@ export function setFirstRunDone(
 ): Effect.Effect<void, StateWriteFailed> {
   return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
 }
+
+/** Whether `view` holds a completed agent run other than the setup
+ *  agent's own. Subagent runs count, so the demo the setup conversation
+ *  delegates ends State 1. */
+function hasCompletedRun(view: SessionView): boolean {
+  for (const run of view.runs.values()) {
+    if (
+      run.status === RUN_PHASE.COMPLETED &&
+      run.identity.kind === 'agent' &&
+      agentName(run.identity.agent) !== SETUP_AGENT_NAME
+    )
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Set the first-run flag once `session` holds a completed run
+ * ({@link hasCompletedRun}), for the caller's scope. Each process that opens
+ * a session calls this beside the open. Closing the scope checks the view one
+ * last time, so a process that exits as its run ends (a headless
+ * `texra run`) still records it. Best-effort: the flag feeds the funnel, so a
+ * failed read or write is logged and never reaches the session.
+ */
+export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
+  function* (session: Session): Effect.fn.Return<void, never, Scope.Scope> {
+    const state = session.roots.globalState;
+    const record = getFirstRunDone(state).pipe(
+      Effect.flatMap((done) =>
+        done ? Effect.void : setFirstRunDone(state, true),
+      ),
+      Effect.catch((error) =>
+        Effect.logWarning('Failed to record the first completed run').pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel('onboarding'),
+        ),
+      ),
+    );
+    yield* Effect.addFinalizer(() =>
+      hasCompletedRun(session.view.current()) ? record : Effect.void,
+    );
+    yield* session.view.changes.pipe(
+      Stream.filter(hasCompletedRun),
+      Stream.take(1),
+      Stream.runForEach(() => record),
+      Effect.forkScoped,
+    );
+  },
+);
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */

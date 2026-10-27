@@ -46,6 +46,7 @@ describe('resolveTeamLaunch', () => {
           agent('lead', { tools: delegateTools }),
           agent('member'),
         ]),
+        rootAgentNames: [],
       }),
     ).toEqual({
       status: 'ready',

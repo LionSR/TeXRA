@@ -32,12 +32,12 @@ import {
   type AgentOptionData,
   type FileListEntry,
 } from '@texra-ai/harness/schemas';
-import { PREFERRED_TOOL_USE_AGENTS } from '@texra-ai/harness';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
+import { PREFERRED_TOOL_USE_AGENTS } from '@texra/shared/constants/agents';
 
 /** The document task `entry` defines, or null for a chat agent. */
 export const documentTaskOf = (

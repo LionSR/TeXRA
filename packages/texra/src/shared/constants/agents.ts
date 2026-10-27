@@ -1,4 +1,4 @@
-import { agentName } from '../schemas/agent';
+import { agentName } from '@texra-ai/harness/schemas';
 
 /** Bundled agent that runs the agent-led setup conversation. */
 export const SETUP_AGENT_NAME = 'setup';
