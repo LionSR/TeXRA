@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Effect-native test bodies — AGENTS.md, "Effect-native tests": a test body
+// Effect-native test bodies — src/test-kernel/AGENTS.md, "Test fixtures and fakes": a test body
 // that executes an Effect program uses `it.effect` with `Effect.gen` +
 // `yield*`, never `await Effect.runPromise(...)`. `Effect.runPromise` stays
 // legitimate in hooks (`beforeEach` and friends) and in non-test helpers, so
@@ -39,7 +39,7 @@ const baselinePath = join(
 );
 const TEST_ROOT = 'src/test-kernel';
 const GUIDANCE =
-  'AGENTS.md, "Effect-native tests": use it.effect with Effect.gen + yield*, or it.live when the body depends on real time';
+  'src/test-kernel/AGENTS.md, "Test fixtures and fakes": use it.effect with Effect.gen + yield*, or it.live when the body depends on real time';
 
 /**
  * The runs this gate counts, as declared in the pinned Effect version. Every

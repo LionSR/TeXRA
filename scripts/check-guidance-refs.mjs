@@ -100,7 +100,7 @@ const GUIDANCE_DIRS = [
 ];
 
 // Escape hatch for prose that names a path precisely because it is gone —
-// e.g. CLAUDE.md's "`packages/harness/src/common/webview/` does not exist". Put
+// e.g. "`packages/harness/src/common/webview/` does not exist". Put
 // `<!-- guidance-refs-ignore -->` anywhere in the paragraph. It scopes to the
 // whole block (contiguous non-blank lines), not one line, because Prettier
 // reflows this prose and would otherwise strand the marker.
@@ -365,7 +365,7 @@ function relativeMarkdownLinks(line, definitions) {
   if (/^\s{0,3}\[[^\]]+\]:/u.test(line)) return [];
 
   const links = [];
-  for (let open = line.indexOf('['); open !== -1;) {
+  for (let open = line.indexOf('['); open !== -1; ) {
     if (isEscaped(line, open)) {
       open = line.indexOf('[', open + 1);
       continue;

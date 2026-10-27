@@ -111,6 +111,5 @@ code, and this file points at them rather than restating them.
 - **Silent degradation is a defect.** A fallback that hides a failure must log
   loudly or not exist.
 
-Full conventions and the reasoning behind each: [`AGENTS.md`](../AGENTS.md).
-Orientation for agents and a map of the wiring points that fail silently:
-[`CLAUDE.md`](../CLAUDE.md).
+Full conventions, the wiring points that fail silently, and the reasoning
+behind each: [`AGENTS.md`](../AGENTS.md).

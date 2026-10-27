@@ -9,7 +9,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 ## Start With Repo Context
 
-- Read `AGENTS.md` — especially "Code quality rules" (earned from the 2026-07 simplification campaign), "Pragmatic implementations", "Discouraged factory patterns", "Flattening abstraction layers", "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
+- Read `AGENTS.md` — especially "Design guardrails" (with its "Flattening abstraction layers" and "Discouraged factory patterns" rules), "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
 - Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) (the Refactor-LOC lesson: 22 "reduction" PRs netted +5,046 LoC) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
 - Skim `docs/architecture/` before judging anything under `packages/harness/src/agent/`, `packages/harness/src/platform/`, or the run loops; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` records settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` or `rejected/` are history, not current justification.
 - Search `is:issue label:tech-debt` (open and closed) and the relevant per-proposal `Tracking:` issues before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
@@ -18,7 +18,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 Treat these as intentional by default; removing an unused method _inside_ one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
-- The checked-in architectural ratchets under `config/ratchets/` (listed in `CLAUDE.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
+- The checked-in architectural ratchets under `config/ratchets/` (listed in `AGENTS.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The one run program (`packages/harness/src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
@@ -34,7 +34,7 @@ A strong simplification removes, folds, or demotes something real and has clear 
 - Two representations mirror the same fact — e.g. a fact derivable upstream that is instead re-derived by a `resolve*`/`derive*`/`infer*` helper at multiple call sites (checklist §15 names the precedents).
 - Speculative product generality with no product owner: multi-workspace abstraction used by one workspace, configurable registries with one registration, staged-migration scaffolding whose tail never closed.
 - A wrapper, facade, or factory that only relocates complexity: single-caller extractions, trivial identity factories, two-layer factories called once, convenience barrels with no documented public surface.
-- Hand-rolled code reimplementing a Node builtin at the repo's engine floor (ES2022+, see "ES2023+ Patterns" in `AGENTS.md`) or an _existing_ root dependency — hand-rolled serialized async work that Effect concurrency or `withPerKeyLane` already covers is the canonical case (`chain = chain.then(...)` chains and new `p-queue` use are banned).
+- Hand-rolled code reimplementing a Node builtin at the repo's engine floor (ES2022 target, ES2024 library; see "Code style" in `AGENTS.md`) or an _existing_ root dependency — hand-rolled serialized async work that Effect concurrency or `withPerKeyLane` already covers is the canonical case (`chain = chain.then(...)` chains and new `p-queue` use are banned).
 - The simplified behavior may differ slightly, but the new behavior is still reasonable and easier to explain.
 
 Thin candidates are not enough: deleting one typo, a single `knip` run's raw output, reformatting, or "this looks complex" without call-site proof.
@@ -61,7 +61,7 @@ For complex asynchronous code, map each sentinel, readiness promise, cancellatio
 
 ## Hand-Rolled Code Versus A Dependency
 
-This repo's default runs the other way from most: "Pragmatic implementations" prefers native constructs and JSON over new libraries, and a new dependency is never added silently. So the swap question is usually: does a **Node builtin at the ES2022 engine floor** or a **dependency the repo already has** cover this? Effect concurrency primitives replacing hand-rolled promise chains is the standing example. Prefer `.toSorted()`, `.at()`, `Object.hasOwn()`, `node:timers/promises`, and friends over local helpers.
+This repo's default runs the other way from most: "Design guardrails" prefers what Effect, SQLite and Node already provide over new libraries, and a new dependency is never added silently. So the swap question is usually: does a **Node builtin at the ES2022 engine floor** or a **dependency the repo already has** cover this? Effect concurrency primitives replacing hand-rolled promise chains is the standing example. Prefer `.toSorted()`, `.at()`, `Object.hasOwn()`, `node:timers/promises`, and friends over local helpers.
 
 A genuinely _new_ dependency can still be the right answer, but the proposal must name the exact surface the package covers, check maintenance/adoption/transitive footprint honestly, and weigh net deletion (implementation plus dedicated tests plus docs, minus remaining glue). For webview-reachable code, a dependency that pulls Node built-ins into the browser-safe set is disqualified outright. A wrapper that relocates the same complexity is not a win.
 

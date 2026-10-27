@@ -21,7 +21,7 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 4. **Flag silent degradation.** A fallback that masks a failure is a defect unless it is loud (warn with the cause, and surface it). Grep the diff for `catch {`, `catch (_`, `.catch(() =>`, a `catchDecoding` default on persisted data, `??`/`||` over a failed read, and `default: return` in an event switch. Taxonomy and the accepted best-effort exceptions: checklist §15.
 5. **Verify, don't speculate.** Open every file before flagging. If you can't verify, mark it as a question, not a finding.
 6. **Order by severity.** Correctness/security → platform-decoupling → API-contract → maintainability. Cite `path:line` for every finding.
-7. **Skip the noise.** Don't comment on whitespace, missing JSDoc on private helpers, or anything CLAUDE.md says not to comment on.
+7. **Skip the noise.** Don't comment on whitespace, missing JSDoc on private helpers, or anything AGENTS.md says not to comment on.
 
 ## Output format
 

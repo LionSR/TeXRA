@@ -1,542 +1,435 @@
-# Repository Guidelines: TeXRA
+# TeXRA repository guide
 
-This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
+TeXRA is an AI theorist that helps academics with writing, research, and
+document processing using LLMs. It ships as a VS Code extension, an Electron
+desktop app, and a terminal CLI (`texra`): three hosts over one host-agnostic
+core. This file holds the rules every change needs and what the tree won't tell
+you. `CLAUDE.md` only imports it.
 
-## Folder-scoped guides
+Read the nested guide before working in its subtree:
 
-This file holds the rules every change needs. Material for one subtree lives in a
-nested `AGENTS.md`; read it before working there:
+- [`packages/harness/AGENTS.md`](packages/harness/AGENTS.md): config and storage
+  access, agent execution, the run loop, event channels, storage format, core
+  quality, tool input schemas.
+- [`packages/texra/AGENTS.md`](packages/texra/AGENTS.md): the app and its UI
+  toolkit.
+- [`packages/extension/src/AGENTS.md`](packages/extension/src/AGENTS.md):
+  webviews, error surfacing.
+- [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): the testing budget
+  in full, test tiers, fixtures and fakes. Its live-LLM, journeys and E2E rules
+  also bind `packages/llm` and `packages/desktop/tests/e2e`.
 
-- [`src/test-kernel/AGENTS.md`](src/test-kernel/AGENTS.md): test tiers, writing tests, fixtures and fakes. Its live-LLM,
-  journeys and E2E hygiene rules also bind `packages/llm` and `packages/desktop/tests/e2e`.
-- [`packages/harness/AGENTS.md`](packages/harness/AGENTS.md): config and storage access, agent execution, run
-  loop, tool input schemas, storage format, core quality. Settings-UI writes go through `applyStateSettingUpdate`.
-- [`packages/texra/AGENTS.md`](packages/texra/AGENTS.md): the UI toolkit.
-- [`packages/extension/src/AGENTS.md`](packages/extension/src/AGENTS.md): webviews, error surfacing.
+## Commands
+
+```bash
+corepack pnpm install
+npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast, build:fast
+npm run typecheck         # builds do NOT type check, see below
+npm run gate              # the static CI jobs: invariants, typecheck + format, lint
+npm run test:watch        # while editing: reruns what a save reaches
+npm run test:changed      # before a commit: suites reachable from uncommitted edits
+npm run test:pure         # before a push (~30s): the shared-registry tier and the architecture ratchets
+npm test                  # before opening a PR: the full suite, minutes long
+npm run format
+npm run lint
+npm run check:dead-code-ratchet
+npm run hooks:install     # optional pre-commit hooks (needs `pip install pre-commit`)
+```
+
+**Builds don't type check.** esbuild and Vite only strip types. Run
+`npm run typecheck` (or a `:safe` variant: `compile:safe`, `package:safe`,
+`build:safe`) before committing; this is the most common way a change lands
+broken. `typecheck` composes `typecheck:{workspace,test-kernel,harness,llm,cli,trace-viewer,desktop}`;
+run the affected ones while developing. `typecheck:harness` is the full harness
+build and regenerates `packages/harness/dist/`. `build:initial` validates a
+full initial build (desktop app and VSIX).
+
+Commits use [Conventional Commits](https://www.conventionalcommits.org)
+(`fix:`, `feat:`, `docs:`), a present-tense summary under 72 characters. Changes
+land on `main` through one PR per change; a `refactor:` / `simplify:` /
+`consolidate` / `dedupe` / `extract` PR fills the `## Net elements (R6)` and
+`## Consumer counts (R8)` sections of `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ## TeXRA 1.0 direction
 
-TeXRA 1.0 is the next release generation, developed on `main`, with breaking
-changes to the application and its stored state (accepted 2026-09-09; a
-development target, not a claim that 1.0 has shipped). `release/0.40` carries
-focused fixes for existing users under the released storage and execution
-contracts.
+TeXRA 1.0 is the next release generation, developed on `main` with breaking
+changes to the application and its stored state (not yet shipped).
+`release/0.40` carries focused fixes under the released contracts.
 
-- **Project terminology.** Use **project** for the user's working unit in
-  product text, documentation, and new or revised application interfaces. A
-  project may contain papers, code, data, and other research materials. Use
-  **paper** when referring to an actual scholarly document, not as a synonym
-  for a project. Existing application identifiers using `paper` should be
-  renamed coherently when their surrounding interfaces are revised.
-- **Breaking storage format.** SQLite is the authoritative store for persistent
-  application state. 1.0 does not import or migrate the legacy JSON store,
-  histories, or execution checkpoints (see "Compatibility and format
-  retirement"). This does not authorize deleting existing user data:
-  initialize new state separately and leave old state untouched. Research
-  files remain ordinary files; JSON remains fine for deliberate configuration,
-  interchange, and export formats.
-- **Effect-native implementation and tests.** Express asynchronous application
-  logic through Effect services, layers, scoped resources, typed errors, and
-  structured concurrency, with execution kept at the established host, tool,
-  and SDK boundaries; do not preserve Promise-based orchestration or add
-  pass-through adapters to retain an old internal interface. Pure computation
-  stays simple TypeScript. Test Effect programs with `@effect/vitest`,
-  `it.effect`, scoped test layers, and the test clock for retries, delays, and
-  deadlines; use `it.live` only for real external I/O or real time. Pure
-  functions and schemas may use ordinary Vitest. Retire tests with their
-  implementation and keep coverage at the final application's durable
-  boundaries.
-- **Use the supported stack before writing infrastructure.** Prefer the
-  maintained facilities of Effect, SQLite, Node, and the host APIs
-  (concurrency, resource lifetime, retries, streams, database, filesystem) and
-  check their actual APIs before adding a custom implementation. Custom
-  infrastructure needs a product requirement those facilities cannot meet;
-  preserving an old internal interface is not one. Build the 1.0 design
-  directly, in complete changes that stay useful.
+- **Terminology.** Say **project** for the user's working unit (papers, code,
+  data, other materials) and **paper** only for an actual scholarly document.
+  Rename `paper` identifiers when their interfaces are revised.
+- **SQLite is the authoritative store** for persistent application state. Do
+  not import or migrate the legacy JSON store, histories, or checkpoints, and
+  never delete existing user data: initialize new state beside it. Research
+  files stay ordinary files; JSON is fine for configuration, interchange and
+  export.
+- **Effect-native.** Asynchronous logic is Effect services, layers, scoped
+  resources, typed errors and structured concurrency, run only at the host,
+  tool and SDK boundaries. Pure computation stays plain TypeScript. Don't
+  preserve Promise-based orchestration or add adapters to keep an old internal
+  interface.
+- **Use the supported stack first.** Effect, SQLite, Node and the host APIs
+  already cover concurrency, resource lifetime, retries, streams, storage and
+  files; check their actual APIs before writing infrastructure. Preserving an
+  old internal interface is not a requirement.
 
-## Changelog Guidelines
+### Compatibility and format retirement
 
-When updating CHANGELOG.md:
+1.0 keeps no compatibility with earlier persisted data, config shapes, agent
+YAML fields, or flags. Add no legacy readers, aliases, migrations, dual-format
+unions, or compatibility writers; delete existing ones on sight, with their
+schemas, fixtures and tests. The only exceptions are formats with consumers
+outside TeXRA and wire protocols TeXRA still supports: normalize those once at
+the boundary and reject anything else with a clear error. `trace.json` is not
+an exception: a document from an older build fails loudly at parse (#12359).
+`config.json` is additive-only from 1.0: a key may be added, and a released key
+keeps its meaning. The session database's format stamp and row versions:
+`packages/harness/AGENTS.md` "Storage format".
 
-- Cover user-visible features and bug fixes in plain language, grouped into
-  Features, Bug Fixes, and (rarely) Breaking Changes
-- Describe the net difference from the previous released version, not the
-  commit sequence; omit defects introduced and fixed before the release
-- Do not expose internal architecture, protocol names, schemas, or codenames;
-  describe the effect in product terms
-- Exclude refactors, tests, dependency maintenance, and other changes with no
-  user-visible effect
+## Layout
 
-## Development workflow
+A pnpm workspace in three layers (design:
+`.agents/docs/implemented/architecture/2026-10-02-harness-package-split.md`):
 
-1. **Install dependencies**: run `corepack pnpm install` if needed.
-2. **Install the local hooks (recommended)**: install `pre-commit`
-   (`python -m pip install pre-commit`), then run `npm run hooks:install`. The
-   chained hook (`scripts/format-staged.mjs`) stages Prettier's output for you
-   and never overwrites unstaged edits (it keeps the working-tree copy and asks
-   you to run `npm run format` afterward). Use `git add -p` for a partially
-   staged file, and re-run `npm run hooks:install` after any manual
-   `pre-commit install`.
-3. **Run checks before committing**:
-   - Format code using `npm run format`.
-   - Type check with `npm run typecheck` (builds do not; see below).
-   - Build the extension bundle with `npm run compile:fast`.
-   - Lint TypeScript sources with `npm run lint`. `npm run gate` runs the
-     static CI jobs (invariants, typecheck and format, lint) in one command.
-   - Run the affected Vitest suites with `npm run test:changed`, and the
-     `pure` tier with `npm run test:pure` before pushing (see "Scoping the
-     test run" in `src/test-kernel/AGENTS.md`). Run the full suite with `npm test` before opening a
-     pull request.
-4. Commit only when `npm run lint` completes without errors.
+- `packages/harness/src` (`@texra-ai/harness`): the Effect-only harness and SDK
+  surface, built and releasable at 0.x. There is no `@texra/core`.
+- `packages/texra/src` (`@texra-ai/texra`): the app: TeXRA's plugins, LaTeX,
+  the UI kit (`@ui/*`) and the host-side controllers.
+- `packages/llm`: model access.
+- `packages/extension`, `packages/desktop`, `packages/cli`,
+  `packages/trace-viewer`: hosts and apps over them.
+- Repo-root `src/` holds only the test suite (`src/test-kernel/`);
+  `src/README.md` maps the tree.
 
-### Build system: esbuild + Vite
+Use the path aliases in `tsconfig.json` instead of relative chains. Harness
+aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
+`packages/harness/src`; `@texra/*`, `@latex/*`, `@replacement/*`,
+`@telemetry/*`, `@housekeeping/*` and `@ui/*` point into the app. Inside
+`packages/harness/src` (an ESM package) a relative import names its `.js` file.
 
-The extension host is bundled with esbuild and the webviews with Vite
-(`compile:fast`, `watch:fast`, `package:fast`, `build:fast`). Both only strip
-TypeScript types, so a build never catches a type error: run `npm run typecheck`
-or the `:safe` variants (`compile:safe`, `package:safe`, `build:safe`), which
-type check first. CI always runs `typecheck`.
+**The harness boundary is frozen, not open.** The app and hosts reach the
+harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
+`/schemas`, `/transcript`); a host holds the `LocalSession` that
+`Sessions.open` returns. The harness imports nothing from the app
+(`HARNESS_NO_APP_IMPORT_PATTERNS` in `eslint.config.mjs`), and harness, app and
+llm import no host layer. ESLint also fails:
 
-`npm run typecheck` composes independently runnable checks:
-`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:harness`,
-`typecheck:llm`, `typecheck:cli`, `typecheck:trace-viewer`, and
-`typecheck:desktop`. Run the affected ones while developing and the full command
-before committing. `typecheck:harness` performs the complete harness-package build
-and regenerates `packages/harness/dist/`. There is no `typecheck:extension`: the
-root `tsconfig.json` already includes `packages/extension/src/**`. Use
-`build:initial` to validate a full initial build (desktop app and VSIX).
+- an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/`, the
+  SDK entry files (`HARNESS_ENTRY_FILES`), `packages/harness/src/effect/` and
+  the named runtime entries (`EFFECT_RUN_ENTRIES`);
+- `new AbortController()` outside its two permanent residents;
+- any `@adapter-until` marker: there are no temporary adapters.
 
-## Commit messages
+The ratchets in `config/ratchets/` freeze the remaining edges. **Never widen a
+baseline**; a decrease is always welcome. `harness-deep-import-baseline` admits
+no new harness-internal specifier (`@agent/*`, `@shared/*`, `@platform/*`, …)
+from the app or a host, type-only included. `row-readers-baseline.json` lists,
+per session row type, the files that read it outside its reducers;
+`factOwnerRatchet.vitest.ts` fails a new reader and a second writer of a fact
+in its `OWNERS` table (shrink the list with
+`npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`).
+`refuted-candidates.json` records refactors investigated and refused; landing
+one on new evidence rewrites its entry in the same PR. Other invariants are
+hardcoded tests under `src/test-kernel/architecture/`, e.g.
+`sharedSchemasDeepImportRatchet.vitest.ts` (no `@shared/schemas/<leaf>`
+import) and `unknownErrorChannelRatchet.vitest.ts` (below). The open work is
+the public surface in
+`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`
+and shrinking the frozen lists, not another lint rule. Publishing the harness
+and llm packages is the owner's manual step (`releasing` skill).
 
-- Use the [Conventional Commits](https://www.conventionalcommits.org) style such as `fix:`, `feat:`, or `docs:`.
-- Keep the summary short (under 72 characters) and written in the present tense.
-- Provide additional context in the body when needed.
+Where things go:
 
-## Coding style
+- `packages/harness/src/shared/` holds wire contracts and UI-shared message
+  types; `@ui` (`packages/texra/src/ui/`) is the rendering toolkit over them.
+  Neither takes new `@agent/*` imports. Host-neutral app orchestration goes in
+  `packages/texra/src/controllers/` (the session bridge in its `session/`); a
+  host's own request handling sits beside the view it serves
+  (`packages/extension/src/progressView/extensionHostRequests.ts`,
+  `packages/desktop/src/main/desktopHostRequests.ts`).
+- `packages/harness/src/utils/` is host-agnostic, **not** browser-safe. The
+  webview frontends import no `@utils/*` module at runtime; they get path,
+  error, text and escaping helpers from `@texra-ai/harness/schemas` and the
+  transcript helpers from `@texra-ai/harness/transcript`.
+- `packages/harness/src/eventBus/` is `AppSignals` only (auth, subscriptions,
+  credentials, workspace-file writes), not run or session progress.
+- Webview base classes are in `packages/extension/src/common/webview/`, not in
+  the harness.
+- The transcript row model is `packages/harness/src/shared/transcript/`
+  (`@shared/transcript`); `packages/harness/src/transcript/` (`@transcript`) is
+  run-transcript persistence.
 
-- TypeScript code in `packages/*/src/` and the test suite targets ES2022 with the ES2024 library (`tsconfig.json`).
-- Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing. `import/order` and `no-nested-ternary` are enforced at error level.
-- Prefer `const` and `let` over `var`.
-- Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
-- Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
-- Document functions with concise comments. Use JSDoc style for public APIs.
-- Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `packages/texra/src/controllers/session/`.
+Two wiring points fail silently: a new VS Code command is registered through
+`packages/extension/src/commands.ts`, and a new setting is declared in the
+settings catalog by its owner (`packages/harness/AGENTS.md` "Configuration,
+storage, and workspace files") and shown in the native TeXRA settings view.
+`packages/extension/package.json` must not contribute `configuration`
+(`scripts/sync-package-contributes.mjs` throws).
 
-### Naming conventions
+## Separation of concerns: VS Code coupling
 
-- **Const object naming**:
-  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `SessionEvents`, `ModelInvoker`)
-  - Use **camelCase** for simple command/function namespaces (e.g., `latexCommands`)
-- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `SESSION_CLOSE_DEADLINE_MS`)
+Core logic must not import `vscode`. Check this first on any diff.
+
+**VS Code-free zones:** `packages/harness/src/`, `packages/texra/src/`,
+`packages/llm/src/`, `packages/desktop/src/`, and the webview frontends
+`packages/extension/src/progressView/frontend/` and
+`packages/extension/src/settingsView/frontend/`. Enforced by
+`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`, mirrored in
+`src/test-kernel/architecture/dependencyDirection.vitest.ts`; keep both in sync
+with this list.
+
+**VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
+over `processLayer()` once), `packages/extension/src/commands/`,
+`packages/extension/src/frontend/` (the extension-host frontend, not a webview),
+`packages/extension/src/common/` (not the harness's `common/`), and the view
+providers in `packages/extension/src/{progressView,settingsView}/` outside
+their `frontend/`.
+
+- Reach process services (`AgentDirectories`, `AppState`, `Secrets`,
+  `FileSystem`, `SetupPlatform`, …) from the Effect context the process
+  runtime serves, and per-workspace ones from the `WorkspaceRoots` the caller
+  holds. When agnostic code needs a host-only capability, add a typed port
+  served by that runtime, not an import or a field on a `Platform` object.
+- Use the Effect `FileSystem` (`stat(...).type`), not `vscode.FileType`, and
+  `isFileNotFoundError` (`@common/errors/errorPredicates`), not
+  `vscode.FileSystemError`.
+- Return errors to the caller; the command or frontend layer shows the message.
+- Carry the workspace root as data from its holder (a run's `session.roots`, a
+  tool's `ToolContext.env.roots`, the `WorkspaceFs` service), never
+  `vscode.workspace.workspaceFolders`. There is no ambient fallback.
+
+## Agent system
+
+The harness's `packages/harness/src/agent/` holds the domain model (`core/`,
+see its README) and the runtime. A run is one Effect program
+(`runtime/loop/toolUse.ts`) that appends rows to the run history and continues
+from the `RunState` each append returns; resume is the same function over the
+same rows. There is no flow engine: do not add a node, a cursor, a services
+bag, or a second writer of the run history. Every model call goes through
+`runtime/ModelInvoker.ts` and the `packages/llm` `Model` bound by
+`runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
+`runtime/run/invocation.ts`.
+
+Launch runs with `session.runs.launch({ request, options })` (requires the
+composition root's `SessionOwner`) and resume with `resumeRun`; call
+`executeAgent` only when you already own the `runId`. Run-loop rules, write
+points, and the event and card channels: `packages/harness/AGENTS.md`.
+
+Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
+`temperature`) in `packages/extension/resources/agents/`, created with the
+built-in `creator` agent or the settings view's Agents tab. A plugin may own
+one block of an agent file (`Plugin.agentBlock`); the documents plugin's
+`task:` block (`packages/texra/src/tools/documents/documentTask.ts`) makes an
+agent a document task, run by `packages/texra/src/agent/output/documentRecipe.ts`.
+
+**Prompts** (bundled agents, plugin agents, templates, skills,
+`.github/prompts/`) use general behavioral rubrics: never an identifiable
+person's name, writing samples, voice calibration, or account metadata. Public
+examples are synthetic or licensed with consent; user content, model output and
+credentials never become fixtures. Review a prompt change as the final resolved
+prompt with representative behavior checks.
+
+## Effect
+
+Effect is v4; v3 material often differs. Check the installed sources and types
+in `node_modules/effect` instead of guessing a pattern.
+
+- **Forward a captured context only through `Context.pick`.**
+  `Effect.context<T>()` returns the whole fiber context; re-providing it
+  shadows every more specific provision inside. Prefer `yield*`-ing the
+  services you need; when a context must travel, `Context.pick(A, B)(ctx)`
+  (`tools/liveTools.ts`).
+- **A service with a sensible default is a `Context.Reference`**, never a
+  hand-provided null (`RunCall`, `ChildRuns`).
+- **Serialize async work through Effect** (concurrency primitives, or
+  `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` for one
+  at a time per key), never a hand-written promise chain. Release resources on
+  success, failure and interruption.
+- **No `unknown` error channel** (`unknownErrorChannelRatchet.vitest.ts`). Type
+  it with the tagged error the path raises, or `Error` for a port whose hosts
+  fail differently. Turn a foreign rejection into an `Error` at its boundary
+  with `ensureError` (`@utils/errors/errorMessage`), never a `(e) => e`
+  pass-through and never the thunk form `Effect.try(() => …)` /
+  `Effect.tryPromise(() => …)`, whose `UnknownError` hides the message.
+- **Errors**: surface each once and let it propagate to that handler.
+  `@common/errors/*` classifies (`classifyAgentError`, the `sdkError/` leaves,
+  `errorPredicates`; no barrel); `@utils/errors/errorMessage` narrows `unknown`
+  (`toErrorMessage`, `ensureError`, `formatError`) and is browser-safe.
+- **Logging**: `Effect.log*` with `withLogChannel` (`@logger/effectLog`), and
+  structured payloads as `Effect.annotateLogs({ data })` so the progress view
+  renders them. Agent flows log through `AgentTrace` (`@agent/trace`); only a
+  fiberless publication point writes `writeLogEntry` (`@logger/logSink`).
+
+## Effect Schema Patterns
+
+Schemas are Effect Schema (`import { Schema } from 'effect'`) and the single
+source of truth. Zod is gone (ruled 2026-10-24); do not add it back for any
+shape. Normalize external input once at the boundary; downstream code never
+branches on format version.
+
+- Derive types: `typeof S.Type` (decoded), `typeof S.Encoded` (stored or wire).
+  Compose with `S.mapFields(Struct.assign/pick/omit)` or `...S.fields`. A union
+  is `Schema.Union([...])` of literal-discriminated structs; `Schema.TaggedUnion`
+  for `_tag`. `Schema.declare<T>(guard)` only for an external SDK type, with a
+  comment saying why.
+- Pass a schema as `Schema.Codec<T, unknown>` when it decodes unknown input,
+  `Schema.Codec<T>` only when both forms match, or `<S extends Schema.Top>`
+  when the caller's type is wanted back; never `Schema.Top` for something a
+  caller decodes with.
+- Decode with `Schema.decodeUnknownEffect` in Effect code,
+  `decodeUnknownResult` at a sync boundary that handles failure,
+  `decodeUnknownSync` where failure is a defect. The error `message` is the
+  rendered issue tree.
+- Checks are `.check(...)`: `Schema.isMinLength(n)`, `isPattern(re)`,
+  `isBetween({ minimum, maximum })`, `isUUID()`, …; a custom one is
+  `Schema.makeFilter(predicate, { message })` (wrap a predicate with optional
+  parameters: `(v) => pred(v)`). A literal subset is `Lit.pick([...])`; JSON is
+  `Schema.JsonObject` / `Schema.Json`.
+- `Schema.optional(S)` is absent or `undefined`, `optionalKey(S)` absent only,
+  `NullOr(S)` adds `null`. Accept a database null with
+  `Schema.optional(Schema.NullOr(S))` and normalize to `undefined`.
+- Structs ignore undeclared keys. Refuse them with
+  `{ onExcessProperty: 'error' }` at the one site that must; keep them with
+  `Schema.StructWithRest`.
+- Transformations: `S.pipe(Schema.decodeTo(Target, { decode, encode }))` with
+  `SchemaGetter.transform` (present values), `transformOptional` (fills an
+  absent key) or `transformEffect` (can fail with
+  `SchemaIssue.InvalidValue`). Decode-only (`SchemaGetter.forbidden` encode) is
+  allowed only at a provider boundary. An `.annotate({ description })` after
+  `decodeTo` or a default lands on the decoded side and misses the JSON Schema;
+  annotate the encoded layer first.
+- Errors are `Schema.TaggedError` with schema fields (`cause: Schema.Defect()`).
+
+**Defaults are not interchangeable.** `withDecodingDefault` substitutes for an
+absent field before decoding, `withDecodingDefaultType` fills it with a decoded
+value, and `catchDecoding` swallows any decoding failure, including a missing
+required field. On security, accounting, lifecycle and persisted data, use a
+default only for a documented absent field and let malformed values fail:
+`catchDecoding` there turns corruption into a silent default, and permanent data
+loss once that value feeds a whole-file write. It is fine on non-authoritative
+view state.
+
+**Tool input schemas.** An optional field is `Schema.optional(Schema.NullOr(S))`,
+not `Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, …) require
+optional fields to be nullable. Test with `== null`, coalesce with
+`?? undefined`. Numbers are `Schema.Finite` or `Schema.Int`, never
+`Schema.Number` (its JSON Schema admits `"NaN"` and drops checks). The model's
+JSON Schema comes from `packages/harness/src/agent/core/tools/toolSchema.ts`.
+Decode with `{ errors: 'all' }`. Union branches and defaults:
+`packages/harness/AGENTS.md` "Tool input schemas".
+
+## Design guardrails
+
+- **Modern, scalable, not over-engineered (owner rule).** Use what SQLite and
+  Effect provide instead of a hand-written version. Prefer shapes that keep
+  working as data grows: content addressing, a version per record kind,
+  projections rebuilt from history, one owner per fact. Then write the fewest
+  lines that do the job; build nothing speculative. Trust data from code you
+  control and validate only at real boundaries.
+- **Find the design problem.** Reduce change amplification and cognitive load
+  before adding features, deepen shallow modules, and aim for the structure you
+  would have designed with the change in mind. When a hotspot is too complex,
+  look for the data structure, duplicated fact or misplaced owner behind it;
+  never split a file mechanically.
+- **Flattening abstraction layers.** Entry points run the loop program
+  directly. Inline a wrapper that only creates state, runs a program and
+  interprets results. Import from the defining module; leave no re-export
+  shims. No convenience barrels: an index file exists only for a documented
+  public surface.
+- **Discouraged factory patterns.** A factory needs multiple callers, real
+  logic, class construction, or captured context; inline a `buildX` called only
+  from `createX` and replace an identity factory with a literal. Grep the
+  caller count before adding a shared helper: single-caller extractions are
+  banned (narrowing an export surface to one entry point is not one). New
+  ports, facades and template methods delete what they replace in the same PR.
+- **Exports are contracts.** Default to file-local; a new export needs a
+  consumer in the same PR (`npm run check:dead-code-ratchet` against
+  `config/ratchets/knip-baseline.json`).
+- **Silent degradation is a defect.** A fallback that masks a failure logs the
+  cause at `warn` and surfaces it, or does not exist. `catch {}`, `??` over a
+  failed read, `catchDecoding` on persisted data and a `default: return` that
+  drops an unknown event all hide bugs. Accepted exceptions: §15 of
+  `.claude/skills/code-review/references/review-checklist.md`.
+- **No shared mutable state.** A module-level object that is returned or
+  crosses a module boundary is deep-frozen or built fresh by a factory. State
+  tests must isolate sits behind an injectable, resettable handle. Register
+  something globally only when an external surface references it.
+- **UI anti-patterns.** Never compensate for data-model problems at render
+  time (no `Date.now()`, synthetic IDs, DOM existence checks or dedup in
+  renderers); fix the data upstream. One home per user action: secondary
+  surfaces show read-only status, not a second control (exceptions: a global
+  default versus a per-item override, or one command plus one UI button).
 
 ### Plain names and comments
 
-Name things for what they do, in ordinary programming English. Write comments for a reader who has read
-the code but none of the planning docs. Coined metaphors read as insight to the author and as noise to
-everyone else, and one metaphor tends to end up meaning several things.
-
-- **Use the plain word.** Prefer these over the metaphor on the left in new identifiers and comments:
-
-  | Avoid                       | Write instead                                     |
-  | --------------------------- | ------------------------------------------------- |
-  | fold (as a noun), folded    | update, apply, rebuild; applied                   |
-  | park, parked                | wait, waiting, blocked                            |
-  | settle, settled, settlement | finish, finished, result (name which result)      |
-  | admit, admission            | accept, start, requires                           |
-  | arm (of a union or a fold)  | case, branch, handler                             |
-  | move, grammar, transition   | outcome, handlers, next step                      |
-  | tombstone, hydration        | deletion marker, initial load                     |
-  | seam, plane, ledger, spine  | boundary, layer, record, the specific module name |
-  | refusal (our own rejection) | rejection, error (a model refusing stays refusal) |
-
-  Existing names that are documented APIs (`withPerKeyLane`, `SessionEvents`) keep their names.
-
-- **One word, one meaning.** Before reusing a word for a new concept, grep it. If it already names
-  something else in that package, pick another word.
-- **No document citations in code.** No section numbers, PRD or decision ids (`5.2`, `D5`, `G1`,
-  `decision 9`), and no "ruled" or "owner rule" provenance. Say the reason directly; the PR and the design doc
-  carry the history.
-- **Comments must be true.** A comment that calls a function pure, or a field final, is checked like code.
-  When you change behaviour, fix the comment in the same commit.
-- **Persisted and wire strings keep their spelling.** Row and event `type` literals, `_tag` strings,
-  settings keys and command ids are data. Renaming the TypeScript around them is fine; renaming the string
-  is a format change.
-
-### Directory organization
-
-This is a pnpm workspace; CLAUDE.md "Layout" describes the packages and the frozen `@agent/*` surface. Never widen a baseline under `config/ratchets/`; a decrease is always welcome. Kernel architecture tests under `src/test-kernel/architecture/` pin single-authority invariants with hardcoded rules rather than baseline JSON: for example `approvalPolicyAuthorityRatchet.vitest.ts`, and `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every `@shared/schemas/<leaf>` import.
-
-Two of those baselines budget the code itself rather than an import edge, and both run in the pure tier:
-
-- `row-readers-baseline.json` — per session row type, the files that read it (compare, switch on or list its `type`) outside its reducers (`runRows.ts`, `runState.ts`, `turnRowHandlers.ts`, `sessionViewUpdate.ts`, `transcriptUpdate.ts`, the store projections). `factOwnerRatchet.vitest.ts` fails a new reader with the reducer to read instead; a file that stops reading leaves the list with `npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`, which only drops entries. The same suite holds a table of facts with one owner each (`OWNERS`: `stopReason` and the `launchParent` fallback in `RunRegistry`, the lifecycle rows' writers) and fails a second writer.
-- `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence rewrites the entry in the same PR and, by convention (not checked), cites the id in the PR body.
-
-Another code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
-
-### Pragmatic implementations
-
-- **Start simple**: Choose the most direct solution, using built-ins (objects, Maps, Sets, arrays) and host APIs; persistent application state belongs in SQLite (see "TeXRA 1.0 direction"). A new abstraction earns its place only when it clearly reduces complexity.
-- **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
-- **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
-  - `@common/errors/*` — classification and surfacing: `classifyAgentError` (`@common/errors/agentErrorClassification`), the SDK-error inspection under `@common/errors/sdkError/`, and `@common/errors/errorPredicates`. There is no barrel; import the leaf module. Reach for these when the _kind_ of failure changes what happens next.
-  - `@utils/errors/errorMessage` — the `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`, and `formatError` (a prefixed, truncated message). Browser-safe, which `@common/errors/*` is not required to be.
-
-### Testing discipline
-
-Tests are production maintenance work, and this project breaks internal
-interfaces often and on purpose. A test pinned to a seam that is about to churn
-is not safety — it is merge friction the next refactor has to pay down. The
-default for a PR is **zero new tests**; a test must earn its place — protecting
-a consequential current contract, a difficult invariant, or a reproduced
-defect — and is never proof of work or PR padding.
-
-Three rules come first and override anything below that seems to allow more:
-
-1. **Never write unit tests after you write code.** A unit test written to
-   fit code that already exists asserts what the code does, not what it
-   should do. It passes on day one, catches nothing, and pins the
-   implementation for the next refactor to pay down. If the code is already
-   written, the evidence is an E2E run, not a retrofitted unit suite. Keeping
-   an existing test is not writing one: when a cleanup deletes a suite, a live
-   helper keeps its last direct test that protects a real contract.
-2. **E2E tests are the preferred and default testing mechanism.** Verify a
-   complex feature by driving the real app (the Playwright suite in
-   `packages/desktop/tests/e2e/`, or the real `texra` binary for CLI
-   behavior) through the user-visible path. Every E2E test ends by producing
-   a **verifiable, repeatable artifact** — a screenshot compared against a
-   committed baseline, a saved transcript, run history, or output file —
-   written to a known path (`packages/desktop/tests/e2e/test-results/`), so a
-   reviewer can re-run the test and diff the artifact rather than trusting a
-   green checkmark.
-3. **If you must test a system in isolation, write down how it can fail
-   first, then write the code.** Before any implementation, list every way the
-   unit can fail — bad input, malformed persisted data, ordering and
-   cancellation races, partial writes, provider errors, boundary sizes — in the
-   PR body or at the top of the suite. Each isolated test encodes one entry
-   from that list; a test that maps to no listed failure mode does not get
-   written. This is the only route to a new unit test.
-
-Concretely:
-
-- A behavior-preserving refactor adds no new tests; the existing suite passing
-  is the evidence.
-- A bug fix gets at most one regression test that reproduces the defect, at the
-  narrowest boundary that exhibits it — written to fail before the fix lands.
-  Prefer an E2E reproduction when the defect is reachable through the app.
-- A new feature gets E2E coverage of its user-visible path, ending in an
-  artifact. Isolated tests only under rule 3, at its durable boundary — the
-  wire contract, the schema, the parser — never a unit test for each internal
-  layer the data passes through.
-- Delete a unit test that would not catch a real bug the E2E suite misses:
-  mock echoes, call-count and call-order pins, snapshot tests of copy,
-  "renders without crashing", and re-assertions of a schema's defaults are
-  cost with no signal.
-
-How to write the tests that do earn a place: `src/test-kernel/AGENTS.md`
-"Writing tests that earn a place".
-
-The same discipline applies in review: do not ask an author to add tests unless
-the diff leaves a consequential contract or reproduced defect unprotected. When
-code or a historical format is retired, delete tests and fixtures that exist
-only for that retired behavior instead of rewriting them around the new
-implementation.
-
-### Effect Schema Patterns
-
-Schemas are Effect Schema (`import { Schema } from 'effect'`, effect 4.x).
-Zod is not used; the owner ruled the move on 2026-10-24 (rulings ledger,
-"Schemas are Effect Schema").
-
-**Schemas as the single source of truth**
-
-- Define the schema, then the type from it: `type X = typeof XSchema.Type`
-  (the decoded form) and `typeof XSchema.Encoded` (the stored or wire form).
-- Compose instead of repeating fields: `S.mapFields(Struct.assign({...}))`,
-  `S.mapFields(Struct.pick([...]))`, `Struct.omit`, `...S.fields` in a new
-  `Schema.Struct`. A union of structs is `Schema.Union([...])`; its members
-  discriminate on their literal fields (`kind: Schema.Literal('x')`), and
-  `Schema.TaggedUnion` is for `_tag` unions.
-- A schema's type crosses a function boundary as `Schema.Codec<T, unknown>`
-  when the schema decodes unknown input (a record's `schema:` field, a tool's
-  input, a stored or wire shape: its encoded form is not `T` once a field
-  has a default, a brand or a transformation), as `Schema.Codec<T>` only
-  when encoded and decoded forms are the same, and as a generic
-  `<S extends Schema.Top>` when the caller's type is wanted back. Never
-  `Schema.Top` for a value a caller decodes with: it has unknown decoding
-  services, so the decode functions reject it.
-- `Schema.declare<T>(guard)` only for an external SDK type a schema cannot
-  state, with the reason in a comment.
-- Decode with `Schema.decodeUnknownEffect(S)` inside Effect code (the error
-  channel is `SchemaError`), `Schema.decodeUnknownResult(S)` at a sync
-  boundary that handles the failure, `Schema.decodeUnknownSync(S)` where a
-  failure is a defect. The failure's `message` is the rendered issue tree;
-  there is no separate pretty-printer. Encode with the matching `encode*`.
-
-**Type and validation idioms**
-
-- Primitives: `Schema.String`, `Schema.Number`, `Schema.Int`, `Schema.Finite`,
-  `Schema.Boolean`, `Schema.Literal('a')`, `Schema.Literals(['a', 'b'])`,
-  `Schema.Enum(CONST_OBJECT)` for a `{ KEY: 'value' } as const` table.
-- Checks are `.check(...)` with the built-in predicates: `Schema.isMinLength(n)`,
-  `Schema.isMaxLength(n)`, `Schema.isPattern(re)`, `Schema.isGreaterThan(n)`,
-  `Schema.isBetween({ minimum, maximum })` (an options object, not two
-  arguments), `Schema.isUUID()`, …; a custom one is
-  `Schema.makeFilter(predicate, { message })`. `makeFilter` calls the
-  predicate as `(input, ast, options)`, so a function with its own optional
-  parameters is wrapped: `(v) => pred(v)`. A filter either returns a boolean
-  and carries `{ message }`, or returns its own issues (a string, or
-  `{ path, issue }` records; an empty array is success) and carries no
-  `message`: an annotation message replaces whatever the predicate returned.
-- A subset of a `Schema.Literals` is `Lit.pick(['a', 'b'])`, not a second
-  list. A string-keyed JSON object is `Schema.JsonObject`; any JSON value is
-  `Schema.Json`.
-- `Schema.optional(S)` is absent or `undefined`; `Schema.optionalKey(S)` is
-  absent only; `Schema.NullOr(S)` is `S | null`; `Schema.optional(Schema.NullOr(S))`
-  is the tool-input form (below).
-- Describe a field for the model or a settings page with
-  `.annotate({ description: '...' })`; `Schema.resolveAnnotations(S)` reads it.
-- A struct ignores keys it does not declare. A shape that must refuse them
-  (the former `strictObject`: a security check, a metadata guard) decodes
-  with `{ onExcessProperty: 'error' }` at the one site that needs the
-  refusal, or carries a filter that names the forbidden key; a shape that
-  must keep them is
-  `Schema.StructWithRest(Schema.Struct({...}), [Schema.Record(Schema.String, Schema.Unknown)])`.
-- A transformation is `S.pipe(Schema.decodeTo(Target, { decode, encode }))`
-  with `SchemaGetter.transform` on each side; a decode-only transformation
-  names `SchemaGetter.forbidden` as its encode and is allowed only at a
-  provider boundary, never on a persisted or wire shape.
-  `SchemaGetter.transform` maps a present value only: a decoder that fills
-  an absent key (`?? fallback`) is `SchemaGetter.transformOptional`, and a
-  transformation that can fail is `transformEffect` /
-  `transformOptionalEffect` returning
-  `Effect.fail(new SchemaIssue.InvalidValue({ message }, input))`. An
-  `.annotate({ description })` on a `decodeTo` or `withDecodingDefault`
-  result lands on the decoded side and never reaches the JSON Schema;
-  annotate the encoded layer (`Schema.optional(...)`) before piping.
-- Reading a schema back: `S.fields` (Struct), `S.members` (Union),
-  `S.literals` (Literals), `S.literal` (Literal), `S.key` / `S.value`
-  (Record), `S.from` / `S.to` (a `decodeTo`), `S.ast` for anything else;
-  `Schema.is(S)` is the type guard and `Schema.isSchema(u)` tells a schema
-  from a value.
-- Errors are `Schema.TaggedError` classes with schema fields; a wrapped cause
-  is `cause: Schema.Defect()` (or the cause's own error schema). They are
-  yieldable, carry `Error.cause`, and cross the RPC edge as themselves.
-
-**Default values**
-
-- `S.pipe(Schema.withDecodingDefault(Effect.succeed(v)))` substitutes for an
-  absent or `undefined` field BEFORE decoding runs on it (the stored form);
-  use for documented absent-input defaults.
-- `S.pipe(Schema.withDecodingDefaultType(Effect.succeed(v)))` fills an absent
-  or `undefined` field with a decoded value, not decoded again.
-- `S.pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(v))))`
-  substitutes after a decoding failure; use only where malformed present
-  data may be discarded by policy.
-
-Preserve the distinction between absent and invalid present data. In security,
-accounting, lifecycle, and durable-state schemas, use a decoding default only
-for documented absent fields with explicit product meaning, and let malformed
-present values fail. Do not use `catchDecoding` to turn corruption or contract
-drift into an ordinary default. An absent required field is also a decoding
-failure, so `catchDecoding` replaces missing required data as well as invalid
-present data.
-
-Examples: a decoding default of `0` or `[]` when loading saved state;
-`catchDecoding` on a non-authoritative view-state field, or on the whole
-view-state schema for an all-or-nothing fallback (never a `Result` check plus a
-ternary).
-
-**Null handling from databases**: accept null with
-`Schema.optional(Schema.NullOr(Schema.String))` and normalize to undefined.
-
-**Tool input schemas (IMPORTANT)**
-
-An optional tool-input field is `Schema.optional(Schema.NullOr(S))`, not
-`Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require
-optional fields to also be nullable for structured output. Check for a missing
-value with `== null` (not `=== undefined`), and coalesce with `?? undefined`
-when passing it to a function expecting `T | undefined`. A tool-input number
-is `Schema.Finite` or `Schema.Int`, never `Schema.Number`: the JSON Schema
-for `Schema.Number` is an `anyOf` that admits the strings `"Infinity"` and
-`"NaN"` and loses the field's checks. The model's JSON Schema comes from
-`Schema.toJsonSchemaDocument` through
-`packages/harness/src/agent/core/tools/toolSchema.ts`, which flattens a
-top-level union, drops the `additionalProperties: true` and duplicate null
-members Effect emits, and strips the dialect URI for the providers. Decode a
-tool's input with `{ errors: 'all' }` so the model sees every issue at once.
-
-Union branches, `nullishWithDefault`, and designing for the model's first call:
-`packages/harness/AGENTS.md` "Tool input schemas".
-
-**Compatibility and format retirement**
-
-TeXRA 1.0 keeps no compatibility with earlier persisted data, config shapes,
-agent YAML fields, or flags (see "TeXRA 1.0 direction"). Do not add legacy
-readers, aliases, migrations, dual-format unions, or compatibility writers, and
-there is no retirement window to wait out: delete existing ones on sight, with
-their schemas, transforms, fixtures, and compatibility-specific tests. The only
-exceptions are formats with consumers outside TeXRA and wire protocols TeXRA
-still supports; normalize those once at their boundary, and reject any other
-unsupported state with a clear error. `trace.json` is **not** such an exception:
-the owner ruled that 1.0's exports start fresh, so a document from an older
-build fails loudly at the parse boundary (#12359). The session database's format stamp and row versions:
-`packages/harness/AGENTS.md` "Storage format".
-
-`config.json` is additive-only from 1.0 (ruled 2026-09-30): a key may be added,
-and a released key keeps its meaning, so no retired-key list and no rewrite of
-old files is kept.
-
-### ES2023+ Patterns
-
-Use the modern features the target and library provide: `.at()`, `Object.hasOwn()`,
-`.flatMap()`, `.replaceAll()`, `.toSorted()` / `.findLast()` / `.toReversed()`
-instead of mutate-then-sort or backwards index loops, `.slice()` over
-`.substring()`, `for...of` (with `.entries()` when the index is needed) over
-index loops, `Number.parseInt(value, 10)` with an explicit radix, the `node:`
-protocol for Node builtins, and `node:timers/promises` for sleeping in
-Node-only code. Use `?? false` for boolean coercion, not `|| false`. Copies from
-a Set/Map still need the spread before `.toSorted()`.
-
-Index-based loops are still right when the index is the point: token consumers
-that advance `i` by a variable stride, queue/BFS loops that append mid-iteration,
-and `charCodeAt(i)` hash loops (`for...of` walks code points, not UTF-16 units,
-which changes persisted hash output).
-
-### Platform decoupling rules
-
-For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
-
-1. **Never import `vscode` in VS Code-free zones.** The zones (the whole harness, the whole app, `packages/llm/src/`, `packages/desktop/src/` and the webview frontends) and the rule against new `@agent/*` imports under `packages/harness/src/shared/` and `packages/texra/src/ui/` are in CLAUDE.md "Separation of concerns: VS Code coupling".
-
-2. **Use platform-agnostic helpers instead of VS Code types:**
-   - The Effect `FileSystem` (`stat(...).type === 'File'` / `'Directory'`) — not `vscode.FileType`
-   - `isFileNotFoundError(err)` from `@common/errors/errorPredicates` — not `instanceof vscode.FileSystemError`
-
-3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
-
-4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the composition root provides once per process (`SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). There is no `Platform` object to add a field to; a process fact has one home, the service the runtime serves.
-
-5. **Prefer the session's own `roots.workspace` over `vscode.workspace.workspaceFolders`.** Carry it as data from the caller that holds it (a run's `session.roots`, a tool's `ToolContext.env.roots`); inside Effect, take it from the `WorkspaceFs` service, whose `root` is the same value. There is no ambient fallback: code that cannot name a caller holding the root has an owner to thread it from, not a helper to reach for.
-
-### Patterns across the codebase
-
-Config and storage access, agent execution, the run loop, webviews: see "Folder-scoped guides".
-
-**Logging and telemetry**
-
-- Log with `Effect.log*` and name the channel with `withLogChannel` (`@logger/effectLog`). Only a synchronous publication point with no fiber (the trace emitter, pre-runtime and shutdown paths) writes `writeLogEntry` from `@logger/logSink` directly. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
-- Always pass structured payloads as raw `data` (`Effect.annotateLogs({ data })`) (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
-- Publish runtime progress through session events and `SessionHandle.interactions.emit`; keep non-agent logs on the shared `TeXRA` output channel.
-
-### Prompt and agent files
-
-These rules cover every prompt the repo ships: bundled agents in
-`packages/extension/resources/agents/`, plugin agents, templates, skills, and
-the workflow prompts in `.github/prompts/`.
-
-- Prompts use general behavioral rubrics, never an identifiable person's name,
-  private writing samples, voice or style calibration, feedback transcripts,
-  biography, or account metadata.
-- Public examples are synthetic, or have documented consent and a compatible
-  license.
-- User content, retrieved documents, model output, credentials, and account
-  state are runtime inputs; never commit them as prompt fixtures.
-- A prompt change is reviewed as the final resolved prompt, with representative
-  behavior checks, not only a YAML or Markdown syntax check.
-
-### UI anti-patterns
-
-Never compensate for data-model problems at render time: no `Date.now()`, synthetic IDs, DOM existence checks or deduplication in renderers. Store data once at the source with all metadata. One home per user action: secondary surfaces show read-only status, never a second control (exceptions: a global default versus a per-item override, or one command plus a single UI button). Grep procedure: code-review checklist § 5.
-
-## Design and refactoring
-
-Draw on John Ousterhout's _A Philosophy of Software Design_ when adding or
-refactoring code:
-
-- Simplify sources of complexity (change amplification, cognitive load, unknown
-  unknowns) before adding features.
-- Deepen shallow modules that merely pass data through: hide implementation
-  behind small interfaces and combine functionality that leaks across modules.
-- Aim for the structure you would have had if you had designed the system with
-  the change in mind. In a PR, describe the design issues found and how the
-  refactoring addresses them.
-- After large renames, search for missed files and paths.
-- Share state between managers by passing the shared dependency through the
-  constructor.
-
-### Flattening abstraction layers
-
-Entry points (`executeAgent`) run the loop program (`runToolUse`) directly. Inline a wrapper that only creates state, runs the program, and interprets results; delete unused wrapper files and leave no empty re-exports; import from the module that defines the symbol, never a re-exporting file.
-
-### Discouraged factory patterns
-
-Avoid factories that add indirection without value: a two-layer factory whose inner `buildX` is called only from `createX` (inline it), and a trivial identity factory that only spreads into a new object (use an object literal).
-
-A factory IS justified when it is called from multiple locations, contains meaningful logic (validation, defaults, transforms), creates class instances or complex objects, or captures closures with initialization context.
-
-At review time this extends into the abstraction-cost guardrails (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned; narrowing a module's export surface to one entry point, fewer exports with the same callers, is not an extraction), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
-
-## Code quality rules
-
-These rules were learned from a 2026-07 whole-repo simplification campaign. They complement the guardrails above ("Flattening abstraction layers", "Discouraged factory patterns", "UI anti-patterns", "Effect Schema Patterns", and the code-review checklist § 13).
-
-- **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) fails any unused export not in the baseline.
-
-- **The core holds the pi bar, shrink-only.** What `npm run check:core-quality` holds in the harness and llm cores (`CORE_QUALITY_DIRS` in `eslint.config.mjs`) is in `packages/harness/AGENTS.md` "Core quality".
-
-- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol. Nothing has a re-export shim.
-
-- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory. `Object.freeze` is shallow: for nested objects/arrays or a `Map`/`Set`, deep-freeze or use a factory.
-
-- **Global registration requires a global consumer.** Register something globally (components, commands, providers) only when an external surface references it; internal-only consumers import locally.
-
-- **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle.
-
-- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`packages/harness/src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
-
-## Documentation
-
-- Documentation lives in `docs/` as Markdown; follow existing heading levels and keep lines under 120 characters.
-
-## Branching
-
-- Changes land on `main` through pull requests, one feature branch per change.
-- `.github/PULL_REQUEST_TEMPLATE.md` requires `## Net elements (R6)` and
-  `## Consumer counts (R8)` sections on any `refactor:` / `simplify:` /
-  `consolidate` / `dedupe` / `extract` PR — see the review checklist § 14.
-
-<!-- effect-solutions:start -->
-
-## Effect Best Practices
-
-**IMPORTANT:** Always consult effect-solutions before writing Effect code.
-
-1. Run `effect-solutions list` to see available guides
-2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
-3. Search `~/.local/share/effect-solutions/effect` for real implementations
-
-Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
-
-Never guess at Effect patterns - check the guide first. If `effect-solutions`
-is not installed (the repository does not provision it), consult the pinned
-package sources and types in `node_modules/effect`. Effect is v4; v3 material
-may differ from the installed version.
-
-<!-- effect-solutions:end -->
-
-Two rules the guides do not spell out, each learned from a defect here:
-
-- **A captured context is forwarded only through `Context.pick`.**
-  `Effect.context<T>()` returns the whole fiber context at runtime; the type
-  parameter narrows the type, not the value. `Effect.provide(ctx)` merges
-  with the provided side winning, so re-providing an unpicked capture
-  shadows every more specific provision inside the wrapped effect (a
-  script's nested calls once all launched under the script's own call id
-  this way). Prefer `yield*`-ing the services you need and providing exactly
-  those; when a context must travel, `Context.pick(A, B)(ctx)`
-  (`tools/liveTools.ts`).
-- **A service with a sensible default is a `Context.Reference`**, never a
-  hand-provided null: `null` outside a run (`RunCall`), a rejection outside a
-  session (`ChildRuns`). A reference is never a requirement, so the fence
-  that keeps it from a plugin's tool is the export surface, not `R`.
+Name things for what they do in ordinary programming English, and write
+comments for a reader who has read the code but none of the planning docs.
+
+| Avoid                       | Write instead                                     |
+| --------------------------- | ------------------------------------------------- |
+| fold (as a noun), folded    | update, apply, rebuild; applied                   |
+| park, parked                | wait, waiting, blocked                            |
+| settle, settled, settlement | finish, finished, result (name which result)      |
+| admit, admission            | accept, start, requires                           |
+| arm (of a union or a fold)  | case, branch, handler                             |
+| move, grammar, transition   | outcome, handlers, next step                      |
+| tombstone, hydration        | deletion marker, initial load                     |
+| seam, plane, ledger, spine  | boundary, layer, record, the specific module name |
+| refusal (our own rejection) | rejection, error (a model refusing stays refusal) |
+
+Documented API names (`withPerKeyLane`, `SessionEvents`) keep their names, and
+persisted or wire strings (row and event `type` literals, `_tag`s, settings
+keys, command ids) keep their spelling: renaming them is a format change. Grep a
+word before giving it a new meaning. No document citations in code (`5.2`,
+`D5`, "ruled", "owner rule"): state the reason. A false comment is a bug; fix
+it in the commit that changes the behavior.
+
+## Testing discipline
+
+Tests are a budget, not proof of work: internal interfaces here break often by
+design, and a test pinned to one is merge friction. The default for a PR is
+**zero new tests**. A refactor adds none; a bug fix gets at most one regression
+test, written to fail first; a feature gets E2E coverage ending in a verifiable
+artifact. Never write unit tests after the code: an isolated test starts from a
+written list of failure modes. Extend existing suites, and don't ask for tests
+in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
+
+## Code style
+
+ESLint (`eslint.config.mjs`) and Prettier enforce most style. Beyond them:
+
+- Group imports by source, each block under a comment
+  (`// Third-party imports`, `// Local imports - component`).
+- PascalCase for service singletons (`SessionEvents`, `ModelInvoker`),
+  camelCase for function namespaces (`latexCommands`), `UPPER_SNAKE_CASE` for
+  constants. JSDoc on public APIs.
+- The target is ES2022 with the ES2024 library. Use `.at()`, `Object.hasOwn()`,
+  `.flatMap()`, `.replaceAll()`, `.toSorted()` / `.toReversed()` /
+  `.findLast()` (spread a Set or Map first), `.slice()` over `.substring()`,
+  `for...of` with `.entries()`, `Number.parseInt(v, 10)`, the `node:` prefix,
+  `node:timers/promises` for sleeps, and `?? false` over `|| false`. Index
+  loops stay where the index is the point: variable-stride token consumers,
+  queues that grow mid-loop, and `charCodeAt(i)` hash loops (`for...of` walks
+  code points and would change persisted hashes).
+
+## Docs
+
+`docs/guide/` and a few root docs publish to texra.ai (VitePress); internal
+directories are excluded by `docs/.vitepress/publicDocs.js`. A new file at the
+`docs/` root can silently freeze the deploy: check that allowlist and
+`docs/scripts/check-root-docs.mjs` first. PRDs and proposals live under
+`.agents/docs/` (`.agents/docs/README.md`). Every repo path cited in guidance
+must exist (`npm run check:guidance-refs`). Changelog rules: the `releasing`
+skill.
+
+## Skills
+
+- **code-review**: `/review` and any review of this repo; always include a
+  `Verified` section.
+- **find-simplification**: deletion and collapse candidates, recorded as dated
+  proposals or tech-debt issues.
+- **texra-cli**: the Ink TUI, transcript rendering, headless output, CLI flags
+  and help.
+- **releasing**: changelog, tags, GitHub Releases, desktop installers, npm
+  packages.

@@ -1,12 +1,12 @@
 # TeXRA Review Checklist
 
-Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` ("Separation of concerns: VS Code coupling", "Schemas (Effect Schema)", "Design guardrails") and their full patterns in `AGENTS.md` (Effect Schema Patterns, Flattening abstraction layers, Discouraged factory patterns, UI anti-patterns) — don't restate those; consult them when the diff lands in their territory.
+Targeted greps + concrete fixes. Pair with the design rules in `AGENTS.md` ("Separation of concerns: VS Code coupling", "Effect Schema Patterns", "Design guardrails", including its Flattening abstraction layers, Discouraged factory patterns and UI anti-patterns rules) — don't restate those; consult them when the diff lands in their territory.
 
 For a diff under `packages/cli/`, also load the **texra-cli** skill: the TUI has rendering invariants (Static scrollback ownership, live-region scope, resize repaint, headless parity) that no generic pass will catch.
 
 ## 1. Platform decoupling (highest-signal)
 
-The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
+The full zone list lives in `AGENTS.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `packages/harness/src/shared/`** → finding. `packages/harness/src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
@@ -19,7 +19,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 ## 2. Effect Schema correctness
 
-Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as the single source of truth"; compat rules in "Compatibility and format retirement"; summary in `CLAUDE.md` → "Schemas (Effect Schema)"). Greps for the diff:
+Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compatibility and format retirement"). Greps for the diff:
 
 - **Tool input schemas using `Schema.optional(S)`** instead of `Schema.optional(Schema.NullOr(S))` (breaks DeepSeek/Kimi/etc. structured output). At use sites, check for `=== undefined` (should be `== null`).
 - **A second schema library**: any `zod` import, `z.`, or `Data.TaggedError` (errors are `Schema.TaggedError`).
@@ -50,7 +50,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 `AGENTS.md` → "UI anti-patterns" already lists the anti-patterns. Greps for the diff:
 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
-- **Lit components mutating shared state** → dispatch typed request events (see `packages/extension/src/AGENTS.md` "Webview Consistency Patterns").
+- **Lit components mutating shared state** → dispatch typed request events (see `packages/extension/src/AGENTS.md` "Webviews").
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
 - **Webview providers/handlers not composing `BundledViewContentProvider` for HTML generation** (`packages/extension/src/common/webview/`), or a new view inventing message-dispatch machinery instead of following `settingsView`'s owned-dispatch pattern (`SettingsViewMessageHandler`) or `progressView`'s typed host requests.
 - **String literals for webview commands** → constants in `packages/texra/src/shared/ipc.ts` (`SETTINGS_VIEW_COMMANDS`).
@@ -98,7 +98,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 
 ## 12. Modern TypeScript (ES2023)
 
-Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for the diff:
+Full pattern list in `AGENTS.md` → "Code style". Greps for the diff:
 
 - **Bare Node builtin imports** — `grep -nE "from '(assert|buffer|child_process|crypto|events|fs|fs/promises|module|os|path|url|util)'"` → use the `node:` prefix (`from 'node:path'`). The whole repo is unified on it.
 - **`[...arr].sort(` / `.slice().sort(`** on a true array → `.toSorted()`. Keep the spread when copying out of a `Set` or `Map.entries()`.
@@ -149,7 +149,7 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 
 ## 16. Code quality rules (2026-07 simplification campaign)
 
-Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full rationale and evidence lives in `AGENTS.md` → "Code quality rules"; don't restate it in review comments, just check for it.
+Concrete rules earned from the 2026-07 whole-repo simplification campaign. The rules themselves live in `AGENTS.md` → "Design guardrails" and "Effect"; don't restate it in review comments, just check for it.
 
 - **New exports need a consumer in the same PR.** `rg "exportedSymbol" packages/` for any newly exported symbol; zero outside hits is a finding. Search every package, not just the defining one — a harness export consumed only from another package through an alias (e.g. `@shared`, `@utils`, `@agent`) is still live. Sharpens §8's "dead exports" grep from a cleanup pass into a pre-merge gate.
 - **No undocumented convenience barrels.** A new or modified index/barrel re-export file is a finding unless it documents a real external public surface, its consumers, and its door policy (precedent: the trace events SDK contract).
