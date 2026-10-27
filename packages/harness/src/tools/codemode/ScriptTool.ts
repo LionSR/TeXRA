@@ -143,14 +143,13 @@ const settlementOf = (
       name: result.name ?? 'ToolFailed',
       message: result.error,
     });
-  if (op !== undefined)
-    return Effect.succeed({
-      _tag: 'Value',
-      value:
-        op.name === `${SEARCH_TOOLS}()`
-          ? (JSON.parse(result.output ?? '[]') as unknown)
-          : result.output,
-    });
+  if (op !== undefined) {
+    const value: unknown =
+      op.name === `${SEARCH_TOOLS}()`
+        ? JSON.parse(result.output ?? '[]')
+        : result.output;
+    return Effect.succeed({ _tag: 'Value', value });
+  }
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));
   return Effect.succeed({
     _tag: 'Value',
@@ -163,6 +162,44 @@ const settlementOf = (
 
 const shown = (value: unknown): string =>
   value === undefined ? 'undefined' : JSON.stringify(value, null, 2);
+
+/** The last `RUN_LOG_MAX_LINES` lines a script logged, for its result, and
+ *  how many earlier ones it dropped; each batch also streams through `emit`. */
+const logTailOf = (emit: (text: string) => void) => {
+  const tail: string[] = [];
+  let omitted = 0;
+  return {
+    /** The tail as result lines; none when nothing was logged. */
+    lines: (): string[] =>
+      tail.length === 0
+        ? []
+        : [
+            '',
+            `Log (last ${tail.length} lines${omitted > 0 ? `, ${omitted} earlier omitted` : ''}):`,
+            ...tail,
+          ],
+    onLog: (lines: ReadonlyArray<string>, dropped: number) =>
+      Effect.sync(() => {
+        tail.push(...lines);
+        const overflow = Math.max(0, tail.length - RUN_LOG_MAX_LINES);
+        tail.splice(0, overflow);
+        omitted += dropped + overflow;
+        if (lines.length > 0) emit(`${lines.join('\n')}\n`);
+      }),
+  };
+};
+
+/** A guest exception as its name, message and the guest's own frames (the
+ *  realm's bridge and natives locate nothing in the script). */
+const faultLine = (name: string, message: string, stack = ''): string =>
+  [
+    `The script threw ${name}: ${message}`,
+    ...stack
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('at ') && line.includes('script.js'))
+      .slice(0, FAULT_FRAMES),
+  ].join('\n    ');
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const { emit } = yield* ToolContext;
@@ -188,19 +225,9 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   const scriptCalls = yield* issued;
   const sandbox = yield* CodeSandbox;
-  // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
-  const tail: string[] = [];
-  let tailOmitted = 0;
-  const logTail = (): string[] =>
-    tail.length === 0
-      ? []
-      : [
-          '',
-          `Log (last ${tail.length} lines${tailOmitted > 0 ? `, ${tailOmitted} earlier omitted` : ''}):`,
-          ...tail,
-        ];
+  const logTail = logTailOf(emit);
   const failed = (lines: readonly string[]) =>
-    Effect.fail(new ToolError([...lines, ...logTail()].join('\n')));
+    Effect.fail(new ToolError([...lines, ...logTail.lines()].join('\n')));
   const script = { source: input.code, title: input.title ?? null };
   // The files its calls attached, in the order their results committed:
   // they reach the model on the script's own result.
@@ -261,14 +288,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
             )
           : issue(op);
       },
-      onLog: (lines, dropped) =>
-        Effect.sync(() => {
-          tail.push(...lines);
-          const overflow = Math.max(0, tail.length - RUN_LOG_MAX_LINES);
-          tail.splice(0, overflow);
-          tailOmitted += dropped + overflow;
-          if (lines.length > 0) emit(`${lines.join('\n')}\n`);
-        }),
+      onLog: logTail.onLog,
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
@@ -288,21 +308,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       // before the failure are most of what explains it.
       Effect.catchTags({
         ScriptFault: (fault) =>
-          failed([
-            [
-              `The script threw ${fault.name}: ${fault.message}`,
-              // The guest's own frames: the realm's bridge and natives
-              // locate nothing in the script.
-              ...(fault.stack ?? '')
-                .split('\n')
-                .map((line) => line.trim())
-                .filter(
-                  (line) =>
-                    line.startsWith('at ') && line.includes('script.js'),
-                )
-                .slice(0, FAULT_FRAMES),
-            ].join('\n    '),
-          ]),
+          failed([faultLine(fault.name, fault.message, fault.stack)]),
         ScriptSyntaxError: (error) =>
           failed([`The script does not parse: ${error.message}`]),
         ScriptCpuExhausted: (error) => failed([error.message]),
@@ -313,7 +319,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
   const returned = Schema.decodeUnknownResult(JsonValueSchema)(value);
-  const log = logTail();
+  const log = logTail.lines();
   const foreground =
     input.run_in_background === true
       ? [
@@ -353,6 +359,7 @@ const SURFACE = [
 
 const SCRIPT_TOOL = 'script';
 
+/** The `script` tool: runs a model-written JavaScript program whose globals call the run's other tools. */
 export const ScriptTool = defineTool({
   name: SCRIPT_TOOL,
   // A resume runs the script again from the top against its recorded calls:

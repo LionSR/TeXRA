@@ -321,6 +321,7 @@ export function appendApprovalDiffNote(
   );
 }
 
+/** The tool result the model gets when the user rejects or cancels a file edit's approval. */
 export function buildApprovalRejectedResult(
   path: string,
   sourceTool: string,

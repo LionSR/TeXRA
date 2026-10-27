@@ -36,6 +36,7 @@ const MemoryFileMetaSchema = Schema.Struct({
   pinned: Schema.optional(Schema.Boolean),
 });
 
+/** A memory file's attribution metadata, as read from its frontmatter. */
 export type MemoryFileMeta = typeof MemoryFileMetaSchema.Type;
 
 const FRONTMATTER_FENCE = '---';

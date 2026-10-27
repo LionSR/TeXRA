@@ -337,7 +337,7 @@ export {
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services, switches and their seed.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-export { seedDisabledToolDefaults } from '@tools/toolAvailability';
+export { seedDisabledToolDefaults } from '@tools/pluginCatalog';
 // The harness's log output: where its entries go and how an entry reads.
 export {
   entryChannel,

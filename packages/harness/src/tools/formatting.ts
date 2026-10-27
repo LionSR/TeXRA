@@ -62,6 +62,33 @@ interface FileViewResult {
 }
 
 /**
+ * A file view's "Read …" summary: the whole file when `unbounded` (no range
+ * asked for, nothing truncated) shows all of it, else the lines shown, or why
+ * none were.
+ */
+function viewSummary(
+  filePath: string,
+  totalLines: number,
+  startLine: number,
+  visibleCount: number,
+  unbounded: boolean,
+): string {
+  if (visibleCount === 0) {
+    const reason =
+      totalLines === 0 ? 'file is empty' : 'no lines in requested range';
+    return `Read ${filePath} (${reason})`;
+  }
+  const lastVisibleLine = startLine + visibleCount - 1;
+  if (unbounded && startLine === 1 && lastVisibleLine === totalLines)
+    return `Read ${filePath}`;
+  const rangeLabel =
+    startLine === lastVisibleLine
+      ? `line ${startLine}`
+      : `lines ${startLine}-${lastVisibleLine}`;
+  return `Read ${rangeLabel} of ${filePath}`;
+}
+
+/**
  * Shared pipeline for displaying file content with line numbers, truncation,
  * and a standardised "Read …" summary.  Used by read_file, memory view, and
  * executions readFile.
@@ -94,35 +121,13 @@ export function formatFileView({
     segments.push(`...(truncated, ${rangeSize - maxLines} more lines)`);
   }
 
-  // -- summary --------------------------------------------------------------
-  let summary: string;
-
-  if (visibleCount === 0) {
-    const reason =
-      totalLines === 0 ? 'file is empty' : 'no lines in requested range';
-    summary = `Read ${filePath} (${reason})`;
-  } else {
-    const lastVisibleLine = startLine + visibleCount - 1;
-    const isFullRead =
-      !rangeProvided &&
-      !truncated &&
-      startLine === 1 &&
-      lastVisibleLine === totalLines;
-
-    if (isFullRead) {
-      summary = `Read ${filePath}`;
-    } else {
-      const rangeLabel =
-        startLine === lastVisibleLine
-          ? `line ${startLine}`
-          : `lines ${startLine}-${lastVisibleLine}`;
-      summary = `Read ${rangeLabel} of ${filePath}`;
-    }
-  }
-
-  if (summarySuffix) {
-    summary += summarySuffix;
-  }
+  const summary = `${viewSummary(
+    filePath,
+    totalLines,
+    startLine,
+    visibleCount,
+    !rangeProvided && !truncated,
+  )}${summarySuffix}`;
 
   return { status: 'executed', output: segments.join('\n'), summary };
 }

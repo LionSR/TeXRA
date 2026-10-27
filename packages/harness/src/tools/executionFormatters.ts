@@ -18,6 +18,7 @@ import type { RunView, SessionView } from '@shared/session/sessionView';
  */
 type RunDisplayCategory = 'task' | RunIdentity['kind'];
 
+/** The category a run is listed and summarized under (see `RunDisplayCategory`). */
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' && run.recipe
     ? 'task'

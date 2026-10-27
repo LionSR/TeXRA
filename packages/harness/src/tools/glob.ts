@@ -162,6 +162,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   );
 });
 
+/** The `glob` tool: finds workspace files matching glob patterns, newest first. */
 export const GlobTool = defineTool({
   name: 'glob',
   replay: 'safe',

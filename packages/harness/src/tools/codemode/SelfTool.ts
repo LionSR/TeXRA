@@ -22,21 +22,20 @@ import {
   type DispatchFacts,
   qualifyAggregateId,
   ToolError,
-  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult } from '@tools/core/result';
-import { childResult, failedResult } from '@tools/delegation/AgentTool';
+import { childResult } from '@tools/delegation/agentChild';
+import { failedResult } from '@tools/delegation/AgentTool';
 import {
   agentChildRunId,
   countLaunch,
   recoverAgentChild,
 } from '@tools/delegation/agentChild';
 import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { describeSubagentProgress } from '@tools/delegation/subagentRun';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { outputJsonSchemaOf } from '@tools/delegation/inputFields';
+import { subagentProgressSink } from '@tools/delegation/subagentRun';
 
 const SelfInputSchema = Schema.Struct({
   prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
@@ -142,21 +141,8 @@ const runSelf = Effect.fn('self.call')(function* (
       "A task's script has no conversation to fork: call self() with `fork: false`.",
     );
   const name = config.agent;
-  const outputSchema =
-    input.schema == null
-      ? undefined
-      : yield* Effect.try({
-          try: () =>
-            normalizeStructuredOutputSchema(input.schema ?? {}).jsonSchema,
-          catch: (error) =>
-            new ToolError(
-              `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-            ),
-        });
-  const notify = (update: SubagentProgressUpdate): void => {
-    const line = describeSubagentProgress(name, update);
-    if (line) call.emit(`${line}\n`);
-  };
+  const outputSchema = yield* outputJsonSchemaOf(input.schema);
+  const notify = subagentProgressSink(call, name);
   // An earlier attempt's child answers the call, or continues under its id.
   const recovered = yield* Effect.result(
     recoverAgentChild(call, { notify, running: (work) => work }),

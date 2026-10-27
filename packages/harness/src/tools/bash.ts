@@ -354,10 +354,8 @@ function executeBashTool(input: BashInput) {
       // it. Every other child type already answers this case — agent-CLI
       // refuses, native subagents degrade to the parent trace, a script runs in
       // the foreground — and a background shell cannot degrade, because the follow-up
-      // IS its delivery. The approval the loop already took is spent by the
-      // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
-      // the `finally` kills the process group, so launching here would run the
-      // user's command and then discard its result with nothing reported.
+      // IS its delivery. Launching anyway would run the approved command and
+      // lose its result when the run ends, with nothing reported.
       if (run.toolPolicy.stopAfterCycle)
         return yield* Effect.fail(
           new ToolError(
@@ -529,6 +527,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   );
 });
 
+/** The `bash` tool: runs an approved shell command in the workspace, in the foreground or as a background run. */
 export const BashTool = defineTool({
   name: 'bash',
   requiresApproval: true,

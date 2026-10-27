@@ -1,7 +1,8 @@
 /**
  * The process's plugin catalog: the `ToolRegistry` over the plugin list an
  * entry passes to `processLayer`, the tool catalog over it, the
- * user's MCP servers and the installed plugins, following the switches.
+ * user's MCP servers and the installed plugins, following the switches,
+ * and the switches' first-install positions.
  */
 
 // Third-party imports
@@ -24,13 +25,57 @@ import {
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import { AppState } from '@platform/interfaces';
+import { AppState, type StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { toolCatalogLayer } from '@tools/liveTools';
+import {
+  toolCatalogLayer,
+  type ToolCatalog,
+  type ToolCatalogOwner,
+} from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
-import { readDisabledTools, type Plugin } from '@tools/plugins';
-import { toolTable, type InstalledToolReader } from '@tools/toolTable';
+import {
+  readDisabledTools,
+  storedDisabledTools,
+  type Plugin,
+} from '@tools/plugins';
+import {
+  toolTable,
+  type InstalledToolReader,
+  type PluginLayerServices,
+  type ToolRegistry,
+} from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * Seed the disabled-tool list for first-time users only, on every host and
+ * in the agent package.
+ *
+ * Every plugin of `plugins` whose switch starts `off` is seeded as disabled
+ * on a fresh install. Callers pass
+ * the global state store they already hold. DISABLED_TOOLS is its own
+ * fresh-install signal, because this seed is the only thing that writes it
+ * before the user does: an absent value means neither the seed nor the user
+ * has ever set the list, and a present one (an empty list included) means the
+ * user's choices are already recorded, so re-seeding would silently disable
+ * tools they had enabled. A recorded id that names no plugin of `plugins` is
+ * kept: one composition's list is not every list that shares the store, and
+ * an id no plugin has switches nothing.
+ */
+export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
+  function* (state: StateStore, plugins: readonly Plugin[]) {
+    const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
+    const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
+    if (recorded !== undefined) return;
+
+    const defaults = plugins
+      .filter((plugin) => plugin.toggle === 'off')
+      .map((plugin) => plugin.id);
+    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
+    yield* Effect.logInfo(
+      `First install: plugins switched off by default: ${defaults.join(', ')}`,
+    ).pipe(withLogChannel('pluginCatalog'));
+  },
+);
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */
 const SWITCH_READ = Schedule.exponential('200 millis');
@@ -50,7 +95,11 @@ const SWITCH_READ = Schedule.exponential('200 millis');
 export const pluginCatalogLayer = (
   plugins: readonly Plugin[],
   mcpConfigPath: string,
-) =>
+): Layer.Layer<
+  ToolCatalog | ToolCatalogOwner | ToolRegistry,
+  never,
+  Exclude<PluginLayerServices, ToolCatalog>
+> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

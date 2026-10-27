@@ -72,6 +72,48 @@ const SUBSCHEMA_RECORD_KEYS = [
   'properties',
 ];
 
+// Keywords a sandbox schema may not use, each with the error it fails with.
+const FORBIDDEN_KEYWORDS: ReadonlyArray<
+  readonly [keywords: readonly string[], message: string]
+> = [
+  [
+    ['pattern', 'patternProperties'],
+    'Structured output JSON Schema cannot use pattern or patternProperties.',
+  ],
+  [['format'], 'Structured output JSON Schema cannot use format.'],
+  [
+    ['$ref', '$dynamicRef'],
+    'Structured output JSON Schema cannot use $ref; inline the definition instead.',
+  ],
+];
+
+/**
+ * A schema node's subschemas, in walk order: each single subschema, each
+ * branch of a list, each member of a record. A record naming a
+ * prototype-polluting property is rejected when the walk reaches it.
+ */
+function* subschemasOf(record: {
+  readonly [key: string]: unknown;
+}): Generator<unknown> {
+  for (const key of SUBSCHEMA_KEYS) yield record[key];
+  for (const key of SUBSCHEMA_LIST_KEYS) {
+    const branches = record[key];
+    if (Array.isArray(branches)) yield* branches;
+  }
+  for (const key of SUBSCHEMA_RECORD_KEYS) {
+    const schemas = record[key];
+    if (schemas === null || typeof schemas !== 'object') continue;
+    for (const name of Object.keys(schemas)) {
+      if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
+        throw new Error(
+          `Structured output JSON Schema cannot declare a "${name}" property.`,
+        );
+      }
+    }
+    yield* Object.values(schemas);
+  }
+}
+
 /**
  * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
  * is compiled on the host. Walking the schema it rejects:
@@ -104,43 +146,10 @@ function assertSafeSandboxSchema(schema: unknown): void {
       for (const child of node) walk(child, depth + 1);
       return;
     }
-    const record = node;
-    if ('pattern' in record || 'patternProperties' in record) {
-      throw new Error(
-        'Structured output JSON Schema cannot use pattern or patternProperties.',
-      );
+    for (const [keywords, message] of FORBIDDEN_KEYWORDS) {
+      if (keywords.some((keyword) => keyword in node)) throw new Error(message);
     }
-    if ('format' in record) {
-      throw new Error('Structured output JSON Schema cannot use format.');
-    }
-    if ('$ref' in record || '$dynamicRef' in record) {
-      throw new Error(
-        'Structured output JSON Schema cannot use $ref; inline the definition instead.',
-      );
-    }
-
-    for (const key of SUBSCHEMA_KEYS) {
-      walk(record[key], depth + 1);
-    }
-    for (const key of SUBSCHEMA_LIST_KEYS) {
-      const branches = record[key];
-      if (Array.isArray(branches)) {
-        for (const branch of branches) walk(branch, depth + 1);
-      }
-    }
-    for (const key of SUBSCHEMA_RECORD_KEYS) {
-      const schemas = record[key];
-      if (schemas !== null && typeof schemas === 'object') {
-        for (const name of Object.keys(schemas)) {
-          if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
-            throw new Error(
-              `Structured output JSON Schema cannot declare a "${name}" property.`,
-            );
-          }
-        }
-        for (const child of Object.values(schemas)) walk(child, depth + 1);
-      }
-    }
+    for (const child of subschemasOf(node)) walk(child, depth + 1);
   };
   walk(schema, 0);
 }

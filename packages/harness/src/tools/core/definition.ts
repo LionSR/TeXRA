@@ -27,6 +27,7 @@ export type DefinedTool<T, R = never> = Omit<
   readonly guard?: ToolGuard<T, R>;
 };
 
+/** What `defineTool` takes: the tool's metadata, its input schema, its guard, and its body. */
 export type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'name' | 'description'>
 > &

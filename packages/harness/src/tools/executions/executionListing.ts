@@ -38,6 +38,7 @@ interface ListingCaller {
   readonly runId: RunId | undefined;
 }
 
+/** One page of the session's runs, most recent first, as the `executions` listing text. */
 export const listExecutions = Effect.fn('listExecutions')(function* (
   { session, runId: caller }: ListingCaller,
   offset: number,

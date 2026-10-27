@@ -17,7 +17,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { seedDisabledToolDefaults } from '@tools/pluginCatalog';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

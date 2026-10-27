@@ -183,9 +183,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
 
     // A declared tool nothing could serve is a configuration error: the run
     // is refused (a plugin switched off withholds its tools at the step).
-    const table = yield* ToolRegistry;
+    const { tools } = yield* ToolRegistry;
     const unknown = declaredToolNames(persona.tools).filter(
-      (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
+      (name) => !tools.get(name) && mcpServerOfToolName(name) === undefined,
     );
     if (unknown.length > 0)
       return yield* new AgentError({

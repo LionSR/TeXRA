@@ -719,6 +719,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
   },
 );
 
+/** The `executions` tool: lists and views the session's runs, waits on, stops and messages live ones, and queries the run history. */
 export const ExecutionsTool = defineTool({
   name: 'executions',
   slow: true,
@@ -770,8 +771,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
       `Cannot read ${directoryErrorPath}: ${toErrorMessage(cause)}`,
     );
   const stats = yield* fs.stat(fullPath).pipe(Effect.mapError(unreadable));
-  // A symlink to a directory counts, which is what the bitmask probe this
-  // replaced answered for: the standard `stat` follows the link.
+  // `stat` follows a symlink, so a link to a directory counts as one.
   if (stats.type === 'Directory') {
     return yield* Effect.fail(
       new ToolError(

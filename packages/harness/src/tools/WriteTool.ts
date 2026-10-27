@@ -14,7 +14,7 @@ import {
 import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
-import { defineTool } from './core/definition';
+import { defineTool, type DefinedTool } from './core/definition';
 
 const WriteInputSchema = Schema.Struct({
   path: Schema.String.annotate({
@@ -83,7 +83,12 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 });
 
 /** The `write_file` tool, with the app's filter on what it writes. */
-export const writeFileTool = (writeFilter?: WriteFilter) =>
+export const writeFileTool = (
+  writeFilter?: WriteFilter,
+): DefinedTool<
+  WriteInput,
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
+> =>
   defineTool({
     name: 'write_file',
     requiresApproval: 'inBody',

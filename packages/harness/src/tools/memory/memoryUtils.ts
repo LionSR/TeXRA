@@ -22,6 +22,7 @@ export const MAX_PREVIEW_CHARS = 8000;
 /** How many memories may be pinned at once. */
 export const MAX_PINNED_MEMORIES = 10;
 
+/** The `/memories/...` display path of a path relative to the memory root. */
 export function relativeToDisplayPath(relativePath: string): string {
   if (!relativePath) {
     return MEMORY_DISPLAY_ROOT;
@@ -29,6 +30,7 @@ export function relativeToDisplayPath(relativePath: string): string {
   return `${MEMORY_DISPLAY_ROOT}/${normalizeFilePath(relativePath)}`;
 }
 
+/** The `/memories/...` display path of a memory file's storage path. */
 export function toDisplayPath(storagePath: string): string {
   const relative = path.relative(WORKSPACE_STORAGE_LAYOUT.memory, storagePath);
   return relativeToDisplayPath(relative);

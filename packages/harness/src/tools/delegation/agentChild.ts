@@ -1,6 +1,6 @@
 /**
- * The child run an awaited `agent` call answers from, and the receipt a
- * detached one returns.
+ * The child run an awaited `agent` call answers from, what its end becomes
+ * for the call, and the receipt a detached one returns.
  *
  * A call's child is named by the call and its intent attempt
  * (`agentChildRunId`), so a resumed call finds what an earlier attempt
@@ -20,6 +20,8 @@ import { createHash } from 'node:crypto';
 // Third-party imports
 import { Effect, FileSystem, Stream } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { readRecipeResult } from '@agent/runtime/recipeResult';
+import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 
 // Local imports
 import {
@@ -32,6 +34,7 @@ import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
+  toJsonValue,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
@@ -39,7 +42,7 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { SessionView } from '@shared/session/sessionView';
-import { errorResult } from '@tools/core/result';
+import { errorResult, executed } from '@tools/core/result';
 
 // Local file imports
 import { resumeSubagentInBand } from './inBandSubagentRun';
@@ -210,6 +213,53 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   }
 });
 
+/** What an ended child becomes for its call: its envelope (a recipe's read
+ *  through its block), or the error a script's `await` throws for it. */
+export const childResult = Effect.fn('AgentTool.childResult')(function* (
+  call: RunToolCall,
+  agentName: string,
+  { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
+  key: string | undefined,
+) {
+  if (result.outcome === 'cancelled')
+    return errorResult(
+      `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
+      {
+        name: 'Skipped',
+        summary: `Skipped '${agentName}'`,
+        diagnostics: { reason: 'user', runId },
+      },
+    );
+  if (result.outcome !== 'completed')
+    return errorResult(
+      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error?.message ? `: ${result.error.message}` : '.'}`,
+      { name: 'AgentFailed', summary: `'${agentName}' failed` },
+    );
+  const config = yield* getRunRecords(call.run.session, runId).readConfig();
+  const view = yield* call.run.session.view.read([]);
+  const recipe = yield* readRecipeResult(
+    config,
+    result.output,
+    runId,
+    call.env.roots,
+  );
+  return {
+    ...executed(
+      formatSubagentDelivery(agentName, result, { runId, recipe }),
+      `Completed '${agentName}'`,
+    ),
+    value: toJsonValue({
+      ...result.output,
+      ...(recipe !== undefined && { changes: recipe.changes }),
+      runId,
+      outcome: result.outcome,
+      cost: treeCostOf(view, runId),
+      spent: treeCostOf(view, call.run.runId),
+    }),
+    ...(key !== undefined && { reuseKey: key }),
+  };
+});
+
 /** The bytes behind a workflow call's files, hashed for its reuse key. */
 export const fingerprint = Effect.fn('agent.fingerprint')(function* (
   paths: readonly (readonly string[])[],
@@ -261,7 +311,7 @@ const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
 /** What `runId` and every run under it have spent. The view lists every
  *  run with a row, so a run missing from it is a broken invariant, never a
  *  spend of $0 that would let a script's cost cap pass. */
-export function treeCostOf(view: SessionView, runId: RunId): number {
+function treeCostOf(view: SessionView, runId: RunId): number {
   const run = view.runs.get(runId);
   if (run === undefined)
     throw new Error(`Run ${runId} is missing from its session's view.`);

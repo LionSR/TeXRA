@@ -29,6 +29,7 @@ const CHANNEL = 'runGeneratedFiles';
 /** Scan depth: the run root plus one level of generated subdirectories. */
 const RUN_FILE_SCAN_DEPTH = 2;
 
+/** A file or directory a run wrote into its storage directory. */
 export interface RunGeneratedFile {
   /** Path relative to the run storage directory, POSIX-separated. */
   readonly path: string;
@@ -88,14 +89,14 @@ function walkRunStorage(
       // rather than reading as "no generated files".
       Effect.catch((error) => {
         if (error.reason._tag === 'NotFound')
-          return Effect.succeed([] as string[]);
+          return Effect.succeed<string[]>([]);
         if (relativePath === '') return Effect.fail(error);
         return Effect.logWarning(
           `Unreadable run directory '${fullPath}'; listing it as empty`,
         ).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-          Effect.as([] as string[]),
+          Effect.as<string[]>([]),
         );
       }),
     );

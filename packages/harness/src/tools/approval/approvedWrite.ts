@@ -137,7 +137,11 @@ export function approvedWriteConflict(
   path: string,
   original: string | null,
   finalContent: string,
-) {
+): Effect.Effect<
+  ApprovedEditConflictError | undefined,
+  Error,
+  ToolContext | FileSystem.FileSystem | WorkspaceFs
+> {
   return writeApprovedContent(path, original, finalContent).pipe(
     Effect.as(undefined),
     Effect.catchIf(

@@ -38,9 +38,7 @@ import {
 // Local imports
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import { storedDisabledTools, type Plugin } from '@tools/plugins';
+import type { Plugin } from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
   ToolProbeError,
@@ -52,7 +50,7 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -68,41 +66,6 @@ const CHANNEL = 'toolAvailability';
  * other probe failure.
  */
 const GROUP_PROBE_TIMEOUT_MS = 20_000;
-
-// ============================================================
-// Switches
-// ============================================================
-
-/**
- * Seed the disabled-tool list for first-time users only, on every host and
- * in the agent package.
- *
- * Every plugin of `plugins` whose switch starts `off` is seeded as disabled
- * on a fresh install. Callers pass
- * the global state store they already hold. DISABLED_TOOLS is its own
- * fresh-install signal, because this seed is the only thing that writes it
- * before the user does: an absent value means neither the seed nor the user
- * has ever set the list, and a present one (an empty list included) means the
- * user's choices are already recorded, so re-seeding would silently disable
- * tools they had enabled. A recorded id that names no plugin of `plugins` is
- * kept: one composition's list is not every list that shares the store, and
- * an id no plugin has switches nothing.
- */
-export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
-  function* (state: StateStore, plugins: readonly Plugin[]) {
-    const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
-    const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
-    if (recorded !== undefined) return;
-
-    const defaults = plugins
-      .filter((plugin) => plugin.toggle === 'off')
-      .map((plugin) => plugin.id);
-    yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-    yield* Effect.logInfo(
-      `First install: plugins switched off by default: ${defaults.join(', ')}`,
-    ).pipe(withLogChannel(CHANNEL));
-  },
-);
 
 // ============================================================
 // The service
@@ -125,6 +88,58 @@ interface ProbeRound {
   inputs: ToolProbeInputs;
   again: boolean;
 }
+
+/**
+ * One probe of every plugin for `inputs`' root. A plugin's probe runs with
+ * its own process services while its layer is up (a language server roster,
+ * say); a probe never brings a layer up, which could act (one may register
+ * tools). Every group probes at once and no group's failure cancels a
+ * sibling, because each one resolves to a result of its own.
+ */
+const probePlugins = (
+  plugins: readonly ProbedToolPlugin[],
+  catalog: ToolCatalogShape,
+  inputs: ToolProbeInputs,
+) =>
+  Effect.forEach(
+    plugins,
+    (plugin) =>
+      Effect.scoped(
+        Effect.flatMap(catalog.processServices(plugin.id), (own) =>
+          Option.isSome(own)
+            ? Effect.provide(probeToolGroup(plugin, inputs), own.value)
+            : probeToolGroup(plugin, inputs),
+        ),
+      ),
+    { concurrency: 'unbounded' },
+  );
+
+/**
+ * Run `react` after each committed write to one of `secrets`, for the
+ * caller's scope. The bus delivers to a synchronous listener, so the
+ * listener only enqueues the key, and a loop of its own runs `react`.
+ */
+const onSecretWrites = (
+  secrets: ReadonlySet<string>,
+  react: Effect.Effect<void>,
+) =>
+  Effect.gen(function* () {
+    const changes = yield* Queue.unbounded<string>();
+    const subscribed = yield* Deferred.make<void>();
+    yield* Effect.forkScoped(
+      onAppSignal(
+        'credentialChanged',
+        ({ key }) => {
+          if (secrets.has(key)) Queue.offerUnsafe(changes, key);
+        },
+        subscribed,
+      ),
+    );
+    yield* Deferred.await(subscribed);
+    yield* Effect.forkScoped(
+      Effect.forever(Effect.andThen(Queue.take(changes), () => react)),
+    );
+  });
 
 /**
  * The process's {@link ToolAvailability}, built once over the services the
@@ -169,23 +184,7 @@ export const toolAvailabilityLayer: Layer.Layer<
     const claim = yield* Semaphore.make(1);
 
     const probeRound = (inputs: ToolProbeInputs) =>
-      Effect.forEach(
-        PROBED_PLUGINS,
-        // A plugin's probe runs with its own process services while its
-        // layer is up (a language server roster, say); a probe never
-        // brings a layer up, which could act (one may register tools).
-        (plugin) =>
-          Effect.scoped(
-            Effect.flatMap(catalog.processServices(plugin.id), (own) =>
-              Option.isSome(own)
-                ? Effect.provide(probeToolGroup(plugin, inputs), own.value)
-                : probeToolGroup(plugin, inputs),
-            ),
-          ),
-        // Every group probes at once and no group's failure cancels a
-        // sibling, because each one resolves to a result of its own.
-        { concurrency: 'unbounded' },
-      ).pipe(
+      probePlugins(PROBED_PLUGINS, catalog, inputs).pipe(
         Effect.provideContext(services),
         // Only a held root's results are kept: one no session holds is
         // answered, not remembered.
@@ -258,28 +257,14 @@ export const toolAvailabilityLayer: Layer.Layer<
       Effect.andThen(Effect.sync(forgetToolMisses), start(inputs));
 
     // A committed write to a declared secret re-probes every held root with
-    // its newest inputs. The bus delivers to a synchronous listener, so the
-    // listener only enqueues the key; the loop below owns the refreshes.
-    const changes = yield* Queue.unbounded<string>();
-    const subscribed = yield* Deferred.make<void>();
-    yield* Effect.forkScoped(
-      onAppSignal(
-        'credentialChanged',
-        ({ key }) => {
-          if (REPROBE_SECRETS.has(key)) Queue.offerUnsafe(changes, key);
-        },
-        subscribed,
-      ),
-    );
-    yield* Deferred.await(subscribed);
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.andThen(Queue.take(changes), () =>
-          Effect.forEach(
-            [...held.values()].flatMap((holders) => holders.slice(-1)),
-            trigger,
-            { discard: true },
-          ),
+    // its newest inputs.
+    yield* onSecretWrites(
+      REPROBE_SECRETS,
+      Effect.suspend(() =>
+        Effect.forEach(
+          [...held.values()].flatMap((holders) => holders.slice(-1)),
+          trigger,
+          { discard: true },
         ),
       ),
     );

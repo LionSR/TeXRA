@@ -27,6 +27,7 @@ const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
 The /memories directory is shared with the orchestrator and other subagents. Check it when your delegated task may depend on context from prior sessions or sibling agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
 </subagent_memory_protocol>`;
 
+/** The memory protocol text for a step, or empty when the step does not offer `memory`. */
 export const memoryPromptSection: PromptSection = ({ offered, isChild }) => {
   if (!offered.includes('memory')) return '';
   const parts = [MEMORY_TOOL_INSTRUCTIONS];

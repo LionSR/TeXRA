@@ -13,6 +13,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 
+/** What `buildFileAttachment` reads: a workspace file, with an optional description and MIME type override. */
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
   filePath: string;
@@ -63,6 +64,7 @@ const attachmentFailure =
           cause: error,
         });
 
+/** What `buildBytesAttachment` wraps: bytes already in memory, the path shown for them, and their MIME type. */
 export interface BuildBytesAttachmentOptions {
   /** Display path surfaced to the model. */
   path: string;

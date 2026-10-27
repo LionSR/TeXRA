@@ -19,7 +19,8 @@ import {
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
+import type { JSONSchemaObject } from '@agent/core/tools/toolSchema';
+import { ToolError, type RunId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
@@ -28,10 +29,15 @@ import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
+import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { ensureError, formatError } from '@utils/errors/errorMessage';
+import {
+  ensureError,
+  formatError,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 
 /**
@@ -91,10 +97,68 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   }
   return null;
 });
+/** A file a call names, and where it resolved. */
+interface CallFile {
+  readonly file: string;
+  readonly absolutePath: string;
+}
+/** A call's input, context and media files, resolved. */
+export type CallFiles = readonly [
+  inputs: readonly CallFile[],
+  contexts: readonly CallFile[],
+  media: readonly CallFile[],
+];
+
+/** A launch's files, resolved at once: a run-storage file must be the
+ *  calling run's own or a declared output of a completed child of it; a
+ *  trusted script's files pass as named. */
+export const resolveCallFiles = (
+  session: SessionHandle,
+  runId: RunId,
+  files: Record<
+    'inputFiles' | 'contextFiles' | 'mediaFiles',
+    readonly string[]
+  >,
+  trusted: boolean,
+): Effect.Effect<CallFiles, Error, FileSystem.FileSystem | ToolRegistry> => {
+  const resolve = (label: string, list: readonly string[]) =>
+    trusted
+      ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
+      : resolveInvocationFileList(session, runId, label, list);
+  return Effect.all(
+    [
+      resolve('Input file', files.inputFiles),
+      resolve('Context file', files.contextFiles),
+      resolve('Media file', files.mediaFiles),
+    ],
+    { concurrency: 'unbounded' },
+  );
+};
+
+/** The JSON Schema a delegated call's answer takes, when its `schema` names
+ *  one; an unsupported one fails the call. */
+export const outputJsonSchemaOf = (
+  schema: Record<string, unknown> | null | undefined,
+): Effect.Effect<JSONSchemaObject | undefined, ToolError> =>
+  schema == null
+    ? Effect.succeed(undefined)
+    : Effect.try({
+        try: () => normalizeStructuredOutputSchema(schema).jsonSchema,
+        catch: (error) =>
+          new ToolError(
+            `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
+          ),
+      });
+
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
   'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
 ].join(' ');
+/**
+ * A subagent's instruction with the parent's request attached as binding
+ * context (when given) and the closing note on how its final answer is
+ * delivered.
+ */
 export function withToolUseSubagentHandoffInstruction(
   instruction: string,
   parentInstruction?: string,
@@ -230,7 +294,7 @@ const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
  * Resolve workflow file dependencies against their owning session's roots,
  * read once from `session.roots` rather than from an ambient session scope.
  */
-export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
+const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
     session: SessionHandle,
     parentRunId: RunId,

@@ -30,6 +30,7 @@ export type AvailabilityResults = ReadonlyMap<
   readonly ExternalToolCheckResult[]
 >;
 
+/** The process service holding each workspace's dependency probe results. */
 export class ToolAvailability extends Context.Service<
   ToolAvailability,
   {

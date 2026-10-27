@@ -165,7 +165,7 @@ export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
 }
 
 const erase = <ROut, C>(plugin: PluginDefinition<ROut, C>): Plugin =>
-  plugin as unknown as Plugin;
+  plugin as unknown as Plugin; // cast: no type says "needs what its own layers serve"; the pinning step provides `ROut`.
 
 /** A plugin value from its definition, its own services erased. */
 export const definePlugin: <ROut = never>(
@@ -210,9 +210,10 @@ export function storedDisabledTools(
       );
 }
 
-/** The plugin ids the user switched off in `store`'s record; none while it
- *  is absent. */
-export function readDisabledTools(store: StateStore) {
+/** The plugin ids switched off in `store`'s record; none while it is absent. */
+export function readDisabledTools(
+  store: StateStore,
+): Effect.Effect<ReadonlySet<string>, StateReadFailed> {
   return store.get(GlobalStateKey.DISABLED_TOOLS).pipe(
     Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
     Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),

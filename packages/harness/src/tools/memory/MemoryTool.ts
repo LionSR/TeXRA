@@ -138,8 +138,7 @@ const run = Effect.fn('MemoryTool.run')(function* (
         invocation,
       );
     case 'insert': {
-      // Schema-enforced: the branch's .refine() rejects insert_text and
-      // new_str both being absent before execute() is ever reached.
+      // The insert branch's schema check rejects a call with neither text.
       const insertText = (input.insert_text ?? input.new_str)!;
       return yield* insert(
         yield* locate(input.path),
@@ -528,6 +527,7 @@ const buildDirectoryListing = Effect.fn('MemoryTool.buildDirectoryListing')(
   },
 );
 
+/** The `memory` tool: views and edits the persistent memory files under `/memories`. */
 export const MemoryTool = defineTool({
   name: 'memory',
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).

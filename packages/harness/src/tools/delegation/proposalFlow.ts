@@ -85,16 +85,13 @@ function summarizeProposal(proposal: AgentProposal): string {
   return parts.join(', ');
 }
 
-/** Convert proposal result to ToolResult. Returns null if approved. */
-function proposalResultToToolResult(
+/** The call's result when the person did not approve the delegation. */
+function declinedResult(
   result: RequestDecision,
   agentName: string,
   proposal: AgentProposal,
-): ToolResult | null {
+): ToolResult {
   const echo = summarizeProposal(proposal);
-
-  if (result.action === 'approve') return null;
-
   const refusal = refusalOf('proposal', result);
   switch (refusal.action) {
     case 'cancel': {
@@ -231,6 +228,48 @@ function formEdits(
   };
 }
 
+/** What an approval changed a proposed value to, when it may change it. */
+const changedTo = (
+  changes: boolean,
+  approved: string | null | undefined,
+  proposed: string,
+): string | undefined =>
+  changes && approved && approved !== proposed ? approved : undefined;
+
+/** The agent `name` among those the run may launch now, if it is one. */
+const visibleAgent = Effect.fn('visibleAgent')(function* (
+  parent: RunToolCall,
+  name: string,
+) {
+  return findAgentByIdentifier(
+    yield* (yield* AgentCatalog).visible(
+      parent.env.roots,
+      parent.run.delegationAgentScope ?? undefined,
+    ),
+    name,
+  );
+});
+
+/** How a person's approval is recorded: the model and agent it switched
+ *  to, each beside the one proposed. */
+function approvalMetaOf(
+  proposal: AgentProposal,
+  modelOverride: string | undefined,
+  agentOverride: string | undefined,
+): ApprovalMeta {
+  return {
+    autoApproved: false,
+    ...(modelOverride && {
+      modelOverride,
+      requestedModel: proposal.model,
+    }),
+    ...(agentOverride && {
+      agentOverride,
+      requestedAgent: proposal.agent,
+    }),
+  };
+}
+
 /** How an approved delegation launches: the proposal with the agent and
  *  model the approval settled on, and how it was approved. */
 interface ApprovedDelegation {
@@ -264,58 +303,39 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   }
 
   const { result } = decision;
+  if (result.action !== 'approve')
+    return declinedResult(result, proposal.agent, proposal);
 
-  const nonApproveResult = proposalResultToToolResult(
-    result,
-    proposal.agent,
-    proposal,
-  );
-  if (nonApproveResult) return nonApproveResult;
-  if (result.action !== 'approve') {
-    return yield* Effect.die(
-      new Error('A proposal decision that is not an approve was not declined.'),
-    );
-  }
-
-  // Every non-approve action returned above, so this is the approved path.
   // Route an approved model override through the same availability gate the
   // initial delegation uses (selectAvailableDelegationModel), so an unavailable
   // model fails synchronously here instead of launching and then failing
   // asynchronously. Re-selecting the proposed model needs no re-check — it was
   // already resolved when the proposal was built.
   const changes = ask === undefined;
+  const requestedModel = changedTo(changes, result.model, proposal.model);
   let modelOverride: string | undefined;
-  if (changes && result.model && result.model !== proposal.model) {
+  if (requestedModel !== undefined) {
     const modelExit = yield* Effect.exit(
       selectAvailableDelegationModel({
-        requestedModel: result.model,
+        requestedModel,
         parentModel: proposal.model,
         settings: parent.env.roots,
       }),
     );
     if (Exit.isFailure(modelExit)) {
       return errorResult(
-        `Cannot launch with model '${result.model}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
+        `Cannot launch with model '${requestedModel}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
         {
-          summary: `Approved model override '${result.model}' is not available`,
+          summary: `Approved model override '${requestedModel}' is not available`,
         },
       );
     }
     modelOverride = modelExit.value;
   }
 
-  const agentOverride =
-    changes && result.agent && result.agent !== proposal.agent
-      ? result.agent
-      : undefined;
+  const agentOverride = changedTo(changes, result.agent, proposal.agent);
   const resolvedAgentOverride = agentOverride
-    ? findAgentByIdentifier(
-        yield* (yield* AgentCatalog).visible(
-          parent.env.roots,
-          parent.run.delegationAgentScope ?? undefined,
-        ),
-        agentOverride,
-      )
+    ? yield* visibleAgent(parent, agentOverride)
     : undefined;
 
   // Re-validate against the current registry — between proposal display and
@@ -347,16 +367,6 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
         agentSource: resolvedAgentOverride.source,
       }),
     },
-    approvalMeta: {
-      autoApproved: false,
-      ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
-      }),
-      ...(agentOverride && {
-        agentOverride,
-        requestedAgent: proposal.agent,
-      }),
-    },
+    approvalMeta: approvalMetaOf(proposal, modelOverride, agentOverride),
   } satisfies ApprovedDelegation;
 });

@@ -21,11 +21,9 @@ import { Cause, Effect, Exit, Result, Schema, SynchronizedRef } from 'effect';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ToolContext } from '@agent/core/tools/ToolTypes';
+import type { JSONSchemaObject } from '@agent/core/tools/toolSchema';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
-import { readRecipeResult } from '@agent/runtime/recipeResult';
-import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
-import { getRunRecords } from '@agent/storage/runRecords';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
@@ -33,11 +31,7 @@ import {
   AGENT_SOURCE,
   AgentProposalSchema,
   type AgentProposal,
-  toJsonValue,
-  ToolError,
-  type RunEnd,
-  type RunId,
-  type SubagentProgressUpdate,
+  type AgentSource,
   type ToolResult,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -45,7 +39,6 @@ import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -53,12 +46,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import {
   agentChildRunId,
+  childResult,
   countLaunch,
   earlierChild,
   fingerprint,
   recoverAgentChild,
   reusable,
-  treeCostOf,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
@@ -67,17 +60,19 @@ import {
 } from './inBandSubagentRun';
 import {
   memoriesField,
+  outputJsonSchemaOf,
   personaField,
   rejectUnusableWorkingDirectory,
-  resolveInvocationFileList,
+  resolveCallFiles,
+  type CallFiles,
   withToolUseSubagentHandoffInstruction,
   workingDirectoryField,
 } from './inputFields';
 import { decideDelegation, requireAgent } from './proposalFlow';
 import {
   delegatedChildGrants,
-  describeSubagentProgress,
   launchDetachedSubagent,
+  subagentProgressSink,
 } from './subagentRun';
 
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
@@ -243,53 +238,6 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   });
 });
 
-/** What an ended child becomes for its call: its envelope (a recipe's read
- *  through its block), or the error a script's `await` throws for it. */
-export const childResult = Effect.fn('AgentTool.childResult')(function* (
-  call: RunToolCall,
-  agentName: string,
-  { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
-  key: string | undefined,
-) {
-  if (result.outcome === 'cancelled')
-    return errorResult(
-      `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
-      {
-        name: 'Skipped',
-        summary: `Skipped '${agentName}'`,
-        diagnostics: { reason: 'user', runId },
-      },
-    );
-  if (result.outcome !== 'completed')
-    return errorResult(
-      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error?.message ? `: ${result.error.message}` : '.'}`,
-      { name: 'AgentFailed', summary: `'${agentName}' failed` },
-    );
-  const config = yield* getRunRecords(call.run.session, runId).readConfig();
-  const view = yield* call.run.session.view.read([]);
-  const recipe = yield* readRecipeResult(
-    config,
-    result.output,
-    runId,
-    call.env.roots,
-  );
-  return {
-    ...executed(
-      formatSubagentDelivery(agentName, result, { runId, recipe }),
-      `Completed '${agentName}'`,
-    ),
-    value: toJsonValue({
-      ...result.output,
-      ...(recipe !== undefined && { changes: recipe.changes }),
-      runId,
-      outcome: result.outcome,
-      cost: treeCostOf(view, runId),
-      spent: treeCostOf(view, call.run.runId),
-    }),
-    ...(key !== undefined && { reuseKey: key }),
-  };
-});
-
 /** One call: a script's awaited calls within {@link scriptChildBudget}. */
 export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
@@ -316,108 +264,18 @@ export function failedResult(agentName: string, error: Error): ToolResult {
   });
 }
 
-const agentCall = Effect.fn('AgentTool.agentCall')(function* (
-  call: RunToolCall,
-  launch: ChildLaunch,
-) {
-  const { run } = call;
-  const script = call.script ?? undefined;
-  const { session, runId: parentRunId } = run;
-  const { task, files, persona } = launch;
-  const agent =
-    persona == null
-      ? yield* requireAgent(call.env.roots, launch.agentName, run)
-      : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
-  const unusable = yield* rejectUnusableWorkingDirectory(
-    call.env.roots,
-    launch.workingDirectory ?? undefined,
-  );
-  if (unusable) return unusable;
-  const outputSchema =
-    launch.schema == null
-      ? undefined
-      : yield* Effect.try({
-          try: () =>
-            normalizeStructuredOutputSchema(launch.schema ?? {}).jsonSchema,
-          catch: (error) =>
-            new ToolError(
-              `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-            ),
-        });
-  // The call's files: a run-storage file must be this run's own or a declared
-  // output of a completed child of it; a trusted script's files pass as named.
-  const trusted = isTrustedScript(run.config);
-  const resolved = yield* Effect.exit(
-    Effect.all(
-      (
-        [
-          ['Input file', files.inputFiles],
-          ['Context file', files.contextFiles],
-          ['Media file', files.mediaFiles],
-        ] as const
-      ).map(([label, list]) =>
-        trusted
-          ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
-          : resolveInvocationFileList(session, parentRunId, label, list),
-      ),
-      { concurrency: 'unbounded' },
-    ),
-  );
-  if (Exit.isFailure(resolved))
-    return errorResult(toErrorMessage(Cause.squash(resolved.cause)));
-  const [inputs = [], contexts = [], media = []] = resolved.value;
-  const contextFiles = contexts.map(({ file }) => file);
+/** The agent a call runs: the one it defines, or one the run may launch. */
+const agentOf = (call: RunToolCall, launch: ChildLaunch) =>
+  launch.persona == null
+    ? requireAgent(call.env.roots, launch.agentName, call.run)
+    : Effect.succeed({ name: launch.agentName, source: AGENT_SOURCE.INLINE });
 
-  // Awaited in a script unless sent to the background, and always in a
-  // one-shot run, which has no later turn for a follow-up to reach.
-  const oneShot = run.toolPolicy.stopAfterCycle === true;
-  const awaited =
-    oneShot || (script !== undefined && launch.background !== true);
-  // A task, a structured call and a trusted script's call reach the child
-  // verbatim; any other is handed off with the parent's instruction.
-  const handsOff = task === null && outputSchema === undefined && !trusted;
-  // A completed call with the same prompt, options and file bytes is reused.
-  // The requested model, not the one availability resolves to, so a reuse
-  // does not depend on which credentials are configured now.
-  const key =
-    awaited && script !== undefined
-      ? sha256({
-          tool: launch.tool,
-          prompt: launch.prompt,
-          ...(handsOff && { handoff: call.instruction ?? null }),
-          agent: agent.name,
-          ...(persona != null && { persona }),
-          model: launch.model ?? null,
-          schema: outputSchema ?? null,
-          ...files,
-          options: task?.options ?? null,
-          memories: launch.memories,
-          workingDirectory: launch.workingDirectory ?? null,
-          id: launch.id ?? null,
-          files: yield* fingerprint(
-            [inputs, contexts, media].map((group) =>
-              group.map(({ absolutePath }) => absolutePath),
-            ),
-          ),
-        })
-      : undefined;
-  if (key !== undefined && script !== undefined) {
-    const reused = yield* reusable(call, script, key);
-    if (reused !== null) return reused;
-  }
-
-  // An awaited child's progress is what this call prints while it runs:
-  // transient text on its card, never a row of the run. The child's own run
-  // (and, in a script, its stage row) is where its progress is kept.
-  const notify = (update: SubagentProgressUpdate): void => {
-    const line = describeSubagentProgress(agent.name, update);
-    if (line) call.emit(`${line}\n`);
-  };
-  const timeoutMs = launch.timeoutMs ?? undefined;
-  const running = <A, R>(
-    work: Effect.Effect<A, Error, R>,
-  ): Effect.Effect<A, Error, R> =>
-    timeoutMs === undefined
+/** `work` held to the call's `timeoutMs`; past it the wait is interrupted,
+ *  which stops the child. */
+const limitedBy =
+  (timeoutMs: number | null | undefined) =>
+  <A, R>(work: Effect.Effect<A, Error, R>): Effect.Effect<A, Error, R> =>
+    timeoutMs == null
       ? work
       : work.pipe(
           Effect.timeoutOrElse({
@@ -426,35 +284,93 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           }),
         );
 
-  // The child an earlier attempt of this call launched answers it, before
-  // anything about a launch is decided again: it was approved and
-  // configured when it launched.
+/**
+ * An awaited script call's reuse key, and the completed call with that key it
+ * reuses, if any: the same prompt, options and file bytes. The requested
+ * model, not the one availability resolves to, so a reuse does not depend on
+ * which credentials are configured now.
+ */
+const reuseOf = Effect.fn('AgentTool.reuseOf')(function* (
+  call: RunToolCall,
+  script: ScriptScope,
+  launch: ChildLaunch,
+  agent: string,
+  outputSchema: JSONSchemaObject | undefined,
+  handsOff: boolean,
+  groups: CallFiles,
+) {
+  const { persona, files, task } = launch;
+  const key = sha256({
+    tool: launch.tool,
+    prompt: launch.prompt,
+    ...(handsOff && { handoff: call.instruction ?? null }),
+    agent,
+    ...(persona != null && { persona }),
+    model: launch.model ?? null,
+    schema: outputSchema ?? null,
+    ...files,
+    options: task?.options ?? null,
+    memories: launch.memories,
+    workingDirectory: launch.workingDirectory ?? null,
+    id: launch.id ?? null,
+    files: yield* fingerprint(
+      groups.map((group) => group.map(({ absolutePath }) => absolutePath)),
+    ),
+  });
+  return { key, reused: yield* reusable(call, script, key) };
+});
+
+/**
+ * What the child an earlier attempt of this call launched answers it with,
+ * before anything about a launch is decided again (it was approved and
+ * configured when it launched); null when this attempt launches its own.
+ */
+const earlierAnswer = Effect.fn('AgentTool.earlierAnswer')(function* (
+  call: RunToolCall,
+  launch: ChildLaunch,
+  agent: string,
+  awaited: boolean,
+  key: string | undefined,
+) {
   if (!awaited) {
     const earlier = yield* earlierChild(call);
-    if (earlier !== null)
-      return {
-        ...executed(
-          `Subagent '${agent.name}' was launched by an earlier attempt of this call; its result arrives as a follow-up.\nRun ID: ${earlier}`,
-          `Launched '${agent.name}' (async)`,
-        ),
-        value: { runId: earlier },
-      };
-  } else {
-    const recovered = yield* Effect.result(
-      recoverAgentChild(call, { notify, running }),
-    );
-    if (Result.isFailure(recovered))
-      return failedResult(agent.name, recovered.failure);
-    const settled = recovered.success;
-    if (settled.kind === 'ended')
-      return yield* childResult(call, agent.name, settled, key);
+    if (earlier === null) return null;
+    return {
+      ...executed(
+        `Subagent '${agent}' was launched by an earlier attempt of this call; its result arrives as a follow-up.\nRun ID: ${earlier}`,
+        `Launched '${agent}' (async)`,
+      ),
+      value: { runId: earlier },
+    };
   }
+  const recovered = yield* Effect.result(
+    recoverAgentChild(call, {
+      notify: subagentProgressSink(call, agent),
+      running: limitedBy(launch.timeoutMs),
+    }),
+  );
+  if (Result.isFailure(recovered))
+    return failedResult(agent, recovered.failure);
+  const settled = recovered.success;
+  return settled.kind === 'ended'
+    ? yield* childResult(call, agent, settled, key)
+    : null;
+});
 
-  // An unavailable model fails this call, which a script may catch.
+/** The delegation a call proposes, on the model availability selects for it;
+ *  an unavailable model fails the call, which a script may catch. */
+const proposalOf = Effect.fn('AgentTool.proposalOf')(function* (
+  call: RunToolCall,
+  launch: ChildLaunch,
+  agent: { readonly name: string; readonly source: AgentSource },
+  handsOff: boolean,
+  [inputs, contexts, media]: CallFiles,
+) {
+  const { persona, task } = launch;
   const selected = yield* Effect.exit(
     selectAvailableDelegationModel({
       requestedModel: launch.model,
-      parentModel: (yield* SynchronizedRef.get(run.model)).modelId,
+      parentModel: (yield* SynchronizedRef.get(call.run.model)).modelId,
       settings: call.env.roots,
     }),
   );
@@ -476,15 +392,29 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
         : launch.prompt,
       inputFiles: inputs.map(({ file }) => file),
-      contextFiles,
+      contextFiles: contexts.map(({ file }) => file),
       mediaFiles: media.map(({ file }) => file),
-      outputFiles: files.outputFiles,
+      outputFiles: launch.files.outputFiles,
       // A task's options reach the child through its plugin's recipe.
       ...(task !== null && { options: task.options }),
       ...(task === null && { rootUserInstruction: call.instruction }),
     },
   );
+  return proposal;
+});
 
+/** Put `proposal` to approval and launch the child it settles on: detached
+ *  with a receipt, or awaited to its envelope. */
+const decideAndLaunch = Effect.fn('AgentTool.decideAndLaunch')(function* (
+  call: RunToolCall,
+  launch: ChildLaunch,
+  proposal: AgentProposal,
+  outputSchema: JSONSchemaObject | undefined,
+  awaited: boolean,
+  key: string | undefined,
+) {
+  const { run } = call;
+  const script = call.script ?? undefined;
   const decided = yield* decideDelegation(
     call,
     proposal,
@@ -494,14 +424,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   if ('status' in decided) return decided;
   if (script !== undefined) {
-    const limited = yield* countLaunch(script, agent.name);
+    const limited = yield* countLaunch(script, proposal.agent);
     if (limited !== null) return limited;
   }
 
   // The asking script's `script`; the child's (with `options`) is set below.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // An approval may pick another agent: a task's recipe is that agent's.
-  const taskConfig = task?.configFor(decided.proposal);
+  const taskConfig = launch.task?.configFor(decided.proposal);
   if (taskConfig === null)
     return errorResult(`'${approved.agent}' has no task block.`);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
@@ -528,22 +458,80 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       : receipt;
   }
   const launched = yield* Effect.result(
-    running(
+    limitedBy(launch.timeoutMs)(
       executeSubagentInBand({
-        session,
+        session: run.session,
         runId: agentChildRunId(call),
-        parentRunId,
+        parentRunId: run.runId,
         configPayload,
         parentCard: call.logId,
         parentCallId: call.callId,
         grants,
-        notify,
+        notify: subagentProgressSink(call, proposal.agent),
       }),
     ),
   );
   return Result.isFailure(launched)
     ? failedResult(approved.agent, launched.failure)
     : yield* childResult(call, approved.agent, launched.success, key);
+});
+
+const agentCall = Effect.fn('AgentTool.agentCall')(function* (
+  call: RunToolCall,
+  launch: ChildLaunch,
+) {
+  const { run } = call;
+  const script = call.script ?? undefined;
+  const agent = yield* agentOf(call, launch);
+  const unusable = yield* rejectUnusableWorkingDirectory(
+    call.env.roots,
+    launch.workingDirectory ?? undefined,
+  );
+  if (unusable) return unusable;
+  const outputSchema = yield* outputJsonSchemaOf(launch.schema);
+  const trusted = isTrustedScript(run.config);
+  const resolved = yield* Effect.exit(
+    resolveCallFiles(run.session, run.runId, launch.files, trusted),
+  );
+  if (Exit.isFailure(resolved))
+    return errorResult(toErrorMessage(Cause.squash(resolved.cause)));
+  const groups = resolved.value;
+
+  // Awaited in a script unless sent to the background, and always in a
+  // one-shot run, which has no later turn for a follow-up to reach.
+  const awaited =
+    run.toolPolicy.stopAfterCycle === true ||
+    (script !== undefined && launch.background !== true);
+  // A task, a structured call and a trusted script's call reach the child
+  // verbatim; any other is handed off with the parent's instruction.
+  const handsOff =
+    launch.task === null && outputSchema === undefined && !trusted;
+  const { key, reused } =
+    awaited && script !== undefined
+      ? yield* reuseOf(
+          call,
+          script,
+          launch,
+          agent.name,
+          outputSchema,
+          handsOff,
+          groups,
+        )
+      : { key: undefined, reused: null };
+  if (reused !== null) return reused;
+
+  const earlier = yield* earlierAnswer(call, launch, agent.name, awaited, key);
+  if (earlier !== null) return earlier;
+  const proposal = yield* proposalOf(call, launch, agent, handsOff, groups);
+  if ('status' in proposal) return proposal;
+  return yield* decideAndLaunch(
+    call,
+    launch,
+    proposal,
+    outputSchema,
+    awaited,
+    key,
+  );
 });
 
 /** The `agent` tool. */

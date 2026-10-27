@@ -62,6 +62,7 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
     ),
   );
 
+/** Follow `session`'s interrupted runs for the session's life, as the module comment describes. */
 export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
   function* (
     session: SessionHandle,

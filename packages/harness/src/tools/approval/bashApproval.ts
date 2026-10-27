@@ -25,6 +25,7 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
+/** A command a run asks the user to approve (a shell command, or another tool's call spelled as one), where it runs, and which standing grant answers it. */
 export interface BashApprovalRequest {
   readonly command: string;
   readonly cwd?: string | null;
@@ -132,6 +133,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   );
 });
 
+/** The tool result the model gets when the user rejects or cancels a shell command's approval. */
 export function buildBashApprovalRejectedResult(
   command: string,
   refusal: RefusalDecision,

@@ -295,6 +295,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   return yield* requestApproval(call, plan, call.run.runId);
 });
 
+/** The `plan` tool: proposes a plan for the user to approve, run as a goal, or reject. */
 export const PlanTool = defineTool({
   name: PLAN,
   requiresApproval: 'inBody',

@@ -161,6 +161,7 @@ const namedCustomDirectory = Effect.flatMap(AgentDirectories, (directories) =>
   ),
 );
 
+/** The layer that loads the agent catalog as the runtime is built and reloads it on every change described above. */
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;

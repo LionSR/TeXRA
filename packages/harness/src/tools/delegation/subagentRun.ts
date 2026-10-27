@@ -29,11 +29,23 @@ import { executed } from '@tools/core/result';
 import { startDetachedChildRunLoop } from './detachedChildRun';
 
 /**
- * One compact line per child progress update, for an awaited child: the
- * `agent` call streams it to its card. Returns undefined for updates with
- * nothing worth a line.
+ * An awaited child's progress as its call prints it while it runs: one
+ * compact line per update, transient text on the call's card (`emit`), never
+ * a row of the run. The child's own run (and, in a script, its stage row) is
+ * where its progress is kept.
  */
-export function describeSubagentProgress(
+export function subagentProgressSink(
+  call: { readonly emit: (text: string) => void },
+  agentName: string,
+): (update: SubagentProgressUpdate) => void {
+  return (update) => {
+    const line = progressLine(agentName, update);
+    if (line) call.emit(`${line}\n`);
+  };
+}
+
+/** One update's line; none for an update with nothing worth a line. */
+function progressLine(
   agentName: string,
   update: SubagentProgressUpdate,
 ): string | undefined {

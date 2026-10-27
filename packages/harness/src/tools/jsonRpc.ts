@@ -67,6 +67,7 @@ class JsonRpcFrameError extends Schema.TaggedError<JsonRpcFrameError>()(
   { message: Schema.String },
 ) {}
 
+/** An open JSON-RPC connection to a peer: requests, notifications and its one close. */
 export interface JsonRpcConnection {
   readonly request: <T>(
     method: string,
@@ -149,14 +150,14 @@ const takeFrames = (buffer: Buffer): Decoded =>
       const headerEnd = rest.indexOf(HEADER_END);
       if (headerEnd < 0) break;
       const header = rest.subarray(0, headerEnd).toString('ascii');
-      const match = CONTENT_LENGTH.exec(header);
-      if (!match) {
+      const length = CONTENT_LENGTH.exec(header)?.[1];
+      if (length === undefined) {
         return yield* new JsonRpcFrameError({
           message: `Frame header without Content-Length: ${header}`,
         });
       }
       const bodyStart = headerEnd + HEADER_END.length;
-      const bodyEnd = bodyStart + Number.parseInt(match[1]!, 10);
+      const bodyEnd = bodyStart + Number.parseInt(length, 10);
       if (rest.length < bodyEnd) break;
       messages.push(
         yield* parseBody(rest.subarray(bodyStart, bodyEnd).toString('utf8')),
@@ -166,6 +167,13 @@ const takeFrames = (buffer: Buffer): Decoded =>
     // Copy the tail so the consumed prefix is not retained by the slice.
     return [Buffer.from(rest), messages] as const;
   });
+
+/** A request or notification we send: `fields`, with `params` when given. */
+const outgoing = (fields: object, params: unknown): object => ({
+  jsonrpc: '2.0',
+  ...fields,
+  ...(params !== undefined && { params }),
+});
 
 function encodeLine(message: object): Uint8Array {
   return Buffer.from(`${JSON.stringify(message)}\n`, 'utf8');
@@ -183,7 +191,7 @@ const parseBody = (
   }).pipe(
     Effect.flatMap((value) =>
       Predicate.isObject(value)
-        ? Effect.succeed(value as JsonRpcMessage)
+        ? Effect.succeed(value as JsonRpcMessage) // cast: a peer's JSON object, trusted to the JSON-RPC shape, not decoded field by field
         : Effect.fail(
             new JsonRpcFrameError({
               message: `Frame body is not a JSON-RPC object: ${body.slice(0, 200)}`,
@@ -212,6 +220,7 @@ const takeLines = (buffer: Buffer): Decoded =>
     return [Buffer.from(rest), messages] as const;
   });
 
+/** Open a JSON-RPC connection over `options`' streams; its reader and writer fibers live in the caller's scope. */
 export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   options: JsonRpcConnectionOptions,
 ) {
@@ -369,16 +378,11 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       yield* takePending(id);
       return yield* new JsonRpcConnectionDisposed({ message: closedSince });
     }
-    yield* send({
-      jsonrpc: '2.0',
-      id,
-      method,
-      ...(params !== undefined && { params }),
-    });
+    yield* send(outgoing({ id, method }, params));
     const result = yield* Deferred.await(deferred).pipe(
       Effect.onInterrupt(() => takePending(id)),
     );
-    return result as T;
+    return result as T; // cast: the peer's unchecked JSON, of the type the caller's method promises
   });
 
   const notify = Effect.fn('JsonRpc.notify')(function* (
@@ -386,11 +390,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     params?: unknown,
   ) {
     if ((yield* Ref.get(closedReason)) !== undefined) return;
-    yield* send({
-      jsonrpc: '2.0',
-      method,
-      ...(params !== undefined && { params }),
-    });
+    yield* send(outgoing({ method }, params));
   });
 
   const inputEnded = Deferred.await(inputDone);

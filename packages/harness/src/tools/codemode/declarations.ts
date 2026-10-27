@@ -44,61 +44,33 @@ const union = (types: readonly string[]): string => {
   return unique.length === 0 ? 'never' : unique.join(' | ');
 };
 
-/** A JSON Schema as a TypeScript type; `full` spreads objects one field per
- *  line, each under its description. */
-function typeOf(
-  schema: unknown,
-  root: Schema,
-  full: boolean,
-  indent: string,
-  resolving: ReadonlySet<string> = new Set(),
-): string {
+/**
+ * What rendering a schema carries into its parts: the root its `$ref`s
+ * resolve against, the form (`full` spreads objects one field per line, each
+ * under its description), the indent of the current line, and the refs being
+ * expanded, so a recursive ref renders as `unknown`.
+ */
+interface Rendering {
+  readonly root: Schema;
+  readonly full: boolean;
+  readonly indent: string;
+  readonly resolving: ReadonlySet<string>;
+}
+
+/** A JSON Schema as a TypeScript type. */
+function typeOf(schema: unknown, at: Rendering): string {
   if (!Predicate.isObject(schema))
     return schema === false ? 'never' : 'unknown';
-  const recur = (inner: unknown, at = indent) =>
-    typeOf(inner, root, full, at, resolving);
-  if (typeof schema.$ref === 'string') {
-    const ref = schema.$ref;
-    const target = ref.startsWith('#/')
-      ? ref
-          .slice(2)
-          .split('/')
-          .reduce<unknown>(
-            (node, key) => (Predicate.isObject(node) ? node[key] : undefined),
-            root,
-          )
-      : undefined;
-    return target === undefined || resolving.has(ref)
-      ? 'unknown'
-      : typeOf(target, root, full, indent, new Set([...resolving, ref]));
-  }
+  if (typeof schema.$ref === 'string') return refType(schema.$ref, at);
   if ('const' in schema) return JSON.stringify(schema.const);
   if (Array.isArray(schema.enum))
     return union(schema.enum.map((value) => JSON.stringify(value)));
   const variants = schema.anyOf ?? schema.oneOf;
-  if (Array.isArray(variants)) {
-    const spread =
-      full &&
-      variants.some(
-        (variant) =>
-          Predicate.isObject(variant) && Predicate.isObject(variant.properties),
-      );
-    if (!spread) return union(variants.map((variant) => recur(variant)));
-    // One object branch per line, its description as its doc comment.
-    return variants
-      .map((variant) => {
-        const doc =
-          Predicate.isObject(variant) && typeof variant.description === 'string'
-            ? docComment(variant.description, indent).join('\n') + '\n'
-            : '';
-        return `\n${doc}${indent}| ${recur(variant)}`;
-      })
-      .join('');
-  }
+  if (Array.isArray(variants)) return variantsType(variants, at);
   if (Array.isArray(schema.allOf))
-    return schema.allOf.map((part) => recur(part)).join(' & ');
+    return schema.allOf.map((part) => typeOf(part, at)).join(' & ');
   if (Array.isArray(schema.type))
-    return union(schema.type.map((type) => recur({ ...schema, type })));
+    return union(schema.type.map((type) => typeOf({ ...schema, type }, at)));
   switch (schema.type) {
     case 'string':
     case 'boolean':
@@ -107,15 +79,63 @@ function typeOf(
     case 'number':
     case 'integer':
       return 'number';
-    case 'array': {
-      if (Array.isArray(schema.prefixItems))
-        return `[${schema.prefixItems.map((item) => recur(item)).join(', ')}]`;
-      const item = recur(schema.items);
-      return /^[\w"]+$/.test(item) ? `${item}[]` : `Array<${item}>`;
-    }
+    case 'array':
+      return arrayType(schema, at);
   }
   if (schema.type !== 'object' && !Predicate.isObject(schema.properties))
     return 'unknown';
+  return objectType(schema, at);
+}
+
+/** A `#/...` ref into the root, expanded unless it is already being expanded. */
+function refType(ref: string, at: Rendering): string {
+  const target = ref.startsWith('#/')
+    ? ref
+        .slice(2)
+        .split('/')
+        .reduce<unknown>(
+          (node, key) => (Predicate.isObject(node) ? node[key] : undefined),
+          at.root,
+        )
+    : undefined;
+  return target === undefined || at.resolving.has(ref)
+    ? 'unknown'
+    : typeOf(target, { ...at, resolving: new Set([...at.resolving, ref]) });
+}
+
+/** `anyOf`/`oneOf` as a union; in the full form, a union with an object
+ *  branch puts one branch per line, its description as its doc comment. */
+function variantsType(variants: readonly unknown[], at: Rendering): string {
+  const spread =
+    at.full &&
+    variants.some(
+      (variant) =>
+        Predicate.isObject(variant) && Predicate.isObject(variant.properties),
+    );
+  if (!spread) return union(variants.map((variant) => typeOf(variant, at)));
+  return variants
+    .map((variant) => {
+      const doc =
+        Predicate.isObject(variant) && typeof variant.description === 'string'
+          ? docComment(variant.description, at.indent).join('\n') + '\n'
+          : '';
+      return `\n${doc}${at.indent}| ${typeOf(variant, at)}`;
+    })
+    .join('');
+}
+
+/** An array: a tuple of its `prefixItems`, or a list of its `items`. */
+function arrayType(schema: Schema, at: Rendering): string {
+  if (Array.isArray(schema.prefixItems))
+    return `[${schema.prefixItems.map((item) => typeOf(item, at)).join(', ')}]`;
+  const item = typeOf(schema.items, at);
+  return /^[\w"]+$/.test(item) ? `${item}[]` : `Array<${item}>`;
+}
+
+/** An object: its named fields, and an index signature when it declares a
+ *  typed one or names no field. */
+function objectType(schema: Schema, at: Rendering): string {
+  const { full, indent } = at;
   const properties = Predicate.isObject(schema.properties)
     ? schema.properties
     : {};
@@ -123,24 +143,9 @@ function typeOf(
     Array.isArray(schema.required) ? schema.required : [],
   );
   const extra = schema.additionalProperties;
-  const fields = Object.entries(properties).map(([name, property]) => {
-    const key = IDENTIFIER.test(name) ? name : JSON.stringify(name);
-    const head = `${key}${required.has(name) ? '' : '?'}: `;
-    if (!full) return `${head}${recur(property)}`;
-    const inner = `${indent}${INDENT}`;
-    const notes = Predicate.isObject(property)
-      ? [
-          typeof property.description === 'string' ? property.description : '',
-          'default' in property
-            ? `Default: ${JSON.stringify(property.default)}.`
-            : '',
-        ].filter((note) => note !== '')
-      : [];
-    return [
-      ...docComment(notes.join(' '), inner),
-      `${inner}${head}${recur(property, inner)};`,
-    ].join('\n');
-  });
+  const fields = Object.entries(properties).map(([name, property]) =>
+    fieldOf(name, property, required.has(name), at),
+  );
   // A loose object's open index says nothing a script needs: only a typed
   // one, or a record with no named fields, is declared.
   if (
@@ -149,12 +154,38 @@ function typeOf(
       : Predicate.isObject(extra) && Object.keys(extra).length > 0
   )
     fields.push(
-      `${full ? `${indent}${INDENT}` : ''}[key: string]: ${recur(extra)}${full ? ';' : ''}`,
+      `${full ? `${indent}${INDENT}` : ''}[key: string]: ${typeOf(extra, at)}${full ? ';' : ''}`,
     );
   if (fields.length === 0) return '{}';
   return full
     ? `{\n${fields.join('\n')}\n${indent}}`
     : `{ ${fields.join('; ')} }`;
+}
+
+/** One field of an object; the full form puts it on its own line under its
+ *  description and default. */
+function fieldOf(
+  name: string,
+  property: unknown,
+  required: boolean,
+  at: Rendering,
+): string {
+  const key = IDENTIFIER.test(name) ? name : JSON.stringify(name);
+  const head = `${key}${required ? '' : '?'}: `;
+  if (!at.full) return `${head}${typeOf(property, at)}`;
+  const inner = `${at.indent}${INDENT}`;
+  const notes = Predicate.isObject(property)
+    ? [
+        typeof property.description === 'string' ? property.description : '',
+        'default' in property
+          ? `Default: ${JSON.stringify(property.default)}.`
+          : '',
+      ].filter((note) => note !== '')
+    : [];
+  return [
+    ...docComment(notes.join(' '), inner),
+    `${inner}${head}${typeOf(property, { ...at, indent: inner })};`,
+  ].join('\n');
 }
 
 /**
@@ -169,7 +200,7 @@ export function declarationOf(
 ): string {
   const schema = inputSchema(definition);
   const root = Predicate.isObject(schema) ? schema : {};
-  const args = typeOf(root, root, full, indent);
+  const args = typeOf(root, { root, full, indent, resolving: new Set() });
   const name = IDENTIFIER.test(definition.name)
     ? definition.name
     : JSON.stringify(definition.name);
@@ -194,7 +225,12 @@ export function globalDeclarationOf(
   const schema = inputSchema(definition);
   const root = Predicate.isObject(schema) ? schema : {};
   const properties = Predicate.isObject(root.properties) ? root.properties : {};
-  const first = typeOf(properties[positional], root, false, '');
+  const first = typeOf(properties[positional], {
+    root,
+    full: false,
+    indent: '',
+    resolving: new Set(),
+  });
   const member = IDENTIFIER.test(definition.name)
     ? `tools.${definition.name}`
     : `tools[${JSON.stringify(definition.name)}]`;

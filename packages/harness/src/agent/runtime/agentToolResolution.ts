@@ -228,7 +228,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // A declared tool a gate withholds says so; an injected one goes quietly,
   // as the run never asked for it by name.
   const gated = (name: string, source: 'declared' | 'injected'): boolean => {
-    const tool = enabled.get(name)?.tool ?? table.get(name);
+    const tool = enabled.get(name)?.tool ?? table.tools.get(name);
     const refusal = hostRefusal(tool, input);
     if (refusal !== undefined) {
       if (source === 'declared')
@@ -261,7 +261,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
       // tool retired from the table): dropping it silently would strip the
       // agent's capability with no trace. One whose plugin is switched off
       // is withheld quietly; an MCP name was reported above.
-      if (!table.get(name) && mcpServerOfToolName(name) === undefined)
+      if (!table.tools.get(name) && mcpServerOfToolName(name) === undefined)
         warnings.push(
           `${source === 'declared' ? 'Declared' : 'Injected'} tool not found in registry: ${name}`,
         );
@@ -290,7 +290,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   for (const tool of input.runTools) {
     const { name } = tool.definition;
     const index = definitions.findIndex((entry) => entry.name === name);
-    if (overlay.has(name) || table.get(name) || index !== -1)
+    if (overlay.has(name) || table.tools.get(name) || index !== -1)
       warnings.push(`Run-scoped tool "${name}" shadows an existing tool.`);
     overlay.set(name, tool);
     if (index === -1) definitions.push(tool.definition);

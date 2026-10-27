@@ -209,9 +209,9 @@ export function agentBlockOf<A>(
 export interface ToolTable {
   /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
-  /** The tool registered under `name` in any plugin, typed as plugins
-   *  declare their tools (`Plugin.tools`). */
-  readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
+  /** Every plugin's tools by name, typed as plugins declare them
+   *  (`Plugin.tools`). */
+  readonly tools: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Each request kind's decision hook, from the plugin that owns it. */
   readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
@@ -277,7 +277,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   );
   if (new Set(modules).size !== modules.length)
     refuse('two plugins ship a script module of one name.');
-  return { entries, get: (name) => byName.get(name), decisions, blocks };
+  return { entries, tools: byName, decisions, blocks };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

@@ -92,6 +92,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   });
 });
 
+/** The `edit_file` tool: exact literal string replacements in a workspace file, written after the edit is approved. */
 export const EditFileTool = defineTool({
   name: 'edit_file',
   requiresApproval: 'inBody',

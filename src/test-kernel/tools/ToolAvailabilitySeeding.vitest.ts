@@ -14,7 +14,7 @@ import {
 } from '@test/support/setupPlatform';
 import { wolfram } from '@texra/tools/integrationPlugins';
 import { texraPlugins } from '@texra/tools/registry';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { seedDisabledToolDefaults } from '@tools/pluginCatalog';
 
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());

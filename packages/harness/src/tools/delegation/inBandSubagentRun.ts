@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit, Fiber, Schema } from 'effect';
+import { Cause, Clock, Effect, Exit, Fiber, Option, Schema } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -22,6 +22,8 @@ import {
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
@@ -103,6 +105,70 @@ const defectsAsErrors = <A, R>(
     ),
   );
 
+/** The squashed cause of a failed exit; none for a success. */
+const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
+  Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
+
+/** A fresh child's registration, as the call that launches it owns it. */
+const registrationOf = (
+  options: InBandSubagentRunBaseOptions,
+  agent: string,
+): RegisterRunOptions => ({
+  identity: { kind: 'agent', agent },
+  userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+  parentRunId: options.parentRunId,
+  ...(options.parentCard !== undefined && { parentCard: options.parentCard }),
+  ...(options.parentCallId !== undefined && {
+    parentCallId: options.parentCallId,
+  }),
+  ...(options.grants !== undefined && { grants: options.grants }),
+});
+
+/**
+ * Fail unless the child's `run.result` row landed. The caller answers a call
+ * whose recovery reads that row, so the in-memory manifest is not enough: a
+ * completed run whose manifest never landed is precisely what recovery
+ * refuses to repeat, so the write is verified here, where the failure can
+ * still be named. A read failure stays distinct from an absent row so the
+ * error blames the I/O cause rather than persistence.
+ */
+const requirePersistedResult = Effect.fn('requirePersistedResult')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  childFailed: boolean,
+  childError: () => unknown,
+) {
+  const persistedExit = yield* Effect.exit(
+    getRunRecords(session, runId).readResultMeta(),
+  );
+  const readFailure = failureOf(persistedExit);
+  if (readFailure !== undefined)
+    yield* Effect.logWarning(
+      'Failed to read the persisted result manifest',
+    ).pipe(
+      Effect.annotateLogs({ data: { runId, error: readFailure } }),
+      withLogChannel(CHANNEL),
+    );
+  if (Option.getOrNull(Exit.getSuccess(persistedExit)) !== null) return;
+  if (childFailed) {
+    const error = childError();
+    return yield* new SubagentDurabilityError({
+      message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+      cause: new AggregateError(
+        readFailure === undefined ? [error] : [error, readFailure],
+        `Subagent ${runId} run and persistence both failed.`,
+      ),
+    });
+  }
+  return yield* new SubagentDurabilityError({
+    message:
+      readFailure === undefined
+        ? `Failed to persist result for subagent ${runId}.`
+        : `Failed to verify the persisted result for subagent ${runId}.`,
+    cause: readFailure,
+  });
+});
+
 /**
  * Execute one child through the one shared driver and read its typed result
  * back from the durable record. The child runs under the same detached
@@ -159,20 +225,7 @@ const executeInBand = Effect.fn('executeInBand')(
                   definition: launch.definition,
                   // Registered with its opening, which the child's run
                   // commits as it starts.
-                  registration: {
-                    identity: { kind: 'agent', agent: config.agent },
-                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                    parentRunId: options.parentRunId,
-                    ...(options.parentCard !== undefined && {
-                      parentCard: options.parentCard,
-                    }),
-                    ...(options.parentCallId !== undefined && {
-                      parentCallId: options.parentCallId,
-                    }),
-                    ...(options.grants !== undefined && {
-                      grants: options.grants,
-                    }),
-                  },
+                  registration: registrationOf(options, config.agent),
                 }
               : {
                   resume: {
@@ -189,9 +242,7 @@ const executeInBand = Effect.fn('executeInBand')(
     });
 
     const completionExit = yield* Effect.exit(Fiber.join(fiber));
-    const loopFailure = Exit.isFailure(completionExit)
-      ? Cause.squash(completionExit.cause)
-      : undefined;
+    const loopFailure = failureOf(completionExit);
 
     // The turn the child ended with, as its loop recorded it; none means
     // the run was interrupted, or a delivery write or the infrastructure
@@ -212,10 +263,8 @@ const executeInBand = Effect.fn('executeInBand')(
     const endExit = yield* Effect.exit(
       getRunRecords(options.session, runId).readRunEnd(),
     );
-    const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
-    const endFailure = Exit.isFailure(endExit)
-      ? Cause.squash(endExit.cause)
-      : undefined;
+    const runEnd = Option.getOrNull(Exit.getSuccess(endExit));
+    const endFailure = failureOf(endExit);
     if (endFailure !== undefined)
       yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
         Effect.annotateLogs({ data: { runId, error: endFailure } }),
@@ -232,49 +281,12 @@ const executeInBand = Effect.fn('executeInBand')(
           `Subagent ${runId} ended with failed outcome.`,
       );
 
-    // The caller answers a call whose recovery reads the child's own
-    // `run.result` row, so the in-memory manifest is not enough:
-    // a completed run whose manifest never landed is precisely what recovery
-    // refuses to repeat, so the write is verified here, where the failure can
-    // still be named. A read failure stays distinct from an absent row so the
-    // thrown error blames the I/O cause rather than persistence.
-    {
-      const persistedExit = yield* Effect.exit(
-        getRunRecords(options.session, runId).readResultMeta(),
-      );
-      const readFailure = Exit.isFailure(persistedExit)
-        ? Cause.squash(persistedExit.cause)
-        : undefined;
-      if (readFailure !== undefined)
-        yield* Effect.logWarning(
-          'Failed to read the persisted result manifest',
-        ).pipe(
-          Effect.annotateLogs({ data: { runId, error: readFailure } }),
-          withLogChannel(CHANNEL),
-        );
-      const persisted = Exit.isSuccess(persistedExit)
-        ? persistedExit.value
-        : null;
-      if (persisted === null) {
-        if (childFailed) {
-          const error = childError();
-          return yield* new SubagentDurabilityError({
-            message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-            cause: new AggregateError(
-              readFailure === undefined ? [error] : [error, readFailure],
-              `Subagent ${runId} run and persistence both failed.`,
-            ),
-          });
-        }
-        return yield* new SubagentDurabilityError({
-          message:
-            readFailure === undefined
-              ? `Failed to persist result for subagent ${runId}.`
-              : `Failed to verify the persisted result for subagent ${runId}.`,
-          cause: readFailure,
-        });
-      }
-    }
+    yield* requirePersistedResult(
+      options.session,
+      runId,
+      childFailed,
+      childError,
+    );
 
     if (childFailed) return yield* Effect.fail(ensureError(childError()));
 

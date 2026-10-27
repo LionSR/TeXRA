@@ -253,6 +253,7 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
   },
 );
 
+/** The `read_file` tool: returns a workspace file's text (optionally a line range), or a PDF or image as an attachment. */
 export const ReadFileTool = defineTool({
   name: 'read_file',
   replay: 'safe',

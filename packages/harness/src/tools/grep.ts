@@ -76,6 +76,7 @@ const GrepInputSchema = Schema.Struct({
   }),
 });
 
+/** A decoded `grep` tool input. */
 export type GrepInput = typeof GrepInputSchema.Type;
 
 const CHANNEL = 'GrepTool';
@@ -227,6 +228,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   return executed(output, summary);
 });
 
+/** The `grep` tool: searches workspace file contents with ripgrep. */
 export const GrepTool = defineTool({
   name: 'grep',
   replay: 'safe',

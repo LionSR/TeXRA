@@ -43,6 +43,7 @@ function formatPage(page: HistoryPage): string {
   return lines.join('\n');
 }
 
+/** Run one read-only SQL statement over the session's run history and format the page it returns. */
 export const queryHistory = Effect.fn('ExecutionsTool.query')(function* (
   session: SessionHandle,
   sql: string,

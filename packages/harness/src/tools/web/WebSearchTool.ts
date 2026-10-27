@@ -202,6 +202,7 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
   );
 });
 
+/** The `web_search` tool: searches the web and returns the results. */
 export const WebSearchTool = defineTool({
   name: 'web_search',
   replay: 'safe',

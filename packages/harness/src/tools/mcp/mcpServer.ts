@@ -263,14 +263,14 @@ function mcpTool(
 /** SIGTERM the process and wait for it, escalating to SIGKILL. */
 const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   handle.kill({ forceKillAfter: STOP_TIMEOUT }).pipe(
-    Effect.catch((error) =>
-      Effect.logDebug(`kill failed: ${error.message}`).pipe(
-        withLogChannel(CHANNEL),
+    Effect.catch((error) => Effect.logDebug(`kill failed: ${error.message}`)),
+    Effect.andThen(
+      Effect.timeoutOption(
+        Effect.ignore(handle.exitCode, { log: 'Warn' }),
+        STOP_TIMEOUT,
       ),
     ),
-    Effect.andThen(
-      Effect.ignore(handle.exitCode).pipe(Effect.timeoutOption(STOP_TIMEOUT)),
-    ),
+    withLogChannel(CHANNEL),
   );
 
 /** Spawn, initialize and list, in the caller's scope. */
@@ -299,7 +299,7 @@ const connect = (config: McpServerConfig) =>
             stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
           }),
         ),
-        Effect.ignore,
+        Effect.ignore({ log: 'Warn', message: 'MCP stderr read failed' }),
       ),
     );
 

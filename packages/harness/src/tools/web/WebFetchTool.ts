@@ -65,8 +65,8 @@ function isRestrictedIp(address: string): boolean {
   if (!ipaddr.isValid(address)) return false;
   const ip = ipaddr.process(address);
   const range = ip.range();
-  if (ip.kind() === 'ipv6' && (range === 'rfc6052' || range === '6to4')) {
-    const { parts } = ip as ipaddr.IPv6;
+  if (ip instanceof ipaddr.IPv6 && (range === 'rfc6052' || range === '6to4')) {
+    const { parts } = ip;
     const [high, low] =
       range === 'rfc6052' ? [parts[6], parts[7]] : [parts[1], parts[2]];
     return isRestrictedIp(
@@ -218,7 +218,16 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const decoder = yield* Effect.try({
         try: () => new TextDecoder(charset || 'utf-8'),
         catch: ensureError,
-      }).pipe(Effect.orElseSucceed(() => new TextDecoder()));
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.as(
+            Effect.logWarning(
+              `${url} declares a charset this runtime does not decode; read as UTF-8: ${error.message}`,
+            ),
+            new TextDecoder(),
+          ),
+        ),
+      );
       let total = 0;
       const parts = yield* response.stream.pipe(
         // A response without a body reads as empty text.
@@ -311,6 +320,7 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   return executed(sections.join('\n\n'), `Fetched: ${url}`);
 });
 
+/** The `web_fetch` tool: fetches a public URL and returns its content as text. */
 export const WebFetchTool = defineTool({
   name: 'web_fetch',
   replay: 'safe',

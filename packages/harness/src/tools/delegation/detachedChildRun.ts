@@ -54,6 +54,11 @@ type DetachedChildRunInputBase = Omit<
   'strategy' | 'childRun'
 >;
 
+/**
+ * What a launch site passes to start a detached child run: the child run
+ * loop's parameters plus either a process strategy built around a stream it
+ * creates, or a native strategy that `executeAgent` runs.
+ */
 export type DetachedChildRunInput<
   TTurn,
   R = never,

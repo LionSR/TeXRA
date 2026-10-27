@@ -151,6 +151,7 @@ const QueryActionSchema = Schema.Struct({
   ),
 });
 
+/** The `executions` tool's input: one of its actions (view, wait, kill, send, query). */
 export const ExecutionsToolInputSchema = Schema.Union([
   ViewActionSchema,
   WaitActionSchema,
@@ -159,4 +160,5 @@ export const ExecutionsToolInputSchema = Schema.Union([
   QueryActionSchema,
 ]);
 
+/** A decoded `executions` tool input. */
 export type ExecutionsToolInput = typeof ExecutionsToolInputSchema.Type;
