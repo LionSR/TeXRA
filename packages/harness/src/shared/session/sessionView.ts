@@ -53,7 +53,7 @@ import type {
 } from './readonlyViews';
 
 /** Which session (paper) a view is of: the session's storage root. */
-const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
+const SessionKeySchema = Schema.NonEmptyString;
 
 /** The integer fields' shapes: `Count` from zero, `Positive` from one. */
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));

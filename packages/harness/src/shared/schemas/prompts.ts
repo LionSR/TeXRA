@@ -195,7 +195,7 @@ export type ExternalInquiryPermission =
 // ============================================================================
 
 const UserQuestionOptionSchema = Schema.Struct({
-  label: Schema.String.check(Schema.isMinLength(1)),
+  label: Schema.NonEmptyString,
   description: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
@@ -205,7 +205,7 @@ const UserQuestionOptionSchema = Schema.Struct({
  * chosen. The user-question tool's input and the question panel share it.
  */
 export const UserQuestionPromptSchema = Schema.Struct({
-  question: Schema.String.check(Schema.isMinLength(1)),
+  question: Schema.NonEmptyString,
   header: Schema.optional(
     Schema.NullOr(Schema.String.check(Schema.isMaxLength(12))),
   ),

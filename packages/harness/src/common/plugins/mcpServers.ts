@@ -85,7 +85,7 @@ export const ServerNameSchema = Schema.String.check(
 
 const McpServerEntrySchema = Schema.Struct({
   type: Schema.optional(Schema.Literal('stdio')),
-  command: Schema.String.check(Schema.isMinLength(1)),
+  command: Schema.NonEmptyString,
   args: Schema.optional(Schema.Array(Schema.String)),
   env: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });

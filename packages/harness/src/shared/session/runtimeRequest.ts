@@ -67,7 +67,7 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.model'),
     ...runScoped,
-    model: Schema.String.check(Schema.isMinLength(1)),
+    model: Schema.NonEmptyString,
   }),
   /**
    * A stopped run's directory, copied to `to` (workspace-relative) or
@@ -79,7 +79,7 @@ export const RuntimeRequestSchema = Schema.Union([
     files: Schema.Union([
       Schema.Struct({
         op: Schema.Literal('copy'),
-        to: Schema.String.check(Schema.isMinLength(1)),
+        to: Schema.NonEmptyString,
       }),
       Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
@@ -87,7 +87,7 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
-    text: Schema.String.check(Schema.isMinLength(1)),
+    text: Schema.NonEmptyString,
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     /** `turn`: the run reads the message when its current turn ends, not
@@ -105,7 +105,7 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('request.decide'),
     ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
   }),
   /** A pending tool edit's preview, as the session's host staged it beside
@@ -113,7 +113,7 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */

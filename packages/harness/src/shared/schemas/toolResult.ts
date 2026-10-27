@@ -154,14 +154,14 @@ const ToolResultSharedFields = {
 /** A `plugin.fact` of one of the calling tool's plugin's arms
  *  (`Plugin.arms`), committed in its call's `tool.result` batch. */
 const ToolFactSchema = Schema.Struct({
-  plugin: Schema.String.check(Schema.isMinLength(1)),
-  kind: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
+  kind: Schema.NonEmptyString,
   /** The arm's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
    *  under the calling run; absent, the fact is about the run itself. */
-  aggregate: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  aggregate: Schema.optional(Schema.NonEmptyString),
 });
 /** A fact a tool's call states about its run (`ToolFactSchema`). */
 export type ToolFact = typeof ToolFactSchema.Type;
@@ -184,16 +184,14 @@ const ExecutedToolResultSchema = Schema.Struct({
   value: Schema.optional(JsonValueSchema),
   /** The key a later call of the same tool in this run may take this result
    *  under instead of running again; only an executed result carries one. */
-  reuseKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  reuseKey: Schema.optional(Schema.NonEmptyString),
   /** The call whose result this one took under its `reuseKey`. */
-  reusedFrom: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  reusedFrom: Schema.optional(Schema.NonEmptyString),
   /** Follow-ups queued on the calling run that this result answers (a
    *  child's report a wait returned): consumed in the call's settlement
    *  batch, so they leave the run's input only with the result. Not stored
    *  on the result. */
-  consumedFollowUps: Schema.optional(
-    Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-  ),
+  consumedFollowUps: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   /** Facts about the call's run, committed beside its `tool.result` as
    *  `plugin.fact` rows; never stored on the result itself. */
   facts: Schema.optional(Schema.Array(ToolFactSchema)),
@@ -203,10 +201,10 @@ const ExecutedToolResultSchema = Schema.Struct({
 const ErrorToolResultSchema = Schema.Struct({
   status: Schema.Literal('error'),
   /** Error message if tool run failed */
-  error: Schema.String.check(Schema.isMinLength(1)),
+  error: Schema.NonEmptyString,
   /** The name of the Error a script's `await` throws; `ToolFailed` when
    *  absent. */
-  name: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  name: Schema.optional(Schema.NonEmptyString),
   /** Brief summary for human-facing logs */
   summary: Schema.optional(Schema.String),
   output: Schema.optional(Schema.Undefined),
@@ -257,14 +255,14 @@ export class ToolError extends Error {
  *  bytes; a capture failure records the omission and its reason rather than
  *  a claim that bytes were included. */
 export const SettledAttachmentSchema = Schema.Struct({
-  path: Schema.String.check(Schema.isMinLength(1)),
-  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  path: Schema.NonEmptyString,
+  mimeType: Schema.NonEmptyString,
   description: Schema.optional(Schema.String),
   content: Schema.Union([
     Schema.Struct({ kind: Schema.Literal('stored'), digest: Sha256Schema }),
     Schema.Struct({
       kind: Schema.Literal('metadata-only'),
-      reason: Schema.String.check(Schema.isMinLength(1)),
+      reason: Schema.NonEmptyString,
     }),
   ]),
 });

@@ -17,7 +17,7 @@ import { RunUsageTotalsSchema } from './usage';
  * it.
  */
 export const NonAgentRunRecordSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   instruction: Schema.String,
   workingDirectory: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),

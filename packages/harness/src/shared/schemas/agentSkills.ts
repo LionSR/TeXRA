@@ -52,17 +52,17 @@ export type PluginTrust = typeof PluginTrustSchema.Type;
 export const InstalledPluginSchema = Schema.Struct({
   name: SkillNameSchema,
   /** The git URL fetched from, or the absolute path of a local plugin. */
-  source: Schema.String.check(Schema.isMinLength(1)),
+  source: Schema.NonEmptyString,
   /** The git ref asked for at install; absent means the remote's HEAD. */
-  ref: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  ref: Schema.optional(Schema.NonEmptyString),
   /** The commit the managed checkout is pinned to. */
   commit: Schema.optional(
     Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/)),
   ),
   /** Absolute path of the plugin root, the directory holding its manifest. */
-  path: Schema.String.check(Schema.isMinLength(1)),
+  path: Schema.NonEmptyString,
   /** Absolute skill roots inside `path`, each holding `<skill>/SKILL.md`. */
-  skills: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  skills: Schema.Array(Schema.NonEmptyString),
   /** The marketplace entry's version and description, for a plugin with no
    *  manifest of its own. */
   version: Schema.optional(Schema.String),

@@ -562,7 +562,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     // `.min(1)` so a blank value is rejected at the write boundary and a
     // legacy blank read falls back (loudly) to the default identity.
-    schema: Schema.String.check(Schema.isMinLength(1)).pipe(
+    schema: Schema.NonEmptyString.pipe(
       Schema.withDecodingDefault(Effect.succeed(DEFAULT_GIT_AUTHOR_NAME)),
     ),
     title: 'Agent commit author',
@@ -574,7 +574,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
   } satisfies SurfacedSettingEntry,
   {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-    schema: Schema.String.check(Schema.isMinLength(1)).pipe(
+    schema: Schema.NonEmptyString.pipe(
       Schema.withDecodingDefault(Effect.succeed(DEFAULT_GIT_AUTHOR_EMAIL)),
     ),
     title: 'Agent commit email',
@@ -717,7 +717,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Model picker preferences ---------------------------------------------
   {
     key: GlobalStateKey.HELPER_MODEL,
-    schema: Schema.String.check(Schema.isMinLength(1)).pipe(
+    schema: Schema.NonEmptyString.pipe(
       Schema.withDecodingDefault(Effect.succeed(DEFAULT_HELPER_MODEL)),
     ),
     title: 'Helper model',

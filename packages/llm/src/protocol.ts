@@ -26,10 +26,10 @@ export const BackgroundCapabilitySchema = Schema.Literals([
 /** The model a binding requests and the deployment it is served from: the
  *  endpoint and the scope of the credential that pays for it. */
 export const BindingSchema = Schema.Struct({
-  requestedModel: Schema.String.check(Schema.isMinLength(1)),
+  requestedModel: Schema.NonEmptyString,
   deployment: Schema.Struct({
     endpoint: EndpointSchema,
-    credentialScope: Schema.String.check(Schema.isMinLength(1)),
+    credentialScope: Schema.NonEmptyString,
   }),
 });
 /**

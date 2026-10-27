@@ -13,9 +13,9 @@ import { Schema } from 'effect';
 
 /** The fields every provider's stored session carries. */
 export const SubscriptionSessionBaseSchema = Schema.Struct({
-  accessToken: Schema.String.check(Schema.isMinLength(1)),
-  refreshToken: Schema.String.check(Schema.isMinLength(1)),
-  idToken: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  accessToken: Schema.NonEmptyString,
+  refreshToken: Schema.NonEmptyString,
+  idToken: Schema.optional(Schema.NonEmptyString),
   /** Absolute expiry (ms since epoch). */
   expiresAtMs: Schema.Number,
 });
@@ -26,12 +26,8 @@ export const SubscriptionSessionBaseSchema = Schema.Struct({
  * keeps the previous one in that case.
  */
 export const SubscriptionTokenResponseSchema = Schema.Struct({
-  access_token: Schema.String.check(Schema.isMinLength(1)),
-  refresh_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  id_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
+  access_token: Schema.NonEmptyString,
+  refresh_token: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+  id_token: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
   expires_in: Schema.Number,
 });

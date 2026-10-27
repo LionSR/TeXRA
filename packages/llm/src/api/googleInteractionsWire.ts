@@ -22,7 +22,7 @@ const WireCompletedStepSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('thought'),
     summary: Schema.optional(Schema.Array(WireTextSchema)),
-    signature: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    signature: Schema.optional(Schema.NonEmptyString),
   }),
   Schema.Struct({
     type: Schema.Literal('model_output'),
@@ -30,11 +30,11 @@ const WireCompletedStepSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal('function_call'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
+    id: Schema.NonEmptyString,
+    name: Schema.NonEmptyString,
     arguments: Schema.optional(JsonObjectSchema),
     // A replay needs only the thought's signature, so a call's is not kept.
-    signature: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    signature: Schema.optional(Schema.NonEmptyString),
   }),
 ]);
 // A GET echoes the input ahead of the output whatever `include_input` says,
@@ -76,9 +76,9 @@ const WireUsageSchema = Schema.Struct({
 });
 /** The interaction a GET or a background create returns. */
 export const WireInteractionSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   status: Schema.String,
-  model: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  model: Schema.optional(Schema.NonEmptyString),
   steps: Schema.optional(Schema.Unknown),
   usage: Schema.optional(WireUsageSchema),
 });
@@ -135,7 +135,7 @@ const WireEventSchema = Schema.Union([
       }),
       Schema.Struct({
         type: Schema.Literal('thought_signature'),
-        signature: Schema.String.check(Schema.isMinLength(1)),
+        signature: Schema.NonEmptyString,
       }),
       Schema.Struct({
         type: Schema.Literal('arguments_delta'),

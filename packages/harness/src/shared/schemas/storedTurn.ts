@@ -20,7 +20,7 @@ import { Sha256Schema } from './offeredTools';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({
-  kind: Schema.String.check(Schema.isMinLength(1)),
+  kind: Schema.NonEmptyString,
   data: Schema.Record(Schema.String, JsonValueSchema),
 });
 
@@ -34,10 +34,10 @@ export const StoredProtocolSchema = Schema.Literals([
 /** The selected binding: protocol, deployment and model, never a secret. */
 export const StoredOriginSchema = Schema.Struct({
   protocol: StoredProtocolSchema,
-  requestedModel: Schema.String.check(Schema.isMinLength(1)),
+  requestedModel: Schema.NonEmptyString,
   deployment: Schema.Struct({
-    endpoint: Schema.String.check(Schema.isMinLength(1)),
-    credentialScope: Schema.String.check(Schema.isMinLength(1)),
+    endpoint: Schema.NonEmptyString,
+    credentialScope: Schema.NonEmptyString,
   }),
   codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
 });
@@ -54,7 +54,7 @@ const TextPartSchema = Schema.Struct({
  * provider call (`agent/runtime/storedTurn.ts`).
  */
 const MediaAddress = {
-  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  mimeType: Schema.NonEmptyString,
   digest: Sha256Schema,
 };
 const StoredInputPartSchema = Schema.Union([
@@ -62,7 +62,7 @@ const StoredInputPartSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('image'),
     ...MediaAddress,
-    detail: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    detail: Schema.optional(Schema.NonEmptyString),
   }),
   Schema.Struct({
     kind: Schema.Literals(['audio', 'video', 'document']),
@@ -94,8 +94,8 @@ const StoredContentSchema = Schema.Array(
     }),
     Schema.Struct({
       kind: Schema.Literal('local-call'),
-      providerCallId: Schema.String.check(Schema.isMinLength(1)),
-      name: Schema.String.check(Schema.isMinLength(1)),
+      providerCallId: Schema.NonEmptyString,
+      name: Schema.NonEmptyString,
       /** The provider's exact returned bytes, never a parse of them. */
       argumentsText: Schema.String,
       evidence: Schema.optional(ProviderEvidenceSchema),
@@ -110,9 +110,9 @@ const TokenCount = Schema.NullOr(
 /** One completed provider turn. */
 export const StoredTurnSchema = Schema.Struct({
   kind: Schema.Literal('http'),
-  providerResponseId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  providerResponseId: Schema.NullOr(Schema.NonEmptyString),
   requestedOrigin: StoredOriginSchema,
-  returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  returnedModel: Schema.NullOr(Schema.NonEmptyString),
   modelFingerprint: Schema.NullOr(Schema.String),
   content: StoredContentSchema,
   finishReason: Schema.Literals([
@@ -165,7 +165,7 @@ export const StoredMessageSchema = Schema.Union([
   /** A context update the run appended mid-conversation. */
   Schema.Struct({
     role: Schema.Literal('system'),
-    text: Schema.String.check(Schema.isMinLength(1)),
+    text: Schema.NonEmptyString,
   }),
 ]);
 /** One entry of canonical history, as a committed row holds it. */
@@ -175,6 +175,6 @@ export type StoredMessage = typeof StoredMessageSchema.Type;
  *  it by. */
 export const StoredOperationSchema = Schema.Struct({
   origin: StoredOriginSchema,
-  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  providerResponseId: Schema.NonEmptyString,
   evidence: ProviderEvidenceSchema,
 });

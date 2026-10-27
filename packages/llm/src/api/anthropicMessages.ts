@@ -55,7 +55,7 @@ import type {
  * malformed response: the upload counts as failed and the bytes are sent.
  */
 const UploadedFileSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   expires_at: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
 }).pipe(
   Schema.decodeTo(UploadedSchema, {

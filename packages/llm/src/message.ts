@@ -14,7 +14,7 @@ const TextPartSchema = Schema.Struct({
   text: Schema.String,
 });
 const MediaFieldsSchema = Schema.Struct({
-  mimeType: Schema.String.check(Schema.isMinLength(1)),
+  mimeType: Schema.NonEmptyString,
   // Encoding validity is distinct from a provider accepting the captured bytes.
   base64: Schema.String.check(Schema.isBase64()),
 });
@@ -47,7 +47,7 @@ const MessagePartSchema = Schema.Struct({
   evidence: Schema.optional(
     Schema.Struct({
       kind: Schema.Literal('openai-responses-message'),
-      itemId: Schema.String.check(Schema.isMinLength(1)),
+      itemId: Schema.NonEmptyString,
       status: EvidenceStatusSchema,
       phase: Schema.optional(
         Schema.NullOr(Schema.Literals(['commentary', 'final_answer'])),
@@ -57,8 +57,8 @@ const MessagePartSchema = Schema.Struct({
 });
 const LocalCallPartSchema = Schema.Struct({
   kind: Schema.Literal('local-call'),
-  providerCallId: Schema.String.check(Schema.isMinLength(1)),
-  name: Schema.String.check(Schema.isMinLength(1)),
+  providerCallId: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
   /**
    * The provider's exact returned bytes, the one carrier of the arguments.
    * A JSON.parse then JSON.stringify round trip is not byte exact (it
@@ -70,7 +70,7 @@ const LocalCallPartSchema = Schema.Struct({
   evidence: Schema.optional(
     Schema.Struct({
       kind: Schema.Literal('openai-responses-function-call'),
-      itemId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+      itemId: Schema.optional(Schema.NonEmptyString),
       status: Schema.optional(Schema.Literal('completed')),
     }),
   ),
@@ -86,11 +86,11 @@ const OutputPartSchema = Schema.Union([
       Schema.Union([
         Schema.Struct({
           kind: Schema.Literal('google-interactions-thought-signature'),
-          signature: Schema.String.check(Schema.isMinLength(1)),
+          signature: Schema.NonEmptyString,
         }),
         Schema.Struct({
           kind: Schema.Literal('openai-responses-reasoning'),
-          itemId: Schema.String.check(Schema.isMinLength(1)),
+          itemId: Schema.NonEmptyString,
           // Missing, null and exact opaque bytes have distinct wire meanings.
           encryptedContent: Schema.optional(Schema.NullOr(Schema.String)),
           status: Schema.optional(EvidenceStatusSchema),
@@ -245,7 +245,7 @@ export const MessageSchema = Schema.Union([
    *  message where the binding takes one, otherwise as `systemUpdateText`. */
   Schema.Struct({
     role: Schema.Literal('system'),
-    text: Schema.String.check(Schema.isMinLength(1)),
+    text: Schema.NonEmptyString,
   }),
 ]);
 
@@ -330,13 +330,13 @@ export const GoogleContinuationSchema = PrefixSchema.mapFields(
       }),
     ),
     anchor: Schema.Struct({
-      interactionId: Schema.String.check(Schema.isMinLength(1)),
+      interactionId: Schema.NonEmptyString,
       coveredSteps: Schema.Int.check(Schema.isGreaterThan(0)),
     }),
   }),
 );
 const ResponsesAnchorSchema = Schema.Struct({
-  responseId: Schema.String.check(Schema.isMinLength(1)),
+  responseId: Schema.NonEmptyString,
   coveredItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 /** A Responses continuation: the stored response that already holds the

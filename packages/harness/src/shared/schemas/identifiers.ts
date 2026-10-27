@@ -30,9 +30,9 @@ export const RunSelectionSchema = Schema.Union([
 
 /** The complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = Schema.Tuple([
-  Schema.String.check(Schema.isMinLength(1)),
+  Schema.NonEmptyString,
   Schema.Int.check(Schema.isGreaterThan(0)),
-  Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  Schema.NullOr(Schema.NonEmptyString),
 ]);
 const OwnerIdentityJsonSchema = Schema.fromJsonString(OwnerIdentitySchema);
 const decodeOwnerIdentityJson = Schema.decodeUnknownResult(
@@ -92,7 +92,7 @@ const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
 export type AggregateKind = typeof AggregateKindSchema.Type;
 const AggregateKeySchema = Schema.Tuple([
   AggregateKindSchema,
-  Schema.String.check(Schema.isMinLength(1)),
+  Schema.NonEmptyString,
 ]).check(
   Schema.makeFilter(([kind, id]) => kind !== 'run' || isRunId(id), {
     message: 'A run aggregate is keyed by a run id',

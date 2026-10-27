@@ -64,7 +64,7 @@ export type ContextManagementData = typeof ContextManagementDataSchema.Type;
  */
 export const CompactionActivityDataSchema = Schema.Struct({
   activity: Schema.Literal('context_compaction'),
-  operationId: Schema.String.check(Schema.isMinLength(1)),
+  operationId: Schema.NonEmptyString,
   state: Schema.Literals([
     'started',
     'completed',

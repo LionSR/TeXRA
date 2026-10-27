@@ -46,7 +46,7 @@ export type TextChunk = typeof TextChunkSchema.Type;
 export const ResumeBlockerSchema = Schema.Struct({
   kind: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
   /** The agent or plugin it names. */
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
 });
 /** The decoded shape of {@link ResumeBlockerSchema}. */
 export type ResumeBlocker = typeof ResumeBlockerSchema.Type;

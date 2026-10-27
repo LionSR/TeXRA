@@ -79,7 +79,7 @@ export const chainedContinuation = (
     : {};
 
 const DeclarationSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   description: Schema.String,
   parameters: JsonObjectSchema,
 });

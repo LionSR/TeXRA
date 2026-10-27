@@ -187,9 +187,7 @@ export const InlinePersonaSchema = AgentDefinitionSchema.mapFields(
   Struct.assign({
     /** The tools it is offered, by name, as a file names them: what the run
      *  records is plain data, never a runtime tool definition. */
-    tools: Schema.optional(
-      Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-    ),
+    tools: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   }),
 );
 /** An inline persona as an embedder writes it (before defaults). */

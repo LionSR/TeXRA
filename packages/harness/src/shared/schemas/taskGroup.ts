@@ -15,7 +15,7 @@ export const StageKindSchema = Schema.Literals(['run', 'session', 'script']);
  * fold builds one from a `stage.start` row and closes it on its `stage.end`.
  */
 export const TaskGroupSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   name: Schema.String,
   startTime: Schema.Number,
   endTime: Schema.optional(Schema.Number),

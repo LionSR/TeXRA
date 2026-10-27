@@ -18,7 +18,7 @@ export const Sha256Schema = Schema.String.check(
 /** One offered tool and its identity: a call to it runs only while the tool
  *  the run would dispatch still has this name, digest, plugin and revision. */
 const OfferedToolSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   /** sha256 over the canonical JSON of the name and input schema, every
    *  description left out: the identity a call is checked against. */
   digest: Sha256Schema,
@@ -28,8 +28,8 @@ const OfferedToolSchema = Schema.Struct({
    *  the identity, so it rejects no call. */
   shown: Sha256Schema,
   /** The contributing plugin; `run` for a tool only this run holds. */
-  plugin: Schema.String.check(Schema.isMinLength(1)),
-  revision: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
+  revision: Schema.NonEmptyString,
   /** Whether the step's requests send the model this declaration. False
    *  while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`) for
    *  every tool but `script` and the run's own: the model reaches it from
@@ -49,7 +49,7 @@ export type OfferedTool = typeof OfferedToolSchema.Type;
 export const ToolsOfferedPayloadSchema = Schema.Struct({
   tools: Schema.Array(OfferedToolSchema),
   /** The names of the skills the step lists, in listing order. */
-  skills: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  skills: Schema.Array(Schema.NonEmptyString),
   /** The address of the system text the run's requests send: its base text
    *  with every section as the step that opened the run's context rendered
    *  them, frozen until a compaction opens it again. Null when it sends
@@ -61,7 +61,7 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
   context: Sha256Schema,
   /** The installed plugins' hooks the step pinned, each as
    *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
-  hooks: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  hooks: Schema.Array(Schema.NonEmptyString),
   /** The modules a `script` of the step may import, each source's address
    *  by specifier (`builtIn:<name>`), stored as a `context.blob`: a resumed
    *  script loads these. Empty when the step offers no script. */
@@ -77,7 +77,7 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
 const DelegationTargetsSchema = Schema.Struct({
   agents: Schema.Array(
     Schema.Struct({
-      name: Schema.String.check(Schema.isMinLength(1)),
+      name: Schema.NonEmptyString,
       description: Schema.String,
       tools: Schema.Array(Schema.String),
       task: Schema.Boolean,

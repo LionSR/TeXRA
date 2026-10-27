@@ -125,7 +125,7 @@ export const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
 /** The persisted OAuth session bundle. */
 const XaiSessionSchema = SubscriptionSessionBaseSchema.mapFields(
   Struct.assign({
-    email: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    email: Schema.optional(Schema.NonEmptyString),
   }),
 );
 /** A stored xAI (Grok) session. */
@@ -133,11 +133,11 @@ export type XaiSession = typeof XaiSessionSchema.Type;
 
 /** RFC 8628 device-code authorization response. */
 export const XaiDeviceCodeSchema = Schema.Struct({
-  device_code: Schema.String.check(Schema.isMinLength(1)),
-  user_code: Schema.String.check(Schema.isMinLength(1)),
-  verification_uri: Schema.String.check(Schema.isMinLength(1)),
+  device_code: Schema.NonEmptyString,
+  user_code: Schema.NonEmptyString,
+  verification_uri: Schema.NonEmptyString,
   verification_uri_complete: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+    Schema.NullOr(Schema.NonEmptyString),
   ),
   expires_in: Schema.optional(
     Schema.NullOr(

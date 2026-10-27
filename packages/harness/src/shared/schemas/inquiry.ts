@@ -40,7 +40,7 @@ export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 /** Full global inquiry records, independent of project display lifetimes. */
 const InquiryTurnBaseShape = {
   turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
-  timestamp: Schema.String.check(Schema.isMinLength(1)),
+  timestamp: Schema.NonEmptyString,
   question: Schema.String,
   context: Schema.optional(Schema.NullOr(Schema.String)),
   suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
@@ -60,7 +60,7 @@ const AnsweredInquiryTurnSchema = Schema.Struct({
   ...InquiryTurnBaseShape,
   kind: Schema.Literal('answered'),
   answer: Schema.String,
-  answeredAt: Schema.String.check(Schema.isMinLength(1)),
+  answeredAt: Schema.NonEmptyString,
   sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
 });
 /** The decoded shape of an inquiry turn whose answer has been recorded. */

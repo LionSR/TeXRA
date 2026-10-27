@@ -12,9 +12,9 @@ export const SkillSchema = Schema.Struct({
    *  characters before it gets here: `skillLoader.normalizeSkillDescription`
    *  owns that policy and reports what it changed. */
   description: Schema.String,
-  body: Schema.String.check(Schema.isMinLength(1)),
-  baseDir: Schema.String.check(Schema.isMinLength(1)),
-  path: Schema.String.check(Schema.isMinLength(1)),
+  body: Schema.NonEmptyString,
+  baseDir: Schema.NonEmptyString,
+  path: Schema.NonEmptyString,
 });
 
 export type Skill = typeof SkillSchema.Type;

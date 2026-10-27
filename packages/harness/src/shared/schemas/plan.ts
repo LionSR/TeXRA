@@ -11,7 +11,7 @@ import { Schema } from 'effect';
  * matters for the session it was approved in.
  */
 export const PlanSchema = Schema.Struct({
-  objective: Schema.String.check(Schema.isMinLength(1)).annotate({
+  objective: Schema.NonEmptyString.annotate({
     description:
       'The plan document: what to achieve, the approach, and a verifiable stopping condition',
   }),

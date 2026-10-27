@@ -264,19 +264,13 @@ export const openaiAbortMatch = (
 export const ResponseAuthenticationSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('api-key'),
-    apiKey: Schema.String.check(Schema.isMinLength(1)).check(
-      Schema.isPattern(/^[^\r\n]+$/),
-    ),
+    apiKey: Schema.NonEmptyString.check(Schema.isPattern(/^[^\r\n]+$/)),
   }),
   Schema.Struct({
     kind: Schema.Literal('codex'),
-    accessToken: Schema.String.check(Schema.isMinLength(1)).check(
-      Schema.isPattern(/^[^\r\n]+$/),
-    ),
+    accessToken: Schema.NonEmptyString.check(Schema.isPattern(/^[^\r\n]+$/)),
     accountId: Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).check(
-        Schema.isPattern(/^[^\r\n]+$/),
-      ),
+      Schema.NonEmptyString.check(Schema.isPattern(/^[^\r\n]+$/)),
     ),
   }),
 ]);

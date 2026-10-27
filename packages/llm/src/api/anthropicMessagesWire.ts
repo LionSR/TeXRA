@@ -85,8 +85,8 @@ export const BlockSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal('tool_use'),
-    id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
+    id: Schema.NonEmptyString,
+    name: Schema.NonEmptyString,
     input: JsonObjectSchema,
     caller: Schema.optional(Schema.Struct({ type: Schema.Literal('direct') })),
     toolset_name: Schema.optional(Schema.NullOr(Schema.String)),
@@ -99,8 +99,8 @@ export const EventSchema = Schema.Union([
     type: Schema.Literal('message_start'),
     message: StopSchema.mapFields(
       Struct.assign({
-        id: Schema.String.check(Schema.isMinLength(1)),
-        model: Schema.String.check(Schema.isMinLength(1)),
+        id: Schema.NonEmptyString,
+        model: Schema.NonEmptyString,
         type: Schema.Literal('message'),
         role: Schema.Literal('assistant'),
         content: Schema.Array(Schema.Unknown).check(Schema.isMaxLength(0)),

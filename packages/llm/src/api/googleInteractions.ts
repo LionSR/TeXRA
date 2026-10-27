@@ -540,7 +540,7 @@ const submitInteraction = Effect.fn('llm.google.submit')(function* (
     );
     // Retain a real accepted identifier even if later snapshot validation fails.
     const identity = Schema.decodeUnknownResult(
-      Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
+      Schema.Struct({ id: Schema.NonEmptyString }),
     )(raw);
     if (!Result.isSuccess(identity))
       return yield* new ModelError({

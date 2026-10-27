@@ -17,7 +17,7 @@ const ResponsesOperationSchema = Schema.Struct({
       protocol: Schema.Literal('openai-responses'),
     }),
   ),
-  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  providerResponseId: Schema.NonEmptyString,
   afterSequence: Schema.NullOr(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   ),

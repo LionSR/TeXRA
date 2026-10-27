@@ -36,10 +36,10 @@ const CliOutputFieldsSchema = Schema.Struct({
 /** What every script a run opens on records: its source, title, the tools
  *  it is offered, and its wall-clock limit. */
 const ScriptFieldsSchema = Schema.Struct({
-  code: Schema.String.check(Schema.isMinLength(1)),
-  title: Schema.String.check(Schema.isMinLength(1)),
+  code: Schema.NonEmptyString,
+  title: Schema.NonEmptyString,
   /** The tools the run offers the script, by name. */
-  tools: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  tools: Schema.Array(Schema.NonEmptyString),
   /** The script's wall-clock limit, when it set one. */
   timeoutMs: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
@@ -122,7 +122,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
             Struct.assign({
               kind: Schema.Literal('recipe'),
               /** The agent-file block (`AgentBlock.key`) whose task it runs. */
-              block: Schema.String.check(Schema.isMinLength(1)),
+              block: Schema.NonEmptyString,
               /** The launch's options for that task, as its plugin reads them
                *  (the switches that plugin defines). */
               options: Schema.Record(Schema.String, JsonValueSchema),

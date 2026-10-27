@@ -103,10 +103,10 @@ const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 const CodexSessionSchema = SubscriptionSessionBaseSchema.mapFields(
   Struct.assign({
-    accountId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-    email: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    accountId: Schema.optional(Schema.NonEmptyString),
+    email: Schema.optional(Schema.NonEmptyString),
     /** The ChatGPT plan the token was issued for (`plus`, `pro`, `team`, ...). */
-    planType: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    planType: Schema.optional(Schema.NonEmptyString),
   }),
 );
 /** A stored ChatGPT (Codex) session. */
@@ -114,13 +114,9 @@ export type CodexSession = typeof CodexSessionSchema.Type;
 
 /** Device-code "usercode" response. Field name varies (`user_code`/`usercode`). */
 export const CodexDeviceUserCodeSchema = Schema.Struct({
-  device_auth_id: Schema.String.check(Schema.isMinLength(1)),
-  user_code: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  usercode: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
+  device_auth_id: Schema.NonEmptyString,
+  user_code: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+  usercode: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
   // The endpoint sends the poll interval (seconds) as a string or a number, may
   // omit it, and could send junk. Normalize at the boundary to a positive
   // number, defaulting to 5 (matches Codex CLI / Zed).
@@ -142,11 +138,9 @@ export const CodexDeviceUserCodeSchema = Schema.Struct({
 
 /** Device-code poll success: an authorization code + its PKCE verifier. */
 export const CodexDeviceTokenSchema = Schema.Struct({
-  authorization_code: Schema.String.check(Schema.isMinLength(1)),
-  code_verifier: Schema.String.check(Schema.isMinLength(1)),
-  code_challenge: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
+  authorization_code: Schema.NonEmptyString,
+  code_verifier: Schema.NonEmptyString,
+  code_challenge: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
 });
 
 // JWT claim extraction. We never verify the signature here (the token came
