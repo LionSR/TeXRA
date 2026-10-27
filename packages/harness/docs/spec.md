@@ -870,11 +870,11 @@ still issue a new command, which runs under I4
 These existing suites check the sections above.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:818` (pre-1.0
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:808` (pre-1.0
   moved aside), `:878` (foreign file refused), `:912` (damaged file moved
   aside), `:1073` (newer schema refused)
 - **2.2 envelope**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1097` (dense seq,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1087` (dense seq,
   one commit order), `:1136` (parent incarnation), `:1246` (ordinals never
   reused), `:1297` (blobs)
 - **2.3 publisher**:
@@ -884,26 +884,26 @@ These existing suites check the sections above.
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:475` (newer build
-  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:945`
+  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:935`
   (undecodable row), `:1014` (earlier build's row);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:199`
 - **3 row kinds**:
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:199` (every golden
   row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:756`, `:1168`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2175`
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2165`
   (live state equals reloaded state), `:2207` (batch contract);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:375`, `:526`
   (listing equals the fold)
 - **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:411`, `:491`,
   `:543` (asks again after a stop), `:457` (budget), `:615` (unchain once),
-  `:431`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:78`
+  `:431`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:472`, `:553`,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:553`,
   `:1476`, `:1717` (another OS process), `:1829` (dead owner reclaimed), `:1879`
   (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:84`
 - **8 requests**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1394`;
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1384`;
   `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
