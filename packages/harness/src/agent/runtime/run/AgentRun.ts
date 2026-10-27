@@ -23,10 +23,9 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { Persona, SessionEventDraft } from '@shared/schemas';
+import type { ModelBackend, Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunHistoryDraft } from '@shared/session/runState';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
@@ -81,6 +80,8 @@ interface RunCallbacks {
 /** The tool a script's run makes its one call to. */
 const SCRIPT_TOOL = 'script';
 
+/** What one run owns for its lifetime, as the loop, the invoker and the
+ *  run's tools read it from the {@link AgentRun} service. */
 export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
@@ -92,16 +93,16 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /** The session's setting slots and the process secret store the launch
-   *  read, for what the run reads besides its model (`ModelAccess` owns that). */
-  readonly stores: ModelOptionStores;
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
   readonly opening: TemplateOpening | null;
   /** How the launch enters the run's cell. */
   readonly entry: LaunchEntry;
   readonly fileService: RunFileService;
-  /** What each step resolves its tools from (`loop/step.ts`). */
+  /** What each step resolves its tools from (`loop/step.ts`), with the
+   *  session's setting slots and the process secret store the launch read
+   *  (`stores`), for what the run reads besides its model (`ModelAccess`
+   *  owns that). */
   readonly toolInputs: Omit<
     StepToolInputs,
     'approvalPromptsUnavailable' | 'hostCapabilities'
@@ -146,9 +147,68 @@ export interface AgentRunShape {
   readonly callbacks: RunCallbacks;
 }
 
+/** The per-run service, provided once at the `executeAgent` boundary by
+ *  {@link agentRunLayer} for the run's lifetime. */
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
   '@texra-ai/harness/agent/AgentRun',
 ) {}
+
+/**
+ * What a run offers, from its own definition and launch under the session's
+ * gates; its launcher's tools do not bound it. A script run offers its
+ * script; an inheriting plugin agent, beside the installed plugins' tools,
+ * the file, shell and web tools; anyone else its persona's. `root`: the run
+ * has no parent.
+ */
+function toolOffer(config: AgentConfig, persona: Persona, root: boolean) {
+  // A script's run offers its script and exactly the tools its launch
+  // names (a background script's parent's, a task's recipe's).
+  const script = config.script ?? null;
+  const plugin = config.agentSource === AGENT_SOURCE.PLUGIN;
+  // A plugin agent that names no tools inherits them, as a Claude Code
+  // subagent does: the standard file, shell and web tools and the
+  // installed plugins' tools, whoever launched it.
+  const inherits = plugin && script === null && persona.tools.length === 0;
+  // A persona that declares no tools writes text only: the injected
+  // tools stay out, and its turns get the model's whole output budget.
+  const textOnly = script === null && !inherits && persona.tools.length === 0;
+  let tools = persona.tools;
+  if (script !== null)
+    tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
+  else if (inherits) tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
+  // A script's run and a text-only persona inject none. A plugin agent
+  // that names its tools gets only those.
+  const injectTools = script === null && !textOnly && (!plugin || inherits);
+  // The installed plugins' tools reach a top-level run (unless it is a
+  // plugin agent that names its tools), a `self()` child, which runs as its
+  // caller, and an inheriting plugin agent wherever it runs; any other
+  // child gets what it declares.
+  const injectInstalled =
+    injectTools && (root || config.asCaller === true || inherits);
+  return { tools, textOnly, injectTools, injectInstalled };
+}
+
+/**
+ * The backend and declined routes a run binds under: a resumed run's as its
+ * rows fold them, else a fork's as its source was bound at the cut (its
+ * seed's `run.config` row); a fresh run has no backend and declines none.
+ * Nothing here reads or writes the user's stored preferences.
+ */
+function recordedBinding(
+  folded: RunState | null,
+  seed: readonly RunHistoryDraft[] | null | undefined,
+): {
+  readonly backend: ModelBackend | undefined;
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
+} {
+  const seeded = seed?.findLast((row) => row.type === 'run.config');
+  const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
+  const persisted = folded?.backend != null ? folded : fromSeed;
+  return {
+    backend: persisted?.backend ?? undefined,
+    declinedRoutes: persisted?.declinedRoutes ?? [],
+  };
+}
 
 interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
@@ -174,15 +234,12 @@ export const agentRunLayer = (
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session } = ctx;
-      const { logger, config } = ctx;
+      const { runId, session, logger, config, persona } = ctx;
       const runHistory = yield* RunHistory;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
-
-      const { persona } = ctx;
 
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
@@ -194,35 +251,16 @@ export const agentRunLayer = (
         ? buildTerminalTool(outputSchema)
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
-      // A script's run offers its script and exactly the tools its launch
-      // names (a background script's parent's, a task's recipe's).
-      const script = config.script ?? null;
-      // A plugin agent that names no tools inherits them, as a Claude Code
-      // subagent does: the standard file, shell and web tools and the
-      // installed plugins' tools, whoever launched it.
-      const inherits =
-        config.agentSource === AGENT_SOURCE.PLUGIN &&
-        script === null &&
-        persona.tools.length === 0;
-      // A persona that declares no tools writes text only: the injected
-      // tools stay out, and its turns get the model's whole output budget.
-      const textOnly =
-        script === null && !inherits && persona.tools.length === 0;
       const root = (session.runs.get(runId)?.parent ?? null) === null;
+      const { tools, textOnly, injectTools, injectInstalled } = toolOffer(
+        config,
+        persona,
+        root,
+      );
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
       // default route.
       const folded = yield* runHistory.load(runId);
-      // A run is offered what its own definition and launch declare, under
-      // the session's gates; its launcher's tools do not bound it. A script
-      // run offers its script; an inheriting plugin agent, beside the
-      // installed plugins' tools, the file, shell and web tools; anyone else
-      // its persona's.
-      let tools = persona.tools;
-      if (script !== null)
-        tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
-      else if (inherits)
-        tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
       // The loaded plugins (MCP servers) the declared tools name, held in
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
@@ -237,47 +275,24 @@ export const agentRunLayer = (
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),
-        // A script's run and a text-only persona inject none. A plugin
-        // agent that names its tools gets only those.
-        injectTools:
-          script === null &&
-          !textOnly &&
-          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        // The installed plugins' tools reach a top-level run (unless it is a
-        // plugin agent that names its tools), a `self()` child, which runs as
-        // its caller, and an inheriting plugin agent wherever it runs; any
-        // other child gets what it declares.
-        injectInstalled:
-          script === null &&
-          !textOnly &&
-          (root || config.asCaller === true || inherits) &&
-          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+        injectTools,
+        injectInstalled,
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         held,
       };
-      // A fork binds as its source was bound at the cut (its seed's row).
-      const seeded = ctx.entry.seed?.findLast(
-        (row) => row.type === 'run.config',
+      const { backend, declinedRoutes } = recordedBinding(
+        folded,
+        ctx.entry.seed,
       );
-      const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
-      const persisted = folded?.backend != null ? folded : fromSeed;
-      const backend = persisted?.backend ?? undefined;
-      const modelId = config.model;
-      const modelConfig = ctx.modelConfig;
-      // The routes this run declines: a resumed run replays the set its rows
-      // record; a fresh run declines none. Nothing here reads or writes the
-      // user's stored preferences.
-      const declinedRoutes: readonly DeclinableUsageRoute[] =
-        persisted?.declinedRoutes ?? [];
       // Each binding owns a scope forked from the run's; only the one in
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.
       let bindingScope = yield* Scope.fork(scope);
       const bound = yield* (yield* ModelAccess)
         .bind({
-          modelId,
-          config: modelConfig,
+          modelId: config.model,
+          config: ctx.modelConfig,
           backend,
           declinedRoutes,
           textOnly,
@@ -315,7 +330,6 @@ export const agentRunLayer = (
         toolPolicy: ctx.toolPolicy,
         workingDirectory: ctx.workingDirectory,
         delegationAgentScope: ctx.delegationAgentScope,
-        stores: ctx.stores,
         opening: ctx.opening,
         entry: ctx.entry,
         fileService: new RunFileService(runId, session.roots),

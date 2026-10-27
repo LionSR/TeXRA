@@ -284,7 +284,6 @@ export function testAgentRun(
     }),
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
-    stores: hostStores(),
     toolPolicy: {},
     opening: {
       inputs: {},

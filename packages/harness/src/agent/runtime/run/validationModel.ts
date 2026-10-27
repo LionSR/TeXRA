@@ -90,101 +90,89 @@ const text = (value: string): TurnResult['content'] => [
 /** What the golden chat's goal round reports, and its result carries. */
 const ANSWERED = 'The golden chat is answered.';
 
-/**
- * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
- * a system prompt names its part, a step is its count of tool results, and a
- * held call waits for its `*.release` file beside the flag file.
- */
-function goldenTurn(
-  turn: ResolvedTurn,
-  flagPath: string,
-  call: (name: string, input: unknown) => TurnResult['content'][number],
-): Effect.Effect<TurnResult['content'] | null> {
-  const gate = (name: string) =>
-    Effect.gen(function* () {
-      const file = path.join(path.dirname(flagPath), name);
-      while (!existsSync(file)) yield* Effect.sleep('20 millis');
-    });
-  const system = turn.system ?? '';
-  const results = turn.messages.filter((m) => m.role === 'tool');
-  const said = JSON.stringify(turn.messages);
-  // The golden chat's `/compact`: its summary replaces the history.
-  if (system === COMPACTION_SYSTEM_PROMPT)
-    return Effect.succeed(text('The golden chat so far.'));
-  // The golden parent's session label: its `run.description`.
-  if (
-    system.startsWith('Generate a short TeXRA session label') &&
-    said.includes('<agent>golden_parent</agent>')
-  )
-    return Effect.succeed(text('Working through the golden parent task'));
-  // A call naming GOLDEN-PARK (a label's too) waits for its release file.
-  if ((system + said).includes('GOLDEN-PARK'))
-    return Effect.as(gate('golden-park.release'), text('Parked run released.'));
+/** A tool call part, numbered by the model's response count. */
+type CallPart = (name: string, input: unknown) => TurnResult['content'][number];
+
+type ToolMessage = Extract<ResolvedTurn['messages'][number], { role: 'tool' }>;
+
+/** What a golden part reads off its request: `said` is its messages as JSON
+ *  and `results` its tool results, whose count is the part's step. */
+interface GoldenRequest {
+  readonly turn: ResolvedTurn;
+  readonly system: string;
+  readonly said: string;
+  readonly results: ToolMessage[];
+  readonly call: CallPart;
+}
+
+/** A scripted reply: its content, null for none, or content held until its
+ *  `release` file appears beside the flag file. */
+type GoldenReply =
+  | TurnResult['content']
+  | null
+  | { readonly release: string; readonly content: TurnResult['content'] };
+
+/** The golden store's scripted parts, keyed by the marker a system prompt
+ *  carries and tried in order: the first marker the prompt contains answers. */
+const GOLDEN_PARTS: Record<string, (request: GoldenRequest) => GoldenReply> = {
   // A call awaiting approval: the tool and command after the marker.
-  const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
-    /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
-  if (marker !== undefined)
-    return Effect.succeed(
-      results.length
-        ? text('The approved command ran.')
-        : [call(asked, { command })],
-    );
+  'GOLDEN-APPROVAL': ({ system, results, call }) => {
+    const [, asked = 'bash', command = 'echo approved >> approved.txt'] =
+      /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
+    return results.length
+      ? text('The approved command ran.')
+      : [call(asked, { command })];
+  },
   // A diagnostics read the service forwards to an attached window.
-  if (system.includes('GOLDEN-DIAGNOSTICS'))
-    return Effect.succeed(
-      results.length === 0
-        ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
-        : text('The diagnostics read came back.'),
-    );
+  'GOLDEN-DIAGNOSTICS': ({ results, call }) =>
+    results.length === 0
+      ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
+      : text('The diagnostics read came back.'),
   // A service task accepting a file from the run its instruction names.
-  if (system.includes('GOLDEN-ACCEPT')) {
+  'GOLDEN-ACCEPT': ({ said, results, call }) => {
     const source = /\b([0-9a-f]{12})\b/.exec(said)?.[1];
     const files = [{ path: 'draft.tex', original: 'accepted.tex' }];
-    return Effect.succeed(
-      results.length > 0 || source === undefined
-        ? text('Accepted.')
-        : [call('accept_run_files', { execution_id: source, files })],
-    );
-  }
-  if (system.includes('GOLDEN-CHILD')) {
+    return results.length > 0 || source === undefined
+      ? text('Accepted.')
+      : [call('accept_run_files', { execution_id: source, files })];
+  },
+  'GOLDEN-CHILD': ({ said, results, call }) => {
     // Messaging its waiting headless parent is refused (it never reads).
     if (!said.includes('Answer the delegated child task'))
-      return Effect.succeed(text('Child result.'));
+      return text('Child result.');
     if (results.length === 0)
-      return Effect.succeed([
+      return [
         call('executions', {
           path: '/executions',
           action: 'query',
           sql: "SELECT id FROM runs WHERE name = 'golden_parent'",
         }),
-      ]);
+      ];
     const page = results[0]?.results
       .flatMap((result) => result.content)
       .map((part) => (part.kind === 'text' ? part.text : ''))
       .join('\n');
     const parent = /^([0-9a-f]{12})$/m.exec(page ?? '')?.[1];
-    return Effect.succeed(
-      results.length === 1 && parent !== undefined
-        ? [
-            call('executions', {
-              path: `/executions/${parent}`,
-              action: 'send',
-              message: 'The delegated child has a note for its parent.',
-            }),
-          ]
-        : text('Child result.'),
-    );
-  }
+    return results.length === 1 && parent !== undefined
+      ? [
+          call('executions', {
+            path: `/executions/${parent}`,
+            action: 'send',
+            message: 'The delegated child has a note for its parent.',
+          }),
+        ]
+      : text('Child result.');
+  },
   // The interactive chat: a plan run as a goal, its round and result, and
   // replies after a `/model` and a `/compact`, told apart by what they say.
-  if (system.includes('GOLDEN-CHAT')) {
+  'GOLDEN-CHAT': ({ turn, said, results, call }) => {
     // A Codex child held until a stop; what is typed behind stays queued.
     if (said.includes('Hold this turn.'))
       return results.length === 0
-        ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
-        : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
+        ? [call('codex', { prompt: 'Answer the Codex task.' })]
+        : { release: 'golden-chat.release', content: text('Released.') };
     if (said.includes('The golden chat so far.'))
-      return Effect.succeed(text('Answered after the compaction.'));
+      return text('Answered after the compaction.');
     // The goal's round (`self()`): a command its grant approves, a verdict.
     const round = turn.tools.some(({ name }) => name === 'submit_output');
     const step = round
@@ -194,51 +182,44 @@ function goldenTurn(
         ]
       : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
     if (round || results.length === 0)
-      return Effect.succeed(step.slice(results.length, results.length + 1));
+      return step.slice(results.length, results.length + 1);
     if (said.includes('After the model switch.'))
-      return Effect.succeed(text('Answered after the model switch.'));
-    return Effect.succeed(
-      text(
-        said.includes(ANSWERED)
-          ? 'Golden chat goal complete.'
-          : 'The plan runs as a goal.',
-      ),
+      return text('Answered after the model switch.');
+    return text(
+      said.includes(ANSWERED)
+        ? 'Golden chat goal complete.'
+        : 'The plan runs as a goal.',
     );
-  }
-  if (system.includes('GOLDEN-SCRIPT')) {
+  },
+  'GOLDEN-SCRIPT': ({ turn, said, results, call }) => {
     // A background command waiting for its release file; its result wakes
     // the task once more.
     if (said.includes('Run in the background.')) {
       const last = turn.messages.at(-1);
-      if (last?.role === 'tool')
-        return Effect.succeed(text('Sent to the background.'));
-      return Effect.succeed(
-        JSON.stringify(last).includes('Run in the background.')
-          ? [
-              call('bash', {
-                command:
-                  'until [ -e ../bash.release ]; do sleep 0.05; done; echo released',
-                description: 'Wait for the release',
-                run_in_background: true,
-              }),
-            ]
-          : text('The background command finished.'),
-      );
-    }
-    return Effect.succeed(
-      results.length === 0
+      if (last?.role === 'tool') return text('Sent to the background.');
+      return JSON.stringify(last).includes('Run in the background.')
         ? [
-            call('script', {
-              title: 'Gather the notes',
-              code: GOLDEN_SCRIPT_SOURCE,
+            call('bash', {
+              command:
+                'until [ -e ../bash.release ]; do sleep 0.05; done; echo released',
+              description: 'Wait for the release',
+              run_in_background: true,
             }),
           ]
-        : text('Script done.'),
-    );
-  }
+        : text('The background command finished.');
+    }
+    return results.length === 0
+      ? [
+          call('script', {
+            title: 'Gather the notes',
+            code: GOLDEN_SCRIPT_SOURCE,
+          }),
+        ]
+      : text('Script done.');
+  },
   // The fork: each reply names its view's user messages by their last
   // lines, so the store records what the edit left.
-  if (system.includes('GOLDEN-FORK')) {
+  'GOLDEN-FORK': ({ turn }) => {
     const users = turn.messages.flatMap((message) =>
       message.role === 'user'
         ? message.content.flatMap((part) =>
@@ -246,35 +227,33 @@ function goldenTurn(
           )
         : [],
     );
-    return Effect.succeed(text(`Saw: ${users.join(' | ')}`));
-  }
+    return text(`Saw: ${users.join(' | ')}`);
+  },
   // The crash suite's delivery run: three children, each reporting back.
-  if (system.includes('GOLDEN-DELIVERY'))
-    return Effect.succeed(
-      results.length === 0
-        ? [
-            call('agent', {
-              agentName: 'golden_child',
-              prompt: 'Delivery child: answer.',
-              background: true,
-            }),
-            call('script', {
-              title: 'Deliver',
-              code: GOLDEN_BACKGROUND_SOURCE,
-              run_in_background: true,
-            }),
-            call('bash', {
-              command: 'echo delivered',
-              description: 'Deliver',
-              run_in_background: true,
-            }),
-          ]
-        : text('Noted.'),
-    );
+  'GOLDEN-DELIVERY': ({ results, call }) =>
+    results.length === 0
+      ? [
+          call('agent', {
+            agentName: 'golden_child',
+            prompt: 'Delivery child: answer.',
+            background: true,
+          }),
+          call('script', {
+            title: 'Deliver',
+            code: GOLDEN_BACKGROUND_SOURCE,
+            run_in_background: true,
+          }),
+          call('bash', {
+            command: 'echo delivered',
+            description: 'Deliver',
+            run_in_background: true,
+          }),
+        ]
+      : text('Noted.'),
   // The crash-point run: two calls, a script, the echo's text. A step a crash
   // cut off unstarted is asked for again; a view an edit replaced no longer
   // holds the task, and the echo shows the view the edit left.
-  if (system.includes('GOLDEN-CRASH')) {
+  'GOLDEN-CRASH': ({ said, results, call }) => {
     const done = results.filter(
       (message) =>
         !message.results.some((result) =>
@@ -294,32 +273,64 @@ function goldenTurn(
       ],
       () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
     ][done];
-    return Effect.succeed(
-      step === undefined || !said.includes('Work through the crash task.')
-        ? null
-        : step(),
-    );
-  }
-  if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
-  const steps = [
-    () => call('read_file', { path: 'notes.tex' }),
-    () => call('plan', { objective: 'Read the notes and ask a child.' }),
-    () =>
-      call('agent', {
-        agentName: 'golden_child',
-        prompt: 'Answer the delegated child task.',
-      }),
-  ];
-  const step = steps[results.length];
-  return Effect.succeed(step === undefined ? text('Parent done.') : [step()]);
+    return step === undefined || !said.includes('Work through the crash task.')
+      ? null
+      : step();
+  },
+  'GOLDEN-PARENT': ({ results, call }) => {
+    const steps = [
+      () => call('read_file', { path: 'notes.tex' }),
+      () => call('plan', { objective: 'Read the notes and ask a child.' }),
+      () =>
+        call('agent', {
+          agentName: 'golden_child',
+          prompt: 'Answer the delegated child task.',
+        }),
+    ];
+    const step = steps[results.length];
+    return step === undefined ? text('Parent done.') : [step()];
+  },
+};
+
+/**
+ * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
+ * a system prompt names its part, a step is its count of tool results, and a
+ * held reply waits for its `*.release` file beside the flag file.
+ */
+function goldenTurn(
+  turn: ResolvedTurn,
+  flagPath: string,
+  call: CallPart,
+): Effect.Effect<TurnResult['content'] | null> {
+  const system = turn.system ?? '';
+  const said = JSON.stringify(turn.messages);
+  // The golden chat's `/compact`: its summary replaces the history.
+  if (system === COMPACTION_SYSTEM_PROMPT)
+    return Effect.succeed(text('The golden chat so far.'));
+  // The golden parent's session label: its `run.description`.
+  if (
+    system.startsWith('Generate a short TeXRA session label') &&
+    said.includes('<agent>golden_parent</agent>')
+  )
+    return Effect.succeed(text('Working through the golden parent task'));
+  const results = turn.messages.filter((m) => m.role === 'tool');
+  const [, part] =
+    Object.entries(GOLDEN_PARTS).find(([marker]) => system.includes(marker)) ??
+    [];
+  // A call naming GOLDEN-PARK (a label's too) waits for its release file.
+  const reply: GoldenReply = (system + said).includes('GOLDEN-PARK')
+    ? { release: 'golden-park.release', content: text('Parked run released.') }
+    : (part?.({ turn, system, said, results, call }) ?? null);
+  if (reply === null || !('release' in reply)) return Effect.succeed(reply);
+  const file = path.join(path.dirname(flagPath), reply.release);
+  return Effect.gen(function* () {
+    while (!existsSync(file)) yield* Effect.sleep('20 millis');
+    return reply.content;
+  });
 }
 
-function mathematicalValidationOutput(prompt: string): {
-  answer: string;
-  derivation: string;
-  check: string;
-} {
-  if (prompt.includes('x^2 - y^2')) {
+function mathematicalValidationOutput(prompt: string) {
+  if (prompt.includes('x^2 - y^2'))
     return {
       answer:
         '(x,y) = (±23,±22), (±9,±6), and (±7,±2), with independent signs.',
@@ -328,15 +339,13 @@ function mathematicalValidationOutput(prompt: string): {
       check:
         'The factorization is bijective because x-y and x+y are odd divisors of 45; direct substitution gives differences of squares 45.',
     };
-  }
-  if (prompt.includes('A^2 = A')) {
+  if (prompt.includes('A^2 = A'))
     return {
       answer: 'A is similar over R to diag(1,1,0), and det(I+A)=4.',
       derivation:
         'The minimal polynomial divides t(t-1), whose roots are distinct, so A is diagonalizable with eigenvalues 0 and 1. The trace is the multiplicity of 1, hence it is 2.',
       check: 'I+A is similar to diag(2,2,1), whose determinant is 4.',
     };
-  }
   return {
     answer: 'The probability that HHT appears before THH is 1/4.',
     derivation:
@@ -344,6 +353,69 @@ function mathematicalValidationOutput(prompt: string): {
     check:
       'Substitution satisfies every state equation and uses absorbing values 1 after HHT and 0 after THH.',
   };
+}
+
+/** The echo reply: the user messages the request carries, each by its last
+ *  60 characters, which is what a fork or a compaction left of the view. */
+function echoContent(turn: ResolvedTurn): TurnResult['content'] {
+  if (turn.system === COMPACTION_SYSTEM_PROMPT)
+    return text('Earlier turns, summarized.');
+  const seen = turn.messages.flatMap((message) =>
+    message.role === 'user'
+      ? message.content.flatMap((part) =>
+          part.kind === 'text' ? [part.text.slice(-60)] : [],
+        )
+      : [],
+  );
+  return text(`Model saw: ${seen.join(' | ')}`);
+}
+
+/** The reply outside the golden mode: the echo, the script fan-out's and the
+ *  history query's call and then its result, else the polished document. */
+function validationContent(
+  turn: ResolvedTurn,
+  scriptFanout: boolean,
+  historyQuery: boolean,
+  echo: boolean,
+  call: CallPart,
+): TurnResult['content'] {
+  if (echo) return echoContent(turn);
+  const toolNames = new Set(turn.tools.map((tool) => tool.name));
+  const hasToolResult = turn.messages.some(({ role }) => role === 'tool');
+  if (scriptFanout && toolNames.has('submit_output'))
+    return [
+      call(
+        'submit_output',
+        mathematicalValidationOutput(JSON.stringify(turn.messages)),
+      ),
+    ];
+  if (scriptFanout && !hasToolResult && toolNames.has('script'))
+    return [
+      call('script', {
+        title: 'Solve the validation problems',
+        code: SCRIPT_FANOUT_VALIDATION_SOURCE,
+      }),
+    ];
+  if (historyQuery && !hasToolResult && toolNames.has('executions'))
+    return [
+      call('executions', {
+        path: '/executions',
+        action: 'query',
+        sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
+      }),
+    ];
+  if ((scriptFanout && toolNames.has('script')) || historyQuery) {
+    // Hand the result back verbatim, so the run's report shows what the
+    // script's children answered or what the query returned.
+    const results = turn.messages.flatMap((message) =>
+      message.role === 'tool' ? message.results : [],
+    );
+    const what = scriptFanout ? 'Script' : 'History query';
+    return text(`${what} result: ${JSON.stringify(results)}`);
+  }
+  return text(
+    `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
+  );
 }
 
 /**
@@ -369,26 +441,22 @@ export const shouldUseInternalValidationModel = Effect.fn(
   if ((yield* envVar(envKey)) !== '1') return false;
 
   const flagPath = yield* envVar(flagEnvKey);
-  if (!flagPath || !path.isAbsolute(flagPath)) {
+  if (!flagPath || !path.isAbsolute(flagPath))
     return yield* Effect.die(
       new Error(
         `${envKey}=1 is restricted to package validation and needs an absolute ${flagEnvKey} path.`,
       ),
     );
-  }
 
   // An unreadable flag file dies with the filesystem error, which names it.
   const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
-  if (flagContent.trim() !== expectedFlagContent) {
+  if (flagContent.trim() !== expectedFlagContent)
     return yield* Effect.die(
       new Error(`${envKey}=1 received an invalid validation flag file.`),
     );
-  }
 
   return true;
 });
-
-const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';
 
 /** The canned llm `Model` behind the validation backend. */
 export function validationModel(config: ModelConfig): {
@@ -399,102 +467,17 @@ export function validationModel(config: ModelConfig): {
     protocol: 'openai-responses',
     requestedModel: config.id,
     deployment: {
-      endpoint: VALIDATION_ENDPOINT,
+      endpoint: 'https://validation.invalid/v1',
       credentialScope: 'validation',
     },
   });
   let responses = 0;
-  const call = (name: string, input: unknown) =>
-    ({
-      kind: 'local-call',
-      providerCallId: `validation-${name}-${responses}`,
-      name,
-      argumentsText: JSON.stringify(input),
-    }) as const;
-  const complete = (
-    turn: ResolvedTurn,
-    scriptFanout: boolean,
-    historyQuery: boolean,
-    echo: boolean,
-    golden: TurnResult['content'] | null,
-  ): TurnResult => {
-    const toolNames = new Set(turn.tools.map((tool) => tool.name));
-    const hasToolResult = turn.messages.some(
-      (message) => message.role === 'tool',
-    );
-    let content: TurnResult['content'];
-    if (golden !== null) {
-      content = golden;
-    } else if (echo && turn.system === COMPACTION_SYSTEM_PROMPT) {
-      content = text('Earlier turns, summarized.');
-    } else if (echo) {
-      // The user messages the request carries, in order, each by its last
-      // 60 characters: what a fork or a compaction left of the model's view.
-      const seen = turn.messages.flatMap((message) =>
-        message.role === 'user'
-          ? message.content.flatMap((part) =>
-              part.kind === 'text' ? [part.text.slice(-60)] : [],
-            )
-          : [],
-      );
-      content = text(`Model saw: ${seen.join(' | ')}`);
-    } else if (scriptFanout && toolNames.has('submit_output')) {
-      content = [
-        call(
-          'submit_output',
-          mathematicalValidationOutput(JSON.stringify(turn.messages)),
-        ),
-      ];
-    } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
-      content = [
-        call('script', {
-          title: 'Solve the validation problems',
-          code: SCRIPT_FANOUT_VALIDATION_SOURCE,
-        }),
-      ];
-    } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
-      content = [
-        call('executions', {
-          path: '/executions',
-          action: 'query',
-          sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
-        }),
-      ];
-    } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
-      // Hand the result back verbatim, so the run's report shows what the
-      // script's children answered or what the query returned.
-      const results = turn.messages.flatMap((message) =>
-        message.role === 'tool' ? message.results : [],
-      );
-      const what = scriptFanout ? 'Script' : 'History query';
-      content = text(`${what} result: ${JSON.stringify(results)}`);
-    } else {
-      content = text(
-        `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
-      );
-    }
-    const calls = content.some((part) => part.kind === 'local-call');
-    // About four characters a token, so compaction can be crossed.
-    const inputTokens = echo
-      ? Math.ceil(JSON.stringify(turn.messages).length / 4)
-      : 1;
-    return {
-      kind: 'http',
-      providerResponseId: `validation-response-${responses}`,
-      requestedOrigin: origin,
-      returnedModel: config.id,
-      modelFingerprint: null,
-      content,
-      finishReason: calls ? 'tool-calls' : 'stop',
-      usage: {
-        inputTokens,
-        outputTokens: 1,
-        totalTokens: inputTokens + 1,
-        cachedInputTokens: null,
-        reasoningTokens: null,
-      },
-    };
-  };
+  const call: CallPart = (name, input) => ({
+    kind: 'local-call',
+    providerCallId: `validation-${name}-${responses}`,
+    name,
+    argumentsText: JSON.stringify(input),
+  });
   const prepareTurn: Model['prepareTurn'] = (request) =>
     Effect.succeed({
       ...origin,
@@ -521,25 +504,42 @@ export function validationModel(config: ModelConfig): {
     Stream.fromEffect(
       Effect.gen(function* () {
         responses += 1;
-        const [scriptFanout, historyQuery, echo, golden, flagPath] =
-          yield* Effect.all([
-            envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
-            envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
-            envVar('TEXRA_INTERNAL_VALIDATE_ECHO'),
-            envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
-            envVar(
-              process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '',
-            ),
-          ]);
-        return complete(
-          turn,
-          scriptFanout === '1',
-          historyQuery === '1',
-          echo === '1',
-          golden === '1' && flagPath
-            ? yield* goldenTurn(turn, flagPath, call)
-            : null,
+        const [scriptFanout, historyQuery, echo, golden] = (yield* Effect.all([
+          envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
+          envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
+          envVar('TEXRA_INTERNAL_VALIDATE_ECHO'),
+          envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
+        ])).map((value) => value === '1');
+        const flagPath = yield* envVar(
+          process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '',
         );
+        const content =
+          (golden && flagPath
+            ? yield* goldenTurn(turn, flagPath, call)
+            : null) ??
+          validationContent(turn, scriptFanout, historyQuery, echo, call);
+        // About four characters a token, so compaction can be crossed.
+        const inputTokens = echo
+          ? Math.ceil(JSON.stringify(turn.messages).length / 4)
+          : 1;
+        return {
+          kind: 'http',
+          providerResponseId: `validation-response-${responses}`,
+          requestedOrigin: origin,
+          returnedModel: config.id,
+          modelFingerprint: null,
+          content,
+          finishReason: content.some((part) => part.kind === 'local-call')
+            ? 'tool-calls'
+            : 'stop',
+          usage: {
+            inputTokens,
+            outputTokens: 1,
+            totalTokens: inputTokens + 1,
+            cachedInputTokens: null,
+            reasoningTokens: null,
+          },
+        } satisfies TurnResult;
       }),
     ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
   return { origin, model: { prepareTurn, streamTurn } };

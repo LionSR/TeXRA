@@ -25,8 +25,7 @@ import {
 } from '@shared/schemas';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
+import { Settings, type SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate } from '../loop/rows';
@@ -304,15 +303,14 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
 });
 
 /**
- * The tool-use loop's compaction (durable harness, gap 4). Crossing the
- * threshold starts the summary on a fiber in the run's scope, and a later
- * request boundary of the turn, or its end at the latest, lands it as the
- * edit of messages `[0, to)` at the `base` it was computed from. A binding
- * that carries one turn at a time waits for it instead. Every other edit of
- * the view (a `/compact`, a model switch) settles this
- * first ({@link settle}), so no summary meets a view another edit moved. A
- * history past the window waits for the summary; a `/compact` settles, then
- * summarizes the whole history.
+ * The tool-use loop's compaction. Crossing the threshold starts the summary
+ * on a fiber in the run's scope, and a later request boundary of the turn,
+ * or its end at the latest, lands it as the edit of messages `[0, to)` at
+ * the `base` it was computed from. A binding that carries one turn at a time
+ * waits for it instead. Every other edit of the view (a `/compact`, a model
+ * switch) settles this first ({@link settle}), so no summary meets a view
+ * another edit moved. A history past the window waits for the summary; a
+ * `/compact` settles, then summarizes the whole history.
  */
 export interface BackgroundCompaction {
   /** At a request boundary, no attempt open; `requests` consume `/compact`s.
@@ -337,6 +335,8 @@ export interface BackgroundCompaction {
   ) => Effect.Effect<RunState, CellError>;
 }
 
+/** Open a run's {@link BackgroundCompaction} in the caller's scope, where
+ *  the summary fibers it starts run. */
 export const backgroundCompaction = Effect.fn('compaction.background')(
   function* (
     input: Omit<CompactionInput, 'force' | 'bound' | 'cell'>,

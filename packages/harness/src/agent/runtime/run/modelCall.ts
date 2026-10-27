@@ -41,6 +41,8 @@ export interface CallResult {
   readonly usage: NormalizedUsage | null;
 }
 
+/** One model call made outside a turn: its binding, request, settings and
+ *  where its attempt rows go. `R` is what `reacquire` needs. */
 export interface ModelCall<R = never> {
   /** Why the call is made; a turn is `ModelInvoker.invoke`, not this path. */
   readonly purpose: 'compaction' | 'helper';

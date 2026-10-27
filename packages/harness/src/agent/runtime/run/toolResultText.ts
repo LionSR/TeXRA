@@ -17,6 +17,8 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
  * tail is large because build errors cluster at the end of long logs.
  */
 export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
+/** The tail kept when a tool result exceeds the cap; see
+ *  {@link TOOL_RESULT_TRUNCATION_HEAD_CHARS}. */
 export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
 
 /**

@@ -197,7 +197,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const trusted = isTrustedScript(run.config);
     const off = trusted
       ? Effect.succeed(new Set<string>())
-      : readDisabledTools(run.stores.globalState);
+      : readDisabledTools(run.toolInputs.stores.globalState);
     const pinned = yield* run.session.tools
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));

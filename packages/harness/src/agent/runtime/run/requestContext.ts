@@ -69,7 +69,10 @@ const RecordedRequestSchema = Schema.Struct({
 /** The continuation a request bound to `origin` chains on, as a spreadable
  *  field; empty when the origin differs or the run holds none (a failed
  *  attempt whose chained response the vendor dropped retires it). */
-export const chainedContinuation = (state: RunState, origin: ModelOrigin) =>
+export const chainedContinuation = (
+  state: RunState,
+  origin: ModelOrigin,
+): Pick<TurnRequest, 'continuation'> =>
   state.continuation !== null &&
   sameModelOrigin(state.continuation.origin, origin)
     ? { continuation: state.continuation }

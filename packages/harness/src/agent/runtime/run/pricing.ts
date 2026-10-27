@@ -6,7 +6,7 @@
  * to the process usage log, which bills per call.
  */
 import { Effect } from 'effect';
-import { turnCost, type TurnResult } from '@texra-ai/llm';
+import { turnCost, type TurnResult, type TurnUsage } from '@texra-ai/llm';
 
 import { usageRouteOf } from '@agent/runtime/modelAccess/credentials';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
@@ -14,6 +14,21 @@ import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import type { SettingsStores } from '@shared/config/settings';
 import { environment } from '@utils/system/nodeWorkspace';
+
+/** The counts only one provider reports, undefined where it reported none. */
+function providerOnlyCounts(
+  provider: TurnUsage['providerUsage'],
+): Pick<NormalizedUsage, 'cacheCreationTokens' | 'toolUsePromptTokens'> {
+  switch (provider?.kind) {
+    case 'anthropic':
+      return { cacheCreationTokens: provider.cacheCreationTokens ?? undefined };
+    case 'google':
+      return { toolUsePromptTokens: provider.toolUsePromptTokens ?? undefined };
+    case 'xai':
+    case undefined:
+      return {};
+  }
+}
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.
@@ -26,23 +41,12 @@ export function priceTurnUsage(
 ): NormalizedUsage | null {
   if (usage === null) return null;
   const usageRoute = usageRouteOf(bound.route);
-  const provider = usage.providerUsage;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? undefined;
   const reasoning = usage.reasoningTokens ?? undefined;
-  let cacheCreationTokens: number | undefined;
-  let toolUsePromptTokens: number | undefined;
-  switch (provider?.kind) {
-    case 'anthropic':
-      cacheCreationTokens = provider.cacheCreationTokens ?? undefined;
-      break;
-    case 'google':
-      toolUsePromptTokens = provider.toolUsePromptTokens ?? undefined;
-      break;
-    case 'xai':
-    case undefined:
-      break;
-  }
+  const { cacheCreationTokens, toolUsePromptTokens } = providerOnlyCounts(
+    usage.providerUsage,
+  );
   return {
     inputTokens,
     outputTokens: usage.outputTokens ?? 0,

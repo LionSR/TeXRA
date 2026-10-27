@@ -65,10 +65,10 @@ type LaunchResolvedRunFacts = Pick<
   | 'logger'
   | 'parentStage'
   | 'toolPolicy'
-  | 'stores'
   | 'opening'
   | 'entry'
->;
+> &
+  Pick<AgentRunShape['toolInputs'], 'stores'>;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /** The launch model's registry config, which `AgentRun` binds (or a

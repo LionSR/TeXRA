@@ -25,17 +25,15 @@ export function estimateMessageTokens(
         }
         break;
       case 'tool':
-        for (const { content } of message.results) {
-          for (const part of content) {
-            if (part.kind === 'text') chars += part.text.length;
-          }
+        for (const part of message.results.flatMap(({ content }) => content)) {
+          if (part.kind === 'text') chars += part.text.length;
         }
         break;
       case 'assistant':
         for (const part of message.content) {
           if (part.kind === 'local-call') chars += part.argumentsText.length;
           else if (part.kind === 'message') {
-            for (const piece of part.content) chars += piece.text.length;
+            chars += part.content.reduce((n, { text }) => n + text.length, 0);
           }
         }
         break;
@@ -44,6 +42,8 @@ export function estimateMessageTokens(
   return Math.ceil(chars / 4);
 }
 
+/** The tokens the run's history occupies now: the last response's counted
+ *  tokens plus an estimate of what followed it, or the estimate alone. */
 export function contextTokens(
   state: Pick<
     RunState,

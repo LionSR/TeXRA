@@ -55,7 +55,7 @@ export const observeBackground = <E>(
     readonly deadlineAtMs: number;
   },
   onEvent: (event: BackgroundEvent) => Effect.Effect<void, E>,
-) => {
+): Effect.Effect<void, E | ModelError> => {
   const { operation, deadlineAtMs } = accepted;
   const id = operation.providerResponseId;
   // Each step's failure is its own fact: a cancel that failed may still be
