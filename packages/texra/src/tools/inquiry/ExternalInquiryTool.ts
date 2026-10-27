@@ -41,8 +41,6 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 
-import { collectKnownSessionLinks } from './inquiryRecordFormatting';
-
 const CHANNEL = 'InquiryTool';
 
 // ============================================================================
@@ -130,6 +128,26 @@ const InquiryInputSchema = Schema.Union([
 ]);
 
 type InquiryInput = typeof InquiryInputSchema.Type;
+
+/**
+ * Collect distinct external session links (most-recent-first) across all
+ * turns of a thread. Used by the inquiry panel to render "known external
+ * session links" so the user can continue the same outside conversation.
+ */
+function collectKnownSessionLinks(
+  manifest: InquiryThreadRecord,
+): string[] | undefined {
+  const known = [
+    ...new Set(
+      manifest.turns
+        .toReversed()
+        .filter((turn) => turn.kind !== 'open')
+        .flatMap((turn) => turn.sessionLinks ?? []),
+    ),
+  ];
+
+  return known.length ? known : undefined;
+}
 
 // ============================================================================
 // Read / list subcommand outputs

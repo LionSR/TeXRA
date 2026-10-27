@@ -67,9 +67,7 @@ The files have distinct roles:
   annotations (the counterpart that strips them lives in
   `replacement/advanced.ts`, both built on the same shared brace-balanced
   macro scanner).
-- **Output processing** — `texraResponseTextProcessing.ts` is the LaTeX-owned
-  policy for cleaning up and joining a model's continued LaTeX output; the
-  agent runtime only supplies the connector strategy. `texcount.ts` shells out
+- **Output processing** — `texcount.ts` shells out
   to `texcount` for word/character counts. `latexdiff.ts` defines
   `LaTeXdiffService`, which executes a single diff (invokes the command,
   writes and post-processes the output) in its direct/VC/per-round/
@@ -109,9 +107,7 @@ The files have distinct roles:
   `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to
   restore flattened bibliography directives and sanitize latexdiff's
-  `\DIFadd`/`\DIFdel` markup. `types.ts` holds the types those
-  pieces share, and
-  `latexdiffCopy.ts` the user-facing outcome strings both host commands print
+  `\DIFadd`/`\DIFdel` markup. `latexdiffCopy.ts` holds the user-facing outcome strings both host commands print
   so they can't disagree on wording.
 
 New parsing helpers that more than one extractor needs belong in
