@@ -9,6 +9,9 @@
  */
 import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 
+import { ModelError, authOrRejectionKind } from '../errors.js';
+import { decodeWireOrFail } from './transport.js';
+
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
 import { UploadedSchema } from './uploadCache.js';
 
@@ -143,7 +146,7 @@ export const DeltaEventSchema = EventSchema.mapFields(
 );
 
 /** What every socket frame carries: its event type and lane. */
-export const WebSocketEnvelopeSchema = Schema.Struct({
+const WebSocketEnvelopeSchema = Schema.Struct({
   type: Schema.String,
   // This acquisition owns the implicit lane, not a multiplexed connection.
   stream_id: Schema.optional(Schema.Never),
@@ -157,7 +160,7 @@ const SequencedWebSocketErrorSchema = Schema.Struct({
   param: Schema.NullOr(Schema.String),
 });
 /** An error frame, with or without an HTTP status, read as one shape. */
-export const WebSocketErrorSchema = Schema.Union([
+const WebSocketErrorSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('error'),
     status: Schema.optional(Schema.Int),
@@ -209,3 +212,42 @@ const UploadedFileSchema = Schema.Struct({
 /** Reads a Files API create response into the upload cache's canonical form. */
 export const decodeUploadedFile =
   Schema.decodeUnknownResult(UploadedFileSchema);
+
+const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
+/**
+ * One WebSocket frame as the Responses event it carries. A binary frame, bad
+ * JSON or a multiplexed lane is malformed; an error frame fails with the
+ * provider's rejection.
+ */
+export const socketFrameEvent = (
+  frame: unknown,
+): Effect.Effect<unknown, ModelError> =>
+  Effect.gen(function* () {
+    if (typeof frame !== 'string')
+      return yield* new ModelError({
+        kind: 'malformed-output',
+        message: 'The Responses connection returned a binary frame.',
+      });
+    const raw = yield* decodeWireOrFail(
+      JsonFrameSchema,
+      'The Responses connection returned invalid JSON.',
+      frame,
+    );
+    const envelope = yield* decodeWireOrFail(
+      WebSocketEnvelopeSchema,
+      'The Responses event does not belong to the implicit lane.',
+      raw,
+    );
+    if (envelope.type !== 'error') return raw;
+    const rejected = yield* decodeWireOrFail(
+      WebSocketErrorSchema,
+      'The Responses connection returned a malformed error.',
+      raw,
+    );
+    return yield* new ModelError({
+      kind: authOrRejectionKind(rejected.status),
+      message: rejected.error.message,
+      status: rejected.status,
+      cause: rejected.error,
+    });
+  });

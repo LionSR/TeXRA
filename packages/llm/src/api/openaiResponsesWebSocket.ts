@@ -2,16 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import {
-  Cause,
-  Clock,
-  Effect,
-  Exit,
-  Result,
-  Schema,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Cause, Clock, Effect, Exit, type Scope, Stream } from 'effect';
 import { WebSocket, createWebSocketStream } from 'ws';
 
 // Local imports - canonical model contract
@@ -19,6 +10,8 @@ import {
   decodeModelConfiguration,
   type Model,
   type OpenAIResponsesConfiguration,
+  type ResolvedTurn,
+  type TurnEvent,
 } from '../turn.js';
 import {
   ModelError,
@@ -27,10 +20,7 @@ import {
 } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
-import {
-  WebSocketEnvelopeSchema,
-  WebSocketErrorSchema,
-} from './openaiResponsesWire.js';
+import { socketFrameEvent } from './openaiResponsesWire.js';
 import { originOf } from '../protocol.js';
 import { rejoin } from './transport.js';
 import {
@@ -38,13 +28,270 @@ import {
   prepareResponsesTurn,
   responseAuthentication,
   responseParameters,
+  type ResponsesBinding,
 } from './openaiResponsesRequest.js';
+import type { Duplex } from 'node:stream';
 
-const decodeFrame = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Unknown),
-);
-const decodeEnvelope = Schema.decodeUnknownResult(WebSocketEnvelopeSchema);
-const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
+/** One acquired socket, the binding its turns run on, and what they share. */
+interface Connection {
+  readonly config: OpenAIResponsesConfiguration;
+  readonly origin: ResponsesBinding['origin'];
+  readonly transport: {
+    readonly kind: 'websocket';
+    readonly connectionId: string;
+  };
+  readonly openedAt: number;
+  /** What a closed connection reports; cleanup recognizes it by identity. */
+  readonly closed: ModelError;
+  readonly socket: WebSocket;
+  readonly reader: Duplex;
+  readonly iterator: AsyncIterator<unknown>;
+  /** The first failure that made the connection unusable. */
+  invalid: ModelError | undefined;
+  /** Whether a turn reads its response, or drains after its terminal event. */
+  phase: 'idle' | 'reading' | 'draining';
+  /** The frame read a turn waits on, which its cleanup rejoins. */
+  pendingRead: Promise<IteratorResult<unknown>> | undefined;
+  /** The last completed response, which the next turn must not repeat. */
+  latestResponseId: string | undefined;
+}
+
+const socketFailure = (cause: unknown): ModelError =>
+  cause instanceof ModelError
+    ? cause
+    : new ModelError({
+        kind: 'transport',
+        message: 'The Responses WebSocket failed.',
+        cause,
+      });
+
+/**
+ * Waits out `pending` at cleanup, dropping only a rejection that repeats the
+ * closed connection's error or a failure `exit` already carries.
+ */
+const join = (
+  closed: ModelError,
+  pending: Promise<unknown>,
+  exit: Exit.Exit<unknown, unknown>,
+) =>
+  rejoin(
+    pending,
+    exit,
+    (cause) =>
+      cause === closed ||
+      (Exit.isFailure(exit) &&
+        exit.cause.reasons.some((reason) =>
+          Cause.isFailReason(reason)
+            ? reason.error === cause
+            : Cause.isDieReason(reason) && reason.defect === cause,
+        )),
+  );
+
+/** Marks the connection unusable with its first failure and stops its reader. */
+function invalidate(connection: Connection, error: ModelError): void {
+  connection.invalid ??= error;
+  connection.reader.destroy(connection.invalid);
+}
+
+/** The deployment's `/responses` endpoint as a socket URL. */
+function socketEndpoint(deployment: string): Effect.Effect<URL, ModelError> {
+  const endpoint = new URL(deployment);
+  if (endpoint.username || endpoint.password)
+    return Effect.fail(
+      new ModelError({
+        kind: 'unsupported',
+        message:
+          'Responses endpoint credentials cannot override the selected authentication.',
+      }),
+    );
+  endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/responses`;
+  if (endpoint.protocol === 'https:') endpoint.protocol = 'wss:';
+  else if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
+  else
+    return Effect.fail(
+      new ModelError({
+        kind: 'unsupported',
+        message: 'The Responses endpoint must use HTTP or HTTPS.',
+      }),
+    );
+  return Effect.succeed(endpoint);
+}
+
+/** Waits for the socket to open; a failed or rejected handshake fails it. */
+const handshake = (connection: Connection) =>
+  Effect.callback<void, ModelError>((resume) => {
+    const { socket, reader } = connection;
+    const remove = () => {
+      socket.off('open', onOpen);
+      socket.off('error', onError);
+      socket.off('unexpected-response', onUnexpected);
+    };
+    const onOpen = () => {
+      remove();
+      resume(Effect.void);
+    };
+    const onError = (cause: Error) => {
+      remove();
+      resume(Effect.fail(connection.invalid ?? socketFailure(cause)));
+    };
+    const onUnexpected = (
+      request: import('node:http').ClientRequest,
+      response: import('node:http').IncomingMessage,
+    ) => {
+      const status = response.statusCode;
+      const error = new ModelError({
+        kind: authOrRejectionKind(status),
+        message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
+        status,
+        requestId:
+          typeof response.headers['x-request-id'] === 'string'
+            ? response.headers['x-request-id']
+            : undefined,
+      });
+      remove();
+      connection.invalid = error;
+      response.destroy();
+      request.destroy();
+      reader.destroy();
+      resume(Effect.fail(error));
+    };
+    socket.once('open', onOpen);
+    socket.once('error', onError);
+    socket.once('unexpected-response', onUnexpected);
+    return Effect.sync(remove);
+  });
+
+/** Pings the open socket every 30 seconds until it is invalid. */
+const keepAlive = (connection: Connection) =>
+  Effect.gen(function* () {
+    while (!connection.invalid) {
+      yield* Effect.sleep(30_000);
+      if (!connection.invalid)
+        yield* Effect.callback<void>((resume) => {
+          connection.socket.ping((cause: Error | undefined) => {
+            if (cause) invalidate(connection, socketFailure(cause));
+            resume(Effect.void);
+          });
+        });
+    }
+  });
+
+/** One turn over the connection, which it holds until the turn settles. */
+const streamSocketTurn = (
+  connection: Connection,
+  input: Extract<ResolvedTurn, { mode: 'foreground' }>,
+): Stream.Stream<TurnEvent, ModelError> =>
+  Stream.suspend(() => {
+    const { config, origin, transport, socket, reader, closed } = connection;
+    let responseId: string | undefined;
+    let returnedModel: string | undefined;
+    let completed = false;
+    const enrich = (error: ModelError) =>
+      enrichModelError(error, {
+        responseId: error.responseId ?? responseId,
+        model: error.model ?? returnedModel ?? config.requestedModel,
+      });
+    return Stream.unwrap(
+      Effect.gen(function* () {
+        const { turn, parameters } = yield* responseParameters(
+          config,
+          origin,
+          transport,
+          input,
+          'foreground',
+          null,
+        );
+        const now = yield* Clock.currentTimeMillis;
+        yield* Effect.acquireRelease(
+          Effect.suspend(() => {
+            if (connection.invalid) return Effect.fail(connection.invalid);
+            if (connection.phase !== 'idle')
+              return Effect.fail(
+                new ModelError({
+                  kind: 'unsupported',
+                  message:
+                    'This Responses connection already has an active turn.',
+                }),
+              );
+            if (now - connection.openedAt >= 55 * 60_000) {
+              invalidate(connection, closed);
+              return Effect.fail(closed);
+            }
+            connection.phase = 'reading';
+            return Effect.void;
+          }),
+          (_, exit) =>
+            Effect.gen(function* () {
+              if (!completed || Exit.isFailure(exit))
+                invalidate(connection, closed);
+              if (connection.pendingRead)
+                yield* join(closed, connection.pendingRead, exit);
+              connection.pendingRead = undefined;
+              if (!connection.invalid) connection.phase = 'idle';
+            }),
+        );
+        yield* Effect.callback<void, ModelError>((resume) => {
+          socket.send(
+            JSON.stringify({
+              type: 'response.create',
+              ...parameters,
+              ...(config.webSocketStreamParameter === 'required'
+                ? { stream: true }
+                : {}),
+            }),
+            (cause) =>
+              resume(cause ? Effect.fail(socketFailure(cause)) : Effect.void),
+          );
+        });
+        const chunks = Stream.fromPull(
+          Effect.succeed(
+            Effect.gen(function* () {
+              const read = connection.iterator.next();
+              connection.pendingRead = read;
+              const next = yield* Effect.tryPromise({
+                try: () => read,
+                catch: socketFailure,
+              });
+              connection.pendingRead = undefined;
+              if (next.done) return yield* closed;
+              return [yield* socketFrameEvent(next.value)] as const;
+            }),
+          ),
+        );
+        return responseEvents(chunks, origin, (result) =>
+          withResponsesContinuation(config, turn, result),
+        ).pipe(
+          Stream.mapEffect((event) =>
+            Effect.gen(function* () {
+              if (event.kind === 'identified') {
+                if (event.providerResponseId === connection.latestResponseId)
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'The Responses connection repeated its preceding response identity.',
+                  });
+                responseId = event.providerResponseId;
+                returnedModel = event.returnedModel ?? undefined;
+              }
+              if (event.kind !== 'completed') return event;
+              connection.phase = 'draining';
+              if (reader.readableLength > 0)
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message:
+                    'The Responses connection buffered data beyond its terminal event.',
+                });
+              connection.latestResponseId =
+                event.result.providerResponseId ?? undefined;
+              completed = true;
+              return event;
+            }),
+          ),
+          Stream.mapError(enrich),
+        );
+      }).pipe(Effect.mapError(enrich)),
+    );
+  });
 
 /** Acquires one physical connection; invalidation requires explicit reacquisition. */
 export const openaiResponsesWebSocketModel = Effect.fn(
@@ -68,21 +315,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
     ),
   );
-  const endpoint = new URL(config.deployment.endpoint);
-  if (endpoint.username || endpoint.password)
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message:
-        'Responses endpoint credentials cannot override the selected authentication.',
-    });
-  endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/responses`;
-  if (endpoint.protocol === 'https:') endpoint.protocol = 'wss:';
-  else if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
-  else
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message: 'The Responses endpoint must use HTTP or HTTPS.',
-    });
+  const endpoint = yield* socketEndpoint(config.deployment.endpoint);
   const transport = { kind: 'websocket' as const, connectionId: randomUUID() };
   const openedAt = yield* Clock.currentTimeMillis;
   const closed = new ModelError({
@@ -90,34 +323,8 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     message:
       'The Responses connection is no longer usable; reacquire and admit a new turn.',
   });
-  let invalid: ModelError | undefined;
-  let phase: 'idle' | 'reading' | 'draining' = 'idle';
-  let pendingRead: Promise<IteratorResult<unknown>> | undefined;
-  let latestResponseId: string | undefined;
-
-  const failure = (cause: unknown) =>
-    cause instanceof ModelError
-      ? cause
-      : new ModelError({
-          kind: 'transport',
-          message: 'The Responses WebSocket failed.',
-          cause,
-        });
-  const join = (pending: Promise<unknown>, exit: Exit.Exit<unknown, unknown>) =>
-    rejoin(
-      pending,
-      exit,
-      (cause) =>
-        cause === closed ||
-        (Exit.isFailure(exit) &&
-          exit.cause.reasons.some((reason) =>
-            Cause.isFailReason(reason)
-              ? reason.error === cause
-              : Cause.isDieReason(reason) && reason.defect === cause,
-          )),
-    );
-  const resource = yield* Effect.acquireRelease(
-    Effect.sync(() => {
+  const connection = yield* Effect.acquireRelease(
+    Effect.sync((): Connection => {
       const socket = new WebSocket(endpoint, {
         headers: {
           Authorization: `Bearer ${selected.token}`,
@@ -130,22 +337,34 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       });
       // This listener records failures while idle as well as during a pending read.
       reader.on('error', (cause) => {
-        invalid ??= failure(cause);
+        opened.invalid ??= socketFailure(cause);
       });
       socket.once('close', () => {
-        invalid ??= closed;
+        opened.invalid ??= closed;
       });
-      return {
+      const opened: Connection = {
+        config,
+        origin,
+        transport,
+        openedAt,
+        closed,
         socket,
         reader,
-        iterator: reader[Symbol.asyncIterator]() as AsyncIterator<unknown>,
+        iterator: reader[Symbol.asyncIterator](),
+        invalid: undefined,
+        phase: 'idle',
+        pendingRead: undefined,
+        latestResponseId: undefined,
       };
+      return opened;
     }),
-    ({ socket, reader, iterator }, exit) =>
+    (connection, exit) =>
       Effect.gen(function* () {
-        invalid ??= closed;
+        const { socket, reader, iterator } = connection;
+        connection.invalid ??= closed;
         reader.destroy(closed);
         yield* join(
+          closed,
           iterator.return ? iterator.return() : Promise.resolve(),
           exit,
         ).pipe(
@@ -158,15 +377,11 @@ export const openaiResponsesWebSocketModel = Effect.fn(
         );
       }),
   );
-  const { socket, reader, iterator } = resource;
-  const invalidate = (error: ModelError) => {
-    invalid ??= error;
-    reader.destroy(invalid);
-  };
   // The sole consumer decodes frames; this synchronous guard only invalidates idle traffic.
-  socket.on('message', () => {
-    if (phase !== 'reading')
+  connection.socket.on('message', () => {
+    if (connection.phase !== 'reading')
       invalidate(
+        connection,
         new ModelError({
           kind: 'malformed-output',
           message:
@@ -174,211 +389,12 @@ export const openaiResponsesWebSocketModel = Effect.fn(
         }),
       );
   });
-  yield* Effect.callback<void, ModelError>((resume) => {
-    const remove = () => {
-      socket.off('open', onOpen);
-      socket.off('error', onError);
-      socket.off('unexpected-response', onUnexpected);
-    };
-    const onOpen = () => {
-      remove();
-      resume(Effect.void);
-    };
-    const onError = (cause: Error) => {
-      remove();
-      resume(Effect.fail(invalid ?? failure(cause)));
-    };
-    const onUnexpected = (
-      request: import('node:http').ClientRequest,
-      response: import('node:http').IncomingMessage,
-    ) => {
-      const status = response.statusCode;
-      const error = new ModelError({
-        kind: authOrRejectionKind(status),
-        message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
-        status,
-        requestId:
-          typeof response.headers['x-request-id'] === 'string'
-            ? response.headers['x-request-id']
-            : undefined,
-      });
-      remove();
-      invalid = error;
-      response.destroy();
-      request.destroy();
-      reader.destroy();
-      resume(Effect.fail(error));
-    };
-    socket.once('open', onOpen);
-    socket.once('error', onError);
-    socket.once('unexpected-response', onUnexpected);
-    return Effect.sync(remove);
-  });
-  yield* Effect.gen(function* () {
-    while (!invalid) {
-      yield* Effect.sleep(30_000);
-      if (!invalid)
-        yield* Effect.callback<void>((resume) => {
-          socket.ping((cause: Error | undefined) => {
-            if (cause) invalidate(failure(cause));
-            resume(Effect.void);
-          });
-        });
-    }
-  }).pipe(Effect.forkScoped);
+  yield* handshake(connection);
+  yield* keepAlive(connection).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
     prepareResponsesTurn(config, origin, transport, request, null);
   const streamTurn: Model['streamTurn'] = (input) =>
-    Stream.suspend(() => {
-      let responseId: string | undefined;
-      let returnedModel: string | undefined;
-      let completed = false;
-      const enrich = (error: ModelError) =>
-        enrichModelError(error, {
-          responseId: error.responseId ?? responseId,
-          model: error.model ?? returnedModel ?? config.requestedModel,
-        });
-      return Stream.unwrap(
-        Effect.gen(function* () {
-          const { turn, parameters } = yield* responseParameters(
-            config,
-            origin,
-            transport,
-            input,
-            'foreground',
-            null,
-          );
-          const now = yield* Clock.currentTimeMillis;
-          yield* Effect.acquireRelease(
-            Effect.suspend(() => {
-              if (invalid) return Effect.fail(invalid);
-              if (phase !== 'idle')
-                return Effect.fail(
-                  new ModelError({
-                    kind: 'unsupported',
-                    message:
-                      'This Responses connection already has an active turn.',
-                  }),
-                );
-              if (now - openedAt >= 55 * 60_000) {
-                invalidate(closed);
-                return Effect.fail(closed);
-              }
-              phase = 'reading';
-              return Effect.void;
-            }),
-            (_, exit) =>
-              Effect.gen(function* () {
-                if (!completed || Exit.isFailure(exit)) invalidate(closed);
-                if (pendingRead) yield* join(pendingRead, exit);
-                pendingRead = undefined;
-                if (!invalid) phase = 'idle';
-              }),
-          );
-          yield* Effect.callback<void, ModelError>((resume) => {
-            socket.send(
-              JSON.stringify({
-                type: 'response.create',
-                ...parameters,
-                ...(config.webSocketStreamParameter === 'required'
-                  ? { stream: true }
-                  : {}),
-              }),
-              (cause) =>
-                resume(cause ? Effect.fail(failure(cause)) : Effect.void),
-            );
-          });
-          const chunks = Stream.fromPull(
-            Effect.succeed(
-              Effect.gen(function* () {
-                pendingRead = iterator.next();
-                const next = yield* Effect.tryPromise({
-                  try: () => pendingRead!,
-                  catch: failure,
-                });
-                pendingRead = undefined;
-                if (next.done) return yield* closed;
-                if (typeof next.value !== 'string')
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'The Responses connection returned a binary frame.',
-                  });
-                const raw = yield* decodeFrame(next.value).pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'The Responses connection returned invalid JSON.',
-                        cause,
-                      }),
-                  ),
-                );
-                const envelope = decodeEnvelope(raw);
-                if (!Result.isSuccess(envelope))
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'The Responses event does not belong to the implicit lane.',
-                    cause: envelope.failure,
-                  });
-                if (envelope.success.type === 'error') {
-                  const rejected = decodeRejection(raw);
-                  if (!Result.isSuccess(rejected))
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The Responses connection returned a malformed error.',
-                      cause: rejected.failure,
-                    });
-                  return yield* new ModelError({
-                    kind: authOrRejectionKind(rejected.success.status),
-                    message: rejected.success.error.message,
-                    status: rejected.success.status,
-                    cause: rejected.success.error,
-                  });
-                }
-                return [raw] as const;
-              }),
-            ),
-          );
-          return responseEvents(chunks, origin, (result) =>
-            withResponsesContinuation(config, turn, result),
-          ).pipe(
-            Stream.mapEffect((event) =>
-              Effect.gen(function* () {
-                if (event.kind === 'identified') {
-                  if (event.providerResponseId === latestResponseId)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The Responses connection repeated its preceding response identity.',
-                    });
-                  responseId = event.providerResponseId;
-                  returnedModel = event.returnedModel ?? undefined;
-                }
-                if (event.kind !== 'completed') return event;
-                phase = 'draining';
-                if (reader.readableLength > 0)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'The Responses connection buffered data beyond its terminal event.',
-                  });
-                latestResponseId = event.result.providerResponseId ?? undefined;
-                completed = true;
-                return event;
-              }),
-            ),
-            Stream.mapError(enrich),
-          );
-        }).pipe(Effect.mapError(enrich)),
-      );
-    });
-  return Object.freeze({
-    prepareTurn,
-    streamTurn,
-  });
+    streamSocketTurn(connection, input);
+  return Object.freeze({ prepareTurn, streamTurn });
 });

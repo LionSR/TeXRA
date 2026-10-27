@@ -1,6 +1,6 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import { Cause, Clock, Effect, Result, Schema, Stream } from 'effect';
+import { Clock, Effect, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -11,9 +11,13 @@ import {
   decodeModelConfiguration,
   ResolvedTurnSchema,
   TurnResultSchema,
+  type BackgroundEvent,
+  type BackgroundSubmission,
   type GoogleInteractionsConfiguration,
   type Model,
+  type ObservationPolicySchema,
   type ResolvedTurn,
+  type TurnEvent,
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
@@ -21,12 +25,9 @@ import { decodeTurnRequest } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   IN_FLIGHT_STATUSES,
-  WireCompletedStepSchema,
-  WireEventSchema,
   WireInteractionSchema,
-  WireSnapshotStepsSchema,
-  WireStreamInteractionSchema,
-  WireUsageSchema,
+  googleWire,
+  snapshotParts,
 } from './googleInteractionsWire.js';
 import { systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
@@ -41,14 +42,12 @@ import {
 } from '../errors.js';
 import {
   admitObservation,
-  decodeWireOrFail,
   ownedAbortSafeRequest,
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
-  wireFail as fail,
 } from './transport.js';
-import type { InputPart, Part, PartEvent } from './parts.js';
+import type { InputPart } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 
 const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
@@ -101,13 +100,121 @@ const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   }
 });
 
+type LocalCall = Extract<TurnResult['content'][number], { kind: 'local-call' }>;
+type ToolResult = Extract<
+  ResolvedTurn['messages'][number],
+  { role: 'tool' }
+>['results'][number];
+
+/**
+ * One tool result as its function_result step. A function result takes text
+ * and images alone; a document, audio or video the tool attached is returned
+ * apart, named by its call, for the user turn that follows the results.
+ */
+const functionResult = Effect.fn('llm.google.functionResult')(function* (
+  result: ToolResult,
+  call: LocalCall,
+) {
+  const content: Array<Interactions.TextContent | Interactions.ImageContent> =
+    [];
+  const carried: Interactions.Content[] = [];
+  for (const input of result.content) {
+    const part = yield* lowerInputPart(input);
+    if (part.type === 'text' || part.type === 'image') content.push(part);
+    else carried.push({ type: 'text', text: `From ${call.name}:` }, part);
+  }
+  const step: Interactions.Step = {
+    type: 'function_result',
+    call_id: call.providerCallId,
+    name: call.name,
+    ...(result.status === 'error' ? { is_error: true } : {}),
+    result: content,
+  };
+  return { step, carried };
+});
+
+/**
+ * One assistant part as the steps that replay it. Another model's thoughts
+ * are omitted (`ownThoughts` false), as the Anthropic and Chat codecs do;
+ * each local call joins `calls`, the calls of this assistant turn, whose IDs
+ * must be distinct.
+ */
+const modelSteps = Effect.fn('llm.google.modelSteps')(function* (
+  part: TurnResult['content'][number],
+  ownThoughts: boolean,
+  calls: LocalCall[],
+): Effect.fn.Return<Interactions.Step[], ModelError> {
+  switch (part.kind) {
+    case 'message':
+      if (
+        part.evidence !== undefined ||
+        part.content.some((child) => child.kind !== 'text')
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Google requires ordinary text message groups without foreign item evidence.',
+        });
+      }
+      return [
+        {
+          type: 'model_output',
+          content: part.content.map(({ text }) => ({ type: 'text', text })),
+        },
+      ];
+    case 'reasoning':
+      if (!ownThoughts) return [];
+      if (
+        part.content !== undefined ||
+        (part.evidence !== null &&
+          part.evidence.kind !== 'google-interactions-thought-signature')
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'Google reasoning needs supported thought evidence.',
+        });
+      }
+      return [
+        {
+          type: 'thought',
+          summary: part.summary.map(({ text }) => ({ type: 'text', text })),
+          ...(part.evidence ? { signature: part.evidence.signature } : {}),
+        },
+      ];
+    case 'local-call':
+      if (
+        calls.some((call) => call.providerCallId === part.providerCallId) ||
+        part.evidence !== undefined
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Google calls require distinct original IDs without foreign item evidence.',
+        });
+      }
+      calls.push(part);
+      return [
+        {
+          type: 'function_call',
+          id: part.providerCallId,
+          name: part.name,
+          arguments: yield* parseOutboundToolArguments(part.argumentsText),
+        },
+      ];
+    default:
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message: 'Google Interactions cannot encode this canonical content.',
+      });
+  }
+});
+
 const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   messages: ResolvedTurn['messages'],
   origin: ModelOrigin,
 ) {
   const steps: Interactions.Step[] = [];
-  let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
-    [];
+  let calls: LocalCall[] = [];
   for (const message of messages) {
     if (message.role === 'system' || message.role === 'user') {
       const content =
@@ -120,98 +227,24 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
         previous.content = [...(previous.content ?? []), ...content];
       else steps.push({ type: 'user_input', content });
     } else if (message.role === 'tool') {
-      // A function result takes text and images alone; a document, audio or
-      // video a tool attached is accepted in a user turn only, so those parts
-      // follow the results in one user_input step, each named by its call.
       const carried: Interactions.Content[] = [];
       for (const result of message.results) {
         // The canonical grammar guarantees adjacent, complete ordinals.
-        const call = calls[result.callOrdinal];
-        const content: Array<
-          Interactions.TextContent | Interactions.ImageContent
-        > = [];
-        for (const input of result.content) {
-          const part = yield* lowerInputPart(input);
-          if (part.type === 'text' || part.type === 'image') content.push(part);
-          else carried.push({ type: 'text', text: `From ${call.name}:` }, part);
-        }
-        steps.push({
-          type: 'function_result',
-          call_id: call.providerCallId,
-          name: call.name,
-          ...(result.status === 'error' ? { is_error: true } : {}),
-          result: content,
-        });
+        const lowered = yield* functionResult(
+          result,
+          calls[result.callOrdinal],
+        );
+        steps.push(lowered.step);
+        carried.push(...lowered.carried);
       }
       if (carried.length > 0)
         steps.push({ type: 'user_input', content: carried });
       calls = [];
     } else {
       calls = [];
-      const ids = new Set<string>();
-      for (const part of message.content) {
-        switch (part.kind) {
-          case 'message': {
-            if (
-              part.evidence !== undefined ||
-              part.content.some((child) => child.kind !== 'text')
-            ) {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message:
-                  'Google requires ordinary text message groups without foreign item evidence.',
-              });
-            }
-            steps.push({
-              type: 'model_output',
-              content: part.content.map(({ text }) => ({ type: 'text', text })),
-            });
-            break;
-          }
-          case 'reasoning':
-            // Omit another model's thoughts, as the Anthropic and Chat codecs do.
-            if (!sameModelOrigin(message.origin, origin)) break;
-            if (
-              part.content !== undefined ||
-              (part.evidence !== null &&
-                part.evidence.kind !== 'google-interactions-thought-signature')
-            ) {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message: 'Google reasoning needs supported thought evidence.',
-              });
-            }
-            steps.push({
-              type: 'thought',
-              summary: part.summary.map(({ text }) => ({ type: 'text', text })),
-              ...(part.evidence ? { signature: part.evidence.signature } : {}),
-            });
-            break;
-          case 'local-call':
-            if (ids.has(part.providerCallId) || part.evidence !== undefined) {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message:
-                  'Google calls require distinct original IDs without foreign item evidence.',
-              });
-            }
-            ids.add(part.providerCallId);
-            calls.push(part);
-            steps.push({
-              type: 'function_call',
-              id: part.providerCallId,
-              name: part.name,
-              arguments: yield* parseOutboundToolArguments(part.argumentsText),
-            });
-            break;
-          default:
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'Google Interactions cannot encode this canonical content.',
-            });
-        }
-      }
+      const ownThoughts = sameModelOrigin(message.origin, origin);
+      for (const part of message.content)
+        steps.push(...(yield* modelSteps(part, ownThoughts, calls)));
     }
   }
   return steps;
@@ -324,238 +357,340 @@ function createInput(
   >;
 }
 
-/** Open a canonical part; re-encode snapshot arguments until streamed deltas replace them. */
-const stepPart = Effect.fn('llm.google.stepPart')(function* (
-  step: typeof WireCompletedStepSchema.Type,
-): Effect.fn.Return<Part, ModelError> {
-  switch (step.type) {
-    case 'thought':
-      return {
-        kind: 'reasoning',
-        summary: (step.summary ?? []).map(({ text }) => ({
-          kind: 'text',
-          text,
-        })),
-        evidence:
-          step.signature === undefined
-            ? null
-            : {
-                kind: 'google-interactions-thought-signature',
-                signature: step.signature,
-              },
-      };
-    case 'model_output':
-      if ((step.content?.length ?? 0) > 1)
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'Google returned unsupported assistant content.',
-        });
-      return {
-        kind: 'message',
-        content: (step.content ?? []).map(({ text }) => ({
-          kind: 'text',
-          text,
-        })),
-      };
-    case 'function_call':
-      return {
-        kind: 'local-call',
-        providerCallId: step.id,
-        name: step.name,
-        argumentsText:
-          step.arguments === undefined ? '' : JSON.stringify(step.arguments),
-      };
-  }
-});
+type GoogleTurn = Extract<ResolvedTurn, { protocol: 'google-interactions' }>;
+type BackgroundTurn = Extract<ResolvedTurn, { mode: 'background' }>;
 
-/** A reported usage receipt; an absent one leaves the last in place. */
-const usageParts = (
-  usage: typeof WireUsageSchema.Type | undefined,
-): PartEvent[] =>
-  usage === undefined
-    ? []
-    : [
-        {
-          kind: 'usage',
-          usage: {
-            inputTokens: usage.total_input_tokens ?? null,
-            outputTokens: usage.total_output_tokens ?? null,
-            totalTokens: usage.total_tokens ?? null,
-            cachedInputTokens: usage.total_cached_tokens ?? null,
-            reasoningTokens: usage.total_thought_tokens ?? null,
-            providerUsage: {
-              kind: 'google',
-              toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
-            },
-          },
-        },
-      ];
-
-const interactionEnd = (
-  interaction: typeof WireStreamInteractionSchema.Type,
-): PartEvent[] => [
-  {
-    kind: 'identity',
-    id: interaction.id || null,
-    model: interaction.model ?? null,
-  },
-  ...usageParts(interaction.usage),
-  {
-    kind: 'finish',
-    finish: {
-      finishReason:
-        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-      // Google reports status but no terminal reason.
-      finishEvidence: {
-        kind: 'google-interactions',
-        status: interaction.status,
-        terminalReason: null,
-      },
-    },
-  },
-];
-
-/** A step delta as the part it grows: text, summary, signature or arguments. */
-function deltaPart(
-  index: number,
-  delta: Extract<
-    typeof WireEventSchema.Type,
-    { event_type: 'step.delta' }
-  >['delta'],
-): PartEvent {
-  switch (delta.type) {
-    case 'text':
-      return { kind: 'append', index, channel: 'text', text: delta.text };
-    case 'thought_summary':
-      return {
-        kind: 'append',
-        index,
-        channel: 'summary',
-        text: delta.content.text,
-      };
-    case 'arguments_delta':
-      return {
-        kind: 'append',
-        index,
-        channel: 'arguments',
-        text: delta.arguments,
-      };
-    case 'thought_signature':
-      return {
-        kind: 'evidence',
-        index,
-        evidence: {
-          kind: 'google-interactions-thought-signature',
-          signature: delta.signature,
-        },
-      };
-  }
+/** One bound Interactions deployment: its decoded route, origin and client. */
+interface GoogleBinding {
+  readonly config: GoogleInteractionsConfiguration;
+  readonly origin: ModelOrigin;
+  readonly client: GoogleGenAI;
 }
 
-function googleWire(store: boolean) {
-  let done = false;
-  return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
-    Effect.gen(function* () {
-      const event = yield* decodeWireOrFail(
-        WireEventSchema,
-        'Google returned malformed or unsupported stream data.',
-        raw,
-      );
-      if (done)
-        return yield* fail(
-          'Google emitted data after its completed interaction.',
-        );
-      switch (event.event_type) {
-        case 'interaction.created':
-        case 'interaction.completed': {
-          const interaction = event.interaction;
-          if (store && !interaction.id)
-            return yield* fail('Google omitted a stored interaction ID.');
-          // The stream takes content only from complete start/delta/stop cycles.
-          if (interaction.steps !== undefined)
-            return yield* fail(
-              'Google terminal step snapshots are not supported by this streaming codec.',
-              'unsupported',
-            );
-          if (event.event_type === 'interaction.created')
-            return [
-              {
-                kind: 'identity',
-                id: interaction.id || null,
-                model: interaction.model ?? null,
-              },
-              ...usageParts(interaction.usage),
-            ];
-          done = true;
-          if (!COMPLETED_STATUSES.includes(event.interaction.status))
-            return yield* fail(
-              'Google ended without an authoritative completed turn.',
-            );
-          return interactionEnd(event.interaction);
-        }
-        case 'interaction.status_update':
-          if (store && !event.interaction_id)
-            return yield* fail('Google omitted a stored interaction ID.');
-          return [
-            { kind: 'identity', id: event.interaction_id || null, model: null },
-          ];
-        case 'error':
-          return yield* new ModelError({
-            kind: 'provider-rejection',
-            message: 'Google reported a failed interaction.',
-            cause: event,
-          });
-        case 'step.start':
-          return [
-            {
-              kind: 'open',
-              index: event.index,
-              part: yield* stepPart(event.step),
-            },
-          ];
-        case 'step.stop':
-          return [
-            ...usageParts(event.usage),
-            { kind: 'close', index: event.index },
-          ];
-        case 'step.delta':
-          return [
-            ...usageParts(event.metadata?.total_usage),
-            deltaPart(event.index, event.delta),
-          ];
-      }
-    });
-}
-
-/** The stored anchor shared by foreground completion and background observation. */
-const googleContinuation = Effect.fn('llm.google.continuation')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
+/**
+ * The completed turn with the stored anchor its next round chains on, if
+ * any; foreground completion and background observation share it.
+ */
+const withContinuation = Effect.fn('llm.google.continuation')(function* (
+  turn: GoogleTurn,
   result: TurnResult,
   origin: ModelOrigin,
-) {
-  if (!turn.controls.store || result.providerResponseId === null)
-    return undefined;
+): Effect.fn.Return<TurnResult, ModelError> {
+  if (!turn.controls.store || result.providerResponseId === null) return result;
   const prefix: ResolvedTurn['messages'] = [
     ...turn.messages,
     { role: 'assistant', origin, content: result.content },
   ];
   const coveredSteps = yield* lowerMessages(prefix, origin);
   // With no output step, the next input joins the last user_input step.
-  if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
-  return {
-    origin,
-    coveredMessages: prefix.length,
-    prefixFingerprint: prefixFingerprint(
-      GOOGLE_PREFIX_DOMAIN,
+  if (coveredSteps.at(-1)?.type === 'user_input') return result;
+  return Schema.decodeUnknownSync(TurnResultSchema)({
+    ...result,
+    continuation: {
       origin,
-      turn.system,
-      prefix,
-    ),
-    anchor: {
-      interactionId: result.providerResponseId,
-      coveredSteps: coveredSteps.length,
+      coveredMessages: prefix.length,
+      prefixFingerprint: prefixFingerprint(
+        GOOGLE_PREFIX_DOMAIN,
+        origin,
+        turn.system,
+        prefix,
+      ),
+      anchor: {
+        interactionId: result.providerResponseId,
+        coveredSteps: coveredSteps.length,
+      },
     },
-  };
+  });
+});
+
+/** A background failure named by its operation and the model it ran on. */
+const withOperation = (
+  binding: GoogleBinding,
+  operation: RemoteOperation,
+  error: ModelError,
+  returnedModel?: string,
+) =>
+  fillModelError(error, {
+    operation,
+    responseId: operation.providerResponseId,
+    model: returnedModel ?? binding.config.requestedModel,
+  });
+
+const snapshot = Effect.fn('llm.google.snapshot')(function* (
+  raw: unknown,
+  operation: RemoteOperation,
+) {
+  const parsed = Schema.decodeUnknownResult(WireInteractionSchema)(raw);
+  if (
+    !Result.isSuccess(parsed) ||
+    parsed.success.id !== operation.providerResponseId
+  ) {
+    return yield* new ModelError({
+      kind: 'malformed-output',
+      message:
+        'Google returned a malformed or mismatched interaction snapshot.',
+      cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
+    });
+  }
+  return parsed.success;
+});
+
+const completedSnapshot = Effect.fn('llm.google.completedSnapshot')(function* (
+  interaction: typeof WireInteractionSchema.Type,
+  origin: ModelOrigin,
+) {
+  if (!COMPLETED_STATUSES.includes(interaction.status)) {
+    return yield* new ModelError({
+      kind: ['failed', 'cancelled', 'incomplete', 'budget_exceeded'].includes(
+        interaction.status,
+      )
+        ? 'provider-rejection'
+        : 'malformed-output',
+      message: `Google background interaction ended with status ${interaction.status}.`,
+    });
+  }
+  const batch = yield* snapshotParts(interaction);
+  return yield* completedTurn(
+    assembleTurn(Stream.make(batch), { origin, provider: 'Google' }),
+  );
+});
+
+const streamInteraction = (
+  { config, origin, client }: GoogleBinding,
+  turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
+): Stream.Stream<TurnEvent, ModelError> =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      if (
+        turn.protocol !== 'google-interactions' ||
+        turn.mode !== 'foreground'
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'The prepared Google invocation is unsupported.',
+        });
+      }
+      const inputSteps = yield* invocationInput(turn, origin);
+      let reader: ReadableStreamDefaultReader<unknown> | undefined = undefined;
+      const signal = yield* readerAbortSignal(() => reader);
+      const source = yield* Effect.tryPromise({
+        try: () =>
+          client.interactions.create(
+            {
+              ...createInput(turn, inputSteps),
+              background: false,
+              stream: true,
+            },
+            { maxRetries: 0, fetchOptions: { signal } },
+          ),
+        catch: sdkFailure,
+      });
+      reader = source.getReader();
+      const body = reader;
+      return assembleTurn(
+        pullStream(() => body.read(), sdkFailure).pipe(
+          Stream.mapEffect(googleWire(turn.controls.store)),
+        ),
+        {
+          origin,
+          provider: 'Google',
+          allowMissingResponseId: !turn.controls.store,
+          finalize: (result) => withContinuation(turn, result, origin),
+        },
+      );
+    }).pipe(
+      Effect.mapError((error) =>
+        fillModelError(error, { model: config.requestedModel }),
+      ),
+    ),
+  );
+
+const submitInteraction = Effect.fn('llm.google.submit')(function* (
+  binding: GoogleBinding,
+  turn: BackgroundTurn,
+): Effect.fn.Return<BackgroundSubmission, ModelError> {
+  const { config, origin, client } = binding;
+  let operation: RemoteOperation | undefined;
+  return yield* Effect.gen(function* () {
+    if (
+      turn.protocol !== 'google-interactions' ||
+      turn.mode !== 'background' ||
+      config.background !== 'supported' ||
+      !turn.controls.store
+    ) {
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message:
+          'Google background execution requires an enabled route and store:true.',
+      });
+    }
+    const inputSteps = yield* invocationInput(turn, origin);
+    const raw = yield* ownedAbortSafeRequest(
+      (signal) =>
+        client.interactions.create(
+          {
+            ...createInput(turn, inputSteps),
+            background: true,
+            stream: false,
+          },
+          { maxRetries: 0, fetchOptions: { signal } },
+        ),
+      sdkFailure,
+      { isAbortMatch: googleAbortMatch },
+    );
+    // Retain a real accepted identifier even if later snapshot validation fails.
+    const identity = Schema.decodeUnknownResult(
+      Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
+    )(raw);
+    if (!Result.isSuccess(identity))
+      return yield* new ModelError({
+        kind: 'malformed-output',
+        message: 'Google returned no background interaction identifier.',
+        cause: identity.failure,
+      });
+    operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
+      origin,
+      providerResponseId: identity.success.id,
+      afterSequence: null,
+    });
+    const interaction = yield* snapshot(raw, operation);
+    if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
+      return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
+        kind: 'accepted',
+        operation,
+        returnedModel: interaction.model ?? null,
+      });
+    }
+    return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
+      kind: 'completed',
+      result: yield* withContinuation(
+        turn,
+        yield* completedSnapshot(interaction, origin),
+        origin,
+      ),
+    });
+  }).pipe(
+    Effect.mapError((error) =>
+      operation === undefined
+        ? error
+        : withOperation(binding, operation, error),
+    ),
+  );
+});
+
+const observeInteraction = (
+  binding: GoogleBinding,
+  admitted: BackgroundTurn,
+  input: RemoteOperation,
+  policy: typeof ObservationPolicySchema.Type,
+): Stream.Stream<BackgroundEvent, ModelError> =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const { origin, client } = binding;
+      const { turn, operation, deadlineAtMs, deadline } =
+        yield* admitObservation(
+          'google-interactions',
+          origin,
+          admitted,
+          input,
+          policy,
+        );
+      let returnedModel: string | undefined;
+      const completion = Effect.gen(function* () {
+        while (true) {
+          // Consumer delay and prior polls consume the original deadline.
+          const remaining = deadlineAtMs - (yield* Clock.currentTimeMillis);
+          if (remaining <= 0) return yield* deadline;
+          const raw = yield* ownedAbortSafeRequest(
+            (signal) =>
+              client.interactions.get(
+                operation.providerResponseId,
+                { stream: false, include_input: false },
+                { maxRetries: 0, fetchOptions: { signal } },
+              ),
+            (cause) =>
+              withOperation(
+                binding,
+                operation,
+                sdkFailure(cause),
+                returnedModel,
+              ),
+            {
+              isAbortMatch: googleAbortMatch,
+              deadline: { duration: remaining, error: deadline },
+            },
+          );
+          const interaction = yield* snapshot(raw, operation);
+          if (interaction.model !== undefined) {
+            if (
+              returnedModel !== undefined &&
+              returnedModel !== interaction.model
+            ) {
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'Google changed the returned model for an accepted interaction.',
+              });
+            }
+            returnedModel = interaction.model;
+          }
+          if (!IN_FLIGHT_STATUSES.includes(interaction.status)) {
+            const result = yield* completedSnapshot(
+              { ...interaction, model: returnedModel },
+              origin,
+            );
+            return Schema.decodeUnknownSync(BackgroundEventSchema)({
+              kind: 'completed',
+              afterSequence: null,
+              result: yield* withContinuation(turn, result, origin),
+            });
+          }
+          yield* Effect.sleep(
+            Math.min(
+              5_000,
+              Math.max(0, deadlineAtMs - (yield* Clock.currentTimeMillis)),
+            ),
+          );
+        }
+      }).pipe(
+        Effect.mapError((error) =>
+          withOperation(binding, operation, error, returnedModel),
+        ),
+      );
+      return Stream.concat(
+        Stream.succeed(
+          Schema.decodeUnknownSync(BackgroundEventSchema)({
+            kind: 'identified',
+            afterSequence: null,
+            providerResponseId: operation.providerResponseId,
+            requestedOrigin: origin,
+            returnedModel: null,
+          }),
+        ),
+        Stream.fromEffect(completion),
+      );
+    }),
+  );
+
+const cancelInteraction = Effect.fn('llm.google.cancel')(function* (
+  binding: GoogleBinding,
+  input: RemoteOperation,
+) {
+  const operation = yield* boundOperation(input, binding.origin);
+  return yield* Effect.gen(function* () {
+    const raw = yield* ownedAbortSafeRequest(
+      (signal) =>
+        binding.client.interactions.cancel(
+          operation.providerResponseId,
+          undefined,
+          { maxRetries: 0, fetchOptions: { signal } },
+        ),
+      (cause) => withOperation(binding, operation, sdkFailure(cause)),
+      { isAbortMatch: googleAbortMatch },
+    );
+    const interaction = yield* snapshot(raw, operation);
+    return yield* confirmCancelled(operation, interaction.status);
+  }).pipe(Effect.mapError((error) => withOperation(binding, operation, error)));
 });
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
@@ -579,6 +714,7 @@ export function googleInteractionsModel(
       fetch: transport.fetch,
     },
   });
+  const binding: GoogleBinding = { config, origin, client };
 
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
     function* (request) {
@@ -626,321 +762,19 @@ export function googleInteractionsModel(
       return turn;
     },
   );
-
   const streamTurn: Model['streamTurn'] = (turn) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        if (
-          turn.protocol !== 'google-interactions' ||
-          turn.mode !== 'foreground'
-        ) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'The prepared Google invocation is unsupported.',
-          });
-        }
-        const inputSteps = yield* invocationInput(turn, origin);
-        let reader: ReadableStreamDefaultReader<unknown> | undefined =
-          undefined;
-        const signal = yield* readerAbortSignal(() => reader);
-        const source = yield* Effect.tryPromise({
-          try: () =>
-            client.interactions.create(
-              {
-                ...createInput(turn, inputSteps),
-                background: false,
-                stream: true,
-              },
-              { maxRetries: 0, fetchOptions: { signal } },
-            ),
-          catch: sdkFailure,
-        });
-        reader = source.getReader();
-        const body = reader;
-        return assembleTurn(
-          pullStream(() => body.read(), sdkFailure).pipe(
-            Stream.mapEffect(googleWire(turn.controls.store)),
-          ),
-          {
-            origin,
-            provider: 'Google',
-            allowMissingResponseId: !turn.controls.store,
-            finalize: (result) => withContinuation(turn, result),
-          },
-        );
-      }).pipe(
-        Effect.mapError((error) =>
-          fillModelError(error, { model: config.requestedModel }),
-        ),
-      ),
-    );
-  const snapshot = Effect.fn('llm.google.snapshot')(function* (
-    raw: unknown,
-    operation: RemoteOperation,
-  ) {
-    const parsed = Schema.decodeUnknownResult(WireInteractionSchema)(raw);
-    if (
-      !Result.isSuccess(parsed) ||
-      parsed.success.id !== operation.providerResponseId
-    ) {
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message:
-          'Google returned a malformed or mismatched interaction snapshot.',
-        cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
-      });
-    }
-    return parsed.success;
-  });
-  const completedSnapshot = Effect.fn('llm.google.completedSnapshot')(
-    function* (interaction: typeof WireInteractionSchema.Type) {
-      if (!COMPLETED_STATUSES.includes(interaction.status)) {
-        return yield* new ModelError({
-          kind: [
-            'failed',
-            'cancelled',
-            'incomplete',
-            'budget_exceeded',
-          ].includes(interaction.status)
-            ? 'provider-rejection'
-            : 'malformed-output',
-          message: `Google background interaction ended with status ${interaction.status}.`,
-        });
-      }
-      const steps = yield* decodeWireOrFail(
-        WireSnapshotStepsSchema,
-        'Google returned malformed or unsupported completed steps.',
-        interaction.steps,
-      );
-      const parts = yield* Effect.forEach(steps, (step, index) =>
-        Effect.map(stepPart(step), (part): PartEvent[] => [
-          { kind: 'open', index, part },
-          { kind: 'close', index },
-        ]),
-      );
-      // The identity leads, so a failing step names the returned model.
-      const [identity, ...end] = interactionEnd(interaction);
-      const batch = [identity, ...parts.flat(), ...end];
-      return yield* completedTurn(
-        assembleTurn(Stream.make(batch), { origin, provider: 'Google' }),
-      );
-    },
-  );
-  /** A completed turn with the anchor its next round chains on, if any. */
-  const withContinuation = (
-    turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
-    result: TurnResult,
-  ) =>
-    googleContinuation(turn, result, origin).pipe(
-      Effect.map((continuation) =>
-        continuation
-          ? Schema.decodeUnknownSync(TurnResultSchema)({
-              ...result,
-              continuation,
-            })
-          : result,
-      ),
-    );
-  const withOperation = (
-    operation: RemoteOperation,
-    error: ModelError,
-    returnedModel?: string,
-  ) =>
-    fillModelError(error, {
-      operation,
-      responseId: operation.providerResponseId,
-      model: returnedModel ?? config.requestedModel,
-    });
-  const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
-    'llm.google.submit',
-  )(function* (turn) {
-    let operation: RemoteOperation | undefined;
-    return yield* Effect.gen(function* () {
-      if (
-        turn.protocol !== 'google-interactions' ||
-        turn.mode !== 'background' ||
-        config.background !== 'supported' ||
-        !turn.controls.store
-      ) {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Google background execution requires an enabled route and store:true.',
-        });
-      }
-      const inputSteps = yield* invocationInput(turn, origin);
-      const raw = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.interactions.create(
-            {
-              ...createInput(turn, inputSteps),
-              background: true,
-              stream: false,
-            },
-            { maxRetries: 0, fetchOptions: { signal } },
-          ),
-        sdkFailure,
-        { isAbortMatch: googleAbortMatch },
-      );
-      // Retain a real accepted identifier even if later snapshot validation fails.
-      const identity = Schema.decodeUnknownResult(
-        Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
-      )(raw);
-      if (!Result.isSuccess(identity))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned no background interaction identifier.',
-          cause: identity.failure,
-        });
-      operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-        origin,
-        providerResponseId: identity.success.id,
-        afterSequence: null,
-      });
-      const interaction = yield* snapshot(raw, operation);
-      if (IN_FLIGHT_STATUSES.includes(interaction.status)) {
-        return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
-          kind: 'accepted',
-          operation,
-          returnedModel: interaction.model ?? null,
-        });
-      }
-      return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
-        kind: 'completed',
-        result: yield* withContinuation(
-          turn,
-          yield* completedSnapshot(interaction),
-        ),
-      });
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) =>
-            operation === undefined ? error : withOperation(operation, error),
-          ),
-        ),
-      ),
-    );
-  });
-  const observe: NonNullable<Model['background']>['observe'] = (
-    admitted,
-    input,
-    policy,
-  ) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        const { turn, operation, deadlineAtMs, deadline } =
-          yield* admitObservation(
-            'google-interactions',
-            origin,
-            admitted,
-            input,
-            policy,
-          );
-        let returnedModel: string | undefined;
-        const completion = Effect.gen(function* () {
-          while (true) {
-            // Consumer delay and prior polls consume the original deadline.
-            const remaining = deadlineAtMs - (yield* Clock.currentTimeMillis);
-            if (remaining <= 0) return yield* deadline;
-            const raw = yield* ownedAbortSafeRequest(
-              (signal) =>
-                client.interactions.get(
-                  operation.providerResponseId,
-                  { stream: false, include_input: false },
-                  { maxRetries: 0, fetchOptions: { signal } },
-                ),
-              (cause) =>
-                withOperation(operation, sdkFailure(cause), returnedModel),
-              {
-                isAbortMatch: googleAbortMatch,
-                deadline: { duration: remaining, error: deadline },
-              },
-            );
-            const interaction = yield* snapshot(raw, operation);
-            if (interaction.model !== undefined) {
-              if (
-                returnedModel !== undefined &&
-                returnedModel !== interaction.model
-              ) {
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'Google changed the returned model for an accepted interaction.',
-                });
-              }
-              returnedModel = interaction.model;
-            }
-            if (!IN_FLIGHT_STATUSES.includes(interaction.status)) {
-              const result = yield* completedSnapshot({
-                ...interaction,
-                model: returnedModel,
-              });
-              return Schema.decodeUnknownSync(BackgroundEventSchema)({
-                kind: 'completed',
-                afterSequence: null,
-                result: yield* withContinuation(turn, result),
-              });
-            }
-            yield* Effect.sleep(
-              Math.min(
-                5_000,
-                Math.max(0, deadlineAtMs - (yield* Clock.currentTimeMillis)),
-              ),
-            );
-          }
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (error) =>
-                withOperation(operation, error, returnedModel),
-              ),
-            ),
-          ),
-        );
-        return Stream.concat(
-          Stream.succeed(
-            Schema.decodeUnknownSync(BackgroundEventSchema)({
-              kind: 'identified',
-              afterSequence: null,
-              providerResponseId: operation.providerResponseId,
-              requestedOrigin: origin,
-              returnedModel: null,
-            }),
-          ),
-          Stream.fromEffect(completion),
-        );
-      }),
-    );
-  const cancel: NonNullable<Model['background']>['cancel'] = Effect.fn(
-    'llm.google.cancel',
-  )(function* (input) {
-    const operation = yield* boundOperation(input, origin);
-    return yield* Effect.gen(function* () {
-      const raw = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.interactions.cancel(operation.providerResponseId, undefined, {
-            maxRetries: 0,
-            fetchOptions: { signal },
-          }),
-        (cause) => withOperation(operation, sdkFailure(cause)),
-        { isAbortMatch: googleAbortMatch },
-      );
-      const interaction = yield* snapshot(raw, operation);
-      return yield* confirmCancelled(operation, interaction.status);
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => withOperation(operation, error)),
-        ),
-      ),
-    );
-  });
+    streamInteraction(binding, turn);
+  const background: NonNullable<Model['background']> = {
+    submit: (turn) => submitInteraction(binding, turn),
+    observe: (turn, operation, policy) =>
+      observeInteraction(binding, turn, operation, policy),
+    cancel: (operation) => cancelInteraction(binding, operation),
+  };
   return Object.freeze({
     prepareTurn,
     streamTurn,
     ...(config.background === 'supported'
-      ? { background: Object.freeze({ submit, observe, cancel }) }
+      ? { background: Object.freeze(background) }
       : {}),
   });
 }

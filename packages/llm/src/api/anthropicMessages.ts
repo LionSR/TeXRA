@@ -32,24 +32,14 @@ import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
-import {
-  decodeWireOrFail,
-  parseOutboundToolArguments,
-  sdkStream,
-  wireFail as fail,
-} from './transport.js';
+import { parseOutboundToolArguments, sdkStream } from './transport.js';
 import {
   filesApiUploads,
   UploadedSchema,
   type UploadCache,
 } from './uploadCache.js';
-import {
-  BlockSchema,
-  EventSchema,
-  StopSchema,
-  UsageSchema,
-} from './anthropicMessagesWire.js';
-import type { InputPart, PartEvent } from './parts.js';
+import { anthropicWire } from './anthropicMessagesStream.js';
+import type { InputPart } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
   ContentBlockParam,
@@ -133,40 +123,79 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
   });
 });
 
-const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
-  turn: ResolvedTurn,
-  origin: ModelOrigin,
-  config: AnthropicMessagesConfiguration,
-  uploads: UploadCache,
-) {
-  if (
-    turn.protocol !== 'anthropic-messages' ||
-    !sameModelOrigin(turn, origin)
-  ) {
+type AssistantPart = TurnResult['content'][number];
+type AnthropicControls = Extract<
+  ResolvedTurn,
+  { protocol: 'anthropic-messages' }
+>['controls'];
+
+/**
+ * One assistant part as the content blocks that replay it. Reasoning replays
+ * only to the model that produced it (`ownReasoning`), and only with its
+ * exact signed or redacted evidence.
+ */
+const assistantBlocks = Effect.fn('llm.anthropic.assistantBlocks')(function* (
+  part: AssistantPart,
+  ownReasoning: boolean,
+): Effect.fn.Return<ContentBlockParam[], ModelError> {
+  if (part.kind === 'message' && part.evidence === undefined) {
+    if (part.content.some((child) => child.kind !== 'text'))
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message: 'Anthropic cannot replay foreign refusal content.',
+      });
+    return part.content.map((child) => ({ type: 'text', text: child.text }));
+  }
+  if (part.kind === 'local-call' && part.evidence === undefined)
+    return [
+      {
+        type: 'tool_use',
+        id: part.providerCallId,
+        name: part.name,
+        input: yield* parseOutboundToolArguments(part.argumentsText),
+      },
+    ];
+  if (part.kind === 'reasoning' && ownReasoning) {
+    if (
+      part.evidence?.kind === 'anthropic-thinking-signature' &&
+      part.content?.length === 1
+    )
+      return [
+        {
+          type: 'thinking',
+          thinking: part.content[0].text,
+          signature: part.evidence.signature,
+        },
+      ];
+    if (part.evidence?.kind === 'anthropic-redacted-thinking')
+      return [{ type: 'redacted_thinking', data: part.evidence.data }];
     return yield* new ModelError({
       kind: 'unsupported',
       message:
-        'The prepared Anthropic invocation belongs to another model or deployment.',
+        'Anthropic reasoning requires exact signed or redacted provider evidence.',
     });
   }
-  const controls = turn.controls;
-  if (
-    controls.thinking.mode === 'enabled' &&
-    controls.thinking.budgetTokens >= controls.maxOutputTokens
-  ) {
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message:
-        'Anthropic manual thinking requires a budget below the output limit.',
-    });
-  }
-  const nowMs = yield* Clock.currentTimeMillis;
-  const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
-    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
+  return yield* new ModelError({
+    kind: 'unsupported',
+    message:
+      'Anthropic cannot replay foreign content evidence or missing call identities.',
+  });
+});
+
+/**
+ * The replayable history as Messages turns. `fileIdFor` names the live
+ * upload this binding holds for some document bytes, or `null`.
+ */
+const lowerMessages = Effect.fn('llm.anthropic.lowerMessages')(function* (
+  turnMessages: ResolvedTurn['messages'],
+  origin: ModelOrigin,
+  config: AnthropicMessagesConfiguration,
+  fileIdFor: (base64: string) => string | null,
+) {
+  const lowerPart = (part: InputPart) => inputPart(part, fileIdFor);
   const messages: MessageParam[] = [];
-  let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
-    [];
-  const history = replayableHistory(turn.messages, origin);
+  let calls: Extract<AssistantPart, { kind: 'local-call' }>[] = [];
+  const history = replayableHistory(turnMessages, origin);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
       // Native where the model takes it and the API admits it: after a user
@@ -200,60 +229,69 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       }
       messages.push({ role: 'user', content });
     } else {
-      calls = [];
-      const content: ContentBlockParam[] = [];
-      for (const part of message.content) {
-        if (part.kind === 'message' && part.evidence === undefined) {
-          for (const child of part.content) {
-            if (child.kind !== 'text')
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message: 'Anthropic cannot replay foreign refusal content.',
-              });
-            content.push({ type: 'text', text: child.text });
-          }
-        } else if (part.kind === 'local-call' && part.evidence === undefined) {
-          calls.push(part);
-          content.push({
-            type: 'tool_use',
-            id: part.providerCallId,
-            name: part.name,
-            input: yield* parseOutboundToolArguments(part.argumentsText),
-          });
-        } else if (
-          part.kind === 'reasoning' &&
-          sameModelOrigin(message.origin, origin)
-        ) {
-          if (
-            part.evidence?.kind === 'anthropic-thinking-signature' &&
-            part.content?.length === 1
-          ) {
-            content.push({
-              type: 'thinking',
-              thinking: part.content[0]!.text,
-              signature: part.evidence.signature,
-            });
-          } else if (part.evidence?.kind === 'anthropic-redacted-thinking') {
-            content.push({
-              type: 'redacted_thinking',
-              data: part.evidence.data,
-            });
-          } else
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'Anthropic reasoning requires exact signed or redacted provider evidence.',
-            });
-        } else
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'Anthropic cannot replay foreign content evidence or missing call identities.',
-          });
-      }
-      messages.push({ role: 'assistant', content });
+      calls = message.content.filter((part) => part.kind === 'local-call');
+      const ownReasoning = sameModelOrigin(message.origin, origin);
+      const blocks = yield* Effect.forEach(message.content, (part) =>
+        assistantBlocks(part, ownReasoning),
+      );
+      messages.push({ role: 'assistant', content: blocks.flat() });
     }
   }
+  return messages;
+});
+
+/** The canonical thinking control as the Messages `thinking` parameter. */
+function wireThinking(
+  thinking: AnthropicControls['thinking'],
+): MessageCreateParamsStreaming['thinking'] {
+  switch (thinking.mode) {
+    case 'disabled':
+      return { type: 'disabled' };
+    case 'adaptive':
+      return { type: 'adaptive', display: thinking.display };
+    case 'enabled':
+      return {
+        type: 'enabled',
+        display: thinking.display,
+        budget_tokens: thinking.budgetTokens,
+      };
+  }
+}
+
+const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
+  turn: ResolvedTurn,
+  origin: ModelOrigin,
+  config: AnthropicMessagesConfiguration,
+  uploads: UploadCache,
+) {
+  if (
+    turn.protocol !== 'anthropic-messages' ||
+    !sameModelOrigin(turn, origin)
+  ) {
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message:
+        'The prepared Anthropic invocation belongs to another model or deployment.',
+    });
+  }
+  const controls = turn.controls;
+  if (
+    controls.thinking.mode === 'enabled' &&
+    controls.thinking.budgetTokens >= controls.maxOutputTokens
+  ) {
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message:
+        'Anthropic manual thinking requires a budget below the output limit.',
+    });
+  }
+  const nowMs = yield* Clock.currentTimeMillis;
+  const messages = yield* lowerMessages(
+    turn.messages,
+    origin,
+    config,
+    (base64) => uploads.fileIdFor(base64, nowMs),
+  );
   const tools: NonNullable<MessageCreateParamsStreaming['tools']> = [];
   for (const tool of turn.tools) {
     if (tool.parameters.type !== 'object')
@@ -267,17 +305,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       input_schema: { ...tool.parameters, type: 'object' },
     });
   }
-  const thinking = controls.thinking;
-  let wireThinking: MessageCreateParamsStreaming['thinking'];
-  if (thinking.mode === 'disabled') wireThinking = { type: 'disabled' };
-  else if (thinking.mode === 'adaptive')
-    wireThinking = { type: 'adaptive', display: thinking.display };
-  else
-    wireThinking = {
-      type: 'enabled',
-      display: thinking.display,
-      budget_tokens: thinking.budgetTokens,
-    };
   const body: MessageCreateParamsStreaming = {
     model: turn.requestedModel,
     max_tokens: controls.maxOutputTokens,
@@ -288,7 +315,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       ? {}
       : { output_config: { effort: controls.effort } }),
     stop_sequences: [...controls.stopSequences],
-    thinking: wireThinking,
+    thinking: wireThinking(controls.thinking),
     ...(controls.cache === 'disabled'
       ? {}
       : { cache_control: { type: 'ephemeral', ttl: controls.cache } }),
@@ -313,266 +340,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   }
   return body;
 });
-
-const FINISH = {
-  end_turn: 'stop',
-  max_tokens: 'length',
-  stop_sequence: 'stop-sequence',
-  tool_use: 'tool-calls',
-  refusal: 'refusal',
-  model_context_window_exceeded: 'context-window-exceeded',
-} as const;
-
-/** The canonical receipt of Anthropic's cumulative counters. */
-function canonicalUsage(
-  usage: typeof UsageSchema.Type,
-): NonNullable<TurnResult['usage']> {
-  const uncached = usage.input_tokens ?? null;
-  const cached = usage.cache_read_input_tokens ?? null;
-  const creation = usage.cache_creation_input_tokens ?? null;
-  const inputTokens =
-    uncached !== null && cached !== null && creation !== null
-      ? uncached + cached + creation
-      : null;
-  const outputTokens = usage.output_tokens ?? null;
-  return {
-    inputTokens,
-    outputTokens,
-    cachedInputTokens: cached,
-    totalTokens:
-      inputTokens !== null && outputTokens !== null
-        ? inputTokens + outputTokens
-        : null,
-    reasoningTokens: usage.output_tokens_details?.thinking_tokens ?? null,
-    providerUsage: {
-      kind: 'anthropic',
-      uncachedInputTokens: uncached,
-      cacheCreationTokens: creation,
-      cacheCreation5mTokens:
-        usage.cache_creation?.ephemeral_5m_input_tokens ?? null,
-      cacheCreation1hTokens:
-        usage.cache_creation?.ephemeral_1h_input_tokens ?? null,
-    },
-  };
-}
-
-/** The canonical part a content block opens. */
-function blockPart(
-  block: typeof BlockSchema.Type,
-): TurnResult['content'][number] {
-  switch (block.type) {
-    case 'text':
-      return { kind: 'message', content: [{ kind: 'text', text: '' }] };
-    case 'thinking':
-      return {
-        kind: 'reasoning',
-        summary: [],
-        content: [{ kind: 'text', text: '' }],
-        evidence: block.signature
-          ? { kind: 'anthropic-thinking-signature', signature: block.signature }
-          : null,
-      };
-    case 'redacted_thinking':
-      return {
-        kind: 'reasoning',
-        summary: [],
-        evidence: { kind: 'anthropic-redacted-thinking', data: block.data },
-      };
-    case 'tool_use':
-      // A start carries no arguments, so a call no delta extends is `{}`.
-      return {
-        kind: 'local-call',
-        providerCallId: block.id,
-        name: block.name,
-        argumentsText: '{}',
-      };
-  }
-}
-
-/**
- * One response's Messages events as parts. The wire opens one block at a
- * time, in order; message_delta carries the stop and cumulative usage, and
- * message_stop settles them.
- */
-function anthropicWire() {
-  let started = false;
-  let stopped = false;
-  let next = 0;
-  let open: { index: number; type: string; signed: boolean } | undefined;
-  let stop: typeof StopSchema.Type = {};
-  let usage: typeof UsageSchema.Type = {};
-
-  const parts = (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
-    Effect.gen(function* () {
-      const event = yield* decodeWireOrFail(
-        EventSchema,
-        'Anthropic returned an unsupported or malformed stream event.',
-        raw,
-      );
-      if (event.type === 'message_start') {
-        const message = event.message;
-        if (
-          started ||
-          message.stop_reason != null ||
-          message.stop_sequence != null ||
-          message.stop_details != null ||
-          message.container != null
-        )
-          return yield* fail('Anthropic returned an invalid initial message.');
-        started = true;
-        usage = message.usage;
-        return [{ kind: 'identity', id: message.id, model: message.model }];
-      }
-      if (!started)
-        return yield* fail(
-          'Anthropic emitted content before message identity.',
-        );
-      if (event.type === 'message_delta') {
-        if (open || event.delta.container != null)
-          return yield* fail(
-            'Anthropic returned unsettled content.',
-            'unsupported',
-          );
-        stop = event.delta;
-        // These counters are cumulative; null/omission means no update, never zero or addition.
-        usage = {
-          ...usage,
-          ...Object.fromEntries(
-            Object.entries(event.usage).filter(([, value]) => value != null),
-          ),
-        };
-        return [];
-      }
-      if (event.type === 'message_stop') {
-        const reason = stop.stop_reason;
-        if (open || reason == null)
-          return yield* fail(
-            'Anthropic stopped without complete content and a terminal reason.',
-          );
-        if (reason === 'pause_turn')
-          return yield* fail(
-            'Anthropic paused hosted execution requires a separate supported continuation protocol.',
-            'unsupported',
-          );
-        stopped = true;
-        const refusal = stop.stop_details;
-        return [
-          { kind: 'usage', usage: canonicalUsage(usage) },
-          {
-            kind: 'finish',
-            finish: {
-              finishReason: FINISH[reason],
-              ...(stop.stop_sequence == null
-                ? {}
-                : { stopSequence: stop.stop_sequence }),
-              ...(refusal === undefined
-                ? {}
-                : {
-                    refusalEvidence: refusal && {
-                      kind: 'anthropic-refusal',
-                      category: refusal.category,
-                      explanation: refusal.explanation,
-                    },
-                  }),
-            },
-          },
-        ];
-      }
-      if (stop.stop_reason != null)
-        return yield* fail(
-          'Anthropic emitted content after terminal message metadata.',
-        );
-      if (event.type === 'content_block_start') {
-        const block = event.content_block;
-        if (open || event.index !== next)
-          return yield* fail(
-            'Anthropic content blocks are not complete and ordered.',
-          );
-        if (
-          (block.type === 'text' && (block.citations?.length ?? 0) > 0) ||
-          (block.type === 'tool_use' &&
-            (block.toolset_name != null ||
-              Object.keys(block.input).length !== 0))
-        )
-          return yield* fail(
-            'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
-            'unsupported',
-          );
-        open = {
-          index: next++,
-          type: block.type,
-          signed: block.type === 'thinking' && block.signature.length > 0,
-        };
-        const initial =
-          (block.type === 'text' && block.text) ||
-          (block.type === 'thinking' && block.thinking);
-        return [
-          { kind: 'open', index: event.index, part: blockPart(block) },
-          ...(initial
-            ? [
-                {
-                  kind: 'append',
-                  index: event.index,
-                  channel: block.type === 'text' ? 'text' : 'reasoning',
-                  text: initial,
-                } as const,
-              ]
-            : []),
-        ];
-      }
-      if (open?.index !== event.index)
-        return yield* fail('Anthropic updated a block that is not open.');
-      if (event.type === 'content_block_stop') {
-        if (open.type === 'thinking' && !open.signed)
-          return yield* fail('Anthropic thinking ended without its signature.');
-        open = undefined;
-        return [{ kind: 'close', index: event.index }];
-      }
-      const delta = event.delta;
-      if (delta.type === 'signature_delta') {
-        if (open.type !== 'thinking')
-          return yield* fail('Anthropic emitted a mismatched content delta.');
-        open.signed = true;
-        return [
-          {
-            kind: 'evidence',
-            index: event.index,
-            evidence: {
-              kind: 'anthropic-thinking-signature',
-              signature: delta.signature,
-            },
-          },
-        ];
-      }
-      if (delta.type === 'text_delta')
-        return [
-          {
-            kind: 'append',
-            index: open.index,
-            channel: 'text',
-            text: delta.text,
-          },
-        ];
-      if (delta.type === 'thinking_delta')
-        return [
-          {
-            kind: 'append',
-            index: open.index,
-            channel: 'reasoning',
-            text: delta.thinking,
-          },
-        ];
-      return [
-        {
-          kind: 'append',
-          index: open.index,
-          channel: 'arguments',
-          text: delta.partial_json,
-        },
-      ];
-    });
-  return { parts, stopped: () => stopped };
-}
 
 /** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
 export function anthropicMessagesModel(

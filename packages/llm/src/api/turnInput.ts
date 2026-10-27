@@ -28,7 +28,10 @@ export const decodeTurnRequest = (
 export function fitLimit(
   defaults: AnthropicMessagesConfiguration['defaults'],
   requested: number | undefined,
-) {
+): Pick<
+  AnthropicMessagesConfiguration['defaults'],
+  'maxOutputTokens' | 'thinking'
+> {
   const maxOutputTokens = requested ?? defaults.maxOutputTokens;
   const { thinking } = defaults;
   const fits =

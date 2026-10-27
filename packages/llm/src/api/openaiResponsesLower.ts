@@ -22,6 +22,9 @@ import type {
 } from '../turn.js';
 import type { UploadCache } from './uploadCache.js';
 
+type ResponsesTurn = Extract<ResolvedTurn, { protocol: 'openai-responses' }>;
+type ResponsesMessage = ResponsesTurn['messages'][number];
+
 const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
@@ -41,12 +44,7 @@ const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
  * are never materialized again; a count that drifts from the lowering fails
  * the continuation's `coveredItems` check loudly.
  */
-const loweredItemCount = (
-  message: Extract<
-    ResolvedTurn,
-    { protocol: 'openai-responses' }
-  >['messages'][number],
-): number => {
+const loweredItemCount = (message: ResponsesMessage): number => {
   if (message.role === 'tool') return message.results.length;
   return message.role === 'assistant' ? message.content.length : 1;
 };
@@ -57,13 +55,7 @@ const loweredItemCount = (
  * message then appends its local calls. A continuation's suffix lowers
  * against the ids its covered prefix left.
  */
-const replayCallIds = (
-  message: Extract<
-    ResolvedTurn,
-    { protocol: 'openai-responses' }
-  >['messages'][number],
-  callIds: string[],
-): void => {
+const replayCallIds = (message: ResponsesMessage, callIds: string[]): void => {
   if (message.role === 'tool') return;
   callIds.length = 0;
   if (message.role !== 'assistant') return;
@@ -73,41 +65,135 @@ const replayCallIds = (
 };
 
 /**
+ * One tool result as a function call's output. A settlement that carries
+ * only text keeps the plain string output the API has always taken.
+ * Attachments keep `result.content` order so a label still sits next to the
+ * file it names.
+ */
+const toolOutput = Effect.fn('llm.responses.toolOutput')(function* (
+  result: Extract<ResponsesMessage, { role: 'tool' }>['results'][number],
+  documents: DocumentAccess,
+): Effect.fn.Return<
+  string | OpenAI.Responses.ResponseInputContent[],
+  ModelError
+> {
+  if (result.content.every((part) => part.kind === 'text')) {
+    const text = result.content.map((part) => part.text).join('');
+    return result.status === 'error' ? `Error: ${text}` : text;
+  }
+  const lowered = yield* Effect.forEach(result.content, (part) =>
+    responsesContent(part, documents),
+  );
+  return result.status === 'error'
+    ? [{ type: 'input_text', text: 'Error: ' }, ...lowered]
+    : lowered;
+});
+
+/**
+ * One assistant content part as the input item that replays it. Message and
+ * call evidence has a single kind, this protocol's own; reasoning replays
+ * only with its original Responses evidence.
+ */
+const assistantItem = Effect.fn('llm.responses.assistantItem')(function* (
+  part: TurnResult['content'][number],
+): Effect.fn.Return<OpenAI.Responses.ResponseInputItem, ModelError> {
+  switch (part.kind) {
+    case 'message': {
+      if (part.evidence) {
+        return {
+          type: 'message',
+          role: 'assistant',
+          id: part.evidence.itemId,
+          status: part.evidence.status,
+          ...(part.evidence.phase !== undefined
+            ? { phase: part.evidence.phase }
+            : {}),
+          content: part.content.map((child) =>
+            child.kind === 'text'
+              ? { type: 'output_text', text: child.text, annotations: [] }
+              : { type: 'refusal', refusal: child.text },
+          ),
+        };
+      }
+      if (part.content.some((child) => child.kind !== 'text')) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Responses refusal history requires its original message evidence.',
+        });
+      }
+      return {
+        role: 'assistant',
+        content: part.content.map((child) => child.text).join(''),
+      };
+    }
+    case 'reasoning': {
+      if (part.evidence?.kind !== 'openai-responses-reasoning') {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Responses reasoning requires its original provider evidence.',
+        });
+      }
+      return {
+        type: 'reasoning',
+        id: part.evidence.itemId,
+        summary: part.summary.map((child) => ({
+          type: 'summary_text',
+          text: child.text,
+        })),
+        ...(part.content !== undefined
+          ? {
+              content: part.content.map((child) => ({
+                type: 'reasoning_text' as const,
+                text: child.text,
+              })),
+            }
+          : {}),
+        ...(part.evidence.status !== undefined
+          ? { status: part.evidence.status }
+          : {}),
+        ...(part.evidence.encryptedContent !== undefined
+          ? { encrypted_content: part.evidence.encryptedContent }
+          : {}),
+      };
+    }
+    case 'local-call':
+      return {
+        type: 'function_call',
+        call_id: part.providerCallId,
+        name: part.name,
+        arguments: part.argumentsText,
+        ...(part.evidence?.itemId !== undefined
+          ? { id: part.evidence.itemId }
+          : {}),
+        ...(part.evidence?.status !== undefined
+          ? { status: part.evidence.status }
+          : {}),
+      };
+  }
+});
+
+/**
  * The messages as Responses input items. `callIds` is the mutable call-id
  * run the loop keeps: seeded with the ids a covered prefix left when
  * lowering only a continuation's suffix.
  */
 const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  messages: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+  turn: ResponsesTurn,
+  messages: ResponsesTurn['messages'],
   config: OpenAIResponsesConfiguration,
   documents: DocumentAccess,
   callIds: string[],
 ) {
-  const content = (part: Parameters<typeof responsesContent>[0]) =>
-    responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
   for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        // A settlement that carries only text keeps the plain string output
-        // the API has always taken. Attachments keep `result.content` order
-        // so a label still sits next to the file it names.
-        let output: string | OpenAI.Responses.ResponseInputContent[];
-        if (result.content.every((part) => part.kind === 'text')) {
-          const text = result.content.map((part) => part.text).join('');
-          output = result.status === 'error' ? `Error: ${text}` : text;
-        } else {
-          const lowered = yield* Effect.forEach(result.content, content);
-          output =
-            result.status === 'error'
-              ? [{ type: 'input_text' as const, text: 'Error: ' }, ...lowered]
-              : lowered;
-        }
         input.push({
           type: 'function_call_output',
           call_id: callIds[result.callOrdinal],
-          output,
+          output: yield* toolOutput(result, documents),
         });
       }
       continue;
@@ -125,7 +211,9 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
     if (message.role === 'user') {
       input.push({
         role: 'user',
-        content: yield* Effect.forEach(message.content, content),
+        content: yield* Effect.forEach(message.content, (part) =>
+          responsesContent(part, documents),
+        ),
       });
       continue;
     }
@@ -136,104 +224,9 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           message: 'Provider content evidence belongs to another model origin.',
         });
       }
-      switch (part.kind) {
-        case 'message': {
-          if (part.evidence) {
-            if (part.evidence.kind !== 'openai-responses-message') {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message: 'Responses cannot replay foreign message evidence.',
-              });
-            }
-            input.push({
-              type: 'message',
-              role: 'assistant',
-              id: part.evidence.itemId,
-              status: part.evidence.status,
-              ...(part.evidence.phase !== undefined
-                ? { phase: part.evidence.phase }
-                : {}),
-              content: part.content.map((child) =>
-                child.kind === 'text'
-                  ? { type: 'output_text', text: child.text, annotations: [] }
-                  : { type: 'refusal', refusal: child.text },
-              ),
-            });
-          } else {
-            const text: string[] = [];
-            for (const child of part.content) {
-              if (child.kind !== 'text') {
-                return yield* new ModelError({
-                  kind: 'unsupported',
-                  message:
-                    'Responses refusal history requires its original message evidence.',
-                });
-              }
-              text.push(child.text);
-            }
-            input.push({ role: 'assistant', content: text.join('') });
-          }
-          break;
-        }
-        case 'reasoning': {
-          if (part.evidence?.kind !== 'openai-responses-reasoning') {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'Responses reasoning requires its original provider evidence.',
-            });
-          }
-          input.push({
-            type: 'reasoning',
-            id: part.evidence.itemId,
-            summary: part.summary.map((child) => ({
-              type: 'summary_text',
-              text: child.text,
-            })),
-            ...(part.content !== undefined
-              ? {
-                  content: part.content.map((child) => ({
-                    type: 'reasoning_text' as const,
-                    text: child.text,
-                  })),
-                }
-              : {}),
-            ...(part.evidence.status !== undefined
-              ? { status: part.evidence.status }
-              : {}),
-            ...(part.evidence.encryptedContent !== undefined
-              ? { encrypted_content: part.evidence.encryptedContent }
-              : {}),
-          });
-          break;
-        }
-        case 'local-call': {
-          if (
-            part.evidence !== undefined &&
-            part.evidence.kind !== 'openai-responses-function-call'
-          ) {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'Responses tool history requires local calls without foreign evidence.',
-            });
-          }
-          callIds.push(part.providerCallId);
-          input.push({
-            type: 'function_call',
-            call_id: part.providerCallId,
-            name: part.name,
-            arguments: part.argumentsText,
-            ...(part.evidence?.itemId !== undefined
-              ? { id: part.evidence.itemId }
-              : {}),
-            ...(part.evidence?.status !== undefined
-              ? { status: part.evidence.status }
-              : {}),
-          });
-          break;
-        }
-      }
+      const item = yield* assistantItem(part);
+      if (part.kind === 'local-call') callIds.push(part.providerCallId);
+      input.push(item);
     }
   }
   return input;
@@ -241,7 +234,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
 
 /** The required tool must be among the supplied definitions. */
 const checkToolChoice = (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: ResponsesTurn,
 ): Effect.Effect<void, ModelError> => {
   const choice = turn.controls.toolChoice;
   return choice === 'auto' ||
@@ -257,7 +250,7 @@ const checkToolChoice = (
 };
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: ResponsesTurn,
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
@@ -284,7 +277,7 @@ export const withResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
   config: OpenAIResponsesConfiguration,
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: ResponsesTurn,
   result: TurnResult,
 ): Effect.fn.Return<TurnResult, ModelError> {
   if (!sameModelOrigin(turn, result.requestedOrigin))
@@ -332,8 +325,13 @@ export const withResponsesContinuation = Effect.fn(
   return { ...result, continuation };
 });
 
+/**
+ * The turn's Responses `input`: every message lowered, or with a stored
+ * continuation only the suffix it does not cover, chained to the stored
+ * response by `previous_response_id`.
+ */
 export const responseInput = Effect.fn('llm.responses.input')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: ResponsesTurn,
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {

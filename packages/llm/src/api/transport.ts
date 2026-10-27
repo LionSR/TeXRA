@@ -78,12 +78,13 @@ export const admitObservation = Effect.fn('llm.admitObservation')(function* <
 });
 
 /**
- * The value a pull source yields while it is not done: the `value` of the
- * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
- * it from that member alone is what keeps the done member's `undefined` out
- * of the stream's element type.
+ * What one read of a pull source settles to: done, or one value. Both a
+ * `ReadableStreamReadResult` and an `IteratorResult` have this shape; only
+ * the not-done member's value reaches the stream, so the done member's
+ * `undefined` stays out of its element type.
  */
-type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
+type PullResult<A> =
+  { readonly done: true } | { readonly done?: false; readonly value: A };
 
 /**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
@@ -94,24 +95,15 @@ type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
  * ladder. Only the source and the failure classifier ever differed, so those
  * are the parameters.
  */
-export const pullStream = <
-  R extends { readonly done?: boolean; readonly value?: unknown },
-  E,
->(
-  pull: () => PromiseLike<R>,
+export const pullStream = <A, E>(
+  pull: () => PromiseLike<PullResult<A>>,
   onError: (cause: unknown) => E,
-): Stream.Stream<PullValue<R>, E> =>
+): Stream.Stream<A, E> =>
   Stream.fromPull(
     Effect.succeed(
       Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
         Effect.flatMap((next) =>
-          next.done
-            ? Cause.done()
-            : // `done` is false here, so the result is the value-carrying
-              // member of the union `PullValue` picked the type from.
-              Effect.succeed([
-                (next as { readonly value: PullValue<R> }).value,
-              ] as const),
+          next.done ? Cause.done() : Effect.succeed([next.value] as const),
         ),
       ),
     ),
@@ -132,15 +124,17 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
     Effect.sync(() => source[Symbol.asyncIterator]()),
     (iterator) => {
       source.controller.abort();
-      return iterator.return
-        ? Effect.tryPromise({
-            try: () => iterator.return!(),
-            catch: cleanupFailure,
-          }).pipe(Effect.orDie)
+      const close = iterator.return?.bind(iterator);
+      return close
+        ? Effect.tryPromise({ try: () => close(), catch: cleanupFailure }).pipe(
+            Effect.orDie,
+          )
         : Effect.void;
     },
   );
-  return pullStream(() => iterator.next(), onError);
+  // An iterator types the value it returns when done as `any`, so the
+  // element type is named rather than inferred from both members.
+  return pullStream<unknown, E>(() => iterator.next(), onError);
 });
 
 const decodeToolArguments = Schema.decodeUnknownEffect(

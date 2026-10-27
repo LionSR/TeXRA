@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, Result, Schema, Stream } from 'effect';
+import { Effect, Result, Schema, type Scope, Stream } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -24,9 +24,7 @@ import type { InputPart, Part, PartEvent } from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
 
-// The codec is the lowest module of this split: the input lowering, the
-// request surface and the entry all name the response origin, so it lives
-// with the schemas that produce it.
+/** The model origin a Responses binding serves, named by every module of the split. */
 export type ResponseOrigin = RemoteOperation['origin'];
 
 const malformed = (message: string, cause?: unknown) =>
@@ -213,10 +211,10 @@ function gifFrameCount(bytes: Uint8Array): number | null {
     return null;
   const tableSize = (flags: number): number =>
     flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0;
-  let offset = 13 + tableSize(bytes[10]!);
+  let offset = 13 + tableSize(bytes[10]);
   const skipSubBlocks = (): boolean => {
     while (offset < bytes.length) {
-      const size = bytes[offset]!;
+      const size = bytes[offset];
       offset += 1;
       if (size === 0) return true;
       offset += size;
@@ -225,7 +223,7 @@ function gifFrameCount(bytes: Uint8Array): number | null {
   };
   let frames = 0;
   while (offset < bytes.length) {
-    const block = bytes[offset]!;
+    const block = bytes[offset];
     if (block === 0x3b) return frames;
     if (block === 0x21) {
       offset += 2;
@@ -233,7 +231,7 @@ function gifFrameCount(bytes: Uint8Array): number | null {
     } else if (block === 0x2c) {
       if (offset + 10 > bytes.length) return null;
       frames += 1;
-      offset += 10 + tableSize(bytes[offset + 9]!) + 1;
+      offset += 10 + tableSize(bytes[offset + 9]) + 1;
       if (!skipSubBlocks()) return null;
     } else {
       return null;
@@ -448,7 +446,7 @@ export const responseEvents = (
 export const sdkEvents = (
   source: AsyncIterable<unknown> & { readonly controller: AbortController },
   enrich: (error: ModelError) => ModelError,
-) =>
+): Effect.Effect<Stream.Stream<unknown, ModelError>, never, Scope.Scope> =>
   sdkStream(
     source,
     (cause) =>
