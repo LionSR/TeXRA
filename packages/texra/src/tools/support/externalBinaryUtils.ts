@@ -21,7 +21,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Semaphore } from 'effect';
+import { Effect, FileSystem, SynchronizedRef } from 'effect';
 import which from 'which';
 
 import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness';
@@ -226,24 +226,15 @@ export function createCachedBinaryResolver(
   Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
-  let cached: string | undefined;
-  const probeLane = Semaphore.makeUnsafe(1);
+  const cached = SynchronizedRef.makeUnsafe<string | undefined>(undefined);
   return () =>
-    Effect.suspend(() => {
-      if (cached !== undefined) return Effect.succeed(cached);
+    SynchronizedRef.modifyEffect(cached, (found) => {
+      if (found) return Effect.succeed([found, found] as const);
       const config = buildConfig();
-      if (!config) return Effect.succeed(undefined);
-      return Effect.suspend(() =>
-        cached !== undefined
-          ? Effect.succeed(cached)
-          : resolveBinary(config).pipe(
-              Effect.tap((result) =>
-                Effect.sync(() => {
-                  if (result) cached = result;
-                }),
-              ),
-            ),
-      ).pipe(probeLane.withPermits(1));
+      if (!config) return Effect.succeed([undefined, undefined] as const);
+      return resolveBinary(config).pipe(
+        Effect.map((result) => [result, result] as const),
+      );
     }).pipe(
       // The probe steps are plain synchronous calls (Node module resolution,
       // the PATH extension, `which.sync`); one that throws is a
