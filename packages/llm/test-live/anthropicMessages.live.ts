@@ -10,17 +10,14 @@ liveProtocol({
     anthropicMessagesModel(
       {
         protocol: 'anthropic-messages',
-        requestedModel: 'claude-haiku-4-5-20251001',
+        requestedModel: 'claude-haiku-5-5',
         deployment: {
           endpoint: 'https://api.anthropic.com',
           credentialScope: 'live',
         },
-        supportsTemperature: true,
-        supportsForcedToolChoice: true,
         supportsSystemMessages: false,
         defaults: {
           maxOutputTokens: 2048,
-          temperature: 0,
           parallelToolCalls: true,
           thinking: { mode: 'disabled' },
           effort: null,

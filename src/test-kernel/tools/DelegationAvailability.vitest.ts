@@ -23,14 +23,14 @@ describe('delegation model availability', () => {
         );
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
-            requestedModel: 'anthropic/claude-opus-4-8',
-            parentModel: 'anthropic/claude-sonnet-4-6',
+            requestedModel: 'anthropic/claude-opus-5-5',
+            parentModel: 'anthropic/claude-sonnet-5-5',
             settings: hostStores(),
           }),
         );
 
         expect(failure.message).toContain(
-          'Model "anthropic/claude-opus-4-8" is not currently available for delegation',
+          'Model "anthropic/claude-opus-5-5" is not currently available for delegation',
         );
         expect(failure.message).toMatch(/Available models: openai\//);
       }).pipe(Effect.provide(fakeProcessServices())),

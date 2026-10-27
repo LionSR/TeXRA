@@ -149,11 +149,9 @@ export function chooseReasoning(
     return { thinking: false, effort: null, mode };
   }
 
-  const thinkingOff =
-    wanted === ReasoningEffort.NONE || request.thinking === false;
-  if (thinkingOff) {
+  if (wanted === ReasoningEffort.NONE) {
     if (reasoning.off === undefined) {
-      if (explicit === undefined && request.thinking === undefined) {
+      if (explicit === undefined) {
         // Only the user's saved `none` asked for this; the model always
         // thinks, so the default applies instead.
         return {
@@ -170,17 +168,7 @@ export function chooseReasoning(
         message: `${label} cannot turn thinking off.`,
       });
     }
-    if (wanted === ReasoningEffort.NONE || reasoning.off.length === 0) {
-      return { thinking: false, effort: null, mode };
-    }
-    const offAccepted = options.routeEfforts
-      ? reasoning.off.filter((effort) => options.routeEfforts?.includes(effort))
-      : reasoning.off;
-    return {
-      thinking: false,
-      mode,
-      ...snapped(offAccepted, wanted, `${label} without thinking`, strict),
-    };
+    return { thinking: false, effort: null, mode };
   }
 
   const accepted = options.routeEfforts

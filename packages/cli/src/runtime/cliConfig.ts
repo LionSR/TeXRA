@@ -1,6 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
-import { MODEL_CONFIGS, formatModelRef, parseModelRef } from 'llm-zoo';
+import { MODELS, formatModelRef, parseModelRef } from 'llm-zoo';
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
@@ -54,14 +54,6 @@ export interface CliCommandDefaults {
   readonly modelScope?: 'workspace-config' | 'user-config';
 }
 
-export function isCliSupportedModelId(model: string): boolean {
-  return modelConfig(model) != null;
-}
-
-export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS).filter(isCliSupportedModelId);
-}
-
 function normalizeCliModelLookupKey(value: string): string {
   return value
     .trim()
@@ -78,21 +70,17 @@ function modelLookupKeys(id: string): string[] {
 
 /**
  * The model string a CLI argument names: a model reference with optional
- * `@effort`/`+pro` as given, an llm-zoo 1.x key as the reference it stands
- * for, or an unambiguous spelling of a model's API id or label
+ * `@effort`/`+pro` as given, or an unambiguous spelling of a model's API id or label
  * (`grok-4.7`, `Opus 5.5`).
  */
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
   const selection = parseModelRef(trimmed);
-  if (selection && isCliSupportedModelId(selection.ref)) {
-    // `thinking: false` has no string form, so such a 1.x key stays as typed.
-    return selection.thinking === false ? trimmed : formatModelRef(selection);
-  }
+  if (selection) return formatModelRef(selection);
 
   const lower = trimmed.toLowerCase();
-  const ids = knownCliModelIds();
+  const ids = MODELS;
   const exactIdMatch = ids.find((id) => id.toLowerCase() === lower);
   if (exactIdMatch) return exactIdMatch;
 

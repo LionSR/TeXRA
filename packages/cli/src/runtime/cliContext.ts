@@ -17,6 +17,7 @@ import {
   type SkillSourceOptions,
   Settings,
 } from '@texra-ai/harness';
+import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,
   canonicalizeWorkspacePath,
@@ -37,7 +38,7 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
-import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
+import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from './terminalRequirements';
@@ -428,7 +429,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const configWarnings = [...warnings];
     const envModel = yield* pickEnv(
       'TEXRA_MODEL',
-      (model) => (isCliSupportedModelId(model) ? model : undefined),
+      (model) => (modelConfig(model) ? model : undefined),
       configWarnings,
     );
     // `--no-color` is an explicit force-disable: layer it onto the ambient

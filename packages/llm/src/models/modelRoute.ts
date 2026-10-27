@@ -120,17 +120,12 @@ function codexSubscriptionOf(
 
 /**
  * Whether no route TeXRA reaches serves `config`: llm-zoo retired the model,
- * or only OpenRouter or GitHub Copilot serves it, neither of which TeXRA
- * calls.
+ * or only OpenRouter serves it, which TeXRA does not call.
  */
 export function isUnservedModel(
-  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'provider'>,
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly'>,
 ): boolean {
-  return (
-    config.retired === true ||
-    config.openRouterOnly === true ||
-    config.provider === ModelProvider.COPILOT
-  );
+  return config.retired === true || config.openRouterOnly === true;
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
@@ -225,10 +220,8 @@ export function decideModelRoute(
   facts: RouteDecisionFacts,
 ): ModelRoute {
   if (facts.validation) return { kind: 'validation' };
-  // Only OpenRouter or GitHub Copilot serves this model, and TeXRA calls
-  // neither.
-  if (config.openRouterOnly || config.provider === ModelProvider.COPILOT)
-    return { kind: 'unserved' };
+  // Only OpenRouter serves this model, and TeXRA does not call OpenRouter.
+  if (config.openRouterOnly) return { kind: 'unserved' };
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
   const codex = codexSubscriptionOf(config);

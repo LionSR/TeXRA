@@ -48,7 +48,7 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
     cacheMissInputTokens: Schema.optional(TokenCountSchema),
     /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
     cacheCreationTokens: Schema.optional(TokenCountSchema),
-    /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
+    /** Tokens used for reasoning (OpenAI reasoning models, Claude and Gemini thinking) */
     reasoningTokens: Schema.optional(TokenCountSchema),
     /** Tokens consumed by tool use prompts (Google) */
     toolUsePromptTokens: Schema.optional(TokenCountSchema),

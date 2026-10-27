@@ -1,7 +1,7 @@
 /**
  * The model a caller names, stored as one string per choice: llm-zoo's
  * selection form `provider/id[@effort][+pro]` (e.g.
- * `anthropic/claude-opus-5@high`), which names the model by its provider's
+ * `anthropic/claude-opus-5-5@high`), which names the model by its provider's
  * own API ID and says how to run it.
  */
 import {
