@@ -6,7 +6,10 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { replaceInputCommands } from '@texra/agent/output/fileMapping';
-import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
+import {
+  createExternalLocation as externalLocation,
+  createWorkspaceLocation,
+} from '@utils/files/fileLocation';
 
 describe('replaceInputCommands', () => {
   it.effect('rewrites an extensionless LaTeX input to the generated file', () =>
@@ -22,7 +25,10 @@ describe('replaceInputCommands', () => {
 
       yield* replaceInputCommands(
         [baseMain, baseSection],
-        [outputMain, outputSection],
+        [
+          { source: 'main.tex', location: outputMain },
+          { source: 'sections/method.tex', location: outputSection },
+        ],
       ).pipe(
         Effect.provideService(FileSystem.FileSystem, {
           ...fs,
@@ -41,5 +47,40 @@ describe('replaceInputCommands', () => {
         String.raw`\input{sections/method_r1}`,
       );
     }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+  it.effect(
+    'keeps each \\input on its own base when two bases share a file name',
+    () =>
+      Effect.gen(function* () {
+        const bases = ['paper.tex', 'a/main.tex', 'b/main.tex'].map((file) =>
+          createWorkspaceLocation(`/w/${file}`, file),
+        );
+        // Outputs sit at the model-reported source path under the round dir.
+        const outputs = ['paper.tex', 'a/main.tex', 'b/main.tex'].map(
+          (source) => ({
+            source,
+            location: externalLocation(`/r/r1/${source}`),
+          }),
+        );
+        const original = String.raw`\input{a/main} \input{b/main}`;
+        const files = new Map<string, string>(
+          outputs.map(({ location }) => [location.absolutePath, original]),
+        );
+        const fs = yield* FileSystem.FileSystem;
+
+        yield* replaceInputCommands(bases, outputs).pipe(
+          Effect.provideService(FileSystem.FileSystem, {
+            ...fs,
+            readFileString: (target: string) =>
+              Effect.succeed(files.get(target) ?? ''),
+            writeFileString: (target: string, content: string) =>
+              Effect.sync(() => {
+                files.set(target, content);
+              }),
+          }),
+        );
+
+        expect(files.get('/r/r1/paper.tex')).toBe(original);
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

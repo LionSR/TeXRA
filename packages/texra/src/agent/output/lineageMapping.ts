@@ -4,7 +4,9 @@
  * Traces the lineage of a round's output files back to their base files.
  * Extraction (`computeOutputDiffStats`) is its one caller: the lineage it
  * records on each output is what every later reader (latexdiff, the critic's
- * review, the hosts) takes, never a recomputation.
+ * review, the hosts) takes, never a recomputation. Its source matcher
+ * (`findMatchingBaseFile`) also pairs outputs with bases for the `\input`
+ * rewrite, which runs before lineage is recorded.
  */
 
 import * as path from 'node:path';
@@ -13,8 +15,6 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-
-import { createFileMapping } from './fileMapping';
 
 import type { OutputState } from './outputState';
 import type { RoundFileEntry, RoundFileMapping } from './types';
@@ -42,6 +42,59 @@ function computePathKeys(filePath: string): PathKeys {
   };
 }
 
+/**
+ * Map each source file to the target whose file name contains the source's
+ * name without its extension, the longest such name winning (`paper` matches
+ * `paper_revised.tex`). Uses string keys (comparable paths) for robust
+ * lookups, FileLocation values for data, so lookups work even when
+ * FileLocation objects are reconstructed.
+ *
+ * @returns Map from source path to target FileLocation
+ */
+function createFileMapping(
+  sourceFiles: FileLocation[],
+  targetFiles: FileLocation[],
+): Map<string, FileLocation> {
+  const fileMapping = new Map<string, FileLocation>();
+
+  if (sourceFiles.length === 0 || targetFiles.length === 0) {
+    return fileMapping;
+  }
+
+  const baseNameOf = (filePath: string): string =>
+    path.parse(path.basename(filePath)).name;
+
+  // Source names do not depend on the target, so derive them once up front.
+  const sources = sourceFiles.map((sourceFile) => {
+    const sourcePath = fileLocationDisplayPath(sourceFile);
+    return { sourcePath, sourceName: baseNameOf(sourcePath) };
+  });
+
+  for (const target of targetFiles) {
+    const targetPath = fileLocationDisplayPath(target);
+    const targetBaseName = path.basename(targetPath);
+
+    let bestMatchSourcePath: string | null = null;
+    let bestMatchScore = 0;
+
+    for (const { sourcePath, sourceName } of sources) {
+      if (
+        targetBaseName.includes(sourceName) &&
+        sourceName.length > bestMatchScore
+      ) {
+        bestMatchScore = sourceName.length;
+        bestMatchSourcePath = sourcePath;
+      }
+    }
+
+    if (bestMatchSourcePath) {
+      fileMapping.set(bestMatchSourcePath, target);
+    }
+  }
+
+  return fileMapping;
+}
+
 /** Invert a Map<sourceKey, targetLocation> into Map<targetPath, sourceLocation>. */
 function invertMapping(
   forwardMapping: Map<string, FileLocation>,
@@ -67,11 +120,15 @@ function invertMapping(
  * Match full relative paths first, then fall back to basename-only matching for
  * legacy outputs that report just a filename.
  */
-function findMatchingBaseFile(
-  baseEntries: readonly BaseEntry[],
+export function findMatchingBaseFile(
+  baseFiles: readonly FileLocation[],
   source: string,
 ): FileLocation | undefined {
   const src = computePathKeys(source);
+  const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
+    loc,
+    ...computePathKeys(fileLocationDisplayPath(loc)),
+  }));
 
   const matchers: ((entry: BaseEntry) => boolean)[] = [
     (entry) => entry.relativePath === src.relativePath,
@@ -99,10 +156,6 @@ export function traceFileLineage(
 ): RoundFileMapping {
   const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
 
-  const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
-    loc,
-    ...computePathKeys(fileLocationDisplayPath(loc)),
-  }));
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
   // Base filenames that appear as substrings of output names (e.g. "paper"
@@ -115,7 +168,7 @@ export function traceFileLineage(
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of currentOutputs) {
     const key = fileLocationDisplayPath(entry.location);
-    const origin = findMatchingBaseFile(baseEntries, entry.source);
+    const origin = findMatchingBaseFile(baseFiles, entry.source);
     mapping.set(key, {
       base: origin ?? baseToOutput.get(key),
       origin,
