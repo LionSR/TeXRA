@@ -340,10 +340,6 @@ export async function runChat(
       chatPolicy,
       projectApprovalPolicy(runtimeSession.roots.config),
     );
-  const currentSessionContext = (): CliContext => ({
-    ...context,
-    quietLogs: true,
-  });
   // `/approval` sets this chat's launch policy only, here or in the
   // service; the project's policy changes through `/config` or the settings
   // view. The chat's latest run takes the change on its own `approval.policy`
@@ -542,7 +538,7 @@ export async function runChat(
     runSession,
     served: runsElsewhere,
     records: runtimeSession.records,
-    getSessionContext: currentSessionContext,
+    sessionContext: { ...context, quietLogs: true },
     chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,

@@ -260,7 +260,7 @@ function makeInit(
           }),
       };
     },
-    getSessionContext: () => makeSessionContext(),
+    sessionContext: makeSessionContext(),
     chatScope,
     shutdownScope: scope,
     cwd: '/tmp/workspace',
