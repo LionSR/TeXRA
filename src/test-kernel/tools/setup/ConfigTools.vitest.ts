@@ -23,27 +23,21 @@ import {
 import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
 import { generateRunId } from '@utils/core';
 
-const updateTool = UpdateConfigTool;
-
-function createPlatform() {
-  const project = createFakeHost();
-  const layer = nativeToolTestLayer({ roots: project.roots });
-  return { config: project.roots.config, layer };
-}
-
 describe('ConfigTools — update_config allowlist', () => {
   it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
-      const { config, layer } = createPlatform();
+      const { roots } = createFakeHost();
 
       const key = 'texra.model.useGoogleInteractionsServerState';
-      const result = yield* updateTool
-        .call({ key, value: true, target: 'user' })
-        .pipe(Effect.provide(layer));
+      const result = yield* UpdateConfigTool.call({
+        key,
+        value: true,
+        target: 'user',
+      }).pipe(Effect.provide(nativeToolTestLayer({ roots })));
 
       assert.equal(result.status, 'error');
       assert.deepEqual(
-        config.inspect(key),
+        roots.config.inspect(key),
         { globalValue: undefined, workspaceValue: undefined },
         'must not write rejected settings',
       );
@@ -75,7 +69,7 @@ describe('ConfigTools — update_config approval', () => {
         (requests) => Effect.sync(() => requests.detach()),
       );
 
-      const result = yield* guardedToolCall(updateTool, {
+      const result = yield* guardedToolCall(UpdateConfigTool, {
         key: 'texra.bib.zoteroPort',
         value: 23200,
         target: 'user',

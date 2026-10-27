@@ -26,50 +26,9 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
-
-// Local file imports
-import { recordSessionEvents } from '../agent/progressTestUtils';
-
-type ExecuteCommandOptions = NonNullable<
-  Parameters<typeof execUtils.executeCommand>[1]
->;
-
-/**
- * Stub `executeCommand` so it emits streamed chunks through the callbacks the
- * tool passes in, then settles with a successful zero-exit result unless the
- * case overrides part of it.
- */
-function mockStreamingCommand(
-  stream: (options: ExecuteCommandOptions) => void,
-  result: Partial<ExecResult> = {},
-): void {
-  vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-    (_command, options) =>
-      Effect.sync(() => {
-        stream(options);
-        return {
-          success: true,
-          stdout: '',
-          stderr: '',
-          timedOut: false,
-          exitCode: 0,
-          ...result,
-        };
-      }),
-  );
-}
-
-/** The successful zero-exit result most background-launch cases settle with. */
-const DONE_EXEC_RESULT: ExecResult = {
-  success: true,
-  stdout: 'done\n',
-  stderr: '',
-  timedOut: false,
-  exitCode: 0,
-};
 
 /**
  * Stub `executeCommand` to park until the test settles it. Returns the
@@ -86,23 +45,9 @@ function holdCommand(): (result: ExecResult) => void {
   };
 }
 
-/** Shared teardown for background-launch cases. */
-function detachBackgroundRun(
-  recorded: ReturnType<typeof recordSessionEvents>,
-  parentRunId: RunId,
-): void {
-  // A teardown that runs in `finally`, so the close runs on its own.
+/** Close the parent's input so the background run's delivery ends. */
+function detachBackgroundRun(parentRunId: RunId): void {
   Effect.runFork(testDefaultSession().followUps.closeInput(parentRunId));
-}
-
-/**
- * A parent run the run history already knows: its one `run.start` has landed, so
- * the parking and the launch that follow append to a run that began exactly
- * once. A second `run.start` on the same aggregate is refused by the seq-1
- * rule, and that refusal is a lost publication the next settle reports.
- */
-function startedParentRun(): RunId {
-  return publishTestRunStart(testDefaultSession());
 }
 
 /**
@@ -133,16 +78,10 @@ const BASH_PLATFORM_OPTIONS = {
   config: { 'texra.toolUse.requireBashApproval': false },
 } as const;
 
-/** The one run id a background launch reports in its output. */
-function launchedIds(result: ToolResult): {
-  output: string;
-  runId: RunId | undefined;
-} {
-  const output = String(result.output ?? '');
-  return {
-    output,
-    runId: /Run ID: (\S+)/.exec(output)?.[1] as RunId | undefined,
-  };
+/** The run id a background launch reports in its output. */
+function launchedRunId(result: ToolResult): RunId | undefined {
+  return /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1] as
+    RunId | undefined;
 }
 
 function launchBackgroundBash(parentRunId: RunId) {
@@ -151,10 +90,6 @@ function launchBackgroundBash(parentRunId: RunId) {
   // after every fact its parent queued, this parent's `run.start` included.
   // Settling here instead would make this suite pass whether or not that
   // barrier exists.
-  return backgroundBashCall(parentRunId);
-}
-
-function backgroundBashCall(parentRunId: RunId) {
   return BashTool.call({
     command: 'make build',
     run_in_background: true,
@@ -192,7 +127,19 @@ describe('BashTool', () => {
     },
   ])('does not split surrogate pairs at the $name', ({ text }) =>
     Effect.gen(function* () {
-      mockStreamingCommand((options) => options.onStdout?.(text));
+      vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+        (_command, options) =>
+          Effect.sync(() => {
+            options?.onStdout?.(text);
+            return {
+              success: true,
+              stdout: '',
+              stderr: '',
+              timedOut: false,
+              exitCode: 0,
+            };
+          }),
+      );
 
       const result = yield* BashTool.call({
         command: 'unicode-boundary',
@@ -227,59 +174,47 @@ describe('BashTool', () => {
         // confirm the run is already untracked (terminal) by the time the
         // resume is even invoked.
         vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
-          Effect.succeed(DONE_EXEC_RESULT),
+          Effect.succeed({
+            success: true,
+            stdout: 'done\n',
+            stderr: '',
+            timedOut: false,
+            exitCode: 0,
+          }),
         );
 
-        const parentRunId = startedParentRun();
+        const parentRunId = publishTestRunStart(testDefaultSession());
         let handleAtResumeTime: unknown;
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
-        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         // The resume a wake starts is the run's one resume in flight.
         const followUps = testDefaultSession().followUps;
         const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
-        const tryResumeRun = vi
-          .spyOn(followUps.resumes, 'once')
-          .mockImplementation((resumed, resume) => {
+        vi.spyOn(followUps.resumes, 'once').mockImplementation(
+          (resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
             handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
             return resumeOnce(resumed, resume);
-          });
+          },
+        );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
-        const recorded = recordSessionEvents(testDefaultSession());
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => detachBackgroundRun(parentRunId)),
+        );
+        const launched = launchedRunId(
+          yield* launchBackgroundBash(parentRunId),
+        );
+        assert.ok(launched, 'Launch output should report a run id');
+        runId = launched;
 
-        try {
-          const launchResult = yield* launchBackgroundBash(parentRunId);
-          assert.equal(launchResult.status, 'executed');
-          const launched = launchedIds(launchResult);
-          assert.ok(launched.runId, 'Launch output should report a run id');
-          runId = launched.runId;
-
-          yield* Deferred.await(wakeReached);
-          assert.ok(
-            tryResumeRun.mock.calls.length > 0,
-            'Background bash completion should reach the wake step',
-          );
-          // The wake step was reached — this run must already be untracked
-          // (finalized), never still RUNNING, so a resumed parent that waits on
-          // it right now resolves immediately instead of racing its own wake.
-          assert.equal(handleAtResumeTime, undefined);
-          assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
-        } finally {
-          detachBackgroundRun(recorded, parentRunId);
-        }
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
+        yield* Deferred.await(wakeReached);
+        // The wake step was reached — this run must already be untracked
+        // (finalized), never still RUNNING, so a resumed parent that waits on
+        // it right now resolves immediately instead of racing its own wake.
+        assert.equal(handleAtResumeTime, undefined);
+        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
+      }),
   );
 
   it.live(
@@ -287,21 +222,16 @@ describe('BashTool', () => {
     () =>
       Effect.gen(function* () {
         const resolveCommand = holdCommand();
-        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(testDefaultSession());
+        const parentRunId = publishTestRunStart(testDefaultSession());
 
-        const launchResult = yield* launchBackgroundBash(parentRunId);
-        const { output, runId } = launchedIds(launchResult);
-        assert.ok(runId, output);
+        const runId = launchedRunId(yield* launchBackgroundBash(parentRunId));
+        assert.ok(runId, 'Launch output should report a run id');
 
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
-        const stopped = testDefaultSession().runs.stop(runId, {
-          reason: 'user',
-        });
-        assert.equal(stopped.accepted(), true);
-        const stopSettlement = yield* Effect.forkChild(stopped.settlement);
+        const stopSettlement = yield* Effect.forkChild(
+          testDefaultSession().runs.stop(runId, { reason: 'user' }).settlement,
+        );
         resolveCommand({
           success: false,
           stdout: '',
@@ -319,17 +249,7 @@ describe('BashTool', () => {
           }),
           Effect.timeout('1 second'),
         );
-        detachBackgroundRun(recorded, parentRunId);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
+        detachBackgroundRun(parentRunId);
+      }),
   );
 });

@@ -1,12 +1,7 @@
 /**
- * The direct LSP lane at its two boundaries: the `LeanServerPool` service
- * (Effect, under `it.effect`'s `TestClock` where idle eviction and the
- * diagnostics quiet window are the subject, under `it.live` where the child
- * process's real exit timing is) and the `LeanLanguageServices` port the
- * `directLeanLanguageServices` layer provides — the pool's programs plus the
- * interruption fold, which the adapter suites compose directly under
- * `it.live`. Servers are a fake `lake` script (a real child process) or an
- * in-memory child handed to the Node spawner through the mocked `spawn`.
+ * The `LeanServerPool` service's server lifetimes, under `it.effect`'s
+ * `TestClock` where idle eviction and the diagnostics quiet window are the
+ * subject. Servers are a fake `lake` script run as a real child process.
  */
 
 // Node imports
@@ -42,31 +37,13 @@ import {
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-const { spawnOverride } = vi.hoisted(() => ({
-  spawnOverride: {
-    current: undefined as undefined | ((...args: unknown[]) => unknown),
-  },
-}));
-
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>();
-  return {
-    ...actual,
-    spawn: (...args: Parameters<typeof actual.spawn>) =>
-      (spawnOverride.current ?? actual.spawn)(...args),
-  };
-});
-
 // Local imports
 import type { RunId } from '@shared/schemas';
 import {
   LeanServerPool,
   type LeanServerPoolOptions,
 } from '@texra/tools/lean/direct/leanServerPool';
-import {
-  isLeanServerActive,
-  type LeanServerInfo,
-} from '@texra/tools/lean/leanServerRegistry';
+import { isLeanServerActive } from '@texra/tools/lean/leanServerRegistry';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -101,11 +78,7 @@ function handle(message) {
     send({ jsonrpc: '2.0', id: message.id, result: null });
     return;
   }
-  if (message.method === 'exit') {
-    const delayMs = Number(process.env.TEXRA_FAKE_LEAN_EXIT_DELAY || 0);
-    setTimeout(() => process.exit(0), delayMs);
-    return;
-  }
+  if (message.method === 'exit') process.exit(0);
   if (message.method === 'textDocument/didOpen') {
     if (process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS === '1') return;
     send({
@@ -160,12 +133,9 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
-/** The `FileSystem`/`Path` pair the process runtime provides the spawner. */
-const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-
 /** The spawner graph the process runtime serves the pool. */
 const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provideMerge(nodePlatform),
+  Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
 );
 
 const NO_RUN: RunId | undefined = undefined;
@@ -192,7 +162,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  spawnOverride.current = undefined;
   vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -255,13 +224,10 @@ const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 const eventually = (assertion: () => void | Promise<void>) =>
   Effect.promise(() => vi.waitFor(assertion, { timeout: 5000, interval: 10 }));
 
-const fakeLakeIt = {
-  effect: it.effect.skipIf(process.platform === 'win32'),
-  live: it.live.skipIf(process.platform === 'win32'),
-};
+const fakeLakeIt = it.effect.skipIf(process.platform === 'win32');
 
 describe('LeanServerPool', () => {
-  fakeLakeIt.effect(
+  fakeLakeIt(
     'does not stop a server while a diagnostics request is in flight',
     () =>
       Effect.gen(function* () {
@@ -290,36 +256,34 @@ describe('LeanServerPool', () => {
       }),
   );
 
-  fakeLakeIt.effect(
-    'stops a shared server after its final owner and lease end',
-    () =>
-      Effect.gen(function* () {
-        const { pool } = yield* openPool();
-        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
-        expect(activeServerRoots(pool)).toEqual([projectRoot]);
-        const release = path.join(tempRoot, 'build.release');
-        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_RELEASE', release);
-        const build = yield* Effect.forkChild(
-          pool.executeProjectCommand('build', run('e00001')),
-        );
-        // Running, so its lease is held.
-        yield* eventually(async () =>
-          expect(await countLogged('command')).toBe(1),
-        );
-        yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
+  fakeLakeIt('stops a shared server after its final owner and lease end', () =>
+    Effect.gen(function* () {
+      const { pool } = yield* openPool();
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
+      const release = path.join(tempRoot, 'build.release');
+      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_RELEASE', release);
+      const build = yield* Effect.forkChild(
+        pool.executeProjectCommand('build', run('e00001')),
+      );
+      // Running, so its lease is held.
+      yield* eventually(async () =>
+        expect(await countLogged('command')).toBe(1),
+      );
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
 
-        // The reuser joins the original owner. Ending only e00002 keeps the
-        // shared server for e00001; ending the final owner defers the stop
-        // until e00001's already-running build releases its lease.
-        yield* pool.stopSessionsForRun(run('e00002'));
-        expect(activeServerRoots(pool)).toEqual([projectRoot]);
-        yield* pool.stopSessionsForRun(run('e00001'));
-        expect(activeServerRoots(pool)).toEqual([projectRoot]);
+      // The reuser joins the original owner. Ending only e00002 keeps the
+      // shared server for e00001; ending the final owner defers the stop
+      // until e00001's already-running build releases its lease.
+      yield* pool.stopSessionsForRun(run('e00002'));
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
+      yield* pool.stopSessionsForRun(run('e00001'));
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
-        writeFileSync(release, '');
-        yield* Fiber.join(build);
-        expect(activeServerRoots(pool)).toEqual([]);
-      }),
+      writeFileSync(release, '');
+      yield* Fiber.join(build);
+      expect(activeServerRoots(pool)).toEqual([]);
+    }),
   );
 });
 
@@ -327,20 +291,15 @@ function run(runId: string): RunId {
   return runId as RunId;
 }
 
-/** The roster the pool or the port over it reports. */
-interface ServerRosterReader {
-  listServers(): readonly LeanServerInfo[];
-}
-
-function runningServerRoots(reader: ServerRosterReader): string[] {
-  return reader
+function runningServerRoots(pool: LeanServerPool['Service']): string[] {
+  return pool
     .listServers()
     .filter((info) => info.status === 'running')
     .map((info) => info.workspaceRoot);
 }
 
-function activeServerRoots(reader: ServerRosterReader): string[] {
-  return reader
+function activeServerRoots(pool: LeanServerPool['Service']): string[] {
+  return pool
     .listServers()
     .filter(isLeanServerActive)
     .map((info) => info.workspaceRoot)

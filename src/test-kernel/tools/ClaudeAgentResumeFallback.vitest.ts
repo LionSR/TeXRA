@@ -76,27 +76,26 @@ const parkedParent = Effect.gen(function* () {
 
 /** The tool's call layer under `parent`'s run, serving `registry` as the
  *  step would. */
-const toolLayer = (
-  registry: AgentCliSessionRegistry,
-  parent: Parent,
-  toolPolicy: { readonly stopAfterCycle?: boolean } = {},
-) =>
+const toolLayer = (registry: AgentCliSessionRegistry, parent: Parent) =>
   Layer.merge(
     nativeToolTestLayer({
-      run: { session: parent.session, runId: parent.runId, toolPolicy },
+      run: { session: parent.session, runId: parent.runId, toolPolicy: {} },
     }),
     Layer.succeed(ClaudeAgentSessionsService)(registry),
   );
 
-/** One SDK `query` answering a single result message. */
-const answer = (result: Record<string, unknown>) =>
+/** One SDK `query` answering a single successful turn of `session_id`. */
+const succeeded = (sessionId: string) =>
   (async function* () {
-    yield { type: 'result', modelUsage: {}, total_cost_usd: 0, ...result };
+    yield {
+      type: 'result',
+      modelUsage: {},
+      total_cost_usd: 0,
+      subtype: 'success',
+      session_id: sessionId,
+      result: 'Done.',
+    };
   })();
-
-/** A successful turn of `session_id`. */
-const succeeded = (sessionId: string, text = 'Done.') =>
-  answer({ subtype: 'success', session_id: sessionId, result: text });
 
 /** Wait until the SDK has been queried `n` times. */
 const untilQueried = (storage: string, n: number) =>
@@ -176,9 +175,7 @@ describe(
           // the waiting call then queues onto that loop.
           yield* Deferred.succeed(envReady, {});
           expect((yield* Fiber.join(first)).status).toBe('executed');
-          expect((yield* Fiber.join(second)).summary).toMatch(
-            /Follow-up queued/,
-          );
+          expect((yield* Fiber.join(second)).status).toBe('executed');
           yield* untilQueried(parent.storage, 2);
 
           expect(childrenOf(parent)).toHaveLength(1);

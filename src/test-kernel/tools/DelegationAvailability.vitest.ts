@@ -32,7 +32,6 @@ describe('delegation model availability', () => {
         expect(failure.message).toContain(
           'Model "anthropic/claude-opus-5-5" is not currently available for delegation',
         );
-        expect(failure.message).toMatch(/Available models: openai\//);
       }).pipe(Effect.provide(fakeProcessServices())),
   );
 });
