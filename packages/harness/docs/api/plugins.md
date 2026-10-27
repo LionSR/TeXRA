@@ -551,8 +551,10 @@ type DefineToolOptions<T, R = never> = Required<
      * tool already has, it never sets it.
      */
     guard?: ToolGuard<T, NoInfer<R>>;
-    /** The run body. */
-    execute: (input: T) => Effect.Effect<ToolResult, Error, R>;
+    /** The run body. Succeed with the text the model reads back, or with a
+     *  whole `ToolResult` for a summary, attachments or facts; fail with
+     *  an `Error` and the model reads its message as the tool's error. */
+    execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
 ```
 

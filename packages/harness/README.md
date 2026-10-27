@@ -427,12 +427,16 @@ const EchoTool = defineTool({
   name: 'echo',
   description: 'Return the supplied text.',
   schema: Schema.Struct({ text: Schema.String }),
-  execute: ({ text }) =>
-    Effect.succeed({ status: 'executed' as const, output: text }),
+  execute: ({ text }) => Effect.succeed(text),
 });
 
 const tools = [EchoTool];
 ```
+
+`execute` succeeds with the text the model reads back, or with a whole
+`ToolResult` (`executed(output, summary)` from `./plugins`) when the tool
+also reports a summary, attachments or facts. Failing with an `Error` gives
+the model its message as the tool's error.
 
 Pass `tools` to `session.start`. A custom tool that requires
 approval runs only on a session opened with an approval handler; on any
