@@ -144,23 +144,6 @@ const AnthropicControlsSchema = Schema.Struct({
   cache: CacheSchema,
   stopSequences: Schema.Array(Schema.String),
 });
-/** Schema check: a route without temperature support must default to null. */
-function validateTemperatureDefault(configuration: {
-  readonly supportsTemperature: boolean;
-  readonly defaults: { readonly temperature: number | null };
-}): Schema.FilterIssue[] {
-  return !configuration.supportsTemperature &&
-    configuration.defaults.temperature !== null
-    ? [
-        {
-          path: ['defaults', 'temperature'],
-          issue: 'A model without temperature support requires a null default.',
-        },
-      ]
-    : [];
-}
-
-/** A protocol binding and its defaults, as `bindModel` builds it. */
 const ModelConfigurationSchema = Schema.Union([
   BindingSchema.mapFields(
     Struct.assign({
@@ -215,7 +198,16 @@ const ModelConfigurationSchema = Schema.Union([
     }),
   ).check(
     Schema.makeFilter((configuration) => {
-      const issues = validateTemperatureDefault(configuration);
+      const issues: Schema.FilterIssue[] = [];
+      if (
+        !configuration.supportsTemperature &&
+        configuration.defaults.temperature !== null
+      ) {
+        issues.push({
+          path: ['defaults', 'temperature'],
+          issue: 'A model without temperature support requires a null default.',
+        });
+      }
       if (
         !configuration.supportsMaxOutputTokens &&
         configuration.defaults.maxOutputTokens !== null
@@ -254,15 +246,19 @@ const ModelConfigurationSchema = Schema.Union([
     }),
   ),
 ]);
+/** A protocol binding and its defaults, as `bindModel` builds it. */
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
 /** The configuration a binding was built with; a mismatch is a programming defect. */
 export const decodeModelConfiguration = Schema.decodeUnknownSync(
   ModelConfigurationSchema,
 );
 type ConfigurationOf<P> = Extract<ModelConfiguration, { protocol: P }>;
+/** A Google Interactions binding's configuration. */
 export type GoogleInteractionsConfiguration =
   ConfigurationOf<'google-interactions'>;
+/** An OpenAI Responses binding's configuration (OpenAI and the vendors on it). */
 export type OpenAIResponsesConfiguration = ConfigurationOf<'openai-responses'>;
+/** An Anthropic Messages binding's configuration. */
 export type AnthropicMessagesConfiguration =
   ConfigurationOf<'anthropic-messages'>;
 const PreparedInputSchema = ModelOriginSchema.mapFields(
@@ -363,8 +359,7 @@ const IdentitySchema = Schema.Struct({
   returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
 
-/** A completed provider turn, not a completed agent execution. */
-export const TurnResultSchema = Schema.Struct({
+const TurnResultFieldsSchema = Schema.Struct({
   kind: Schema.Literal('http'),
   ...IdentitySchema.fields,
   /** Null for a stateless Google response with no retrievable ID. */
@@ -429,7 +424,27 @@ export const TurnResultSchema = Schema.Struct({
   /** Unknown counts remain unknown, including within a partial receipt. */
   usage: Schema.NullOr(TurnUsageSchema),
   continuation: Schema.optional(ContinuationSchema),
-}).check(
+});
+type TurnResultFields = typeof TurnResultFieldsSchema.Type;
+
+/** Identity or evidence on a result that its protocol or outcome cannot carry. */
+function misplacedIdentityOrEvidence(result: TurnResultFields): boolean {
+  const { protocol } = result.requestedOrigin;
+  return (
+    (result.providerResponseId === null &&
+      (protocol !== 'google-interactions' ||
+        result.continuation !== undefined)) ||
+    (result.refusalEvidence !== undefined &&
+      protocol !== 'anthropic-messages') ||
+    (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
+    [result.usage?.providerUsage?.kind, result.finishEvidence?.kind].some(
+      (kind) => kind != null && protocol !== EVIDENCE_PROTOCOL[kind],
+    )
+  );
+}
+
+/** A completed provider turn, not a completed agent execution. */
+export const TurnResultSchema = TurnResultFieldsSchema.check(
   Schema.makeFilter((result) => {
     const issues = validateAssistantContent(
       result.requestedOrigin,
@@ -445,20 +460,7 @@ export const TurnResultSchema = Schema.Struct({
           'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
       });
     }
-    const usageKind = result.usage?.providerUsage?.kind;
-    const finishKind = result.finishEvidence?.kind;
-    if (
-      (result.providerResponseId === null &&
-        (result.requestedOrigin.protocol !== 'google-interactions' ||
-          result.continuation !== undefined)) ||
-      (result.refusalEvidence !== undefined &&
-        result.requestedOrigin.protocol !== 'anthropic-messages') ||
-      (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
-      (usageKind != null &&
-        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) ||
-      (finishKind != null &&
-        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
-    ) {
+    if (misplacedIdentityOrEvidence(result)) {
       issues.push(
         'Provider identity and evidence require their original protocol and outcome.',
       );
@@ -538,9 +540,7 @@ export const BackgroundSubmissionSchema = Schema.Union([
 ]);
 /** {@link BackgroundSubmissionSchema}'s value. */
 export type BackgroundSubmission = typeof BackgroundSubmissionSchema.Type;
-const SequenceSchema = Schema.Struct({
-  afterSequence: CountSchema,
-});
+const SequenceSchema = Schema.Struct({ afterSequence: CountSchema });
 /** A delivered sequence is not a durable acknowledgement by its consumer. */
 const SequencedBackgroundEventSchema = Schema.Union([
   IdentifiedEventSchema.mapFields(
@@ -663,7 +663,7 @@ export const completedTurn = Effect.fn('llm.generateTurn')(function* (
 ) {
   const result = yield* Stream.runFold(
     events,
-    () => null as TurnResult | null,
+    (): TurnResult | null => null,
     (current, event) => (event.kind === 'completed' ? event.result : current),
   );
   if (result === null)

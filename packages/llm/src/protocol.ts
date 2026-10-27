@@ -18,10 +18,13 @@ const EndpointSchema = Schema.String.check(
     { message: 'Endpoints carry no userinfo, query string or fragment.' },
   ),
 );
+/** Whether a binding serves turns as remote background work (`Model.background`). */
 export const BackgroundCapabilitySchema = Schema.Literals([
   'supported',
   'unsupported',
 ]);
+/** The model a binding requests and the deployment it is served from: the
+ *  endpoint and the scope of the credential that pays for it. */
 export const BindingSchema = Schema.Struct({
   requestedModel: Schema.String.check(Schema.isMinLength(1)),
   deployment: Schema.Struct({
@@ -54,7 +57,7 @@ export const originOf = <P extends ModelOrigin['protocol']>(
   config: Pick<ModelOrigin, 'requestedModel' | 'deployment'> & {
     readonly protocol: P;
   },
-) =>
+): ModelOrigin & { readonly protocol: P } =>
   Object.freeze({
     protocol: config.protocol,
     requestedModel: config.requestedModel,

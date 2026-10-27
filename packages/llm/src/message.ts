@@ -109,7 +109,13 @@ const OutputPartSchema = Schema.Union([
   LocalCallPartSchema,
 ]);
 
+/** A turn's content: its messages, reasoning and local calls, in order. */
 export const ContentSchema = Schema.Array(OutputPartSchema);
+/**
+ * The protocol each provider-specific record on a turn belongs to, keyed by
+ * its `kind`: content evidence, usage receipts and finish evidence. A record
+ * on a turn of any other protocol is invalid.
+ */
 export const EVIDENCE_PROTOCOL = {
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
@@ -124,6 +130,24 @@ export const EVIDENCE_PROTOCOL = {
   'openai-responses': 'openai-responses',
 } as const;
 
+type ReasoningPart = Extract<
+  (typeof ContentSchema.Type)[number],
+  { readonly kind: 'reasoning' }
+>;
+
+/** Signed thinking keeps its one returned text as `content`; redacted
+ *  thinking keeps all of it in the evidence. Other reasoning has no shape rule. */
+function keepsThinkingShape(part: ReasoningPart): boolean {
+  switch (part.evidence?.kind) {
+    case 'anthropic-thinking-signature':
+      return part.summary.length === 0 && part.content?.length === 1;
+    case 'anthropic-redacted-thinking':
+      return part.summary.length === 0 && part.content === undefined;
+    default:
+      return true;
+  }
+}
+
 /** The schema issues in a turn's content against its origin: foreign
  *  evidence, malformed signed thinking, repeated item or call ids. */
 export function validateAssistantContent(
@@ -131,8 +155,17 @@ export function validateAssistantContent(
   content: typeof ContentSchema.Type,
 ): Schema.FilterIssue[] {
   const issues: Schema.FilterIssue[] = [];
-  const ids = new Set<string>();
+  const callIds = new Set<string>();
   const itemIds = new Set<string>();
+  const requireDistinct = (
+    seen: Set<string>,
+    id: string,
+    path: readonly PropertyKey[],
+    issue: string,
+  ): void => {
+    if (seen.has(id)) issues.push({ path, issue });
+    seen.add(id);
+  };
   for (const [index, part] of content.entries()) {
     const evidence = part.evidence;
     if (
@@ -145,13 +178,7 @@ export function validateAssistantContent(
           'Provider content evidence requires its original protocol binding.',
       });
     }
-    if (
-      part.kind === 'reasoning' &&
-      ((evidence?.kind === 'anthropic-thinking-signature' &&
-        (part.summary.length !== 0 || part.content?.length !== 1)) ||
-        (evidence?.kind === 'anthropic-redacted-thinking' &&
-          (part.summary.length !== 0 || part.content !== undefined)))
-    ) {
+    if (part.kind === 'reasoning' && !keepsThinkingShape(part)) {
       issues.push({
         path: ['content', index],
         issue:
@@ -163,22 +190,21 @@ export function validateAssistantContent(
       'itemId' in evidence &&
       evidence.itemId !== undefined
     ) {
-      if (itemIds.has(evidence.itemId)) {
-        issues.push({
-          path: ['content', index, 'evidence', 'itemId'],
-          issue: 'Provider item IDs must be distinct within one response.',
-        });
-      }
-      itemIds.add(evidence.itemId);
+      requireDistinct(
+        itemIds,
+        evidence.itemId,
+        ['content', index, 'evidence', 'itemId'],
+        'Provider item IDs must be distinct within one response.',
+      );
     }
-    if (part.kind !== 'local-call') continue;
-    if (ids.has(part.providerCallId)) {
-      issues.push({
-        path: ['content', index, 'providerCallId'],
-        issue: 'Provider call IDs must be distinct within one response.',
-      });
+    if (part.kind === 'local-call') {
+      requireDistinct(
+        callIds,
+        part.providerCallId,
+        ['content', index, 'providerCallId'],
+        'Provider call IDs must be distinct within one response.',
+      );
     }
-    ids.add(part.providerCallId);
   }
   return issues;
 }
@@ -294,6 +320,8 @@ const PrefixSchema = Schema.Struct({
   coveredMessages: Schema.Int.check(Schema.isGreaterThan(0)),
   prefixFingerprint: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
 });
+/** A Google Interactions continuation: the interaction that already holds
+ *  the covered prefix, so a later turn sends only what follows it. */
 export const GoogleContinuationSchema = PrefixSchema.mapFields(
   Struct.assign({
     origin: ModelOriginSchema.mapFields(
@@ -311,6 +339,8 @@ const ResponsesAnchorSchema = Schema.Struct({
   responseId: Schema.String.check(Schema.isMinLength(1)),
   coveredItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
+/** A Responses continuation: the stored response that already holds the
+ *  covered prefix, so a later turn chains on it and sends only what follows. */
 export const ResponsesContinuationSchema = PrefixSchema.mapFields(
   Struct.assign({
     origin: ModelOriginSchema.mapFields(

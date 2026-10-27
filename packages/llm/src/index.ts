@@ -62,6 +62,7 @@ export type {
   SecretsOperation,
 } from './providers/credentials.js';
 export {
+  API_KEY_PROVIDER_IDS,
   BACKEND_PROTOCOLS,
   findModelProviderPlugin,
   MODEL_PROVIDER_PLUGINS,
@@ -76,14 +77,12 @@ export type {
 } from './providers/providerPlugins.js';
 export {
   API_KEY_ENV_NAMES,
-  API_KEY_PROVIDER_IDS,
   apiKeyEnvName,
   providerDisplayName,
 } from './providers/providers.js';
 export {
   apiKeySecretName,
   apiProviderOfSecretName,
-  exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
   loadApiKeyStatusMap,

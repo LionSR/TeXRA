@@ -51,38 +51,37 @@ export class ReasoningChoiceError extends Schema.TaggedError<ReasoningChoiceErro
   { message: Schema.String },
 ) {}
 
-const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
-
 /**
- * The accepted level nearest to `wanted`; a tie goes to the higher level, so
- * a missing `medium` between `low` and `high` becomes `high`.
+ * The accepted level nearest to `wanted` on {@link EFFORT_SCALE}; a tie goes
+ * to the higher level, so a missing `medium` between `low` and `high` becomes
+ * `high`.
  */
 function nearestEffort(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
 ): ReasoningEffort | undefined {
-  let best: ReasoningEffort | undefined;
+  const target = EFFORT_SCALE.indexOf(wanted);
+  let best: { effort: ReasoningEffort; rank: number } | undefined;
   for (const effort of accepted) {
-    const distance = Math.abs(rank(effort) - rank(wanted));
+    const rank = EFFORT_SCALE.indexOf(effort);
+    const distance = Math.abs(rank - target);
     const bestDistance =
-      best === undefined ? Infinity : Math.abs(rank(best) - rank(wanted));
+      best === undefined ? Infinity : Math.abs(best.rank - target);
     if (
       distance < bestDistance ||
-      (distance === bestDistance &&
-        best !== undefined &&
-        rank(effort) > rank(best))
+      (distance === bestDistance && best !== undefined && rank > best.rank)
     ) {
-      best = effort;
+      best = { effort, rank };
     }
   }
-  return best;
+  return best?.effort;
 }
 
 function snapped(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
   label: string,
-  strict: boolean,
+  strict: boolean | undefined,
 ): { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string } {
   if (accepted.includes(wanted)) return { effort: wanted };
   const effort = nearestEffort(accepted, wanted);
@@ -96,6 +95,20 @@ function snapped(
     requested: wanted,
     note: `${label} has no ${wanted} effort; using ${effort} (accepts ${accepted.join(', ')}).`,
   };
+}
+
+/** The selection's mode, refused when the model has no such mode. */
+function requestedMode(
+  config: Pick<ModelConfig, 'label' | 'modes'>,
+  mode: ReasoningMode | undefined,
+): ReasoningMode | null {
+  if (mode === undefined) return null;
+  if (!(config.modes ?? []).includes(mode)) {
+    throw new ReasoningChoiceError({
+      message: `${config.label} has no ${mode} mode.`,
+    });
+  }
+  return mode;
 }
 
 /** How {@link chooseReasoning} settles a request the model cannot serve. */
@@ -124,21 +137,12 @@ export function chooseReasoning(
   request: ReasoningRequest = {},
   options: ChooseReasoningOptions = {},
 ): ReasoningChoice {
-  const { reasoning } = config;
-  const strict = options.strict ?? false;
-  const label = config.label;
-
-  if (
-    request.mode !== undefined &&
-    !(config.modes ?? []).includes(request.mode)
-  ) {
-    throw new ReasoningChoiceError({
-      message: `${label} has no ${request.mode} mode.`,
-    });
-  }
-  const mode = request.mode ?? null;
+  const { label, reasoning } = config;
+  const mode = requestedMode(config, request.mode);
   const explicit = request.effort;
-  const wanted = explicit ?? options.userEffort ?? DEFAULT_EFFORT;
+  // The level asked for: the selection's, else the user's saved one.
+  const asked = explicit ?? options.userEffort;
+  const wanted = asked ?? DEFAULT_EFFORT;
 
   if (reasoning === undefined) {
     if (explicit !== undefined && explicit !== ReasoningEffort.NONE) {
@@ -150,35 +154,29 @@ export function chooseReasoning(
   }
 
   if (wanted === ReasoningEffort.NONE) {
-    if (reasoning.off === undefined) {
-      if (explicit === undefined) {
-        // Only the user's saved `none` asked for this; the model always
-        // thinks, so the default applies instead.
-        return {
-          ...chooseReasoning(
-            config,
-            { ...request, effort: DEFAULT_EFFORT },
-            { ...options, userEffort: undefined },
-          ),
-          requested: ReasoningEffort.NONE,
-          note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
-        };
-      }
+    if (reasoning.off !== undefined) {
+      return { thinking: false, effort: null, mode };
+    }
+    if (explicit !== undefined) {
       throw new ReasoningChoiceError({
         message: `${label} cannot turn thinking off.`,
       });
     }
-    return { thinking: false, effort: null, mode };
+    // Only the user's saved `none` asked for this; the model always
+    // thinks, so the default applies instead.
+    return {
+      ...chooseReasoning(
+        config,
+        { ...request, effort: DEFAULT_EFFORT },
+        { ...options, userEffort: undefined },
+      ),
+      requested: ReasoningEffort.NONE,
+      note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
+    };
   }
 
-  const accepted = options.routeEfforts
-    ? reasoning.efforts.filter((effort) =>
-        options.routeEfforts?.includes(effort),
-      )
-    : reasoning.efforts;
   if (reasoning.efforts.length === 0) {
-    if (explicit === undefined && options.userEffort === undefined)
-      return { thinking: true, effort: null, mode };
+    if (asked === undefined) return { thinking: true, effort: null, mode };
     return {
       thinking: true,
       effort: null,
@@ -187,7 +185,16 @@ export function chooseReasoning(
       note: `${label} has no effort levels; ignoring ${wanted}.`,
     };
   }
-  return { thinking: true, mode, ...snapped(accepted, wanted, label, strict) };
+  const { routeEfforts } = options;
+  const accepted =
+    routeEfforts === undefined
+      ? reasoning.efforts
+      : reasoning.efforts.filter((effort) => routeEfforts.includes(effort));
+  return {
+    thinking: true,
+    mode,
+    ...snapped(accepted, wanted, label, options.strict),
+  };
 }
 
 /**

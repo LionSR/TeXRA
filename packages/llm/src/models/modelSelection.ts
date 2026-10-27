@@ -13,8 +13,6 @@ import {
 
 /** A stored model string resolved against the catalog. */
 export interface SelectedModel {
-  /** The string as stored. */
-  readonly id: string;
   readonly config: ModelConfig;
   /** The effort, thinking and mode the string asks for, if any. */
   readonly request: Omit<ModelSelection, 'ref'>;
@@ -26,7 +24,7 @@ export function selectModel(id: string): SelectedModel | undefined {
   const config = selection && lookup(selection.ref);
   if (!selection || !config) return undefined;
   const { ref: _ref, ...request } = selection;
-  return { id, config, request };
+  return { config, request };
 }
 
 /** The registry entry a stored model string names. */

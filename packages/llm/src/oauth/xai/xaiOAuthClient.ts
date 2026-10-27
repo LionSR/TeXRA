@@ -104,13 +104,20 @@ export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
       );
     }
 
-    // Best effort: a body that is not an error object carries no code.
+    // A body that is not an error object carries no code: the failure below
+    // then reports the status alone, and the unreadable body is logged.
     const { error: oauthError, error_description: errorDescription } =
-      yield* parseOAuthJson(response, DeviceErrorBodySchema, '').pipe(
-        Effect.orElseSucceed(() => ({
-          error: undefined,
-          error_description: undefined,
-        })),
+      yield* parseOAuthJson(
+        response,
+        DeviceErrorBodySchema,
+        'Grok device token error body is not an OAuth error object',
+      ).pipe(
+        Effect.catchTag('OAuthUnexpectedResponse', (unreadable) =>
+          Effect.as(Effect.logWarning(unreadable.message, unreadable.cause), {
+            error: undefined,
+            error_description: undefined,
+          }),
+        ),
       );
     if (oauthError === 'authorization_pending' || oauthError === 'slow_down') {
       return yield* new DeviceAuthorizationPending({

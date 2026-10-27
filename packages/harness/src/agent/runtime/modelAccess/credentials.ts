@@ -4,10 +4,9 @@
  * The secret reaches the binding's transport and never a row. Every failure
  * is a {@link RouteUnavailable} the user can act on.
  */
-import { Effect } from 'effect';
+import { Effect, Redacted } from 'effect';
 
 import {
-  exposeApiKey,
   lookupApiKey,
   resolveRouteEndpoint,
   type ApiKeyProviderId,
@@ -192,7 +191,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
       message: `Missing API key for ${provider}. Set a provider API key in settings.`,
     });
   }
-  const bearer = exposeApiKey(key);
+  const bearer = Redacted.value(key);
   const endpoint = yield* routeEndpoint(config, route, facts);
   return {
     route: route.kind,

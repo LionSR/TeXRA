@@ -70,13 +70,6 @@ class DeviceCodeTimedOut extends Schema.TaggedError<DeviceCodeTimedOut>()(
 const DEVICE_CODE_TIMED_OUT_MESSAGE =
   'Device-code sign-in timed out. Run sign-in again.';
 
-/** What the poll fails with: the poll's own terminal errors, a transient's
- *  carried error, or the code's expiry. */
-type DeviceAuthorizationFailure<E> =
-  | Exclude<E, DeviceAuthorizationPending | DeviceAuthorizationTransient>
-  | (E extends DeviceAuthorizationTransient ? Error : never)
-  | DeviceCodeTimedOut;
-
 const isPending = (error: unknown): error is DeviceAuthorizationPending =>
   error instanceof DeviceAuthorizationPending;
 
@@ -176,12 +169,8 @@ export const pollDeviceAuthorization = Effect.fn(
     }),
     // A pending at the deadline is a timeout; a transient, whether its budget
     // ran out or the deadline passed, is its own carried failure.
-    Effect.mapError((error) => {
-      if (isPending(error)) return timedOut;
-      return (
-        isTransient(error) ? error.error : error
-      ) as DeviceAuthorizationFailure<E>;
-    }),
+    Effect.catchIf(isPending, () => Effect.fail(timedOut)),
+    Effect.catchIf(isTransient, (transient) => Effect.fail(transient.error)),
   );
 });
 

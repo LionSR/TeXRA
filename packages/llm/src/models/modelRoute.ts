@@ -214,6 +214,22 @@ export function zeroCostAccessOverrides(contextWindow: number): {
   };
 }
 
+/**
+ * Whether `config` pays through Kimi Code: an exclusive model always does; a
+ * dual-backend one only with the subscription switch on and a key stored.
+ */
+function takesKimiCodeKey(
+  config: ModelConfig,
+  facts: RouteDecisionFacts,
+): boolean {
+  return (
+    isKimiCodeExclusiveModel(config) ||
+    (isKimiSubscriptionEligible(config) &&
+      facts.preferKimiCode &&
+      facts.kimiCodeKey)
+  );
+}
+
 /** Decide the route `config` takes under `facts`. Pure. */
 export function decideModelRoute(
   config: ModelConfig,
@@ -235,12 +251,7 @@ export function decideModelRoute(
   if (facts.xaiSubscription && config.provider === ModelProvider.XAI) {
     return { kind: 'xai-subscription' };
   }
-  if (
-    isKimiCodeExclusiveModel(config) ||
-    (isKimiSubscriptionEligible(config) &&
-      facts.preferKimiCode &&
-      facts.kimiCodeKey)
-  ) {
+  if (takesKimiCodeKey(config, facts)) {
     return {
       kind: 'api-key',
       provider: 'kimiCode',

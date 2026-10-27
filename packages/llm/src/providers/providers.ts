@@ -1,5 +1,5 @@
 import {
-  MODEL_PROVIDER_PLUGINS,
+  API_KEY_PROVIDER_IDS,
   findModelProviderPlugin,
   type ApiKeyProviderId,
 } from './providerPlugins.js';
@@ -15,21 +15,6 @@ export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
 export function providerDisplayName(provider: string): string {
   return findModelProviderPlugin(provider)?.displayName ?? provider;
 }
-
-// ============================================================================
-// Direct API-key providers
-// ============================================================================
-
-/**
- * Provider IDs where users can configure direct API keys — the single source
- * for direct key-provider enumeration, derived from the plugin manifest.
- * Order = display order in the settings key rows.
- */
-export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
-  MODEL_PROVIDER_PLUGINS.flatMap((plugin) =>
-    plugin.apiKey ? [plugin.id as ApiKeyProviderId] : [],
-  ),
-);
 
 /** Environment variable for a provider's API key. */
 export function apiKeyEnvName(provider: ApiKeyProviderId): string {

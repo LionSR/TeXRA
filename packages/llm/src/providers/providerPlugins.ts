@@ -6,8 +6,8 @@
  * its regional pair. Beside it, `BACKEND_PROTOCOLS` names the protocol each
  * provider a run can be bound to speaks.
  *
- * Derived from this list: the provider display name, the API-key provider
- * order and API-key env names (`./providers.ts`), default endpoints
+ * Derived from this list: the API-key provider order (below), the provider
+ * display name and API-key env names (`./providers.ts`), default endpoints
  * (`../models/routeEndpoint.ts`). The app owns everything a user
  * sees about a provider beyond its name: key pages, picker grouping and the
  * setup assistant's probe models, as well as the settings over this list —
@@ -162,6 +162,15 @@ export type ApiKeyProviderId = Extract<
   (typeof MANIFEST)[number],
   { readonly apiKey: true }
 >['id'];
+
+/**
+ * Provider IDs where users can configure direct API keys — the single source
+ * for direct key-provider enumeration. Order = display order in the settings
+ * key rows.
+ */
+export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
+  MANIFEST.flatMap((plugin) => ('apiKey' in plugin ? [plugin.id] : [])),
+);
 
 /** Providers with an HTTP endpoint of their own, which a host may override. */
 export type EndpointProviderId = Extract<

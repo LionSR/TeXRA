@@ -11,12 +11,16 @@ import {
   resolveCredential,
   type SecretsFailed,
 } from './credentials.js';
-import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from './providers.js';
-import type { ApiKeyProviderId } from './providerPlugins.js';
+import { apiKeyEnvName } from './providers.js';
+import {
+  API_KEY_PROVIDER_IDS,
+  findModelProviderPlugin,
+  type ApiKeyProviderId,
+} from './providerPlugins.js';
 
 /** Runtime-checked narrowing for provider strings. */
 export function isApiProvider(provider: string): provider is ApiKeyProviderId {
-  return (API_KEY_PROVIDER_IDS as readonly string[]).includes(provider);
+  return findModelProviderPlugin(provider)?.apiKey === true;
 }
 
 /** Secret storage key for a provider's API key. */
@@ -49,18 +53,6 @@ interface ResolvedApiKey {
    */
   value: Redacted.Redacted<string> | undefined;
   origin: CredentialOrigin;
-}
-
-/**
- * Unwrap a sealed key at the one point it is handed to a foreign runtime: a
- * provider SDK, a subprocess environment, a usage client. Every other caller
- * keeps the `Redacted` value, which renders as `<redacted:provider>` in a log,
- * a trace, or `JSON.stringify`. Named rather than inlined so the places that
- * expose a credential are greppable, and so a caller need not import `effect`
- * to hand a key onward.
- */
-export function exposeApiKey(key: Redacted.Redacted<string>): string {
-  return Redacted.value(key);
 }
 
 /**
@@ -134,6 +126,7 @@ export function loadApiKeyStatusMap(
   ).pipe(
     Effect.map(
       (entries) =>
+        // cast: fromEntries widens keys to string; there is one entry per provider id.
         Object.fromEntries(entries) as Record<ApiKeyProviderId, ApiKeyStatus>,
     ),
   );

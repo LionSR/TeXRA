@@ -5,15 +5,10 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as os from 'node:os';
-import { Effect } from 'effect';
+import { Effect, Redacted } from 'effect';
 
 // Local imports
-import {
-  apiKeyEnvName,
-  exposeApiKey,
-  lookupApiKey,
-  type SecretsFailed,
-} from '@texra-ai/llm';
+import { apiKeyEnvName, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { executeCommand, inheritedEnv } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -209,7 +204,7 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   const secrets = yield* Secrets;
   const managed = yield* lookupApiKey(secrets, 'anthropic');
   if (managed) {
-    env[apiKeyVar] = exposeApiKey(managed);
+    env[apiKeyVar] = Redacted.value(managed);
   }
 
   return env;
