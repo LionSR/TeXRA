@@ -12,8 +12,8 @@ import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import {
-  createOutputState,
   ensureRoundData,
+  type OutputState,
 } from '@texra/agent/output/outputState';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 
@@ -52,7 +52,7 @@ describe('runCompileCheck', () => {
       // before compileLatex2Pdf is ever invoked.
       yield* Effect.promise(() => initLatexPlatform({}));
 
-      const outputState = createOutputState();
+      const outputState: OutputState = { rounds: new Map() };
       ensureRoundData(outputState, 0).outputs = [
         outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
       ];

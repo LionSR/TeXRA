@@ -13,15 +13,11 @@ const MultipleDocumentFileTypeSchema = Schema.Literals([
 ]);
 export type MultipleDocumentFileType =
   (typeof MultipleDocumentFileTypeSchema)['Type'];
-const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.literals;
 
 /** Narrows a broader file-type value to the `MultipleDocumentFileType` set. */
-export function isMultipleDocumentFileType(
-  value: string,
-): value is MultipleDocumentFileType {
-  // cast: widening the literal tuple to strings so `includes` takes any string.
-  return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
-}
+export const isMultipleDocumentFileType = Schema.is(
+  MultipleDocumentFileTypeSchema,
+);
 
 /**
  * Values accepted by the "get/set current editor file" round trip
