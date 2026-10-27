@@ -63,7 +63,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import type { RunControls } from '../RunHandle';
+import type { RunControls, RunHandle } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunEndResult } from '../RunEndResult';
 
@@ -76,11 +76,9 @@ export interface ToolUseStart {
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */
   readonly turns?: ChildRunBoundary<RunEndResult>;
-  /** Host wiring that is live while the loop can accept an interrupt. */
-  readonly attachment?: {
-    attach(controls: RunControls): void;
-    detach(controls: RunControls): void;
-  };
+  /** The run's handle, holding the loop's controls while it can act on
+   *  them. */
+  readonly attachment?: Pick<RunHandle, 'attachControls' | 'detachControls'>;
 }
 
 /** A user message the loop appends itself. */
@@ -180,12 +178,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const attach = (): void => {
     if (live) return;
     live = true;
-    start.attachment?.attach(controls);
+    start.attachment?.attachControls(controls);
   };
   const detach = (): void => {
     if (!live) return;
     live = false;
-    start.attachment?.detach(controls);
+    start.attachment?.detachControls(controls);
   };
 
   // -------------------------------------------------------------- opening
