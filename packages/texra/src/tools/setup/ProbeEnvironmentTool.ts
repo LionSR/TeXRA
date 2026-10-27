@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import * as os from 'node:os';
 import { Effect, Schema } from 'effect';
 
 // Local imports
@@ -17,9 +16,8 @@ import {
   ToolContext,
   withLogChannel,
 } from '@texra-ai/harness';
-import { withExtendedPath } from '@texra-ai/harness/node';
+import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -102,19 +100,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   const secrets = yield* Secrets;
   const { roots } = (yield* ToolContext).env;
 
-  // `os.homedir()` can throw UV_ENOENT in container/remote environments
-  // where the home directory is not resolvable; the report names it
-  // unresolved and the cause is logged, so the probe still answers.
-  const homedir = yield* Effect.try({
-    try: () => os.homedir(),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `The home directory could not be resolved: ${error.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as('<unresolved>')),
-    ),
-  );
+  // Where no home directory resolves (logged by `homeDirectory`), the
+  // report names it unresolved, so the probe still answers.
+  const homedir = (yield* homeDirectory) ?? '<unresolved>';
   const extendedPath = withExtendedPath({ PATH: process.env.PATH }).PATH ?? '';
   const pm = detectPackageManager();
   const hostInfo = yield* nodeHostEnvironment.hostInfo();

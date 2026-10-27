@@ -7,11 +7,13 @@ import * as path from 'node:path';
 import { globSync } from 'glob';
 import { LRUCache } from 'lru-cache';
 import which from 'which';
+import { Effect } from 'effect';
 
 // Local imports
+import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import { normalizeFilePath } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * An existence probe that asserts an absolute path and then asks `node:fs`.
@@ -50,17 +52,28 @@ const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
 const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
 
 /**
- * Safe wrapper around `os.homedir()` that returns `null` instead of throwing.
- * `os.homedir()` can throw a SystemError (UV_ENOENT) in environments where the
- * home directory cannot be determined (containers, CI/CD, some remote setups).
+ * The user's home directory, or `undefined` where none resolves.
+ * `os.homedir()` throws a SystemError (UV_ENOENT) where it cannot be
+ * determined (a uid with no passwd entry and no `HOME`: containers, CI, some
+ * remote setups), and can return an empty string. Every file the caller would
+ * read under the home directory is then skipped, so the failure is logged at
+ * warn rather than read as "no such file".
  */
-export function safeHomedir(): string | null {
-  try {
-    return os.homedir() || null;
-  } catch {
-    return null;
-  }
-}
+export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
+  try: () => os.homedir(),
+  catch: ensureError,
+}).pipe(
+  Effect.filterOrFail(
+    (home) => home !== '',
+    () => new Error('os.homedir() returned an empty string'),
+  ),
+  Effect.catch((error) =>
+    Effect.logWarning(
+      `The home directory could not be resolved; files under it (user settings, skills, ignore rules, logins) are skipped: ${error.message}`,
+    ).pipe(Effect.as(undefined)),
+  ),
+  withLogChannel('platformPaths'),
+);
 
 /**
  * An absolute root read from the environment, or null.
