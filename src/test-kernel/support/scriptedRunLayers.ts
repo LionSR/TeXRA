@@ -9,7 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
+import { ModelInvoker } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';

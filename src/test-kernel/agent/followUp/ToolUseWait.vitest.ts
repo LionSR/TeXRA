@@ -6,7 +6,7 @@ import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';

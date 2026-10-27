@@ -125,8 +125,6 @@ const INTERRUPTED_RETRY_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
-export type { InvokeRequest } from './run/requestContext';
-
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;

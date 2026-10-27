@@ -40,11 +40,8 @@ import {
 
 // Local imports
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import {
-  ModelInvoker,
-  modelInvokerLayer,
-  type InvokeRequest,
-} from '@agent/runtime/ModelInvoker';
+import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
