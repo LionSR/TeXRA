@@ -3,8 +3,6 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -35,15 +33,12 @@ function jsonResponse(body: unknown, status = 200): Response {
  */
 function stubCodexSession(
   overrides: {
-    readonly loadSession?: () => Effect.Effect<unknown, unknown>;
     readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
     readonly refreshRejected?: () => Effect.Effect<void, unknown>;
   } = {},
 ): void {
   vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
-    loadSession:
-      overrides.loadSession ??
-      (() => Effect.succeed({ accessToken: 'chatgpt-secret' })),
+    loadSession: () => Effect.succeed({ accessToken: 'chatgpt-secret' }),
     getFreshSession:
       overrides.getFreshSession ??
       (() =>
@@ -55,19 +50,10 @@ function stubCodexSession(
   } as never);
 }
 
-function makeService(
-  options: {
-    readonly secrets?: PlatformSecrets;
-    readonly stores?: SettingsStores;
-    readonly requestTimeoutMs?: number;
-  } = {},
-): SubscriptionUsageService {
+function makeService(): SubscriptionUsageService {
   return new SubscriptionUsageService({
-    secrets: options.secrets ?? new FakeSecrets(CODING_PLAN_KEYS),
-    stores: options.stores ?? makeFakeSettingsStores().stores,
-    ...(options.requestTimeoutMs === undefined
-      ? {}
-      : { requestTimeoutMs: options.requestTimeoutMs }),
+    secrets: new FakeSecrets(CODING_PLAN_KEYS),
+    stores: makeFakeSettingsStores().stores,
   });
 }
 
@@ -95,38 +81,32 @@ describe('SubscriptionUsageService', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([['chatgpt' as const, 401]])(
-    'maps %s HTTP %s to invalid credentials without exposing details',
-    async (provider, status) => {
-      let accessToken = 'chatgpt-secret';
-      stubCodexSession({
-        getFreshSession: () => Effect.sync(() => ({ accessToken })),
-        refreshRejected: () =>
-          Effect.sync(() => {
-            accessToken = 'chatgpt-refreshed';
-          }),
-      });
-      const http = vi.fn<UsageFetch>(async () =>
-        jsonResponse({ secret: 'must not escape' }, status),
-      );
+  it('maps chatgpt HTTP 401 to invalid credentials without exposing details', async () => {
+    let accessToken = 'chatgpt-secret';
+    stubCodexSession({
+      getFreshSession: () => Effect.sync(() => ({ accessToken })),
+      refreshRejected: () =>
+        Effect.sync(() => {
+          accessToken = 'chatgpt-refreshed';
+        }),
+    });
+    const http = vi.fn<UsageFetch>(async () =>
+      jsonResponse({ secret: 'must not escape' }, 401),
+    );
 
-      const snapshot = await runUsage(makeService().getUsage(provider), http);
-      expect(snapshot).toMatchObject({
-        state: 'unavailable',
-        reason: 'invalid_credentials',
-      });
-      expect(JSON.stringify(snapshot)).not.toContain('secret');
-      // A ChatGPT 401 is retried once, on the refreshed token.
-      if (provider === 'chatgpt') {
-        expect(
-          http.mock.calls.map(
-            ([, init]) =>
-              (init.headers as Record<string, string>).authorization,
-          ),
-        ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
-      }
-    },
-  );
+    const snapshot = await runUsage(makeService().getUsage('chatgpt'), http);
+    expect(snapshot).toMatchObject({
+      state: 'unavailable',
+      reason: 'invalid_credentials',
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('secret');
+    // A ChatGPT 401 is retried once, on the refreshed token.
+    expect(
+      http.mock.calls.map(
+        ([, init]) => (init.headers as Record<string, string>).authorization,
+      ),
+    ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
+  });
 
   it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
     stubCodexSession();

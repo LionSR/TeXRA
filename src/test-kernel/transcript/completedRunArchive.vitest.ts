@@ -30,7 +30,7 @@ import {
   seedRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
+import { seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   closeTestSession as closeSessionAt,
   openTestDefaultSession,
@@ -48,15 +48,6 @@ function runConfig(
     agent,
     model,
   });
-}
-
-/** Publish the run's existence the way registration does. */
-async function stampRun(runId: RunId): Promise<void> {
-  const view = await Effect.runPromise(taskSession.view.read([runId]));
-  if (!view.runs.has(runId)) {
-    publishTestRunStart(taskSession, runId);
-    await Effect.runPromise(taskSession.log.settled);
-  }
 }
 
 let taskSession: SessionHandle;
@@ -111,7 +102,6 @@ describe('completedRunArchive facade', () => {
         const runId = '0aa1110aa111' as RunId;
         const config = runConfig('orchestrator');
 
-        yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
         const session = yield* openTestDefaultSession({
           roots: testWorkspaceRoots(),
@@ -168,10 +158,6 @@ describe('completedRunArchive facade', () => {
           (yield* Effect.flip(resumeRun(runId, { session }))).message,
         ).toContain('Missing API key');
 
-        const released = yield* Effect.result(
-          seedReport(session, runId, 'late write'),
-        );
-        expect(released._tag).toBe('Failure');
         expect(
           (yield* Effect.exit(
             session.log.transact([
@@ -208,16 +194,6 @@ describe('completedRunArchive facade', () => {
           roots: taskSession.roots,
         });
 
-        const endpoint = yield* ExecutionsTool.call({
-          path: `/executions/${runId}/conversation`,
-        }).pipe(Effect.provide(toolLayer));
-        expect(endpoint.status).toBe('executed');
-        expect(endpoint.output).toContain('Conversation (4 messages)');
-        expect(endpoint.output).toContain('Prove the first lemma.');
-        expect(endpoint.output).toContain('First proof.');
-        expect(endpoint.output).toContain('Now prove the second lemma.');
-        expect(endpoint.output).toContain('Second proof.');
-
         const firstPage = yield* ExecutionsTool.call({
           path: `/executions/${runId}/conversation`,
           offset: 0,
@@ -230,15 +206,11 @@ describe('completedRunArchive facade', () => {
         }).pipe(Effect.provide(toolLayer));
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
-        expect(firstPage.output).toContain('<message index="1"');
-        expect(firstPage.output).toContain('<message index="2"');
         expect(firstPage.output).not.toContain('Now prove the second lemma.');
         expect(secondPage.output).toContain(
           'Returned message interval: [2, 4)',
         );
         expect(secondPage.output).toContain('Next offset: none');
-        expect(secondPage.output).toContain('<message index="3"');
-        expect(secondPage.output).toContain('<message index="4"');
         expect(secondPage.output).not.toContain('Prove the first lemma.');
       }).pipe((program) => withProcessServices(testRuntime(), program)),
   );

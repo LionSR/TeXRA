@@ -35,25 +35,6 @@ function run<A, E>(
   return testRuntime().runPromise(program);
 }
 
-/**
- * The preview program the controller runs for a LaTeX proposal, replaced so a
- * test can hand the controller's injected display callback a build it holds
- * open. The override starts that build and completes without awaiting it,
- * which is what the real program's settle race produces: the fiber running it
- * is interrupted and the host build keeps going with nobody holding it.
- */
-const latexPreview = vi.hoisted(() => ({
-  previewProposedLatex: vi.fn(),
-  /** The options each call received, so a test can reuse the callback. */
-  injectedOptions: [] as Array<{ openBuildDisplay: BuildDisplayFn }>,
-}));
-
-vi.mock('@texra/tools/latex/latexPreview', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@texra/tools/latex/latexPreview')>();
-  return { ...actual, previewProposedLatex: latexPreview.previewProposedLatex };
-});
-
 function approvalRequest() {
   return toolEditApprovalRequest({
     path: '/workspace/paper.tex',

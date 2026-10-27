@@ -7,11 +7,7 @@ import { describe } from 'vitest';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  agentKeyOf,
-  agentMatchesIdentifier,
-  parseAgentModePresets,
-} from '@shared/schemas';
+import { agentMatchesIdentifier, parseAgentModePresets } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
@@ -60,51 +56,29 @@ const LEGACY_ICON_PRESET = {
 };
 const MALFORMED_PRESET = { id: 'broken' };
 
-function createController(options?: {
-  agents?: SettingsAgentCatalogEntry[];
-  visible?: SettingsAgentCatalogEntry[];
-  customPresets?: unknown;
-}) {
-  const getAgents = () => options?.agents ?? AGENTS;
+function createController(customPresets: unknown) {
+  const getAgents = () => AGENTS;
   const workspaceState = new FakeStateStore({
-    [WorkspaceStateKey.CUSTOM_TEAMS]: options?.customPresets ?? [],
-    // A `visible` agent list is the user's choice: the custom agents it leaves out
-    // were turned off.
-    ...(options?.visible
-      ? {
-          [WorkspaceStateKey.WORKSPACE_AGENTS]: {
-            kind: 'custom',
-            agentKeys: options.visible.map(agentKeyOf),
-          },
-          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: getAgents()
-            .filter(
-              (entry) =>
-                entry.source === 'custom' && !options.visible?.includes(entry),
-            )
-            .map(agentKeyOf),
-        }
-      : {}),
+    [WorkspaceStateKey.CUSTOM_TEAMS]: customPresets,
   });
   const workspaceAgents = new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
     resolveAgent: (identifier) =>
-      getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),
+      AGENTS.find((entry) => agentMatchesIdentifier(entry, identifier)),
     getPresets: () =>
       workspaceState
         .get(WorkspaceStateKey.CUSTOM_TEAMS)
         .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
-    workspaceAgents,
     controller: new SettingsAgentCatalogController({
       repoState: workspaceState,
       workspaceAgents,
       getAgents,
       newerBuiltInOf: () => undefined,
     }),
-    workspaceState,
     customPresets: workspaceState
       .get(WorkspaceStateKey.CUSTOM_TEAMS)
       .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
@@ -116,9 +90,7 @@ describe('SettingsAgentCatalogController', () => {
     'preserves unrecognized persisted records when saving a preset',
     () =>
       Effect.gen(function* () {
-        const state = createController({
-          customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
-        });
+        const state = createController([LEGACY_ICON_PRESET, MALFORMED_PRESET]);
 
         yield* state.controller.saveCurrentPreset('New Team');
 

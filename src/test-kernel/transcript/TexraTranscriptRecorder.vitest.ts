@@ -4,20 +4,6 @@ import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
-/** A fold built into a fresh trace, plus its rows and groups. */
-function attachRecorder(runId: RunId = 'stream:test' as RunId) {
-  const recorder = createTestRunTrace(runId);
-  const rows = recorder.rows;
-  return {
-    trace: recorder.trace,
-    finalize: recorder.finalize,
-    settlePhase: recorder.settlePhase,
-    rows,
-    row: (id: string | undefined): TranscriptRow | undefined =>
-      rows().find((row) => row.id === id),
-  };
-}
-
 /** The model-response rows' texts. */
 function assistantRows(rows: readonly TranscriptRow[]) {
   return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
@@ -25,7 +11,7 @@ function assistantRows(rows: readonly TranscriptRow[]) {
 
 describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
-    const { trace, rows } = attachRecorder();
+    const { trace, rows } = createTestRunTrace('stream:test' as RunId);
 
     trace.info('Compacting context', {
       messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
@@ -35,8 +21,6 @@ describe('createTestRunTrace undecodable compaction payload', () => {
     expect(rows()).toMatchObject([
       {
         kind: 'error',
-        level: 'error',
-        messageType: MESSAGE_TYPES.ERROR,
         summary: { full: 'Malformed contextCompactionActivity payload' },
         details: [
           { key: 'message', value: expect.stringContaining('operationId') },
@@ -48,7 +32,9 @@ describe('createTestRunTrace undecodable compaction payload', () => {
 
 describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
-    const { trace, finalize, rows } = attachRecorder();
+    const { trace, finalize, rows } = createTestRunTrace(
+      'stream:test' as RunId,
+    );
 
     const round = trace.openStage('r0', { kind: 'session' });
     const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);

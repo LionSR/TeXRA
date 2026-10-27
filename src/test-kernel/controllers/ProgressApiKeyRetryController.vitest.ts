@@ -1,103 +1,52 @@
-import { Redacted, Effect } from 'effect';
-// Third-party imports
 import { it } from '@effect/vitest';
+import { Effect, Redacted } from 'effect';
 import { describe, expect } from 'vitest';
 
-// Local imports
-import type { AppState } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 
-/**
- * `it.effect` for this suite. Every controller entry point reads the process
- * global state through `AppState`; the fake host installed for the test
- * supplies it, so the services are provided per test rather than captured at
- * collection time.
- */
-function itHosted<A, E>(
-  name: string,
-  body: () => Effect.Effect<A, E, AppState>,
-): void {
-  it.effect(name, () => Effect.provide(body(), fakeProcessServices()));
-}
-
-/** The controller's deps are file-local; derive them from its constructor. */
-type ProgressApiKeyRetryControllerDeps = ConstructorParameters<
-  typeof ProgressApiKeyRetryController
->[0];
-
-interface HarnessOptions {
-  keys?: Partial<Record<ApiKeyProviderId, string | undefined>>;
-  prompt?(keys: Map<ApiKeyProviderId, string | undefined>): void;
-  retryPending?: boolean;
-  isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
-}
-
-function createHarness(options: HarnessOptions = {}): {
-  controller: ProgressApiKeyRetryController;
-  keys: Map<ApiKeyProviderId, string | undefined>;
-  prompts: ApiKeyProviderId[];
-  retries: string[];
-} {
-  const keys = new Map<ApiKeyProviderId, string | undefined>(
-    Object.entries(options.keys ?? {}) as Array<
-      [ApiKeyProviderId, string | undefined]
-    >,
-  );
-  const prompts: ApiKeyProviderId[] = [];
-  const retries: string[] = [];
-
-  return {
-    keys,
-    prompts,
-    retries,
-    controller: new ProgressApiKeyRetryController({
-      readKey: (provider) =>
-        Effect.sync(() => {
-          // The fixture keeps plain strings; the port hands out sealed values,
-          // which compare by value so a re-entered identical key reads
-          // unchanged.
-          const key = keys.get(provider);
-          return key === undefined ? undefined : Redacted.make(key);
-        }),
-      hasUsableKey: (provider) =>
-        Effect.sync(() => (keys.get(provider)?.trim().length ?? 0) > 0),
-      promptForApiKey: (provider) =>
-        Effect.sync(() => {
-          prompts.push(provider);
-          options.prompt?.(keys);
-        }),
-      isRetryPending:
-        options.isRetryPending ?? (() => options.retryPending ?? true),
-      triggerRetry: (stream) =>
-        Effect.sync(() => {
-          retries.push(stream);
-        }),
-    }),
-  };
-}
-
 describe('ProgressApiKeyRetryController', () => {
-  itHosted('does not retry when a depleted provider key was not changed', () =>
+  it.effect('does not retry when a depleted provider key was not changed', () =>
     Effect.gen(function* () {
-      const harness = createHarness({
-        keys: { anthropic: 'old-key' },
-        prompt: (keys) => {
-          keys.set('anthropic', 'old-key');
-        },
+      const keys = new Map<ApiKeyProviderId, string>([
+        ['anthropic', 'old-key'],
+      ]);
+      const prompts: ApiKeyProviderId[] = [];
+      const retries: string[] = [];
+      const controller = new ProgressApiKeyRetryController({
+        // The port hands out sealed values, which compare by value so a
+        // re-entered identical key reads unchanged.
+        readKey: (provider) =>
+          Effect.sync(() => {
+            const key = keys.get(provider);
+            return key === undefined ? undefined : Redacted.make(key);
+          }),
+        hasUsableKey: (provider) =>
+          Effect.sync(() => (keys.get(provider)?.trim().length ?? 0) > 0),
+        // The person re-enters the same key.
+        promptForApiKey: (provider) =>
+          Effect.sync(() => {
+            prompts.push(provider);
+            keys.set('anthropic', 'old-key');
+          }),
+        isRetryPending: () => true,
+        triggerRetry: (stream) =>
+          Effect.sync(() => {
+            retries.push(stream);
+          }),
       });
 
-      yield* harness.controller.useOwnApiKey({
+      yield* controller.useOwnApiKey({
         stream: 'stream-a' as RunId,
         requestId: 'retry-a',
         provider: 'anthropic',
         requireNewKey: true,
       });
 
-      expect(harness.prompts).toStrictEqual(['anthropic']);
-      expect(harness.retries).toStrictEqual([]);
-    }),
+      expect(prompts).toStrictEqual(['anthropic']);
+      expect(retries).toStrictEqual([]);
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
 });
