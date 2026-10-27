@@ -3,7 +3,7 @@
  *
  * Applies a discipline team (an agent team) to the current workspace and
  * records it as the user-level default team, so fresh workspaces are seeded
- * with the same agent list (PRD: agent-native onboarding). The discipline-picker
+ * with the same agent list. The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
  * The workspace agents write is the same `WorkspaceAgentsController.applyTeam` the

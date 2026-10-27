@@ -1,5 +1,5 @@
 /**
- * The Surface (PRD one-fold-three-renderers, section 9): every interaction
+ * The Surface: every interaction
  * fact a renderer owns for one view instance and one open session. It is
  * the second of the two records a component reads (`SessionView` is the
  * first) and the only place selection, drafts, expansion, focus, and layout
@@ -347,8 +347,8 @@ function projectSelection(
 }
 
 /**
- * Every per-stream map drops its entry when that stream leaves the view
- * (PRD 9): an id is never reused, so the entry can never become valid
+ * Every per-stream map drops its entry when that stream leaves the view:
+ * an id is never reused, so the entry can never become valid
  * again, and without the prune the maps and the persisted form grow without
  * bound. The selection is decided here once, by `select` (a chat passes its
  * tree scope). Returns the same record when nothing moved.
@@ -441,7 +441,7 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
 /**
  * Every change a component may ask of the surface. The root applies it;
  * a component never mutates the record. `selectNew` and `select` are also
- * host-initiated arms of `surface.action` (PRD 8.5).
+ * host-initiated arms of `surface.action`.
  */
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }

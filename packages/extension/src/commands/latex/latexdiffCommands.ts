@@ -31,8 +31,10 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
-import type { DiffRunResult } from '@latex/latexdiff/types';
-import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
+import {
+  runLatexdiffForRun,
+  type DiffRunResult,
+} from '@latex/latexdiff/diffOperations';
 import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,

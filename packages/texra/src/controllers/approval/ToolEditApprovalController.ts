@@ -4,7 +4,7 @@
  * One controller per session stages the previews of that session's tool-edit
  * requests, so a request can never be settled by another session's
  * controller. The request itself is a `request.opened` row the fold lists
- * and a `request.decide` command answers (one run model, 3.7); what lives
+ * and a `request.decide` command answers; what lives
  * here is the preview the durable payload cannot carry (the original and
  * proposed content the host shows in its diff view) and the verbs over it.
  * Everything a host owns, staging the preview files, opening its diff view,

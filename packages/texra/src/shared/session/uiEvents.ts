@@ -6,7 +6,7 @@
  * the composer's Send: the root resolves what it sends (a follow-up to the
  * selected stream, or a launch) from the surface, so the button and the
  * run accelerator share one decision. The root installs one listener per
- * event; nothing translates in between (PRD 8, identity translation), and
+ * event; nothing translates in between, and
  * a harness that assigns fixtures simply ignores them.
  */
 import type { HostRequest } from '@texra/shared/session/hostRequest';

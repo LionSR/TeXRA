@@ -1,9 +1,13 @@
 /**
- * Format specification and the shared render pipeline.
+ * Format specification and the shared render pipeline of the chat export,
+ * which renders a conversation as Markdown (`./markdownSpec`) or LaTeX
+ * (`./latexSpec`).
  *
  * A FormatSpec is a header template, a footer string, and a node-renderer
  * table. `renderDocument` runs the pandoc-style pipeline:
  *   ExportNode[] → FormatSpec → string
+ * Adding a new node kind means adding one entry per renderer table. The
+ * formatters are host-neutral: all platform wiring lives in the caller.
  */
 
 import type {

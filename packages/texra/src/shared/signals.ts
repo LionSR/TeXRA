@@ -1,21 +1,16 @@
 /**
- * Signal utilities shared across all webview apps.
- *
- * Re-exports from @lit-labs/signals and provides helpers
- * for extracting fields from monolithic signals.
+ * Signal helpers shared across the webview apps and the terminal client,
+ * over @lit-labs/signals.
  */
 
-import { SignalWatcher, signal, Signal } from '@lit-labs/signals';
+import { signal, Signal } from '@lit-labs/signals';
 import { Effect, Fiber, Stream, type ManagedRuntime } from 'effect';
-
-export { SignalWatcher, Signal };
 
 /** A signal fed by an Effect stream, with the fiber's interrupt. */
 export type StreamSignal<A> = Signal.State<A> & { dispose: () => void };
 
 /**
- * The one meeting point between Effect and the components (PRD
- * one-fold-three-renderers, 7.5): a stream drained into a signal on the
+ * The one meeting point between Effect and the components: a stream drained into a signal on the
  * given runtime, coalesced here by taking the last element of each drained
  * array. Components are `SignalWatcher`s; nothing else of Effect reaches
  * them. `dispose` interrupts the drain.

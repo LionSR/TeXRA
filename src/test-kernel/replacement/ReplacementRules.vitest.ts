@@ -3,7 +3,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import replacementEngine, { applyReplacements } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
@@ -11,13 +11,21 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 // fencedLatexBlocksRegex
 // ---------------------------------------------------------------------------
 
+/** The fenced-block rule set alone, applied as the engine applies a regex set. */
+function applyFencedBlocks(text: string): string {
+  const { patterns, flags } = FENCED_LATEX_BLOCK_REPLACEMENTS;
+  return Object.entries(patterns).reduce((current, [pattern, replacement]) => {
+    const regex = new RegExp(pattern, flags);
+    return typeof replacement === 'string'
+      ? current.replace(regex, replacement)
+      : current.replace(regex, replacement);
+  }, text);
+}
+
 describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
   it('preserves CRLF line endings', () => {
     assert.strictEqual(
-      applyReplacements(
-        '::: align*\r\n&= a + b\\\\\r\n:::\r\n',
-        FENCED_LATEX_BLOCK_REPLACEMENTS,
-      ).text,
+      applyFencedBlocks('::: align*\r\n&= a + b\\\\\r\n:::\r\n'),
       '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n',
     );
   });
@@ -27,11 +35,8 @@ describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
 &= 0
 :::
 `;
-    const once = applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS).text;
-    assert.strictEqual(
-      applyReplacements(once, FENCED_LATEX_BLOCK_REPLACEMENTS).text,
-      once,
-    );
+    const once = applyFencedBlocks(input);
+    assert.strictEqual(applyFencedBlocks(once), once);
   });
 });
 

@@ -311,7 +311,7 @@ function getCompiledRegex(pattern: string, flags?: string): RegExp {
 /**
  * Apply replacements to text, handling both regex and non-regex patterns.
  */
-export function applyReplacements(
+function applyReplacements(
   text: string,
   replacements: ReplacementRuleSet | ReplacementRuleSet[],
   options?: {

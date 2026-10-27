@@ -3,7 +3,7 @@
 //
 // The factory takes a highlight hook and an optional `configure` hook. Math
 // is wired by the caller through a `usePlugin` callback (see
-// `createTexmathPlugin`) so non-math hosts — the CLI TUI in particular —
+// `katexHtmlProcessor`) so non-math hosts — the CLI TUI in particular —
 // don't pull `markdown-it-texmath` into their bundle.
 
 import MarkdownIt from 'markdown-it';

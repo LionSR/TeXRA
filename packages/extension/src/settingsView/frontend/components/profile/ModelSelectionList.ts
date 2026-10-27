@@ -15,8 +15,8 @@ import { postMessage } from '@texra/shared/hostBridge';
 import {
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
-  type ProviderKeyStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import {
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,

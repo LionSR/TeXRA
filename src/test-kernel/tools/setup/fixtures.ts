@@ -14,7 +14,7 @@ import {
 export const withSetup = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | SetupPlatform, E, R> =>
-  Layer.merge(layer, SetupPlatform.layer(fakeSetupPlatform));
+  Layer.merge(layer, Layer.succeed(SetupPlatform)(fakeSetupPlatform));
 
 /**
  * Build a fully stubbed host-varying setup platform for tool unit tests.

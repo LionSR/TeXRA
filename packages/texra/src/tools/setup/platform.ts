@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Context, Effect, Layer, Schema } from 'effect';
+import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
@@ -110,11 +110,7 @@ export interface SetupPlatformShape {
 export class SetupPlatform extends Context.Service<
   SetupPlatform,
   SetupPlatformShape
->()('@texra/setup/SetupPlatform') {
-  static layer(setup: SetupPlatformShape): Layer.Layer<SetupPlatform> {
-    return Layer.succeed(SetupPlatform)(setup);
-  }
-}
+>()('@texra/setup/SetupPlatform') {}
 
 /**
  * Fail with a uniform, sorted-allowlist error when `id` is not a member of

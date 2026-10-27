@@ -1,7 +1,32 @@
 import { Effect } from 'effect';
 
-// Local imports - utilities
-import { looksLikeCredentialPlaceholder } from '@texra/utils/text/credentialPlaceholder';
+const PROVIDER_PLACEHOLDER_PATTERNS: readonly RegExp[] = [
+  /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,
+  /^(?:api[- _]?)?key[- _]?here$/i,
+  /^placeholder$/i,
+  /^example$/i,
+];
+
+const GITHUB_PLACEHOLDER_PATTERNS: readonly RegExp[] = [
+  /^(?:(?:gh[pousr]_|github_pat_)|sk-?)?(?:x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?.*)/i,
+  /^\[.*(?:redacted|github[- _]?token).*\]/i,
+  /^(?:(?:api|github)[- _]?)?(?:key|token)[- _]?here$/i,
+  /^placeholder$/i,
+  /^example$/i,
+];
+
+/** Reject common masked/example values before they enter the secret store. */
+function looksLikeCredentialPlaceholder(
+  value: string,
+  kind: 'provider' | 'github',
+): boolean {
+  if (value.length < 8) return true;
+  const patterns =
+    kind === 'github'
+      ? GITHUB_PLACEHOLDER_PATTERNS
+      : PROVIDER_PLACEHOLDER_PATTERNS;
+  return patterns.some((pattern) => pattern.test(value));
+}
 
 /**
  * The one member of the credential store this needs, generic over whatever
