@@ -135,7 +135,7 @@ each server with the agents that use it):
 ```
 
 A server name uses letters, digits, `_` and `-` (at most 32 characters, no
-`__`). Only stdio servers (a `command` TeXRA starts) are supported. An entry
+`__`, and not ending in `_`). Only stdio servers (a `command` TeXRA starts) are supported. An entry
 that does not match this shape is skipped, and a run that asks for MCP tools
 shows why in its transcript.
 

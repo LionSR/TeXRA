@@ -236,4 +236,27 @@ describe('MCP server plugins', () => {
       expect(warnings).toEqual([`${file} is not valid JSON: Unexpected token`]);
     }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
   );
+
+  // Tool names split at the first `__`, so `mcp__foo___echo` reads as server
+  // `foo`: a trailing `_` is refused with a warning, never dropped quietly.
+  it.live('skips a server whose name ends in "_" with a warning', () =>
+    Effect.gen(function* () {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      const file = path.join(dir, 'mcp.json');
+      writeFileSync(file, '{"mcpServers": {"foo_": {"command": "x"}}}');
+      const fs = yield* FileSystem.FileSystem;
+      const { plugins, warnings } = yield* mcpPluginLoader(
+        fs,
+        file,
+        TEST_REVISION_KEY,
+      )(['mcp__foo___*']);
+      expect(plugins).toEqual([]);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('MCP server "foo_"');
+      expect(warnings[0]).toContain('must not end in "_"');
+    }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
+  );
 });
