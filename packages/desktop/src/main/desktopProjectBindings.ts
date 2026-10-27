@@ -62,7 +62,7 @@ import type {
 } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
 
-export interface ProjectBinding {
+interface ProjectBinding {
   readonly project: DesktopProject;
   readonly bridge: SessionBridge;
   /** This window's port on the project's bridge. */
@@ -99,7 +99,7 @@ export interface ProjectBindings {
   readonly workspaceRoute: DesktopCommandRoute;
 }
 
-export interface ProjectBindingsOptions {
+interface ProjectBindingsOptions {
   readonly host: DesktopWindowHost;
   readonly runtime: ProcessRuntime;
   readonly projects: DesktopProjectRegistry;

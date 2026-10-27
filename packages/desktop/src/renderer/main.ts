@@ -30,7 +30,10 @@ import {
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
 
-import { formatDesktopAccelerator } from '@texra/shared/commands/accelerators';
+import {
+  formatDesktopAccelerator,
+  type DesktopPlatform,
+} from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
@@ -69,7 +72,6 @@ import {
   resolveDesktopPushes,
   resolveSessionWire,
 } from '../shared/hostBridgeChannels';
-import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import {
   createDesktopSettingsDialog,
@@ -225,7 +227,14 @@ function finishProjectRename(key: string, name: string | null): void {
     project.updateState({ ...project.getState(), projectName: name.trim() });
   rerenderShell();
 }
-const rendererPlatform = getRendererPlatform(document.defaultView);
+// The renderer has no Node types by design, so the platform is read from the
+// navigator, and an inconclusive one takes the non-mac branch.
+const rendererPlatform = ((): DesktopPlatform => {
+  const platform = window.navigator.platform.toLowerCase();
+  if (platform.includes('mac')) return 'darwin';
+  if (platform.includes('win')) return 'win32';
+  return 'linux';
+})();
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
 const shortcutAcceleratorsById = new Map<string, string | undefined>(

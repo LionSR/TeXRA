@@ -216,7 +216,6 @@ export function createDesktopWindowHost(options: {
     reported,
     reportBackgroundError,
     openExternalProgram,
-    openExternalInBackground,
     showDiscardDialog: () =>
       dialog.showMessageBoxSync(window, {
         type: 'warning',

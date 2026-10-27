@@ -15,7 +15,12 @@ import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
 import { resolveXtermTheme } from '@ui/wa/xtermTheme';
 
-import { getDesktopChromeFontSize } from './desktopTypography';
+/** xterm takes a numeric font size: the desktop chrome's computed size, so
+ *  the terminal follows the CSS type scale instead of a separate number. */
+function chromeFontSize(): number {
+  const fontSize = Number.parseFloat(getComputedStyle(document.body).fontSize);
+  return Number.isFinite(fontSize) && fontSize > 0 ? fontSize : 14;
+}
 
 interface TerminalPaneCallbacks {
   /** Requests a pty for `sessionId` at the measured geometry. */
@@ -90,7 +95,7 @@ export function createTerminalPane(
       convertEol: false,
       cursorBlink: true,
       fontFamily,
-      fontSize: getDesktopChromeFontSize(),
+      fontSize: chromeFontSize(),
       // Build logs and test output are long; a shallow buffer would discard the
       // beginning of exactly the runs users need to read.
       scrollback: 10_000,
