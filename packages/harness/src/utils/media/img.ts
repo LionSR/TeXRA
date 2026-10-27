@@ -291,16 +291,15 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
   const pages = yield* Effect.acquireUseRelease(
     fs.makeTempDirectory({ prefix: 'texra-pdf-conversion-' }),
     (tempDir) =>
-      Effect.gen(function* () {
-        const base64Images: string[] = [];
-        const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
-        for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-          base64Images.push(
-            yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
-          );
-        }
-        return base64Images;
-      }),
+      // Each page writes its own file, so a few convert at once, in order.
+      Effect.forEach(
+        Array.from(
+          { length: Math.min(pageCount, PDF_MAX_PAGES) },
+          (_, index) => index + 1,
+        ),
+        (pageNum) => singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
+        { concurrency: 4 },
+      ),
     (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
   );
   return { pages, pageCount };

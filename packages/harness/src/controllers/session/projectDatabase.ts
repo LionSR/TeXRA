@@ -86,12 +86,14 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           return;
         }
         let bytes = 0;
-        for (const name of yield* fs.readDirectory(directory, {
-          recursive: true,
-        })) {
-          const info = yield* fs.stat(path.join(directory, name));
-          if (info.type === 'File') bytes += Number(info.size);
-        }
+        yield* Effect.forEach(
+          yield* fs.readDirectory(directory, { recursive: true }),
+          (name) =>
+            Effect.map(fs.stat(path.join(directory, name)), (info) => {
+              if (info.type === 'File') bytes += Number(info.size);
+            }),
+          { concurrency: 16, discard: true },
+        );
         // A store whose database is not SQLite is still an orphan.
         const unreadable =
           (yield* fs.exists(database)) &&

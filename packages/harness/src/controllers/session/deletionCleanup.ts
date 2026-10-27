@@ -88,7 +88,7 @@ const removeRunDirectories = (
         }
         return fs.remove(target, { recursive: true, force: true });
       },
-      { discard: true },
+      { concurrency: 4, discard: true },
     );
   }).pipe(
     Effect.uninterruptible,

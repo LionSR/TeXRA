@@ -410,30 +410,30 @@ const openSession = (open: SessionHandleInit) =>
     return Context.get(context, Session);
   }).pipe(Effect.scoped, withPerKeyLane(rootLanes, open.roots.storage));
 
-/** Every session the map holds, entries still building waited for within the
- *  close budget; one released, or opening past the budget, is skipped. */
+/** Every session the map holds, entries still building waited for at once
+ *  within the close budget; one released, or opening past it, is skipped. */
 const listSessions = Effect.gen(function* () {
   const sessions = yield* SessionMap;
-  const keys = yield* RcMap.keys(sessions.rcMap);
-  const held: SessionHandle[] = [];
-  for (const key of keys) {
-    const entry = yield* sessions.contextEffectOption(key).pipe(
-      Effect.scoped,
-      Effect.catch(unopenedEntry(key)),
-      // A store that will not open must not hold a shutdown: past the
-      // close budget the entry is skipped, said once, and released with
-      // the map.
-      Effect.timeoutOrElse({
-        duration: SESSION_CLOSE_DEADLINE_MS,
-        orElse: () =>
-          Effect.logWarning(
-            `Session ${key.storage} was still opening past the close budget; it is skipped here and released with the process.`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(Option.none())),
-      }),
-    );
-    if (Option.isSome(entry)) held.push(Context.get(entry.value, Session));
-  }
-  return held;
+  const entries = yield* Effect.forEach(
+    yield* RcMap.keys(sessions.rcMap),
+    (key) =>
+      sessions.contextEffectOption(key).pipe(
+        Effect.scoped,
+        Effect.catch(unopenedEntry(key)),
+        // A store that will not open must not hold a shutdown: past the
+        // close budget the entry is skipped, said once, and released with
+        // the map.
+        Effect.timeoutOrElse({
+          duration: SESSION_CLOSE_DEADLINE_MS,
+          orElse: () =>
+            Effect.logWarning(
+              `Session ${key.storage} was still opening past the close budget; it is skipped here and released with the process.`,
+            ).pipe(withLogChannel(CHANNEL), Effect.as(Option.none())),
+        }),
+      ),
+    { concurrency: 'unbounded' },
+  );
+  return entries.flatMap(Option.toArray).map((c) => Context.get(c, Session));
 });
 
 /** An entry whose build failed holds no session: its opener fails with the

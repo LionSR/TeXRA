@@ -119,8 +119,10 @@ export const freeName = Effect.fnUntraced(function* (base: string) {
   const fs = yield* FileSystem.FileSystem;
   for (let n = 1; ; n += 1) {
     const name = n === 1 ? base : `${base}.${n}`;
-    const taken = yield* Effect.forEach(['', '-wal', '-shm'], (suffix) =>
-      fs.exists(`${name}${suffix}`),
+    const taken = yield* Effect.forEach(
+      ['', '-wal', '-shm'],
+      (suffix) => fs.exists(`${name}${suffix}`),
+      { concurrency: 'unbounded' },
     );
     if (!taken.some(Boolean)) return name;
   }
@@ -182,17 +184,22 @@ const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
 /** The aside copies beside the store at `filename`, with their sizes. */
 export const asideCopies = Effect.fnUntraced(function* (filename: string) {
   const fs = yield* FileSystem.FileSystem;
-  const copies: { path: string; bytes: number }[] = [];
-  for (const name of yield* fs.readDirectory(dirname(filename))) {
-    if (
-      !name.startsWith(basename(filename)) ||
-      !ASIDE.test(name.slice(basename(filename).length))
-    )
-      continue;
-    const path = join(dirname(filename), name);
-    copies.push({ path, bytes: Number((yield* fs.stat(path)).size) });
-  }
-  return copies;
+  const names = (yield* fs.readDirectory(dirname(filename))).filter(
+    (name) =>
+      name.startsWith(basename(filename)) &&
+      ASIDE.test(name.slice(basename(filename).length)),
+  );
+  return yield* Effect.forEach(
+    names,
+    (name) => {
+      const path = join(dirname(filename), name);
+      return Effect.map(fs.stat(path), (info) => ({
+        path,
+        bytes: Number(info.size),
+      }));
+    },
+    { concurrency: 'unbounded' },
+  );
 });
 
 /** Whether `cause` carries a SQLite primary result code among `codes`, as a

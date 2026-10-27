@@ -243,6 +243,7 @@ export function listPlugins(env: PluginEnv) {
           const counts = yield* Effect.forEach(
             plugin.skills.map((skill) => path.join(record.path, skill)),
             countSkills,
+            { concurrency: 'unbounded' },
           );
           return {
             ...record,
@@ -275,6 +276,7 @@ export function listPlugins(env: PluginEnv) {
             } satisfies PluginListing),
           ),
         ),
+      { concurrency: 4 },
     );
   });
 }
@@ -323,13 +325,22 @@ export function readInstalledPluginLoad(
     const withheld: string[] = [];
     if (enabled.length === 0) return { loadable, withheld };
     const envKey = yield* envKeyOf(stores);
-    for (const record of enabled) {
-      const read = yield* Effect.result(
-        Effect.gen(function* () {
-          const plugin = yield* rereadPlugin(record);
-          return { plugin, key: yield* trustKey(record, plugin, envKey) };
-        }),
-      );
+    // Each plugin is read and digested at once, then judged in order.
+    const reads = yield* Effect.forEach(
+      enabled,
+      (record) =>
+        Effect.map(
+          Effect.result(
+            Effect.gen(function* () {
+              const plugin = yield* rereadPlugin(record);
+              return { plugin, key: yield* trustKey(record, plugin, envKey) };
+            }),
+          ),
+          (read) => ({ record, read }),
+        ),
+      { concurrency: 4 },
+    );
+    for (const { record, read } of reads) {
       if (Result.isFailure(read)) {
         withheld.push(
           `Plugin ${record.name} is not loaded: ${read.failure.message}`,
