@@ -29,8 +29,6 @@ import {
 } from './storedTurn';
 import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 
-/* ------------------------------------------------------------------ ids */
-
 const RunFamilySchema = Schema.Literals(['toolUse']);
 /** The loop a `run.position` row belongs to: `toolUse`, the one run program. */
 export type RunFamily = typeof RunFamilySchema.Type;
@@ -71,7 +69,7 @@ const FailedNextSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('unchain') }),
   Schema.Struct({
     kind: Schema.Literal('ask'),
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
   Schema.Struct({ kind: Schema.Literal('cancel') }),
@@ -81,9 +79,7 @@ export type FailedNext = typeof FailedNextSchema.Type;
 
 /** The canonical call key: `providerCallId`, never null, so a completed
  *  turn cannot carry a call without an identity. */
-const CallIdSchema = Schema.String.check(Schema.isMinLength(1));
-
-/* ---------------------------------------------------------- run.position */
+const CallIdSchema = Schema.NonEmptyString;
 
 const PositionAtSchema = Schema.Literals([
   'turn.ready',
@@ -117,8 +113,6 @@ export const RunPositionPayloadSchema = Schema.Struct({
   }),
 );
 
-/* ---------------------------------------------------------- model.message */
-
 /**
  * Per-call dispatch facts, stamped at append time so the fold and the resume
  * rule stay data-only and need no tool registry. One entry per local-call
@@ -126,7 +120,7 @@ export const RunPositionPayloadSchema = Schema.Struct({
  */
 const DispatchFactsSchema = Schema.Struct({
   callId: CallIdSchema,
-  toolName: Schema.String.check(Schema.isMinLength(1)),
+  toolName: Schema.NonEmptyString,
   lane: Schema.Literals(['parallel', 'barrier', 'own']),
   /** The tool's replay declaration when the call was committed: a resume
    *  re-runs an unfinished call unasked only when this and the tool's
@@ -138,7 +132,7 @@ const DispatchFactsSchema = Schema.Struct({
   /** The call's card id, minted with the response: a slow tool's card opens
    *  under it before the call runs, a fast tool's opens and closes with the
    *  settlement, and a resumed settlement closes the same card. */
-  logId: Schema.String.check(Schema.isMinLength(1)),
+  logId: Schema.NonEmptyString,
 });
 /** The decoded dispatch facts of one call, as a `response` row lists them. */
 export type DispatchFacts = typeof DispatchFactsSchema.Type;
@@ -165,7 +159,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('identified'),
     invocation: InvocationRefSchema,
-    providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+    providerResponseId: Schema.NonEmptyString,
   }),
   /** The attempt failed: what went wrong, in the runtime's own failure
    *  vocabulary (deliberately not the llm package's `ModelError`), and what
@@ -219,7 +213,54 @@ export const ModelMessagePayloadSchema = Schema.Union([
      * The rows are the only carrier.
      */
     usage: Schema.NullOr(NormalizedUsageSchema),
-  }),
+  }).check(
+    Schema.makeFilter((p) => {
+      const local = p.turn.content.filter((part) => part.kind === 'local-call');
+      if (local.length !== p.calls.length) {
+        return {
+          path: ['calls'],
+          issue:
+            'Every local call of the response has exactly one dispatch fact.',
+        };
+      }
+      const issues: Schema.FilterIssue[] = [];
+      const ids = new Set(p.calls.map((c) => c.callId));
+      // A duplicate has a primary to reuse, so it names a call that precedes it
+      // and is not itself a duplicate. Membership in `ids` alone would admit a
+      // call naming itself, which can never settle.
+      const earlierPrimaries = new Set<string>();
+      p.calls.forEach((call, index) => {
+        // Order, identity and tool: a fact that names another tool than the
+        // part it stands for is the one the resume rule would dispatch, so the
+        // provider's requested tool is bound here, not only its call id.
+        if (
+          call.callId !== local[index]?.providerCallId ||
+          call.toolName !== local[index]?.name
+        ) {
+          issues.push({
+            path: ['calls', index],
+            issue:
+              'Dispatch facts follow the response call order, identity and tool.',
+          });
+        }
+        if (
+          call.duplicateOf != null &&
+          !earlierPrimaries.has(call.duplicateOf)
+        ) {
+          issues.push({
+            path: ['calls', index, 'duplicateOf'],
+            issue:
+              'A duplicate names an earlier non-duplicate call of this same response.',
+          });
+        }
+        if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
+      });
+      if (ids.size !== p.calls.length) {
+        issues.push({ path: ['calls'], issue: 'Duplicate call id.' });
+      }
+      return issues;
+    }),
+  ),
   /** The call the app hands a script's run: no model, attempt or usage. */
   Schema.Struct({
     kind: Schema.Literal('handed-down'),
@@ -250,54 +291,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
       Schema.NullOr(Schema.Literals(['blank-continuation', 'final-tool'])),
     ),
   }),
-]).check(
-  Schema.makeFilter((p) => {
-    if (p.kind !== 'response') return;
-    const local = p.turn.content.filter((part) => part.kind === 'local-call');
-    if (local.length !== p.calls.length) {
-      return {
-        path: ['calls'],
-        issue:
-          'Every local call of the response has exactly one dispatch fact.',
-      };
-    }
-    const issues: Schema.FilterIssue[] = [];
-    const ids = new Set(p.calls.map((c) => c.callId));
-    // A duplicate has a primary to reuse, so it names a call that precedes it
-    // and is not itself a duplicate. Membership in `ids` alone would admit a
-    // call naming itself, which can never settle.
-    const earlierPrimaries = new Set<string>();
-    p.calls.forEach((call, index) => {
-      // Order, identity and tool: a fact that names another tool than the
-      // part it stands for is the one the resume rule would dispatch, so the
-      // provider's requested tool is bound here, not only its call id.
-      if (
-        call.callId !== local[index]?.providerCallId ||
-        call.toolName !== local[index]?.name
-      ) {
-        issues.push({
-          path: ['calls', index],
-          issue:
-            'Dispatch facts follow the response call order, identity and tool.',
-        });
-      }
-      if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
-        issues.push({
-          path: ['calls', index, 'duplicateOf'],
-          issue:
-            'A duplicate names an earlier non-duplicate call of this same response.',
-        });
-      }
-      if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
-    });
-    if (ids.size !== p.calls.length) {
-      issues.push({ path: ['calls'], issue: 'Duplicate call id.' });
-    }
-    return issues;
-  }),
-);
-
-/* ----------------------------------------------------------- context.edit */
+]);
 
 /**
  * The one row that edits the model's view of the run other than by
@@ -325,24 +319,19 @@ export const ContextEditPayloadSchema = Schema.Struct({
   messages: Schema.Array(StoredMessageSchema),
   usage: Schema.NullOr(NormalizedUsageSchema),
   input: Schema.optional(Schema.NullOr(RunInputSchema)),
-})
-  .check(
-    Schema.makeFilter(({ range }) => range.from <= range.to, {
-      path: ['range'],
-      message: 'An edit range ends before it starts.',
-    }),
-  )
-  .check(
-    Schema.makeFilter(
-      ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
-      {
-        path: ['trigger'],
-        message: 'A compaction names its trigger, and no other cause has one.',
-      },
-    ),
-  );
-
-/* ------------------------------------------------------------ script.call */
+}).check(
+  Schema.makeFilter(({ range }) => range.from <= range.to, {
+    path: ['range'],
+    message: 'An edit range ends before it starts.',
+  }),
+  Schema.makeFilter(
+    ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
+    {
+      path: ['trigger'],
+      message: 'A compaction names its trigger, and no other cause has one.',
+    },
+  ),
+);
 
 /**
  * One call a `script` call's guest issued: its arguments, which no response
@@ -357,13 +346,13 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   /** `<scriptCallId>/<seq>`. */
   callId: CallIdSchema,
-  toolName: Schema.String.check(Schema.isMinLength(1)),
+  toolName: Schema.NonEmptyString,
   input: JsonValueSchema,
   /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
   replay: Schema.Literals(['safe', 'unsafe']),
-  logId: Schema.String.check(Schema.isMinLength(1)),
+  logId: Schema.NonEmptyString,
   /** The script's stage, which its calls' cards open under. */
-  stageId: Schema.String.check(Schema.isMinLength(1)),
+  stageId: Schema.NonEmptyString,
   /** The guest's latest `phase()` title when it issued the call. */
   phase: Schema.NullOr(Schema.String),
 }).check(
@@ -373,8 +362,6 @@ export const ScriptCallPayloadSchema = Schema.Struct({
 );
 /** The decoded shape of {@link ScriptCallPayloadSchema}. */
 export type ScriptCallPayload = typeof ScriptCallPayloadSchema.Type;
-
-/* ------------------------------------------------------------ tool.intent */
 
 /** What issued the call whose body an intent starts: a response's dispatch
  *  facts, or the guest of one of its `script` calls (`script.call`). */
@@ -397,8 +384,6 @@ export const ToolIntentPayloadSchema = Schema.Struct({
    *  earlier approval never authorizes another attempt implicitly. */
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
 });
-
-/* ------------------------------------------------------------ tool.result */
 
 /**
  * One call's settlement: what it returned and the attachments captured with

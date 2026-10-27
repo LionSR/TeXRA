@@ -149,7 +149,7 @@ const RunParentSchema = Schema.Struct({
   /** The parent's tool call that launched this run (an `agent` call's
    *  child, a background `script` run), which owns it until it detaches;
    *  null for a child no call launched. */
-  callId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  callId: Schema.NullOr(Schema.NonEmptyString),
 });
 /** The decoded parent edge of a `run.start` row: the launching run, its
  *  incarnation, and the tool call that launched the child. */
@@ -197,9 +197,7 @@ const RunStartEventSchema = durable('run.start', {
   /** The parent's tool card (its `logId`) whose call launched this run: an
    *  `agent` call's child, a `script` call's background run. Absent for a
    *  root and for a child no card launched. */
-  parentCard: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
+  parentCard: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
   /** The run's approval policy at launch, from the session's single authority. */
   approvalPolicy: Schema.optional(Schema.NullOr(ApprovalPolicySnapshotSchema)),
 });
@@ -226,8 +224,8 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.mapFields(
  *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
  *  under its `parent` run (whose deletion collects it) or none. */
 export const PluginFactDraftSchema = durable('plugin.fact', {
-  plugin: Schema.String.check(Schema.isMinLength(1)),
-  kind: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
+  kind: Schema.NonEmptyString,
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -251,7 +249,7 @@ const DisplayRowDraftSchema = Schema.Union([
     config: RunRecordFieldsSchema,
     binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
-  durable('run.model', { model: Schema.String.check(Schema.isMinLength(1)) }), // projected (`projections.ts`), never stored
+  durable('run.model', { model: Schema.NonEmptyString }), // projected (`projections.ts`), never stored
   /** The parent edge severed by a stop that detaches the run: the only
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
@@ -278,7 +276,7 @@ const DisplayRowDraftSchema = Schema.Union([
   durable('child.park', {
     phase: Schema.Literals(['parked', 'resumed', 'paused']),
     resumeId: Schema.optional(Schema.String),
-    heldFor: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    heldFor: Schema.optional(Schema.NonEmptyString),
     ends: Schema.optional(Schema.Literals(['completed', 'failed'])),
   }),
   /** A run's title, and who gave it: the model's summary, or the user's
@@ -292,7 +290,7 @@ const DisplayRowDraftSchema = Schema.Union([
    *  a crash loses nothing; `followUpId` is the producer's delivery id or
    *  minted. Pending is queued without consumed. */
   durable('followup.queued', {
-    followUpId: Schema.String.check(Schema.isMinLength(1)),
+    followUpId: Schema.NonEmptyString,
     content: FollowUpContentSchema,
     /** When the row may be read; the rules are `readableMessages`. */
     holdUntil: Schema.optional(
@@ -304,7 +302,7 @@ const DisplayRowDraftSchema = Schema.Union([
         Schema.Struct({ kind: Schema.Literal('compact') }),
         Schema.Struct({
           kind: Schema.Literal('model'),
-          model: Schema.String.check(Schema.isMinLength(1)),
+          model: Schema.NonEmptyString,
         }),
       ]),
     ),
@@ -312,14 +310,14 @@ const DisplayRowDraftSchema = Schema.Union([
   /** The follow-up became the message a turn carries, in that
    *  message's batch: never delivered twice. */
   durable('followup.consumed', {
-    followUpId: Schema.String.check(Schema.isMinLength(1)),
+    followUpId: Schema.NonEmptyString,
   }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows,
    * never host handles. Pending is opened without decided.
    */
   durable('request.opened', {
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     payload: PermissionPayloadSchema,
   }),
   /**
@@ -329,7 +327,7 @@ const DisplayRowDraftSchema = Schema.Union([
    * alone, and an automatic close names its cause here.
    */
   durable('request.decided', {
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
@@ -381,7 +379,7 @@ const RunHistoryEventDraftSchema = Schema.Union([
    * parent's `followup.queued` commits in the same transaction.
    */
   durable('child.turn', {
-    attemptId: Schema.String.check(Schema.isMinLength(1)),
+    attemptId: Schema.NonEmptyString,
     turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
     phase: Schema.Literals(['accepted', 'settled']),
   }),
@@ -478,60 +476,40 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
 }
 
 /**
- * The listing types the fold keys `latest` by: every durable arm
- * but the transcript tier. The request pair shares one entry because it
- * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
- * shares one because it folds to one existence: a tombstone's commit then
- * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read. `run.position` is a
- * listing key of its own: the phase is folded from it, so a cold listing
- * that dropped it would paint every parked run as ready. `stage.start` is
- * transcript tier alone: its display arm is a no-op and only the transcript
- * fold reads it over the whole aggregate, so listing it would pull the latest
- * one of every run into every renderer for no reader.
- *
- * `run.fact` and `plugin.fact` hold several families on one type, so they
- * are read grouped by family as well (`listingKeyOf`, `Database`).
+ * The types the listing never keys: the transcript tier, read by the
+ * transcript fold over the whole aggregate (`stage.start` included, whose
+ * display arm is a no-op), and the run history, whose private rows a cold
+ * hydrate never pulls into a renderer. `context.state` is the exception:
+ * its newest row is a listing row, as `run.position` (a display row the
+ * phase is folded from) is. The fold suite pins the set.
  */
+const UNLISTED_TYPES: ReadonlySet<string> = new Set(
+  [...TranscriptEventSchema.members, ...RunHistoryEventDraftSchema.members]
+    .map((schema) => schema.fields.type.literal)
+    .filter((type) => type !== 'context.state'),
+);
+
+/** Pairs that fold to one thing share one listing type: the request pair
+ *  to one set, the follow-up pair likewise, and the lifecycle pair to one
+ *  existence, so a tombstone's commit outranks a replayed `run.start`
+ *  below it, which is what makes the tombstone final under every read. */
+const PAIRED_LISTING_TYPES: Readonly<Record<string, string>> = {
+  'request.opened': 'request',
+  'request.decided': 'request',
+  'followup.queued': 'followup',
+  'followup.consumed': 'followup',
+  'run.start': 'lifecycle',
+  'run.removed': 'lifecycle',
+};
+
+/** The listing type the fold keys `latest` by, or null for an unlisted
+ *  arm. `run.fact` and `plugin.fact` hold several families on one type, so
+ *  they are read grouped by family as well (`listingKeyOf`, `Database`). */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
 ): string | null {
-  switch (event.type) {
-    case 'log':
-    case 'stage.start':
-    case 'stage.end':
-    case 'tool.start':
-    case 'tool.end':
-    case 'stream.start':
-    case 'stream.end':
-    case 'response.finalized':
-    case 'usage':
-    case 'model.message':
-    case 'context.edit':
-    case 'tool.intent':
-    case 'script.call':
-    case 'tool.result':
-    case 'tools.offered':
-    case 'context.blob':
-    case 'hook.outcome':
-    case 'child.turn':
-      // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
-      // rows stay out: a cold hydrate never pulls one into every
-      // renderer (`run.position` is a listing row). Keyed
-      // records fold whole; the fold suite pins this list.
-      return null;
-    case 'request.opened':
-    case 'request.decided':
-      return 'request';
-    case 'followup.queued':
-    case 'followup.consumed':
-      return 'followup';
-    case 'run.start':
-    case 'run.removed':
-      return 'lifecycle';
-    default:
-      return event.type;
-  }
+  if (UNLISTED_TYPES.has(event.type)) return null;
+  return PAIRED_LISTING_TYPES[event.type] ?? event.type;
 }
 
 /**
