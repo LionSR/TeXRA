@@ -2,7 +2,7 @@
  * Schema definitions for SettingsView messages.
  *
  * Public entry point and single home for the settings-view wire format:
- * combines the messages re-exported from MemoryView and ProfileView with the
+ * combines the MemoryView and ProfileView message schemas with the
  * settings-specific data schemas, the outbound (backend → webview) message
  * union, and the inbound (webview → backend) message union plus their
  * dispatchers.
