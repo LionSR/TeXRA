@@ -72,7 +72,7 @@ import { generateShortId } from '@utils/core';
 
 import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
-import { runInvocation, type RouteRetries } from './run/invocation';
+import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens } from './run/contextTokens';
@@ -185,7 +185,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
       const access = yield* ModelAccess;
-      const gate = yield* Effect.context<RouteRetries>();
+      const gate = yield* RouteRetries;
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
         runId,
@@ -808,7 +808,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               },
             }).pipe(
               Effect.provideService(UsageLog, usageLog),
-              Effect.provideContext(gate),
+              Effect.provideService(RouteRetries, gate),
             ),
         );
 

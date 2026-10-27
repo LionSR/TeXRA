@@ -5,7 +5,7 @@
  * a foreign claim without a death proof `NotOwner`, a rejecting collaborator
  * a defect. A message is the exception: `submitFollowUp` admits it.
  */
-import { Effect, SubscriptionRef, type Context } from 'effect';
+import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
 
 import {
   describeFollowUpFailure,
@@ -21,12 +21,12 @@ import {
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
-import { registryOf, RunLive, Runs } from '@agent/runtime/runRegistry';
+import { registryOf, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionRequests,
 } from '@agent/runtime/SessionHandle';
-import type { GlobalValues } from '@platform/processRuntime';
+import { GlobalValues } from '@platform/processRuntime';
 import {
   qualifyAggregateId,
   requestParksItsCaller,
@@ -57,7 +57,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
-type RequestServices = GlobalValues | RunFilesServices | Runs;
+type RequestServices = GlobalValues | RunFilesServices;
+/** What a handler reads of `services`; never the whole captured context. */
+const servicesOf = Context.pick(GlobalValues, FileSystem.FileSystem, Path.Path);
 
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
@@ -352,13 +354,12 @@ const handle = (
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {
-        const runs = yield* Runs;
         // An explicit child policy wins; an unset one is the session's
         // "Keep subagents running", resolved once for every request's stop.
         const detachActiveChildren =
           req.detachActiveChildren ??
           (yield* detachSubagentsOnStop(deps.session().roots));
-        yield* runs.stop(req.runId, {
+        yield* deps.session().runs.stop(req.runId, {
           detachActiveChildren,
           reason: req.reason,
         }).settlement;
@@ -461,8 +462,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
       admitted.ownerId !== null &&
       SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
     return yield* handle(deps, req, admitted, heldHere).pipe(
-      Effect.provideContext(deps.services),
-      Effect.provideService(Runs, deps.session().runs),
+      Effect.provideContext(servicesOf(deps.services)),
     );
   });
 
