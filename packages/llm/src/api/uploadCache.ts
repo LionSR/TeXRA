@@ -49,23 +49,28 @@ export interface UploadCache {
   readonly releaseUploads: () => Effect.Effect<readonly UnreleasedUpload[]>;
 }
 
-/** Digests kept, so a document lowered on every turn (and twice in one, to
- *  check then to send) is hashed once. */
+/** Digests one binding keeps, so a document lowered on every turn (and
+ *  twice in one, to check then to send) is hashed once. */
 const DIGEST_MEMO_SIZE = 64;
 
-// Keyed by the base64 string itself: the history holds the same string turn
-// after turn, and comparing it is far cheaper than hashing it.
-const digests = new Map<string, string>();
-
-const digestOf = (base64: string): string => {
-  const known = digests.get(base64);
-  if (known !== undefined) return known;
-  const digest = hash('sha256', base64, 'hex');
-  const [oldest] = digests.keys();
-  if (digests.size >= DIGEST_MEMO_SIZE && oldest !== undefined)
-    digests.delete(oldest);
-  digests.set(base64, digest);
-  return digest;
+/**
+ * A binding's SHA-256 of base64 bytes, memoized by the string itself: the
+ * history holds the same string turn after turn, and comparing it is far
+ * cheaper than hashing it. The memo belongs to the binding, so the strings
+ * it holds go when the binding does, not with the process.
+ */
+const digestMemo = (): ((base64: string) => string) => {
+  const digests = new Map<string, string>();
+  return (base64) => {
+    const known = digests.get(base64);
+    if (known !== undefined) return known;
+    const digest = hash('sha256', base64, 'hex');
+    const [oldest] = digests.keys();
+    if (digests.size >= DIGEST_MEMO_SIZE && oldest !== undefined)
+      digests.delete(oldest);
+    digests.set(base64, digest);
+    return digest;
+  };
 };
 
 /**
@@ -120,6 +125,7 @@ export function filesApiUploads(provider: {
       ),
     );
 
+  const digestOf = digestMemo();
   const live = new Map<string, Uploaded>();
   const inFlight = new Set<string>();
   // Every id this binding created, including one a repeated upload replaced
