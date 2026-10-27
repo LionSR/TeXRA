@@ -20,7 +20,7 @@ const items = [
       mode: 'Thinking · medium',
     },
   },
-  { id: 'anthropic/claude-haiku-4-5-20251001', thinking: true },
+  { id: 'anthropic/claude-haiku-5-5', thinking: true },
   { id: 'openai/gpt-6.1-sol', thinking: true },
 ];
 </script>
