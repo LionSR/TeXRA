@@ -199,7 +199,7 @@ function handleRequestEnsureProgressView(
  * `RuntimePresentationEvent` key is required by
  * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`
  * — omitting one here is a compile error rather than a silently dropped event
- * (CLAUDE.md, silent degradation), replacing the previous `switch`'s
+ * (AGENTS.md, silent degradation), replacing the previous `switch`'s
  * `never`-typed `default` guard. The five presentation events handled here are
  * the extension's own dispatch, replacing a previous per-host
  * presentation-event bus and its static router (a duplicate replay mechanism —

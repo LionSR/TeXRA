@@ -30,6 +30,12 @@
       "category": "unused",
       "kind": "exports",
       "name": "OAuthUnexpectedResponse"
+    },
+    {
+      "file": "packages/texra/src/replacement/engine.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "applyReplacements"
     }
   ]
 }

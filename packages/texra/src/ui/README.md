@@ -18,9 +18,9 @@ two halves:
   Block still blocks. The run header shows the switch for as long as the run
   lives, and the user can turn it off mid-run. One state (the run's
   delegated-work bypass), not a second autonomy system with its own words.
-- **In the loop.** Nothing lands without the user seeing it. Approvals are a
-  visible choice (Ask / Block / Auto-approve), not a buried setting. Every
-  failure the user must act on is shown where it happened.
+- **In the loop.** Nothing lands without the user seeing it. Approval is a
+  visible choice, not a buried setting, and every failure the user must act on
+  is shown where it happened.
 
 ## Layers
 
@@ -89,8 +89,8 @@ two halves:
 ## Rules
 
 - **No per-component skin.** A control that needs a new look gets a skin or
-  token here. A local override (a hand-rolled focus ring, a hard-coded
-  height) is how three inputs ended up with three shapes.
+  token here, never a local override (a hand-rolled focus ring, a hard-coded
+  height).
 - **One home per action** (AGENTS.md "UI anti-patterns"). Before adding a
   control, find the existing home of that action and cut the duplicate.
 - **Words come from `copy/`.**
@@ -138,6 +138,6 @@ retain their editor models, PTYs, browser views and conversation while tabs move
 The dock adapter maps all visual tokens to TeXRA; do not add a second palette.
 Group menus offer splits and maximize/restore. Tab menus offer moves and closure;
 dragging a tab to any group edge creates a split. Opening a new task reveals Agent
-without replacing document groups. The Theme preference lives in Settings > General
-
-> Appearance. All Electron verification uses isolated, offscreen windows.
+without replacing document groups. The Theme preference lives in Settings →
+General → Appearance. All Electron verification uses isolated, offscreen
+windows.

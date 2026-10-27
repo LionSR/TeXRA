@@ -493,8 +493,6 @@ interface UsageSection {
 
 const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
 
-let usageColorOverride: boolean | undefined;
-
 function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
   for (let index = 0; index < rawArgs.length;) {
     const arg = rawArgs[index];
@@ -505,12 +503,6 @@ function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
     index += tokenCount ?? 1;
   }
   return false;
-}
-
-export function setUsageColorOverrideFromRawArgs(
-  rawArgs: readonly string[],
-): void {
-  usageColorOverride = hasUsageNoColorFlag(rawArgs) ? false : undefined;
 }
 
 export function withUsageSections<T extends AnyCommand>(
@@ -533,8 +525,12 @@ function formatUsageSection(section: UsageSection): string {
   ].join('\n');
 }
 
-function usageColorEnabled(stream: 'stdout' | 'stderr'): boolean | undefined {
-  if (usageColorOverride !== undefined) return usageColorOverride;
+/** `--no-color` on the routed argv wins over the ambient stream decision. */
+function usageColorEnabled(
+  stream: 'stdout' | 'stderr',
+  rawArgs: readonly string[],
+): boolean | undefined {
+  if (hasUsageNoColorFlag(rawArgs)) return false;
   const ambient = readCliAmbientState();
   return stream === 'stdout'
     ? ambient.stdoutColorEnabled
@@ -573,15 +569,21 @@ async function usageParentWithFullPath({
 export function formatCliArgumentError(
   message: string,
   resolved: Pick<ResolvedCliCommand, 'commandPath'>,
+  rawArgs: readonly string[],
 ): string {
   const text =
-    usageColorEnabled('stderr') === false ? stripAnsi(message) : message;
+    usageColorEnabled('stderr', rawArgs) === false
+      ? stripAnsi(message)
+      : message;
   return `${text}\nRun \`${resolved.commandPath.join(' ')} --help\` for usage.`;
 }
 
 /** Print the usage of the deepest command `--help` resolved, with its parent
  *  named by the full command path and its extra usage sections. */
-export async function showUsage(resolved: ResolvedCliCommand): Promise<void> {
+export async function showUsage(
+  resolved: ResolvedCliCommand,
+  rawArgs: readonly string[],
+): Promise<void> {
   const { command } = resolved;
   const usage = await renderUsage(
     command,
@@ -592,7 +594,7 @@ export async function showUsage(resolved: ResolvedCliCommand): Promise<void> {
     ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
     : usage;
   const text =
-    usageColorEnabled('stdout') === false
+    usageColorEnabled('stdout', rawArgs) === false
       ? stripAnsi(usageWithSections)
       : usageWithSections;
   writeRawStdout(`${text}\n\n`);

@@ -16,7 +16,7 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 
 - `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`)
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
-- `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-5.6-sol+pro`)
+- `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
 Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. Old short names such as `opus55` or `sonnet5T` are still accepted when you type them, but the reference is the canonical name.
 
@@ -30,7 +30,7 @@ Thinking and non-thinking versions of a model are one entry, not separate models
 | `anthropic/claude-haiku-5-5`  | Fast; `@none` for fastest responses       | $    | Fast   |
 
 Fable 5.1, Opus 5.5, and Sonnet 5.5 (and the older Opus 4.6 through Opus 5, Sonnet 4.6, and Sonnet 5) include the full 1M context window at standard pricing, with no opt-in or
-beta header required. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
+beta header required. Haiku 5.5 (`anthropic/claude-haiku-5-5`) also has a 1M context window, billed at $0.10 / $0.50 per 1M tokens up to 100K input tokens ($0.50 / $2.50 above 100K), with adaptive thinking on by default and `@none` to turn thinking off. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
 
 Claude Fable 5.1 (`anthropic/claude-fable-5-1`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so it does not take `@none`. It supports the full reasoning-effort range up to `@xhigh` and the top `@max` tier, and is eligible for context compaction in tool-use mode.
 
@@ -46,9 +46,8 @@ TeXRA's reasoning-effort selector maps to Anthropic's effort levels automaticall
 | :--------------------- | :----------------------- | :--- | :---- |
 | `openai/gpt-6-astra`   | Most capable, 1M context | $$$$ | Fast  |
 | `openai/gpt-6.1-sol`   | Agentic coding           | $$$  | Fast  |
+| `openai/gpt-6.1-terra` | Lower-cost reasoning     | $$   | Fast  |
 | `openai/gpt-6-luna`    | Budget reasoning         | $    | Fast  |
-| `openai/gpt-5.6-sol`   | Previous flagship        | $$$$ | Fast  |
-| `openai/gpt-5.6-terra` | Lower-cost reasoning     | $$$  | Fast  |
 
 GPT-6 Astra (`openai/gpt-6-astra`) is OpenAI's most capable model for the hardest end-to-end work; it is
 available in the API and in Codex for Pro, Enterprise, and Business Premium subscribers, and
@@ -56,13 +55,11 @@ supports reasoning effort up to `@max`.
 Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
 output for the full request.
 
-GPT-6.1 Sol (`openai/gpt-6.1-sol`) and GPT-6 Luna (`openai/gpt-6-luna`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol) and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). Both take reasoning effort up to `@max` and use the same long-context pricing as Astra. GPT-6.1 Sol supersedes GPT-6 Sol (`openai/gpt-6-sol`) at the same price with cheaper cached input.
+GPT-6.1 Sol (`openai/gpt-6.1-sol`), GPT-6.1 Terra (`openai/gpt-6.1-terra`), and GPT-6 Luna (`openai/gpt-6-luna`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol), Terra $1 / $5 (half of GPT-5.6 Terra on input, less than half on output), and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). All three take reasoning effort up to `@max` and use the same long-context pricing threshold (above 272K input tokens) as Astra. GPT-6.1 Sol supersedes GPT-6 Sol (`openai/gpt-6-sol`) at the same price with cheaper cached input.
 
-GPT-6 Sol and Luna supersede GPT-5.6 Sol (`openai/gpt-5.6-sol`) and Luna (`openai/gpt-5.6-luna`); GPT-5.6 Luna is now
-deprecated. The [Codex integration](./agent-integrations.md#openai-codex) runs GPT-6.1 Sol unless you pick another model.
-`openai/gpt-5.6-terra` (Terra) remains a mid-priced option.
+GPT-6.1 Sol, GPT-6.1 Terra, and GPT-6 Luna supersede the GPT-5.6 series (`openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, and `openai/gpt-5.6-luna`). The [Codex integration](./agent-integrations.md#openai-codex) runs GPT-6.1 Sol unless you pick another model.
 
-**Pro mode.** Add `+pro` to a GPT model (for example `openai/gpt-5.6-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
+**Pro mode.** Add `+pro` to a supported GPT model (for example `openai/gpt-6.1-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
 rather than a premium tier, for the hardest planning and long-horizon tasks. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API.

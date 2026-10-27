@@ -20,7 +20,7 @@ const tiers = [
     models: [
       'openai/gpt-6-luna',
       'deepseek/deepseek-flash@none',
-      'anthropic/claude-haiku-4-5-20251001@none',
+      'anthropic/claude-haiku-5-5@none',
     ],
   },
   {

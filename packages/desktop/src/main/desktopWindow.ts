@@ -15,7 +15,12 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness';
+import {
+  AgentDirectories,
+  Secrets,
+  withPerKeyLane,
+  type PerKeyLane,
+} from '@texra-ai/harness';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -68,13 +73,7 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  PlatformSecrets,
-  AgentDirectoriesPort,
-  StateStore,
-} from '@texra-ai/harness';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,
@@ -84,13 +83,6 @@ interface DesktopWindowOptions {
   readonly projects: DesktopProjectRegistry;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
-  /** The process services the composition root built (see
-   *  `ElectronPlatformInitResult`), handed down so the window's controllers
-   *  and IPC surfaces take their stores from their owner rather than
-   *  re-reading them. */
-  readonly globalState: StateStore;
-  readonly secrets: PlatformSecrets;
-  readonly agentDirectories: AgentDirectoriesPort;
   /** See ElectronPlatformInitResult.resourcesPath. */
   readonly resourcesPath: string;
   /** See ElectronPlatformInitResult.mainDir. */
@@ -111,6 +103,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 ): Effect.fn.Return<OpenedDesktopWindow, never, Scope.Scope | ProcessServices> {
   const { runtime, projects } = options;
   const scope = yield* Scope.Scope;
+  const secrets = yield* Secrets;
   const spawn = desktopSpawner(runtime, scope);
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
@@ -157,8 +150,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     host,
     runtime,
     projects,
-    globalState: options.globalState,
-    secrets: options.secrets,
     settings: () => surface.settings(),
     activeRun: () => bindings.active(),
   });
@@ -184,8 +175,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     host,
     runtime,
     projects,
-    secrets: options.secrets,
-    agentDirectories: options.agentDirectories,
+    secrets,
+    agentDirectories: yield* AgentDirectories,
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
@@ -198,7 +189,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
     onboarding,
     promptController,
-    secrets: options.secrets,
+    secrets,
     resourcesPath: options.resourcesPath,
   });
   const navigation = createProjectNavigation({

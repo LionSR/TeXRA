@@ -1,3 +1,29 @@
+/**
+ * Node.js platform implementation and host building blocks for
+ * `@texra-ai/harness`.
+ *
+ * > **Guide:** Read [Philosophy & Architecture](/api/) for a minimal Node.js
+ * > embedding example using `nodePlatform` and `Sessions.layer`.
+ *
+ * ### Key exports by role
+ *
+ * - **Default SDK platform**: [`nodePlatform`](#nodeplatform) and
+ *   [`NodePlatformOptions`](#nodeplatformoptions) build an `AgentPlatform` from
+ *   `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
+ * - **Workspace roots & paths**:
+ *   [`createNodeWorkspaceRoots`](#createnodeworkspaceroots),
+ *   [`canonicalizeWorkspacePath`](#canonicalizeworkspacepath),
+ *   [`workspaceRelativePath`](#workspacerelativepath),
+ *   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
+ *   [`resolveWorkspaceStoragePath`](#resolveworkspacestoragepath).
+ * - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
+ *   [`ProjectDatabases`](#projectdatabases), and
+ *   [`ProcessIdentity`](#processidentity).
+ * - **Commands, binary probes & atomic file I/O**:
+ *   [`executeCommand`](#executecommand), [`findCommand`](#findcommand),
+ *   [`probeTool`](#probetool), [`writeFileAtomic`](#writefileatomic), and
+ *   [`readNormalizedFile`](#readnormalizedfile).
+ */
 // The default platform of an SDK embedder.
 export {
   nodePlatform,

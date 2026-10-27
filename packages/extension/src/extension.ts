@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
-  Context,
   Deferred,
   Effect,
   Exit,
@@ -291,13 +290,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             undefined,
           ),
         );
-      // The process's sessions, read once here from the runtime that
-      // serves them and threaded to the window's activation.
-      const sessions = yield* Effect.map(
-        managed.contextEffect,
-        Context.get(Sessions),
-      );
-      return { secrets, runtime, roots, editors, sessions, reached };
+      return { secrets, runtime, roots, editors, reached };
     }),
   );
 });
@@ -434,7 +427,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { secrets, runtime, roots, editors, sessions, reached } =
+  const { secrets, runtime, roots, editors, reached } =
     yield* initVscodePlatform(context, workspaceRoot, {
       toolMissingHandler: vscodeToolMissingReporter,
       service: reachExtensionService(context.extensionPath),
@@ -447,15 +440,9 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(
-      context,
-      secrets,
-      runtime,
-      roots,
-      editors,
-      sessions,
-      reached,
-    ).pipe(Effect.provideService(Scope.Scope, activationScope)),
+    activateWorkspace(context, secrets, runtime, roots, editors, reached).pipe(
+      Effect.provideService(Scope.Scope, activationScope),
+    ),
   );
   // Off the activation tick: withExtendedPath() runs synchronous glob probes.
   yield* withProcessServices(
@@ -471,7 +458,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   editors: EditorRegistry,
-  sessions: Context.Service.Shape<typeof Sessions>,
   /** The background service, as the activation reached it once. */
   reached: Result.Result<ServiceLink, Error>,
 ) {
@@ -501,7 +487,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       ),
     };
   } else {
-    const session = yield* sessions.open(roots, {
+    const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
       host: { interruptedTasks: 'offer' },
     });

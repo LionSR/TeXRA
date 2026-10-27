@@ -4,8 +4,8 @@ Step 0: Load the local review instructions before doing anything else.
 
 1. Read `.claude/skills/code-review/SKILL.md`.
 2. Read `.claude/skills/code-review/references/review-checklist.md`.
-3. Consult `CLAUDE.md` and `AGENTS.md` for the repository rules referenced by
-   the changed files.
+3. Consult `AGENTS.md`, and the nested `AGENTS.md` of each changed subtree,
+   for the repository rules the changed files touch.
 
 Get the diff with `gh pr diff`, then group changed files by the architectural
 zones described in the review skill. For PRD or documentation-only diffs, review

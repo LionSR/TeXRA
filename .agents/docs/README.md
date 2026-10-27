@@ -56,6 +56,6 @@ rest on landed work and stay open.
   — for everything without an owner, the directory tree and git history remain
   the index.
 - Cross-references between notes use relative markdown links.
-- Shared binary/figure assets live in `.agents/docs/figures/`; measurement and
-  reproduction artifacts live in `.agents/docs/evidence/`, and only while a
-  live note cites them.
+- Measurement and reproduction artifacts live in `.agents/docs/evidence/`,
+  and only while a live note cites them; other assets sit in the note's own
+  directory.

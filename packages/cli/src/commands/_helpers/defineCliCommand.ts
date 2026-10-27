@@ -178,11 +178,15 @@ export function defineCliCommand<const A extends ArgsDef, E>(
           setExitCode(outcome);
           return;
         }
-        // The TUI mounts at this Promise edge, after the program has settled:
-        // `runChat` is the interactive host entry and owns Ink, its own signal
-        // handlers and its teardown.
+        // The TUI mounts at this Promise edge, after the program has settled,
+        // on the runtime that program ran on (a settled program means the
+        // install succeeded): `runChat` owns Ink, its own signal handlers and
+        // its teardown.
         const { runChat } = await import('@cli/chat/tui/runChatTui');
-        setExitCode((await runChat(context, outcome.chat)).exitCode);
+        setExitCode(
+          (await runChat(Result.getOrThrow(runtime), context, outcome.chat))
+            .exitCode,
+        );
         return;
       }
       // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
