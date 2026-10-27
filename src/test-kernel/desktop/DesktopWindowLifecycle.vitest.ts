@@ -32,14 +32,18 @@ describe('desktop window lifecycle', () => {
         continueQuit = continuation;
       },
     });
-    listener?.({ preventDefault: vi.fn() });
+    const first = { preventDefault: vi.fn() };
+    listener?.(first);
+    expect(first.preventDefault).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     expect(ranShutdown).not.toHaveBeenCalled();
 
     window = null;
     continueQuit?.();
-    listener?.({ preventDefault: vi.fn() });
+    const second = { preventDefault: vi.fn() };
+    listener?.(second);
     await shutdownRan.promise;
+    expect(second.preventDefault).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
 
     listener?.({ preventDefault: vi.fn() });

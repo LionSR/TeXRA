@@ -725,6 +725,9 @@ describe('createChatSessionController', () => {
 
     await runSubmit(ctrl, 'Carry on.');
 
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'followUp.send', runId: 'a11111' }),
+    );
     await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(true));
   });
 });

@@ -598,6 +598,11 @@ describe('ModelInvoker retry', () => {
       const outcome = yield* invokeOn(kit);
 
       expect(outcome.kind).toBe('failed');
+      // The failure opened a retry request, so the policy's denial is what
+      // ended the invocation, not a stop that never asked.
+      if (outcome.kind === 'failed') {
+        expect(outcome.state.invocation?.current.failed?.next.kind).toBe('ask');
+      }
       // A denial is not a cancel: the run stays running so the failure can
       // terminalize (#7331).
       expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);

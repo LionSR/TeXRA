@@ -896,7 +896,7 @@ These existing suites check the sections above.
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:375`, `:526`
   (listing equals the fold)
 - **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:411`, `:491`,
-  `:543` (asks again after a stop), `:457` (budget), `:609` (unchain once),
+  `:543` (asks again after a stop), `:457` (budget), `:614` (unchain once),
   `:431`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
 - **7 claims**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:558`,

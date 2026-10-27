@@ -704,6 +704,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           outcome: RUN_PHASE.WAITING,
         });
         const recoveredHandle = session.runs.get(runId)?.handle;
+        expect(recoveredHandle).toBeDefined();
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
