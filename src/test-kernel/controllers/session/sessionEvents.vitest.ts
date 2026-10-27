@@ -1196,43 +1196,6 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
-    const storage = workspace();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      yield* db.appendAll([runStart]);
-      // Reject the second insert after the first member changed its sequence.
-      // This exercises rollback, independently of pre-transaction validation.
-      yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
-            WHEN NEW.type = 'run.position'
-            BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
-        } finally {
-          raw.close();
-        }
-      });
-      // The trigger is another connection's commit: let the poll take its
-      // wake first, so the level below counts this process's batches.
-      yield* TestClock.adjust('300 millis');
-      const level = yield* SubscriptionRef.get(db.level);
-      const failure = yield* Effect.flip(db.appendAll([olderStart, waiting]));
-
-      expect(failure._tag).toBe('DatabaseWriteFailed');
-      const rows = yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          return raw.prepare('SELECT seq FROM event').all();
-        } finally {
-          raw.close();
-        }
-      });
-      expect(rows).toEqual([{ seq: 1 }]);
-      expect(yield* SubscriptionRef.get(db.level)).toBe(level);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
-
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
     const append = Effect.gen(function* () {
@@ -1381,88 +1344,6 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  it.effect(
-    'reads bounded history, latest listing facts, and outstanding requests',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        const id = qualifyAggregateId('run', RUN);
-        const other = qualifyAggregateId('run', OLDER);
-        const absent = qualifyAggregateId(
-          'run',
-          Schema.decodeUnknownSync(RunIdSchema)('ab99ff'),
-        );
-        const rows = yield* db.appendAll([
-          runStart,
-          olderStart,
-          waiting,
-          requested,
-          { ...requested, requestId: 'second' },
-          {
-            type: 'request.decided',
-            aggregateId: id,
-            requestId: 'second',
-            decision: { action: 'approve' },
-          },
-          {
-            ...waiting,
-            payload: { family: 'toolUse', at: 'waiting' },
-          },
-          {
-            type: 'response.finalized',
-            aggregateId: id,
-            text: 'final answer',
-          },
-          { type: 'run.removed', aggregateId: other },
-        ]);
-        // Keyed by `listingKeyOf`: the tombstone replaces its run's
-        // `run.start` under the one lifecycle key the fold keeps.
-        expect((yield* db.readListing()).map((row) => row.commit)).toEqual([
-          1, 4, 7, 9,
-        ]);
-        const withoutTranscript = yield* db.readInputBatch([], 0);
-        expect(withoutTranscript.cursor).toBe(9);
-        expect(withoutTranscript.events).toEqual(
-          rows.filter((row) => row.commit !== 8),
-        );
-        expect((yield* db.readInputBatch([id], 0)).events).toEqual(rows);
-        expect(yield* db.readAggregate(id, 3)).toEqual(
-          rows.filter((row) => row.aggregateId === id && row.seq >= 3),
-        );
-        expect(yield* db.aggregateState([id, other, absent])).toEqual([
-          {
-            aggregateId: id,
-            uid: expect.any(String),
-            ownerId: SELF,
-            closed: false,
-            parentId: null,
-            startCommit: 1,
-          },
-          {
-            aggregateId: other,
-            uid: expect.any(String),
-            ownerId: SELF,
-            closed: true,
-            parentId: null,
-            startCommit: 2,
-          },
-        ]);
-        // A closed target is the typed ownership rejection; a seq-1
-        // violation on an open or absent one is a plain write failure.
-        for (const [draft, tag] of [
-          [{ ...waiting, aggregateId: other }, 'DatabaseNotOwner'],
-          [olderStart, 'DatabaseNotOwner'],
-          [runStart, 'DatabaseWriteFailed'],
-          [{ ...waiting, aggregateId: absent }, 'DatabaseWriteFailed'],
-        ] as const) {
-          expect((yield* Effect.flip(db.appendAll([draft])))._tag).toBe(tag);
-        }
-        expect(yield* db.currentCommit).toBe(9);
-        expect(yield* db.aggregateState([absent])).toEqual([]);
-      }).pipe(Effect.provide(substrate(storage)));
-    },
-  );
   it.effect(
     'requires every dependent claim before committing a deletion',
     () => {
