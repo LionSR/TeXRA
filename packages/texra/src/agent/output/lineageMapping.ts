@@ -123,14 +123,10 @@ function invertMapping(
  * legacy outputs that report just a filename.
  */
 function findMatchingBaseFile(
-  baseFiles: readonly FileLocation[],
+  baseEntries: readonly BaseEntry[],
   source: string,
 ): FileLocation | undefined {
   const src = computePathKeys(source);
-  const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
-    loc,
-    ...computePathKeys(fileLocationDisplayPath(loc)),
-  }));
 
   const matchers: ((entry: BaseEntry) => boolean)[] = [
     (entry) => entry.relativePath === src.relativePath,
@@ -168,10 +164,15 @@ export function pairOutputsWithBases(
     baseFiles,
   );
 
+  const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
+    loc,
+    ...computePathKeys(fileLocationDisplayPath(loc)),
+  }));
+
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of outputs) {
     const key = fileLocationDisplayPath(entry.location);
-    const origin = findMatchingBaseFile(baseFiles, entry.source);
+    const origin = findMatchingBaseFile(baseEntries, entry.source);
     mapping.set(key, {
       base: origin ?? baseToOutput.get(key),
       origin,
