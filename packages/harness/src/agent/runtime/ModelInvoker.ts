@@ -359,7 +359,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           localCallsOf(turn.content),
           (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
-          generateShortId,
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.

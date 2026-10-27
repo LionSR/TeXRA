@@ -26,7 +26,6 @@ import {
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
 
@@ -159,7 +158,6 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
     (yield* SynchronizedRef.get(run.steps))?.tools.registry,
     run.logger,
-    generateShortId,
   );
   if (facts === undefined)
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));

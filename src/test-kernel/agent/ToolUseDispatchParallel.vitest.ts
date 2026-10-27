@@ -280,12 +280,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         responseId: RESPONSE_ID,
         invocation: INVOCATION,
         turn,
-        calls: dispatchFactsFor(
-          localCallsOf(turn.content),
-          tools,
-          noopTrace,
-          () => 'log-id',
-        ),
+        calls: dispatchFactsFor(localCallsOf(turn.content), tools, noopTrace),
         usage: null,
       },
     },

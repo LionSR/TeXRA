@@ -39,7 +39,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores } from '@test/support/setupPlatform';
-import { generateRunId, generateShortId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
@@ -251,7 +251,6 @@ function scriptedInvoker(
                     turn.kind === 'http' ? localCallsOf(turn.content) : [],
                     (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
-                    generateShortId,
                   ),
                   usage: null,
                 },
