@@ -464,17 +464,17 @@ export function createChatSessionController(
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
   // The attachment closes after the interactions are disposed.
-  const attached = runtime.runSync(Scope.fork(chatScope));
   runtime.runSync(
-    Scope.addFinalizer(
-      chatScope,
-      Effect.sync(() => interactions.dispose?.()),
-    ),
-  );
-  runtime.runSync(
-    runSession
-      .attach(interactions)
-      .pipe(Scope.provide(attached), Effect.forkIn(chatScope)),
+    Effect.gen(function* () {
+      const attached = yield* Scope.fork(chatScope);
+      yield* Scope.addFinalizer(
+        chatScope,
+        Effect.sync(() => interactions.dispose?.()),
+      );
+      yield* runSession
+        .attach(interactions)
+        .pipe(Scope.provide(attached), Effect.forkIn(chatScope));
+    }),
   );
 
   // -----------------------------------------------------------------------
