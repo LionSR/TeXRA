@@ -2,6 +2,32 @@
 
 <!-- Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. -->
 
+Browser-safe entry of `@texra-ai/llm`: the turn contract, model and provider
+catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
+
+> **Guide:** Read [Model Layer (`@texra-ai/llm`)](/api/model-layer) for how
+> catalog selection, route resolution, `prepareTurn` / `streamTurn`, and
+> `ModelError` work together.
+
+### Key exports by role
+
+- **Turn contract**: [`Model`](#model) (`prepareTurn`, `streamTurn`),
+  [`TurnRequest`](#turnrequest) ([`TurnRequestSchema`](#turnrequestschema)),
+  [`ResolvedTurn`](#resolvedturn), [`TurnEvent`](#turnevent),
+  [`TurnResult`](#turnresult), and [`completedTurn`](#completedturn).
+- **Model & provider catalogs**: [`selectModel`](#selectmodel),
+  [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
+  [`decideModelRoute`](#decidemodelroute),
+  [`resolveRouteEndpoint`](#resolverouteendpoint),
+  [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
+  [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
+- **Structured failures & credentials**: [`ModelError`](#modelerror),
+  [`ModelErrorFields`](#modelerrorfields), and
+  [`CredentialStore`](#credentialstore).
+
+Binding a model to its wire protocol (`bindModel`) and running subscription
+OAuth flows live in [`@texra-ai/llm/node`](./node).
+
 ## acceptedEfforts
 
 The effort values a route may send for a model: the levels it accepts

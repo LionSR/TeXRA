@@ -1,60 +1,28 @@
-# Packed-tarball example
+# Packed-tarball examples
 
-Runs [`@texra-ai/llm`](../../llm/README.md) and
-[`@texra-ai/harness`](../README.md) the way a consumer off the registry
-would: both are packed, installed into a fresh directory, type-checked and
-imported by package name. No repository path alias appears in the two
-programs, so a resolution the published artifacts could not satisfy fails
-here.
+Runs [`@texra-ai/llm`](../../llm/README.md) and [`@texra-ai/harness`](../README.md) the way a consumer off the registry gets them: both packages are packed into `.tgz` tarballs, installed into a fresh directory outside the repository with `npm install`, type-checked with `skipLibCheck: false`, and executed by `node`. Every import specifier is a published package subpath (`@texra-ai/llm`, `@texra-ai/llm/node`, `@texra-ai/harness`, `@texra-ai/harness/node`, `@texra-ai/harness/plugins`, `@texra-ai/harness/schemas`, `@texra-ai/harness/transcript`), never a workspace path alias.
 
-- `llm.ts` uses `@texra-ai/llm` alone: it picks a catalog model, decides its
-  route, binds it, and runs one turn against a `fetch` that answers 401, so
-  the turn fails with a typed `ModelError` and nothing leaves the process.
-- `effectSession.ts` composes the harness runtime, opens a session, and asks
-  for an agent that does not exist, so the typed refusal is visible.
-
-Neither needs a provider key.
+None of the examples need a provider API key or network access: `01-llm-turn.ts` supplies in-process `fetch` handlers, and `02`–`06` use `_support.ts`, which wires `nodePlatform` with an in-memory Anthropic Messages SSE dispatcher.
 
 ```bash
 corepack pnpm --filter @texra-ai/harness run example:packed
 ```
 
-`scripts/example-packed.mjs` does, step by step:
+## Examples ladder
 
-1. copies this folder's `package.json`, `tsconfig.json` and programs into a
-   new temporary directory outside the repository;
-2. packs `@texra-ai/llm` and `@texra-ai/harness` there (each pack builds its
-   package), renamed to the fixed `llm.tgz` and `harness.tgz` this folder's
-   `package.json` names;
-3. runs `npm install`;
-4. type-checks both programs with the workspace's TypeScript: strict,
-   `nodenext` resolution and `skipLibCheck` off, so every shipped declaration
-   the programs reach is checked;
-5. runs `npm start`, and removes the directory on success. A failing step
-   keeps it and prints its path.
+| File                             | What it exercises                                                                                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-llm-turn.ts`                 | `@texra-ai/llm` standalone: `selectModel`, `decideModelRoute`, `resolveRouteEndpoint`, `bindModel`, `prepareTurn`, `streamTurn` (over synthetic SSE), `turnCost`, and a 401 `ModelError`. |
+| `02-session-and-events.ts`       | `Sessions.layer({ platform, plugins: harnessBuiltins })`, `sessions.open`, `InlinePersonaSchema`, `AgentNotFound` refusal, `run.events` (`stream.chunk`), and `run.result`.               |
+| `03-custom-tools-and-plugins.ts` | `defineTool` (`nullishWithDefault`, `lane: 'parallel'`, `replay: 'safe'`, `executed`), `definePlugin`, and a two-turn tool call loop.                                                     |
+| `04-approvals-and-requests.ts`   | Approval-gated tool (`requiresApproval: true`), `session.attach({ approve })`, interactive `waiting` state, `session.request({ kind: 'followUp.send' })`, and `run.stop`.                 |
+| `05-durable-resume-and-fork.ts`  | Persistent SQLite store (`{ persistent: true }`), `session.request({ kind: 'run.fork' })`, resuming the forked branch via `followUp.send`, `listRuns()`, and `records()`.                 |
+| `06-views-and-transcript.ts`     | `session.view.subscribe`, `sessionActivity`, `attentionOf`, `acceptsFollowUp`, `TranscriptRow` formatting (`rowHeadline`, `elideText`), and `ToolRowModel` sections.                      |
 
-Outside the repository, nothing resolves by walking up into the workspace's
-`node_modules`, so a dependency or a type the tarballs do not declare fails.
-`npm install` rather than `pnpm`, with no lockfile: the install resolves what
-a new consumer's would, peers included, so an incoherent Effect set fails
-here. CI runs it (the `packed example` job) on every change to either package
-or to the workspace's dependency files, and nightly.
+## How `scripts/example-packed.mjs` runs
 
-Expected output, with the temporary paths varying:
-
-```text
-model: Sonnet 5, anthropic at https://api.anthropic.com
-bound: anthropic-messages
-turn failed: ModelError authentication
-[...] INFO (#1): First install: plugins switched off by default:  { channel: 'toolAvailability' }
-[agentRegistry] Loaded 0 agents in 4ms
-session root: /var/folders/.../texra-harness-example-XXXX/storage/v1/workspace-storage/texra-harness-example-XXXX-<hash>
-first view level: 0 runs
-sessions the owner holds: 1
-inline persona valid: true
-refusal: AgentNotFound - Agent "no-such-agent" was not found in the configured agent directory.
-done
-```
-
-The process exits on its own: leaving the scope closed the session and disposed
-the runtime that held it.
+1. Copies `package.json`, `tsconfig.json`, `_support.ts`, and `01-*.ts`..`06-*.ts` into a temporary directory outside the repository.
+2. Runs `pnpm --filter @texra-ai/llm pack` and `pnpm --filter @texra-ai/harness pack` into that directory as `llm.tgz` and `harness.tgz`.
+3. Runs `npm install --no-audit --no-fund` (plain `node_modules`, no workspace lockfile).
+4. Runs `tsc -p` with `strict: true`, `moduleResolution: "nodenext"`, and `skipLibCheck: false`.
+5. Runs `npm start` (executing `01` through `06` in order) and removes the temporary directory on success.

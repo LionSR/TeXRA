@@ -7,9 +7,18 @@ const base = '/';
 // Shared by every page that should show the guide navigation, including the
 // root-level work page, which would otherwise render with no sidebar.
 const apiSidebar = [
-  { text: 'Overview', link: '/api/' },
   {
-    text: '@texra-ai/harness',
+    text: 'Guide',
+    items: [
+      { text: 'Philosophy & Architecture', link: '/api/' },
+      { text: 'Durable Protocol', link: '/api/durable-protocol' },
+      { text: 'Views & Transcripts', link: '/api/views-and-transcripts' },
+      { text: 'Plugins & Codemode', link: '/api/plugins-and-codemode' },
+      { text: 'Model Layer (@texra-ai/llm)', link: '/api/model-layer' },
+    ],
+  },
+  {
+    text: '@texra-ai/harness Reference',
     items: [
       { text: 'harness', link: '/api/harness/' },
       { text: 'harness/schemas', link: '/api/harness/schemas' },
@@ -19,7 +28,7 @@ const apiSidebar = [
     ],
   },
   {
-    text: '@texra-ai/llm',
+    text: '@texra-ai/llm Reference',
     items: [
       { text: 'llm', link: '/api/llm/' },
       { text: 'llm/node', link: '/api/llm/node' },

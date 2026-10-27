@@ -2,6 +2,37 @@
 
 <!-- Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. -->
 
+Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
+`@texra-ai/harness`.
+
+> **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
+> how to author tools and plugins, how step-pinned catalogs work, and how the
+> `script` (Codemode) sandbox replays across crashes.
+
+### Key exports by role
+
+- **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
+  [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
+  [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
+  ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+  `Sessions.layer({ platform, plugins })`.
+- **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+  [`executed`](#executed), [`errorResult`](#errorresult),
+  [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+  [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
+  ([`requestToolEditApproval`](#requesttooleditapproval),
+  [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
+  [`approvedWriteConflict`](#approvedwriteconflict)).
+- **Runtime callbacks inside a tool**: [`requireRun`](#requirerun),
+  [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
+  [`RunInbox`](#runinbox).
+- **Lifetimes, prompt sections & durable rows**:
+  [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
+  [`ProcessPluginLayer`](#processpluginlayer),
+  [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
+  [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+  and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
+
 ## AGENT_TOOL_NAME
 
 The tool that runs a named agent as a child of the calling run.

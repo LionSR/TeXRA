@@ -32,7 +32,7 @@ Anthropic API key can spend once you link a Console organization to the plan.
 
 Pick a catalog model, decide its route, bind it, and run one turn. Here the
 key is read from the environment. The runnable version of this program,
-[`packages/harness/example/llm.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/llm.ts),
+[`packages/harness/example/01-llm-turn.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/01-llm-turn.ts),
 passes a `fetch` that answers 401, so it needs no key.
 
 ```ts

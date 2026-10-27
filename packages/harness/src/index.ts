@@ -1,15 +1,40 @@
 /**
- * `@texra-ai/harness` — the SDK's surface, stated in Effect.
+ * The root entry of `@texra-ai/harness`: sessions, runs, tools, settings, and
+ * the agent catalog, stated in Effect.
  *
- * The services below are where every decision this package makes is
- * stated: which level is a run's first, when its transcript interest
- * changes, when its drain ends, which failure wins. Nothing in the package
- * calls `Effect.runPromise`, `runSync`, or `runFork`: a Promise-land
- * embedder runs `Effect.runPromise(program)` at its own entry point.
+ * > **Guide:** Read [Philosophy & Architecture](/api/) and
+ * > [Durable Protocol & Recovery](/api/durable-protocol) for how the runtime
+ * > works and how to embed it.
  *
- * This module is the package's public surface, documented in the package
- * README. `effect` is a peer dependency: the surface is Effect services, not
- * Promises.
+ * ### Key exports by role
+ *
+ * - **Process & session lifecycle**: [`Sessions`](#sessions) (`Sessions.layer`,
+ *   `open`, `close`, `closeAll`, `list`), [`processLayer`](#processlayer),
+ *   [`Session`](#session), [`LocalSession`](#localsession), [`Run`](#run),
+ *   [`StartInput`](#startinput), [`ResumeInput`](#resumeinput), and
+ *   [`SessionHost`](#sessionhost) (`ApprovalHandler`).
+ * - **Tools & agent catalog**: [`defineTool`](#definetool), [`ITool`](#itool),
+ *   [`AgentCatalog`](#agentcatalog), [`AgentDirectories`](#agentdirectories),
+ *   and [`Plugin`](#plugin).
+ * - **Configuration & secrets**: [`Settings`](#settings),
+ *   [`CurrentValues`](#currentvalues), [`ConfigProvider`](#configprovider), and
+ *   [`Secrets`](#secrets).
+ * - **Typed failures**: [`RunFailure`](#runfailure),
+ *   [`LaunchError`](#launcherror), [`ResumeRefused`](#resumerefused),
+ *   [`PluginsRefused`](#pluginsrefused), [`ToolsRefused`](#toolsrefused), and
+ *   [`SessionOpenError`](#sessionopenerror) (`DatabaseOpenFailed`,
+ *   `DatabaseReadFailed`, `DatabaseWriteFailed`).
+ *
+ * ### Companion subpaths
+ *
+ * - [`@texra-ai/harness/schemas`](./schemas): browser-safe Effect Schemas, view
+ *   types (`SessionView`, `RunView`, `TranscriptView`), and pure view queries.
+ * - [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
+ *   projections and `RemoteSessionView` for UI renderers.
+ * - [`@texra-ai/harness/plugins`](./plugins): built-in plugins (`harnessBuiltins`)
+ *   and the `definePlugin` authoring surface.
+ * - [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
+ *   filesystem, SQLite, and process building blocks.
  */
 // The one barrel the "no convenience barrels" rule does not apply to.
 

@@ -2,6 +2,43 @@
 
 <!-- Generated from `packages/harness/src/index.ts` by `npm run docgen`; do not edit. -->
 
+The root entry of `@texra-ai/harness`: sessions, runs, tools, settings, and
+the agent catalog, stated in Effect.
+
+> **Guide:** Read [Philosophy & Architecture](/api/) and
+> [Durable Protocol & Recovery](/api/durable-protocol) for how the runtime
+> works and how to embed it.
+
+### Key exports by role
+
+- **Process & session lifecycle**: [`Sessions`](#sessions) (`Sessions.layer`,
+  `open`, `close`, `closeAll`, `list`), [`processLayer`](#processlayer),
+  [`Session`](#session), [`LocalSession`](#localsession), [`Run`](#run),
+  [`StartInput`](#startinput), [`ResumeInput`](#resumeinput), and
+  [`SessionHost`](#sessionhost) (`ApprovalHandler`).
+- **Tools & agent catalog**: [`defineTool`](#definetool), [`ITool`](#itool),
+  [`AgentCatalog`](#agentcatalog), [`AgentDirectories`](#agentdirectories),
+  and [`Plugin`](#plugin).
+- **Configuration & secrets**: [`Settings`](#settings),
+  [`CurrentValues`](#currentvalues), [`ConfigProvider`](#configprovider), and
+  [`Secrets`](#secrets).
+- **Typed failures**: [`RunFailure`](#runfailure),
+  [`LaunchError`](#launcherror), [`ResumeRefused`](#resumerefused),
+  [`PluginsRefused`](#pluginsrefused), [`ToolsRefused`](#toolsrefused), and
+  [`SessionOpenError`](#sessionopenerror) (`DatabaseOpenFailed`,
+  `DatabaseReadFailed`, `DatabaseWriteFailed`).
+
+### Companion subpaths
+
+- [`@texra-ai/harness/schemas`](./schemas): browser-safe Effect Schemas, view
+  types (`SessionView`, `RunView`, `TranscriptView`), and pure view queries.
+- [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
+  projections and `RemoteSessionView` for UI renderers.
+- [`@texra-ai/harness/plugins`](./plugins): built-in plugins (`harnessBuiltins`)
+  and the `definePlugin` authoring surface.
+- [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
+  filesystem, SQLite, and process building blocks.
+
 ## AgentCatalog
 
 The process's agent catalog (see {@link AgentCatalogShape}).

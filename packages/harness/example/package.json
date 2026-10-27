@@ -5,14 +5,15 @@
   "type": "module",
   "description": "Runs @texra-ai/llm and @texra-ai/harness from packed tarballs, as a consumer would",
   "scripts": {
-    "start": "node llm.ts && node effectSession.ts"
+    "start": "node 01-llm-turn.ts && node 02-session-and-events.ts && node 03-custom-tools-and-plugins.ts && node 04-approvals-and-requests.ts && node 05-durable-resume-and-fork.ts && node 06-views-and-transcript.ts"
   },
   "dependencies": {
     "@effect/platform-node": "^4.0.6",
     "@effect/sql-sqlite-node": "^4.0.6",
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "^4.0.6"
+    "effect": "^4.0.6",
+    "undici": "^8.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.19.0"
