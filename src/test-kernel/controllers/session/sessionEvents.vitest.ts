@@ -1196,6 +1196,43 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
+  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db.appendAll([runStart]);
+      // Reject the second insert after the first member changed its sequence.
+      // This exercises rollback, independently of pre-transaction validation.
+      yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
+            WHEN NEW.type = 'run.position'
+            BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
+        } finally {
+          raw.close();
+        }
+      });
+      // The trigger is another connection's commit: let the poll take its
+      // wake first, so the level below counts this process's batches.
+      yield* TestClock.adjust('300 millis');
+      const level = yield* SubscriptionRef.get(db.level);
+      const failure = yield* Effect.flip(db.appendAll([olderStart, waiting]));
+
+      expect(failure._tag).toBe('DatabaseWriteFailed');
+      const rows = yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          return raw.prepare('SELECT seq FROM event').all();
+        } finally {
+          raw.close();
+        }
+      });
+      expect(rows).toEqual([{ seq: 1 }]);
+      expect(yield* SubscriptionRef.get(db.level)).toBe(level);
+    }).pipe(Effect.provide(substrate(storage)));
+  });
+
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
     const append = Effect.gen(function* () {

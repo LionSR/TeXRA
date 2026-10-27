@@ -875,11 +875,11 @@ These existing suites check the sections above.
   aside), `:1063` (newer schema refused)
 - **2.2 envelope**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1087` (dense seq,
-  one commit order), `:1126` (parent incarnation), `:1199` (ordinals never
-  reused), `:1250` (blobs)
+  one commit order), `:1126` (parent incarnation), `:1236` (ordinals never
+  reused), `:1287` (blobs)
 - **2.3 publisher**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:417` (enqueue
-  order), `:1126` (a rejected batch rolls back whole), `:372`, `:622`;
+  order), `:1199` (a rejected batch rolls back whole), `:372`, `:622`;
   `src/test-kernel/support/crashConformance.ts:1114` (one job, one transaction)
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
@@ -891,8 +891,8 @@ These existing suites check the sections above.
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:199` (every golden
   row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:756`, `:1168`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2046`
-  (live state equals reloaded state), `:2078` (batch contract);
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2083`
+  (live state equals reloaded state), `:2115` (batch contract);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:375`, `:526`
   (listing equals the fold)
 - **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:470`,
@@ -900,7 +900,7 @@ These existing suites check the sections above.
   `:410`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
 - **7 claims**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:558`,
-  `:1347`, `:1588` (another OS process), `:1700` (dead owner reclaimed), `:1750`
+  `:1384`, `:1625` (another OS process), `:1737` (dead owner reclaimed), `:1787`
   (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:84`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:

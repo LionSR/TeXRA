@@ -28,22 +28,23 @@ function config(agent: string): AgentConfig {
 let session: SessionHandle;
 
 /** Commit the run's `run.start`, the fact its listing row is built from. */
-const startRun = (id: RunId, identity: RunIdentity) =>
+const startRun = (id: RunId, identity: RunIdentity, parentRunId?: RunId) =>
   session.log.transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', id),
       identity,
       userFollowUpSupport: 'unsupported',
-      parent: null,
+      parent:
+        parentRunId === undefined ? null : { id: parentRunId, callId: null },
       provenance: null,
     },
   ]);
 
 /** An agent run: its start and its configuration record. */
-const writeRun = (id: RunId, agent: string) =>
+const writeRun = (id: RunId, agent: string, parentRunId?: RunId) =>
   Effect.andThen(
-    startRun(id, { kind: 'agent', agent }),
+    startRun(id, { kind: 'agent', agent }, parentRunId),
     seedRunRecord(session, id, config(agent)),
   );
 
@@ -95,6 +96,18 @@ describe('run listing normalization', () => {
           record: expect.objectContaining({ agent: 'bash' }),
         }),
       ]);
+    }),
+  );
+
+  it.effect('keeps agent-spawned child runs out of history listings', () =>
+    Effect.gen(function* () {
+      const rootId = 'eee111' as RunId;
+      const childId = 'fff222' as RunId;
+      yield* writeRun(rootId, 'orchestrator');
+      yield* writeRun(childId, 'search', rootId);
+
+      // A child belongs to its parent's transcript, not to the history list.
+      expect((yield* listRuns(session)).map(({ id }) => id)).toEqual([rootId]);
     }),
   );
 });
