@@ -312,7 +312,7 @@ describe('the golden 1.0 store', () => {
         expect(
           events.flatMap((event) =>
             event.type === 'run.start' && event.parent !== null
-              ? [[event.parent.id, event.parent.callId]]
+              ? [[event.parent.id, event.parent.call?.callId ?? null]]
               : [],
           ),
         ).toEqual([

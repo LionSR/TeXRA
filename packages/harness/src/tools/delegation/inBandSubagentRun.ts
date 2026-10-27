@@ -37,6 +37,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunEnd,
   type RunId,
+  type RunParentCall,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -62,10 +63,9 @@ export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabili
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
-  /** The parent's tool card whose call launches the child. */
-  readonly parentCard?: string;
-  /** That call's id, which owns the child. */
-  readonly parentCallId?: string;
+  /** The parent's call that launches the child, which owns it, and its
+   *  tool card. */
+  readonly parentCall?: RunParentCall;
   /** The grants a fresh child is registered with. */
   readonly grants?: ApprovalGrants;
   /**
@@ -163,11 +163,8 @@ const executeInBand = Effect.fn('executeInBand')(
                     identity: { kind: 'agent', agent: config.agent },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     parentRunId: options.parentRunId,
-                    ...(options.parentCard !== undefined && {
-                      parentCard: options.parentCard,
-                    }),
-                    ...(options.parentCallId !== undefined && {
-                      parentCallId: options.parentCallId,
+                    ...(options.parentCall !== undefined && {
+                      parentCall: options.parentCall,
                     }),
                     ...(options.grants !== undefined && {
                       grants: options.grants,

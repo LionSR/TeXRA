@@ -168,7 +168,7 @@ const RunViewSchema = Schema.Struct({
    *  `halted`): the settled point a whole-task fork cuts at; null before
    *  its first turn ends, when there is nothing to fork. */
   forkPoint: Schema.NullOr(Positive),
-  /** The parent's tool card that launched this run (`run.start.parentCard`). */
+  /** The parent's tool card that launched this run (`run.start.parent.call.card`). */
   parentCard: Schema.NullOr(Schema.String),
   /** Root first. */
   ancestors: Schema.Array(

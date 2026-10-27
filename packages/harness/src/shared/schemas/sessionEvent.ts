@@ -59,6 +59,7 @@ import { TranscriptEventSchema } from './traceEvent';
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
  *  1, assigned by the substrate's publisher and by nothing else. */
 const SeqSchema = Schema.Int.check(Schema.isGreaterThan(0));
+const NonEmpty = Schema.String.check(Schema.isMinLength(1));
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. Local: no row
@@ -144,11 +145,14 @@ const RunParentSchema = Schema.Struct({
   id: RunIdSchema,
   uid: Schema.String.check(Schema.isUUID()),
   /** The parent's tool call that launched this run (an `agent` call's
-   *  child, a background `script` run), which owns it until it detaches;
-   *  null for a child no call launched. */
-  callId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+   *  child, a background `script` run), which owns it until it detaches,
+   *  with its tool card (`logId`: a provider may reuse a call id, never a
+   *  card); null for a child no call launched. */
+  call: Schema.NullOr(Schema.Struct({ callId: NonEmpty, card: NonEmpty })),
 });
 export type RunParent = typeof RunParentSchema.Type;
+/** The call that launched a child run, with its tool card. */
+export type RunParentCall = NonNullable<RunParent['call']>;
 
 /**
  * Where a run's history came from, when not from its own launch: a fork
@@ -187,12 +191,6 @@ const RunStartEventSchema = durable('run.start', {
   parent: Schema.NullOr(RunParentSchema),
   /** Null for a run that starts fresh. */
   provenance: Schema.NullOr(RunProvenanceSchema),
-  /** The parent's tool card (its `logId`) whose call launched this run: an
-   *  `agent` call's child, a `script` call's background run. Absent for a
-   *  root and for a child no card launched. */
-  parentCard: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
   /** The run's approval policy at launch, from the session's single authority. */
   approvalPolicy: Schema.optional(Schema.NullOr(ApprovalPolicySnapshotSchema)),
 });

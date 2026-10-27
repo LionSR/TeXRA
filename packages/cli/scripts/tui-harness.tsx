@@ -537,7 +537,7 @@ function seedRun(
     parent:
       options.parentRunId === undefined
         ? null
-        : { id: options.parentRunId, callId: null },
+        : { id: options.parentRunId, call: null },
     provenance: null,
   });
   if (identity.kind === 'agent') {

@@ -684,9 +684,9 @@ export const databaseLayer = (
             parent = {
               id: runIdOf(aggregateTarget(edges.parent).id),
               uid: parentState.uid,
-              callId:
+              call:
                 draft.type === 'run.start'
-                  ? (draft.parent?.callId ?? null)
+                  ? (draft.parent?.call ?? null)
                   : null,
             };
           }

@@ -73,7 +73,7 @@ return { delivered: child.response }`;
 
 /** The crash-point conformance run's script: a read and a command in one
  *  `Promise.all`, then an awaited `agent()` call, whose child the call owns
- *  (`run.start.parent.callId`). */
+ *  (`run.start.parent.call`). */
 const GOLDEN_CRASH_SOURCE = `phase('Gather')
 const [notes, shell] = await Promise.all([
   tools.read_file({ path: 'notes.tex' }),

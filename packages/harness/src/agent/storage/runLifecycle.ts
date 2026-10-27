@@ -25,6 +25,7 @@ import {
   type RunId,
   type RunIdentity,
   type RunOutcome,
+  type RunParentCall,
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -87,9 +88,9 @@ export const activationRows = Effect.fn('activationRows')(function* (
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;
-  readonly parentCard?: string; // the parent's tool card launching it
-  /** That call's id: the call that owns this run until it detaches. */
-  readonly parentCallId?: string;
+  /** The parent's call that launched it, which owns this run until it
+   *  detaches, and that call's tool card. */
+  readonly parentCall?: RunParentCall;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
@@ -172,12 +173,9 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
             ? null
             : {
                 id: options.parentRunId,
-                callId: options.parentCallId ?? null,
+                call: options.parentCall ?? null,
               },
         provenance: options.provenance ?? null,
-        ...(options.parentCard !== undefined && {
-          parentCard: options.parentCard,
-        }),
         approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
       });
     }
