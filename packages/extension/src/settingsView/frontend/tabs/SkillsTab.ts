@@ -73,7 +73,6 @@ export class SkillsTab extends LitElement {
     `,
   ];
   @property({ type: Boolean }) masterEnabled = false;
-  @property({ attribute: false }) disabledSkills: string[] = [];
   @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
     [];
   @property({ attribute: false }) skills: readonly SkillDisplayItem[] = [];

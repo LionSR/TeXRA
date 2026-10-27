@@ -22,7 +22,6 @@ export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
   readonly onPersist?: () => void;
   readonly echoOnPersist?: boolean;
-  readonly remainder: string;
   readonly availableRows?: number;
 }
 

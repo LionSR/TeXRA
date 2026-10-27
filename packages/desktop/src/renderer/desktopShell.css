@@ -1,10 +1,6 @@
 /* Desktop composition: a title bar, project/history rail, agent and workspace.
    Controls and typography use the shared skins; this sheet only owns layout. */
 :root {
-  --shell-frame-header-height: 44px;
-  --shell-frame-icon-size: 14px;
-  --shell-frame-icon-box: 24px;
-  --shell-workbench-tab-height: 38px;
   --macos-titlebar-safe-inset: 96px;
 }
 .desktop-app {

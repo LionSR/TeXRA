@@ -104,7 +104,6 @@ const askHeadlessUserQuestion = Effect.fn(
         const answer = yield* whilePrompting(
           hooks,
           queueCliApprovalQuestion(context, {
-            kind: 'approval',
             summary: payload.context
               ? `${payload.context}\n\n${formatted}`
               : formatted,

@@ -244,10 +244,7 @@ export interface SessionHandleInit {
    */
   readonly interruptedTasks?: 'offer' | 'retry';
   /** Absent, the project's database; ephemeral, a throwaway one. */
-  readonly transcriptMode?: {
-    readonly kind: 'ephemeral';
-    readonly reason: string;
-  };
+  readonly transcriptMode?: { readonly kind: 'ephemeral' };
 }
 
 /** The rows that open a request: its `request.opened`, and the

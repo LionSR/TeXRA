@@ -721,7 +721,7 @@ export async function runChat(
   );
   inkRef.current = ink;
   // No model yet: the "Connect a model" panel is the first thing on screen.
-  if (modelConnectionNeeded.get()) openCliSlashCommandForm('login', '');
+  if (modelConnectionNeeded.get()) openCliSlashCommandForm('login');
 
   const exitController = createSessionExitController({
     ink,

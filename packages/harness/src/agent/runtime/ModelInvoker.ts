@@ -519,7 +519,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         function* (
           cell: RunCell,
           invocation: InvocationRef,
-          request: InvokeRequest,
           bound: BoundModel,
           accepted: NonNullable<Attempt['accepted']>,
         ): Effect.fn.Return<
@@ -687,7 +686,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           attempt: (bound, ref, accepted) =>
             accepted === null
               ? attemptOnce(cell, ref, request, bound)
-              : observeAccepted(cell, ref, request, bound, accepted),
+              : observeAccepted(cell, ref, bound, accepted),
           failed: Effect.fn('ModelInvoker.failed')(function* (
             ref,
             { error, unsent },

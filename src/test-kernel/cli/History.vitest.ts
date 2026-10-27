@@ -215,7 +215,6 @@ describe('CLI history runtime', () => {
       Effect.succeed({
         ...host.platform,
         host: host.roots.host,
-        globalStorage: host.roots.globalStorage,
         config: host.roots.config,
         workspaceState: host.roots.workspaceState,
         repoState: host.roots.repoState,

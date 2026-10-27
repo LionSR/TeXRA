@@ -164,7 +164,6 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
     value: {
       kind: 'access',
       selection: {
-        kind: 'subscription-preference',
         provider: 'chatgpt',
         state: 'on',
       },
@@ -176,7 +175,6 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
     value: {
       kind: 'access',
       selection: {
-        kind: 'subscription-preference',
         provider: 'grok',
         state: 'on',
       },

@@ -7,9 +7,7 @@
  * waiting out the timer or dropping the work.
  *
  * `schedule()` always (re)starts the timer, matching a classic trailing
- * debounce. A call site that instead wants "start once, coalesce further
- * calls until it fires" (a throttle-style batching window) can guard with
- * `pending`: `if (!batcher.pending) batcher.schedule();`.
+ * debounce.
  *
  * The timer handle is cleared *before* the callback runs, so a `schedule()`
  * made from inside the callback opens a fresh window that this invocation's
@@ -17,7 +15,7 @@
  * transcript sync flushes buffered trace chunks into the store from inside
  * its own callback, which synchronously re-schedules. A library debounce
  * that invokes and then cancels (es-toolkit's does) silently drops that
- * reschedule and leaves `pending` stuck true, freezing every later update.
+ * reschedule, freezing every later update.
  *
  * The callback is fixed at creation and takes no arguments — call sites that
  * need per-invocation data close over their own mutable state (as the
@@ -34,8 +32,6 @@ export interface FlushableDebounce {
   flush(): void;
   /** Clear the pending timer without invoking the callback. No-op when nothing is pending. */
   cancel(): void;
-  /** True while a call is scheduled and hasn't fired, flushed, or been cancelled yet. */
-  readonly pending: boolean;
 }
 
 export function createFlushableDebounce(
@@ -66,8 +62,5 @@ export function createFlushableDebounce(
       invoke();
     },
     cancel,
-    get pending() {
-      return timer !== undefined;
-    },
   };
 }

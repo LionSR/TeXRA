@@ -101,12 +101,6 @@ export class AgentCliSessionRegistry {
     });
   }
 
-  release(sessionId: string): void {
-    const state = this.sessions.get(sessionId);
-    this.sessions.delete(sessionId);
-    settleReservation(state, undefined);
-  }
-
   /** Release every alias owned by one child run, and its hold. */
   releaseByRunId(runId: RunId): void {
     for (const [sessionId, state] of this.sessions) {

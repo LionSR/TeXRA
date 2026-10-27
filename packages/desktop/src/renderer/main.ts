@@ -468,7 +468,6 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
 }
 
 interface SplitPanelElement extends HTMLElement {
-  readonly position: number;
   readonly positionInPixels: number;
 }
 

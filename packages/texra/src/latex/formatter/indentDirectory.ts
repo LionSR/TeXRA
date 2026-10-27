@@ -17,25 +17,21 @@ import type { LatexFormatter } from './texFormatter';
 export type IndentLatexResult =
   | {
       status: 'formatted';
-      directory: string;
       count: number;
       /** The `.tex` files the formatter ran on and failed. */
       failed: readonly string[];
     }
   | {
       status: 'disabled';
-      directory: string;
       count: 0;
     }
   | {
       status: 'missing-config';
-      directory: string;
       count: 0;
       configPath: string;
     }
   | {
       status: 'error';
-      directory: string;
       count: 0;
       error: unknown;
     };
@@ -73,7 +69,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
     yield* Effect.logDebug(
       'LaTeX formatter disabled; skipping indentation',
     ).pipe(withLogChannel(CHANNEL));
-    return { status: 'disabled', directory, count: 0 };
+    return { status: 'disabled', count: 0 };
   }
   const {
     id,
@@ -92,7 +88,6 @@ export const indentLatexFilesInDirectory = Effect.fn(
     );
     return {
       status: 'missing-config',
-      directory,
       count: 0,
       configPath: config,
     };
@@ -168,7 +163,6 @@ export const indentLatexFilesInDirectory = Effect.fn(
         withLogChannel(CHANNEL),
         Effect.as<IndentLatexResult>({
           status: 'formatted',
-          directory,
           count: indentedCount,
           failed,
         }),
@@ -181,7 +175,6 @@ export const indentLatexFilesInDirectory = Effect.fn(
         withLogChannel(CHANNEL),
         Effect.as({
           status: 'error',
-          directory,
           count: 0,
           error: err,
         } satisfies IndentLatexResult),

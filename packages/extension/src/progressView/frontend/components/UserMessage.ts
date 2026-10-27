@@ -118,10 +118,6 @@ export class UserMessage extends LitElement {
         opacity: 1;
       }
 
-      .user-message-icon {
-        font-size: var(--font-size-xs);
-      }
-
       .user-message-content {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
@@ -367,9 +363,6 @@ export class UserMessage extends LitElement {
 }
 
 declare global {
-  interface HTMLElementEventMap {
-    'fork-from-here': CustomEvent<ForkFromHere>;
-  }
   interface HTMLElementTagNameMap {
     'user-message': UserMessage;
   }

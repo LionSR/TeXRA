@@ -248,7 +248,6 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         answer = yield* whilePrompting(
           hooks,
           askCliApprovalQuestion(context, {
-            kind: 'approval',
             summary: content.summary,
             prompt,
           }),
@@ -269,7 +268,6 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         const feedbackAnswer = yield* whilePrompting(
           hooks,
           askCliApprovalQuestion(context, {
-            kind: 'approval',
             summary: '',
             prompt: 'Rejection feedback (optional, Enter to skip): ',
           }),

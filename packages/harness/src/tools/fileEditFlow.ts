@@ -19,7 +19,6 @@ import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
   requestToolEditApproval,
-  type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { findExternalRoot } from '@utils/files/externalRoots';
@@ -177,9 +176,7 @@ export function replaceLiteralMatches({
 }
 
 interface AppliedFileEdit {
-  approval: AcceptedToolEditApprovalResult;
   appliedContent: string;
-  baseContent: string;
 }
 
 interface FileEditPresentation {
@@ -250,7 +247,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
         ),
       );
     }
-    const presentation = present({ approval, ...written });
+    const presentation = present(written);
     const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,

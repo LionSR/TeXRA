@@ -83,8 +83,6 @@ export interface StepRoot {
 export interface MatchedExternalRoot extends Omit<ExternalRoot, 'kind'> {
   /** The registered root's kind; absent for a step root. */
   readonly kind?: ExternalRootKind;
-  /** Path component relative to `absolutePath` (POSIX separators, '' for the root itself). */
-  readonly relative: string;
 }
 
 /** Keyed by kind. */
@@ -222,12 +220,7 @@ export function findExternalRoot(
   ]) {
     if (!isPathWithin(root.absolutePath, resolved)) continue;
 
-    const candidate: MatchedExternalRoot = {
-      ...root,
-      relative: path
-        .relative(root.absolutePath, resolved)
-        .replaceAll(path.sep, '/'),
-    };
+    const candidate: MatchedExternalRoot = root;
 
     // Prefer the most-specific (longest) match; on ties, prefer read-only so a
     // writable entry cannot override a colocated read-only one.

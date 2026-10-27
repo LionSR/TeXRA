@@ -3386,7 +3386,6 @@ interface StreamChunkEvent {
   readonly type: 'stream.chunk';
   readonly id: string;
   readonly text: string;
-  readonly stageId?: string;
 }
 ```
 

@@ -74,10 +74,7 @@ function installTestPlatform(): Promise<void> {
     session = await Effect.runPromise(
       openTestDefaultSession({
         roots: testWorkspaceRoots(),
-        transcriptMode: {
-          kind: 'ephemeral',
-          reason: 'accept files test session',
-        },
+        transcriptMode: { kind: 'ephemeral' },
       }),
     );
     detachHostInteractions();

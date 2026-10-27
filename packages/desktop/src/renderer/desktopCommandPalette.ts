@@ -38,7 +38,6 @@ interface CommandPaletteEntry {
 export interface CommandPaletteController {
   element: HTMLElement;
   open(): void;
-  close(): void;
 }
 
 interface DesktopCommandPaletteOptions {
@@ -328,7 +327,7 @@ export function createDesktopCommandPalette({
   });
 
   renderTemplate();
-  return { element: dialog, open, close };
+  return { element: dialog, open };
 }
 
 function toPaletteEntry(

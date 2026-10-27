@@ -252,12 +252,6 @@ export abstract class PollingSourceBase<
     };
   }
 
-  disposeAll(): void {
-    this.subscriptions.clear();
-    this.stopPolling();
-    this.notifyKeysChanged();
-  }
-
   /**
    * Subclass entry point. Looks up `key` in the map, creates initial state via
    * `initState(now)` (the installed `Clock`'s reading) if absent (enforcing the max-concurrent cap), adds the

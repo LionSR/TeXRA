@@ -161,7 +161,6 @@ function RegisteredFormSurface(props: {
 
 export function openRegisteredCliSlashForm(
   command: SlashCommand,
-  remainder: string,
   onPersist?: () => void,
 ): boolean {
   const Form = command.formComponent;
@@ -179,7 +178,6 @@ export function openRegisteredCliSlashForm(
       <RegisteredFormSurface availableRows={availableRows}>
         <Form
           availableRows={availableRows}
-          remainder={remainder.trimStart()}
           onPersist={onPersist ? persist : undefined}
           echoOnPersist={command.echo === 'ifPersists'}
           onDone={close}
@@ -190,10 +188,7 @@ export function openRegisteredCliSlashForm(
   return true;
 }
 
-export function openCliSlashCommandForm(
-  commandName: string,
-  remainder: string,
-): boolean {
+export function openCliSlashCommandForm(commandName: string): boolean {
   const command = findSlashCommand(commandName);
-  return command ? openRegisteredCliSlashForm(command, remainder) : false;
+  return command ? openRegisteredCliSlashForm(command) : false;
 }

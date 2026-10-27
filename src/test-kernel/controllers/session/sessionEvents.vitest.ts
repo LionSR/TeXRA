@@ -621,7 +621,7 @@ describe('Sessions owner', () => {
   const open = (storagePath: string) =>
     openTestSession({
       roots: createFakeWorkspaceRoots({ storagePath }),
-      transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
+      transcriptMode: { kind: 'ephemeral' },
     });
 
   // Real polling loops (`vi.waitFor`) on the process runtime's live work:

@@ -78,8 +78,6 @@ interface SelectProps<T> {
       readonly active: boolean;
       readonly focused: boolean;
       readonly hiddenItemCount: number;
-      readonly index: number;
-      readonly overflowText?: string;
     },
   ) => ReactNode;
 }
@@ -451,10 +449,6 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                   active,
                   focused,
                   hiddenItemCount: hiddenBefore + hiddenAfter,
-                  index: i,
-                  ...(showInlineOverflow
-                    ? { overflowText: inlineOverflowText }
-                    : {}),
                 })}
               </>
             ) : (

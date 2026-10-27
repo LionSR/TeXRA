@@ -109,7 +109,6 @@ function record(d: Draft, event: TranscriptEvent): void {
           true,
         ),
         label: event.label,
-        open: true,
       });
       applyTaskGroup(d, event);
       return;
@@ -117,10 +116,7 @@ function record(d: Draft, event: TranscriptEvent): void {
 
     case 'stage.end': {
       const slot = ix.slots.get(event.id);
-      if (slot?.kind === 'stage') {
-        slot.open = false;
-        write(d, slot);
-      }
+      if (slot?.kind === 'stage') write(d, slot);
       applyTaskGroup(d, event);
       return;
     }

@@ -123,7 +123,6 @@ export interface LeanServerOptions {
 export class LeanServer extends Context.Service<
   LeanServer,
   {
-    readonly workspaceRoot: string;
     /** Settles once the scope has fully released the process. */
     readonly closed: Deferred.Deferred<void>;
     /**
@@ -618,7 +617,6 @@ const make = ({
     });
 
     return LeanServer.of({
-      workspaceRoot: root,
       closed,
       shutdown,
       diagnostics,

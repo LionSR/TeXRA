@@ -68,7 +68,7 @@ export function handleTuiSlashCommand(
         `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
       );
       if (
-        !openRegisteredCliSlashForm(redactedIntent, '', () =>
+        !openRegisteredCliSlashForm(redactedIntent, () =>
           appendSlashCommandEcho(line),
         )
       ) {
@@ -85,7 +85,7 @@ export function handleTuiSlashCommand(
       registered?.formComponent !== undefined &&
       (!rest || registered.formRemainders?.includes(rest.toLowerCase()))
     ) {
-      openRegisteredCliSlashForm(registered, rest, () =>
+      openRegisteredCliSlashForm(registered, () =>
         appendSlashCommandEcho(line),
       );
       return true;
@@ -99,7 +99,7 @@ export function handleTuiSlashCommand(
     }
     if (registered) {
       if (
-        openRegisteredCliSlashForm(registered, parsed.remainder, () =>
+        openRegisteredCliSlashForm(registered, () =>
           appendSlashCommandEcho(line),
         )
       ) {

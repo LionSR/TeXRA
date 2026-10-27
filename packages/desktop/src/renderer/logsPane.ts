@@ -29,7 +29,6 @@ type DesktopLogLevel = 'debug' | 'error' | 'info' | 'warn' | 'unknown';
 interface DesktopLogEntry {
   readonly id: string;
   readonly level: DesktopLogLevel;
-  readonly message: string;
   readonly raw: string;
   readonly summary: string;
   readonly timestamp?: string;
@@ -124,7 +123,6 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
       level: line
         ? (LEVEL_PRESENTATION_KEY[line.level] ?? 'unknown')
         : 'unknown',
-      message,
       raw,
       summary:
         truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',

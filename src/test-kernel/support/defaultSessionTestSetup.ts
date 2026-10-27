@@ -16,10 +16,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 Effect.runSync(
   openTestDefaultSession({
     roots: testWorkspaceRoots(),
-    transcriptMode: {
-      kind: 'ephemeral',
-      reason: 'test process default session',
-    },
+    transcriptMode: { kind: 'ephemeral' },
   }).pipe(Effect.provideService(References.PreventSchedulerYield, true)),
 );
 

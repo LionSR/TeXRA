@@ -23,8 +23,6 @@ export const OWN_API_KEYS = {
   /** Model-access picker option. */
   option: {
     label: 'Use your own API keys',
-    description:
-      'Model calls are billed to your own accounts at OpenAI, Anthropic, and other providers. You get higher limits, plus the models your plan does not cover.',
   },
 } as const;
 

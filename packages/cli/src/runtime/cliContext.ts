@@ -47,7 +47,6 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 type CliMode = 'headless' | 'interactive';
 
 export interface CliPromptRequest {
-  readonly kind: 'approval';
   readonly summary: string;
   readonly prompt: string;
 }

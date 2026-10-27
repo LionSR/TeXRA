@@ -61,12 +61,6 @@ export const catalogDetailStyles: CSSResult = css`
     flex-wrap: wrap;
     margin-block: var(--wa-space-xs);
   }
-  .catalog-footnote {
-    padding-block-start: var(--wa-space-2xs);
-    font-size: var(--font-size-xs);
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary);
-  }
   .catalog-detail-path {
     font-size: var(--font-size-xs);
     font-family: var(--wa-font-family-mono);

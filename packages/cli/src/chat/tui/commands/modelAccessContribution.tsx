@@ -156,7 +156,7 @@ export function modelAccessContribution(deps: {
           // The key form takes the slot this form leaves; closing first keeps
           // `takeActiveForm` from requeueing this form behind it.
           props.onDone(undefined);
-          openCliSlashCommandForm('key', '');
+          openCliSlashCommandForm('key');
         }}
         onCancel={() => props.onDone(undefined)}
       />
@@ -209,7 +209,7 @@ export function modelAccessContribution(deps: {
                 'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
               );
             }
-            openCliSlashCommandForm('key', '');
+            openCliSlashCommandForm('key');
           }),
         formComponent: ProviderApiKeyFormAdapter,
         redactInput: true,

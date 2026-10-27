@@ -251,9 +251,6 @@ export const toolPathProtectionEnabled = settingSignal<boolean>(
 export const agentSkillsEnabled = settingSignal<boolean>(
   AGENT_SKILLS_CONFIG_KEY,
 );
-export const disabledSkills = settingSignal<string[]>(
-  WorkspaceStateKey.DISABLED_SKILLS,
-);
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
 );

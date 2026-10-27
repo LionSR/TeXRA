@@ -178,7 +178,6 @@ function workflowRun(
   const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
   return {
     ok: true,
-    runId,
     outcomePersisted: true,
     result: {
       outcome,

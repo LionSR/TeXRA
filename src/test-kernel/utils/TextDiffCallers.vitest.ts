@@ -50,7 +50,6 @@ describe('approved write', () => {
 
         expect(writeResult).toEqual({
           appliedContent: 'alpha\nBETA\nomega\nlocal\n',
-          baseContent: 'alpha\nbeta\nomega\nlocal\n',
         });
         expect(
           yield* Effect.tryPromise(() =>

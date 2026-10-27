@@ -214,7 +214,7 @@ export function registerBuiltinSlashCommands(options: {
             selectable && canSelectModel()
               ? (value) => {
                   props.onDone(value);
-                  openCliSlashCommandForm('model', '');
+                  openCliSlashCommandForm('model');
                 }
               : props.onDone,
         })}

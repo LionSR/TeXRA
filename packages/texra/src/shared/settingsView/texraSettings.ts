@@ -87,9 +87,14 @@ const CliModelSchema = Schema.optional(
   Schema.Trim.check(Schema.isMinLength(1)),
 );
 
-/** Per-command overrides of the top-level `agent`/`model` rows. */
-const CliCommandDefaultsSchema = Schema.optional(
+/** `texra chat`'s overrides of the top-level `agent`/`model` rows. */
+const CliChatDefaultsSchema = Schema.optional(
   Schema.Struct({ agent: CliAgentSchema, model: CliModelSchema }),
+);
+
+/** `texra run`'s override of the top-level `model` row; its agent is an argument. */
+const CliRunDefaultsSchema = Schema.optional(
+  Schema.Struct({ model: CliModelSchema }),
 );
 
 /** TeXRA's config-file-backed rows, keyed by their dotted path under `texra.`. */
@@ -100,7 +105,7 @@ const TEXRA_CONFIG_ROWS: Record<
   agent: {
     schema: CliAgentSchema,
     description:
-      'Agent `texra chat` and `texra run` start with when neither `--agent` nor a per-command default names one.',
+      'Agent `texra chat` starts with when neither `--agent` nor `texra.chat.agent` names one.',
   },
   model: {
     schema: CliModelSchema,
@@ -108,14 +113,14 @@ const TEXRA_CONFIG_ROWS: Record<
       'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
   },
   chat: {
-    schema: CliCommandDefaultsSchema,
+    schema: CliChatDefaultsSchema,
     description:
       'Agent and model `texra chat` starts with, overriding the top-level defaults.',
   },
   run: {
-    schema: CliCommandDefaultsSchema,
+    schema: CliRunDefaultsSchema,
     description:
-      'Agent and model `texra run` starts with, overriding the top-level defaults.',
+      'Model `texra run` starts with, overriding the top-level `texra.model`.',
   },
   outputFormat: {
     schema: CliOutputFormatSchema,

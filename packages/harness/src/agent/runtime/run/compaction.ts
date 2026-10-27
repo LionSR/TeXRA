@@ -124,7 +124,6 @@ interface Summary {
   readonly replacement: RunState['messages'][number];
   readonly usage: CallResult['usage'];
   readonly to: number;
-  readonly tokensBefore: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;
   readonly cell: RunCell; // its attempts committed through it; it lands here
@@ -236,7 +235,6 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     },
     usage: summarized.value.usage,
     to: conversation.length,
-    tokensBefore,
     contextWindow,
     activity,
     cell: input.cell,

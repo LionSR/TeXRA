@@ -489,7 +489,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       script === null &&
       step.offered.some((t) => t.name === fact.toolName && !t.sent);
     const tool = unsent ? undefined : step.registry.get(fact.toolName);
-    const stageId = script?.stageId;
     // A slow tool's card opens as its body starts; what the tool prints is
     // transient text on it, capped, never a row, refused once the call returned.
     let accepting = false;
@@ -503,7 +502,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         type: 'stream.chunk',
         id: fact.logId,
         text,
-        ...(stageId !== undefined ? { stageId } : {}),
       });
     };
     const { requests, retireStanding } = callRequests(
