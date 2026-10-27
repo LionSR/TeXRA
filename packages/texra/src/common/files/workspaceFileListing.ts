@@ -24,11 +24,13 @@ interface WorkspaceFileListingOptions {
 
 /**
  * The workspace-relative paths under `root` the filters admit, sorted.
- * Each entry's type comes with the directory listing (`readdir` dirents), so
- * only a symlink costs a `stat` — which follows it, matching the platform
- * listing this replaces: a link to a directory is visited, a link to a file
- * is listed, and a dangling, circular, or unreadable link, like an entry
- * that vanished between the listing and the probe, is skipped.
+ * Each entry's type comes with the directory listing (`readdir` dirents,
+ * read from Node directly: `FileSystem` has no typed listing), so only a
+ * symlink costs a `stat`, through the `FileSystem` service, which follows
+ * it: a link to a directory is visited, a link to a file is listed, and a
+ * dangling, circular, or unreadable link is skipped. A directory that
+ * vanished between its parent's listing and its own is skipped; a file
+ * that did is still listed, since nothing probes it.
  */
 export const listWorkspaceFiles = Effect.fn(
   'workspaceFileListing.listWorkspaceFiles',
@@ -76,7 +78,9 @@ export const listWorkspaceFiles = Effect.fn(
 
             if (type === 'Directory') {
               if (shouldVisitDirectory(relativePath, filters)) {
-                yield* visit(absolutePath, relativePath);
+                yield* visit(absolutePath, relativePath).pipe(
+                  Effect.catchIf(absentReason, () => Effect.void),
+                );
               }
             } else if (
               type === 'File' &&
