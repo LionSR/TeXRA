@@ -195,7 +195,7 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
   return {
     model: judgedModel(model, spec.billing),
     origin: originOf(configuration),
-    background: !webSocket && wire.backgroundCapable(configuration),
+    background: model.background !== undefined,
     persistentConnection: webSocket,
     serviceTier:
       configuration.protocol === 'openai-responses'

@@ -1,6 +1,8 @@
 // Third-party imports
 import { Schema, Struct } from 'effect';
 
+import type { ModelConfiguration } from './turn.js';
+
 /**
  * Scheme, host and path only. The origin is written into durable rows that
  * are never scrubbed, and a URL check alone admits `user:key@host`,
@@ -80,6 +82,25 @@ export function sameModelOrigin(
     left.deployment.endpoint === right.deployment.endpoint &&
     left.deployment.credentialScope === right.deployment.credentialScope
   );
+}
+
+/**
+ * Whether a configuration admits background work: Responses and Google mark
+ * it, and Google retrieves a background result through server-side state.
+ * The one answer: a protocol model carries its `background` member exactly
+ * when this holds, and the binding reports that member.
+ */
+export function backgroundCapable(configuration: ModelConfiguration): boolean {
+  switch (configuration.protocol) {
+    case 'openai-responses':
+      return configuration.background === 'supported';
+    case 'google-interactions':
+      return (
+        configuration.background === 'supported' && configuration.defaults.store
+      );
+    case 'anthropic-messages':
+      return false;
+  }
 }
 
 function hasSupportedJsonKeys(

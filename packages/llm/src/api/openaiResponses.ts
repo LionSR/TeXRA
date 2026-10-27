@@ -36,7 +36,7 @@ import {
   fillModelError,
   type RemoteOperation,
 } from '../errors.js';
-import { originOf } from '../protocol.js';
+import { backgroundCapable, originOf } from '../protocol.js';
 import { admitObservation, ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
@@ -491,7 +491,7 @@ export function openaiResponsesModel(
           releaseUploads: uploads.releaseUploads,
         }
       : {}),
-    ...(config.background === 'supported'
+    ...(backgroundCapable(config)
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),
   });
