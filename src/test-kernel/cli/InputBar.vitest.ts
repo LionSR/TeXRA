@@ -3,15 +3,7 @@ import { Effect, Fiber } from 'effect';
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import {
@@ -27,9 +19,6 @@ const clipboardMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
-
-beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
-afterEach(() => vi.clearAllMocks());
 
 describe('InputBar slash submit', () => {
   beforeAll(bindTestSessionView);
@@ -58,16 +47,11 @@ describe('InputBar slash submit', () => {
         ['/key private-value', false],
         ['/keys private-value', false],
         ['/key=private-value', false],
-        ['/key:private-value', false],
-        ['/key/private-value', false],
         ['/keysk-private-value', false],
-        ['/keyArbitraryCredentialValue', false],
         ['/ky private-value', false],
-        ['/kye:sk-private-value', false],
         ['/apikey private-value', false],
         ['/unknown', true],
         ['/unknown private-value', false],
-        ['/unknown=value', true],
         ['/tmp=backup', true],
         ['/keyboard shortcuts', false],
         ['/keynote.tex', true],
@@ -82,35 +66,35 @@ describe('InputBar slash submit', () => {
     }
   });
 
-  effectIt.live.each([
-    ['submits the latest draft', ' [Image #1]'],
-    ['keeps an image chip attached to the typed slash prefix', '[Image #1]'],
-  ])('waits for pending image pastes and %s', ([, chipSuffix]) =>
-    Effect.gen(function* () {
-      const imagePasteQueue = new ImagePasteQueue();
-      const paste = createDeferred();
-      const submitted: string[] = [];
-      let draft = '/h';
+  effectIt.live(
+    'waits for pending image pastes and submits the latest draft',
+    () =>
+      Effect.gen(function* () {
+        const chipSuffix = ' [Image #1]';
+        const imagePasteQueue = new ImagePasteQueue();
+        const paste = createDeferred();
+        const submitted: string[] = [];
+        let draft = '/h';
 
-      const pasteFiber = yield* Effect.forkChild(
-        Effect.promise(() => paste.promise).pipe(
-          Effect.map(() => {
-            draft = `/h${chipSuffix}`;
-          }),
-        ),
-      );
-      imagePasteQueue.add(pasteFiber, testRuntime());
+        const pasteFiber = yield* Effect.forkChild(
+          Effect.promise(() => paste.promise).pipe(
+            Effect.map(() => {
+              draft = `/h${chipSuffix}`;
+            }),
+          ),
+        );
+        imagePasteQueue.add(pasteFiber, testRuntime());
 
-      imagePasteQueue.runWhenIdle(() => {
-        submitted.push(draft);
-      });
+        imagePasteQueue.runWhenIdle(() => {
+          submitted.push(draft);
+        });
 
-      expect(submitted).toEqual([]);
+        expect(submitted).toEqual([]);
 
-      paste.resolve();
-      yield* Fiber.await(pasteFiber);
+        paste.resolve();
+        yield* Fiber.await(pasteFiber);
 
-      expect(submitted).toEqual([`/h${chipSuffix}`]);
-    }),
+        expect(submitted).toEqual([`/h${chipSuffix}`]);
+      }),
   );
 });

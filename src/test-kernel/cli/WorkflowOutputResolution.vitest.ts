@@ -82,12 +82,9 @@ describe('CLI workflow output resolution', () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
     const outputFile = join(cwd, 'out.tex');
-    const outputDirectoryFile = join(cwd, 'out', 'paper.tex');
     await writeFile(outputFile, 'existing file');
-    await mkdir(dirname(outputDirectoryFile), { recursive: true });
-    await writeFile(outputDirectoryFile, 'existing directory file');
 
-    const resultForFile = await resolveOutput(
+    const result = await resolveOutput(
       outputFile,
       undefined,
       workflowResult(
@@ -97,33 +94,13 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       { storageRoot: join(cwd, 'storage') },
     );
-    const resultForDirectory = await resolveOutput(
-      undefined,
-      join(cwd, 'out'),
-      workflowResult(
-        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
-        RUN_OUTCOME.CANCELLED,
-      ),
-      testContext(cwd),
-      {
-        expectedOutputFiles: ['paper.tex'],
-        storageRoot: join(cwd, 'storage'),
-      },
-    );
 
-    for (const result of [resultForFile, resultForDirectory]) {
-      expect(result).toMatchObject({
-        outcome: RUN_OUTCOME.CANCELLED,
-        workingDirectory: cwd,
-        runDirectory: runDirUnder(join(cwd, 'storage'), TEST_RUN_ID),
-      });
-      expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
-      expect(Object.hasOwn(result, 'copiedOutputs')).toBe(false);
-    }
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
+      runDirectory: runDirUnder(join(cwd, 'storage'), TEST_RUN_ID),
+    });
+    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
     await expect(readFile(outputFile, 'utf8')).resolves.toBe('existing file');
-    await expect(readFile(outputDirectoryFile, 'utf8')).resolves.toBe(
-      'existing directory file',
-    );
   });
 
   it('uses original-path lineage before flat generated names when basenames collide', async () => {

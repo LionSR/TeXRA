@@ -1,9 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import { selectCliRunModel } from '@cli/runtime/runModel';
-import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
-import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -29,13 +28,6 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 const selectCliRunnableModelMock = vi.mocked(selectCliRunnableModel);
 
-function makeContext(partial: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    cwd: '/tmp',
-    ...partial,
-  });
-}
-
 /** Installs a host whose config carries `texra.run.model` — the tier
  *  `selectCliRunModel` resolves through the workspace roots. */
 function withRunModel(model: string): Promise<void> {
@@ -57,21 +49,10 @@ const runSelect = (
 ): Promise<string> => testRuntime().runPromise(selectCliRunModel(...args));
 
 describe('selectCliRunModel precedence', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    selectCliRunnableModelMock.mockImplementation((request) =>
-      Effect.succeed({
-        model:
-          request.find((candidate) => candidate.model)?.model ??
-          CLI_CHEAP_START_MODEL,
-      }),
-    );
-  });
-
   it('does not fall back from an explicit unavailable model', async () => {
     await withRunModel('deepseek/deepseek-v4-flash');
     const stores = storesOf();
-    const context = makeContext();
+    const context = createTestCliContext({ cwd: '/tmp' });
     selectCliRunnableModelMock.mockReturnValueOnce(
       Effect.fail(
         new Error(

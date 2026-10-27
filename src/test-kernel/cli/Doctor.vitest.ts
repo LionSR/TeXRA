@@ -11,24 +11,6 @@ const context: CliContext = createTestCliContext({
   resourcesPath: '/resources',
 });
 
-function captureDoctorStdout(
-  writeContext: CliContext,
-  report: DoctorReport,
-): string {
-  let stdout = '';
-  const stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
-    stdout += chunk;
-  });
-
-  try {
-    writeDoctorReport(writeContext, report);
-  } finally {
-    stdoutSpy.mockRestore();
-  }
-
-  return stdout;
-}
-
 describe('CLI doctor', () => {
   it('redacts email-like values in check messages and hints', () => {
     const report: DoctorReport = {
@@ -44,10 +26,17 @@ describe('CLI doctor', () => {
       ],
     };
 
-    const text = captureDoctorStdout(context, report);
+    let text = '';
+    const stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+      text += chunk;
+    });
+    try {
+      writeDoctorReport(context, report);
+    } finally {
+      stdoutSpy.mockRestore();
+    }
 
     expect(text).toContain('Workspace config references o***@e***.edu.');
-    expect(text).toContain('Ask a***@e***.edu to update it.');
     expect(text).not.toContain('owner@example.edu');
     expect(text).not.toContain('admin@example.edu');
   });

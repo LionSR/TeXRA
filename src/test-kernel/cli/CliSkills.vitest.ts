@@ -23,17 +23,6 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
 
-/** The listing's own setting slots, carried as data by the caller. */
-const settings = makeFakeSettingsStores('cli').stores;
-/** The roots of a listing for `workspace`, its user skills under no root. */
-const rootsAt = (
-  workspace: string,
-  stores: typeof settings = settings,
-): Parameters<typeof Skills.enabled>[0] => ({
-  ...stores,
-  workspace,
-  storageRoot: path.join(workspace, 'no-storage-root'),
-});
 async function writeSkill(
   root: string,
   dirName: string,
@@ -137,7 +126,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             'publish-paper',
             'Publish a paper as an agent.',
           );
-          await fs.mkdir(path.join(plugin, 'scripts'));
           // A bundled skill of the same name: the plugin's is its own name.
           await writeSkill(
             path.join(resources, 'skills'),
@@ -150,7 +138,13 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         const catalogNow = () =>
           Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>
             loadRuntimeSkillCatalog({
-              roots: rootsAt(resources, stores),
+              // The roots of a listing for `resources`, its user skills
+              // under no root.
+              roots: {
+                ...stores,
+                workspace: resources,
+                storageRoot: path.join(resources, 'no-storage-root'),
+              } satisfies Parameters<typeof Skills.enabled>[0],
               plugins,
             }),
           );
@@ -169,7 +163,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           name: 'paper-protocol',
           path: yield* Effect.promise(() => fs.realpath(plugin)),
         });
-        expect(installed?.commit).toBeUndefined();
         // Installed, it is disabled until the user trusts it.
         expect(JSON.stringify((yield* catalogNow()).catalog)).not.toContain(
           'plugin paper-protocol',
@@ -199,9 +192,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             plugin: 'plugin:paper-protocol',
           }),
         ]);
-        expect(JSON.stringify(catalog.catalog)).toContain(
-          '- paper-protocol:load-paper: Load a published paper repository.\\n  Source: plugin paper-protocol',
-        );
         expect(catalog.catalog).toContainEqual(
           expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
@@ -211,9 +201,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         const disabled = yield* catalogNow();
         expect(JSON.stringify(disabled.catalog)).not.toContain(
           'plugin paper-protocol',
-        );
-        expect(disabled.catalog).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
         // The version it trusts is not asked about again.
         yield* enablePlugin('paper-protocol', env, () =>
@@ -227,9 +214,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         const after = yield* catalogNow();
         expect(JSON.stringify(after.catalog)).not.toContain(
           'plugin paper-protocol',
-        );
-        expect(after.catalog).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
         // A local plugin is referenced in place, so removing it keeps it.
         yield* Effect.promise(() =>

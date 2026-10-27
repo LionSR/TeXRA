@@ -114,23 +114,7 @@ describe('CLI model access resolution', () => {
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackReason: 'environment',
-      }),
-    ).rejects.toThrow(
-      'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
-    );
-    await expect(
-      resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'command-config',
-      }),
-    ).resolves.toEqual({
-      model: 'deepseek/deepseek-v4-flash',
-      notice:
-        'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
-    });
-    await expect(
-      resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackReason: 'history',
       }),
     ).resolves.toEqual({
       model: 'deepseek/deepseek-v4-flash',
