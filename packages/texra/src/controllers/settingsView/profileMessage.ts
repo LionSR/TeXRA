@@ -32,7 +32,7 @@ export const buildProfileMessage = Effect.fn('buildProfileMessage')(function* (
           return {
             provider,
             displayName: yield* getProviderDisplayName(stores, provider),
-            status: secretStatuses[provider] ?? 'not-set',
+            status: secretStatuses[provider],
             customEndpoint: endpointKey
               ? yield* Settings.get<string>(stores, endpointKey)
               : '',

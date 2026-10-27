@@ -1,6 +1,6 @@
 /**
  * Experimental: surface `\criticize{message}{severity}{confidence}` annotations
- * inserted by critique-style agents (criticize, notation, elevate, verifyFix,
+ * inserted by critique-style agents (criticize, notation, logic, enhance,
  * ...) as VS Code diagnostics — squiggles in the editor and entries in the
  * Problems panel, like a linter.
  *

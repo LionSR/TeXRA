@@ -66,7 +66,7 @@ export function holdUntilConnected(message: HeldMessage): boolean {
   setTransientNotice(
     'Connect a model and your message will be sent right away.',
   );
-  openCliSlashCommandForm('login', '');
+  openCliSlashCommandForm('login');
   return true;
 }
 
@@ -145,7 +145,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   const held = heldMessage;
   heldMessage = undefined;
   if (held) yield* send(held);
-  else if (setupAgent) openCliSlashCommandForm('agent', '');
+  else if (setupAgent) openCliSlashCommandForm('agent');
 }, Effect.catchCause(reportInTranscript));
 
 // Every step already speaks in the transcript; a failure in one does too.

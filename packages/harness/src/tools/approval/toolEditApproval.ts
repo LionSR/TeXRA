@@ -296,7 +296,7 @@ function finalizeApprovalResult(
 }
 
 /** The `action: 'apply'` branch of {@link ToolEditApprovalResult}. */
-export type AcceptedToolEditApprovalResult = Extract<
+type AcceptedToolEditApprovalResult = Extract<
   ToolEditApprovalResult,
   { action: 'apply' }
 >;

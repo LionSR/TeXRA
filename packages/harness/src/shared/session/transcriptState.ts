@@ -65,7 +65,6 @@ export type Slot =
       readonly kind: 'stage';
       base: TranscriptRowBase;
       readonly label: string;
-      open: boolean;
     }
   | {
       readonly kind: 'text';

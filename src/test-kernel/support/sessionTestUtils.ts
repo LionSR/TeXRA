@@ -73,10 +73,7 @@ export const createTestSession = (
         globalState: installed.globalState,
       },
       ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? {
-          kind: 'ephemeral',
-          reason: 'isolated test session',
-        },
+        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
       }),
     });
   });
@@ -107,10 +104,7 @@ export function createProcessSession(
       ...open,
       roots,
       ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? {
-          kind: 'ephemeral',
-          reason: 'process test session',
-        },
+        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
       }),
     });
   });

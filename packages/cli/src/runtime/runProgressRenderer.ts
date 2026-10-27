@@ -48,15 +48,6 @@ export interface RunProgressRenderer {
   suspend(): () => void;
 }
 
-export interface RunProgressRendererInit {
-  readonly colorEnabled: boolean;
-  readonly write?: (text: string) => void;
-  readonly nowMs?: () => number;
-  readonly minIntervalMs?: number;
-  readonly heartbeatIntervalMs?: number;
-  readonly getColumns?: () => number | undefined;
-}
-
 export function shouldRenderRunProgress(
   context: Pick<CliContext, 'outputFormat' | 'quietLogs'>,
 ): boolean {
@@ -65,28 +56,24 @@ export function shouldRenderRunProgress(
 
 export function createRunProgressRenderer(
   context: CliContext,
-  init?: RunProgressRendererInit,
 ): RunProgressRenderer | undefined {
   if (!context.renderRunProgress) return undefined;
   return new DefaultRunProgressRenderer({
     colorEnabled: context.stderrColorEnabled,
-    ...init,
-    getColumns:
-      init?.getColumns ??
-      (() => {
-        const columns = getStderrColumns();
-        return context.stderrIsTty && columns != null && columns > 0
-          ? columns
-          : undefined;
-      }),
+    getColumns: () => {
+      const columns = getStderrColumns();
+      return context.stderrIsTty && columns != null && columns > 0
+        ? columns
+        : undefined;
+    },
   });
 }
 class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly attachedAt: number;
-  private readonly write: (text: string) => void;
-  private readonly nowMs: () => number;
-  private readonly minIntervalMs: number;
-  private readonly heartbeatIntervalMs: number;
+  private readonly write: (text: string) => void = writeRawStderr;
+  private readonly nowMs: () => number = Date.now;
+  private readonly minIntervalMs = 100;
+  private readonly heartbeatIntervalMs = 1000;
   private readonly ansi: boolean;
   private readonly getColumns: () => number | undefined;
   private lastRenderAt = 0;
@@ -102,15 +89,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
 
-  constructor(
-    init: RunProgressRendererInit & {
-      readonly getColumns: () => number | undefined;
-    },
-  ) {
-    this.write = init.write ?? writeRawStderr;
-    this.nowMs = init.nowMs ?? Date.now;
-    this.minIntervalMs = init.minIntervalMs ?? 100;
-    this.heartbeatIntervalMs = init.heartbeatIntervalMs ?? 1000;
+  constructor(init: {
+    readonly colorEnabled: boolean;
+    readonly getColumns: () => number | undefined;
+  }) {
     this.ansi = init.colorEnabled;
     this.getColumns = init.getColumns;
     this.attachedAt = this.nowMs();
@@ -260,7 +242,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     // The fold's turn; a run whose loop has not moved yet carries none.
     // The agent as the cards name it (`runIdentityDisplayName`): a recipe
     // launch's `source:name` key reads as its name.
-    const agentName = root.identity?.kind === 'agent' ? root.label : undefined;
+    const agentName = root.identity.kind === 'agent' ? root.label : undefined;
     const parts: string[] = [];
     const turnLabel = formatLoopPositionLabel(root.turn);
     if (turnLabel !== undefined) parts.push(`[${turnLabel}]`);
@@ -338,7 +320,7 @@ function formatActiveChildren(
   children: readonly RunView[],
   descriptionColumns: number,
 ): string | undefined {
-  const agents = children.filter((child) => child.identity?.kind === 'agent');
+  const agents = children.filter((child) => child.identity.kind === 'agent');
   const first =
     agents.find((child) => child.status === RUN_PHASE.RUNNING) ?? agents[0];
   if (!first) return undefined;

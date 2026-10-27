@@ -73,8 +73,8 @@ const SUBSCHEMA_RECORD_KEYS = [
 ];
 
 /**
- * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
- * is compiled on the host. Walking the schema it rejects:
+ * Guard a JSON Schema a model or a sandboxed script authored (untrusted)
+ * before it is compiled on the host. Walking the schema it rejects:
  * `pattern`/`patternProperties`/`format` (compiled to host RegExps, a
  * catastrophic-backtracking ReDoS vector); `$ref`/`$dynamicRef`
  * (external/recursive resolution surprises; inline the definition instead);

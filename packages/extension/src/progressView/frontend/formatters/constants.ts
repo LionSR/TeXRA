@@ -42,13 +42,6 @@ export const TOOL_OUTPUT_LANGUAGES = new Map<string, string>([
 ]);
 
 /**
- * Tools whose input contains a code field that should be syntax highlighted.
- * Maps tool name to highlight.js language for the code field.
- * Supports the 'command' field (bash).
- */
-export const TOOL_CODE_LANGUAGES = new Map<string, string>([['bash', 'bash']]);
-
-/**
  * Map file extensions that don't match highlight.js language names.
  * Focused on LaTeX research context. Unknown extensions try the extension directly.
  */

@@ -17,7 +17,6 @@ import { highlightCode } from '@texra/shared/highlighting/highlightCode';
 
 import {
   createMarkdownProcessor,
-  type LatexReferenceFormatter,
   type MarkdownProcessor,
 } from './createMarkdownProcessor';
 import { createMarkdownRenderer } from './createMarkdownRenderer';
@@ -27,8 +26,6 @@ import { katexMacros } from './katexMacros';
 export interface KatexHtmlProcessorOptions {
   /** CSS colour for KaTeX parse errors (custom property or literal). */
   readonly errorColor: string;
-  /** Override how `\ref`/`\eqref`-style references are emitted. */
-  readonly formatLatexReference?: LatexReferenceFormatter;
 }
 
 export function createKatexHtmlProcessor(
@@ -45,8 +42,5 @@ export function createKatexHtmlProcessor(
       },
     }),
   });
-  return createMarkdownProcessor({
-    renderer,
-    formatLatexReference: options.formatLatexReference,
-  });
+  return createMarkdownProcessor({ renderer });
 }

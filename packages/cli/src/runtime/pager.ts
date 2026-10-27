@@ -31,8 +31,6 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
   options: {
     readonly stdoutIsTty?: boolean;
     readonly headless?: boolean;
-    /** `$PAGER` in place of the live one; `''` disables paging. */
-    readonly pager?: string;
   } = {},
 ): Effect.fn.Return<void, never, ChildProcessSpawner> {
   // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
@@ -45,8 +43,7 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
 
   // The conventional `$PAGER`, no TeXRA-specific variable. As for `git` and
   // `man`, an empty `PAGER=` or `PAGER=cat` means no pager.
-  const command =
-    (options.pager ?? cliEnvValue('PAGER'))?.trim() ?? DEFAULT_PAGER;
+  const command = cliEnvValue('PAGER')?.trim() ?? DEFAULT_PAGER;
   if (command === '' || command === 'cat') {
     writeTextStdout(text);
     return;

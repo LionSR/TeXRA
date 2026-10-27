@@ -34,7 +34,6 @@ export interface AgentCliModelRule {
 }
 
 export interface AgentCliModel {
-  readonly selection: SelectedModel;
   readonly choice: ReasoningChoice;
   /** The level to send; `undefined` sends none (the model has no effort control). */
   readonly effort: AgentCliEffort | undefined;
@@ -73,7 +72,6 @@ export function agentCliReasoning(
   const choice = chooseReasoning(selection.config, request, options);
   const sent = Schema.decodeUnknownResult(AgentCliEffortSchema)(choice.effort);
   return {
-    selection,
     choice,
     effort: Result.isSuccess(sent) ? sent.success : undefined,
   };

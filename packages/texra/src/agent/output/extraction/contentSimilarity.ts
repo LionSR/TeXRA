@@ -214,18 +214,20 @@ function documentSimilarity(a: string, b: string): number {
   return Math.max(0, 1 - distance / maxLength);
 }
 
+/** The similarity below which a candidate is routed to no file. */
+const MIN_SIMILARITY = 0.15;
+
 /**
  * Greedily pair each candidate document with the base file it most closely
  * resembles, highest-confidence pairs first, so an unambiguous match never
  * gets displaced by a later tie. Never guesses: candidates below
- * `minSimilarity`, candidates whose best remaining files tie exactly (e.g.
+ * `MIN_SIMILARITY`, candidates whose best remaining files tie exactly (e.g.
  * identical template stubs), and leftovers once the other side is exhausted
  * all come back unmatched.
  */
 export function assignByContentSimilarity(
   candidates: readonly string[],
   files: ReadonlyArray<NamedDocument>,
-  minSimilarity = 0.15,
 ): Array<NamedDocument | null> {
   const scores = candidates.map((candidate) =>
     files.map((file) => documentSimilarity(candidate, file.content)),
@@ -278,7 +280,7 @@ export function assignByContentSimilarity(
   while (madeProgress) {
     madeProgress = false;
     for (const { c, f, score } of scored) {
-      if (score < minSimilarity) break;
+      if (score < MIN_SIMILARITY) break;
       if (score < bestScoreOf[c]) continue;
       if (takenCandidates.has(c) || takenFiles.has(f)) continue;
       // An exact score tie against another still-free file means there is no

@@ -14,10 +14,10 @@ class CliResourcesNotFound extends Schema.TaggedError<CliResourcesNotFound>()(
 
 export const resolveCliResourcesPath = Effect.fn(
   'resourcesPath.resolveCliResourcesPath',
-)(function* (anchorUrl: string = import.meta.url) {
+)(function* () {
   const fs = yield* FileSystem.FileSystem;
-  const currentDir = path.dirname(fileURLToPath(anchorUrl));
-  // The nearest `cli` ancestor holding a package.json, or the anchor's own
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  // The nearest `cli` ancestor holding a package.json, or this module's own
   // directory when there is none.
   let packageDir = currentDir;
   for (let dir = currentDir; ; dir = path.dirname(dir)) {

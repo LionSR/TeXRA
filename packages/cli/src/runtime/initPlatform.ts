@@ -18,7 +18,6 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
@@ -110,8 +109,6 @@ export type CliPlatformServices = SettingsStores & {
    * that run programs at a Promise edge, instead of looking it up.
    */
   readonly runtime: CliProcessRuntime;
-  /** The process's cross-workspace storage root, from the roots built below. */
-  readonly globalStorage: string;
   /**
    * The stores this root opened, handed over rather than read back. `config`,
    * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
@@ -459,10 +456,6 @@ export function initCliPlatform(
       config: roots.config,
       workspaceState: roots.workspaceState,
       repoState: roots.repoState,
-      // The pure path calculator over this process's storage root (no mkdir),
-      // so every CLI entry, including the ones that find the roots already
-      // installed, names one root without touching the filesystem again.
-      globalStorage: resolveGlobalStoragePath(context.storageRoot),
       globalState,
       secrets,
       session: platform.session,

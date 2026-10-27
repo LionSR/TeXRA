@@ -285,13 +285,9 @@ function inquiryOperations(
         return true;
       });
 
-      const sorted = filtered.toSorted(
-        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-      );
-
-      const trimmed =
-        params.limit != null ? sorted.slice(0, params.limit) : sorted;
-      return trimmed.map(manifestToSummary);
+      return filtered
+        .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .map(manifestToSummary);
     });
   }
 

@@ -336,7 +336,6 @@ export const sessionEventsLayer = Layer.effect(
       // with no fiber, and the refusing plane's publisher fiber has ended.
       if (!admitted)
         writeLogLine(
-          'WARN',
           CHANNEL,
           'Session publication dropped: the plane has closed',
         );

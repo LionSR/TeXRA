@@ -58,7 +58,6 @@ import {
   customAgentScanIssues,
   customPresets,
   detachSubagentsOnStop,
-  disabledSkills,
   disabledSkillSources,
   settingsSnapshotRevisions,
   editApprovalEnabled,
@@ -345,7 +344,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             <skills-tab
               slot="skills"
               .masterEnabled=${agentSkillsEnabled.get()}
-              .disabledSkills=${disabledSkills.get()}
               .disabledSources=${disabledSkillSources.get()}
               .skills=${skillsList.get()}
               .issues=${skillLoadIssues.get()}

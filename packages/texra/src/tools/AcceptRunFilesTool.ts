@@ -53,8 +53,8 @@ import type { PluginToolServices } from '@texra-ai/harness/plugins';
  * Whether `target` is a file, following links: a symlink to a file is a
  * file, a dangling or circular link is not. `fs.stat` follows, so a symlink
  * to a file answers `File`, a dangling target is `NotFound`/`ENOTDIR`, and a
- * circular link raises `ELOOP` (`BadResource`) — those absences match
- * `statIfExists`, and any other failure still propagates.
+ * circular link raises `ELOOP` (`BadResource`) — those absences answer
+ * `false`, and any other failure still propagates.
  */
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
   fs.stat(target).pipe(

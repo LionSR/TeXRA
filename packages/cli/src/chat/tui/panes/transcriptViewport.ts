@@ -31,7 +31,6 @@ export function estimateLiveTranscriptEntryRows(
 interface TranscriptEntrySelection {
   readonly entries: readonly TranscriptRow[];
   readonly rowLimits: ReadonlyMap<string, number>;
-  readonly usedRows: number;
 }
 
 // Pick the newest entries that fit in `maxRows`. Conversation live mode passes
@@ -42,7 +41,7 @@ export function selectTranscriptEntriesForViewport(
   width?: number,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
-    return { entries: [], rowLimits: new Map(), usedRows: 0 };
+    return { entries: [], rowLimits: new Map() };
   }
 
   const selected: TranscriptRow[] = [];
@@ -56,12 +55,11 @@ export function selectTranscriptEntriesForViewport(
       if (selected.length === 0) {
         selected.unshift(entry);
         rowLimits.set(entry.id, maxRows);
-        usedRows = maxRows;
       }
       break;
     }
     selected.unshift(entry);
     usedRows += entryRows;
   }
-  return { entries: selected, rowLimits, usedRows };
+  return { entries: selected, rowLimits };
 }

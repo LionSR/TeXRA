@@ -1535,7 +1535,7 @@ function applyHarnessApprovalPolicySelection(
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    if (openCliSlashCommandForm('approval', input)) return;
+    if (openCliSlashCommandForm('approval')) return;
   }
 
   const policy = parseApprovalPolicy(normalized);
@@ -1650,7 +1650,7 @@ function handleHarnessSlashCommand(line: string): boolean {
         );
         return true;
       }
-      if (openRegisteredCliSlashForm(command, rest)) return true;
+      if (openRegisteredCliSlashForm(command)) return true;
       appendHarnessAssistantTranscript(
         `/${command.name} is registered but has no harness action.`,
       );

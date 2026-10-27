@@ -1,5 +1,5 @@
 // React bridge for `@lit-labs/signals` via `useSyncExternalStore`. Mirrors
-// the primitive the webview's `progressState` uses so the CLI host can read
+// the primitive the webview's `sessionSurfaces` uses so the CLI host can read
 // the same signals without pulling in a second state-management library.
 
 import { useCallback, useSyncExternalStore } from 'react';

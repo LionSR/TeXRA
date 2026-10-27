@@ -43,7 +43,6 @@ import { createLeanServerRoster } from '../leanServerRegistry';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { LeanServerInfo } from '../leanServerRegistry';
 import type {
-  LeanFileCommand,
   LeanProjectCommand,
   FetchDiagnosticsResult,
   LspResult,
@@ -116,7 +115,6 @@ export class LeanServerPool extends Context.Service<
       runId: RunId | undefined,
     ) => Effect.Effect<FetchDiagnosticsResult>;
     readonly executeFileCommand: (
-      command: LeanFileCommand,
       filePath: string,
       runId: RunId | undefined,
     ) => Effect.Effect<void, LeanFileCommandFailed>;
@@ -404,7 +402,6 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
                 workspaceRoot: root,
                 lakeCommand,
                 args,
-                serialize: true,
               }).pipe(
                 Effect.provideService(
                   ChildProcessSpawner.ChildProcessSpawner,
@@ -534,11 +531,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   });
 
   const executeFileCommand = Effect.fn('LeanServerPool.executeFileCommand')(
-    function* (
-      command: LeanFileCommand,
-      filePath: string,
-      runId: RunId | undefined,
-    ) {
+    function* (filePath: string, runId: RunId | undefined) {
       // Both file commands have the same effect from our point of view: drop
       // the cached open state and re-open with fresh contents.
       return yield* withServer(filePath, runId, (server) =>

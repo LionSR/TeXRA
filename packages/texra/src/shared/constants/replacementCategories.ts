@@ -11,8 +11,7 @@
  *
  * Shared by the `replacement` subsystem (category dispatch), the core-settings
  * schema (persisted config validation), the settings-view message schemas, and
- * the LaTeX tab UI. Split out of the old `@shared/constants/latex` dumping
- * ground.
+ * the LaTeX tab UI.
  */
 export const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'latex_spacing',

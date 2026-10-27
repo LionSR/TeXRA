@@ -131,16 +131,14 @@ const wireError = Schema.encodeSync(RequestErrorSchema);
 /** One attached port: its transport, its scopes, and the framer in flight. */
 interface PortEntry {
   readonly port: SessionPort;
-  /** The port's lifetime: `close` closes it, the bridge's scope closes it
-   *  last. */
-  readonly scope: Scope.Closeable;
-  /** The framer fiber's home, forked from {@link scope} before the release
-   *  finalizer is registered: finalizers close last-in first-out, so the
+  /** The framer fiber's home, forked from the port's scope before the
+   *  release finalizer is registered: finalizers close last-in first-out, so the
    *  port is released (its map entry, its transcript set, the host's
    *  `onPortClosed`) before the replay is interrupted, and a host that
    *  closes a port and re-attaches under the same id in one turn finds the
    *  id free. */
   readonly framers: Scope.Closeable;
+  /** Closes the port's scope; the bridge's scope closes it last. */
   readonly close: Effect.Effect<void>;
   fiber: Fiber.Fiber<void> | null;
   /** Host actions sent before the port's first `Subscribe`, in order, or
@@ -224,7 +222,6 @@ export class SessionBridge {
       }
       const entry: PortEntry = {
         port,
-        scope,
         framers,
         close: Scope.close(scope, Exit.void),
         fiber: null,

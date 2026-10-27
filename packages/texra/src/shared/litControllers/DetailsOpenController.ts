@@ -8,21 +8,14 @@ import type { ReactiveController, ReactiveControllerHost } from 'lit';
  * drive its `?open=` from `.open`.
  */
 export class DetailsOpenController implements ReactiveController {
-  private _open: boolean;
+  private _open = false;
   private readonly onShow: (() => void) | undefined;
-  private readonly onHide: (() => void) | undefined;
 
   constructor(
     private readonly host: ReactiveControllerHost,
-    options: {
-      initialOpen?: boolean;
-      onShow?: () => void;
-      onHide?: () => void;
-    } = {},
+    options: { onShow?: () => void } = {},
   ) {
-    this._open = options.initialOpen ?? false;
     this.onShow = options.onShow;
-    this.onHide = options.onHide;
     host.addController(this);
   }
 
@@ -49,6 +42,5 @@ export class DetailsOpenController implements ReactiveController {
   readonly handleHide = (event: Event): void => {
     if (!isOwnDetailsToggle(event)) return;
     this.open = false;
-    this.onHide?.();
   };
 }

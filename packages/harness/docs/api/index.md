@@ -3340,7 +3340,6 @@ interface StreamChunkEvent {
   readonly type: 'stream.chunk';
   readonly id: string;
   readonly text: string;
-  readonly stageId?: string;
 }
 ```
 
@@ -3671,7 +3670,7 @@ setting slots and its storage), the run's working directory, and the
 read-only roots the call's step admits (the skills it lists or its user
 activated). A tool's paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
-where it is launched (`assembleAgentLaunchContext`).
+where it is launched (`buildAgentLaunchContext`).
 
 ```ts
 interface ToolEnv {

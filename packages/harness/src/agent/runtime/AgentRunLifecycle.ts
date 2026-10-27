@@ -298,8 +298,8 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
           });
         }
         const message = kind === 'unexpected' ? errorMsg : sdkMsg;
-        // `abort`/`disk-full` never carry provider or credential fields
-        // (`terminalError()`): narrow them so runRecords' union stays honest.
+        // `abort`/`disk-full` never carry provider or credential fields:
+        // narrow them so runRecords' union stays honest.
         const error: NonNullable<ResultEvent['error']> =
           kind === 'abort' || kind === 'disk-full'
             ? {

@@ -42,7 +42,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   if (!storedKeys.includes(apiKeySecretName(provider))) {
     // If no persisted entry exists but a *usable* (non-blank) key
     // is still reported, it's coming from the `<PROVIDER>_API_KEY`
-    // env var — `deleteApiKey` can't touch that, so be explicit.
+    // env var — `delete` can't touch that, so be explicit.
     const envExists = yield* hasUsableApiKey(secrets, provider);
     if (envExists) {
       return executed(

@@ -4,7 +4,6 @@ import { clampCursor } from './textInputEditing';
 interface TextInputDisplayWindow {
   readonly value: string;
   readonly cursor: number;
-  readonly clipped: boolean;
 }
 
 interface TextInputDisplayRow {
@@ -219,7 +218,7 @@ export function textInputDisplayWindow({
   readonly width?: number;
 }): TextInputDisplayWindow {
   if (maxDisplayRows === undefined || width === undefined) {
-    return { value, cursor: clampCursor(cursor, value.length), clipped: false };
+    return { value, cursor: clampCursor(cursor, value.length) };
   }
   const rowCount = Math.max(1, maxDisplayRows);
   const columnCount = Math.max(1, width);
@@ -246,7 +245,6 @@ export function textInputDisplayWindow({
     startRow = Math.max(0, endRow - contentRowBudget);
   }
   const visibleRows = rows.slice(startRow, endRow);
-  const clipped = startRow > 0 || endRow < rows.length;
   const rowTexts = visibleRows.map((row) =>
     textInputDisplayRowValue(value, row),
   );
@@ -281,6 +279,5 @@ export function textInputDisplayWindow({
       cursorPrefixLength + ellipsisCursorColumn,
       displayValue.length,
     ),
-    clipped,
   };
 }

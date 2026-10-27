@@ -37,14 +37,13 @@ const CHANNEL = 'claudeAgent';
  * swallowed and treated as "no credential."
  *
  * `env` is the environment the subprocess will get, so the answer matches
- * what Claude Code sees; `currentPlatform` is injectable for testability.
+ * what Claude Code sees.
  * A home directory that cannot be resolved is logged and leaves only an
  * explicit `CLAUDE_CONFIG_DIR` to probe.
  */
 const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   function* (
     env: NodeJS.ProcessEnv,
-    currentPlatform: NodeJS.Platform,
   ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
 
@@ -66,7 +65,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     );
     if (credentialFileExists) return true;
 
-    if (currentPlatform === 'darwin') {
+    if (process.platform === 'darwin') {
       const defaultConfigDir = yield* resolveClaudeConfigDir(undefined);
       for (const probe of claudeKeychainCredentialProbes(
         configDir,
@@ -171,46 +170,44 @@ function claudeKeychainCredentialProbes(
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
-export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
-  options: { platform?: NodeJS.Platform } = {},
-): Effect.fn.Return<
-  NodeJS.ProcessEnv,
-  SecretsFailed,
-  Secrets | ChildProcessSpawner
-> {
-  const apiKeyVar = apiKeyEnvName('anthropic');
-  // The other providers' keys stay out of the subprocess: what its tools
-  // print comes back as a tool result. Its own Anthropic key is resolved below.
-  const env: NodeJS.ProcessEnv = yield* inheritedEnv('anthropic');
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
-  env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
-  const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
-  if (oauthToken) {
-    env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
-  } else {
-    delete env.CLAUDE_CODE_OAUTH_TOKEN;
-  }
+export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(
+  function* (): Effect.fn.Return<
+    NodeJS.ProcessEnv,
+    SecretsFailed,
+    Secrets | ChildProcessSpawner
+  > {
+    const apiKeyVar = apiKeyEnvName('anthropic');
+    // The other providers' keys stay out of the subprocess: what its tools
+    // print comes back as a tool result. Its own Anthropic key is resolved below.
+    const env: NodeJS.ProcessEnv = yield* inheritedEnv('anthropic');
+    env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
+    env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
+    const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+    if (oauthToken) {
+      env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
+    } else {
+      delete env.CLAUDE_CODE_OAUTH_TOKEN;
+    }
 
-  // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
-  //    OAuth credential, and skip injecting the managed secret entirely.
-  if (
-    yield* hasClaudeOauthCredential(env, options.platform ?? process.platform)
-  ) {
-    delete env[apiKeyVar];
+    // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
+    //    OAuth credential, and skip injecting the managed secret entirely.
+    if (yield* hasClaudeOauthCredential(env)) {
+      delete env[apiKeyVar];
+      return env;
+    }
+
+    // 2. Preserve an explicit env key rather than overriding it with the secret.
+    if (env[apiKeyVar]) return env;
+
+    // 3. Fall back to the Settings-managed secret. An unreadable secret store
+    //    fails as itself: launching with no credential would surface it as an
+    //    opaque "Invalid API key" from Claude Code.
+    const secrets = yield* Secrets;
+    const managed = yield* lookupApiKey(secrets, 'anthropic');
+    if (managed) {
+      env[apiKeyVar] = exposeApiKey(managed);
+    }
+
     return env;
-  }
-
-  // 2. Preserve an explicit env key rather than overriding it with the secret.
-  if (env[apiKeyVar]) return env;
-
-  // 3. Fall back to the Settings-managed secret. An unreadable secret store
-  //    fails as itself: launching with no credential would surface it as an
-  //    opaque "Invalid API key" from Claude Code.
-  const secrets = yield* Secrets;
-  const managed = yield* lookupApiKey(secrets, 'anthropic');
-  if (managed) {
-    env[apiKeyVar] = exposeApiKey(managed);
-  }
-
-  return env;
-});
+  },
+);

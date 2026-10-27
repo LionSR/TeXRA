@@ -184,7 +184,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
   }),
   /**
    * A completed provider turn, committed once and reused after restart.
-   * `turn` is the storage-owned `StoredTurn`: ordered content, the
+   * `turn` is the storage-owned `StoredTurnSchema`: ordered content, the
    * complete call list, finish reason and observed token counts, with its
    * signatures, encrypted reasoning, native evidence and continuation kept
    * as opaque provider evidence.

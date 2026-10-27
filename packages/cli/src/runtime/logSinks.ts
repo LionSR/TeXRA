@@ -96,18 +96,18 @@ function writeRaw(key: StreamKey, text: string): void {
 // shutdown sequence's final flush, which runs after the process runtime has
 // been disposed — so it never needs that runtime. The stream's write callback
 // is the foreign edge, wrapped exactly once here.
-function writeRawAndWait(key: StreamKey, text: string): Effect.Effect<void> {
+function writeRawStderrAndWait(text: string): Effect.Effect<void> {
   return Effect.callback<void>((resume) => {
-    const stream = openStream(key);
+    const stream = openStream('stderr');
     if (!stream) return resume(Effect.void);
     bestEffortStreamWrite(
       () =>
         stream.write(text, (error) => {
-          if (error) closed[key] = true;
+          if (error) closed.stderr = true;
           resume(Effect.void);
         }),
       () => {
-        closed[key] = true;
+        closed.stderr = true;
         resume(Effect.void);
       },
     );
@@ -141,12 +141,12 @@ export function writeTextStderr(text: string): void {
 }
 
 export function writeTextStderrAndWait(text: string): Effect.Effect<void> {
-  return writeRawAndWait('stderr', `${text}\n`);
+  return writeRawStderrAndWait(`${text}\n`);
 }
 
 /** Wait until every stderr write queued before this call has completed. */
 export function flushTextStderr(): Effect.Effect<void> {
-  return writeRawAndWait('stderr', '');
+  return writeRawStderrAndWait('');
 }
 
 /**
@@ -181,8 +181,6 @@ export function writeErrorStderr(error: unknown): void {
 export function askCliQuestion(
   question: string,
   options: {
-    readonly input?: NodeJS.ReadableStream & { ref?: () => void };
-    readonly output?: NodeJS.WritableStream;
     /** Hide the typed answer: readline's echo goes to a swallowing sink and
      *  the question is written straight to stderr instead. */
     readonly hidden?: boolean;
@@ -190,7 +188,8 @@ export function askCliQuestion(
 ): Effect.Effect<string, Error> {
   return Effect.acquireUseRelease(
     Effect.sync(() => {
-      const input = options.input ?? process.stdin;
+      // When stdin is a file it has no `ref`.
+      const input: NodeJS.ReadableStream & { ref?: () => void } = process.stdin;
       // Ink releases its ownership of stdin with `unref()` when a TUI exits.
       // A following readline prompt must acquire its own live handle or Node
       // can terminate while the caller is still awaiting the answer.
@@ -201,7 +200,7 @@ export function askCliQuestion(
         output: options.hidden
           ? // Swallow readline's echo so the typed secret never reaches the terminal.
             new Writable({ write: (_chunk, _encoding, callback) => callback() })
-          : (options.output ?? process.stderr),
+          : process.stderr,
         // A swallowing non-TTY output would otherwise leave stdin in canonical
         // mode, where the TTY driver echoes the secret itself.
         ...(options.hidden ? { terminal: true } : {}),

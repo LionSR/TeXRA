@@ -45,7 +45,7 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   );
 });
 
-export type TexcountMode = 'separate' | 'include' | 'sum';
+export type TexcountMode = 'separate' | 'include';
 
 export interface TexcountOptions {
   mode?: TexcountMode;
@@ -193,85 +193,6 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
   },
 );
 
-const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
-  workspaceRoot: string | undefined,
-  settings: SettingsStores,
-  paths: readonly string[],
-) {
-  const errors: string[] = [];
-
-  // The per-file probes fan out; the sum itself is a single texcount call
-  // over whatever survived, so the results are folded back in input order.
-  const screened = yield* Effect.forEach(
-    paths,
-    (filePath) =>
-      Effect.gen(function* () {
-        const absolutePath = pathToLocationIn(
-          workspaceRoot,
-          filePath,
-        ).absolutePath;
-        const reason = yield* rejectionReason(absolutePath);
-        if (reason) return { filePath, reason, chinese: false };
-        return {
-          filePath,
-          reason: null,
-          chinese: yield* hasChinesePackages(absolutePath),
-        };
-      }),
-    { concurrency: COUNT_CONCURRENCY },
-  );
-
-  const validPaths: string[] = [];
-  let enableChineseMode = false;
-  for (const entry of screened) {
-    if (entry.reason) {
-      errors.push(entry.reason);
-      continue;
-    }
-    validPaths.push(entry.filePath);
-    if (!enableChineseMode && entry.chinese) {
-      enableChineseMode = true;
-      yield* Effect.logDebug(
-        `Chinese packages detected in ${entry.filePath}, enabling Chinese character counting`,
-      );
-    }
-  }
-
-  if (validPaths.length === 0) {
-    return {
-      output: null,
-      errors:
-        errors.length > 0
-          ? errors
-          : ['No valid LaTeX files were provided for texcount sum mode.'],
-    };
-  }
-
-  const args: string[] = ['-sum'];
-  if (enableChineseMode) {
-    args.push('-ch-only');
-  }
-  args.push(...validPaths);
-
-  const { stdout, error } = yield* runTexcount(
-    workspaceRoot,
-    settings,
-    args,
-    `sum for ${validPaths.join(', ')}`,
-  );
-  if (!stdout) {
-    if (error) {
-      errors.push(error);
-    }
-    return { output: null, errors };
-  }
-
-  return {
-    output: `Combined TeX Count Results (sum):\n${stdout}`,
-    errors,
-  };
-});
-
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   workspaceRoot: string | undefined,
   filePaths: string | string[],
@@ -290,18 +211,6 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
       const message = 'No LaTeX files provided for texcount.';
       yield* Effect.logWarning(message);
       return { output: null, errors: [message] };
-    }
-
-    if (mode === 'sum') {
-      const { output, errors } = yield* getSummedCount(
-        workspaceRoot,
-        settings,
-        trimmedPaths,
-      );
-      if (output) {
-        yield* Effect.logInfo(`Combined TeX Count Results:\n${output}`);
-      }
-      return { output, errors };
     }
 
     const { outputs, errors } = yield* getIndividualCounts(

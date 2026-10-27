@@ -523,9 +523,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       approvalMeta: decided.approvalMeta,
     });
     // What a script's `await` gets for a child sent to the background.
-    return receipt.status === 'executed'
-      ? { ...receipt, value: { runId } }
-      : receipt;
+    return { ...receipt, value: { runId } };
   }
   const launched = yield* Effect.result(
     running(

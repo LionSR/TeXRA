@@ -1,7 +1,7 @@
 /**
  * Tool dashboard data builder.
  *
- * Projects TeXRA's plugin cards (`@tools/pluginCards`) over the process's
+ * Projects TeXRA's plugin cards (`@texra/tools/pluginCards`) over the process's
  * plugins ({@link @tools/plugins}) onto the Tools dashboard, enriched with
  * runtime availability; this controller module keeps that tool-layer
  * dependency out of shared settings-view code.
@@ -81,9 +81,8 @@ function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
 
 /**
  * The cards on `host`'s dashboard, each with its plugin, in card order. A
- * card whose plugin this process does not list, that names the host in its
- * `unavailableHosts`, or whose plugin's every tool declares itself
- * unavailable on the asking host, is not shown there and cannot be
+ * card whose plugin this process does not list, or whose plugin's every
+ * tool declares itself unavailable on the asking host, is not shown there and cannot be
  * installed, authed or toggled from it: host exclusion removes those tools
  * from the resolved agent list, so they can never be called there.
  */
@@ -93,8 +92,7 @@ export function visibleToolPlugins(
 ): readonly { readonly card: PluginCard; readonly plugin: Plugin }[] {
   return TEXRA_PLUGIN_CARDS.flatMap((card) => {
     const plugin = plugins.get(card.id);
-    if (plugin === undefined || card.unavailableHosts?.includes(host))
-      return [];
+    if (plugin === undefined) return [];
     const tools = Object.values(plugin.tools ?? {});
     return tools.length === 0 ||
       tools.some((tool) => tool.unavailableHosts?.includes(host) !== true)
@@ -131,7 +129,6 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       .map(({ card, plugin }) => ({
         id: card.id,
         name: card.name,
-        category: card.category,
         description: card.description,
         tools: Object.keys(plugin.tools ?? {}).map((name) => ({ name })),
         status: 'available' as const,
@@ -167,7 +164,6 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       externalItems.push({
         id: card.id,
         name: card.name,
-        category: card.category,
         description: card.description,
         tools: tools.map((name) => ({ name })),
         status,

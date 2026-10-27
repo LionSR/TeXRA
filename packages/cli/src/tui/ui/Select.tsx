@@ -45,7 +45,6 @@ interface SelectProps<T> {
   readonly onCancel: () => void;
   /** Focus the Nth item on mount (defaults to the active value's index, or 0). */
   readonly initialIndex?: number;
-  readonly labelMaxCols?: number;
   readonly maxVisibleItems?: number;
   readonly showOverflow?: boolean;
   /** Whether this list currently owns terminal input. */
@@ -78,8 +77,6 @@ interface SelectProps<T> {
       readonly active: boolean;
       readonly focused: boolean;
       readonly hiddenItemCount: number;
-      readonly index: number;
-      readonly overflowText?: string;
     },
   ) => ReactNode;
 }
@@ -451,10 +448,6 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                   active,
                   focused,
                   hiddenItemCount: hiddenBefore + hiddenAfter,
-                  index: i,
-                  ...(showInlineOverflow
-                    ? { overflowText: inlineOverflowText }
-                    : {}),
                 })}
               </>
             ) : (
@@ -468,10 +461,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                   </Text>
                   <Text color={focusColor}>{shortcut} </Text>
                 </Box>
-                <Box
-                  flexShrink={0}
-                  maxWidth={props.labelMaxCols ?? labelMaxCols}
-                >
+                <Box flexShrink={0} maxWidth={labelMaxCols}>
                   <Text
                     color={focusColor}
                     dimColor={item.disabled}

@@ -142,11 +142,11 @@ async function copyFromClick(
 /** Build a copy button for banner content. */
 export function buildCopyButton(
   title: string,
-  options: { hidden?: boolean; content?: string; labeled?: boolean } = {},
+  options: { content?: string; labeled?: boolean } = {},
 ): TemplateResult {
-  const { hidden = false, content, labeled = false } = options;
+  const { content, labeled = false } = options;
   // prettier-ignore
-  return html`<wa-button class="${labeled ? 'action-button message-copy' : 'action-icon-button'} banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} ?hidden=${hidden} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${labeled ? html`<span class="copy-label">Copy</span><span class="copied-label">Copied</span>` : waIcon('copy')}</wa-button>`;
+  return html`<wa-button class="${labeled ? 'action-button message-copy' : 'action-icon-button'} banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${labeled ? html`<span class="copy-label">Copy</span><span class="copied-label">Copied</span>` : waIcon('copy')}</wa-button>`;
 }
 
 /**
@@ -159,7 +159,8 @@ export const SPINNER_ICON_NAME = '__spinner__';
  * Map a status string to the failed / in-progress / else icon tri-state for the
  * one `kind: 'status'` tool section, which the codex-turn, codex-patch and MCP
  * rows all converge on. It therefore has to recognize both producer
- * vocabularies: `CodexTurnStateSchema`'s `'running'` and
+ * vocabularies: the Codex turn state's `'running'` (`CodexTurnState` in
+ * `packages/texra/src/tools/codexShared.ts`) and
  * `McpToolOutputSchema.status`'s `'in_progress'`.
  */
 export function triStateStatusIcon(
@@ -208,7 +209,6 @@ interface DetailsSummaryOptions {
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
-    hidden?: boolean;
     content?: string;
   };
   /** Extra Lit template content rendered after the label (e.g. a live timer). */

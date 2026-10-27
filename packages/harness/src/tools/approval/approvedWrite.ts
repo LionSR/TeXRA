@@ -18,7 +18,6 @@ import { mergeEditOnto } from '@utils/text/unifiedDiff';
 
 interface WriteApprovedContentResult {
   appliedContent: string;
-  baseContent: string;
 }
 
 /**
@@ -102,7 +101,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
       const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
-      const unchanged = { appliedContent: baseContent, baseContent };
+      const unchanged = { appliedContent: baseContent };
       if (exists && baseContent === finalContent) return unchanged;
       // The file must be there exactly when it was there at proposal: one
       // deleted meanwhile is not recreated, one created meanwhile is not
@@ -124,7 +123,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       if (!exists)
         yield* fs.makeDirectory(nodePath.dirname(path), { recursive: true });
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
-      return { appliedContent, baseContent };
+      return { appliedContent };
     }).pipe(withPerKeyLane(approvedWriteLanes, lane));
     yield* recordToolFileRead(path);
     return written;

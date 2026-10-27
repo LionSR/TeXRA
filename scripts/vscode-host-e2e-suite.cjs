@@ -142,7 +142,6 @@ async function checks() {
     .executeCommand('texra.execute', {
       config: {
         agent: 'setup',
-        agentCategory: 'toolUse',
         model: 'openai/gpt-5.6-sol',
         instruction: 'Service E2E task',
       },

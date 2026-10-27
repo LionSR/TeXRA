@@ -56,44 +56,22 @@ const FileOptionsSchema = Schema.Struct({
 });
 export type FileOptions = typeof FileOptionsSchema.Type;
 
-/** How a project is named in a rail row, a chip, and the hero subtitle. */
+/** How a project is named in a rail row, a chip, and the hero title. */
 const ProjectDisplaySchema = Schema.Struct({
   key: Schema.String.check(Schema.isMinLength(1)),
   name: Schema.String,
-  initials: Schema.String,
-  subtitle: Schema.String,
 });
 export type ProjectDisplay = typeof ProjectDisplaySchema.Type;
 
 /** The display record of one open folder, produced by the host once so no
- *  renderer derives a name or initials from a path; the no-folder session
- *  reads as the prompt to open one. */
+ *  renderer derives a name from a path; the no-folder session reads as the
+ *  prompt to open one. */
 export function projectDisplayOf(
   key: string,
   root: string | undefined,
 ): ProjectDisplay {
-  if (root === undefined) {
-    return {
-      key,
-      name: 'No project open',
-      initials: 'TX',
-      subtitle: 'Open a folder to start',
-    };
-  }
-  const base = getBasename(root);
-  // The initials a rail row and the hero badge show for the folder.
-  const initials = base
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
-  return {
-    key,
-    name: base || root,
-    initials: initials || 'TX',
-    subtitle: root,
-  };
+  if (root === undefined) return { key, name: 'No project open' };
+  return { key, name: getBasename(root) || root };
 }
 
 /**

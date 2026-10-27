@@ -341,7 +341,6 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-command-palette-label,
-.desktop-command-palette-description,
 .desktop-command-palette-meta {
   min-width: 0;
   overflow: hidden;
@@ -384,11 +383,6 @@ wa-input.desktop-command-palette-input::part(input) {
   color: var(--wa-color-text-normal);
   font-size: var(--font-size);
   font-weight: var(--font-weight-medium);
-}
-
-.desktop-command-palette-description {
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
 }
 
 .desktop-command-palette-meta {

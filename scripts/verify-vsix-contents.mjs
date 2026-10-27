@@ -121,7 +121,7 @@ function verifyDistEntrypoints(entries, failures) {
 // contains no Monaco code — Monaco belongs to the desktop renderer alone. But
 // Vite emits a worker bundle for every `import('...?worker')` expression it
 // sees in the module graph, at transform time, *before* tree-shaking: one
-// webview module importing anything out of `@shared/monaco/monacoLoader` wrote
+// webview module importing anything out of `@texra/shared/monaco/monacoLoader` wrote
 // ~12MB of unreachable Monaco language workers into the VSIX once already, with
 // nothing failing. Pin it — the workers are never referenced by shipped code,
 // so their presence is always a bundling accident.

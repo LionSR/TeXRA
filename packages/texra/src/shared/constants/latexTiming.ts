@@ -1,7 +1,6 @@
 /**
  * LaTeX subsystem runtime constants: build/viewer timing delays and the
- * workspace directories bulk file operations skip. Split out of the old
- * `@shared/constants/latex` dumping ground.
+ * workspace directories bulk file operations skip.
  */
 
 /** Delay before registering a diff document for side-by-side view. */

@@ -17,20 +17,16 @@ interface BrowserLaunchCommand {
   readonly args: string[];
 }
 
-function resolveBrowserLaunch(
-  url: string,
-  wsl: boolean,
-  platform: NodeJS.Platform = process.platform,
-): BrowserLaunchCommand {
+function resolveBrowserLaunch(url: string, wsl: boolean): BrowserLaunchCommand {
   // WSL usually has no `xdg-open`, and the browser the person uses is the
   // Windows one: interop runs the same launcher `win32` uses.
-  if (platform === 'linux' && wsl) {
+  if (process.platform === 'linux' && wsl) {
     return {
       command: 'rundll32.exe',
       args: ['url.dll,FileProtocolHandler', url],
     };
   }
-  switch (platform) {
+  switch (process.platform) {
     case 'darwin':
       return {
         command: 'open',

@@ -47,7 +47,7 @@ import type { AgentSource } from '@texra-ai/harness/schemas';
  */
 function sourceMeta(source: AgentSource): {
   displayName: string;
-  badge?: { icon: IconName; label: string };
+  badge?: { icon: IconName };
 } {
   const { properties } = AGENT_DECORATORS;
   if (!(source in properties)) {

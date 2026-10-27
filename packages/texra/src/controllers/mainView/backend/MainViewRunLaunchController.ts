@@ -174,7 +174,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
   > {
     let preparation: LaunchPreparation;
     if (launch.launchTarget !== 'team') {
-      // AgentConfigSchema prefaults agent/model; reject missing UI selections
+      // AgentConfigSchema defaults agent/model; reject missing UI selections
       // before schema parsing so the user sees the real form problem.
       preparation =
         !launch.agent || !launch.model

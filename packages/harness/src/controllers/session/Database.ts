@@ -252,7 +252,7 @@ export const databaseLayer = (
         sql.unsafe<Record<string, unknown>>(statement, params);
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
-        exec(statement, params).pipe(Effect.map((rows) => rows[0]));
+        exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
       /** The store gate (`storeGate`), in the caller's transaction. */
       const arms = armsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, arms);

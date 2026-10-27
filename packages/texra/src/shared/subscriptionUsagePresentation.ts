@@ -66,13 +66,13 @@ export function formatSubscriptionUsageUpdated(
 /** Compact provider usage text shared by settings and the detailed CLI status. */
 export function formatSubscriptionUsageSummary(
   snapshot: SubscriptionUsageSnapshot,
-  now = Date.now(),
 ): string | undefined {
   if (snapshot.state === 'unavailable') {
     return snapshot.reason === 'missing_credentials'
       ? undefined
       : 'usage unavailable';
   }
+  const now = Date.now();
   return snapshot.windows
     .map((window) => {
       const reset = formatSubscriptionUsageReset(window.resetAt, now);

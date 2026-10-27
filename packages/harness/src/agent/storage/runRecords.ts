@@ -311,7 +311,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     Effect.catchTag('RunHistoryRefused', (refused) =>
       Effect.fail(
         new DatabaseReadFailed({
-          path: session.roots.storage ?? '',
+          path: session.roots.storage,
           cause: refused,
         }),
       ),

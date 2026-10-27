@@ -412,8 +412,8 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
 
 export function cliHistoryNdjsonRecords(
   entries: readonly CliHistoryEntry[],
-  ts = new Date().toISOString(),
 ): CliNdjsonRecord[] {
+  const ts = new Date().toISOString();
   return entries.map((entry) => ({
     kind: 'history-entry',
     ts,

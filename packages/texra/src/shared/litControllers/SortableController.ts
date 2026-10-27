@@ -3,17 +3,13 @@ import Sortable from 'sortablejs';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 interface SortableReorderResult {
-  /** Original index before drag */
-  oldIndex: number;
-  /** New index after drop */
-  newIndex: number;
   /** Reordered items array */
   items: string[];
 }
 
 /**
  * Callback invoked when items are reordered via drag-and-drop.
- * @param result - Contains oldIndex, newIndex, and the reordered items array
+ * @param result - Contains the reordered items array
  */
 type SortableReorderCallback = (result: SortableReorderResult) => void;
 
@@ -82,6 +78,6 @@ export class SortableController implements ReactiveController {
     const [moved] = items.splice(oldIndex, 1);
     items.splice(newIndex, 0, moved);
 
-    this.onReorder({ oldIndex, newIndex, items });
+    this.onReorder({ items });
   }
 }

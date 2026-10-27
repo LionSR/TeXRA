@@ -18,10 +18,9 @@ export class DisposableStore implements Disposable {
   private readonly disposables: DisposableLike[] = [];
   private disposed = false;
 
-  add<T extends DisposableLike>(disposable: T): T {
+  add(disposable: DisposableLike): void {
     if (this.disposed) disposeOne(disposable);
     else this.disposables.push(disposable);
-    return disposable;
   }
 
   dispose(): void {

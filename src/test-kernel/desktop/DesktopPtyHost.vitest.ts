@@ -17,11 +17,10 @@ interface FakePty {
   emitExit(exitCode: number): void;
 }
 
-function createFakePty(pid: number): FakePty & PtyProcess {
+function createFakePty(): FakePty & PtyProcess {
   let dataListener = (_data: string): void => {};
   let exitListener: Parameters<PtyProcess['onExit']>[0] = () => {};
   return {
-    pid,
     write: vi.fn<(data: string) => void>(),
     resize: vi.fn<(cols: number, rows: number) => void>(),
     kill: vi.fn<(signal?: string) => void>(),
@@ -40,8 +39,8 @@ const TERMINAL_ID = 'workbench:terminal:1';
 
 describe('desktop pty host', () => {
   it('ignores callbacks from a disposed session after its id is reused', async () => {
-    const oldPty = createFakePty(101);
-    const replacementPty = createFakePty(102);
+    const oldPty = createFakePty();
+    const replacementPty = createFakePty();
     const spawnPty = vi
       .fn<SpawnPty>()
       .mockReturnValueOnce(oldPty)

@@ -23,10 +23,10 @@ import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDas
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
- * Build the rows, the MCP config file they read, and what that file's
- * invalid entries raise. `cachedResults` skips the availability probes, as
- * the dashboard's own build does (`buildToolDashboardItems`); an unreadable
- * or invalid `mcp.json` lists no servers and says why in `mcpWarnings`.
+ * Build the rows and what the MCP config file's invalid entries raise.
+ * `cachedResults` skips the availability probes, as the dashboard's own
+ * build does (`buildToolDashboardItems`); an unreadable or invalid
+ * `mcp.json` lists no servers and says why in `mcpWarnings`.
  */
 export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   inputs: ToolProbeInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
@@ -48,14 +48,13 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
     return server !== undefined && servers.includes(server);
   };
 
-  const mcpConfigPath = mcpConfigPathOf(inputs.storageRoot);
   const fs = yield* FileSystem.FileSystem;
   // The three loads are independent.
   const [items, installed, mcp] = yield* Effect.all(
     [
       buildToolDashboardItems(inputs, cachedResults),
       InstalledPlugins.list(inputs),
-      readMcpConfig(fs, mcpConfigPath),
+      readMcpConfig(fs, mcpConfigPathOf(inputs.storageRoot)),
     ],
     { concurrency: 'unbounded' },
   );
@@ -93,9 +92,5 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
       usedBy: usedBy(usesServer([server.name])),
     })),
   ];
-  return {
-    rows,
-    mcpConfigPath,
-    mcpWarnings: mcp?.warnings ?? [],
-  };
+  return { rows, mcpWarnings: mcp?.warnings ?? [] };
 });

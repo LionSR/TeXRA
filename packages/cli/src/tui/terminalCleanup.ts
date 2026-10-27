@@ -44,10 +44,8 @@ export function writeTerminalSequence(sequence: string): void {
   }
 }
 
-export function supportsTerminalJobControl(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  return platform !== 'win32';
+export function supportsTerminalJobControl(): boolean {
+  return process.platform !== 'win32';
 }
 
 function cleanupTerminalModes(): void {

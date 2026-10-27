@@ -31,7 +31,6 @@ interface CliCodingPlanStatus {
 }
 
 export type CliModelAccessSelection = {
-  readonly kind: 'subscription-preference';
   readonly provider: CliSubscriptionProvider;
   /** The preference state the selection turns on or off. */
   readonly state: 'off' | 'on';
@@ -166,7 +165,6 @@ export function buildCliModelAccessItems(
     const subscription = status?.subscriptions[provider];
     return {
       value: {
-        kind: 'subscription-preference' as const,
         provider,
         state: subscription?.preferSubscription ? 'off' : 'on',
       },
@@ -181,7 +179,6 @@ export function buildCliModelAccessItems(
     const planStatus = status ? cliCodingPlanStatus(status, plan) : undefined;
     return {
       value: {
-        kind: 'subscription-preference' as const,
         provider: plan.cliProvider,
         state: planStatus?.preferred ? ('off' as const) : ('on' as const),
       },

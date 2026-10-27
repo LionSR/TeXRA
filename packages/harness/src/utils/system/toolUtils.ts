@@ -72,8 +72,8 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     // Log at info level so it shows in output channel by default
     yield* Effect.logInfo(
       `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
-        `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
-        `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
+        `stdout=${result.stdout.slice(0, 200) || '(empty)'}, ` +
+        `stderr=${result.stderr.slice(0, 200) || '(empty)'}`,
     ).pipe(withLogChannel(CHANNEL));
     return false;
   },

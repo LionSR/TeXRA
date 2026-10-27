@@ -27,10 +27,6 @@ export class PrunedNestedMap<A, B, V> {
     return value;
   }
 
-  deleteGroup(a: A): void {
-    this.outer.delete(a);
-  }
-
   /** The live entries of one group; empty when it has none. */
   group(a: A): ReadonlyMap<B, V> {
     return this.outer.get(a) ?? new Map();

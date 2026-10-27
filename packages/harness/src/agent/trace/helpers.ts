@@ -107,7 +107,6 @@ const COMPACTION_ACTIVITY_LOG_TEXT: Record<
 };
 
 export interface CompactionActivityOperation {
-  readonly operationId: string;
   /** Emit the first terminal result; later calls are no-ops. */
   finish(outcome: CompactionActivityOutcome): void;
 }
@@ -131,7 +130,6 @@ export function startCompactionActivity(
 
   emit('started');
   return {
-    operationId,
     finish: (outcome) => {
       if (finished) return;
       finished = true;

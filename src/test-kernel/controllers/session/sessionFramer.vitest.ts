@@ -70,8 +70,6 @@ const PORT = 'sidebar';
 const HOST: HostSnapshot = emptyHostSnapshot({
   key: KEY,
   name: 'Framing',
-  initials: 'FR',
-  subtitle: KEY,
 });
 
 const runStart: SessionEventDraft = {

@@ -1,7 +1,7 @@
 /**
  * The `document_review` tool: the evidence a document task's critic reviews
  * between revisions when the task reflects (its `reflect` option; the
- * recipe in `@agent/output/documentRecipe` calls it). The bundled `critic`
+ * recipe in `@texra/agent/output/documentRecipe` calls it). The bundled `critic`
  * persona holds the instructions; this tool only gathers what it reads.
  */
 import { Effect, FileSystem, Schema } from 'effect';

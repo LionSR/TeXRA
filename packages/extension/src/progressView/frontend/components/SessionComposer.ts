@@ -369,7 +369,6 @@ export class SessionComposer extends LitElement {
         added.push({
           fileName: generatePastedImageName(getExtensionFromMimeType(type)),
           base64: read.base64,
-          mediaType: type,
         });
       } else {
         failures.push(`${type}: ${read.error.message}`);

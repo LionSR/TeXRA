@@ -45,7 +45,6 @@ const webviewSessionLayer = (key: string) =>
 /** One open session of a webview: the services its shell drives, under
  *  the scope `open` was run in. */
 interface WebviewSession {
-  readonly key: string;
   readonly frames: Context.Service.Shape<typeof SessionFrames>;
   /** The shell is the view's one subscribing port. */
   readonly view: Context.Service.Shape<typeof RemoteSessionView>;
@@ -60,7 +59,6 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
   static open(key: string) {
     return WebviewSessions.contextEffect(key).pipe(
       Effect.map((context): WebviewSession => ({
-        key,
         frames: Context.get(context, SessionFrames),
         view: Context.get(context, RemoteSessionView),
       })),

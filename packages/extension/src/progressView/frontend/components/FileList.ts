@@ -245,7 +245,7 @@ export class FileList extends LitElement {
       <ul class="file-round-list">
         ${repeat(
           files,
-          (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
+          (file) => `${round}-${file.location.absolutePath}`,
           (file, index) => this.renderFileItem(file, round, index),
         )}
         ${files.length === 0 ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
@@ -292,9 +292,7 @@ export class FileList extends LitElement {
     file: OutputFileInfo,
     round: number,
     fileIndex: number,
-  ): TemplateResult | typeof nothing {
-    if (!file?.location) return nothing;
-
+  ): TemplateResult {
     // Unique within this shadow root: round + the file's index in that round.
     const idPrefix = `file-action-r${round}-f${fileIndex}`;
 

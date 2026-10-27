@@ -24,13 +24,10 @@ import { withExtendedPath } from '@texra-ai/harness/node';
  */
 interface PtyProcess {
   onData(listener: (data: string) => void): void;
-  onExit(
-    listener: (event: { exitCode: number; signal?: number }) => void,
-  ): void;
+  onExit(listener: (event: { exitCode: number }) => void): void;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   kill(signal?: string): void;
-  readonly pid: number;
 }
 
 interface NodePtyModule {
@@ -48,7 +45,6 @@ interface NodePtyModule {
 }
 
 interface PtySessionHandle {
-  readonly id: string;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   dispose(): void;
@@ -195,7 +191,6 @@ export function createDesktopPtyHost(
       let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
       const heldInput: string[] = [];
       const handle: PtySessionHandle = {
-        id,
         write: (data) => {
           if (child) child.write(data);
           else heldInput.push(data);

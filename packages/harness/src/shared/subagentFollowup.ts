@@ -394,9 +394,7 @@ function findIncompleteEmbeddedSubagentFollowup(
     const index = match.index;
     const tag = match[1];
     const opening = match[0];
-    if (index === undefined || tag === undefined || opening.endsWith('/>')) {
-      continue;
-    }
+    if (opening.endsWith('/>')) continue;
 
     const closing = new RegExp(`</${tag}>`, 'g');
     closing.lastIndex = index + opening.length;

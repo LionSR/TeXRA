@@ -187,7 +187,7 @@ covers, which the operation handle deliberately does not copy.
 | File                              | What it owns                                                                                                                                                            |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |
-| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                                     |
+| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`) and JSON materialization                                                                     |
 | `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                                  |
 | `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                                        |
 | `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |

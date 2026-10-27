@@ -73,7 +73,7 @@ const renameRefShaped = (value: object, rename: (key: string) => string) =>
 
 /** The column tuple every event read selects over {@link EVENT_FROM}. */
 export const EVENT_COLUMNS = `e."commit" AS "commit", s.kind AS kind,
-  s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, e.type AS type,
+  s.logical_id AS logicalId, e.seq AS seq, e.type AS type,
   e.version AS version, e.origin AS origin, e.at AS at, e.data AS data`;
 /** An event `e`'s aggregate key, joined on. */
 export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate`;
@@ -177,7 +177,7 @@ export function encodeDraft(
   if (draft.type === 'context.blob') {
     const { digest, value } = draft.payload;
     const canonical = stableStringify(value);
-    if (canonical === undefined || sha256Hex(canonical) !== digest)
+    if (sha256Hex(canonical) !== digest)
       throw new Error(`The context blob ${digest} does not hash to its digest`);
     stored = { ...payload, payload: { digest, value: canonical } };
   }
@@ -226,7 +226,6 @@ export const RowSchema = Schema.Struct({
   commit: Schema.Int,
   kind: Schema.String,
   logicalId: Schema.String,
-  uid: Schema.String,
   seq: Schema.Int,
   type: Schema.String,
   version: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),

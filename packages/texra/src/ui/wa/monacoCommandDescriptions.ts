@@ -21,7 +21,7 @@ export function installMonacoCommandDescriptions(
       );
       const text =
         popup && popup.style.display !== 'none'
-          ? (popup.querySelector('.hover-contents')?.textContent?.trim() ?? '')
+          ? (popup.querySelector('.hover-contents')?.textContent.trim() ?? '')
           : '';
       let footer = footers.get(widget);
       if (!footer && text) {

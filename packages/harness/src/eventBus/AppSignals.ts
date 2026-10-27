@@ -3,8 +3,8 @@ import { Deferred, Effect, PubSub, Stream } from 'effect';
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
  * credentials, workspace-file writes). Not for run/session progress
- * events — those extend `AgentEvent` (`agent/trace/`) or `SessionFact`
- * (`SessionEvents` in `agent/runtime/`), per the VS Code-free-zone rule in
+ * events — those extend `AgentEvent` (`agent/trace/`) or the `SessionEvent`
+ * schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
  * CLAUDE.md.
  *
  * Delivery and error order, which this module owns and no caller may vary:
@@ -111,7 +111,7 @@ export interface AppSignalPayloads {
    * Extension-only: it exists because VS Code's status-bar tooltip is painted
    * outside the settings webview's own round-trip and has no other refresh
    * trigger. The desktop's write path re-posts the approval snapshot inline
-   * (`applyStateSettingUpdate` -> `postStateSettingSnapshot`), and the CLI
+   * (the shared settings commands' `updateStateSetting`), and the CLI
    * holds the policy in TUI state that its `/approval` command updates
    * directly, so a subscription on either host would be a duplicate repaint.
    */

@@ -2,7 +2,7 @@
  * Outbound message-handler registry for SettingsView.
  *
  * Backend → webview messages are validated and routed by
- * `dispatchSettingsViewOutbound` (`@shared/utils/dispatcher`); every handler
+ * `dispatchSettingsViewOutbound` (`@texra/shared/utils/dispatcher`); every handler
  * lives in the one registry below, which the
  * `SettingsViewOutboundHandlerRegistry` annotation keeps exhaustive — a
  * missing or unknown command is a compile error. Handlers mutate the

@@ -29,7 +29,6 @@ export type PartEvent =
       readonly kind: 'identity';
       readonly id: string | null;
       readonly model: string | null;
-      readonly fingerprint?: string;
     }
   | { readonly kind: 'open'; readonly index: number; readonly part: Part }
   | {

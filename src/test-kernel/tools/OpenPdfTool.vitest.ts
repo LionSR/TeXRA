@@ -46,7 +46,7 @@ describe('OpenPdfTool', () => {
     const session = await Effect.runPromise(
       openTestDefaultSession({
         roots: testWorkspaceRoots(),
-        transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
+        transcriptMode: { kind: 'ephemeral' },
       }),
     );
     sessionRoot = session.roots.storage;

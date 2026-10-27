@@ -345,7 +345,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
         clearDraft();
-        openRegisteredCliSlashForm(cmd, remainder, () =>
+        openRegisteredCliSlashForm(cmd, () =>
           appendSlashCommandEcho(commandLine),
         );
         return;

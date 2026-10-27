@@ -718,7 +718,7 @@ export class PRPollingSource extends PollingSourceBase<
           Effect.map((value) => ({ ok: true as const, value })),
           Effect.catchCause((cause) => {
             const reason = cause.reasons[0];
-            return cause.reasons.length === 1 && reason?._tag === 'Fail'
+            return cause.reasons.length === 1 && reason._tag === 'Fail'
               ? Effect.succeed({ ok: false as const, failure: reason.error })
               : Effect.failCause(cause);
           }),
@@ -813,7 +813,7 @@ export class PRPollingSource extends PollingSourceBase<
         // failures) re-raises on the PollHookRejected channel this hook
         // reports.
         const reason = cause.reasons[0];
-        if (cause.reasons.length === 1 && reason?._tag === 'Fail') {
+        if (cause.reasons.length === 1 && reason._tag === 'Fail') {
           return Effect.succeed({ ok: false as const, failure: reason.error });
         }
         return Effect.failCause(

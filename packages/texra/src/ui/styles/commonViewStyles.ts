@@ -429,13 +429,6 @@ export const commonViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  /* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
-  .agent-icon {
-    display: inline-block;
-    width: 1.2em;
-    text-align: center;
-  }
-
   [hidden] {
     display: none !important;
   }

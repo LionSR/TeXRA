@@ -123,7 +123,7 @@ export interface LeanLanguageServicesShape {
 
 /**
  * The Lean 4 plugin's port, its process layer (`lean4` in
- * `@tools/integrationPlugins`): the direct `lake env lean --server` pool, or
+ * `@texra/tools/integrationPlugins`): the direct `lake env lean --server` pool, or
  * the VS Code extension's Lean 4 bridge, which that host passes with TeXRA's
  * plugins (`texraPlugins`). A Lean tool reads it with
  * `yield* LeanLanguageServices`, served by the step that pinned the plugin;

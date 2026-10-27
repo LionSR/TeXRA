@@ -31,9 +31,9 @@ type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 let logFilePath: string | undefined;
 let consoleInstalled = false;
 
-export function installDesktopAppLog(): string | undefined {
+export function installDesktopAppLog(): void {
   logFilePath = initializeDesktopLogFile();
-  if (logFilePath == null) return undefined;
+  if (logFilePath == null) return;
 
   rotateDesktopLogFile(logFilePath);
   // Core diagnostics reach the file as the structured entries they were
@@ -43,7 +43,6 @@ export function installDesktopAppLog(): string | undefined {
   setLogSink({ write: appendDesktopLogEntry });
   appendDesktopLogLine('info', '--- TeXRA desktop session started ---');
   installConsoleMirror();
-  return logFilePath;
 }
 
 export function getDesktopLogDirectory(): string {
@@ -63,10 +62,8 @@ function getDesktopLogFilePath(): string {
 
 export function readDesktopLogSnapshot(options: {
   workspacePath?: string | undefined;
-  maxBytes?: number | undefined;
 }): DesktopLogSnapshot {
   const path = getDesktopLogFilePath();
-  const maxBytes = Math.max(0, options.maxBytes ?? MAX_VIEWER_LOG_BYTES);
   const workspacePath =
     options.workspacePath == null
       ? undefined
@@ -77,9 +74,9 @@ export function readDesktopLogSnapshot(options: {
   );
   try {
     const buffer = readFileSync(path);
-    const truncated = buffer.length > maxBytes;
+    const truncated = buffer.length > MAX_VIEWER_LOG_BYTES;
     const excerpt = truncated
-      ? buffer.subarray(buffer.length - maxBytes)
+      ? buffer.subarray(buffer.length - MAX_VIEWER_LOG_BYTES)
       : buffer;
     return {
       path: redactedPath,

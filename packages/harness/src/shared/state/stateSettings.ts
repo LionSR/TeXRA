@@ -234,7 +234,7 @@ function globalProviderToggle(opts: {
  *
  * All three hosts read `.texra/config.json` and that storage is flat, so the
  * key and the slot are derived rather than restated; a row carries the schema
- * (with its `.prefault()` default), the copy, and which UI
+ * (with its `withDecodingDefault` default), the copy, and which UI
  * renders it — exactly the shape every state-backed row below already uses.
  *
  * The record's own declaration order is the catalog order, including the

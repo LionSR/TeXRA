@@ -7,7 +7,6 @@ import {
   UPDATE_CHECK_SKIP_ENV,
   runDailyUpdateCheck,
 } from '@texra/utils/system/updateCheck';
-import type { HttpClient } from 'effect/http';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).
@@ -57,11 +56,6 @@ interface CheckForDesktopUpdateOptions {
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */
   isPackaged: boolean;
   notify: (release: DesktopLatestRelease) => Effect.Effect<void, Error>;
-  fetchRelease?: Effect.Effect<
-    DesktopLatestRelease | undefined,
-    Error,
-    HttpClient.HttpClient
-  >;
 }
 
 /** One check. The window that runs it owns it: it stops when that window
@@ -70,7 +64,6 @@ export const checkForDesktopUpdate = ({
   currentVersion,
   isPackaged,
   notify,
-  fetchRelease = fetchLatestDesktopRelease(),
 }: CheckForDesktopUpdateOptions) =>
   Effect.gen(function* () {
     if (!isPackaged || (yield* envFlag(UPDATE_CHECK_SKIP_ENV))) return;
@@ -78,7 +71,7 @@ export const checkForDesktopUpdate = ({
       currentVersion,
       host: 'desktop',
       notifyOnce: true,
-      fetchLatest: fetchRelease.pipe(
+      fetchLatest: fetchLatestDesktopRelease().pipe(
         Effect.map((release) => ({
           version: release?.version,
           refreshed: release !== undefined,

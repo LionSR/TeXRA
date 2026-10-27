@@ -2073,8 +2073,8 @@ type RunPhase = typeof RunPhaseSchema.Type;
 The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`
 row's field): a real `AgentConfig` for agent runs, the honest minimal
 record for everything else. The union keeps the strict non-agent arm
-first: the agent arm's prefaults would fabricate an agent config out of
-any object.
+first: the agent arm's decoding defaults would fabricate an agent config
+out of any object.
 
 ```ts
 type RunRecord = typeof RunRecordFieldsSchema.Type;

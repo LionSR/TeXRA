@@ -13,10 +13,8 @@ import { faBook } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
-import { faBrain } from '@fortawesome/free-solid-svg-icons/faBrain';
 import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
-import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
 import { faChartPie } from '@fortawesome/free-solid-svg-icons/faChartPie';
 import { faCheck } from '@fortawesome/free-solid-svg-icons/faCheck';
 import { faCheckDouble } from '@fortawesome/free-solid-svg-icons/faCheckDouble';
@@ -35,7 +33,6 @@ import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
-import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
 import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp';
 import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
@@ -44,7 +41,6 @@ import { faCodeCompare } from '@fortawesome/free-solid-svg-icons/faCodeCompare';
 import { faCodeMerge } from '@fortawesome/free-solid-svg-icons/faCodeMerge';
 import { faComment } from '@fortawesome/free-solid-svg-icons/faComment';
 import { faComments } from '@fortawesome/free-solid-svg-icons/faComments';
-import { faCompass } from '@fortawesome/free-solid-svg-icons/faCompass';
 import { faCompress } from '@fortawesome/free-solid-svg-icons/faCompress';
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy';
 import { faCube } from '@fortawesome/free-solid-svg-icons/faCube';
@@ -70,7 +66,6 @@ import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faGem } from '@fortawesome/free-solid-svg-icons/faGem';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
 import { faHashtag } from '@fortawesome/free-solid-svg-icons/faHashtag';
-import { faHexagon } from '@fortawesome/free-solid-svg-icons/faHexagon';
 import { faImage } from '@fortawesome/free-solid-svg-icons/faImage';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
@@ -79,14 +74,11 @@ import { faListCheck } from '@fortawesome/free-solid-svg-icons/faListCheck';
 import { faListUl } from '@fortawesome/free-solid-svg-icons/faListUl';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlassChart';
-import { faMeteor } from '@fortawesome/free-solid-svg-icons/faMeteor';
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
-import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
-import { faPlane } from '@fortawesome/free-solid-svg-icons/faPlane';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
@@ -95,7 +87,6 @@ import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBra
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { faRocket } from '@fortawesome/free-solid-svg-icons/faRocket';
 import { faRotateRight } from '@fortawesome/free-solid-svg-icons/faRotateRight';
-import { faSatellite } from '@fortawesome/free-solid-svg-icons/faSatellite';
 import { faScrewdriverWrench } from '@fortawesome/free-solid-svg-icons/faScrewdriverWrench';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faShield } from '@fortawesome/free-solid-svg-icons/faShield';
@@ -157,10 +148,8 @@ const icons = {
   bookmark: faBookmark,
   box: faBox,
   'box-archive': faBoxArchive,
-  brain: faBrain,
   bullseye: faBullseye,
   'caret-down': faCaretDown,
-  'chart-line': faChartLine,
   'chart-pie': faChartPie,
   check: faCheck,
   'check-double': faCheckDouble,
@@ -179,7 +168,6 @@ const icons = {
   'circle-xmark': faCircleXmark,
   clock: faClock,
   'clock-rotate-left': faClockRotateLeft,
-  cloud: faCloud,
   'cloud-arrow-down': faCloudArrowDown,
   'cloud-arrow-up': faCloudArrowUp,
   code: faCode,
@@ -188,7 +176,6 @@ const icons = {
   'code-merge': faCodeMerge,
   comment: faComment,
   comments: faComments,
-  compass: faCompass,
   compress: faCompress,
   copy: faCopy,
   cube: faCube,
@@ -214,7 +201,6 @@ const icons = {
   gem: faGem,
   globe: faGlobe,
   hashtag: faHashtag,
-  hexagon: faHexagon,
   image: faImage,
   key: faKey,
   lightbulb: faLightbulb,
@@ -223,14 +209,11 @@ const icons = {
   'list-ul': faListUl,
   'magnifying-glass': faMagnifyingGlass,
   'magnifying-glass-chart': faMagnifyingGlassChart,
-  meteor: faMeteor,
   microphone: faMicrophone,
   minus: faMinus,
-  moon: faMoon,
   'note-sticky': faNoteSticky,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
-  plane: faPlane,
   play: faPlay,
   plus: faPlus,
   'plus-minus': faPlusMinus,
@@ -239,7 +222,6 @@ const icons = {
   robot: faRobot,
   rocket: faRocket,
   'rotate-right': faRotateRight,
-  satellite: faSatellite,
   'screwdriver-wrench': faScrewdriverWrench,
   server: faServer,
   shield: faShield,

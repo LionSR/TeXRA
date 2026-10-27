@@ -67,7 +67,7 @@ export const revisionKey = Effect.fn('mcpServers.revisionKey')(function* (
 /** A keyed digest of a server's env values, unreadable back to a value. */
 export const envDigest = (key: string, env: Readonly<Record<string, string>>) =>
   createHmac('sha256', Buffer.from(key, 'hex'))
-    .update(stableStringify(env) ?? '')
+    .update(stableStringify(env))
     .digest('hex');
 
 /**

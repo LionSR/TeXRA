@@ -41,7 +41,6 @@ interface ConfirmCardProps extends ConfirmCardHintOptions<ConfirmCardKeyRow> {
   readonly color: string;
   readonly title: string;
   readonly rejectionMode: ConfirmCardRejectionMode;
-  readonly feedbackPlaceholder?: string;
   readonly compact?: boolean;
   readonly children: React.ReactNode;
   readonly onDecide: (decision: SurfaceDecision) => void;
@@ -50,7 +49,6 @@ interface ConfirmCardProps extends ConfirmCardHintOptions<ConfirmCardKeyRow> {
 export function ConfirmCard({
   color,
   title,
-  feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
   compact = false,
   children,
   onDecide,
@@ -73,7 +71,7 @@ export function ConfirmCard({
         <Text>{`${POINTER} `}</Text>
         <BaseTextInput
           value={feedback}
-          placeholder={feedbackPlaceholder}
+          placeholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
           onChange={setFeedback}
           onEscape={() => {
             setFeedbackMode(false);
@@ -119,7 +117,7 @@ export function ConfirmCard({
     rows: feedbackMode
       ? confirmCardFeedbackRows({
           columns,
-          placeholder: feedbackPlaceholder,
+          placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
           value: feedback,
         })
       : 0,

@@ -37,10 +37,7 @@ describe('accept_run_files progress events', () => {
         );
         const session = yield* openTestDefaultSession({
           roots: testWorkspaceRoots(),
-          transcriptMode: {
-            kind: 'ephemeral',
-            reason: 'accept files test session',
-          },
+          transcriptMode: { kind: 'ephemeral' },
         });
         yield* Effect.addFinalizer(() =>
           closeTestSession(session.roots.storage),

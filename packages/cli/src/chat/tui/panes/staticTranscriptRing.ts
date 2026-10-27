@@ -50,7 +50,7 @@ export interface StaticTranscriptState {
   readonly eraseRequest: number;
 }
 
-export interface StaticTranscriptRingBudgets {
+interface StaticTranscriptRingBudgets {
   readonly rowHighWater: number;
   readonly rowLowWater: number;
   readonly byteHighWater: number;
@@ -60,7 +60,7 @@ export interface StaticTranscriptRingBudgets {
 /** Bounded tail at native-terminal-scrollback scale. The high/low split is
  *  hysteresis: a burst can overflow the high-water mark, then trim once down
  *  to the low-water mark instead of trimming on every subsequent append. */
-const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets =
+const STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets =
   Object.freeze({
     rowHighWater: 2_000,
     rowLowWater: 1_500,
@@ -315,12 +315,11 @@ function staticTranscriptItemsTotals(
 function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
-    readonly budgets?: StaticTranscriptRingBudgets;
     readonly totals: StaticTranscriptTotals;
     readonly width?: number;
   },
 ): RingTail {
-  const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
+  const budgets = STATIC_TRANSCRIPT_RING_BUDGETS;
   if (
     options.totals.rows <= budgets.rowHighWater &&
     options.totals.bytes <= budgets.byteHighWater
@@ -372,14 +371,13 @@ function trimStaticTranscriptItems(
 function retainedStaticTranscriptTail(
   items: readonly StaticTranscriptItem[],
   options: {
-    readonly budgets?: StaticTranscriptRingBudgets;
     readonly width?: number;
   },
 ): RingTail {
   if (items.length === 0) {
     return { items, totals: EMPTY_TOTALS, trimmed: false };
   }
-  const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
+  const budgets = STATIC_TRANSCRIPT_RING_BUDGETS;
   const headerCount = items[0]?.kind === 'header' ? 1 : 0;
   if (items.length <= headerCount) {
     const totals = staticTranscriptItemsTotals(items, options.width);
@@ -430,7 +428,6 @@ function retainedStaticTranscriptTail(
       ? [headerItem, ...items.slice(start)]
       : items.slice(start);
   const retained = trimStaticTranscriptItems(candidateItems, {
-    budgets,
     totals: totals.totals,
     width: options.width,
   });
@@ -525,19 +522,12 @@ interface BuildStaticTranscriptItemsOptions {
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly width?: number;
-  readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
 
 function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): RingTail {
-  const {
-    source,
-    meta,
-    maxRows,
-    width,
-    ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
-  } = options;
+  const { source, meta, maxRows, width } = options;
   if (source.waitingForChildIdentity) {
     return { items: [], totals: EMPTY_TOTALS, trimmed: false };
   }
@@ -558,10 +548,7 @@ function buildStaticTranscriptItems(
     items.push({ id: entry.id, kind: 'entry', entry });
   }
 
-  return retainedStaticTranscriptTail(items, {
-    budgets: ringBudgets,
-    width,
-  });
+  return retainedStaticTranscriptTail(items, { width });
 }
 
 function scanStaticTranscriptFromStart(
@@ -584,7 +571,6 @@ export function buildStaticTranscriptState({
   meta,
   ownerKey,
   repaintEpoch,
-  ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   source,
   width,
 }: {
@@ -592,7 +578,6 @@ export function buildStaticTranscriptState({
   readonly meta: SessionMeta;
   readonly ownerKey: string;
   readonly repaintEpoch: number;
-  readonly ringBudgets?: StaticTranscriptRingBudgets;
   readonly source: StaticScrollbackSource;
   readonly width?: number;
   readonly eraseRequest?: number;
@@ -601,7 +586,6 @@ export function buildStaticTranscriptState({
     source,
     meta,
     maxRows,
-    ringBudgets,
     width,
   });
   const scan = source.waitingForChildIdentity
@@ -634,7 +618,6 @@ export function advanceStaticTranscriptState(
     maxRows,
     meta,
     ownerKey,
-    ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
     source,
     width,
   }: {
@@ -642,7 +625,6 @@ export function advanceStaticTranscriptState(
     readonly maxRows?: number;
     readonly meta: SessionMeta;
     readonly ownerKey: string;
-    readonly ringBudgets?: StaticTranscriptRingBudgets;
     readonly source: StaticScrollbackSource;
     readonly width: number;
   },
@@ -658,7 +640,6 @@ export function advanceStaticTranscriptState(
       meta,
       ownerKey,
       repaintEpoch,
-      ringBudgets,
       source,
       width,
     });
@@ -709,7 +690,6 @@ export function advanceStaticTranscriptState(
   if (layoutChanged) {
     const recomputed = staticTranscriptItemsTotals(nextItems, width);
     const trimmed = trimStaticTranscriptItems(nextItems, {
-      budgets: ringBudgets,
       totals: recomputed,
       width,
     });
@@ -758,7 +738,6 @@ export function advanceStaticTranscriptState(
   nextTotals = totals.totals;
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
-    budgets: ringBudgets,
     totals: nextTotals,
     width,
   });

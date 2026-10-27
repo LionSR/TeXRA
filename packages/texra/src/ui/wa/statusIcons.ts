@@ -45,7 +45,6 @@ export interface StatusBadgeOptions {
   /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...). */
   readonly icon: TemplateResult;
   readonly label: string;
-  readonly variant?: WaTagVariant;
   readonly appearance?: StatusBadgeAppearance;
   readonly className?: string;
 }
@@ -58,16 +57,15 @@ export interface StatusBadgeOptions {
 export function renderStatusBadge({
   icon,
   label,
-  variant = 'neutral',
   appearance = 'tag',
   className,
 }: StatusBadgeOptions): TemplateResult {
   if (appearance === 'badge') {
     // prettier-ignore
-    return html`<wa-badge variant=${variant} appearance="filled" class=${ifDefined(className)}>${icon} ${label}</wa-badge>`;
+    return html`<wa-badge variant="neutral" appearance="filled" class=${ifDefined(className)}>${icon} ${label}</wa-badge>`;
   }
   // prettier-ignore
-  return html`<wa-tag variant=${variant} size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
+  return html`<wa-tag variant="neutral" size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
 }
 
 export interface SetStatusIconOptions<Status extends string> {

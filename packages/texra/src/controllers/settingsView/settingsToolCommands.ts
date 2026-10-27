@@ -7,7 +7,6 @@
 import { Effect, Semaphore, Stream, SubscriptionRef } from 'effect';
 
 import {
-  mcpConfigPathOf,
   ToolAvailability,
   ToolCatalog,
   withLogChannel,
@@ -98,7 +97,6 @@ export function settingsToolCommands(ports: {
                 Effect.succeed({
                   command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
                   rows: [],
-                  mcpConfigPath: mcpConfigPathOf(roots.storageRoot),
                   mcpWarnings: [
                     `The plugin list could not be read: ${error.message}`,
                   ],

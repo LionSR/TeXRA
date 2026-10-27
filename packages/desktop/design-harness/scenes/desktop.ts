@@ -105,15 +105,9 @@ function withConversation(): SessionView {
   return viewOf([...scenario.pending, ...chat, local({ self: [OWNER] })]);
 }
 
-const display = (
-  key: string,
-  name: string,
-  subtitle: string,
-): ProjectDisplay => ({
+const display = (key: string, name: string): ProjectDisplay => ({
   key,
   name,
-  initials: key,
-  subtitle,
 });
 
 function project(
@@ -125,10 +119,10 @@ function project(
   return { display: displayRecord, view, surface };
 }
 
-const LP = display('LP', 'LDT-Lean-Paper', 'Lean formalization · with JZF');
-const CT = display('CT', 'CoolingTNS', 'Cooling bound · PRL draft');
-const TN = display('TN', 'TNLean', 'Referee reply, round 2');
-const CO = display('CO', 'coauthor', 'TeXRA source');
+const LP = display('LP', 'LDT-Lean-Paper');
+const CT = display('CT', 'CoolingTNS');
+const TN = display('TN', 'TNLean');
+const CO = display('CO', 'coauthor');
 
 const shellOf = (
   active: string,

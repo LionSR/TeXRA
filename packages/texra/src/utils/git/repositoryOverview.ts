@@ -54,30 +54,25 @@ export interface GitReadOptions {
 
 /**
  * Run one git read, returning stdout (`''` when empty) or `undefined` on
- * failure. Failures go to `options.onError` unless `reportFailure` is false
- * (expected-failure probes such as `@{upstream}` on an unpublished branch).
+ * failure. Failures go to `options.onError`.
  */
 const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   workspace: string,
   args: readonly string[],
   options: GitReadOptions,
-  reportFailure = true,
 ): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   const result = yield* executeCommand(['git', ...args], {
     cwd: workspace,
     settings: options.settings,
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER_BYTES,
-    quiet: !reportFailure,
   });
   if (result.success) return result.stdout;
-  if (reportFailure) {
-    options.onError?.(
-      new Error(
-        result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
-      ),
-    );
-  }
+  options.onError?.(
+    new Error(
+      result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
+    ),
+  );
   return undefined;
 });
 

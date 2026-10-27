@@ -41,8 +41,9 @@ export const installUnhandledRejectionSurface = Effect.fn(
       Effect.provide(effectDiagnosticsLayer('Trace')),
     ),
   );
-  const logError = (message: string, data: unknown) =>
+  const logError = (message: string, data: unknown): void => {
     Queue.offerUnsafe(entries, { message, data });
+  };
   const report = (error: unknown) => {
     logError('Unhandled extension-host rejection', error);
     void vscode.window

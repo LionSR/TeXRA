@@ -65,10 +65,6 @@
   /* Neutral, restrained elevation. No colored glow: raised surfaces should
      feel close to the canvas, not like floating blue glass. */
   --desktop-color-shadow: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 32%));
-  --desktop-shadow-sm: light-dark(
-    0 1px 2px rgb(0 0 0 / 6%),
-    0 1px 2px rgb(0 0 0 / 24%)
-  );
   --desktop-shadow-lg: light-dark(
     0 18px 48px rgb(0 0 0 / 14%),
     0 24px 64px rgb(0 0 0 / 38%)
@@ -468,7 +464,6 @@ body.vscode-high-contrast-light {
   --desktop-color-menu-background: Canvas;
   --desktop-color-menu-border: CanvasText;
   --desktop-color-shadow: transparent;
-  --desktop-shadow-sm: none;
   --desktop-shadow-lg: none;
   /* Error/warning FOREGROUNDS stay CanvasText: Mark is a background keyword
      paired with MarkText, so as text on Canvas its contrast is OS-defined and
@@ -542,7 +537,6 @@ body.vscode-high-contrast-light {
   --color-text-link: LinkText;
   --color-text-link-active: LinkText;
   --color-text-muted: GrayText;
-  --border-control: CanvasText;
 }
 
 /* Honor the OS motion preference for both Web Awesome components and the

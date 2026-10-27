@@ -27,7 +27,6 @@ export const designTokens: CSSResult = css`
     --color-info: var(--wa-color-chart-blue, #3794ff);
     --color-added: var(--wa-color-chart-green, #4caf50);
     --color-removed: var(--wa-color-chart-red, #f44336);
-    --color-chart-orange: var(--wa-color-chart-orange, #d18616);
 
     /* Status indicators (dependency installed/missing, tool available/missing).
        Distinct from --color-success/--color-error: these use the editor
@@ -45,8 +44,6 @@ export const designTokens: CSSResult = css`
 
     /* Component aliases */
     --background-color: var(--color-bg-secondary);
-    --text-color: var(--wa-color-text-normal);
-    --button-hover-background: var(--wa-color-button-hover);
     --dropdown-border: var(--wa-form-control-border-color);
 
     /* Typography */
@@ -95,9 +92,6 @@ export const designTokens: CSSResult = css`
     --height-large: 300px;
     --height-xlarge: 400px;
 
-    /* Widths */
-    --width-button-min: 80px;
-
     /* Borders */
     --border-thin: 1px;
     --border-medium: 2px;
@@ -124,12 +118,6 @@ export const designTokens: CSSResult = css`
     /* Metadata is still text: use the host's readable secondary foreground,
        rather than fading primary text below normal-text contrast. */
     --color-text-muted: var(--wa-color-text-quiet);
-    /* Control boundaries have a separate, non-text contrast requirement. */
-    --border-control: color-mix(
-      in srgb,
-      var(--wa-color-text-normal) 55%,
-      transparent
-    );
 
     /* Seams. Alpha hairlines for the places a border is load-bearing (settings
        rows, code blocks, inputs); large regions separate by a background step
@@ -178,11 +166,9 @@ export const designTokens: CSSResult = css`
        the kind of thing that reads as tidy and fails a low-vision user. */
     --focus-ring-width: 2px;
     --focus-ring-offset: 2px;
-    --textarea-h-s: 2.75rem;
     --textarea-h-m: 6rem;
 
     /* Opacity levels */
-    --opacity-separator: 0.3;
     --opacity-disabled: 0.5;
     --opacity-subtle: 0.7;
     --opacity-normal: 0.85;

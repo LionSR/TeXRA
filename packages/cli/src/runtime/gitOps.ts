@@ -52,11 +52,8 @@ export function repoRoot(cwd: string): GitRead<string | null> {
   return gitValue(cwd, 'rev-parse', '--show-toplevel');
 }
 
-export function remoteUrl(
-  cwd: string,
-  remote = 'origin',
-): GitRead<string | null> {
-  return gitValue(cwd, 'remote', 'get-url', remote);
+export function remoteUrl(cwd: string): GitRead<string | null> {
+  return gitValue(cwd, 'remote', 'get-url', 'origin');
 }
 
 export function currentBranch(cwd: string): GitRead<string | null> {

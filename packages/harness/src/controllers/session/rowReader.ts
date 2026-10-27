@@ -51,7 +51,7 @@ export const AGGREGATE =
  *  envelope: this build's projector wrote it, so it is at the current
  *  version. */
 export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
-  s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, p.type AS type,
+  s.logical_id AS logicalId, e.seq AS seq, p.type AS type,
   NULL AS version, e.origin AS origin, e.at AS at, p.data AS data`;
 /** A projected row joined to its source row's envelope. */
 export const PROJECTED_FROM = `projected_row p
@@ -76,7 +76,6 @@ export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
-    s.uid AS uid,
     e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
     e.at AS at, u.usage AS data
   FROM run_usage u

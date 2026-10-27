@@ -69,7 +69,6 @@ export class TraceEmitter implements AgentTrace {
         // sibling session plane (`SessionHandle.trace`) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
         writeLogLine(
-          'WARN',
           CHANNEL,
           `Trace sink threw while handling event: ${toErrorMessage(err)}`,
         );

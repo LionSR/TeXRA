@@ -591,8 +591,9 @@ defaults.
 ```
 
 Supported top-level keys are `texra.agent`, `texra.model`, and
-`texra.outputFormat`; `texra.chat` and `texra.run` may set command-specific
-`agent` and `model` defaults. Shared TeXRA settings
+`texra.outputFormat`; `texra.chat` may set command-specific `agent` and
+`model` defaults, and `texra.run` a `model` default (`texra run` takes its
+agent as an argument). Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
 built-in CLI model default is `deepseek/deepseek-v4-pro`.
 

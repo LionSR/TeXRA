@@ -107,11 +107,9 @@ function statusTail(info: LeanServerInfo, now: number): string {
   }
 }
 
-export function summarizeLeanServers(
-  list: readonly LeanServerInfo[],
-  now: number = Date.now(),
-): string {
+export function summarizeLeanServers(list: readonly LeanServerInfo[]): string {
   if (list.length === 0) return 'No Lean servers registered.';
+  const now = Date.now();
   const lines = list.map((info) => {
     const modeLabel = LEAN_SERVER_MODE_LABELS[info.mode];
     return `• ${info.workspaceRoot} (${modeLabel})${statusTail(info, now)}`;

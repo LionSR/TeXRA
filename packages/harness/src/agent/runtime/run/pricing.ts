@@ -104,7 +104,7 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
           Math.max(0, usage.inputTokens - cachedInputTokens),
         outputTokens: usage.outputTokens,
         cost: Number(usage.cost.toFixed(6)),
-        responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
+        responseTimeMs: Math.round(usage.responseTimeMs),
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usageRouteOf(bound.route),

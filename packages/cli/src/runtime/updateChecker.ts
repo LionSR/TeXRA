@@ -1,11 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
-import {
-  canonicalizeWorkspacePath,
-  executeCommand,
-  envFlag,
-} from '@texra-ai/harness/node';
+import { executeCommand, envFlag } from '@texra-ai/harness/node';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
   fetchJsonStringField,
@@ -17,7 +13,6 @@ import {
 import {
   cliEnvValue,
   readCliAmbientState,
-  readCliCwd,
   readCliEntrypointPath,
   type CliContext,
 } from './cliContext';
@@ -39,8 +34,8 @@ const CLI_PACKAGE_NAME = '@texra-ai/cli';
  */
 const CLI_HOMEBREW_FORMULA = 'texra';
 
-const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
-const DEFAULT_TIMEOUT_MS = 2500;
+const NPM_REGISTRY = 'https://registry.npmjs.org';
+const REGISTRY_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 
 /** Package manager the running binary was installed with. */
@@ -66,10 +61,10 @@ type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
  * brew formula install; broader `homebrew` / `linuxbrew` prefixes also contain
  * npm globals when Node itself was installed by Homebrew.
  */
-function detectInstallMethod(
-  modulePath: string = currentModulePath(),
-): InstallMethod | undefined {
-  const segments = modulePath.toLowerCase().split(/[\\/]+/);
+function detectInstallMethod(): InstallMethod | undefined {
+  const segments = currentModulePath()
+    .toLowerCase()
+    .split(/[\\/]+/);
   if (segments.includes('cellar')) return 'brew';
   if (!segments.includes('node_modules')) return undefined;
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
@@ -120,36 +115,31 @@ function buildUpdateCommand(method: InstallMethod): {
 }
 
 /** Fetch the `latest` dist-tag version from the npm registry, or undefined. */
-function fetchLatestCliVersion(options?: {
-  registry?: string;
-  timeoutMs?: number;
-}): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
-  const registry = options?.registry ?? DEFAULT_REGISTRY;
+function fetchLatestCliVersion(): Effect.Effect<
+  string | undefined,
+  never,
+  HttpClient.HttpClient
+> {
   return fetchJsonStringField({
-    url: `${registry}/${CLI_PACKAGE_NAME}/latest`,
+    url: `${NPM_REGISTRY}/${CLI_PACKAGE_NAME}/latest`,
     field: 'version',
-    timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    timeoutMs: REGISTRY_TIMEOUT_MS,
     headers: { accept: 'application/json' },
   });
 }
 
-type CommandRunner = (
-  command: string,
+const readBrewStdout = (
   args: readonly string[],
-  timeoutMs: number,
-  cwd?: string,
-) => Effect.Effect<string | undefined, Error, ChildProcessSpawner>;
-
-const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
+  cwd: string,
+): Effect.Effect<string | undefined, Error, ChildProcessSpawner> =>
   Effect.gen(function* () {
     // Runs before platform init (chat startup), so pass an
     // explicit cwd — the wrapper's workspace-root default would throw — no
     // setting slots, since none are open yet, and quiet: true so wrapper debug
     // lines can't leak to the console sink.
-    const workingDir = cwd ?? canonicalizeWorkspacePath(readCliCwd());
-    const result = yield* executeCommand([command, ...args], {
-      timeout: timeoutMs,
-      cwd: workingDir,
+    const result = yield* executeCommand(['brew', ...args], {
+      timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
+      cwd,
       settings: undefined,
       quiet: true,
     });
@@ -205,33 +195,20 @@ function parseHomebrewFormulaVersion(
  * already be fresh enough to offer the right prompt — but report
  * `refreshed: false` so the caller knows the version may be stale.
  */
-function fetchLatestHomebrewFormulaVersion(options?: {
-  formula?: string;
-  timeoutMs?: number;
-  cwd?: string;
-  runCommand?: CommandRunner;
-}): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
+function fetchLatestHomebrewFormulaVersion(
+  cwd: string,
+): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
   return Effect.gen(function* () {
-    const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
-    const runCommand = options?.runCommand ?? readCommandStdout;
-    const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-    const refreshStdout = yield* runCommand(
-      'brew',
-      ['update', '--quiet'],
-      timeoutMs,
-      options?.cwd,
-    );
-    const stdout = yield* runCommand(
-      'brew',
-      ['info', '--json=v2', formula],
-      timeoutMs,
-      options?.cwd,
+    const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
+    const stdout = yield* readBrewStdout(
+      ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
+      cwd,
     );
     return {
       version:
         stdout == null
           ? undefined
-          : parseHomebrewFormulaVersion(stdout, formula),
+          : parseHomebrewFormulaVersion(stdout, CLI_HOMEBREW_FORMULA),
       refreshed: refreshStdout != null,
     };
   });
@@ -309,7 +286,7 @@ export function notifyCliUpdate(
       host: 'cli',
       fetchLatest:
         method === 'brew'
-          ? fetchLatestHomebrewFormulaVersion({ cwd: context.cwd })
+          ? fetchLatestHomebrewFormulaVersion(context.cwd)
           : fetchLatestCliVersion().pipe(
               Effect.map((version) => ({
                 version,

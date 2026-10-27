@@ -291,7 +291,7 @@ export function findDisplayMathRanges(content: string): SourceRange[] {
   const ranges: SourceRange[] = [];
   for (const pattern of DISPLAY_MATH_SPAN_PATTERNS) {
     for (const match of content.matchAll(pattern)) {
-      const start = match.index ?? 0;
+      const start = match.index;
       ranges.push({ start, end: start + match[0].length });
     }
   }

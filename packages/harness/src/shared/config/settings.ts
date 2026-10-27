@@ -202,7 +202,7 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
   if (stored.kind === 'value') return stored.value as T;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
-  writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry.key, stored.cause));
+  writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   // cast: the row's schema produced its own default.
   return Schema.decodeUnknownSync(entry.schema)(undefined) as T;
 }
@@ -244,8 +244,8 @@ function set(
 
 /**
  * Reset a setting to its default by **deleting** the stored key, so the
- * schema's `.prefault()` reappears on the next read. Never writes the literal
- * default value.
+ * schema's decoding default reappears on the next read. Never writes the
+ * literal default value.
  */
 function reset(
   stores: SettingsStores,

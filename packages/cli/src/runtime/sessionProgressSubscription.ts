@@ -13,11 +13,8 @@ import {
   runIdentityName,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { writeNdjsonStdout } from './logSinks';
 import type { LocalSession } from '@texra-ai/harness';
-
-export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
 /**
  * One live child on the `run.children` record, from the fold's own row. The
@@ -72,16 +69,13 @@ function childRow(child: RunView) {
  */
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
-)(function* (
-  session: Pick<LocalSession, 'view'>,
-  writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
-) {
+)(function* (session: Pick<LocalSession, 'view'>) {
   // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
   // wire only under the process's own minimum log level, which `--verbose`
   // lowers to `Debug` — the one place the CLI decides what a debug line is.
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   function emit(event: string, payload: unknown): void {
-    writeRecord({
+    writeNdjsonStdout({
       kind: 'progress',
       event,
       ts: new Date().toISOString(),

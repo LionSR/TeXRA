@@ -35,7 +35,6 @@ export function getExtensionFromMimeType(mimeType: string): string {
 export interface ExtractedClipboardImage {
   readonly fileName: string;
   readonly base64: string;
-  readonly mediaType: string;
 }
 
 /** Image files present on a paste event, paired with their MIME type. */

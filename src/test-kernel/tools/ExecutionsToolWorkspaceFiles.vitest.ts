@@ -36,7 +36,7 @@ describe('ExecutionsTool', () => {
     await Effect.runPromise(
       openTestDefaultSession({
         roots: testWorkspaceRoots(),
-        transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
+        transcriptMode: { kind: 'ephemeral' },
       }),
     );
   });

@@ -16,7 +16,6 @@ const PASTE_CHAR_THRESHOLD = 800;
 const PASTE_MAX_INLINE_LINES = 2;
 
 interface PastedTextEntry {
-  readonly id: number;
   readonly kind: 'text';
   readonly content: string;
 }
@@ -94,7 +93,7 @@ export class DraftAttachmentStore {
   /** Store pasted text; returns the chip to insert in the draft. */
   addPastedText(content: string): string {
     const id = this.nextId++;
-    this.entries.set(id, { id, kind: 'text', content });
+    this.entries.set(id, { kind: 'text', content });
     const numLines = pastedNewlineCount(content);
     return numLines === 0
       ? `[Pasted text #${id}]`

@@ -219,7 +219,7 @@ class ArxivSourceProcessor {
           const reason = cause.reasons[0];
           if (
             cause.reasons.length !== 1 ||
-            reason?._tag !== 'Fail' ||
+            reason._tag !== 'Fail' ||
             reason.error._tag !== 'ArxivSourceTransientError'
           )
             return;

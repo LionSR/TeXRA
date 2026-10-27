@@ -136,9 +136,8 @@ export function createDispatcher<TMessage extends CommandMessage>(
  * a field is wrong". The union's members discriminate on their `command`
  * literal, so a command no member declares fails at the root with no member
  * issue at all, while a matched member that rejects a field reports that
- * member's issue. A nested union inside a matched member (e.g.
- * `UpdatePermissionMessageSchema`'s `action` field) is such a member issue,
- * which is a real validation failure, not an unrecognized command.
+ * member's issue. A nested union inside a matched member is such a member
+ * issue, which is a real validation failure, not an unrecognized command.
  */
 export function isUnrecognizedCommand(error: unknown): boolean {
   if (!Schema.isSchemaError(error)) return false;
@@ -153,7 +152,7 @@ export function isUnrecognizedCommand(error: unknown): boolean {
 //
 // Both functions below are no-ops outside `isDevAssertionMode()` (true under
 // `npm test` or with `TEXRA_DEV_ASSERTIONS=1` set) — zero
-// `safeParse` cost in production. Some of these boundaries (desktop's single
+// decoding cost in production. Some of these boundaries (desktop's single
 // `postToRenderer` channel carries the session frames and their text
 // chunks) are hot enough that even a cheap parse per message is
 // worth avoiding outside dev/test; production keeps sending the

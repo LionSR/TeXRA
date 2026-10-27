@@ -8,7 +8,6 @@
 
 // Local imports
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
-import type { ToolCategory } from '@texra/shared/tools/toolPlugin';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
@@ -20,7 +19,6 @@ import {
 } from '@texra/tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 import { preferredInstallCommand } from '@texra/tools/availabilityProbes';
-import type { SettingHost } from '@texra-ai/harness';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
@@ -42,12 +40,9 @@ export interface PluginCard {
   /** The plugin's id (`Plugin.id`). */
   readonly id: string;
   readonly name: string;
-  readonly category: ToolCategory;
   readonly description: string;
-  /** Product hosts whose dashboard does not list the plugin. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The plugin's catalog rows the card renders inline, in order; the
-   *  catalog itself takes them from TeXRA's rows (`@shared/settingsView/texraSettings`). */
+   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settingsView/texraSettings`). */
   readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */
@@ -59,48 +54,41 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'file-ops',
     name: 'File & Shell Operations',
-    category: 'file',
     description:
       'Read, write, edit files and run shell commands. Includes glob/grep search.',
   },
   {
     id: 'latex-extract',
     name: 'LaTeX Extraction',
-    category: 'latex',
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
   },
   {
     id: 'latex-diagnostics',
     name: 'LaTeX Diagnostics',
-    category: 'latex',
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
   },
   {
     id: 'arxiv',
     name: 'ArXiv Search & Download',
-    category: 'academic',
     description: 'Search arXiv papers and download LaTeX source packages.',
   },
   {
     id: 'web',
     name: 'Web Search & Fetch',
-    category: 'web',
     description:
       'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
   },
   {
     id: 'memory-workflow',
     name: 'Memory & Executions',
-    category: 'workflow',
     description:
       'Persistent memory across sessions and the executions view of the runs an agent launched.',
   },
   {
     id: 'goal',
     name: 'Goal Mode',
-    category: 'workflow',
     description:
       'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
     setup: {
@@ -111,7 +99,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'wolfram',
     name: 'Wolfram Language',
-    category: 'computation',
     description:
       'Wolfram Language through wolframscript, which agents run from the shell for symbolic math, computation, and data analysis.',
     setup: {
@@ -131,7 +118,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'zotero',
     name: 'Zotero Integration',
-    category: 'ai-agents',
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
     setup: {
@@ -153,7 +139,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'lean4',
     name: 'Lean 4 Proof Assistant',
-    category: 'lean',
     description:
       'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',
     setup: {
@@ -185,7 +170,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'multi-agent',
     name: 'Multi-Agent Workflow',
-    category: 'workflow',
     description:
       'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
     setup: {
@@ -196,7 +180,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'github-pr-subscription',
     name: 'GitHub Activity Subscription',
-    category: 'ai-agents',
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
     setup: {
@@ -214,7 +197,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'external-inquiry',
     name: 'External Inquiry',
-    category: 'ai-agents',
     description:
       'Use premium chat subscriptions such as ChatGPT Pro, Claude Opus, Gemini Deep Think, and Grok without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
     setup: {
@@ -226,7 +208,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'codex',
     name: 'OpenAI Codex CLI',
-    category: 'ai-agents',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     settings: CODEX_SETTINGS,
@@ -258,7 +239,6 @@ export const TEXRA_PLUGIN_CARDS: readonly PluginCard[] = [
   {
     id: 'claude-agent',
     name: 'Claude Code CLI',
-    category: 'ai-agents',
     description:
       'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
     settings: CLAUDE_AGENT_SETTINGS,

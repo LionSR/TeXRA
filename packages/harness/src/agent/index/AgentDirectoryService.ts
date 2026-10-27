@@ -188,7 +188,6 @@ export class AgentDirectoryService {
         ).pipe(withLogChannel(this.options.channel));
         yield* this.reportIssue(
           'Custom agents directory must be an absolute path',
-          'custom-agents',
         );
         return undefined;
       }
@@ -208,7 +207,6 @@ export class AgentDirectoryService {
         ).pipe(withLogChannel(this.options.channel));
         yield* this.reportIssue(
           'Parent directory for custom agents directory does not exist',
-          'custom-agents',
         );
         return undefined;
       }
@@ -235,16 +233,13 @@ export class AgentDirectoryService {
 
   /** The issue reporter is a host push with a never error channel, so
    *  reporting an issue cannot fail the resolution that raised it. */
-  private reportIssue(
-    message: string,
-    docsId: 'custom-agents',
-  ): Effect.Effect<void> {
+  private reportIssue(message: string): Effect.Effect<void> {
     if (this.options.issueReporter) {
-      return this.options.issueReporter.report(message, docsId);
+      return this.options.issueReporter.report(message, 'custom-agents');
     }
-    return Effect.logWarning(`${message}. See documentation: ${docsId}`).pipe(
-      withLogChannel(this.options.channel),
-    );
+    return Effect.logWarning(
+      `${message}. See documentation: custom-agents`,
+    ).pipe(withLogChannel(this.options.channel));
   }
 
   /** This file's one failure shape, from whatever cause raised it. */

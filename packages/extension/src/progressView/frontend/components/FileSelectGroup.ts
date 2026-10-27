@@ -146,7 +146,7 @@ export class FileSelectGroup extends LitElement {
       (HTMLElement & { value?: string; checked?: boolean }) | undefined;
     const id = item?.value;
     if (!id) return;
-    this.patchLaunch({ [id]: Boolean(item?.checked) });
+    this.patchLaunch({ [id]: Boolean(item.checked) });
   };
 
   /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */

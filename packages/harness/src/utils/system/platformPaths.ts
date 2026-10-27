@@ -43,7 +43,7 @@ let cachedExtraDirs: string[] | null = null;
  * directly at computation time.
  */
 function warnSkippedDir(message: string): void {
-  writeLogLine('WARN', 'platformPaths', message);
+  writeLogLine('platformPaths', message);
 }
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];

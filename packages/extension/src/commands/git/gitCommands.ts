@@ -46,11 +46,7 @@ const openUrl = (url: string) =>
       ),
     );
 
-export function findCommitInHistory(
-  roots: WorkspaceRoots,
-  commitHash: string,
-  rootPath?: string,
-) {
+export function findCommitInHistory(roots: WorkspaceRoots, commitHash: string) {
   return Effect.gen(function* () {
     if (typeof commitHash !== 'string') {
       return null;
@@ -61,7 +57,7 @@ export function findCommitInHistory(
       return null;
     }
 
-    const workspacePath = rootPath ?? roots.workspace;
+    const workspacePath = roots.workspace;
     if (!workspacePath) {
       return null;
     }

@@ -44,7 +44,6 @@ interface Assembly {
   readonly options: AssemblyOptions;
   id: string | null | undefined;
   model: string | undefined;
-  fingerprint: string | undefined;
   announced: boolean;
   usage: TurnResult['usage'];
   finish: Extract<PartEvent, { kind: 'finish' }> | undefined;
@@ -63,7 +62,7 @@ const fail = (turn: Assembly, what: string) =>
 const none: Folded = Effect.succeed([]);
 
 /**
- * The id, model and fingerprint each fill once and never change. An empty
+ * The id and model each fill once and never change. An empty
  * id or model is observed, so it cannot follow a real one, but identifies
  * nothing; only `null` means the event did not report the field.
  */
@@ -71,7 +70,6 @@ function identify(turn: Assembly, event: Of<'identity'>): Folded {
   const pairs = [
     [turn.id, event.id],
     [turn.model, event.model],
-    [turn.fingerprint, event.fingerprint],
   ];
   if (
     pairs.some(
@@ -82,7 +80,6 @@ function identify(turn: Assembly, event: Of<'identity'>): Folded {
   turn.id ||=
     event.id || (turn.options.allowMissingResponseId ? null : undefined);
   turn.model ||= event.model || undefined;
-  turn.fingerprint ??= event.fingerprint;
   if (turn.announced || turn.id == null) return none;
   turn.announced = true;
   return Effect.succeed([
@@ -280,7 +277,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     providerResponseId: turn.id,
     requestedOrigin: turn.options.origin,
     returnedModel: turn.model ?? null,
-    modelFingerprint: turn.fingerprint ?? null,
+    modelFingerprint: null,
     content,
     ...turn.finish.finish,
     finishReason: reason,
@@ -310,7 +307,6 @@ export function turnAssembly(options: AssemblyOptions): {
     options,
     id: options.responseId,
     model: undefined,
-    fingerprint: undefined,
     announced: false,
     usage: null,
     finish: undefined,

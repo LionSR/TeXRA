@@ -15,11 +15,6 @@ class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFou
   },
 ) {}
 
-interface ResourcesPathOptions {
-  appPath?: string;
-  resourcesPath?: string;
-}
-
 /**
  * Root directory for desktop-persisted memory/history/executions data.
  *
@@ -69,10 +64,10 @@ export const resolveDesktopMainDir = Effect.fn('resolveDesktopMainDir')(
 );
 
 export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
-  function* (mainDirname: string, options: ResourcesPathOptions = {}) {
+  function* (mainDirname: string) {
     const fs = yield* FileSystem.FileSystem;
-    const appPath = options.appPath ?? app.getAppPath();
-    const resourcesPath = options.resourcesPath ?? process.resourcesPath;
+    const appPath = app.getAppPath();
+    const resourcesPath = process.resourcesPath;
     const candidates = [
       join(appPath, 'resources'),
       resourcesPath ? join(resourcesPath, 'resources') : undefined,

@@ -103,7 +103,6 @@ const notOwned = (
 
 const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
   function* (
-    registry: AgentCliSessionRegistry,
     stored: AgentCliSessionEntry,
     params: {
       id: string;
@@ -183,7 +182,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
 
     const stored = yield* store.waitForActive(id);
     if (!stored) continue;
-    return yield* queueAgentCliFollowUp(store, stored, {
+    return yield* queueAgentCliFollowUp(stored, {
       id,
       prompt: params.prompt,
       callerRunId: params.callerRunId,

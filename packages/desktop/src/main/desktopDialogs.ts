@@ -74,13 +74,11 @@ export function createDesktopDialogs(
     /**
      * Shared shape for the "confirm this action" dialog: a warning with a
      * confirm button (defaulted, id 0) and a 'Cancel' button (id 1),
-     * collapsed to a boolean. Used by confirmAcceptFile, the agent-settings
-     * confirm prompt, the credential-settings confirm prompt, and
-     * settingsUi.confirmAction.
+     * collapsed to a boolean. Used by confirmAcceptFile and the settings
+     * prompt port's `confirm`.
      */
     confirmDialog: (options: {
       message: string;
-      title?: string;
       detail?: string;
       confirmLabel?: string;
       project?: string;
@@ -90,7 +88,6 @@ export function createDesktopDialogs(
           dialog.showMessageBox(window, {
             type: 'warning',
             ...inProject(options.project, options.detail),
-            ...(options.title === undefined ? {} : { title: options.title }),
             message: options.message,
             buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
             defaultId: 0,

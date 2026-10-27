@@ -67,10 +67,12 @@ function openRecentMenu(
 export function buildDesktopMenuTemplate(
   actions: DesktopCommandActions,
   recent: DesktopRecentProjects,
-  platform: DesktopPlatform = HOST_PLATFORM,
 ): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
-    getDesktopCommandMenuEntries(platform).map((entry) => [entry.id, entry]),
+    getDesktopCommandMenuEntries(HOST_PLATFORM).map((entry) => [
+      entry.id,
+      entry,
+    ]),
   );
   const commandItem = (id: DesktopCommandId): DesktopMenuTemplateItem => {
     const entry = entriesById.get(id);
@@ -92,15 +94,15 @@ export function buildDesktopMenuTemplate(
       openRecentMenu(recent),
       { type: 'separator' },
       commandItem(DESKTOP_LOCAL_COMMANDS.SAVE_FILE),
-      ...(platform === 'darwin'
+      ...(HOST_PLATFORM === 'darwin'
         ? []
         : [settingsItem, { type: 'separator' as const }]),
-      platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+      HOST_PLATFORM === 'darwin' ? { role: 'close' } : { role: 'quit' },
     ],
   };
 
   const leadingMenus: DesktopMenuTemplateItem[] =
-    platform === 'darwin'
+    HOST_PLATFORM === 'darwin'
       ? [
           {
             role: 'appMenu',

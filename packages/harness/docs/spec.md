@@ -25,12 +25,12 @@ its kind is its `type` column.
 
 - **Process**: One OS process with one process identity,
   `[hostname, pid, processStart]`, stamped on every row it writes
-  (`shared/schemas/sessionEvent.ts:55-75`).
+  (`shared/schemas/sessionEvent.ts:54-74`).
 - **Storage root**: One directory holding one store file.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
 - **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/sessionEvent.ts:103-112`).
+  `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/identifiers.ts:85-88`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it (`controllers/session/Database.ts:648-657`,
   `:749-761`).
@@ -57,14 +57,14 @@ its kind is its `type` column.
   (`shared/schemas/runHistoryEvent.ts:339-360`).
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
-  commits both in one batch (`shared/schemas/sessionEvent.ts:373-386`,
+  commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
   `agent/runtime/requestPolicy.ts:340-352`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
-  (`agent/runtime/SessionEvents.ts:219-371`).
+  (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate (`controllers/session/storeSchema.ts:70-80`).
 
@@ -96,7 +96,7 @@ database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
 the one-time `VACUUM` at setup, page reclaim in autocommit `incremental_vacuum`
 steps, and the `VACUUM INTO` copy a store moved aside takes, none of which
 writes a row (`controllers/session/storeSchema.ts:180-184`, `:316`,
-`controllers/session/storeAside.ts:133-149`).
+`controllers/session/storeAside.ts:137-153`).
 
 ### 2.2 The event table and the envelope
 
@@ -146,12 +146,12 @@ The publisher offers these doors:
   defect (`agent/runtime/SessionEvents.ts:193-195`, `:237-239`).
 - `detach(job)`: Enqueue a job and return at once, for a producer with no fiber;
   its order is the moment of the call
-  (`agent/runtime/SessionEvents.ts:320-343`).
+  (`agent/runtime/SessionEvents.ts:320-342`).
 - `removeRun`: Prove owners, then commit a run's tombstone as the next job
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:408`).
+  `agent/runtime/SessionHandle.ts:405`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -173,7 +173,7 @@ until another process proves this one dead
 its own reaches the publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:97-100`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
-(`agent/runtime/loop/toolUseDispatch.ts:548-551`,
+(`agent/runtime/loop/toolUseDispatch.ts:546-549`,
 `agent/runtime/loop/toolUse.ts:502-505`). `SessionLog.settled` is the barrier
 after every job enqueued before it
 (`controllers/session/sessionStore.ts:305-307`).
@@ -188,7 +188,7 @@ highest version each kind was written at
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
-(`controllers/session/rowCodec.ts:373-399`). A plugin kind whose plugin this
+(`controllers/session/rowCodec.ts:372-398`). A plugin kind whose plugin this
 build lacks passes the gate; its rows are left out of every read (below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
@@ -196,43 +196,43 @@ writes beside them (`controllers/session/Database.ts:273`, `:426-442`).
 Releasing claims is the one write it skips: it writes no row and only gives back
 this process's claims (`controllers/session/Database.ts:426-430`, `:967-975`). A
 core kind this build lacks and never retired counts as newer
-(`controllers/session/rowCodec.ts:375-381`). Kinds a build deleted are listed as
+(`controllers/session/rowCodec.ts:374-380`). Kinds a build deleted are listed as
 retired; their rows fail only their own run's reads
-(`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:288`).
+(`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:287`).
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
 older build's row would read wrong (`shared/schemas/rowVersions.ts:72-155`). A
 plugin's arm versions its own `value` and may carry upcasters for it
-(`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:330`). A row is then
-classified by the reader (`controllers/session/rowCodec.ts:269-335`):
+(`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:329`). A row is then
+classified by the reader (`controllers/session/rowCodec.ts:268-334`):
 
 - **above the kind's current**: `DatabaseStoreNewer`
-  (`controllers/session/rowCodec.ts:291-292`)
+  (`controllers/session/rowCodec.ts:290-291`)
 - **below the lowest readable**: `DatabaseRowEarlier`, the run listed as an
-  earlier build's (`controllers/session/rowCodec.ts:293-296`)
+  earlier build's (`controllers/session/rowCodec.ts:292-295`)
 - **readable, payload fails parse**: `DatabaseRowCorrupt`, naming its commit
-  (`controllers/session/rowCodec.ts:309-321`)
+  (`controllers/session/rowCodec.ts:308-320`)
 - **a plugin kind this build lacks**: left out of every read, kept in the store
-  (`controllers/session/rowCodec.ts:327-328`)
+  (`controllers/session/rowCodec.ts:326-327`)
 
 A read of one run's whole history MUST fail on any row of the aggregate that
 does not decode; a read of its records fails on any undecodable row among the
 rows it selects, and on any earlier build's row anywhere in the run, selected or
-not (`controllers/session/rowReader.ts:167-168`, `:273-298`). A listing or a tail
+not (`controllers/session/rowReader.ts:166-167`, `:273-298`). A listing or a tail
 leaves an earlier build's or a corrupt row out with one warning; when the row is
 on a `run` aggregate it also marks that run unreadable and replaces a damaged
 `run.start` with a bare one of `unknown` identity, so the run still lists
-(`controllers/session/rowReader.ts:309-310`, `:323-339`), and a bad row on a
-`plugin` aggregate marks no run (`controllers/session/rowReader.ts:299-308`); a
+(`controllers/session/rowReader.ts:308-309`, `:323-339`), and a bad row on a
+`plugin` aggregate marks no run (`controllers/session/rowReader.ts:298-307`); a
 row of a known kind at a version above this build's fails any read that selects
 it, listing and tail included, because it means a newer build now writes this
 store; a read whose query does not select that row (a display tail of display
 kinds, a listing of listing rows) can still succeed, while writes and projection
-catch-up stay gated (`controllers/session/rowReader.ts:297-298`). Reads do not
+catch-up stay gated (`controllers/session/rowReader.ts:296-297`). Reads do not
 run the gate: a row of a core kind this build lacks, written by a newer build
 after this one opened the store, reads as corrupt until the next write's gate
 refuses the store; a plugin kind whose plugin this build lacks is left out of
-reads and passes the gate (`controllers/session/rowCodec.ts:288`,
+reads and passes the gate (`controllers/session/rowCodec.ts:287`,
 `controllers/session/Database.ts:431-442`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 `agent/runtime/resumeRun.ts:251-252`).
@@ -240,7 +240,7 @@ cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 ## 3. Row kinds
 
 The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
-from three groups (`shared/schemas/sessionEvent.ts:441-445`). The groups below
+from three groups (`shared/schemas/sessionEvent.ts:439-443`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts:343-472`,
 `shared/session/turnRowHandlers.ts:161-255`, `:267-371`); every other kind on a
@@ -255,8 +255,8 @@ row (`controllers/session/projections.ts:101-120`, `:140-159`), and by the
 display reader, which selects `tool.result` to fill the adjacent `tool.end`
 card's result before it drops the private row
 (`controllers/session/rowCodec.ts:83-83`,
-`controllers/session/rowReader.ts:341-363`). The private rows themselves are
-never sent to a renderer (`shared/schemas/sessionEvent.ts:412-440`).
+`controllers/session/rowReader.ts:340-362`). The private rows themselves are
+never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
   `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`,
@@ -267,19 +267,19 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:412-440`).
 - `tool.intent` (folded: yes): The point after which a call's body may have run,
   at an attempt number; it commits just before the body starts, so it does not
   prove the body ran (`shared/schemas/runHistoryEvent.ts:375-382`,
-  `agent/runtime/loop/toolUseDispatch.ts:542-559`).
+  `agent/runtime/loop/toolUseDispatch.ts:540-557`).
 - `script.call` (folded: yes): A call a `script` guest issued, with its
   arguments (`shared/schemas/runHistoryEvent.ts:339-360`).
 - `tool.result` (folded: yes): A call's one settlement and its disposition
   (`shared/schemas/runHistoryEvent.ts:391-440`).
 - `tools.offered` (folded: yes): The step's offered tools, system text and
-  hooks, when they changed (`shared/schemas/sessionEvent.ts:424`).
+  hooks, when they changed (`shared/schemas/sessionEvent.ts:422`).
 - `context.blob` (folded: yes): Model-facing content stored by sha256 address
-  (`shared/schemas/sessionEvent.ts:425`).
+  (`shared/schemas/sessionEvent.ts:423`).
 - `hook.outcome` (folded: yes): A hook point's recorded outcome; a recorded
   point never runs again (`shared/session/runState.ts:464-471`).
 - `child.turn` (folded: no): A child loop's turn identity and fate, `accepted`
-  or `settled` (`shared/schemas/sessionEvent.ts:435-439`).
+  or `settled` (`shared/schemas/sessionEvent.ts:433-437`).
 
 The `model.message` arms:
 
@@ -291,7 +291,7 @@ The `model.message` arms:
 - `cancelled`: A user stop the provider confirmed for an accepted operation.
 - `failed`: The attempt failed, or its outcome is unknown: a person-admitted
   attempt found with no outcome on resume is re-asked under a `failed` row
-  (`agent/runtime/ModelInvoker.ts:737-752`). Carries its error and the move
+  (`agent/runtime/ModelInvoker.ts:733-748`). Carries its error and the move
   after it (`retry`, `unchain`, `ask`, `stop`, `cancel`).
 - `response`: The completed turn, its dispatch facts per call, and its priced
   usage.
@@ -303,12 +303,12 @@ The `model.message` arms:
 
 `run.report` holds the run's report text, `run.result` its result metadata, and
 `followup.closed` marks its input closed until the run's next `run.activate`
-reopens it (`shared/schemas/sessionEvent.ts:404-411`,
+reopens it (`shared/schemas/sessionEvent.ts:402-409`,
 `agent/followUp/Inbox.ts:38-41`, `:361-371`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
-Every renderer folds these (`shared/schemas/sessionEvent.ts:294-403`; the list's
+Every renderer folds these (`shared/schemas/sessionEvent.ts:292-401`; the list's
 line numbers are in that file). Kinds marked "folded" are also read by
 `applyRunRows`.
 
@@ -353,7 +353,7 @@ fold, which marks that response's answer final
 (`shared/session/runState.ts:387-390`).
 
 Streamed text (`stream.chunk`) is transient. It is not an arm of the vocabulary
-and never a row (`agent/runtime/loop/toolUseDispatch.ts:500-518`).
+and never a row (`agent/runtime/loop/toolUseDispatch.ts:499-516`).
 
 ## 4. Write points
 
@@ -362,26 +362,26 @@ one batch per call (`agent/runtime/RunHistory.ts:386-397`). The loop's write
 points are normative:
 
 - **W1**, `model.message` `attempt`: for a turn or a summary, commits before the
-  billed request leaves the process (`agent/runtime/ModelInvoker.ts:480-502`;
-  summary: `:789-801`).
+  billed request leaves the process (`agent/runtime/ModelInvoker.ts:479-501`;
+  summary: `:785-797`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts:366-382`;
+  (`agent/runtime/ModelInvoker.ts:365-381`;
   `agent/runtime/loop/toolUse.ts:329-336`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
-  (`agent/runtime/loop/toolUseDispatch.ts:527-559`;
+  (`agent/runtime/loop/toolUseDispatch.ts:525-557`;
   `agent/runtime/loop/toolGuard.ts:119-129`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:382-408`,
-  `:660-684`, `:1107-1111`).
+  `:658-682`, `:1105-1109`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:250`, `:279-281`, `:448`, `:502-513`;
   `agent/storage/runLifecycle.ts:243-277`).
 - **W6**, `model.message` `failed`: for a turn or a summary, commits for every
   recorded failure, naming the next move
-  (`agent/runtime/ModelInvoker.ts:616-676`, `:708-710`;
+  (`agent/runtime/ModelInvoker.ts:612-672`, `:704-706`;
   `agent/runtime/run/invocation.ts:383-393`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
   wait; a decision commits once (`agent/runtime/requestPolicy.ts:271-289`,
@@ -389,10 +389,10 @@ points are normative:
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
-(`agent/runtime/ModelInvoker.ts:480-502`,
+(`agent/runtime/ModelInvoker.ts:479-501`,
 `agent/runtime/run/requestContext.ts:139-167`). A compaction summary records its
 attempt the same way, with `purpose: 'summary'`
-(`agent/runtime/ModelInvoker.ts:772-819`). A helper call belongs to no run
+(`agent/runtime/ModelInvoker.ts:768-815`). A helper call belongs to no run
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
@@ -401,33 +401,33 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 in the batch that moves the position to `response.ready`. It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts:57-61`)
-(`agent/runtime/ModelInvoker.ts:359-382`,
+(`agent/runtime/ModelInvoker.ts:358-381`,
 `shared/schemas/runHistoryEvent.ts:235-287`). The loop MUST dispatch only the
 pending response its fold holds (`agent/runtime/loop/toolUse.ts:329-336`). W2
 does not cover a compaction summary, whose answer its caller lands as a
 `context.edit`, or a helper call, which records no row (W1).
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
-guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:527-559`,
+guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:525-557`,
 `agent/runtime/loop/toolGuard.ts:119-129`). The guard asks for a command's
 approval (`agent/runtime/loop/toolGuard.ts:40-47`, `:103-113`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
-(`agent/runtime/loop/toolUseDispatch.ts:548-551`). An attempt whose intent is
+(`agent/runtime/loop/toolUseDispatch.ts:546-549`). An attempt whose intent is
 already committed MUST NOT commit another
-(`agent/runtime/loop/toolUseDispatch.ts:547`).
+(`agent/runtime/loop/toolUseDispatch.ts:545`).
 
 **W4.** A call that settles from its body MUST commit its `tool.result` with its
 whole card: a slow tool's `tool.end`, a fast tool's `tool.start` and `tool.end`
-(`agent/runtime/loop/toolUseDispatch.ts:435-455`, `:647-650`). A body
+(`agent/runtime/loop/toolUseDispatch.ts:435-455`, `:645-648`). A body
 interrupted or cut by a crash commits no result; a resume settles it (section 9,
 "`tool.intent`, no result"). A synthetic settlement of a call no body started (a
 call skipped by a replan, a duplicate, a call after the turn ended) commits its
-`tool.result` with no card (`agent/runtime/loop/toolUseDispatch.ts:388`, `:706`,
-`:988-999`); one that settles a started call as outcome unknown commits its
+`tool.result` with no card (`agent/runtime/loop/toolUseDispatch.ts:388`, `:704`,
+`:986-997`); one that settles a started call as outcome unknown commits its
 card's close, and its open for a fast tool
-(`agent/runtime/loop/toolUseDispatch.ts:713-718`). The delivering `append` MUST
+(`agent/runtime/loop/toolUseDispatch.ts:711-716`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1107-1111`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1105-1109`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -441,16 +441,16 @@ in the same batch as the run's `run.end`
 run whose history does not load ends with its `run.end` and no `halted`
 position, with a warning (`agent/storage/runLifecycle.ts:284-288`). A child the
 child loop drives has no run history and writes no position; it parks on
-`child.park` rows (`shared/schemas/sessionEvent.ts:325-341`).
+`child.park` rows (`shared/schemas/sessionEvent.ts:323-339`).
 
 **W6.** Every failed attempt of a turn or a summary that reaches failure
 recording MUST commit a `failed` row whose `next` is the move after it; a
 renewed observation of an accepted operation repeats without one (section 6),
 and a helper call records none (`agent/runtime/run/modelCall.ts:166`)
 (`agent/runtime/run/invocation.ts:383-393`,
-`agent/runtime/ModelInvoker.ts:616-633`). A `failed` row that asks MUST be
+`agent/runtime/ModelInvoker.ts:612-629`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
-(`agent/runtime/ModelInvoker.ts:664-675`, `shared/session/runHistory.ts:183`).
+(`agent/runtime/ModelInvoker.ts:660-671`, `shared/session/runHistory.ts:183`).
 
 ## 5. The fold
 
@@ -534,7 +534,7 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:96-101`).
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
 (`agent/runtime/run/invocation.ts:355-395`; callers
-`agent/runtime/ModelInvoker.ts:682`, `agent/runtime/run/modelCall.ts:119`). Its
+`agent/runtime/ModelInvoker.ts:678`, `agent/runtime/run/modelCall.ts:119`). Its
 next move is `nextAttempt(invocation, requests)`, read off the invocation's rows
 before every move but the repeat of a renewed observation
 (`agent/runtime/run/invocation.ts:367-369`, `:384-387`,
@@ -558,7 +558,7 @@ The move a `failed` row records is decided once, by `failedNext`
 (`shared/session/inFlight.ts:259-278`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
 (`agent/runtime/run/invocation.ts:343-346`), and a re-ask, `ask` under a fresh
-request id (`agent/runtime/ModelInvoker.ts:737-753`):
+request id (`agent/runtime/ModelInvoker.ts:733-749`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts:265-270`,
@@ -601,7 +601,7 @@ which holds no accepted operation, MUST be asked about again and MUST NOT be
 resent unasked (`shared/session/inFlight.ts:211-217`); one that holds an
 accepted operation is observed (`shared/session/inFlight.ts:211-212`). The ask
 is a new `failed` row on that attempt, with `next: ask`
-(`agent/runtime/ModelInvoker.ts:737-753`). An attempt no person admitted, whose
+(`agent/runtime/ModelInvoker.ts:733-749`). An attempt no person admitted, whose
 outcome no row recorded, is resent (`shared/session/inFlight.ts:217`).
 
 A rejected subscription token MAY be renewed once per execution of
@@ -637,7 +637,7 @@ unprovable and the user is deleting a single run
 `controllers/session/Database.ts:521-534`). The transaction reads the owners
 itself; one it holds no verdict for rolls it back whole, is proven off the write
 lock, and the transaction runs again with that verdict
-(`controllers/session/storeAside.ts:86-111`). A live owner refuses with
+(`controllers/session/storeAside.ts:86-113`). A live owner refuses with
 `DatabaseClaimRefused`, and so does an unprovable one on every other path
 (`controllers/session/storeAside.ts:79-83`).
 
@@ -708,7 +708,7 @@ A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:167-181`,
 `:293-298`, `shared/session/runHistory.ts:101-127`). A tool call that meets a
 storage refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts:598-600`).
+(`agent/runtime/loop/toolUseDispatch.ts:596-598`).
 
 ## 8. Requests
 
@@ -844,10 +844,10 @@ What survives at each commit point follows from sections 2 to 8:
   rejoins that request under its id (`shared/session/inFlight.ts:347-370`).
   Otherwise it is re-run only if both the stored and the current tool declare
   `replay: 'safe'` and the stored arguments validate; else settled as outcome
-  unknown (`agent/runtime/loop/toolUseDispatch.ts:692-719`,
+  unknown (`agent/runtime/loop/toolUseDispatch.ts:690-717`,
   `agent/runtime/run/tools.ts:106-137`).
 - `tool.result`: The settlement is reused; the call is not run again
-  (`agent/runtime/loop/toolUseDispatch.ts:986-987`).
+  (`agent/runtime/loop/toolUseDispatch.ts:984-985`).
 - **delivery `append`**: The loop continues to the next step from
   `results.ready` (`shared/session/runRows.ts:97-105`).
 - `request.opened`: The request stays pending under the same id, or is cancelled

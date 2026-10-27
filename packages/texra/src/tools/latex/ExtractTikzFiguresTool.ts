@@ -61,7 +61,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
 
     const formattedEntries = tikzFigures.map(
       ([label, pictures]) =>
-        `- ${label ?? '(unlabeled)'}: ${formatResultCount(pictures.length, 'picture')}`,
+        `- ${label}: ${formatResultCount(pictures.length, 'picture')}`,
     );
     const outputs: string[] = [
       formatToolOutput(`TikZ figures in ${display}`, formattedEntries),

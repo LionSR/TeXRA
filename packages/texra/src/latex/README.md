@@ -41,7 +41,7 @@ The files have distinct roles:
 
 - **Compilation** — `texTools.ts` builds the kpathsea search path and runs
   `compileLatex2Pdf`; `latexToolchain.ts` lists the core CLI tools TeXRA
-  depends on, checked against `@shared/constants/latexToolchain`'s SSOT by a
+  depends on, checked against `@texra/shared/constants/latexToolchain`'s SSOT by a
   type-level membership check — it catches a renamed/removed shared tool, not
   a new one added there that this list doesn't yet cover; `latexLogging.ts`
   defines the shared log channel that `texcount.ts` and the `formatter/`

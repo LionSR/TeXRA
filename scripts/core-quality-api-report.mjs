@@ -85,10 +85,9 @@ const byText = (left, right) =>
   left.text < right.text ? -1 : left.text > right.text ? 1 : 0;
 
 /**
- * The checker orders a union's members, and a mapped type's properties (a
- * `ZodEnum<{ a: "a"; b: "b" }>`), by type id, which follows the order the
- * program happened to create them, so an edit anywhere in the program can
- * reorder a printed type. Each union prints with its members sorted by their
+ * The checker orders a union's members, and a mapped type's properties, by
+ * type id, which follows the order the program happened to create them, so
+ * an edit anywhere in the program can reorder a printed type. Each union prints with its members sorted by their
  * own text, and each object literal with its properties sorted by name;
  * call, construct and index signatures keep their places.
  */

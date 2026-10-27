@@ -34,14 +34,6 @@ export type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
 /** Annotation naming the logical channel an entry belongs to. */
 export const LOG_CHANNEL = 'channel';
 
-/**
- * Annotation carrying a debug payload. Producers attach the value raw
- * (`Effect.annotateLogs(self, { data })`, or the channel writers' `{ data }`
- * option); the write path below renders it once, for every host surface, so
- * no producer decides how much detail a surface shows.
- */
-const LOG_DATA = 'data';
-
 /** The rendered annotation bound: one bound, at the one owner of rendering,
  * so an always-attached payload cannot flood a host surface. */
 const MAX_ANNOTATION_LENGTH = 2_000;
@@ -170,26 +162,18 @@ export function writeLogEntry(entry: LogEntry): void {
 }
 
 /**
- * One channel line, for the few synchronous publication points with no fiber
- * to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown paths).
- * The entry has the shape the logger layer writes; `data` rides raw.
+ * One `WARN` channel line, for the few synchronous publication points with no
+ * fiber to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown
+ * paths). The entry has the shape the logger layer writes.
  */
-export function writeLogLine(
-  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR',
-  channel: string,
-  message: string,
-  data?: unknown,
-): void {
+export function writeLogLine(channel: string, message: string): void {
   writeLogEntry({
-    level,
+    level: 'WARN',
     fiberId: '',
     timestamp: new Date().toISOString(),
     message,
     cause: undefined,
-    annotations:
-      data === undefined
-        ? { [LOG_CHANNEL]: channel }
-        : { [LOG_CHANNEL]: channel, [LOG_DATA]: data },
+    annotations: { [LOG_CHANNEL]: channel },
     spans: {},
   });
 }

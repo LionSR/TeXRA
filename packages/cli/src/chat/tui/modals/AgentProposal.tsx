@@ -80,15 +80,11 @@ function fileGroupLine(group: {
 
 function fileGroupLines(
   fileGroups: ReturnType<typeof getProposalFileGroups>,
-  heading?: string,
 ): MetadataLine[] {
   if (fileGroups.length === 0) {
     return [];
   }
   const lines = fileGroups.map((group) => fileGroupLine(group));
-  if (heading !== undefined) {
-    return [{ segments: [{ text: `${heading}:` }], tone: 'dim' }, ...lines];
-  }
   const [first, ...rest] = lines;
   return [{ ...first, marginTop: true }, ...rest];
 }

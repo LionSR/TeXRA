@@ -53,11 +53,11 @@ export function getFirstRunDone(state: StateStore) {
   );
 }
 
+/** Record that a real run completed or the user skipped setup. */
 export function setFirstRunDone(
   state: StateStore,
-  done: boolean,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
+  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
 }
 
 /** Whether `view` holds a completed agent run other than the setup
@@ -87,9 +87,7 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
   function* (session: Session): Effect.fn.Return<void, never, Scope.Scope> {
     const state = session.roots.globalState;
     const record = getFirstRunDone(state).pipe(
-      Effect.flatMap((done) =>
-        done ? Effect.void : setFirstRunDone(state, true),
-      ),
+      Effect.flatMap((done) => (done ? Effect.void : setFirstRunDone(state))),
       Effect.catch((error) =>
         Effect.logWarning('Failed to record the first completed run').pipe(
           Effect.annotateLogs({ data: error }),

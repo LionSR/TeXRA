@@ -22,7 +22,7 @@ export interface PluginSettingRow {
  * The entry's schema with its decoding default removed: the shape a value that
  * is present must match, which is what a wire payload or a write carries.
  */
-export function settingSchemaWithoutPrefault(
+export function settingSchemaWithoutDefault(
   entry: StateSettingEntry,
 ): Schema.Codec<unknown> {
   return Schema.toType(entry.schema);

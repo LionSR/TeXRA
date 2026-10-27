@@ -562,7 +562,7 @@ export function App(props: AppProps): React.JSX.Element {
     // one registered with the draft registry, discards.
     if (key.ctrl && input === 'c') {
       if (formBusy) {
-        formProgress?.cancel();
+        formProgress.cancel();
       } else if (!activeDraftRegistry.discard()) {
         props.onCtrlC();
       }

@@ -1,8 +1,7 @@
 /**
  * LaTeX toolchain constants: the recommended LaTeX Workshop settings, the
  * dependency catalog, the per-tool install guides and structured install
- * commands, and the platform normalization helpers they share. Split out of
- * the old `@shared/constants/latex` dumping ground.
+ * commands, and the platform normalization helpers they share.
  */
 
 /** Extension ID for the LaTeX Workshop VS Code extension. */
@@ -106,8 +105,8 @@ interface LatexToolEntry {
  * The one catalog of external LaTeX and image dependencies TeXRA probes, and
  * what each one means to each consumer that probes it. Four surfaces read it
  * and none restates a name: the doctor probe (`@latex/latexToolchain`), the
- * setup assistant's (`@tools/setup/toolProbing`), the settings view's LaTeX
- * status (`@controllers/settingsView/LatexToolingController`), and the
+ * setup assistant's (`@texra/tools/setup/toolProbing`), the settings view's LaTeX
+ * status (`@texra/controllers/settingsView/LatexToolingController`), and the
  * dependency banner (`checkCoreDependencies` in
  * `@texra/utils/system/checkCoreDependencies`).
  *

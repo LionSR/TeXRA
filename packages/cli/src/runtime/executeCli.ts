@@ -108,7 +108,6 @@ export interface CliExecuteOptions {
 export type CliConfigExecuteResult =
   | {
       readonly ok: true;
-      readonly runId: string;
       readonly outcomePersisted: boolean;
       readonly result: CliRunResult;
     }
@@ -146,7 +145,6 @@ export function executeCliConfig(
     }
     return {
       ok: true as const,
-      runId,
       outcomePersisted: run.outcomePersisted,
       result: { ...run.result, plugins },
     };

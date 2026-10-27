@@ -25,7 +25,7 @@ describe('createFlushableDebounce', () => {
   // The CLI transcript sync re-schedules from inside its own callback (its
   // trace flush writes to the store, which fires the change subscription
   // synchronously). An implementation that invokes and then cancels drops that
-  // reschedule and leaves `pending` stuck true, freezing every later sync.
+  // reschedule, freezing every later sync.
   it('keeps a reschedule made from inside the callback', () => {
     const inner = vi.fn();
     let rescheduleOnce = true;
@@ -39,10 +39,8 @@ describe('createFlushableDebounce', () => {
     batcher.schedule();
     vi.advanceTimersByTime(100);
     expect(inner).toHaveBeenCalledOnce();
-    expect(batcher.pending).toBe(true);
 
     vi.advanceTimersByTime(100);
     expect(inner).toHaveBeenCalledTimes(2);
-    expect(batcher.pending).toBe(false);
   });
 });

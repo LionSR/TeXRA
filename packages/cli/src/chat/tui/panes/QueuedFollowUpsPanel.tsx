@@ -21,7 +21,6 @@ interface QueuedFollowUpPanelRow {
 interface QueuedFollowUpPanelDisplay {
   readonly title: string | undefined;
   readonly rows: readonly QueuedFollowUpPanelRow[];
-  readonly hiddenCount: number;
 }
 
 export function queuedFollowUpPanelRowCount(
@@ -41,7 +40,7 @@ function queuedFollowUpPanelDisplay({
   readonly width: number;
 }): QueuedFollowUpPanelDisplay {
   if (messages.length === 0 || maxRows <= 0) {
-    return { title: undefined, rows: [], hiddenCount: 0 };
+    return { title: undefined, rows: [] };
   }
 
   const contentWidth = Math.max(0, width - 2);
@@ -51,7 +50,7 @@ function queuedFollowUpPanelDisplay({
   );
   const messageSlots = Math.max(0, maxRows - 1);
   if (messageSlots === 0) {
-    return { title, rows: [], hiddenCount: messages.length };
+    return { title, rows: [] };
   }
 
   const hasOverflow = messages.length > messageSlots;
@@ -85,7 +84,7 @@ function queuedFollowUpPanelDisplay({
     });
   }
 
-  return { title, rows, hiddenCount };
+  return { title, rows };
 }
 
 export function QueuedFollowUpsPanel({

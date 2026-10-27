@@ -58,7 +58,6 @@ interface FileState {
   disk?: string;
   dirty: boolean;
   syncing: boolean;
-  closed: boolean;
 }
 
 interface EditorPaneCallbacks {
@@ -103,8 +102,6 @@ interface EditorPane {
   layout(): void;
   hasUnsavedChanges(): boolean;
   save(): Promise<void>;
-  /** Release a closed document and its undo history. */
-  close(path: string): void;
   dispose(): void;
 }
 
@@ -143,9 +140,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
   const loadingDirectories = new Set<string>();
   const directoryErrors = new Set<string>();
-  // `close` resets an entry rather than deleting it: a load, sync, or save
-  // still in flight keeps comparing against the same flags and counters, and
-  // the `closed` flag must outlive the model so a late load is discarded.
   const files = new Map<string, FileState>();
 
   function fileState(path: string): FileState {
@@ -156,7 +150,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         activeWrites: 0,
         dirty: false,
         syncing: false,
-        closed: false,
       };
       files.set(path, file);
     }
@@ -404,7 +397,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (file.pendingLoad) return file.pendingLoad;
 
     const load = readCurrentContents(path).then((contents) => {
-      if (disposed || file.closed) return undefined;
+      if (disposed) return undefined;
       file.disk = contents;
       const model = loadedMonaco.editor.createModel(
         contents,
@@ -523,7 +516,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   async function open(path: string): Promise<void> {
     if (disposed) return;
-    fileState(path).closed = false;
     const request = ++latestOpenRequest;
     const target = await ensureEditor();
     if (!target || !monaco) return;
@@ -632,7 +624,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
-    if (!path || !file || !model || file.closed || callbacks.isReadOnly?.(path))
+    if (!path || !file || !model || callbacks.isReadOnly?.(path))
       return Promise.resolve();
     return onModelSyncLane(file, async () => {
       if (disposed || file.model !== model) return;
@@ -699,21 +691,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     hasUnsavedChanges: () => [...files.values()].some((file) => file.dirty),
     // A plain save never overwrites: only the conflict notice's answer does.
     save: () => save(openPath),
-
-    close(path) {
-      const file = fileState(path);
-      file.closed = true;
-      if (openPath === path) {
-        latestOpenRequest += 1;
-        editor?.setModel(null);
-        openPath = undefined;
-      }
-      file.model?.dispose();
-      file.model = undefined;
-      file.viewState = undefined;
-      file.dirty = false;
-      renderTree();
-    },
 
     dispose() {
       disposed = true;

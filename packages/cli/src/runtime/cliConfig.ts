@@ -38,9 +38,8 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
  */
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
-/** The `texra.*` command sections whose members are `agent` and `model`. */
-const COMMAND_ROLES = ['chat', 'run'] as const;
-export type CliCommandRole = (typeof COMMAND_ROLES)[number];
+/** The `texra.*` command sections: `texra.chat` and `texra.run`. */
+export type CliCommandRole = 'chat' | 'run';
 
 /** Agent and model for one command, after the section/top-level fallthrough. */
 export interface CliCommandDefaults {
@@ -192,12 +191,14 @@ const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(
   TEXRA_SETTINGS.configSlotKeys,
 );
 
-/** The two members of a `texra.chat` / `texra.run` section. */
-const COMMAND_SECTION_KEYS: ReadonlySet<string> = new Set(['agent', 'model']);
-
-const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
-  COMMAND_ROLES.map((role) => `texra.${role}`),
-);
+/**
+ * The members each command section accepts. `texra run` takes its agent as a
+ * required argument, so its section sets only the model.
+ */
+const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['texra.chat', new Set(['agent', 'model'])],
+  ['texra.run', new Set(['model'])],
+]);
 
 /**
  * Names the config-file entries that cannot apply. An unknown project key (a
@@ -235,10 +236,11 @@ function configFileWarnings(
         );
         continue;
       }
-      if (!isProjectFile || !COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
+      const sectionKeys = COMMAND_SECTION_KEYS.get(key);
+      if (!isProjectFile || !sectionKeys) continue;
       if (!Predicate.isObject(value)) continue;
       for (const nested of Object.keys(value)) {
-        if (COMMAND_SECTION_KEYS.has(nested)) continue;
+        if (sectionKeys.has(nested)) continue;
         warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
       }
     }

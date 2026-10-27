@@ -57,8 +57,7 @@ const alive = local({ self: [OWNER] });
 const nobody = local({ dead: [OWNER] });
 
 /** A fresh updater of the fixture session. */
-const paper = (cursor = 0, debug = false) =>
-  makeSessionViewUpdater('paper', cursor, debug);
+const paper = () => makeSessionViewUpdater('paper');
 
 describe('session view update', () => {
   const scenario = buildScenario();
@@ -170,8 +169,16 @@ describe('session view update', () => {
     // A verbose view: transcript verbosity is the view's own flag, read from
     // its config authority at open — never a property of a row.
     const initial = () => {
-      const updater = paper(0, true);
-      viewOf([tail(start), subscribe(CHILD), alive], updater);
+      const updater = paper();
+      viewOf(
+        [
+          { _tag: 'debug', enabled: true },
+          tail(start),
+          subscribe(CHILD),
+          alive,
+        ],
+        updater,
+      );
       return updater;
     };
     const live = viewOf(
@@ -220,7 +227,7 @@ describe('session view update', () => {
     });
     // The same rows on a quiet view: the debug row is dropped, its cursor
     // still advances.
-    const quietly = paper(0, false);
+    const quietly = paper();
     viewOf([subscribe(CHILD), alive], quietly);
     const quiet = viewOf(
       log.events

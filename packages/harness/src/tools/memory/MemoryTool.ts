@@ -138,7 +138,7 @@ const run = Effect.fn('MemoryTool.run')(function* (
         invocation,
       );
     case 'insert': {
-      // Schema-enforced: the branch's .refine() rejects insert_text and
+      // Schema-enforced: the branch's check rejects insert_text and
       // new_str both being absent before execute() is ever reached.
       const insertText = (input.insert_text ?? input.new_str)!;
       return yield* insert(

@@ -240,7 +240,6 @@ test('settings navigation and appearance across window sizes', async () => {
         },
         now,
         usage: {
-          provider: 'chatgpt',
           providerName: 'ChatGPT',
           planName: 'Plus',
           state: 'available',

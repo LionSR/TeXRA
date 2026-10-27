@@ -1,150 +1,116 @@
 # Agent trace architecture
 
-The trace channel is the single emission point for every event a TeXRA
-agent run produces. One agent-general interface carries the primitives;
-the TeXRA-specific helpers are plain functions over that interface, so
-there is a single runtime implementation behind both.
+The trace is the display channel of one agent run: every event a run shows a
+reader (log lines, stages, streamed text, tool cards, usage) is one
+`AgentEvent` emitted on its `AgentTrace`. One agent-general interface carries
+the primitives; the TeXRA-specific helpers are plain functions over that
+interface, so there is a single runtime implementation behind both. The trace
+is not the run's state: the rows a run continues from commit through its run
+history (`RunCell.append`), never through the trace.
 
 ```
-                          ┌────────────────────────────────────────┐
-                          │              call sites                │
-                          │  (run loop, tools, output mgrs,        │
-                          │   commands, tests, …)                  │
-                          └────────────────────┬───────────────────┘
-                                               │
-                                  ctx.trace.<method>(...)
-                                               │
-                                               ▼
-                          ┌────────────────────────────────────────┐
-                          │  packages/harness/src/agent/trace/helpers.ts            │
-                          │  packages/harness/src/agent/trace/toolUseHelpers.ts     │
-                          │  ────────────────────────────────────  │
-                          │  TeXRA helpers — plain functions       │
-                          │  taking an AgentTrace:                 │
-                          │  • logSdkError / logProgressStatus     │
-                          │  • logUserMessage                      │
-                          │  • startToolUseCard / endToolUseCard   │
-                          │  • logWebSearch / logFilesLoaded / …   │
-                          └────────────────────┬───────────────────┘
-                                               │  call
-                                               ▼
-                          ┌────────────────────────────────────────┐
-                          │  packages/harness/src/agent/trace/AgentTrace   (TYPE)   │
-                          │  ────────────────────────────────────  │
-                          │  agent-general SDK surface             │
-                          │  • emit / subscribe                    │
-                          │  • activeStageId                       │
-                          │  • debug / info / warn / error         │
-                          │  • openStage / openStream              │
-                          └────────────────────┬───────────────────┘
-                                               │
-                                    implemented by
-                                               │
-                                               ▼
-                          ┌────────────────────────────────────────┐
-                          │  packages/harness/src/agent/trace/TraceEmitter (CLASS)  │
-                          │     the one implementation             │
-                          │     single-stamp at emit() boundary    │
-                          │     AsyncLocalStorage for stage stack  │
-                          └────────────────────┬───────────────────┘
-                                               │  emit(AgentEvent)
-                                               ▼
-                                    ┌──────────────────────┐
-                                    │   subscribers fan    │
-                                    │       out from       │
-                                    │   one event channel  │
-                                    └──┬───────────────┬───┘
-                                       │               │
-                       ┌───────────────┘               └────────────────┐
-                       ▼                                                ▼
-            ┌─────────────────────┐                       ┌─────────────────────────┐
-            │ channelTrace.attach-│                       │ TexraTranscriptRecorder │
-            │ ChannelSubscriber   │                       │                         │
-            │                     │                       │ exhaustive switch on    │
-            │ writes formatted    │                       │ event.type → store ops  │
-            │ lines to per-       │                       │                         │
-            │ channel sink        │                       │ TeXRA-product surface:  │
-            │                     │                       │ feeds the webview       │
-            │ (VS Code output     │                       │ transcript via         │
-            │  channels, console) │                       │ StreamLogStore         │
-            └─────────────────────┘                       └─────────────────────────┘
-                       │                                                │
-                       ▼                                                ▼
-            ┌─────────────────────┐                       ┌─────────────────────────┐
-            │ outputChannelFactory│                       │     StreamLogStore      │
-            │ (host-injected)     │                       │  persists to disk,      │
-            │                     │                       │  drives progress view   │
-            └─────────────────────┘                       └─────────────────────────┘
+                 call sites (run loop, tools, model invoker, …)
+                                      │
+                         trace.<method>(...) / helper(trace, ...)
+                                      │
+                                      ▼
+            ┌───────────────────────────────────────────────────┐
+            │ packages/harness/src/agent/trace/helpers.ts        │
+            │ TeXRA helpers, plain functions over an AgentTrace: │
+            │ logSdkError / logProviderError / logProgressStatus │
+            │ logUserMessage / logContextManagementEvent /       │
+            │ startCompactionActivity                            │
+            └─────────────────────────┬─────────────────────────┘
+                                      ▼
+            ┌───────────────────────────────────────────────────┐
+            │ AgentTrace (interface, AgentTrace.ts)              │
+            │ emit · debug/info/warn/error · openStage ·         │
+            │ openRun · openToolCard                             │
+            └─────────────────────────┬─────────────────────────┘
+                                      │ implemented by
+                                      ▼
+            ┌───────────────────────────────────────────────────┐
+            │ TraceEmitter (TraceEmitter.ts)                     │
+            │ fans each event out to the sinks it was built with │
+            └───────────────┬───────────────────┬───────────────┘
+                            ▼                   ▼
+            ┌──────────────────────┐ ┌──────────────────────────┐
+            │ session.log.publish  │ │ session.trace.tap        │
+            │ a display row on the │ │ the run's trace port:    │
+            │ session event table  │ │ every listener of the    │
+            │ (a chunk: transient  │ │ run (its `events`)       │
+            │ text, never a row)   │ │                          │
+            └──────────────────────┘ └──────────────────────────┘
 ```
 
-Not every product event needs a named helper. Every other case of the
-`AgentEvent` union (usage, context state, tool cards, the finalized
-response) is emitted directly with `trace.emit({ type, ... })`, and
-low-traffic, TeXRA-specific facts ride a log call
-(`trace.info(text, { messageType, data })`) instead of a dedicated named
-helper.
+A run's trace is built in `AgentLaunchContext.ts` with those two sinks; a
+delegated child's trace (`packages/harness/src/tools/delegation/childRun.ts`)
+publishes to its session log only. Readers never subscribe to the emitter:
+the progress view and the desktop renderer read the session view folded from
+the event table, and an SDK caller reads its run handle's `events`, which listens on the
+run's trace port.
+
+Not every product event needs a named helper. Most cases of the `AgentEvent`
+union (usage, context state, tool cards) are emitted directly with
+`trace.emit({ type, ... })`, and low-traffic, TeXRA-specific facts ride a log
+call (`trace.info(text, { messageType, data })`) instead of a dedicated
+helper. A plugin's own facts are `plugin.fact` rows (`ToolResult.facts`),
+never a log payload.
 
 ## Where things live
 
 ```
-packages/harness/src/agent/trace/                  ← agent-general (no TeXRA)
-├── events.ts                     ← AgentEvent discriminated union
-├── AgentTrace.ts                 ← lean SDK interface
-├── TraceEmitter.ts               ← in-process implementation
-├── helpers.ts                    ← TeXRA helpers as functions over AgentTrace
-├── toolUseHelpers.ts             ← tool-use card helpers
-└── index.ts                      ← the module's public surface
+packages/harness/src/agent/trace/        ← agent-general (no TeXRA)
+├── events.ts          ← AgentEvent: the session event schema's trace arms
+├── AgentTrace.ts      ← the interface and its handles
+├── TraceEmitter.ts    ← the implementation, and runEventDraft
+├── helpers.ts         ← TeXRA helpers as functions over AgentTrace
+└── index.ts           ← the module's public surface
 
-packages/harness/src/logger/                       ← channel output and redaction only
-├── logSink.ts                    ← the host sink: entry shape, rendering, writeLogEntry
-├── effectLog.ts                  ← withLogChannel for Effect.log*
-└── redaction.ts                  ← provider-key redaction for logged text
+packages/harness/src/controllers/session/runTrace.ts
+                       ← each run's trace sink: rows in publisher order,
+                         transient streamed text, what the run left open
 
-packages/harness/src/transcript/                   ← TeXRA transcript layer
-├── TexraTranscriptRecorder.ts    ← subscriber → StreamLogStore (transcript)
-└── StreamLogStore.ts             ← transcript persistence (file-backed)
+packages/harness/src/logger/             ← host diagnostics, not the trace
+├── logSink.ts         ← the host sink: entry shape, rendering, writeLogEntry
+├── effectLog.ts       ← withLogChannel for Effect.log*
+└── redaction.ts       ← provider-key redaction for logged text
+
+packages/harness/src/transcript/         ← run transcripts read from rows
+├── runTranscript.ts   ← a run's transcript, rebuilt from its committed rows
+└── traceAssembler.ts  ← a static trace document from the run's rows
 
 packages/texra/src/telemetry/
-└── UsageLogService.ts            ← usage write path, fed per priced call by
-                                    `reportUsage` (`packages/harness/src/agent/runtime/run/modelCall.ts`,
-                                    called from `ModelInvoker` and `modelCall`)
+└── UsageLogService.ts ← usage write path, fed per priced call by
+                         `reportUsage` (`packages/harness/src/agent/runtime/run/pricing.ts`)
 ```
 
-## Single-resolve invariant
+## The emit boundary
 
-```
-caller                       TraceEmitter                   subscribers
-──────                       ────────────                   ───────────
-trace.debug(msg)         ─►  emitLog('debug', msg)
-                                  │
-                                  ▼
-                              this.emit({type:'log', …})
-                                  │
-                                  ▼            ┌── stage stamp resolved
-                              stamp stageId    │   ONCE here from
-                              from AsyncLocal  ┘   AsyncLocalStorage scope
-                                  │
-                                  ▼
-                              for sub of subscribers ─► sub({type:'log', stageId, …})
-                                                          │
-                                                          ▼
-                                                       handle log event
-```
+`TraceEmitter.emit` is the one place an event leaves a run. It hands the
+event to each sink in order and catches what a sink throws, writing a `warn`
+line to the host log sink (`writeLogLine`) so one bad sink cannot break the
+run and its fault stays diagnosable. Once the run ends, `close()` drops the
+sinks, so an event emitted afterwards reaches nobody. A log entry belongs to
+the stage named in its `stageId` option, or to no stage; the emitter keeps no
+implicit stage stack.
 
-Every sugar method (`logError`, `latexDiff`, `openStage`, `usage`, …)
-reduces to one `emit()` call, collapsing ten `resolveActiveGroupId()`
-callsites in the previous logger down to this single point.
+`runEventDraft` turns an event into its row on the run's aggregate.
+`stream.chunk` is the one transient arm: it has no row, and the session graph
+carries its text instead.
 
 ## Adding a new event case
 
-1. Extend `AgentEvent` in `packages/harness/src/agent/trace/events.ts`.
-2. The exhaustive `switch (event.type)` in `TexraTranscriptRecorder.ts`
-   (and any other subscriber) fails to compile until handled.
-3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`,
-   or, if the case is TeXRA-specific, a helper function over `AgentTrace`
-   in `helpers.ts`.
-4. Update the test-support `noopTrace` (`src/test-kernel/support/noopTrace.ts`)
-   if the new case has a return shape.
+1. Declare the arm in the session event schema
+   (`packages/harness/src/shared/schemas/sessionEvent.ts`, or the trace arms in
+   `packages/harness/src/shared/schemas/traceEvent.ts`), then add its type to
+   the `AgentEvent` union in `packages/harness/src/agent/trace/events.ts`.
+2. Handle it where the session view folds rows
+   (`packages/harness/src/shared/session/sessionView.ts`) and in any renderer
+   that switches on the row type.
+3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`
+   only when many call sites need it, or, if the case is TeXRA-specific, a
+   helper function over `AgentTrace` in `helpers.ts`.
 
-The discriminated union is the SSoT — interface drift forces a build
-break in subscribers, not silent data loss.
+The schema is the single source of truth: a renderer that switches
+exhaustively on the row type fails to compile until it handles the new case.

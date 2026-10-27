@@ -375,10 +375,7 @@ export function makeSessions(
                   interruptedTasks: host.interruptedTasks,
                 }),
             ...(!persistent && {
-              transcriptMode: {
-                kind: 'ephemeral',
-                reason: 'npm package consumer',
-              },
+              transcriptMode: { kind: 'ephemeral' },
             }),
           }),
           sessionFor,

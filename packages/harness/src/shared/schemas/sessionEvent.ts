@@ -28,7 +28,6 @@ import {
   aggregateTarget,
   qualifyAggregateId,
   type AggregateId,
-  type AggregateKind,
 } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import {
@@ -88,11 +87,11 @@ const envelope = {
   at: Schema.Int,
 };
 
-/** The aggregate column of a `type` row, checked to be of the given kind. */
-function aggregateIdOf(type: string, kind: AggregateKind) {
+/** The aggregate column of a `type` row, checked to be a run aggregate. */
+function aggregateIdOf(type: string) {
   return AggregateIdSchema.check(
-    Schema.makeFilter((key) => aggregateTarget(key).kind === kind, {
-      message: `Expected a ${kind} aggregate for ${type}`,
+    Schema.makeFilter((key) => aggregateTarget(key).kind === 'run', {
+      message: `Expected a run aggregate for ${type}`,
     }),
   );
 }
@@ -100,10 +99,9 @@ function aggregateIdOf(type: string, kind: AggregateKind) {
 function durable<T extends string, const F extends Schema.Struct.Fields>(
   type: T,
   fields: F,
-  kind: AggregateKind = 'run',
 ) {
   return Schema.Struct({
-    aggregateId: aggregateIdOf(type, kind),
+    aggregateId: aggregateIdOf(type),
     stageId: Schema.optional(Schema.String),
     type: Schema.Literal(type),
     ...fields,
@@ -130,7 +128,7 @@ interface OnRunAggregate extends Struct.Lambda {
 const onRunAggregate = Struct.lambda<OnRunAggregate>((schema) =>
   schema.mapFields(
     Struct.assign({
-      aggregateId: aggregateIdOf(schema.fields.type.literal, 'run'),
+      aggregateId: aggregateIdOf(schema.fields.type.literal),
     }),
   ),
 );
