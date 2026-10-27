@@ -758,12 +758,11 @@ export async function runChat(
     await ink.waitUntilExit();
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
-    // released the store, so the bridge outlives the chat's scope, which the
-    // graceful drain closes. A signal exit leaves the store to process.exit;
-    // closing the scope again here keeps the order on every path: nothing
-    // subscribed to the view outlives it.
+    // released the store, so the bridge outlives the chat's scope. The
+    // teardown settles only on the graceful path, whose drain closes that
+    // scope first (a signal exit ends in process.exit and never returns
+    // here), so nothing subscribed to the view outlives the bridge.
     await exitController.gracefulTeardown();
-    await runtime.runPromise(Scope.close(chatScope, Exit.void));
     unbindSessionView();
   }
   return { exitCode: session.runExitCode };
