@@ -19,9 +19,11 @@ invariant, or a reproduced defect. Three rules override anything below:
    protects a real contract.
 2. **E2E is the default.** Drive the real app (the Playwright suite in
    `packages/desktop/tests/e2e/`, or the real `texra` binary) through the
-   user-visible path, ending in a **verifiable, repeatable artifact**: a
-   screenshot against a committed baseline, a saved transcript, run history, or
-   output file, written under `packages/desktop/tests/e2e/test-results/`.
+   user-visible path, ending in a **verifiable, repeatable artifact** a
+   reviewer can re-run and inspect: a screenshot, a saved transcript, run
+   history, or an output file, written under
+   `packages/desktop/tests/e2e/test-results/` (committed screenshot baselines
+   and how to refresh them: `packages/desktop/tests/e2e/README.md`).
 3. **An isolated test starts from a written list of failure modes**, before the
    implementation: bad input, malformed persisted data, ordering and
    cancellation races, partial writes, provider errors, boundary sizes, in the

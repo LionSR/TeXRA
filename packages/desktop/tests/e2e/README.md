@@ -52,9 +52,9 @@ deliberate UI change:
 
 ## Workspace folder
 
-Each launch records a temporary project through the production SQLite owner
-in the isolated profile, so the app opens that project. Pass `workspacePath` to `launchTexraApp()` if a
-specific layout is required.
+Each launch records a temporary project in the isolated profile through the
+production SQLite owner, so the app opens that project. Pass `workspacePath`
+to `launchTexraApp()` for a specific layout.
 
 ## Cross-package imports
 
