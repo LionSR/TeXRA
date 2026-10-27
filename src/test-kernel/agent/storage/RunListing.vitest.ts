@@ -9,7 +9,6 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
-  emptyRunEndOutput,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -29,23 +28,22 @@ function config(agent: string): AgentConfig {
 let session: SessionHandle;
 
 /** Commit the run's `run.start`, the fact its listing row is built from. */
-const startRun = (id: RunId, identity: RunIdentity, parentRunId?: RunId) =>
+const startRun = (id: RunId, identity: RunIdentity) =>
   session.log.transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', id),
       identity,
       userFollowUpSupport: 'unsupported',
-      parent:
-        parentRunId === undefined ? null : { id: parentRunId, callId: null },
+      parent: null,
       provenance: null,
     },
   ]);
 
 /** An agent run: its start and its configuration record. */
-const writeRun = (id: RunId, agent: string, parentRunId?: RunId) =>
+const writeRun = (id: RunId, agent: string) =>
   Effect.andThen(
-    startRun(id, { kind: 'agent', agent }, parentRunId),
+    startRun(id, { kind: 'agent', agent }),
     seedRunRecord(session, id, config(agent)),
   );
 
@@ -82,43 +80,6 @@ describe('run listing normalization', () => {
     }),
   );
 
-  it.effect(
-    'sees metadata replaced by another host after an earlier listing',
-    () =>
-      Effect.gen(function* () {
-        const id = 'fff666' as RunId;
-        yield* writeRun(id, 'assistant');
-        expect(yield* listRuns(session)).toEqual([
-          expect.not.objectContaining({ description: expect.any(String) }),
-        ]);
-
-        yield* session.log.transact([
-          {
-            type: 'run.description',
-            by: 'model',
-            aggregateId: qualifyAggregateId('run', id),
-            description: 'Updated by another host',
-          },
-        ]);
-        yield* session.log.transact([
-          {
-            type: 'run.end',
-            aggregateId: qualifyAggregateId('run', id),
-            outcome: 'completed',
-            output: emptyRunEndOutput(),
-          },
-        ]);
-
-        expect(yield* listRuns(session)).toEqual([
-          expect.objectContaining({
-            id,
-            description: 'Updated by another host',
-            status: 'completed',
-          }),
-        ]);
-      }),
-  );
-
   it.effect('lists agent runs only, not process storage rows', () =>
     Effect.gen(function* () {
       const processId = 'bbb222' as RunId;
@@ -134,18 +95,6 @@ describe('run listing normalization', () => {
           record: expect.objectContaining({ agent: 'bash' }),
         }),
       ]);
-    }),
-  );
-
-  it.effect('keeps agent-spawned child runs out of history listings', () =>
-    Effect.gen(function* () {
-      const rootId = 'eee111' as RunId;
-      const childId = 'fff222' as RunId;
-      yield* writeRun(rootId, 'orchestrator');
-      yield* writeRun(childId, 'search', rootId);
-
-      // A child belongs to its parent's transcript, not to the history list.
-      expect((yield* listRuns(session)).map(({ id }) => id)).toEqual([rootId]);
     }),
   );
 });

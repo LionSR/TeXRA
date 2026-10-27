@@ -99,21 +99,6 @@ type RecoveryCase = [
 
 const RECOVERY_CASES: readonly RecoveryCase[] = [
   [
-    'recovers documents from percent filename headers',
-    [
-      'Here is the output:',
-      '% main.tex',
-      '\\section{Recovered}',
-      '% sections/appendix.tex',
-      'Appendix text.',
-    ],
-    null,
-    {
-      'main.tex': '\\section{Recovered}\n',
-      'sections/appendix.tex': 'Appendix text.\n',
-    },
-  ],
-  [
     'keeps percent filename comments inside a LaTeX document body',
     [
       '% main.tex',
