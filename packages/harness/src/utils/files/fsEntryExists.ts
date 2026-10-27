@@ -29,22 +29,11 @@ export const fileWatchRetrySchedule = Schedule.exponential('1 second').pipe(
 );
 
 /**
- * lstat's half of the probe below (`FileSystem` has no lstat): a path
- * `readLink` names is a link, dangling or circular alike. Any failure means
- * not a link, or not there at all, and `stat` decides.
- */
-const isLink = (fs: FileSystem.FileSystem, target: string) =>
-  fs.readLink(target).pipe(
-    Effect.as(true),
-    Effect.orElseSucceed(() => false),
-  );
-
-/**
  * The entry's own type at `target`, or `undefined` when nothing is there, with
  * lstat semantics: a link reports as itself rather than as what it points at,
  * and a dangling one still names an entry.
  *
- * {@link isLink} answers lstat's half and `stat` answers the rest. Only
+ * One `lstat`, so a dangling or circular link is still an entry. Only
  * absence ({@link absentReason}, `ENOTDIR` included) is recovered; every other
  * failure propagates, so an unreadable entry is never read as a missing one.
  *
@@ -59,8 +48,7 @@ export const entryTypeIn = Effect.fn('fsEntryExists.entryTypeIn')(function* (
   FileSystem.File.Type | undefined,
   PlatformError.PlatformError
 > {
-  if (yield* isLink(fs, target)) return 'SymbolicLink';
-  return yield* fs.stat(target).pipe(
+  return yield* fs.lstat(target).pipe(
     Effect.map((info) => info.type),
     Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
   );

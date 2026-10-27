@@ -43,25 +43,33 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
     config: Pick<AgentConfig, 'workingDirectory'> | null,
     filePaths: readonly string[],
   ) {
-    const files = new Map<string, RunWorkspaceFile>();
+    const resolvedByPath = new Map<
+      string,
+      { readonly absolutePath: string; readonly path: string }
+    >();
     for (const filePath of filePaths) {
       const resolved = resolveRunWorkspaceFilePath(config, filePath);
-      if (!resolved || files.has(resolved.path)) continue;
-
-      // A path recorded for the run that is no longer there — or whose parent
-      // is not a directory any more — is simply not listed; every other failure
-      // propagates, so an unreadable entry is never reported as a missing one.
-      const entry = yield* entryMetadataAt(resolved.absolutePath).pipe(
-        Effect.catchIf(absentReason, () => Effect.void),
-      );
-      if (entry === undefined) continue;
-
-      files.set(resolved.path, {
-        path: resolved.path,
-        size: entry.size,
-        isDirectory: entry.type === 'Directory',
-      });
+      if (resolved && !resolvedByPath.has(resolved.path))
+        resolvedByPath.set(resolved.path, resolved);
     }
-    return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+
+    // A path recorded for the run that is no longer there — or whose parent
+    // is not a directory any more — is simply not listed; every other failure
+    // propagates, so an unreadable entry is never reported as a missing one.
+    const entries = yield* Effect.forEach(
+      resolvedByPath.values(),
+      (resolved) =>
+        entryMetadataAt(resolved.absolutePath).pipe(
+          Effect.map((entry): RunWorkspaceFile => ({
+            path: resolved.path,
+            size: entry.size,
+            isDirectory: entry.type === 'Directory',
+          })),
+          Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+        ),
+      { concurrency: 8 },
+    );
+    const files = entries.filter((entry) => entry !== undefined);
+    return files.sort((a, b) => a.path.localeCompare(b.path));
   },
 );

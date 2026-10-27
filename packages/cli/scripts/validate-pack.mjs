@@ -168,10 +168,15 @@ try {
     'texra.js',
   );
   assertBundleHardened(installedBin);
-  const help = run(process.execPath, [installedBin, '--help']);
+  // The command `bin` names: the launcher that loads the bundle above.
+  const launcher = path.join(
+    path.dirname(path.dirname(installedBin)),
+    'texra.js',
+  );
+  const help = run(process.execPath, [launcher, '--help']);
   assert(help.includes('TeXRA CLI'), 'installed CLI help should name TeXRA.');
 
-  const version = run(process.execPath, [installedBin, 'version']).trim();
+  const version = run(process.execPath, [launcher, 'version']).trim();
   assert(version.length > 0, 'installed CLI version should be non-empty.');
 
   console.log(`CLI npm package validation passed: ${tarballPath}`);

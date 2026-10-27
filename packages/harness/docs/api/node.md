@@ -79,7 +79,7 @@ The entry's own type at `target`, or `undefined` when nothing is there, with
 lstat semantics: a link reports as itself rather than as what it points at,
 and a dangling one still names an entry.
 
-{@link isLink} answers lstat's half and `stat` answers the rest. Only
+One `lstat`, so a dangling or circular link is still an entry. Only
 absence ({@link absentReason}, `ENOTDIR` included) is recovered; every other
 failure propagates, so an unreadable entry is never read as a missing one.
 

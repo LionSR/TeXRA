@@ -252,8 +252,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     ),
     closeIdle: (idleFor) =>
       Effect.map(
-        Effect.forEach([...projects.keys()], (root) =>
-          closeIfIdle(root, Duration.toMillis(idleFor)),
+        // Each project closes in its own lane, so they close at once.
+        Effect.forEach(
+          [...projects.keys()],
+          (root) => closeIfIdle(root, Duration.toMillis(idleFor)),
+          { concurrency: 'unbounded' },
         ),
         (closed) => closed.filter((session) => session !== undefined),
       ),

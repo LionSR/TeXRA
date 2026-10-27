@@ -227,8 +227,10 @@ export interface ResolvedPlugin {
 
 /** The plugin manifests present in `dir`, Claude Code's first. */
 export function readPluginManifests(dir: string) {
-  return Effect.forEach(PLUGIN_MANIFEST_FILES, (file) =>
-    readJsonFile(path.join(dir, file), PluginManifestSchema),
+  return Effect.forEach(
+    PLUGIN_MANIFEST_FILES,
+    (file) => readJsonFile(path.join(dir, file), PluginManifestSchema),
+    { concurrency: 'unbounded' },
   ).pipe(
     Effect.map((found) =>
       found.filter((manifest): manifest is PluginManifest => !!manifest),
@@ -423,15 +425,20 @@ function presentComponents(
     readonly files: readonly string[];
   }[],
 ) {
-  return Effect.filter(components, (component) =>
-    manifests.some((manifest) => manifest[component.field] !== undefined)
-      ? Effect.succeed(true)
-      : Effect.map(
-          Effect.forEach(component.files, (file) =>
-            exists(path.join(dir, file)),
+  return Effect.filter(
+    components,
+    (component) =>
+      manifests.some((manifest) => manifest[component.field] !== undefined)
+        ? Effect.succeed(true)
+        : Effect.map(
+            Effect.forEach(
+              component.files,
+              (file) => exists(path.join(dir, file)),
+              { concurrency: 'unbounded' },
+            ),
+            (found) => found.some(Boolean),
           ),
-          (found) => found.some(Boolean),
-        ),
+    { concurrency: 'unbounded' },
   ).pipe(Effect.map((found) => found.map((component) => component.label)));
 }
 
@@ -518,8 +525,10 @@ export function countSkills(root: string) {
   return FileSystem.FileSystem.use((fs) => fs.readDirectory(root)).pipe(
     Effect.mapError(ioError),
     Effect.flatMap((names) =>
-      Effect.forEach(names, (name) =>
-        exists(path.join(root, name, 'SKILL.md')),
+      Effect.forEach(
+        names,
+        (name) => exists(path.join(root, name, 'SKILL.md')),
+        { concurrency: 8 },
       ),
     ),
     Effect.map((found) => found.filter(Boolean).length),

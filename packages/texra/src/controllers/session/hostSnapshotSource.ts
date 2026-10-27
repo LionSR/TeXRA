@@ -9,7 +9,14 @@
  * answer (a VS Code host knows its API-key status, its missing tools, and
  * how to start a project; the desktop keeps the first two in Settings).
  */
-import { Cause, Effect, Exit, type FileSystem, Schema } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  type FileSystem,
+  type Path,
+  Schema,
+} from 'effect';
 import {
   AgentDirectories,
   getEnabledModels,
@@ -77,12 +84,12 @@ interface HostSnapshotSourceOptions {
    *  {@link HostSnapshotSourceOptions.stores}. */
   secrets: PlatformSecrets;
   /** The launcher's single-slot catalogs: base and edited candidates. The
-   *  read takes the process `FileSystem` from context; the refresh effects
-   *  that reach it carry the requirement. */
+   *  read takes the process `FileSystem` and `Path` from context; the
+   *  refresh effects that reach it carry the requirement. */
   fileOptions(): Effect.Effect<
     FileOptions,
     HostSnapshotReadFailed,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | Path.Path
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
@@ -108,13 +115,17 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
+    AgentCatalog | FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog>;
   /** The project's files changed on disk, or the surface asked for a relist. */
-  readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
+  readonly refreshFiles: Effect.Effect<
+    void,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
   readonly refreshHostBanners: Effect.Effect<void, never, ChildProcessSpawner>;
@@ -288,7 +299,7 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
+      AgentCatalog | FileSystem.FileSystem | Path.Path | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
     refreshCatalogs: guarded<AgentCatalog>(...catalogLoads),
     refreshFiles: guarded(loadFiles),

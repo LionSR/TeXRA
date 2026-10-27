@@ -141,18 +141,20 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
       }),
       Effect.provideService(FileSystem.FileSystem, {
         ...processFs,
-        // The entry probe reads a link through `readLink`, so a seeded
-        // symlink answers here and everything else falls through.
-        readLink: (target: string) =>
-          runStorageEntries.get(target) === 'SymbolicLink'
-            ? Effect.succeed(target)
-            : processFs.readLink(target),
+        // The entry probe is one `lstat`, so a seeded symlink answers as
+        // one; a declared file answers through `stat` as well.
+        lstat: (target: string) => {
+          const seeded = runStorageEntries.get(target);
+          if (seeded !== undefined) return Effect.succeed(infoOf(seeded));
+          if (absoluteFilePaths.has(target)) return Effect.succeed(fileInfo);
+          // A path no case named: the real filesystem's own failure, so the
+          // probe's `NotFound` reading sees the `PlatformError` it handles.
+          return processFs.lstat(target);
+        },
         stat: (target: string) => {
           if (absoluteFilePaths.has(target)) return Effect.succeed(fileInfo);
           const seeded = runStorageEntries.get(target);
           if (seeded !== undefined) return Effect.succeed(infoOf(seeded));
-          // A path no case named: the real filesystem's own failure, so the
-          // probe's `NotFound` reading sees the `PlatformError` it handles.
           return processFs.stat(target);
         },
         readFile: (target: string) =>

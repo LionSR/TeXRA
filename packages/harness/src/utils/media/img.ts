@@ -10,6 +10,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Settings } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
@@ -64,25 +65,21 @@ function removeTemporary(
     );
 }
 
-/** Get the dimensions of an image file. Pure JS — no external binary required. */
-const getImageDimensions = Effect.fn('img.getImageDimensions')(
-  function* (imagePath: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const bytes = yield* fs.readFile(imagePath);
-    return yield* Effect.try({
-      try: () => imageSize(bytes),
-      catch: conversionFailure,
-    });
-  },
-  Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.fail(
-      new MediaConversionFailed({
-        message: `Failed to get image dimensions: ${error.message}`,
-        cause: error,
-      }),
+/** The dimensions of an image's bytes. Pure JS — no external binary required. */
+const getImageDimensions = (bytes: Uint8Array) =>
+  Effect.try({
+    try: () => imageSize(bytes),
+    catch: conversionFailure,
+  }).pipe(
+    Effect.catchTag('MediaConversionFailed', (error) =>
+      Effect.fail(
+        new MediaConversionFailed({
+          message: `Failed to get image dimensions: ${error.message}`,
+          cause: error,
+        }),
+      ),
     ),
-  ),
-);
+  );
 
 /** Maximum image dimension (pixels) accepted by provider APIs. */
 const API_MAX_IMAGE_DIMENSION = 8000;
@@ -101,10 +98,12 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
     Settings.getConfig<number>(config, 'texra.maxImageDimension'),
     API_MAX_IMAGE_DIMENSION,
   );
-  const { width, height } = yield* getImageDimensions(imagePath);
+  // One read: the bytes that are measured are the bytes returned.
+  const bytes = yield* fs.readFile(imagePath);
+  const { width, height } = yield* getImageDimensions(bytes);
 
   if (width <= maxDimension && height <= maxDimension) {
-    return yield* fs.readFile(imagePath);
+    return bytes;
   }
 
   // Resizing (unlike measuring) still needs an external tool — only
@@ -165,15 +164,22 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
   function* (mediaPath: string, config: ConfigProvider) {
     const fs = yield* FileSystem.FileSystem;
-    if (!(yield* fs.exists(mediaPath))) {
-      return yield* new MediaConversionFailed({
-        message: `File not found: ${mediaPath}`,
-      });
-    }
-
-    const mediaBytes = yield* isImageMimeType(getMimeType(mediaPath))
-      ? resizeImageIfNeeded(mediaPath, config)
-      : fs.readFile(mediaPath);
+    // The read answers whether the file exists: no separate probe.
+    const mediaBytes = yield* (
+      isImageMimeType(getMimeType(mediaPath))
+        ? resizeImageIfNeeded(mediaPath, config)
+        : fs.readFile(mediaPath)
+    ).pipe(
+      Effect.catchIf(
+        (error) => error._tag === 'PlatformError' && absentReason(error),
+        () =>
+          Effect.fail(
+            new MediaConversionFailed({
+              message: `File not found: ${mediaPath}`,
+            }),
+          ),
+      ),
+    );
     if (mediaBytes.length === 0) {
       return yield* new MediaConversionFailed({
         message: `File is empty: ${mediaPath}`,
@@ -231,13 +237,15 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     });
   }
 
-  if (!(yield* fs.exists(outputPath))) {
-    return yield* new MediaConversionFailed({
-      message: 'Failed to convert PDF page to PNG: Output file not found',
-    });
-  }
-
-  const imageBytes = yield* fs.readFile(outputPath);
+  const imageBytes = yield* fs.readFile(outputPath).pipe(
+    Effect.catchIf(absentReason, () =>
+      Effect.fail(
+        new MediaConversionFailed({
+          message: 'Failed to convert PDF page to PNG: Output file not found',
+        }),
+      ),
+    ),
+  );
   yield* Effect.logDebug(
     `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
   ).pipe(withLogChannel(CHANNEL));
@@ -246,6 +254,9 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
 
 /** Upper bound on the pages rasterized from one PDF. */
 const PDF_MAX_PAGES = 100;
+
+/** Pages of one PDF rasterized at the same time. */
+const PDF_PAGE_CONCURRENCY = 4;
 
 /**
  * One base64 encoded PNG per page of the PDF at an absolute path, at most
@@ -290,17 +301,17 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
   // page it holds without touching pages a concurrent conversion is reading.
   const pages = yield* Effect.acquireUseRelease(
     fs.makeTempDirectory({ prefix: 'texra-pdf-conversion-' }),
+    // Each page is its own process writing its own file, so pages
+    // convert at once (bounded: each runs Ghostscript), in page order.
     (tempDir) =>
-      Effect.gen(function* () {
-        const base64Images: string[] = [];
-        const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
-        for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-          base64Images.push(
-            yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
-          );
-        }
-        return base64Images;
-      }),
+      Effect.forEach(
+        Array.from(
+          { length: Math.min(pageCount, PDF_MAX_PAGES) },
+          (_, index) => index + 1,
+        ),
+        (pageNum) => singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
+        { concurrency: PDF_PAGE_CONCURRENCY },
+      ),
     (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
   );
   return { pages, pageCount };

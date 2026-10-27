@@ -61,40 +61,46 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
   const walk = (
     dir: string,
   ): Effect.Effect<void, PlatformError.PlatformError> =>
+    Effect.flatMap(fs.readDirectory(dir), (names) =>
+      Effect.forEach(names, (name) => entry(dir, name), {
+        concurrency: 8,
+        discard: true,
+      }),
+    );
+  // One directory entry: a link, a subdirectory, or a file. A directory's
+  // entries are read at once; the list is sorted after the walk.
+  const entry = (
+    dir: string,
+    name: string,
+  ): Effect.Effect<void, PlatformError.PlatformError> =>
     Effect.gen(function* () {
-      for (const name of yield* fs.readDirectory(dir)) {
-        const full = path.join(dir, name);
-        const relative = path.relative(root, full);
-        // `readLink` answers lstat's half (`FileSystem` has no lstat): a
-        // path it reads is a link, digested as its target text.
-        const link = yield* fs
-          .readLink(full)
-          .pipe(Effect.orElseSucceed(() => undefined));
-        if (link !== undefined) {
-          files.push([relative, `-> ${link}`]);
-          continue;
+      const full = path.join(dir, name);
+      const relative = path.relative(root, full);
+      // One `lstat` per entry: a link is digested as its target text.
+      const info = yield* fs.lstat(full);
+      if (info.type === 'SymbolicLink') {
+        files.push([relative, `-> ${yield* fs.readLink(full)}`]);
+        return;
+      }
+      if (info.type === 'Directory') {
+        if (name !== '.git') yield* walk(full);
+      } else if (info.type === 'File') {
+        const mtime = Option.getOrUndefined(info.mtime)?.getTime();
+        // git's racy rule: a file modified within RACY_MS of now may be
+        // written again under the same (rounded) mtime and size, so it is
+        // hashed fresh and not cached; nor is one with no mtime.
+        const cacheable =
+          mtime !== undefined &&
+          (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
+        const key = cacheable
+          ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
+          : undefined;
+        let hash = key === undefined ? undefined : hashes.get(key);
+        if (hash === undefined) {
+          hash = sha256Hex(yield* fs.readFile(full));
+          if (key !== undefined) hashes.set(key, hash);
         }
-        const info = yield* fs.stat(full);
-        if (info.type === 'Directory') {
-          if (name !== '.git') yield* walk(full);
-        } else if (info.type === 'File') {
-          const mtime = Option.getOrUndefined(info.mtime)?.getTime();
-          // git's racy rule: a file modified within RACY_MS of now may be
-          // written again under the same (rounded) mtime and size, so it is
-          // hashed fresh and not cached; nor is one with no mtime.
-          const cacheable =
-            mtime !== undefined &&
-            (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
-          const key = cacheable
-            ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
-            : undefined;
-          let hash = key === undefined ? undefined : hashes.get(key);
-          if (hash === undefined) {
-            hash = sha256Hex(yield* fs.readFile(full));
-            if (key !== undefined) hashes.set(key, hash);
-          }
-          files.push([relative, hash]);
-        }
+        files.push([relative, hash]);
       }
     });
   yield* walk(root).pipe(
@@ -176,24 +182,36 @@ export const pluginDigest = Effect.fn('pluginDigest')(function* (
   plugin: ResolvedPlugin,
   key: string,
 ) {
-  const files = yield* pluginFiles(root);
-  const servers = yield* Effect.forEach(plugin.mcpServers, (server) =>
-    Effect.map(externalFiles(root, server), (external) => ({
-      name: server.name,
-      command: server.command,
-      args: server.args,
-      env: envDigest(key, server.env),
-      external,
-    })),
-  );
-  // Each hook's exact text, and what a static one runs outside the plugin.
-  const hooks = yield* Effect.forEach(plugin.hooks.hooks, (hook) =>
-    Effect.map(pinHook(root, hook), (pin) => ({
-      id: hook.id,
-      command: hook.command,
-      args: hook.args ?? null,
-      pin,
-    })),
+  // The three reads are independent, so they run at once.
+  const { files, servers, hooks } = yield* Effect.all(
+    {
+      files: pluginFiles(root),
+      servers: Effect.forEach(
+        plugin.mcpServers,
+        (server) =>
+          Effect.map(externalFiles(root, server), (external) => ({
+            name: server.name,
+            command: server.command,
+            args: server.args,
+            env: envDigest(key, server.env),
+            external,
+          })),
+        { concurrency: 'unbounded' },
+      ),
+      // Each hook's exact text, and what a static one runs outside the plugin.
+      hooks: Effect.forEach(
+        plugin.hooks.hooks,
+        (hook) =>
+          Effect.map(pinHook(root, hook), (pin) => ({
+            id: hook.id,
+            command: hook.command,
+            args: hook.args ?? null,
+            pin,
+          })),
+        { concurrency: 'unbounded' },
+      ),
+    },
+    { concurrency: 'unbounded' },
   );
   return sha256Hex(stableStringify({ files, servers, hooks }) ?? '');
 });

@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Stream } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
@@ -216,12 +216,25 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const hash = createHash('sha256');
-  for (const [group, files] of paths.entries())
-    for (const [index, file] of files.entries()) {
-      const bytes = yield* fs.readFile(file);
-      hash.update(`${group}\0${index}\0${bytes.length}\0`);
-      hash.update(bytes);
-    }
+  // Up to 8 files read at once, hashed in the original order as each
+  // arrives, so only those few are held in memory, never the whole set.
+  yield* Stream.fromIterable(
+    paths.flatMap((files, group) =>
+      files.map((file, index) => ({ group, index, file })),
+    ),
+  ).pipe(
+    Stream.mapEffect(
+      ({ group, index, file }) =>
+        Effect.map(fs.readFile(file), (bytes) => ({ group, index, bytes })),
+      { concurrency: 8 },
+    ),
+    Stream.runForEach(({ group, index, bytes }) =>
+      Effect.sync(() => {
+        hash.update(`${group}\0${index}\0${bytes.length}\0`);
+        hash.update(bytes);
+      }),
+    ),
+  );
   return hash.digest('hex');
 });
 

@@ -2,8 +2,8 @@
 
 // Create (or refresh) a `texra-local` command that always runs this repo's
 // locally-built CLI, so it can coexist with a globally-installed published
-// `texra`. It's a symlink to the bundled `dist/bin/texra.js`, which each CLI
-// build overwrites in place — so rebuilding the CLI updates `texra-local`
+// `texra`. It's a symlink to the CLI's `dist/texra.js` launcher (the bundle
+// with Node's compile cache on), which each CLI build overwrites in place — so rebuilding the CLI updates `texra-local`
 // automatically, no relinking needed.
 //
 //   node scripts/link-texra-local.mjs           # link into ~/.local/bin
@@ -21,7 +21,7 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const target = path.join(repoRoot, 'packages/cli/dist/bin/texra.js');
+const target = path.join(repoRoot, 'packages/cli/dist/texra.js');
 const binDir = process.env.TEXRA_LOCAL_BIN_DIR
   ? path.resolve(process.env.TEXRA_LOCAL_BIN_DIR)
   : path.join(homedir(), '.local/bin');

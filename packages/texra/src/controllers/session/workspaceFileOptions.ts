@@ -1,9 +1,9 @@
 /**
  * The launcher's file catalogs of one workspace (PRD one-fold-three-renderers,
  * 8.1, `HostSnapshot.fileOptions`): the base candidates from the input rules
- * and the edited candidates from the edited rules, listed through the
- * `FileSystem` service from context, so both hosts list the same files for
- * the same folder.
+ * and the edited candidates from the edited rules, listed by the one shared
+ * walk (`listWorkspaceFiles`), so both hosts list the same files for the same
+ * folder.
  */
 import { Effect } from 'effect';
 
