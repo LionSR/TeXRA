@@ -22,7 +22,7 @@ npm run test:pure         # the shared-registry tier (~30s), architecture ratche
 npm run test:watch        # the dev loop: reruns what a save reaches
 npm run lint
 npm run format
-npm run gate            # the static CI jobs as one command: invariants, typecheck + format, lint
+npm run gate              # the static CI jobs in one command: invariants, typecheck + format, lint
 npm run check:dead-code-ratchet
 ```
 
@@ -79,19 +79,15 @@ Things the tree won't tell you:
   whole-file; the receiver is checked in review), as does
   `new AbortController()` outside its two ledger residents, and
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters. AGENTS.md "Directory organization"
-  has the rules. The invariant to hold is "never widen a baseline"; the open
-  work is the public surface in the harness general-package design
+  ruled there are no temporary adapters. The invariant to hold is "never
+  widen a baseline"; AGENTS.md "Directory organization" has the rules and the
+  hardcoded architecture tests. The open work is the public surface in the
+  harness general-package design
   (`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`)
-  and shrinking the frozen lists, not another lint rule. Publishing `@texra-ai/harness` and `@texra-ai/llm` is the
-  owner's manual step (npm OTP, `releasing` skill, "npm packages"); CI's
-  `packed example` job installs both tarballs outside the repo, type-checks
-  them strictly and runs them. Kernel architecture tests under
-  `src/test-kernel/architecture/` (for example
-  `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every
-  `@shared/schemas/<leaf>` import, and `unknownErrorChannelRatchet.vitest.ts`,
-  which forbids an `unknown` error channel) also pin single-authority
-  invariants with hardcoded rules rather than baseline JSON.
+  and shrinking the frozen lists, not another lint rule. Publishing
+  `@texra-ai/harness` and `@texra-ai/llm` is the owner's manual step (npm OTP,
+  `releasing` skill, "npm packages"); CI's `packed example` job installs both
+  tarballs outside the repo, type-checks them strictly and runs them.
 - **`packages/harness/src/utils/` is host-agnostic, not browser-safe.** The
   webview frontends import no `@utils/*` module at runtime (ESLint refuses
   it). Path basics, error messages, text primitives and escaping reach them
@@ -191,10 +187,11 @@ within its documented scope.
 **One publisher, loop-owned cards.** Every write to a session's event table
 is a job on the `SessionEvents` inbox (its doors are `transact`, `detach`,
 `removeRun` and `drain`); commit order is enqueue order, and nothing appends
-around it. A tool call's card belongs to the run loop. A slow tool's `tool.start` commits
-with the row that admits the attempt; a fast tool's card opens and closes in
-its settlement batch. On a run with a run history, the card stores no output: its
-output is projected at read time from the `tool.result` it commits with.
+around it. A tool call's card belongs to the run loop. A slow tool's
+`tool.start` commits with the row that accepts the attempt; a fast tool's card
+opens and closes in the batch that records its result. On a run with a run
+history, the card stores no output: its output is projected at read time from
+the `tool.result` it commits with.
 What a tool prints while it runs is transient text on the card id
 (`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add a tool-side
 start card, a durable progress row, or a second append path.

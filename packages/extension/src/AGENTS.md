@@ -38,7 +38,7 @@ one the view you're touching already uses:
   outbound handler registry (`settingsViewHandlers`, typed
   `SettingsViewOutboundHandlerRegistry` so it stays exhaustive).
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
-  event-fold: `ProgressViewProvider` implements `vscode.WebviewViewProvider`
+  event-driven: `ProgressViewProvider` implements `vscode.WebviewViewProvider`
   directly, composed with `BundledViewContentProvider`, and routes through
   `SessionBridge` / `HostDraftRequests` as typed `runtime.request` /
   `host.request` calls (see
@@ -51,7 +51,7 @@ one the view you're touching already uses:
   `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
   this section, not a silent third variant.
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors.
-- **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `packages/texra/src/ui/README.md`. Read it before adding a control or a local style override
+- **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `packages/texra/src/ui/README.md`. Read it before adding a control or a local style override.
 
 ## Miscellaneous
 

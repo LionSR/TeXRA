@@ -79,8 +79,10 @@ When updating CHANGELOG.md:
    `pre-commit install`.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
+   - Type check with `npm run typecheck` (builds do not; see below).
    - Build the extension bundle with `npm run compile:fast`.
-   - Lint TypeScript sources with `npm run lint`.
+   - Lint TypeScript sources with `npm run lint`. `npm run gate` runs the
+     static CI jobs (invariants, typecheck and format, lint) in one command.
    - Run the affected Vitest suites with `npm run test:changed`, and the
      `pure` tier with `npm run test:pure` before pushing (see "Scoping the
      test run" in `src/test-kernel/AGENTS.md`). Run the full suite with `npm test` before opening a
@@ -112,7 +114,7 @@ root `tsconfig.json` already includes `packages/extension/src/**`. Use
 
 ## Coding style
 
-- TypeScript code in `packages/*/src/` and the test suite targets ES2022.
+- TypeScript code in `packages/*/src/` and the test suite targets ES2022 with the ES2024 library (`tsconfig.json`).
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing. `import/order` and `no-nested-ternary` are enforced at error level.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
@@ -163,7 +165,7 @@ everyone else, and one metaphor tends to end up meaning several things.
 
 ### Directory organization
 
-This is a pnpm workspace; CLAUDE.md "Layout" describes the packages and the frozen `@agent/*` surface. Never widen a baseline under `config/ratchets/`; a decrease is always welcome. Kernel architecture tests under `src/test-kernel/architecture/` (for example `approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with hardcoded rules rather than baseline JSON.
+This is a pnpm workspace; CLAUDE.md "Layout" describes the packages and the frozen `@agent/*` surface. Never widen a baseline under `config/ratchets/`; a decrease is always welcome. Kernel architecture tests under `src/test-kernel/architecture/` pin single-authority invariants with hardcoded rules rather than baseline JSON: for example `approvalPolicyAuthorityRatchet.vitest.ts`, and `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every `@shared/schemas/<leaf>` import.
 
 Two of those baselines budget the code itself rather than an import edge, and both run in the pure tier:
 
@@ -174,7 +176,7 @@ Another code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 
 ### Pragmatic implementations
 
-- **Start simple**: Choose the most direct solution, using built-ins (objects, Maps, Sets, arrays), host APIs, and JSON for state. A new abstraction earns its place only when it clearly reduces complexity.
+- **Start simple**: Choose the most direct solution, using built-ins (objects, Maps, Sets, arrays) and host APIs; persistent application state belongs in SQLite (see "TeXRA 1.0 direction"). A new abstraction earns its place only when it clearly reduces complexity.
 - **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
 - **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
   - `@common/errors/*` — classification and surfacing: `classifyAgentError` (`@common/errors/agentErrorClassification`), the SDK-error inspection under `@common/errors/sdkError/`, and `@common/errors/errorPredicates`. There is no barrel; import the leaf module. Reach for these when the _kind_ of failure changes what happens next.
@@ -387,7 +389,7 @@ old files is kept.
 
 ### ES2023+ Patterns
 
-Use the modern features the ES2022+ target provides: `.at()`, `Object.hasOwn()`,
+Use the modern features the target and library provide: `.at()`, `Object.hasOwn()`,
 `.flatMap()`, `.replaceAll()`, `.toSorted()` / `.findLast()` / `.toReversed()`
 instead of mutate-then-sort or backwards index loops, `.slice()` over
 `.substring()`, `for...of` (with `.entries()` when the index is needed) over
@@ -477,7 +479,7 @@ At review time this extends into the abstraction-cost guardrails (code-review ch
 
 ## Code quality rules
 
-These rules were learned from a 2026-07 whole-repo simplification campaign. They complement the guardrails above ("Flattening abstraction layers", "Discouraged factory patterns", "UI anti-patterns", the code-review checklist § 13, and Zod-as-SSOT).
+These rules were learned from a 2026-07 whole-repo simplification campaign. They complement the guardrails above ("Flattening abstraction layers", "Discouraged factory patterns", "UI anti-patterns", "Effect Schema Patterns", and the code-review checklist § 13).
 
 - **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) fails any unused export not in the baseline.
 
@@ -535,6 +537,6 @@ Two rules the guides do not spell out, each learned from a defect here:
   those; when a context must travel, `Context.pick(A, B)(ctx)`
   (`tools/liveTools.ts`).
 - **A service with a sensible default is a `Context.Reference`**, never a
-  hand-provided null: `null` outside a run (`RunCall`), a refusal outside a
+  hand-provided null: `null` outside a run (`RunCall`), a rejection outside a
   session (`ChildRuns`). A reference is never a requirement, so the fence
   that keeps it from a plugin's tool is the export surface, not `R`.
