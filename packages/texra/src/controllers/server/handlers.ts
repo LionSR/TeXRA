@@ -31,8 +31,8 @@ import {
   type Run,
   type Session,
   type RunEnd,
-  presentRunFailure,
 } from '@texra-ai/harness';
+import { presentRunFailure } from '@texra-ai/harness/host';
 import {
   type SessionView,
   isLiveRun,

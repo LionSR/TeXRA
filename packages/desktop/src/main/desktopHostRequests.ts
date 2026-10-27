@@ -8,22 +8,8 @@
 import path from 'node:path';
 
 import { Effect, Exit, Layer } from 'effect';
-import {
-  AgentDirectories,
-  Cancelled,
-  Rejected,
-  Unavailable,
-  type HostRequestFailure,
-  Secrets,
-  withProcessServices,
-  workspaceEnvironmentLayer,
-  type ProcessRuntime,
-  type ProcessServices,
-  sessionFsLayer,
-  type StorageFs,
-  type WorkspaceFs,
-  pathToLocationIn,
-} from '@texra-ai/harness';
+import { Cancelled, Rejected, Unavailable, type HostRequestFailure } from '@texra-ai/harness';
+import { AgentDirectories, Secrets, withProcessServices, workspaceEnvironmentLayer, type ProcessRuntime, type ProcessServices, sessionFsLayer, type StorageFs, type WorkspaceFs, pathToLocationIn } from '@texra-ai/harness/host';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {

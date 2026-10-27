@@ -58,7 +58,7 @@ import {
   HostCapabilitySchema,
   HostFrameSchema,
 } from './hostCalls';
-import type { ValueFamily } from '@texra-ai/harness';
+import type { ValueFamily } from '@texra-ai/harness/host';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by

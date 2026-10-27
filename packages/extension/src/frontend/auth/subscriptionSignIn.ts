@@ -3,7 +3,7 @@ import { Cause, Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -20,7 +20,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import type { Secrets, SettingsStores } from '@texra-ai/harness';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
 import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';

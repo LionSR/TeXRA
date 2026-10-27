@@ -9,7 +9,8 @@ import * as path from 'node:path';
 
 import { Effect, Option, Result, Schema } from 'effect';
 
-import { GlobalValues, readSessionView, type Session } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
+import { GlobalValues, readSessionView } from '@texra-ai/harness/host';
 import { type SessionView, isLiveRun } from '@texra-ai/harness/schemas';
 import {
   resolveWorkspaceStoragePath,

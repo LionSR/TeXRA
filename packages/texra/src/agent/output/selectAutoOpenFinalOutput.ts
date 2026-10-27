@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import {
   documentsResultOf,
@@ -7,7 +7,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which

@@ -21,6 +21,7 @@
     "packages/harness": {
       "entry": [
         "src/index.ts!",
+        "src/host.ts!",
         "src/node.ts!",
         "src/plugins.ts!",
         "src/schemas.ts!",

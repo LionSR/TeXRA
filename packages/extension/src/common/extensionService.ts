@@ -13,7 +13,7 @@ import {
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
-import type { GlobalValues } from '@texra-ai/harness';
+import type { GlobalValues } from '@texra-ai/harness/host';
 import type { Effect, Scope } from 'effect';
 
 /** Hold the service, starting it when none answers, for the caller's

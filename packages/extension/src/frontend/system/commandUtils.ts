@@ -3,12 +3,12 @@ import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ToolMissingHandler } from '@texra-ai/harness';
+import type { ToolMissingHandler } from '@texra-ai/harness/host';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 

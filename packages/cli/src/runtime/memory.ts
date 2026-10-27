@@ -1,6 +1,6 @@
 import { Effect, PlatformError, Predicate } from 'effect';
 
-import { withSessionFs, type StorageFs } from '@texra-ai/harness';
+import { withSessionFs, type StorageFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   type MemoryViewItem,

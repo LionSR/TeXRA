@@ -22,7 +22,8 @@ import type {
   SessionView,
   TranscriptView,
 } from '@texra-ai/harness/schemas';
-import type { ProcessRuntime, Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 /** A transcript row as the TUI reads it off the session view. */
 export type TranscriptRow = TranscriptView['rows'][number];

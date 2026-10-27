@@ -15,12 +15,12 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';

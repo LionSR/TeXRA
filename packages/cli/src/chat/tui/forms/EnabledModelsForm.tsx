@@ -10,7 +10,7 @@ import {
   type CliEnabledModelRow,
 } from '@cli/runtime/enabledModels';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime, StateStore } from '@texra-ai/harness';
+import type { ProcessRuntime, StateStore } from '@texra-ai/harness/host';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;

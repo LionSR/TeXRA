@@ -3,10 +3,10 @@ import { Effect } from 'effect';
 import {
   AgentCatalog,
   type WorkspaceAgentsController,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { cliCommandDefaults } from './cliConfig';
 import type { WorkspaceAgentsSelection } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
 type WorkspaceAgentsSnapshot = Effect.Success<

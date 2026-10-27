@@ -17,7 +17,7 @@ import {
   isFastFirstResponseModel,
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
-import type { ModelOption } from '@texra-ai/harness';
+import type { ModelOption } from '@texra-ai/harness/host';
 import type { ModelOptionData } from '@texra-ai/harness/schemas';
 
 const MILLION = 1_000_000;

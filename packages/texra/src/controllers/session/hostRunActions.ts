@@ -1,30 +1,8 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import * as path from 'node:path';
 
-import {
-  type AgentCatalog,
-  AppState,
-  DatabaseReadFailed,
-  getHelperModelName,
-  isRequestRefusal,
-  type ModelHostFactUnreadable,
-  Rejected,
-  type RequestError,
-  type RequestRefusal,
-  type LocalSession,
-  type Run,
-  type Secrets,
-  type Session,
-  type StartInput,
-  StateReadFailed,
-  Unavailable,
-  withLogChannel,
-  pathToLocationIn,
-  type WorkspaceRoots,
-  presentFollowUpResult,
-  presentRunFailure,
-  type SessionHostInteractions,
-} from '@texra-ai/harness';
+import { DatabaseReadFailed, isRequestRefusal, Rejected, type RequestError, type RequestRefusal, type LocalSession, type Run, type Session, type StartInput, Unavailable, type WorkspaceRoots } from '@texra-ai/harness';
+import { type AgentCatalog, AppState, getHelperModelName, type ModelHostFactUnreadable, type Secrets, StateReadFailed, withLogChannel, pathToLocationIn, presentFollowUpResult, presentRunFailure, type SessionHostInteractions } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 

@@ -11,7 +11,7 @@ import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 /**

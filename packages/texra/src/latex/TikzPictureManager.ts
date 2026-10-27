@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
 import { renderPrompt } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils

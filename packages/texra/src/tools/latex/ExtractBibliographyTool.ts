@@ -4,13 +4,9 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import {
-  defineTool,
-  ToolContext,
-  WorkspaceFs,
-  toPosixPath,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
 import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
 // Local imports - tools

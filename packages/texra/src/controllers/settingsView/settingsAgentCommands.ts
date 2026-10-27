@@ -8,14 +8,14 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, absurd } from 'effect';
 
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
   isStrictlyWithin,
   readCustomAgentDir,
   registerCustomAgentRoot,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import {
   GlobalStateKey,
@@ -24,7 +24,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { formatUnknownTeamMessage } from '@texra-ai/harness';
+import { formatUnknownTeamMessage } from '@texra-ai/harness/host';
 import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
@@ -34,7 +34,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 import type {
   SettingsHostBindings,

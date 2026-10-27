@@ -16,7 +16,7 @@ import {
   truncateWithEllipsis,
   TOOL_CALL_STATUS,
 } from '@texra-ai/harness/schemas';
-import { buildDiffHunks } from '@texra-ai/harness';
+import { buildDiffHunks } from '@texra-ai/harness/host';
 import {
   isMcpToolName,
   toolDisplayKind,

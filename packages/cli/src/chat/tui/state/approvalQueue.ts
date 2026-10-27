@@ -12,7 +12,7 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   attentionOf,
@@ -33,7 +33,8 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
-import type { ProcessRuntime, Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type {
   RuntimeRequest,
   SessionView,

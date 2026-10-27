@@ -8,7 +8,7 @@
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 
 import { firstEventOrTimeout } from './vscodeEventWait';
 

@@ -2,7 +2,7 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness';
+import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness/host';
 import {
   isActivePhase,
   isEmptyUsage,
@@ -41,7 +41,7 @@ import type {
   ProcessRuntime,
   ProcessServices,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;

@@ -3,14 +3,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
+import { defineTool } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   createRunStorageLocation,
-  defineTool,
-  ToolContext,
   hasExtension,
   isPathWithin,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,

@@ -2,16 +2,7 @@
 import { Effect, Result, absurd } from 'effect';
 
 // Local imports
-import {
-  decideRunModel,
-  readModelOptions,
-  type ModelOption,
-  type ModelOptionStores,
-  type ProcessRuntime,
-  type RunModelCandidate,
-  type RunModelDecisionReason,
-  type RunModelFallbackMode,
-} from '@texra-ai/harness';
+import { decideRunModel, readModelOptions, type ModelOption, type ModelOptionStores, type ProcessRuntime, type RunModelCandidate, type RunModelDecisionReason, type RunModelFallbackMode } from '@texra-ai/harness/host';
 import {
   type ModelOptionData,
   type UsageRoute,

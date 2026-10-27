@@ -6,7 +6,7 @@ import replacementEngine, {
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@texra-ai/harness/schemas';
-import type { ConfigProvider } from '@texra-ai/harness';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [

@@ -9,7 +9,8 @@
  */
 import { Effect, Exit, FileSystem, Schema } from 'effect';
 
-import { defineTool, Settings } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,

@@ -4,15 +4,13 @@ import { Buffer } from 'node:buffer';
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
-  Cancelled,
   ownKeyCredential,
-  Rejected,
   Secrets,
   withLogChannel,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -28,7 +26,7 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
-import type { StorageFs } from '@texra-ai/harness';
+import type { StorageFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';

@@ -23,7 +23,8 @@ import { DateTime, Effect, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import type { ExportNode, LocalSession } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/harness';
+import type { ExportNode } from '@texra-ai/harness/host';
 import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 /**

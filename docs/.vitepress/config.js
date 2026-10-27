@@ -25,6 +25,7 @@ const apiSidebar = [
       { text: 'harness/transcript', link: '/api/harness/transcript' },
       { text: 'harness/plugins', link: '/api/harness/plugins' },
       { text: 'harness/node', link: '/api/harness/node' },
+      { text: 'harness/host', link: '/api/harness/host' },
     ],
   },
   {

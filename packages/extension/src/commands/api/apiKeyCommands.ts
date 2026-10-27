@@ -8,14 +8,14 @@ import {
   type ApiKeyProviderId,
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness';
+import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ApiKeyCommands';
 

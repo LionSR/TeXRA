@@ -7,12 +7,12 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect } from 'effect';
 
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   InstalledPlugins,
   type PluginReview,
   type ProcessRuntime,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';

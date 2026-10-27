@@ -3,19 +3,13 @@
 
 import { Effect, Schema, Scope } from 'effect';
 
-import {
-  AppState,
-  Secrets,
-  withProcessServices,
-  type ProcessRuntime,
-  withLogChannel,
-} from '@texra-ai/harness';
+import { AppState, Secrets, withProcessServices, type ProcessRuntime, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness';
+import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';

@@ -16,7 +16,8 @@ import { watchTask } from '@cli/runtime/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import type { GlobalValues, Outcome } from '@texra-ai/harness';
+import type { Outcome } from '@texra-ai/harness';
+import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {

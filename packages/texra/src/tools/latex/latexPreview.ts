@@ -18,7 +18,7 @@ import {
   createExternalLocation,
   createWorkspaceLocation,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';

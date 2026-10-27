@@ -32,7 +32,7 @@ import type {
   ProcessRuntime,
   PlatformSecrets,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }

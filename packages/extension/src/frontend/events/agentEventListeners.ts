@@ -11,16 +11,7 @@
  */
 import { Cause, Effect, Scope } from 'effect';
 
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type HostPresentation,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-  type HostInteractions,
-  type PresentationEventHandlers,
-  withLogChannel,
-} from '@texra-ai/harness';
+import { withProcessServices, type ProcessRuntime, type HostPresentation, type RuntimePresentationEvent, type RuntimePresentationEventPayloads, type HostInteractions, type PresentationEventHandlers, withLogChannel } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   INSTRUCTION_ACTION,
@@ -35,7 +26,8 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'agentEventListeners';
 

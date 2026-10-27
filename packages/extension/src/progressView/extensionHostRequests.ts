@@ -14,26 +14,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FiberHandle, Scope } from 'effect';
 
-import {
-  AgentDirectories,
-  type StateStore,
-  type StateReadFailed,
-  type StateWriteFailed,
-  Cancelled,
-  Rejected,
-  type HostRequestFailure,
-  type RequestRefusal,
-  Secrets,
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-  type Session,
-  withLogChannel,
-  withSessionFs,
-  WorkspaceFs,
-  type StorageFs,
-  pathToLocationIn,
-} from '@texra-ai/harness';
+import { Cancelled, Rejected, type HostRequestFailure, type RequestRefusal, type Session } from '@texra-ai/harness';
+import { AgentDirectories, type StateStore, type StateReadFailed, type StateWriteFailed, Secrets, withProcessServices, type ProcessRuntime, type ProcessServices, withLogChannel, withSessionFs, WorkspaceFs, type StorageFs, pathToLocationIn } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {

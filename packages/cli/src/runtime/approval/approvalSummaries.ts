@@ -17,7 +17,7 @@ import {
 } from '@ui/copy/scriptRequest';
 
 import { type CliApprovalContent } from './approvalPrompts';
-import type { ToolEditApprovalRequest } from '@texra-ai/harness';
+import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;

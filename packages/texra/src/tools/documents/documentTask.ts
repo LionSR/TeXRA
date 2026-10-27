@@ -17,14 +17,14 @@ import {
   buildTemplatePassthrough,
 } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
+import { type ToolResult } from '@texra-ai/harness';
 import {
   withLogChannel,
   hasExtension,
-  type ToolResult,
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   agentKeyOf,

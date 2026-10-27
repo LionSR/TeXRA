@@ -9,7 +9,8 @@ import {
   hasUsableApiKey,
   isApiProvider,
 } from '@texra-ai/llm';
-import { defineTool, Secrets } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness/host';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 
 // Local file imports

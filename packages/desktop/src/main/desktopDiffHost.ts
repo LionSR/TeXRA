@@ -8,7 +8,7 @@ import {
   type ProcessRuntime,
   withLogChannel,
   withProcessServices,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { formatHunkLines, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   ExternalOpenFailed,

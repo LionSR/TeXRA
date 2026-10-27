@@ -9,7 +9,7 @@
 
 import { Clock, Duration, Effect, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import { Secrets } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { scopedClient } from '@texra-ai/harness/plugins';
 

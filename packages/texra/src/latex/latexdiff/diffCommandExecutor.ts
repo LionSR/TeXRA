@@ -2,7 +2,7 @@
 import { Effect, Schema } from 'effect';
 
 // Internal imports
-import { withLogChannel, Settings } from '@texra-ai/harness';
+import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import { executeCommand, type ExecResult } from '@texra-ai/harness/node';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';

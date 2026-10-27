@@ -8,7 +8,7 @@ import {
   withPerKeyLane,
   type PerKeyLane,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import {
   isCodexModel,
@@ -22,7 +22,7 @@ import {
   type AgentCliModelRule,
 } from './agentCliModel';
 import type { ToolError } from '@texra-ai/harness/plugins';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports

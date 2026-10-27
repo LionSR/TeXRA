@@ -16,7 +16,7 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';

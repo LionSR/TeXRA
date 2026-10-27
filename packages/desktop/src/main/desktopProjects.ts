@@ -16,15 +16,8 @@ import {
   type Path,
 } from 'effect';
 
-import {
-  SessionHostInteractions,
-  type LocalSession,
-  type Session,
-  Sessions,
-  withPerKeyLane,
-  type PerKeyLane,
-  StateStores,
-} from '@texra-ai/harness';
+import { type LocalSession, type Session, Sessions } from '@texra-ai/harness';
+import { SessionHostInteractions, withPerKeyLane, type PerKeyLane, StateStores } from '@texra-ai/harness/host';
 import {
   absentReason,
   createNodeWorkspaceRoots,
