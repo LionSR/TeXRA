@@ -49,9 +49,10 @@ export interface SkillSource {
 }
 
 /**
- * One precedence tier of sources. A `source` tier scans its roots one after
- * another; a `name` tier pools its roots and orders their skills by directory
- * name, the order one root holding all of them would give.
+ * One precedence tier of sources. A `source` tier takes its roots' skills
+ * in root order (the roots are read at once); a `name` tier pools its roots
+ * and orders their skills by directory name, the order one root holding all
+ * of them would give.
  */
 export interface SkillSourceTier {
   readonly order: 'source' | 'name';
@@ -121,34 +122,53 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
-    const skillDir = path.join(root, name);
-    const skillPath = path.join(skillDir, 'SKILL.md');
-    const realSkillPath: string | undefined = yield* fs
-      .realPath(skillPath)
-      .pipe(
+  // Each entry resolves and loads in one concurrent pass; duplicates and
+  // issues are decided afterwards in name order (a duplicate's load, which
+  // has no side effects, is dropped).
+  const entries = yield* Effect.forEach(
+    names.toSorted((a, b) => a.localeCompare(b)),
+    (name) => {
+      const skillPath = path.join(root, name, 'SKILL.md');
+      return fs.realPath(skillPath).pipe(
+        Effect.flatMap((realSkillPath) =>
+          Effect.map(
+            loadSkillDirectory(path.join(root, name), name),
+            (loaded) => ({
+              name,
+              skillPath,
+              realSkillPath,
+              loaded,
+              issue: undefined,
+            }),
+          ),
+        ),
         Effect.catch((error) =>
-          Effect.sync(() => {
-            if (!absentReason(error)) {
-              errors.push(
-                issue('warning', 'read_error', error.message, {
+          Effect.succeed({
+            name,
+            skillPath,
+            realSkillPath: undefined,
+            loaded: undefined,
+            issue: absentReason(error)
+              ? undefined
+              : issue('warning', 'read_error', error.message, {
                   path: skillPath,
                 }),
-              );
-            }
-            return undefined;
           }),
         ),
       );
-    if (realSkillPath === undefined) continue;
+    },
+    { concurrency: 16 },
+  );
 
+  for (const entry of entries) {
+    if (entry.issue !== undefined) errors.push(entry.issue);
+    const { loaded, realSkillPath } = entry;
+    if (loaded === undefined || realSkillPath === undefined) continue;
     if (seenRealPaths.has(realSkillPath)) {
-      errors.push(dupRealpathIssue(realSkillPath, skillPath));
+      errors.push(dupRealpathIssue(realSkillPath, entry.skillPath));
       continue;
     }
     seenRealPaths.add(realSkillPath);
-
-    const loaded = yield* loadSkillDirectory(skillDir, name);
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
@@ -161,7 +181,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     skills.push({
       skill: loaded.skill,
       realPath: realSkillPath,
-      entryName: name,
+      entryName: entry.name,
     });
   }
 
@@ -267,21 +287,36 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
       }
     };
 
-    for (const tier of tiers) {
+    // Scan every source concurrently; accept results in precedence order.
+    const scannedTiers = yield* Effect.forEach(
+      tiers,
+      (tier) =>
+        Effect.forEach(
+          tier.sources,
+          Effect.fnUntraced(function* (source) {
+            if (source.required === true) {
+              const sourceError = yield* validateRequiredSource(source);
+              if (sourceError)
+                return { source, sourceError, scanned: undefined };
+            }
+            const scanned = source.command
+              ? yield* scanCommandFile(source.path)
+              : yield* scanSkillRoot(source.path);
+            return { source, sourceError: undefined, scanned };
+          }),
+          { concurrency: 8 },
+        ).pipe(Effect.map((sources) => ({ order: tier.order, sources }))),
+      { concurrency: 'unbounded' },
+    );
+
+    for (const tier of scannedTiers) {
       // A name-ordered tier accepts once, after every root is scanned.
       const pooled: (DiscoveredSkill & { source: SkillSource })[] = [];
-      for (const source of tier.sources) {
-        if (source.required === true) {
-          const sourceError = yield* validateRequiredSource(source);
-          if (sourceError) {
-            errors.push(sourceError);
-            continue;
-          }
+      for (const { source, sourceError, scanned } of tier.sources) {
+        if (scanned === undefined) {
+          errors.push(sourceError);
+          continue;
         }
-
-        const scanned = source.command
-          ? yield* scanCommandFile(source.path)
-          : yield* scanSkillRoot(source.path);
         const result =
           source.namespace === undefined
             ? scanned

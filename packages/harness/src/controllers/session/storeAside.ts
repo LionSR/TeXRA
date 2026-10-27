@@ -97,8 +97,10 @@ export const provingOwners =
       Effect.catchDefect((defect) =>
         defect instanceof OwnersUnproven
           ? Effect.flatMap(
-              Effect.forEach(defect.owners, (owner) =>
-                Effect.map(prove(owner), (v) => [owner, v] as const),
+              Effect.forEach(
+                defect.owners,
+                (owner) => Effect.map(prove(owner), (v) => [owner, v] as const),
+                { concurrency: 'unbounded' },
               ),
               (verdicts) =>
                 provingOwners(prove)(
@@ -119,8 +121,10 @@ export const freeName = Effect.fnUntraced(function* (base: string) {
   const fs = yield* FileSystem.FileSystem;
   for (let n = 1; ; n += 1) {
     const name = n === 1 ? base : `${base}.${n}`;
-    const taken = yield* Effect.forEach(['', '-wal', '-shm'], (suffix) =>
-      fs.exists(`${name}${suffix}`),
+    const taken = yield* Effect.forEach(
+      ['', '-wal', '-shm'],
+      (suffix) => fs.exists(`${name}${suffix}`),
+      { concurrency: 'unbounded' },
     );
     if (!taken.some(Boolean)) return name;
   }

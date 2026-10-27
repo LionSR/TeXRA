@@ -81,17 +81,8 @@ const inspect = (relativePath: string) =>
         .pipe(
           Effect.provideService(FileSystem.FileSystem, {
             ...processFs,
-            // A link answers `readLink`; everything else, and every probe
-            // failure, falls through to the stat below.
-            readLink: (target: string) =>
-              probe(target).pipe(
-                Effect.flatMap((type) =>
-                  type === 'SymbolicLink'
-                    ? Effect.succeed(target)
-                    : missing(target),
-                ),
-              ),
-            stat: (target: string) =>
+            // The entry probe is one `lstat`: each path reports its case type.
+            lstat: (target: string) =>
               probe(target).pipe(Effect.map((type) => ({ ...info, type }))),
           }),
         );

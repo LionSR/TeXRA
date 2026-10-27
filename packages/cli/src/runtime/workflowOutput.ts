@@ -369,12 +369,19 @@ export function resolveWorkflowOutput(
         }
       }
 
-      const copiedOutputs: string[] = [];
-      for (const [relativePath, output] of outputsByRelativePath) {
-        const targetPath = path.join(targetRoot, relativePath);
-        yield* copyOutputFile(output.absolutePath, targetPath, '--output-dir');
-        copiedOutputs.push(targetPath);
-      }
+      // Each output has its own target, so the copies run at once.
+      const copiedOutputs = yield* Effect.forEach(
+        outputsByRelativePath,
+        ([relativePath, output]) => {
+          const targetPath = path.join(targetRoot, relativePath);
+          return copyOutputFile(
+            output.absolutePath,
+            targetPath,
+            '--output-dir',
+          ).pipe(Effect.as(targetPath));
+        },
+        { concurrency: 8 },
+      );
 
       const missing = expectedRelativePaths.filter(
         (expected) => !outputsByRelativePath.has(expected),

@@ -901,8 +901,12 @@ export const databaseLayer = (
         prepareRunRemoval: Effect.fn('Database.prepareRunRemoval')(
           function* (id, mode, expectedStartCommit) {
             const seen = yield* query(readDependents(id));
-            const verdicts = yield* Effect.forEach(othersOf(seen), (owner) =>
-              Effect.map(liveness(owner), (v) => [owner, v] as const),
+            // Outside the transaction: each probe may spawn a process.
+            const verdicts = yield* Effect.forEach(
+              othersOf(seen),
+              (owner) =>
+                Effect.map(liveness(owner), (v) => [owner, v] as const),
+              { concurrency: 'unbounded' },
             );
             const removing = Effect.gen(function* () {
               const observed = yield* readDependents(id);
@@ -916,12 +920,8 @@ export const databaseLayer = (
                   new Error(`Deletion target changed since admission: ${id}`),
                 );
               yield* claimAll(observed, mode);
-              const removal = prepareEventDraft({
-                type: 'run.removed',
-                aggregateId: id,
-              });
               return yield* appendRows(
-                [removal],
+                [prepareEventDraft({ type: 'run.removed', aggregateId: id })],
                 yield* Clock.currentTimeMillis,
               );
             });

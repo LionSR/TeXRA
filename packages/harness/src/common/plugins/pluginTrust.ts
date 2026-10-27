@@ -106,6 +106,7 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
   const skillCount = (yield* Effect.forEach(
     plugin.skills.map((skill) => path.join(record.path, skill)),
     countSkills,
+    { concurrency: 'unbounded' },
   )).reduce((sum, count) => sum + count, 0);
   const lines = [
     `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
@@ -243,6 +244,7 @@ export function listPlugins(env: PluginEnv) {
           const counts = yield* Effect.forEach(
             plugin.skills.map((skill) => path.join(record.path, skill)),
             countSkills,
+            { concurrency: 'unbounded' },
           );
           return {
             ...record,

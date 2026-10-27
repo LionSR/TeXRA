@@ -400,29 +400,42 @@ export function buildDoctorReport(
     // (models/telemetry), so surface it once here rather than as N
     // unrelated-looking failures. The checks that do not need the platform
     // (node, workspace, resources, LaTeX, config) still run.
-    const sessionDependentChecks =
-      input.kind === 'ready'
-        ? [yield* checkModels(input), yield* checkTelemetry(input)]
-        : [
-            failFromError(
-              'platform',
-              'Platform init',
-              'Could not initialize the TeXRA platform.',
-              input.initError,
-            ),
-          ];
+    // The checks are independent, so they run at once; the rows keep their
+    // order.
+    const [workspace, resources, sessionDependentChecks, latex, config] =
+      yield* Effect.all(
+        [
+          checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
+          checkDirectory(
+            'resources',
+            'Packaged resources',
+            context.resourcesPath,
+            'read',
+          ),
+          input.kind === 'ready'
+            ? Effect.all([checkModels(input), checkTelemetry(input)], {
+                concurrency: 'unbounded',
+              })
+            : Effect.succeed([
+                failFromError(
+                  'platform',
+                  'Platform init',
+                  'Could not initialize the TeXRA platform.',
+                  input.initError,
+                ),
+              ]),
+          checkLatex(input.latexToolchain ?? probeLatexToolchain()),
+          checkConfig(context),
+        ],
+        { concurrency: 'unbounded' },
+      );
     const checks: DoctorCheck[] = [
       checkNode(input.nodeVersion ?? process.versions.node),
-      yield* checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
-      yield* checkDirectory(
-        'resources',
-        'Packaged resources',
-        context.resourcesPath,
-        'read',
-      ),
+      workspace,
+      resources,
       ...sessionDependentChecks,
-      ...(yield* checkLatex(input.latexToolchain ?? probeLatexToolchain())),
-      yield* checkConfig(context),
+      ...latex,
+      config,
     ];
     return {
       ok: !checks.some((check) => check.status === 'fail'),

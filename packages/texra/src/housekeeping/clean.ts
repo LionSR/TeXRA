@@ -49,22 +49,25 @@ export const removeBuildDirectories = Effect.fn(
   'housekeeping.removeBuildDirectories',
 )(function* (directories: readonly string[]) {
   const workspaceFs = yield* WorkspaceFs;
-  const failed: string[] = [];
-  for (const dir of directories) {
-    yield* workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
-      Effect.tap(() =>
-        Effect.logDebug(`Removed build directory: ${dir}`).pipe(
-          withLogChannel(CHANNEL),
+  const removed = yield* Effect.forEach(
+    directories,
+    (dir) =>
+      workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
+        Effect.tap(() =>
+          Effect.logDebug(`Removed build directory: ${dir}`).pipe(
+            withLogChannel(CHANNEL),
+          ),
+        ),
+        Effect.as(true),
+        Effect.catch((error) =>
+          Effect.logError(`Error removing build directory ${dir}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as(false),
+          ),
         ),
       ),
-      Effect.catch((error) => {
-        failed.push(dir);
-        return Effect.logError(`Error removing build directory ${dir}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        );
-      }),
-    );
-  }
-  return failed;
+    { concurrency: 8 },
+  );
+  return directories.filter((_, index) => !removed[index]);
 });

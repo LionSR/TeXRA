@@ -69,17 +69,17 @@ const getGitInfo = Effect.fn(function* (
   // which excludes bare repos and paths inside .git, where `git rev-parse`
   // exits 0 but prints false. Those still have a usable branch and history, so
   // gate on exit status only and let the branch/status calls below decide.
-  const insideWorkTree = yield* runGit('rev-parse', '--is-inside-work-tree');
-  if (!insideWorkTree.success) return null;
-
-  // Run branch and status checks in parallel
-  const [branchResult, statusResult] = yield* Effect.all(
+  // All three run at once; the branch and status answers are dropped when
+  // rev-parse failed.
+  const [insideWorkTree, branchResult, statusResult] = yield* Effect.all(
     [
+      runGit('rev-parse', '--is-inside-work-tree'),
       runGit('symbolic-ref', '--short', 'HEAD'),
       runGit('status', '--porcelain'),
     ],
     { concurrency: 'unbounded' },
   );
+  if (!insideWorkTree.success) return null;
 
   // Unlike a non-zero exit (e.g. detached HEAD), a timeout means we couldn't
   // determine dirty/branch state at all — report unknown (null) rather than

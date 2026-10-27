@@ -130,17 +130,23 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
+    const rendered = yield* renderPrompt(personaPrompt, inputs);
+    // The two workspace reads are independent; run them together.
+    const [agentsMd, workspaceInfo] = yield* Effect.all(
+      [
+        loadAgentsMd(options.workspace),
+        options.textOnly
+          ? Effect.succeed('')
+          : buildWorkspaceInfoBlock(options.workspace, options.settings),
+      ],
+      { concurrency: 'unbounded' },
+    );
     const systemPrompt = [
-      yield* renderPrompt(personaPrompt, inputs),
-      ...[yield* loadAgentsMd(options.workspace), attachedMemories].filter(
-        Boolean,
-      ),
+      rendered,
+      ...[agentsMd, attachedMemories].filter(Boolean),
     ].join('\n');
     if (options.textOnly) return { systemPrompt, instructionSuffix: '' };
-    const suffixParts = [
-      TOOL_USE_INSTRUCTIONS,
-      yield* buildWorkspaceInfoBlock(options.workspace, options.settings),
-    ];
+    const suffixParts = [TOOL_USE_INSTRUCTIONS, workspaceInfo];
     return {
       systemPrompt,
       instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), inputs),

@@ -6,8 +6,8 @@
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
- * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
- * `readdir` with types, `cp` with `dereference`, and the
+ * no wrapper. The Node calls `FileSystem` cannot express (`readdir` with
+ * types, `cp` with `dereference`, a native `realPath`, and the
  * `write-file-atomic` package) classify their errno exactly as
  * `@effect/platform-node` does, so a consumer matches `SystemError` by
  * `reason._tag` either way.
@@ -17,7 +17,8 @@
 import * as nodeFs from 'node:fs/promises';
 
 // Third-party imports
-import { Effect, FileSystem, Path, PlatformError } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Effect, FileSystem, Layer, Path, PlatformError } from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
 
@@ -37,6 +38,7 @@ const SYSTEM_ERROR_TAGS: Readonly<
 > = {
   ENOENT: 'NotFound',
   EACCES: 'PermissionDenied',
+  EPERM: 'PermissionDenied',
   EEXIST: 'AlreadyExists',
   EISDIR: 'BadResource',
   ENOTDIR: 'BadResource',
@@ -59,6 +61,28 @@ function systemErrorFrom(
     cause,
   });
 }
+
+/**
+ * Node's `FileSystem`, with `realPath` as one native realpath(3) call.
+ * `@effect/platform-node` resolves a POSIX path with Node's JavaScript
+ * `fs.realpath`, which runs one `lstat` per path segment (Windows already
+ * gets the native call); the native call answers the same in one syscall.
+ * Its errors classify as the library's do.
+ */
+export const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> =
+  Layer.effect(
+    FileSystem.FileSystem,
+    Effect.map(FileSystem.FileSystem, (fs) =>
+      FileSystem.make({
+        ...fs,
+        realPath: (target) =>
+          Effect.tryPromise({
+            try: () => nodeFs.realpath(target),
+            catch: (cause) => systemErrorFrom('realPath', target, cause),
+          }),
+      }),
+    ),
+  ).pipe(Layer.provide(NodeFileSystem.layer));
 
 /**
  * Crash-safe replace, delegated to `write-file-atomic` rather than

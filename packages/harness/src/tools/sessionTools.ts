@@ -201,13 +201,15 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
   off: Effect.Effect<ReadonlySet<string>, E>,
   options?: { readonly installed?: boolean; readonly held?: HeldPlugins },
 ): Effect.fn.Return<ToolStep, E, Scope.Scope> {
-  const switchedOn = shared.onOf(yield* off);
+  const [offSet, read] = yield* Effect.all(
+    [off, options?.installed === true ? shared.installed : NONE],
+    { concurrency: 'unbounded' },
+  );
+  const switchedOn = shared.onOf(offSet);
   const builtIn = shared.builtIn.filter(({ plugin }) =>
     switchedOn.has(plugin.id),
   );
   const plugins = builtIn.map(({ plugin }) => plugin);
-  const read =
-    options?.installed === true ? yield* shared.installed : yield* NONE;
   // Each installed plugin's servers, started with this project's
   // variables, for the step's scope.
   const loads = yield* Effect.forEach(

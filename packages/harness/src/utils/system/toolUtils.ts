@@ -152,6 +152,11 @@ const IMAGE_TOOL_COMMANDS = {
   gm: 'gm version',
 } as const;
 
+/** The image processor found, kept for the process: every image resize and
+ *  PDF conversion asks, and each probe spawns two processes. A miss is not
+ *  kept, so a tool installed mid-session is found on the next ask. */
+let foundImageTool: 'magick' | 'gm' | undefined;
+
 /**
  * Which of the two interchangeable image processors is installed, preferring
  * ImageMagick, or `null` when neither is. The single owner of the
@@ -164,6 +169,7 @@ export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
     never,
     ChildProcessSpawner
   > {
+    if (foundImageTool !== undefined) return foundImageTool;
     const [hasMagick, hasGm] = yield* Effect.all(
       (['magick', 'gm'] as const).map((tool) =>
         Effect.map(
@@ -173,8 +179,8 @@ export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
       ),
       { concurrency: 'unbounded' },
     );
-    if (hasMagick) return 'magick';
-    if (hasGm) return 'gm';
-    return null;
+    if (hasMagick) foundImageTool = 'magick';
+    else if (hasGm) foundImageTool = 'gm';
+    return foundImageTool ?? null;
   },
 );
