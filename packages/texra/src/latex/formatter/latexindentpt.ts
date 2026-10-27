@@ -89,21 +89,23 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
     `${fileBaseName}.bak`,
   ]).pipe(withLogChannel(CHANNEL));
 
-  for (const backupFile of backupFiles) {
-    const removed = yield* fs.remove(backupFile, { force: true }).pipe(
-      Effect.as(true),
-      Effect.catch((err) =>
-        Effect.logWarning(
-          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+  yield* Effect.forEach(
+    backupFiles,
+    (backupFile) =>
+      fs.remove(backupFile, { force: true }).pipe(
+        Effect.andThen(
+          Effect.logDebug(`Removed backup file: ${backupFile}`).pipe(
+            withLogChannel(CHANNEL),
+          ),
+        ),
+        Effect.catch((err) =>
+          Effect.logWarning(
+            `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
+          ).pipe(withLogChannel(CHANNEL)),
+        ),
       ),
-    );
-    if (removed) {
-      yield* Effect.logDebug(`Removed backup file: ${backupFile}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-    }
-  }
+    { concurrency: 8, discard: true },
+  );
 });
 
 /**

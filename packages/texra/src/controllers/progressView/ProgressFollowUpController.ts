@@ -326,13 +326,20 @@ export class ProgressFollowUpController {
     // The map is the target list: insertion order is the order targets are
     // named in, and a path seen twice keeps its first target, enriched by the
     // second.
+    // Each candidate is probed together with the others; the merge below
+    // takes them in order.
+    const probed = yield* Effect.forEach(
+      preferred,
+      (candidate) => {
+        const location = this.deps.workspace.locatePath(candidate);
+        return location.kind === 'external'
+          ? Effect.succeed([])
+          : this.compileFixerTargetsForCandidate(location.relativePath);
+      },
+      { concurrency: 8 },
+    );
     const targetByPath = new Map<string, CompileFixerTarget>();
-    for (const candidate of preferred) {
-      const location = this.deps.workspace.locatePath(candidate);
-      if (location.kind === 'external') continue;
-      const candidateTargets = yield* this.compileFixerTargetsForCandidate(
-        location.relativePath,
-      );
+    for (const candidateTargets of probed) {
       for (const target of candidateTargets) {
         const existing = targetByPath.get(target.path);
         if (existing) {
@@ -360,8 +367,13 @@ export class ProgressFollowUpController {
     }
 
     const sourcePath = artifact.sourcePath;
-    const sourceExists = yield* this.deps.workspace.exists(sourcePath);
-    const artifactExists = yield* this.deps.workspace.exists(relativePath);
+    const [sourceExists, artifactExists] = yield* Effect.all(
+      [
+        this.deps.workspace.exists(sourcePath),
+        this.deps.workspace.exists(relativePath),
+      ],
+      { concurrency: 'unbounded' },
+    );
     if (!artifactExists) {
       return sourceExists
         ? [{ path: sourcePath, missingLatexdiffArtifact: relativePath }]
