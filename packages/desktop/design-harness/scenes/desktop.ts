@@ -167,7 +167,6 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
  *  run's own stop and menu live in its run header), then the conversation
  *  shell's pieces for the selected run. */
 const conversationPane = (
-  projects: readonly RailProject[],
   active: RailProject,
   run: RunView | undefined,
   body: TemplateResult | typeof nothing,
@@ -287,12 +286,7 @@ function sceneDesktopProjects(): TemplateResult {
   return desktopFrame(
     '288px minmax(0,1fr) 440px',
     rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
-    conversationPane(
-      projects,
-      lp,
-      run,
-      run ? transcriptBody(lp, run) : nothing,
-    ),
+    conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing),
     workbench(lp.display.key, tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
   );
 }
@@ -306,12 +300,7 @@ function sceneDesktopOneProject(): TemplateResult {
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(projects, shellOf('LP', ['LP'])),
-    conversationPane(
-      projects,
-      lp,
-      run,
-      run ? transcriptBody(lp, run) : nothing,
-    ),
+    conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing),
   );
 }
 
@@ -330,7 +319,6 @@ function sceneDesktopEmptyProject(): TemplateResult {
     '288px minmax(0,1fr)',
     rail(projects, shellOf('CO', ['CO', 'CT', 'TN'])),
     conversationPane(
-      projects,
       co,
       undefined,
       html`<new-task-hero .projectName=${co.display.name}></new-task-hero>`,
@@ -354,12 +342,7 @@ function sceneDesktopNarrow(): TemplateResult {
     style="grid-template-columns:288px minmax(0,1fr);width:900px"
   >
     ${rail(projects, shellOf('LP', ['LP', 'CT', 'TN']))}
-    ${conversationPane(
-      projects,
-      lp,
-      run,
-      run ? transcriptBody(lp, run) : nothing,
-    )}
+    ${conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing)}
   </div>`;
 }
 
