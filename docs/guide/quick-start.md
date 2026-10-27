@@ -194,10 +194,10 @@ texra run polish --input draft.tex \
 texra chat
 ```
 
-::: tip
+:::: tip
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
 Anthropic API key can spend once you link a Console organization to the plan.
-:::
+::::
 
 <CliRunHero
   command='texra run polish --input draft.tex --instruction "Improve clarity; preserve math and citations."'
