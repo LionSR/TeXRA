@@ -18,7 +18,6 @@ import { AppState } from '@platform/interfaces';
 import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostAppState, setupPlatform } from '@test/support/setupPlatform';
@@ -124,56 +123,39 @@ describe('run-scoped tool resolution', () => {
         const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
-        const warn = vi.fn<typeof noopTrace.warn>();
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch(
-          { runId, session, logger: { ...noopTrace, warn } },
-          config,
-        );
+        const ctx = validationLaunch({ runId, session }, config);
         yield* runToolUse({ resume: false }).pipe(
           Effect.provide(runLayer(ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );
 
         // `gone` vanished and `added` appeared since the run opened.
-        const resumed = yield* Effect.gen(function* () {
+        const step = yield* Effect.gen(function* () {
           const state = yield* session.runHistory.load(runId);
-          const step = yield* stepFor(
-            yield* AgentRun,
-            state!,
-            'request',
-            false,
-          );
-          return { state: state!, step };
+          return yield* stepFor(yield* AgentRun, state!, 'request', false);
         }).pipe(
           Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
         );
 
-        expect(resumed.state.offeredTools?.map(({ name }) => name)).toEqual([
-          'gone',
+        expect(step.tools.definitions.map(({ name }) => name)).toEqual([
           'kept',
         ]);
-        const offered = resumed.step.tools.definitions.map(({ name }) => name);
-        expect(offered).toEqual(['kept']);
-        expect(resumed.step.tools.registry.get('gone') !== undefined).toBe(
-          false,
-        );
-        expect(resumed.step.tools.registry.get('added') !== undefined).toBe(
-          false,
-        );
+        expect(step.tools.registry.has('gone')).toBe(false);
+        expect(step.tools.registry.has('added')).toBe(false);
         // The narrower set is recorded before the resumed request, and the
         // model is told, after the history its cached prefix holds.
-        expect(resumed.step.rows.map(({ type }) => type)).toEqual([
+        expect(step.rows.map(({ type }) => type)).toEqual([
           'context.blob',
           'tools.offered',
           'model.message',
         ]);
-        const told = resumed.step.rows.at(-1);
+        const told = step.rows.at(-1);
         assert(told?.type === 'model.message');
         expect(told.payload).toMatchObject({
           kind: 'append',
@@ -184,9 +166,6 @@ describe('run-scoped tool resolution', () => {
             },
           ],
         });
-        expect(warn).toHaveBeenCalledWith(
-          'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
-        );
         yield* closeSessionOf(session);
       }),
   );

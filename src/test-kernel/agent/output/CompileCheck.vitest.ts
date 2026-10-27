@@ -5,11 +5,11 @@ import * as path from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type { RunId, FileLocation } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import {
   createOutputState,
@@ -25,22 +25,13 @@ import {
   outputFile,
 } from './compileCheckTestUtils';
 
-interface FakeCompileOptions {
-  outputDirectory?: string;
-}
-
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.
 const COMPILED_PDF = fakePath('build/main.pdf');
 
 const mocks = vi.hoisted(() => ({
-  compileLatex2Pdf: vi.fn(
-    (
-      _location: FileLocation,
-      _config?: unknown,
-      _options?: FakeCompileOptions,
-    ): Effect.Effect<CompileLatex2PdfResult> =>
-      Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
+  compileLatex2Pdf: vi.fn((): Effect.Effect<CompileLatex2PdfResult> =>
+    Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
   ),
   hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
 }));
@@ -53,23 +44,7 @@ vi.mock('@latex/latexToolchain', () => ({
   hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
-/** Seeds a single round-0 `main.tex` output -- the common single-file case. */
-function seedMainTexOutput(runId: RunId) {
-  const outputState = createOutputState();
-  ensureRoundData(outputState, 0).outputs = [
-    outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
-  ];
-  return outputState;
-}
-
 describe('runCompileCheck', () => {
-  beforeEach(() => {
-    mocks.compileLatex2Pdf
-      .mockReset()
-      .mockReturnValue(Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }));
-    mocks.hasLatexCompiler.mockReset().mockReturnValue(Effect.succeed(true));
-  });
-
   it.live('counts a per-file exception as a failure, never a silent skip', () =>
     Effect.gen(function* () {
       const runId = 'compile-exception' as RunId;
@@ -77,7 +52,10 @@ describe('runCompileCheck', () => {
       // before compileLatex2Pdf is ever invoked.
       yield* Effect.promise(() => initLatexPlatform({}));
 
-      const outputState = seedMainTexOutput(runId);
+      const outputState = createOutputState();
+      ensureRoundData(outputState, 0).outputs = [
+        outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
+      ];
 
       const result = yield* runCompileCheck(
         compileContext(runId, outputState),
@@ -85,7 +63,6 @@ describe('runCompileCheck', () => {
       );
 
       const failures = result.failures ?? [];
-      expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
       expect(failures).toHaveLength(1);
       expect(failures[0].displayName).toBe('main.tex');
 

@@ -32,13 +32,6 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 /** The suite's catalog, loaded once the fake host is installed. */
 let catalog: AgentCatalogShape;
 
-/** The entry validation accepts: `identifier` within the visible agents. */
-function visibleAgent(identifier: string) {
-  return catalog
-    .visible(hostStores())
-    .pipe(Effect.map((entries) => findAgentByIdentifier(entries, identifier)));
-}
-
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(entry: AgentEntry | undefined) {
@@ -66,11 +59,6 @@ describe('shadowed agent resolution', () => {
         'task:',
         '  requests:',
         '    - Revise the documents.',
-      ],
-      'review.yaml': [
-        'name: review',
-        'description: Custom agent that shadows a built-in name.',
-        'prompt: Custom review agent.',
       ],
     };
     const customDir = await makeTempDir('texra-custom-agent-', tempDirs);
@@ -128,7 +116,11 @@ describe('shadowed agent resolution', () => {
         const builtIn = yield* launchAs(catalog.get('builtIn:assistant'));
         expect(builtIn?.source).toBe('builtIn');
 
-        const custom = yield* launchAs(yield* visibleAgent('assistant'));
+        // The entry validation accepts: the name within the visible agents.
+        const visible = yield* catalog.visible(hostStores());
+        const custom = yield* launchAs(
+          findAgentByIdentifier(visible, 'assistant'),
+        );
         expect(custom?.source).toBe('custom');
       }),
   );

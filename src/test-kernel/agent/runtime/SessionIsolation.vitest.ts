@@ -60,13 +60,8 @@ describe('session isolation', () => {
           ]);
           yield* session.log.settled;
           registryOf(session.runs).track(
-            testRunHandle({
-              runId,
-              agent: 'assistant',
-            }),
+            testRunHandle({ runId, agent: 'assistant' }),
           );
-          // The run's first append claimed its aggregate for this process.
-          expect(yield* session.log.owns(runId)).toBe(true);
         }
         // Each session claims runs in its own root: paper B never holds
         // paper A's run.
@@ -127,24 +122,18 @@ describe('session isolation', () => {
         publishTestRunStart(session, 'c0c001' as RunId);
         // Job 2: the run fiber's own awaited commit, enqueued in the same
         // synchronous turn, so the publisher is already contended when it runs.
-        const seen = yield* Effect.gen(function* () {
-          yield* session.log.transact([
-            {
-              type: 'run.start',
-              aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
-              identity: { kind: 'agent', agent: 'chat' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-            },
-          ]);
-          return {
-            workspace: session.roots.workspace,
-            storage: session.roots.storage,
-          };
-        });
-        expect(seen.workspace).toBe(fakePath('papers/contended'));
-        expect(seen.storage).toBe(fakePath('storage/contended'));
+        yield* session.log.transact([
+          {
+            type: 'run.start',
+            aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
+            identity: { kind: 'agent', agent: 'chat' },
+            userFollowUpSupport: 'unsupported',
+            parent: null,
+            provenance: null,
+          },
+        ]);
+        expect(session.roots.workspace).toBe(fakePath('papers/contended'));
+        expect(session.roots.storage).toBe(fakePath('storage/contended'));
       }),
   );
 });

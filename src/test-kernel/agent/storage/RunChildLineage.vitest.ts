@@ -1,7 +1,6 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { describe, expect } from 'vitest';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
@@ -10,23 +9,13 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
-let session: SessionHandle;
-beforeEach(async () => {
-  session = await Effect.runPromise(createTestSession());
-});
-
-const readParentRunId = (runId: RunId) =>
-  Effect.runPromise(
-    session.view
-      .read([])
-      .pipe(Effect.map((view) => view.runs.get(runId)?.parentId ?? undefined)),
-  );
 
 describe('persisted parent edge', () => {
   it.effect(
     'retains parent identity in the child creation even when reads exclude parent history',
     () =>
       Effect.gen(function* () {
+        const session = yield* createTestSession();
         publishTestRunStart(session, 'aaa0ff' as RunId);
         yield* session.log.settled;
         const rows = yield* session.log.transact([
@@ -44,9 +33,8 @@ describe('persisted parent edge', () => {
         });
         const ownRows = yield* session.log.records('aaa010' as RunId);
         expect(ownRows).toHaveLength(1);
-        expect(
-          yield* Effect.promise(() => readParentRunId('aaa010' as RunId)),
-        ).toBe('aaa0ff');
+        const view = yield* session.view.read([]);
+        expect(view.runs.get('aaa010' as RunId)?.parentId).toBe('aaa0ff');
       }),
   );
 });

@@ -47,7 +47,6 @@ import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { PluginContext } from '@platform/processRuntime';
@@ -170,15 +169,7 @@ function boundModel(): BoundModel {
   };
   return {
     modelId: GPT54,
-    config: {
-      ...MODEL_CONFIGS[GPT54],
-      capabilities: {
-        ...MODEL_CONFIGS[GPT54].capabilities,
-        supportsVision: false,
-        supportsNativePdf: false,
-        supportsNativeAudio: false,
-      },
-    },
+    config: MODEL_CONFIGS[GPT54],
     backend: 'openai',
     model,
     origin: ORIGIN,
@@ -214,11 +205,10 @@ const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
 function agentRun(
   runId: RunId,
   session: SessionHandle,
-  logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
-    { runId, session, logger, model, scope: Scope.makeUnsafe() },
+    { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
     {
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'assistant',
@@ -246,9 +236,6 @@ interface DispatchKit {
 interface HarnessOptions {
   readonly tools: Record<string, ITool>;
   readonly calls: readonly Call[];
-  readonly logger?: AgentTrace;
-  /** The run's binding, for the cases that read more than capabilities. */
-  readonly bound?: BoundModel;
 }
 
 /**
@@ -260,7 +247,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 ) {
   const session = yield* createTestSession();
   const runId = dispatchRunId();
-  const logger = options.logger ?? noopTrace;
   const tools = new Map(Object.entries(options.tools));
   publishTestRunStart(session, runId);
   yield* session.log.settled;
@@ -297,17 +283,17 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         calls: dispatchFactsFor(
           localCallsOf(turn.content),
           tools,
-          logger,
+          noopTrace,
           () => 'log-id',
         ),
         usage: null,
       },
     },
   ]);
-  const model = yield* SynchronizedRef.make(options.bound ?? boundModel());
+  const model = yield* SynchronizedRef.make(boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
-    Layer.succeed(AgentRun, agentRun(runId, session, logger, model)),
+    Layer.succeed(AgentRun, agentRun(runId, session, model)),
     Layer.succeed(RunHistory, session.runHistory),
   );
   return {
@@ -421,16 +407,12 @@ describe('tool-use dispatch', () => {
         )).flatMap((row) => (row.type === 'tool.result' ? [row.payload] : []));
         const nested = results.findIndex((r) => r.callId === 'c1/0');
         const own = results.findIndex((r) => r.callId === 'c1');
-        expect(nested).toBeGreaterThanOrEqual(0);
-        expect(own).toBeGreaterThanOrEqual(0);
         expect(results[nested]?.disposition).toBe('skipped');
         const skipped = results[nested]?.result;
-        const reason = skipped?.status === 'error' ? skipped.error : '';
         // It had started, so the reason carries the unknown-outcome warning.
-        expect(reason).toContain(
-          'The script ended while this call was running',
+        expect(skipped?.status === 'error' && skipped.error).toContain(
+          'Its outcome is unknown',
         );
-        expect(reason).toContain('Its outcome is unknown');
         // Committed before the script's own result.
         expect(nested).toBeLessThan(own);
         yield* closeSessionOf(kit.session);

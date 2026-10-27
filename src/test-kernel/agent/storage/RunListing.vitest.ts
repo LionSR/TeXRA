@@ -2,7 +2,6 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { getRunRecords } from '@agent/storage/runRecords';
 import { listRuns } from '@agent/storage/runListing';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -13,96 +12,42 @@ import {
   emptyRunEndOutput,
   type RunId,
   type RunIdentity,
-  type RunOutcome,
 } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
 
-function config(
-  agent: string,
-  inputFiles: readonly string[] = [],
-): AgentConfig {
+function config(agent: string): AgentConfig {
   return Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Test run listing.',
     workingDirectory: '/workspace',
-    inputFiles,
   });
 }
 
 let session: SessionHandle;
-/** The run facts a listing row is built from, as the rows that carry them. */
-type SeededRunFacts = {
-  readonly timestamp: string;
-  readonly identity: RunIdentity;
-  readonly parentRunId?: RunId;
-  readonly description?: string;
-  readonly outcome?: RunOutcome;
-};
-async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
-  const existing = await Effect.runPromise(getRunRecords(session, id).exists());
-  if (!existing) {
-    const clock = vi
-      .spyOn(Date, 'now')
-      .mockReturnValue(Date.parse(meta.timestamp));
-    try {
-      await Effect.runPromise(
-        session.log.transact([
-          {
-            type: 'run.start',
-            aggregateId: qualifyAggregateId('run', id),
-            identity: meta.identity,
-            userFollowUpSupport: 'unsupported',
-            parent:
-              meta.parentRunId === undefined
-                ? null
-                : { id: meta.parentRunId, callId: null },
-            provenance: null,
-          },
-        ]),
-      );
-    } finally {
-      clock.mockRestore();
-    }
-  }
-  if (meta.description)
-    await Effect.runPromise(
-      session.log.transact([
-        {
-          type: 'run.description',
-          by: 'model',
-          aggregateId: qualifyAggregateId('run', id),
-          description: meta.description,
-        },
-      ]),
-    );
-  if (meta.outcome)
-    await Effect.runPromise(
-      session.log.transact([
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', id),
-          outcome: meta.outcome,
-          output: emptyRunEndOutput(),
-        },
-      ]),
-    );
-}
-async function writeRun(
-  id: RunId,
-  timestamp: string,
-  agentConfig: AgentConfig,
-  parentRunId?: RunId,
-): Promise<void> {
-  await writeMetadata(id, {
-    timestamp,
-    parentRunId,
-    identity: { kind: 'agent', agent: agentConfig.agent },
-  });
-  await Effect.runPromise(seedRunRecord(session, id, agentConfig));
-}
+
+/** Commit the run's `run.start`, the fact its listing row is built from. */
+const startRun = (id: RunId, identity: RunIdentity, parentRunId?: RunId) =>
+  session.log.transact([
+    {
+      type: 'run.start',
+      aggregateId: qualifyAggregateId('run', id),
+      identity,
+      userFollowUpSupport: 'unsupported',
+      parent:
+        parentRunId === undefined ? null : { id: parentRunId, callId: null },
+      provenance: null,
+    },
+  ]);
+
+/** An agent run: its start and its configuration record. */
+const writeRun = (id: RunId, agent: string, parentRunId?: RunId) =>
+  Effect.andThen(
+    startRun(id, { kind: 'agent', agent }, parentRunId),
+    seedRunRecord(session, id, config(agent)),
+  );
 
 describe('run listing normalization', () => {
   setupPlatform({ workspacePath: '/workspace' });
@@ -118,9 +63,7 @@ describe('run listing normalization', () => {
   it.effect('keeps a row whose resumability read fails, not resumable', () =>
     Effect.gen(function* () {
       const id = 'eee556' as RunId;
-      yield* Effect.promise(() =>
-        writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
-      );
+      yield* writeRun(id, 'assistant');
       vi.spyOn(session.log, 'records').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
@@ -144,21 +87,27 @@ describe('run listing normalization', () => {
     () =>
       Effect.gen(function* () {
         const id = 'fff666' as RunId;
-        yield* Effect.promise(() =>
-          writeRun(id, '2026-07-15T12:00:00.000Z', config('assistant')),
-        );
+        yield* writeRun(id, 'assistant');
         expect(yield* listRuns(session)).toEqual([
           expect.not.objectContaining({ description: expect.any(String) }),
         ]);
 
-        yield* Effect.promise(() =>
-          writeMetadata(id, {
-            timestamp: '2026-07-15T12:00:00.000Z',
-            identity: { kind: 'agent', agent: 'assistant' },
+        yield* session.log.transact([
+          {
+            type: 'run.description',
+            by: 'model',
+            aggregateId: qualifyAggregateId('run', id),
             description: 'Updated by another host',
+          },
+        ]);
+        yield* session.log.transact([
+          {
+            type: 'run.end',
+            aggregateId: qualifyAggregateId('run', id),
             outcome: 'completed',
-          }),
-        );
+            output: emptyRunEndOutput(),
+          },
+        ]);
 
         expect(yield* listRuns(session)).toEqual([
           expect.objectContaining({
@@ -174,16 +123,9 @@ describe('run listing normalization', () => {
     Effect.gen(function* () {
       const processId = 'bbb222' as RunId;
       const customBashAgentId = 'ccc333' as RunId;
-      yield* Effect.promise(() =>
-        writeMetadata(processId, {
-          timestamp: '2026-07-15T09:00:00.000Z',
-          identity: { kind: 'process', tool: 'assistant' },
-        }),
-      );
+      yield* startRun(processId, { kind: 'process', tool: 'assistant' });
       yield* seedRunRecord(session, processId, config('assistant'));
-      yield* Effect.promise(() =>
-        writeRun(customBashAgentId, '2026-07-15T08:00:00.000Z', config('bash')),
-      );
+      yield* writeRun(customBashAgentId, 'bash');
 
       expect(yield* listRuns(session)).toEqual([
         expect.objectContaining({
@@ -199,12 +141,8 @@ describe('run listing normalization', () => {
     Effect.gen(function* () {
       const rootId = 'eee111' as RunId;
       const childId = 'fff222' as RunId;
-      yield* Effect.promise(() =>
-        writeRun(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator')),
-      );
-      yield* Effect.promise(() =>
-        writeRun(childId, '2026-07-15T10:05:00.000Z', config('search'), rootId),
-      );
+      yield* writeRun(rootId, 'orchestrator');
+      yield* writeRun(childId, 'search', rootId);
 
       // A child belongs to its parent's transcript, not to the history list.
       expect((yield* listRuns(session)).map(({ id }) => id)).toEqual([rootId]);

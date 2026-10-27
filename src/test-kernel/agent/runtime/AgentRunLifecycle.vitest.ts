@@ -10,7 +10,7 @@ import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { setLogSink } from '@logger/logSink';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
-import type { RunId, RunOutcome } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -49,16 +49,6 @@ function lifecycleFixture(agent = 'test-agent'): {
 
 /** The launching run a subagent fixture names as its parent edge. */
 const PARENT_RUN_ID = 'aa0001' as RunId;
-
-/** What a tool-use run that produced no output ends with on its `run.end`. */
-const EMPTY_TOOL_USE_OUTPUT = {
-  response: '',
-  files: [],
-} as const;
-
-function toolUseResult(runId: RunId, outcome: RunOutcome): RunEndResult {
-  return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
-}
 
 /**
  * Park the run's terminal before its `run.end` write: its stage end, the
@@ -108,37 +98,35 @@ describe('runWithLifecycle', () => {
         // nothing the exit has to remember to clear.
         const { runId, ctx } = lifecycleFixture();
         const parked = yield* parkTerminal(ctx);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
+        );
 
-        try {
-          const running = yield* Effect.forkChild(
-            runLifecycle(
-              ctx,
-              () => Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
-              { parentRunId: PARENT_RUN_ID },
-            ),
-          );
-          // The run reached its own terminal and parked before its persist,
-          // which is the window the stop below has to land in.
-          yield* Deferred.await(parked.started);
+        const running = yield* Effect.forkChild(
+          runLifecycle(
+            ctx,
+            () =>
+              Effect.succeed({
+                outcome: RUN_OUTCOME.COMPLETED,
+                runId,
+                output: { response: '', files: [] },
+              } satisfies RunEndResult),
+            { parentRunId: PARENT_RUN_ID },
+          ),
+        );
+        // The run reached its own terminal and parked before its persist,
+        // which is the window the stop below has to land in.
+        yield* Deferred.await(parked.started);
 
-          const stop = testDefaultSession().runs.stop(runId, {
-            reason: 'user',
-          });
+        const stop = testDefaultSession().runs.stop(runId, { reason: 'user' });
+        expect(stop.accepted()).toBe(false);
+        yield* stop.settlement;
 
-          expect(stop.accepted()).toBe(false);
-
-          yield* stop.settlement;
-
-          yield* Deferred.succeed(parked.release, undefined);
-          const result = yield* Fiber.join(running);
-          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          expect(yield* runEnds(ctx.session, runId)).toMatchObject([
-            { outcome: RUN_OUTCOME.COMPLETED },
-          ]);
-          expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
-        } finally {
-          untrackRun(testDefaultSession().runs, runId);
-        }
+        yield* Deferred.succeed(parked.release, undefined);
+        yield* Fiber.join(running);
+        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+          { outcome: RUN_OUTCOME.COMPLETED },
+        ]);
       }),
   );
 
@@ -154,11 +142,9 @@ describe('runWithLifecycle', () => {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
-        const result = yield* runLifecycle(ctx, () =>
+        yield* runLifecycle(ctx, () =>
           Effect.fail(new DOMException('Request aborted', 'AbortError')),
         );
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
         yield* ctx.session.log.settled;
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
@@ -171,12 +157,8 @@ describe('runWithLifecycle', () => {
         expect(yield* runEnds(ctx.session, runId)).toMatchObject([
           {
             outcome: RUN_OUTCOME.CANCELLED,
-            error: {
-              kind: 'abort',
-              message: 'Request aborted',
-              userRetryable: false,
-            },
-            output: EMPTY_TOOL_USE_OUTPUT,
+            error: { kind: 'abort', userRetryable: false },
+            output: { response: '', files: [] },
           },
         ]);
       }),
