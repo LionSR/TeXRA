@@ -106,8 +106,8 @@ function afterActivation(
 }
 
 const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
-  JSON.stringify([a.own, [...a.goal].sort(), a.limit]) ===
-  JSON.stringify([b.own, [...b.goal].sort(), b.limit]);
+  JSON.stringify([a.own, a.goal.toSorted(), a.limit]) ===
+  JSON.stringify([b.own, b.goal.toSorted(), b.limit]);
 
 /** The `approval.policy` row that records `snapshot` as a run's grants. */
 const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
