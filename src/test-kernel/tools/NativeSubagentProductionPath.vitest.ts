@@ -698,7 +698,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(3);
         expect(
           yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
+        ).toMatchObject({
           started: true,
           delivered: true,
           outcome: RUN_PHASE.WAITING,
@@ -734,7 +734,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               session,
             }),
           ).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
+        ).toMatchObject({
           started: true,
           delivered: true,
           outcome: RUN_PHASE.WAITING,
@@ -761,7 +761,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, { session }),
           ),
-        ).toEqual({
+        ).toMatchObject({
           started: true,
           delivered: false,
           outcome: RUN_OUTCOME.FAILED,

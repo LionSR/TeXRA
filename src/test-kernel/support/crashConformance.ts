@@ -98,7 +98,7 @@ import {
   type StoredRow as Row,
   validationHost,
 } from '@test/support/storeFaults';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
@@ -1106,6 +1106,113 @@ export function crashConformanceSuite(): void {
           }),
         600_000,
       );
+    /**
+     * A background child stays attached to its parent once the call that
+     * launched it has settled, but no open call owns it. A crash there and
+     * an SDK resume of the child run the child itself, and the resume
+     * returns the child's own result rather than failing after admission.
+     */
+    it.live(
+      "an SDK resume of an attached child whose launching call settled returns the child's result",
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const root = generateRunId();
+          /** The background child, once its first turn settled, the root's
+           *  call that launched it settled and the root waits, with the
+           *  child not ended. */
+          const settledChild = (rows: readonly Row[]) => {
+            const child = rows.find(
+              (row) =>
+                row.type === 'run.start' &&
+                row.parent === root &&
+                row.data.includes('"agent":"golden_child"'),
+            );
+            if (child === undefined) return undefined;
+            const callId = (json(child).parent as { callId: string }).callId;
+            const position = rows.findLast(
+              (row) => row.run === root && row.type === 'run.position',
+            );
+            const ready =
+              rows.some(
+                (row) =>
+                  row.run === child.run &&
+                  row.type === 'child.turn' &&
+                  json(row).phase === 'settled',
+              ) &&
+              !rows.some(
+                (row) => row.run === child.run && row.type === 'run.end',
+              ) &&
+              rows.some(
+                (row) =>
+                  row.run === root &&
+                  row.type === 'tool.result' &&
+                  payload(row).callId === callId,
+              ) &&
+              position !== undefined &&
+              payload(position).at === 'waiting';
+            // cast: the store's logical id of a run aggregate is its RunId.
+            return ready ? (child.run as RunId) : undefined;
+          };
+          /** The first commit whose prefix holds such a child. */
+          const crashPoint = (rows: readonly Row[]) =>
+            [...new Set(rows.map((row) => row.commit))].find(
+              (n) =>
+                settledChild(rows.filter((row) => row.commit <= n)) !==
+                undefined,
+            );
+          const { clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
+                testRuntime(),
+                session.runs.launch({
+                  request: {
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                      agent: 'golden_delivery',
+                      model: 'openai/gpt-5.6-sol',
+                      instruction: 'Send the children off.',
+                    }),
+                    runId: root,
+                  },
+                  options: {},
+                }),
+              ),
+            () =>
+              until(roots.storage, (rows) => crashPoint(rows) !== undefined),
+          );
+          const n = crashPoint(rowsOf(roots.storage));
+          expect(n).toBeDefined();
+          const storage = join(roots.storage, 'crash');
+          crashAt(clean, storage, n!);
+          const child = settledChild(rowsOf(storage));
+          expect(child).toBeDefined();
+          const exit = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const session = yield* openTestDefaultSession({
+                roots: { ...roots, storage },
+              });
+              return yield* Effect.exit(
+                testSessionOf(session)
+                  .resume(child!)
+                  .pipe(Effect.flatMap((run) => run.result)),
+              );
+            }).pipe(
+              Effect.ensuring(closeTestDefaultSession),
+              Effect.timeout('60 seconds'),
+            ),
+          );
+          const resumed = rowsOf(storage)
+            .filter((row) => row.commit > n! && row.run === child)
+            .map((row) => row.type);
+          expect(resumed).toContain('run.activate');
+          expect(exit).toMatchObject({
+            _tag: 'Success',
+            value: { runId: child },
+          });
+        }),
+      120_000,
+    );
     /**
      * A job's appends commit together: a process killed between two of them
      * leaves neither on disk. The cut is the store's files copied while the
