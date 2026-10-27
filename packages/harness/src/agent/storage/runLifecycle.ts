@@ -25,7 +25,7 @@ import {
   type RunId,
   type RunIdentity,
   type RunOutcome,
-  type RunParentCall,
+  type RunParent,
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -90,7 +90,7 @@ export interface RegisterRunOptions {
   readonly parentRunId?: RunId;
   /** The parent's call that launched it, which owns this run until it
    *  detaches, and that call's tool card. */
-  readonly parentCall?: RunParentCall;
+  readonly parentCall?: NonNullable<RunParent['call']>;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */

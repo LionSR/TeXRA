@@ -37,7 +37,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunEnd,
   type RunId,
-  type RunParentCall,
+  type RunParent,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -65,7 +65,7 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly runId: RunId;
   /** The parent's call that launches the child, which owns it, and its
    *  tool card. */
-  readonly parentCall?: RunParentCall;
+  readonly parentCall?: NonNullable<RunParent['call']>;
   /** The grants a fresh child is registered with. */
   readonly grants?: ApprovalGrants;
   /**

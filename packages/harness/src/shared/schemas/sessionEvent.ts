@@ -151,8 +151,6 @@ const RunParentSchema = Schema.Struct({
   call: Schema.NullOr(Schema.Struct({ callId: NonEmpty, card: NonEmpty })),
 });
 export type RunParent = typeof RunParentSchema.Type;
-/** The call that launched a child run, with its tool card. */
-export type RunParentCall = NonNullable<RunParent['call']>;
 
 /**
  * Where a run's history came from, when not from its own launch: a fork

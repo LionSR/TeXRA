@@ -263,7 +263,6 @@ const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
     [...view.runs.values()].filter(
       (run) =>
         run.identity.kind === 'script' &&
-        run.id !== root &&
         (run.parentId === root || run.parentId === null),
     ),
     (run) =>
