@@ -121,10 +121,11 @@ describe('CLI run progress renderer', () => {
                 }),
               );
               const scope = yield* Scope.make();
+              const runId = 'd4d4d4' as RunId;
               yield* host
-                .attachRunProgressRenderer(testSessionOf(session))
+                .attachRunProgressRenderer(testSessionOf(session), runId)
                 .pipe(Scope.provide(scope));
-              yield* publishRun(session, 'd4d4d4' as RunId);
+              yield* publishRun(session, runId);
               yield* Scope.close(scope, Exit.void);
               yield* host.close();
             }),

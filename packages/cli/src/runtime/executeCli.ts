@@ -246,7 +246,7 @@ export function executeCliConfig(
     const renderWorkflowPlainProgress =
       runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
-      .attachRunProgressRenderer(session, { runId: request.runId })
+      .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, runContext, {
       prompting: () => presentationHost.holdForPrompt?.(),
