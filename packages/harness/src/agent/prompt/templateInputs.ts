@@ -297,12 +297,17 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     MEDIA_FILE: null,
   };
 
-  for (const prefix of FILE_VAR_CATEGORIES) {
-    const allFiles = getCategoryFiles(agentConfig, prefix);
-    const { xml, readable, skipped } =
-      allFiles.length > 0
-        ? yield* getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
-        : { xml: null, readable: [], skipped: [] };
+  const reads = yield* Effect.forEach(
+    FILE_VAR_CATEGORIES,
+    (prefix) =>
+      getXmlFormatFromReadableFiles(
+        workspaceRoot,
+        getCategoryFiles(agentConfig, prefix),
+      ),
+    { concurrency: 'unbounded' },
+  );
+  for (const [i, { xml, readable, skipped }] of reads.entries()) {
+    const prefix = FILE_VAR_CATEGORIES[i];
     const readableFiles = readable.map(({ file }) => file);
     // The first readable file fills the `*_FILE`/`*_CONTENT` pair from the
     // same read that built the list vars.

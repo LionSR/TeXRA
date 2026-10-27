@@ -167,24 +167,34 @@ export const scanPluginAgents = Effect.gen(function* () {
   });
   const entries: AgentEntry[] = [];
   const issues: AgentScanIssue[] = [];
-  for (const { record, plugin } of loadable) {
-    for (const relative of plugin.agents) {
-      const file = path.join(record.path, relative);
-      const read = yield* Effect.result(readPluginAgent(file, record.name));
-      if (Result.isFailure(read)) {
-        yield* Effect.logWarning(
-          `Plugin agent ${file} is not loaded: ${read.failure.message}`,
-        ).pipe(withLogChannel('agentRegistry'));
-        issues.push({ path: file, message: read.failure.message });
-        continue;
-      }
-      const agent = read.success;
-      if (agent.dropped.length > 0)
-        yield* Effect.logWarning(
-          `Agent ${agent.name} names tools this build does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
-        ).pipe(withLogChannel('agentRegistry'));
-      entries.push(pluginAgentEntry(agent, file));
+  // The files are read together; their entries and warnings follow in
+  // declaration order.
+  const reads = yield* Effect.all(
+    loadable.flatMap(({ record, plugin }) =>
+      plugin.agents.map((relative) => {
+        const file = path.join(record.path, relative);
+        return Effect.map(
+          Effect.result(readPluginAgent(file, record.name)),
+          (read) => ({ file, read }),
+        );
+      }),
+    ),
+    { concurrency: 8 },
+  );
+  for (const { file, read } of reads) {
+    if (Result.isFailure(read)) {
+      yield* Effect.logWarning(
+        `Plugin agent ${file} is not loaded: ${read.failure.message}`,
+      ).pipe(withLogChannel('agentRegistry'));
+      issues.push({ path: file, message: read.failure.message });
+      continue;
     }
+    const agent = read.success;
+    if (agent.dropped.length > 0)
+      yield* Effect.logWarning(
+        `Agent ${agent.name} names tools this build does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
+      ).pipe(withLogChannel('agentRegistry'));
+    entries.push(pluginAgentEntry(agent, file));
   }
   return { entries, issues };
 });

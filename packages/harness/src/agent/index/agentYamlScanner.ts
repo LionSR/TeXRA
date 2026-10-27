@@ -97,19 +97,28 @@ export function scanDirectory(
     // Each file with the root it was found under; a path two roots share
     // keeps the first.
     const rootOf = new Map<string, string>();
-    for (const root of dirs) {
-      const listed = yield* Effect.result(
-        Effect.tryPromise({
-          try: () =>
-            glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
-          catch: (cause) =>
-            new AgentScanError({
-              path: root,
-              message: toErrorMessage(cause),
-              cause,
+    // The roots are listed together, then taken in order.
+    const listings = yield* Effect.forEach(
+      dirs,
+      (root) =>
+        Effect.map(
+          Effect.result(
+            Effect.tryPromise({
+              try: () =>
+                glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
+              catch: (cause) =>
+                new AgentScanError({
+                  path: root,
+                  message: toErrorMessage(cause),
+                  cause,
+                }),
             }),
-        }),
-      );
+          ),
+          (listed) => ({ root, listed }),
+        ),
+      { concurrency: 'unbounded' },
+    );
+    for (const { root, listed } of listings) {
       if (Result.isFailure(listed)) {
         const { message } = listed.failure;
         yield* Effect.logError(`Failed to scan ${root}: ${message}`).pipe(

@@ -43,25 +43,31 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
     config: Pick<AgentConfig, 'workingDirectory'> | null,
     filePaths: readonly string[],
   ) {
-    const files = new Map<string, RunWorkspaceFile>();
+    const resolved = new Map<string, string>();
     for (const filePath of filePaths) {
-      const resolved = resolveRunWorkspaceFilePath(config, filePath);
-      if (!resolved || files.has(resolved.path)) continue;
-
-      // A path recorded for the run that is no longer there — or whose parent
-      // is not a directory any more — is simply not listed; every other failure
-      // propagates, so an unreadable entry is never reported as a missing one.
-      const entry = yield* entryMetadataAt(resolved.absolutePath).pipe(
-        Effect.catchIf(absentReason, () => Effect.void),
-      );
-      if (entry === undefined) continue;
-
-      files.set(resolved.path, {
-        path: resolved.path,
-        size: entry.size,
-        isDirectory: entry.type === 'Directory',
-      });
+      const target = resolveRunWorkspaceFilePath(config, filePath);
+      if (target && !resolved.has(target.path))
+        resolved.set(target.path, target.absolutePath);
     }
-    return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+    const files = yield* Effect.forEach(
+      resolved,
+      ([relative, absolutePath]) =>
+        // A path recorded for the run that is no longer there — or whose
+        // parent is not a directory any more — is simply not listed; every
+        // other failure propagates, so an unreadable entry is never reported
+        // as a missing one.
+        entryMetadataAt(absolutePath).pipe(
+          Effect.map((entry): RunWorkspaceFile[] => [
+            {
+              path: relative,
+              size: entry.size,
+              isDirectory: entry.type === 'Directory',
+            },
+          ]),
+          Effect.catchIf(absentReason, () => Effect.succeed([])),
+        ),
+      { concurrency: 8 },
+    );
+    return files.flat().sort((a, b) => a.path.localeCompare(b.path));
   },
 );

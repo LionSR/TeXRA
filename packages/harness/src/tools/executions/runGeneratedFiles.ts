@@ -100,23 +100,30 @@ function walkRunStorage(
       }),
     );
 
+    // The entries are stat'ed together, then listed in order.
+    const stats = yield* Effect.forEach(
+      entries,
+      (name) => {
+        const rawRelative = relativePath ? path.join(relativePath, name) : name;
+        return fs.stat(path.join(basePath, rawRelative)).pipe(
+          Effect.map((stat) => ({ rawRelative, stat })),
+          // An entry that vanished, or whose path stopped naming something a
+          // stat can follow, between the listing and the stat is a benign
+          // race; anything else is a real fault and propagates.
+          Effect.catchIf(
+            (error) =>
+              error.reason._tag === 'NotFound' ||
+              error.reason._tag === 'BadResource',
+            () => Effect.succeed(null),
+          ),
+        );
+      },
+      { concurrency: 8 },
+    );
     const files: RunGeneratedFile[] = [];
-    for (const name of entries) {
-      const rawRelative = relativePath ? path.join(relativePath, name) : name;
-      const childPath = path.join(basePath, rawRelative);
-
-      const stat = yield* fs.stat(childPath).pipe(
-        // An entry that vanished, or whose path stopped naming something a
-        // stat can follow, between the listing and the stat is a benign race;
-        // anything else is a real fault and propagates.
-        Effect.catchIf(
-          (error) =>
-            error.reason._tag === 'NotFound' ||
-            error.reason._tag === 'BadResource',
-          () => Effect.void,
-        ),
-      );
-      if (!stat) continue;
+    for (const entry of stats) {
+      if (entry === null) continue;
+      const { rawRelative, stat } = entry;
 
       // The entry's kind comes from the stat that already ran, which follows
       // a symlink to what it points at — the classification the listing this
