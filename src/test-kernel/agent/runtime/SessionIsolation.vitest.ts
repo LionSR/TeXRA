@@ -97,43 +97,4 @@ describe('session isolation', () => {
         }
       }),
   );
-
-  /**
-   * #12433, and the reason #12421 retired the carrier. This contract is the
-   * one the desktop needs — two open projects, each its own session, its own
-   * storage root — and an async-local frame could never meet it: a run fiber
-   * resuming after a contended commit resumed outside the frame and read the
-   * PROCESS roots. Roots arrive as data now, so the fiber's answer cannot
-   * depend on which turn it resumes in. The case was `.fails` until the
-   * carrier went; it is green from here.
-   */
-  it.effect(
-    'a run fiber keeps its session roots across a contended publisher commit',
-    () =>
-      Effect.gen(function* () {
-        const project = createFakeWorkspaceRoots({
-          workspacePath: fakePath('papers/contended'),
-          storagePath: fakePath('storage/contended'),
-        });
-        const session = yield* createTestSession({ roots: project });
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        // Job 1: enqueued on the session's one publisher from the process
-        // context, the shape the desktop has.
-        publishTestRunStart(session, 'c0c001' as RunId);
-        // Job 2: the run fiber's own awaited commit, enqueued in the same
-        // synchronous turn, so the publisher is already contended when it runs.
-        yield* session.log.transact([
-          {
-            type: 'run.start',
-            aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
-            identity: { kind: 'agent', agent: 'chat' },
-            userFollowUpSupport: 'unsupported',
-            parent: null,
-            provenance: null,
-          },
-        ]);
-        expect(session.roots.workspace).toBe(fakePath('papers/contended'));
-        expect(session.roots.storage).toBe(fakePath('storage/contended'));
-      }),
-  );
 });

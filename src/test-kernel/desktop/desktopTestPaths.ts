@@ -5,8 +5,7 @@ import { pathToFileURL } from 'node:url';
 // Local imports - test support
 import { REPO_ROOT } from '@test/support/repoScan';
 
-export { REPO_ROOT };
-export const DESKTOP_SRC_DIR = repoPath('packages', 'desktop', 'src');
+const DESKTOP_SRC_DIR = repoPath('packages', 'desktop', 'src');
 
 export function repoPath(...segments: string[]): string {
   return resolve(REPO_ROOT, ...segments);

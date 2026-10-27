@@ -16,9 +16,8 @@ import { testRuntime } from './testProcessRuntime';
  * (`vi.clearAllMocks()` covers it; it keeps the default implementation below).
  *
  * Ordering: the `vi.mock` calls below register when this module evaluates, so
- * the import must precede anything that could load either module (see
- * `cliOutputMock` for the idiom). The bag is `vi.hoisted`, so the mock
- * factories can never observe it uninitialized.
+ * the import must precede anything that could load either module. The bag is
+ * `vi.hoisted`, so the mock factories can never observe it uninitialized.
  */
 const cliInitPlatformMock = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
