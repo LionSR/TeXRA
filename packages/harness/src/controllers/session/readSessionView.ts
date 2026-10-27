@@ -59,8 +59,7 @@ const absent = (
   )
     return Effect.succeed(true);
   if (!cannotOpen(Cause.fail(error))) return Effect.succeed(false);
-  return FileSystem.FileSystem.pipe(
-    Effect.flatMap((fs) => fs.exists(error.path)),
+  return FileSystem.FileSystem.use((fs) => fs.exists(error.path)).pipe(
     Effect.map((exists) => !exists),
     // Unknown: the open's own failure stands.
     Effect.catch((cause) =>

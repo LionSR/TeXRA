@@ -106,10 +106,12 @@ export class RunFileService {
 
       yield* ensureRunDirUnder(this.roots.storage, this.runId);
 
-      const linkTargets = new Map<string, FileLocation>();
-      for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
-        linkTargets.set(target.absolutePath, target);
-      }
+      const linkTargets = new Map(
+        [...baseFiles, ...(options.linkFiles ?? [])].map((target) => [
+          target.absolutePath,
+          target,
+        ]),
+      );
 
       const prepared = yield* Effect.forEach(
         baseFiles,
@@ -209,12 +211,9 @@ export class RunFileService {
     PlatformError.PlatformError,
     FileSystem.FileSystem
   > {
-    return Effect.gen({ self: this }, function* () {
-      return yield* entryExists(
-        yield* FileSystem.FileSystem,
-        this.runDirectory,
-      );
-    });
+    return FileSystem.FileSystem.use((fs) =>
+      entryExists(fs, this.runDirectory),
+    );
   }
 
   /** Where a workspace file's pre-run snapshot lives in this run. */

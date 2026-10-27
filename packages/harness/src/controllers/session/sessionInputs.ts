@@ -98,29 +98,26 @@ export const sessionInputsLayer = Layer.effect(
             );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
+            // One aggregate at a time, in order, as before.
+            const aggregateRows = yield* Effect.forEach(
+              effectiveAggregates,
+              ({ id, fromSeq }) =>
+                requiredRead(log.readDisplayAggregate(id, fromSeq)),
+            );
             const replay: SessionViewInput[] = [
-              {
-                _tag: 'debug',
-                enabled: debug,
-              },
+              { _tag: 'debug', enabled: debug },
               ...listing.map((event) => ({
                 _tag: 'event' as const,
                 read: 'listing' as const,
                 event,
               })),
+              { _tag: 'subscriptions', set: [...effectiveAggregates] },
+              ...aggregateRows.flat().map((event) => ({
+                _tag: 'event' as const,
+                read: 'aggregate' as const,
+                event,
+              })),
             ];
-            replay.push({
-              _tag: 'subscriptions',
-              set: [...effectiveAggregates],
-            });
-            for (const aggregate of effectiveAggregates) {
-              const rows = yield* requiredRead(
-                log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
-              );
-              for (const event of rows) {
-                replay.push({ _tag: 'event', read: 'aggregate', event });
-              }
-            }
             const replayState = yield* requiredRead(
               log.readInputBatch(
                 effectiveAggregates.map(({ id }) => id),

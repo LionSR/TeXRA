@@ -45,10 +45,7 @@ const readTextFile = (
   pid: number,
   file: string,
 ): Effect.Effect<string, ProcessIdentityUnreadable, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    return yield* fs.readFileString(file);
-  }).pipe(
+  FileSystem.FileSystem.use((fs) => fs.readFileString(file)).pipe(
     Effect.mapError(
       (error) =>
         new ProcessIdentityUnreadable({
@@ -69,9 +66,8 @@ const runCommand = (
   args: readonly string[],
   env?: Record<string, string>,
 ): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner;
-    return yield* spawner.string(
+  ChildProcessSpawner.use((spawner) =>
+    spawner.string(
       ChildProcess.make(file, args, {
         env,
         extendEnv: true,
@@ -80,8 +76,8 @@ const runCommand = (
         detached: false,
         forceKillAfter: '5 seconds',
       }),
-    );
-  }).pipe(
+    ),
+  ).pipe(
     Effect.mapError(
       (error) =>
         new ProcessIdentityUnreadable({ pid, detail: error.reason._tag }),
