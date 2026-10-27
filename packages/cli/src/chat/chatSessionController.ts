@@ -456,7 +456,6 @@ export function createChatSessionController(
                       ),
                 ),
               ),
-      secrets,
       settings: stores,
       runtime,
     },

@@ -253,7 +253,7 @@ export function createExtensionHostRequests(
       // The set-key prompt either runs or faults, so its failure is the one
       // failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
-        runHandler('setApiKey', setApiKey(roots, secrets, provider)).pipe(
+        runHandler('setApiKey', setApiKey(roots, provider)).pipe(
           Effect.mapError(
             (failure) =>
               new ApiKeyPromptFailed({
@@ -584,7 +584,7 @@ export function createExtensionHostRequests(
       runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
-    setApiKey: runHandler('setApiKey', setApiKey(roots, secrets)).pipe(
+    setApiKey: runHandler('setApiKey', setApiKey(roots)).pipe(
       Effect.andThen(refreshOnboardingFunnel),
     ),
     openApiKeyGuide: Effect.asVoid(

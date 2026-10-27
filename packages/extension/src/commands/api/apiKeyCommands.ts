@@ -8,14 +8,14 @@ import {
   type ApiKeyProviderId,
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
-import { withLogChannel } from '@texra-ai/harness';
+import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
 
@@ -30,13 +30,8 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
  */
 function createProfileKeyController(
   stores: SettingsStores,
-  secrets: PlatformSecrets,
 ): SettingsProfileKeyController {
-  return new SettingsProfileKeyController({
-    secrets,
-    prompt: vscodeUi,
-    stores,
-  });
+  return new SettingsProfileKeyController({ prompt: vscodeUi, stores });
 }
 
 /**
@@ -103,15 +98,11 @@ function promptForApiKey(
   );
 }
 
-function pickApiProvider(
-  secrets: PlatformSecrets,
-  placeHolder: string,
-  prompt: string,
-) {
+function pickApiProvider(placeHolder: string, prompt: string) {
   return Effect.gen(function* () {
     // One batched read of the key statuses: the pick shows each provider's
     // stored/environment state.
-    const statuses = yield* loadApiKeyStatusMap(secrets);
+    const statuses = yield* loadApiKeyStatusMap(yield* Secrets);
     const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
       label: provider,
       description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
@@ -129,16 +120,11 @@ function pickApiProvider(
  * Set an API key. The command registry forwards a single typed argument, so
  * the optional `provider` is parsed at the dispatch boundary.
  */
-export function setApiKey(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-  provider?: ApiKeyProviderId,
-) {
+export function setApiKey(stores: SettingsStores, provider?: ApiKeyProviderId) {
   return Effect.gen(function* () {
     const target =
       provider ??
       (yield* pickApiProvider(
-        secrets,
         'Select API provider',
         'Keys stay on this machine, in an owner-only folder (~/.texra/secrets).',
       ));
@@ -149,7 +135,7 @@ export function setApiKey(
     const apiKey = yield* promptForApiKey(target, keyUrl);
     if (!apiKey) return;
 
-    yield* createProfileKeyController(stores, secrets)
+    yield* createProfileKeyController(stores)
       .commitProviderKey(target, apiKey)
       .pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>
@@ -160,10 +146,9 @@ export function setApiKey(
 }
 
 /** Remove an API key after a confirmation prompt. */
-export function removeApiKey(stores: SettingsStores, secrets: PlatformSecrets) {
+export function removeApiKey(stores: SettingsStores) {
   return Effect.gen(function* () {
     const provider = yield* pickApiProvider(
-      secrets,
       'Select API provider to remove key',
       'Only removes the key from TeXRA — does not delete it from the provider.',
     );
@@ -172,7 +157,7 @@ export function removeApiKey(stores: SettingsStores, secrets: PlatformSecrets) {
       return;
     }
 
-    yield* createProfileKeyController(stores, secrets)
+    yield* createProfileKeyController(stores)
       .removeProviderKey(provider)
       .pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>

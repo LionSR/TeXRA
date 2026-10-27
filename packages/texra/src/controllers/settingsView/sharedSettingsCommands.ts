@@ -305,7 +305,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     ).pipe(withPerKeyLane(skillListLanes, key));
 
   const profileKeys = new SettingsProfileKeyController({
-    secrets,
     prompt: bindings.prompt,
     stores: roots,
   });

@@ -392,10 +392,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { secrets, runtime, roots } = yield* initVscodePlatform(
-      context,
-      undefined,
-    );
+    const { runtime, roots } = yield* initVscodePlatform(context, undefined);
     registerWelcomeView(context, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
@@ -420,7 +417,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
         ),
       ),
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        runtime.runPromise(apiSetApiKey(roots, secrets)),
+        runtime.runPromise(apiSetApiKey(roots)),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false, runtime);

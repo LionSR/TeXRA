@@ -342,7 +342,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const presentation = createAgentPresentationHost(
       this,
       globalState,
-      secrets,
       this.runtime,
       roots,
       this.scope,

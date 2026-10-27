@@ -120,10 +120,10 @@ export function registerCommands(
     getTeXCount: () => latexGetTeXCount(roots),
     compileTikzFigures: () => latexCompileTikzFigures(roots),
     cloneOverleafProject: () => gitCloneOverleafProject(secrets),
-    removeApiKey: () => apiRemoveApiKey(roots, secrets),
+    removeApiKey: () => apiRemoveApiKey(roots),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
-    setApiKey: (provider) => apiSetApiKey(roots, secrets, provider),
+    setApiKey: (provider) => apiSetApiKey(roots, provider),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
