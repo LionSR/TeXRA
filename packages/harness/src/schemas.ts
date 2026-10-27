@@ -235,14 +235,13 @@ export {
 } from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
-// Error messages, and JSON parsed without a throw.
+// Error messages.
 export {
   ensureError,
   extractErrorMessage,
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-export { safeParseJson } from '@common/parsing/safeParseJson';
 // An exported run (`assembleTrace`), as a static viewer parses it back.
 export {
   readTraceFacts,

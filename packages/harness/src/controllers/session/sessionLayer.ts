@@ -301,7 +301,7 @@ const sessionHandleLayer = (key: SessionKey) =>
     }),
   );
 
-/** The runtime graph of one root (PRD 7.3): the root-scoped services the
+/** The runtime graph of one root: the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
