@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import {
-  createOutputState,
   ensureRoundData,
+  type OutputState,
 } from '@texra/agent/output/outputState';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 
@@ -25,7 +25,7 @@ describe('workflow output lineage mapping', () => {
     const chapter1Output = runStorageFile('r0/inputs/chapter1/lemma.tex');
     const chapter2Output = runStorageFile('r0/inputs/chapter2/lemma.tex');
 
-    const state = createOutputState();
+    const state: OutputState = { rounds: new Map() };
     ensureRoundData(state, 0).outputs = [
       {
         source: 'inputs/chapter1/lemma.tex',

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
-  Context,
   Deferred,
   Effect,
   Exit,
@@ -76,7 +75,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
-  getInlineCommentProvider,
+  inlineCommentProvider,
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
@@ -175,7 +174,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // The Comments UI behind the `inline_comment` tool. The provider reads
           // the controller this host registers at activation, so it is a value
           // from module load; nothing about it waits on that registration.
-          inlineComments: getInlineCommentProvider(),
+          inlineComments: inlineCommentProvider,
           // Lean through the Lean 4 extension, not a direct `lake` pool.
           lean: Layer.effect(
             LeanLanguageServices,
@@ -291,13 +290,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             undefined,
           ),
         );
-      // The process's sessions, read once here from the runtime that
-      // serves them and threaded to the window's activation.
-      const sessions = yield* Effect.map(
-        managed.contextEffect,
-        Context.get(Sessions),
-      );
-      return { secrets, runtime, roots, editors, sessions, reached };
+      return { secrets, runtime, roots, editors, reached };
     }),
   );
 });
@@ -392,10 +385,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { secrets, runtime, roots } = yield* initVscodePlatform(
-      context,
-      undefined,
-    );
+    const { runtime, roots } = yield* initVscodePlatform(context, undefined);
     registerWelcomeView(context, runtime);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
@@ -420,7 +410,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
         ),
       ),
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        runtime.runPromise(apiSetApiKey(roots, secrets)),
+        runtime.runPromise(apiSetApiKey(roots)),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false, runtime);
@@ -437,7 +427,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { secrets, runtime, roots, editors, sessions, reached } =
+  const { secrets, runtime, roots, editors, reached } =
     yield* initVscodePlatform(context, workspaceRoot, {
       toolMissingHandler: vscodeToolMissingReporter,
       service: reachExtensionService(context.extensionPath),
@@ -450,15 +440,9 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(
-      context,
-      secrets,
-      runtime,
-      roots,
-      editors,
-      sessions,
-      reached,
-    ).pipe(Effect.provideService(Scope.Scope, activationScope)),
+    activateWorkspace(context, secrets, runtime, roots, editors, reached).pipe(
+      Effect.provideService(Scope.Scope, activationScope),
+    ),
   );
   // Off the activation tick: withExtendedPath() runs synchronous glob probes.
   yield* withProcessServices(
@@ -474,7 +458,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   editors: EditorRegistry,
-  sessions: Context.Service.Shape<typeof Sessions>,
   /** The background service, as the activation reached it once. */
   reached: Result.Result<ServiceLink, Error>,
 ) {
@@ -504,7 +487,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       ),
     };
   } else {
-    const session = yield* sessions.open(roots, {
+    const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
       host: { interruptedTasks: 'offer' },
     });

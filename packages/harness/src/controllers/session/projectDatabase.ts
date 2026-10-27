@@ -162,12 +162,11 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
           }),
         ),
       );
-    return yield* Effect.forEach(
+    return yield* Effect.all(
       [
         ...inventory.orphans.map(({ directory }) => remove(directory, true)),
         ...inventory.asides.map(({ path: aside }) => remove(aside, false)),
       ],
-      (removal) => removal,
       { concurrency: 8 },
     );
   },

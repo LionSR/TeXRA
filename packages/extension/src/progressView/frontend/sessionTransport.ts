@@ -167,8 +167,9 @@ export function installWebviewTransport(
       const settle = session.pending.get(requestId);
       if (!settle) return;
       session.pending.delete(requestId);
-      runtime.runSync(
-        Deferred.succeed(settle, {
+      Deferred.doneUnsafe(
+        settle,
+        Effect.succeed({
           ok: false,
           error: new Invalid({
             reason: 'The host sent a malformed response.',
@@ -205,7 +206,7 @@ export function installWebviewTransport(
           return;
         }
         pending.delete(message.requestId);
-        runtime.runSync(Deferred.succeed(settle, message.result));
+        Deferred.doneUnsafe(settle, Effect.succeed(message.result));
         return;
       }
       case 'surface.action':

@@ -649,7 +649,7 @@ export const databaseLayer = (
                   );
             if (refused) return yield* invariant(refused);
           }
-          // The seq-1 rule (decision 9): a run aggregate begins with exactly
+          // The seq-1 rule: a run aggregate begins with exactly
           // one `run.start`, and nothing else ever lands at seq 1.
           if (
             target.kind === 'run' &&

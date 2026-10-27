@@ -13,18 +13,22 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
-import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'packCommands';
 
-/** `folderPath` is the packed folder's absolute path: resolved by the
- *  session's workspace view, or where it is for an external selection. */
-const showPackResult = Effect.fn('packCommands.showPackResult')(function* (
-  result: FileOpResult,
-  inputFile: string,
-  folderPath: string | undefined,
-): Effect.fn.Return<void> {
+/** Tell the user what the toolbar's Pack did, offering its folder: the packed
+ *  folder's absolute path, resolved by the session's workspace view, or where
+ *  it is for an external selection. */
+export const presentPack = Effect.fn('packCommands.presentPack')(function* ({
+  result,
+  inputFile,
+}: WorkflowFileOperationResult) {
+  const workspaceFs = yield* WorkspaceFs;
+  const folder = result.status === 'success' ? result.outputFolder : undefined;
+  const folderPath = folder
+    ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
+    : undefined;
   const { level, text } = fileOpResultMessage('pack', result, inputFile);
   if (result.status === 'success' && folderPath) {
     yield* Effect.forkDetach(
@@ -47,17 +51,4 @@ const showPackResult = Effect.fn('packCommands.showPackResult')(function* (
   } else {
     yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, text));
   }
-});
-
-/** Tell the user what the toolbar's Pack did, offering its folder. */
-export const presentPack = Effect.fn('packCommands.presentPack')(function* ({
-  result,
-  inputFile,
-}: WorkflowFileOperationResult) {
-  const workspaceFs = yield* WorkspaceFs;
-  const folder = result.status === 'success' ? result.outputFolder : undefined;
-  const folderPath = folder
-    ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
-    : undefined;
-  yield* showPackResult(result, inputFile, folderPath);
 });

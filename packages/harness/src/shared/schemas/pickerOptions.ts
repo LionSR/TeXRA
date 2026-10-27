@@ -128,7 +128,9 @@ export type ModelOptionData = typeof ModelOptionDataSchema.Type;
  * verdict. Lives with the type so delegation's model list and the CLI's
  * picker can never drift apart on what "available" means.
  */
-export function isModelOptionAvailable(model: ModelOptionData): boolean {
+export function isModelOptionAvailable(
+  model: Pick<ModelOptionData, 'availability'>,
+): boolean {
   return (
     model.availability === undefined ||
     MODEL_AVAILABILITY_STATUS[model.availability].available

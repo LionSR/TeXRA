@@ -219,7 +219,7 @@ export {
 } from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
-// Error messages, and JSON parsed without a throw.
+// Error messages.
 export {
   ensureError,
   extractErrorMessage,

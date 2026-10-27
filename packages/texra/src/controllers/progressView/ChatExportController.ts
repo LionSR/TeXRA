@@ -33,11 +33,9 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-} from '@texra/agent/export/chatExportFormatter';
+import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
+import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
+import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
 import {
   loadChatExportInput,
   type ChatExportInputUnreadable,

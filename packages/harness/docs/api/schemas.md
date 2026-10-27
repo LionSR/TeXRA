@@ -1103,7 +1103,9 @@ verdict. Lives with the type so delegation's model list and the CLI's
 picker can never drift apart on what "available" means.
 
 ```ts
-function isModelOptionAvailable(model: ModelOptionData): boolean
+function isModelOptionAvailable(
+  model: Pick<ModelOptionData, 'availability'>,
+): boolean
 ```
 
 ## isPackagedAgentSource

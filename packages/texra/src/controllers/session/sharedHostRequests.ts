@@ -1,6 +1,5 @@
 /**
- * The `host.request` body both GUI hosts answer through (PRD
- * one-fold-three-renderers, 8.3): one switch, one case order, one wire
+ * The `host.request` body both GUI hosts answer through: one switch, one case order, one wire
  * contract, over a binding table each host fills with the verbs it actually
  * performs. The extension and the desktop had been answering thirty-two
  * kinds with the same body twice -- the same refusal wording, the same
@@ -129,7 +128,7 @@ export interface SharedHostRequestBindings {
   openLabel(label: string): HostVerb<boolean>;
   exportTranscript(runId: RunId): HostVerb<void>;
   showInfo(message: string): HostVerb<void>;
-  /** A host-initiated change to the surface (PRD 8.5). */
+  /** A host-initiated change to the surface. */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** Admit a launch this host cannot run as asked, with the refusal that
    *  says why; the extension names only open workspace folders as a working

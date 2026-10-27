@@ -35,7 +35,9 @@
         "./packages/texra/src/*.ts",
         "./packages/texra/src/*/index.ts"
       ],
-      "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
+      "@common/webview": [
+        "./packages/extension/src/common/webview/BundledViewContentProvider.ts"
+      ],
       "@common/*": [
         "./packages/harness/src/common/*",
         "./packages/harness/src/common/*.ts",

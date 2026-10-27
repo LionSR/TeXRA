@@ -1,5 +1,5 @@
 // Third-party imports
-import { withLogChannel } from '@texra-ai/harness';
+import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { Cause, Effect, Schema } from 'effect';
 
 // Local imports
@@ -21,7 +21,6 @@ import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type {
   ProcessServices,
   Session,
-  PlatformSecrets,
   WorkspaceRoots,
 } from '@texra-ai/harness';
 
@@ -38,7 +37,6 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
  * cancellation instead of a launch-failure notice.
  */
 export function launchSetupAssistant(
-  secrets: PlatformSecrets,
   roots: WorkspaceRoots,
   /** Where the setup conversation runs: here, or in the service. */
   runSession: Session,
@@ -80,7 +78,7 @@ export function launchSetupAssistant(
     // adapter-level checks, so a blank env key does not count and fail later
     // as "No model is available". No model is the missing-credential case; a
     // check that cannot be answered fails to the launch-failure report below.
-    const model = yield* resolveSetupLaunchModel(roots, secrets);
+    const model = yield* resolveSetupLaunchModel(roots, yield* Secrets);
     if (model === null) {
       yield* connectModel;
       return 'not-started' as const;

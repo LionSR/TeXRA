@@ -53,16 +53,17 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
   type ModelSelectionItem,
-  type ProviderKeyStatus,
   type PRSubscriptionEntry,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type {
   SettingsSectionName,
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
-import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
+import { createTrackedSignalRegistry } from '@texra/shared/signals';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type { Signal } from '@lit-labs/signals';
 import type {
   MemoryViewItem,
   SettingsViewSnapshot,

@@ -21,7 +21,6 @@ import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';
 
-import { claimRootRun } from './sessionViewFollow';
 import type { LocalSession } from '@texra-ai/harness';
 
 /** The plain script output also subscribes the transcripts it prints,
@@ -29,9 +28,8 @@ import type { LocalSession } from '@texra-ai/harness';
 type ScriptPlainSession = Pick<LocalSession, 'view'>;
 
 interface ScriptPlainOutputOptions {
-  /** The launched run when the request names it, else the first top-level
-   *  run created after attach: the output prints the script runs under it. */
-  readonly runId?: RunId;
+  /** The launched run: the output prints the script runs under it. */
+  readonly runId: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
@@ -83,7 +81,6 @@ export function attachScriptPlainOutput(
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
     let rootRunId: RunId | undefined;
-    const attachCursor = session.view.current().cursor;
     const write = (line: string): void => {
       options.beforeWrite?.();
       options.writeLine(line);
@@ -107,7 +104,7 @@ export function attachScriptPlainOutput(
           // The view also holds every earlier run hydrated from the
           // transcript summary; only the launched run's own subtree is this
           // run's output.
-          rootRunId ??= claimRootRun(view, options.runId, attachCursor);
+          if (view.runs.has(options.runId)) rootRunId ??= options.runId;
           const root = rootRunId;
           const rootedIds =
             root === undefined

@@ -16,7 +16,73 @@ import {
   SkillSchema,
   type Skill,
 } from './SkillSchema';
-import { extractFrontmatter } from './frontmatter';
+
+interface ExtractedFrontmatter {
+  frontmatter: unknown;
+  body: string;
+}
+
+/**
+ * Raised when SKILL.md content is not well-formed frontmatter. Distinct from
+ * plain read/IO errors so consumers can classify malformed frontmatter by
+ * type instead of string-matching error messages.
+ */
+class SkillFrontmatterError extends Schema.TaggedError<SkillFrontmatterError>()(
+  'SkillFrontmatterError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/**
+ * Extract strict YAML frontmatter from a SKILL.md file.
+ *
+ * Both delimiters must be `---` on their own line. The returned body is
+ * trimmed because an empty skill body is not useful to the runtime.
+ * Fails with {@link SkillFrontmatterError} for every malformed-frontmatter
+ * case.
+ */
+function extractFrontmatter(
+  content: string,
+): Result.Result<ExtractedFrontmatter, SkillFrontmatterError> {
+  const split = splitFrontmatterFence(content);
+  if (split.kind === 'no-opening-fence') {
+    return Result.fail(
+      new SkillFrontmatterError({
+        message: 'SKILL.md must start with YAML frontmatter',
+      }),
+    );
+  }
+  if (split.kind === 'no-closing-fence') {
+    return Result.fail(
+      new SkillFrontmatterError({
+        message: 'SKILL.md frontmatter is missing a closing delimiter',
+      }),
+    );
+  }
+
+  const body = split.body.trim();
+  if (!body) {
+    return Result.fail(
+      new SkillFrontmatterError({
+        message: 'SKILL.md body must be non-empty',
+      }),
+    );
+  }
+
+  const parsed = safeParseYaml(split.frontmatterText);
+  if (Result.isFailure(parsed)) {
+    return Result.fail(
+      new SkillFrontmatterError({
+        message: `Invalid SKILL.md frontmatter: ${parsed.failure.message}`,
+        cause: parsed.failure,
+      }),
+    );
+  }
+
+  return Result.succeed({ frontmatter: parsed.success, body });
+}
 
 export type SkillIssueSeverity = 'error' | 'warning';
 

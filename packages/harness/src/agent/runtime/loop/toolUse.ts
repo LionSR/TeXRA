@@ -26,7 +26,7 @@
 
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
-import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
+import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -63,7 +63,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import type { RunControls } from '../RunHandle';
+import type { RunControls, RunHandle } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunEndResult } from '../RunEndResult';
 
@@ -76,11 +76,9 @@ export interface ToolUseStart {
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */
   readonly turns?: ChildRunBoundary<RunEndResult>;
-  /** Host wiring that is live while the loop can accept an interrupt. */
-  readonly attachment?: {
-    attach(controls: RunControls): void;
-    detach(controls: RunControls): void;
-  };
+  /** The run's handle, holding the loop's controls while it can act on
+   *  them. */
+  readonly attachment?: Pick<RunHandle, 'attachControls' | 'detachControls'>;
 }
 
 /** A user message the loop appends itself. */
@@ -180,12 +178,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const attach = (): void => {
     if (live) return;
     live = true;
-    start.attachment?.attach(controls);
+    start.attachment?.attachControls(controls);
   };
   const detach = (): void => {
     if (!live) return;
     live = false;
-    start.attachment?.detach(controls);
+    start.attachment?.detachControls(controls);
   };
 
   // -------------------------------------------------------------- opening
@@ -227,7 +225,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        const prompts = yield* buildInitialToolUsePrompts(
+        openingSystem = yield* buildOpeningSystemPrompt(
           run.persona.prompt,
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
           {
@@ -236,9 +234,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             textOnly: bound.textOnly,
           },
         );
-        openingSystem = [prompts.systemPrompt, prompts.instructionSuffix]
-          .filter(Boolean)
-          .join('\n');
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
         // The user's task is the user message.

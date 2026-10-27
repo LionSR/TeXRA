@@ -14,7 +14,7 @@ import { liveToolGates } from '@agent/runtime/requestPolicy';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { executeCliRequest } from '@cli/runtime/executeCli';
+import type { executeCliConfig } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors/agentErrors';
 import {
   APPROVAL_BYPASS_KINDS,
@@ -154,8 +154,6 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderrAndWait: mocks.writeTextStderrAndWait,
 }));
 
-type CliRequest = Parameters<typeof executeCliRequest>[0];
-
 /** Result shape the default `rootLaunch` stub resolves with. */
 const COMPLETED_RUN = {
   outcome: 'completed',
@@ -167,8 +165,13 @@ const COMPLETED_RUN = {
  *  `AgentRunLifecycle` does once its CANCELLED end is committed. */
 const STOPPED = Symbol('stopped');
 
-function baseRequest(): CliRequest {
-  return { config: {}, runId: 'ec0000000001' } as unknown as CliRequest;
+function baseConfig(): Parameters<typeof executeCliConfig>[0] {
+  return { agent: 'chat', model: 'test-model', instruction: '' };
+}
+
+/** The id the run under test was launched with: the CLI mints it. */
+function launchedRunId(): RunId {
+  return (mocks.admit.mock.calls[0]?.[0] as LaunchInput).runId;
 }
 
 /** A run program's options with the session, runtime and shutdown scope
@@ -188,15 +191,15 @@ async function loadExecuteCli() {
   // scope in; here the process default this file installs stands in for the
   // first two and the installed host's shutdown scope for the third.
   return {
-    executeCliRequest: (
-      request: Parameters<typeof runtime.executeCliRequest>[0],
-      context: Parameters<typeof runtime.executeCliRequest>[1],
+    executeCliConfig: (
+      config: Parameters<typeof runtime.executeCliConfig>[0],
+      context: Parameters<typeof runtime.executeCliConfig>[1],
       options: WithoutSession<
-        Parameters<typeof runtime.executeCliRequest>[2]
+        Parameters<typeof runtime.executeCliConfig>[2]
       > = {},
     ) =>
       Effect.provide(
-        runtime.executeCliRequest(request, context, {
+        runtime.executeCliConfig(config, context, {
           services: testServices(),
           ...options,
         }),
@@ -274,7 +277,7 @@ async function stubExecuteCliDeps(): Promise<void> {
   mocks.stopRequest.mockReturnValue(undefined);
 }
 
-describe('executeCliRequest', () => {
+describe('executeCliConfig', () => {
   beforeEach(async () => {
     await stubExecuteCliDeps();
     await installFreshDefaultSession();
@@ -321,10 +324,10 @@ describe('executeCliRequest', () => {
     'marks headless $policy runs as approval-unavailable for agent run',
     ({ overrides }) =>
       Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
+        const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
         const seen = promptsUnavailableAtLaunch();
 
-        yield* executeCliRequest(baseRequest(), cliContext(overrides));
+        yield* executeCliConfig(baseConfig(), cliContext(overrides));
 
         expect(seen()).toBe(true);
       }),
@@ -332,8 +335,7 @@ describe('executeCliRequest', () => {
 
   it.effect('presents a classified run failure as its exit code', () =>
     Effect.gen(function* () {
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const request = baseRequest();
+      const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
       mocks.rootLaunch.mockRejectedValueOnce(
         new AgentError({ message: 'boom' }),
       );
@@ -349,7 +351,7 @@ describe('executeCliRequest', () => {
       // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
       // handler and gets misreported as an unexpected crash (double-printed
       // message + a false "please report it" line).
-      const result = yield* executeCliRequest(request, cliContext());
+      const result = yield* executeCliConfig(baseConfig(), cliContext());
 
       expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
       expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
@@ -366,7 +368,7 @@ describe('executeCliRequest', () => {
   it.live('marks owned runs interrupted during platform shutdown', () =>
     Effect.gen(function* () {
       const { platform } = installedHost();
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
+      const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -380,7 +382,7 @@ describe('executeCliRequest', () => {
       const hangingRun = stubHangingRun(published);
 
       const run = yield* Effect.forkChild(
-        executeCliRequest(baseRequest(), cliContext(), {
+        executeCliConfig(baseConfig(), cliContext(), {
           onInterruptedRunFinalized,
         }),
       );
@@ -395,7 +397,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.stopRequest).toHaveBeenCalledExactlyOnceWith({
         kind: 'run.stop',
-        runId: 'ec0000000001',
+        runId: launchedRunId(),
         detachActiveChildren: false,
         reason: 'shutdown',
       });
@@ -416,7 +418,7 @@ describe('executeCliRequest', () => {
       settleRecoveryWrite();
       yield* Fiber.join(shutdown);
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
-        'ec0000000001',
+        launchedRunId(),
       );
       expect(yield* Fiber.join(run)).toEqual({
         ok: false,
@@ -430,7 +432,7 @@ describe('executeCliRequest', () => {
     () =>
       Effect.gen(function* () {
         const { platform } = installedHost();
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
+        const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
         // The run has ended: the session refuses its stop.
         mocks.stopRequest.mockReturnValue(
           Effect.fail(new Error('The task is no longer open.')),
@@ -439,7 +441,7 @@ describe('executeCliRequest', () => {
         const hangingRun = stubHangingRun(published);
         const onInterruptedRunFinalized = vi.fn(() => Effect.void);
         const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {
+          executeCliConfig(baseConfig(), cliContext(), {
             onInterruptedRunFinalized,
           }),
         );

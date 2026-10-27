@@ -1,6 +1,5 @@
 /**
- * Canonical onboarding-funnel copy (PRD: agent-native onboarding — one
- * funnel, three surfaces).
+ * Canonical onboarding-funnel copy: one funnel, three surfaces.
  *
  * The extension/desktop welcome card and the walkthrough import these strings
  * instead of paraphrasing each other, so the choice order can never drift

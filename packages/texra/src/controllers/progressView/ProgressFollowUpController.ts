@@ -11,7 +11,7 @@ import {
   toErrorMessage,
   isTaskConfig,
   fileLocationAddressPath,
-  MODEL_AVAILABILITY_STATUS,
+  isModelOptionAvailable,
   type ModelAvailabilityKind,
   type RunId,
   RunIdSchema,
@@ -32,16 +32,6 @@ export interface ProgressFollowUpModelOption {
   value: string;
   /** The access verdict `modelOptionsFrom` resolved, if it ran. */
   availability?: ModelAvailabilityKind;
-}
-
-/** A row with no resolved kind came from the secret-free list and blocks nothing. */
-function isFollowUpModelAvailable(
-  option: ProgressFollowUpModelOption,
-): boolean {
-  return (
-    option.availability === undefined ||
-    MODEL_AVAILABILITY_STATUS[option.availability].available
-  );
 }
 
 interface ProgressFollowUpWorkspace {
@@ -223,14 +213,13 @@ export class ProgressFollowUpController {
           fallbackMode: 'silent',
         },
         {
-          model: modelOptions.find(isFollowUpModelAvailable)?.value,
+          model: modelOptions.find(isModelOptionAvailable)?.value,
           reason: 'access-list-default',
         },
       ],
       (model) =>
         modelOptions.some(
-          (option) =>
-            option.value === model && isFollowUpModelAvailable(option),
+          (option) => option.value === model && isModelOptionAvailable(option),
         ),
     );
     if (!decision || decision.unavailable) return null;

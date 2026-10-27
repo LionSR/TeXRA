@@ -39,7 +39,7 @@ export function formatSubscriptionUsagePercent(percentUsed: number): string {
 
 export function formatSubscriptionUsageReset(
   resetAt: number | undefined,
-  now = Date.now(),
+  now: number,
 ): string | undefined {
   if (resetAt === undefined) return undefined;
   const remaining = resetAt - now;
@@ -54,7 +54,7 @@ export function formatSubscriptionUsageReset(
 
 export function formatSubscriptionUsageUpdated(
   fetchedAt: number,
-  now = Date.now(),
+  now: number,
 ): string {
   const age = Math.max(0, now - fetchedAt);
   if (age >= STALE_AFTER_MS) {

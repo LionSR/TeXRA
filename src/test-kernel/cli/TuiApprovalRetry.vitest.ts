@@ -103,9 +103,6 @@ function tui(): void {
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
         requests: testDefaultSession().requests,
-        // The installed fake host's secret store: the key-check
-        // expectations name exactly this object.
-        secrets: installedHost().secrets,
         settings: settingsStores.stores,
         runtime: testRuntime(),
       }),

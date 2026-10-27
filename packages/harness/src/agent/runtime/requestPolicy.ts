@@ -1,5 +1,5 @@
 /**
- * A run's questions to a person, as rows (one run model, 3.7): what the
+ * A run's questions to a person, as rows: what the
  * session's approval policy settles when a request opens, decided in core so
  * that `yolo` and `never` mean one thing on every host; `ask`, which opens a
  * request with that answer beside it and waits for the `request.decided`

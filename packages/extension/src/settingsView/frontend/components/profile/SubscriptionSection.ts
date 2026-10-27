@@ -45,7 +45,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /** Everything one provider contributes to the shared section. */
-export interface SubscriptionSectionProvider {
+interface SubscriptionSectionProvider {
   /** DOM id of the rendered `<section>`, used by settings deep links. */
   readonly sectionId: string;
   readonly title: string;

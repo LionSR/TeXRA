@@ -1,12 +1,14 @@
 /** Markdown format spec for chat export. */
 
 import type {
+  ChatExportInput,
   DocumentMeta,
   ExportAttachmentType,
 } from '@texra/agent/export/schemas';
 
 import {
   HEADER_FIELDS,
+  renderDocument,
   type FormatSpec,
   type NodeRenderers,
 } from './formatSpec';
@@ -85,8 +87,13 @@ const MD_NODES: NodeRenderers = {
   'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
 };
 
-export const markdownSpec: FormatSpec = {
+const markdownSpec: FormatSpec = {
   header: (meta) => `# TeXRA Chat Export\n\n${markdownHeader(meta)}`,
   footer: '',
   nodes: MD_NODES,
 };
+
+/** Render a conversation as a Markdown document. */
+export function formatChatAsMarkdown(input: ChatExportInput): string {
+  return renderDocument(input, markdownSpec);
+}

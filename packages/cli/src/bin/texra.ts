@@ -3,7 +3,7 @@ import { setLogSink } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';
-import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
+import { formatCrashReportLine } from '../runtime/cliContext';
 import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { cliPlatformShutdown } from '../runtime/initPlatform';
@@ -47,12 +47,12 @@ await Effect.runPromise(
       Effect.sync(() => {
         writeTextStderr(`TeXRA CLI failed: ${cliErrorMessage(error)}`);
         // Usage errors are handled inside runCli (exit 2) and classified run
-        // failures are consumed into an exit code at executeCliRequest (never
+        // failures are consumed into an exit code at executeCliConfig (never
         // rethrown past it — see runtime/executeCli.ts), so this arm only
         // fires on genuinely UNEXPECTED crashes; point the user at the
         // tracker. formatCrashReportLine keeps the report link off the usage
         // path even if a usage error is ever rethrown.
-        const reportLine = formatCrashReportLine(error, readCliBugsUrl());
+        const reportLine = formatCrashReportLine(error);
         if (reportLine) writeTextStderr(reportLine);
         process.exitCode = CliExitCode.AgentError;
       }),

@@ -45,7 +45,6 @@ interface ProgressWorkflowFileActionsHost {
   ): FileAction<boolean | void>;
   latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
-  readFile(file: string): FileAction<string>;
   showInfo(message: string): FileAction<void>;
   showError(message: string): FileAction<void>;
 }
@@ -161,7 +160,7 @@ export class ProgressWorkflowFileActionsController {
       // The file about to be accepted: a read that fails fails the accept,
       // rather than dropping the run's "user modified the output" follow-up.
       const currentContent =
-        backup === undefined ? undefined : yield* this.deps.host.readFile(file);
+        backup === undefined ? undefined : yield* readOutputFile(file);
 
       let copyMeta: AcceptCopyMeta | undefined;
       if (activeRun && file) {
@@ -233,7 +232,7 @@ export class ProgressWorkflowFileActionsController {
     if (!file) return Effect.void;
 
     return Effect.gen({ self: this }, function* () {
-      const content = yield* this.deps.host.readFile(file);
+      const content = yield* readOutputFile(file);
       // A digest lives while its file is still an output of its run: a
       // removed run, or a round that no longer lists the file, takes its
       // digests with it, so the map is bounded by outputs that exist.
@@ -292,4 +291,18 @@ export class ProgressWorkflowFileActionsController {
 /** A full sha256 digest of a file's text: what a compare-time backup keeps. */
 function contentDigest(content: string): string {
   return hash('sha256', content, 'hex');
+}
+
+/**
+ * An output file's text with CRLF line endings normalized. The path is an
+ * absolute one the controller already resolved, so this reads through the
+ * process filesystem rather than a rooted view that would refuse a path the
+ * user picked outside the workspace.
+ */
+function readOutputFile(file: string): FileAction<string> {
+  return Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+    Effect.map(fs.readFileString(file), (text) =>
+      text.replaceAll('\r\n', '\n'),
+    ),
+  );
 }
