@@ -184,6 +184,9 @@ export ANTHROPIC_API_KEY=sk-…
 texra run polish --input paper.tex
 ```
 
+A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
+Anthropic API key can spend once you link a Console organization to the plan.
+
 A project's `.env` file is read by every task of that project. A key set
 only in this terminal does not reach a task that runs in the TeXRA service;
 the CLI says so, and `TEXRA_NO_SERVICE=1` keeps the task in this terminal.

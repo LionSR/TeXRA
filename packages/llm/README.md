@@ -25,6 +25,9 @@ npm install @texra-ai/llm effect
 dependencies. A binding loads only its own protocol's SDK, on demand.
 OpenAI's runtime is bundled, so `openai` is not installed.
 
+A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
+Anthropic API key can spend once you link a Console organization to the plan.
+
 ## Example
 
 Pick a catalog model, decide its route, bind it, and run one turn. Here the
