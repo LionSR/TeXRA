@@ -4,9 +4,9 @@
  * Traces the lineage of a round's output files back to their base files.
  * Extraction (`computeOutputDiffStats`) is its one caller: the lineage it
  * records on each output is what every later reader (latexdiff, the critic's
- * review, the hosts) takes, never a recomputation. Its source matcher
- * (`findMatchingBaseFile`) also pairs outputs with bases for the `\input`
- * rewrite, which runs before lineage is recorded.
+ * review, the hosts) takes, never a recomputation. Its pairing of outputs with
+ * bases (`pairOutputsWithBases`) also drives the `\input` rewrite, which runs
+ * before lineage is recorded.
  */
 
 import * as path from 'node:path';
@@ -15,6 +15,8 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
+
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
 import type { OutputState } from './outputState';
 import type { RoundFileEntry, RoundFileMapping } from './types';
@@ -120,7 +122,7 @@ function invertMapping(
  * Match full relative paths first, then fall back to basename-only matching for
  * legacy outputs that report just a filename.
  */
-export function findMatchingBaseFile(
+function findMatchingBaseFile(
   baseFiles: readonly FileLocation[],
   source: string,
 ): FileLocation | undefined {
@@ -148,25 +150,26 @@ export function findMatchingBaseFile(
   return undefined;
 }
 
-/** Traces file lineage for a round's outputs. */
-export function traceFileLineage(
-  state: OutputState,
+/**
+ * Pair each output with its base file, keyed by the output's display path:
+ * `origin` is the base its model-reported source names; when the model chose
+ * a new name (`paper_revised.tex`), `base` falls back to the base whose file
+ * name the output's name contains.
+ */
+export function pairOutputsWithBases(
   baseFiles: FileLocation[],
-  currRound: number,
+  outputs: readonly Pick<OutputFileInfo, 'source' | 'location'>[],
 ): RoundFileMapping {
-  const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
-
-  const currentLocations = currentOutputs.map((entry) => entry.location);
-
-  // Base filenames that appear as substrings of output names (e.g. "paper"
-  // matches "paper_revised"), for outputs whose names the model chose.
   const baseToOutput = invertMapping(
-    createFileMapping(baseFiles, currentLocations),
+    createFileMapping(
+      baseFiles,
+      outputs.map((entry) => entry.location),
+    ),
     baseFiles,
   );
 
   const mapping = new Map<string, RoundFileEntry>();
-  for (const entry of currentOutputs) {
+  for (const entry of outputs) {
     const key = fileLocationDisplayPath(entry.location);
     const origin = findMatchingBaseFile(baseFiles, entry.source);
     mapping.set(key, {
@@ -176,4 +179,16 @@ export function traceFileLineage(
   }
 
   return mapping;
+}
+
+/** Traces file lineage for a round's outputs. */
+export function traceFileLineage(
+  state: OutputState,
+  baseFiles: FileLocation[],
+  currRound: number,
+): RoundFileMapping {
+  return pairOutputsWithBases(
+    baseFiles,
+    state.rounds.get(currRound)?.outputs ?? [],
+  );
 }

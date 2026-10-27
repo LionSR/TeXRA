@@ -52,35 +52,44 @@ describe('replaceInputCommands', () => {
     'keeps each \\input on its own base when two bases share a file name',
     () =>
       Effect.gen(function* () {
-        const bases = ['paper.tex', 'a/main.tex', 'b/main.tex'].map((file) =>
-          createWorkspaceLocation(`/w/${file}`, file),
-        );
-        // Outputs sit at the model-reported source path under the round dir.
-        const outputs = ['paper.tex', 'a/main.tex', 'b/main.tex'].map(
-          (source) => ({
-            source,
-            location: externalLocation(`/r/r1/${source}`),
-          }),
-        );
-        const original = String.raw`\input{a/main} \input{b/main}`;
+        const bases = [
+          'paper.tex',
+          'a/main.tex',
+          'b/main.tex',
+          'c/intro.tex',
+        ].map((file) => createWorkspaceLocation(`/w/${file}`, file));
+        // Outputs sit at the model-reported source path under the round dir;
+        // the last one was renamed by the model.
+        const outputs = [
+          'paper.tex',
+          'a/main.tex',
+          'b/main.tex',
+          'c/intro_revised.tex',
+        ].map((source) => ({
+          source,
+          location: externalLocation(`/r/r1/${source}`),
+        }));
+        const original = String.raw`\input{a/main} \input{b/main} \input{c/intro}`;
         const files = new Map<string, string>(
           outputs.map(({ location }) => [location.absolutePath, original]),
         );
-        const fs = yield* FileSystem.FileSystem;
 
         yield* replaceInputCommands(bases, outputs).pipe(
-          Effect.provideService(FileSystem.FileSystem, {
-            ...fs,
-            readFileString: (target: string) =>
-              Effect.succeed(files.get(target) ?? ''),
-            writeFileString: (target: string, content: string) =>
-              Effect.sync(() => {
-                files.set(target, content);
-              }),
-          }),
+          Effect.provide(
+            FileSystem.layerNoop({
+              readFileString: (target: string) =>
+                Effect.succeed(files.get(target) ?? ''),
+              writeFileString: (target: string, content: string) =>
+                Effect.sync(() => {
+                  files.set(target, content);
+                }),
+            }),
+          ),
         );
 
-        expect(files.get('/r/r1/paper.tex')).toBe(original);
-      }).pipe(Effect.provide(nodePlatformLayer)),
+        expect(files.get('/r/r1/paper.tex')).toBe(
+          String.raw`\input{a/main} \input{b/main} \input{c/intro_revised}`,
+        );
+      }),
   );
 });

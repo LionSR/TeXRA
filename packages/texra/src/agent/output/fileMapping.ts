@@ -11,7 +11,7 @@ import {
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
-import { findMatchingBaseFile } from './lineageMapping';
+import { pairOutputsWithBases } from './lineageMapping';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
@@ -25,9 +25,10 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
 /**
  * Update \input commands in output files to reference new file paths.
  *
- * Each output is paired with the base file its model-reported `source` names
- * (the matcher lineage tracing uses), so two bases that share a file name in
- * different directories each keep their own output.
+ * Each output is paired with its base the way lineage tracing pairs them: by
+ * its model-reported `source` first, so two bases that share a file name in
+ * different directories each keep their own output, and by file name for an
+ * output the model renamed.
  *
  * @param baseFiles Base file paths
  * @param outputs The round's outputs with their reported sources
@@ -46,8 +47,9 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
     }
 
     const baseToOutputMap = new Map<string, FileLocation>();
-    for (const { source, location } of outputs) {
-      const base = findMatchingBaseFile(baseFiles, source);
+    const bases = pairOutputsWithBases(baseFiles, outputs);
+    for (const { location } of outputs) {
+      const base = bases.get(fileLocationDisplayPath(location))?.base;
       if (base) baseToOutputMap.set(fileLocationDisplayPath(base), location);
     }
 
