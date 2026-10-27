@@ -22,7 +22,6 @@ import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
-  type CurrentValues,
   type Database,
   type DatabaseClaimRefused,
   type DatabaseNotOwner,
@@ -30,7 +29,7 @@ import {
   DatabaseStoreNewer,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import type { CurrentValues, ValueFamily } from '@shared/session/valueFamily';
 import { CURRENT_VALUE_KIND, type SqlRow } from './rowCodec';
 import type { Exec } from './rowReader';
 import type { SqlError } from 'effect/sql/SqlError';

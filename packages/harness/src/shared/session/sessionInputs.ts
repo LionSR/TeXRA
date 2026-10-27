@@ -7,6 +7,8 @@ import type {
 } from '@shared/schemas';
 import type { Stream } from 'effect';
 
+/** The ordered input stream a session view's updater reads: one replay, then
+ *  every later batch in commit order. */
 export class SessionInputs extends Context.Service<
   SessionInputs,
   {

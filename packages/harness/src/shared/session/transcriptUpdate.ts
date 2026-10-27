@@ -72,10 +72,53 @@ function applyTaskGroup(
       endTime: d.at,
     };
   }
-  const groups = writableArray(d, d.next, 'taskGroups');
+  const groups = writableArray(d, d.next.taskGroups);
+  d.next.taskGroups = groups;
   if (at !== undefined) groups[at] = group;
   else d.ix.taskGroupIndex.set(event.id, groups.push(group) - 1);
   d.touched = true;
+}
+
+/** The transcript event of type `K`. */
+type EventOf<K extends TranscriptEvent['type']> = Extract<
+  TranscriptEvent,
+  { type: K }
+>;
+/** How one transcript event type changes the draft. */
+type Recorder<K extends TranscriptEvent['type']> = (
+  d: Draft,
+  event: EventOf<K>,
+) => void;
+
+/** A stage's heading row and its task group. */
+function openStage(d: Draft, event: EventOf<'stage.start'>): void {
+  // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
+  // stream the previous turn may have opened is no longer this turn's
+  // to reuse. Tool-use turns are session stages containing several
+  // inner model/tool rounds.
+  if (event.kind === 'session') d.ix.pendingModelResponseId = undefined;
+  write(d, {
+    kind: 'stage',
+    base: open(
+      d,
+      event.id,
+      event.parentId ?? undefined,
+      MESSAGE_TYPES.DEFAULT,
+      true,
+    ),
+    label: event.label,
+    open: true,
+  });
+  applyTaskGroup(d, event);
+}
+
+function closeStage(d: Draft, event: EventOf<'stage.end'>): void {
+  const slot = d.ix.slots.get(event.id);
+  if (slot?.kind === 'stage') {
+    slot.open = false;
+    write(d, slot);
+  }
+  applyTaskGroup(d, event);
 }
 
 // A card is a monotone machine: it opens once, takes progress while it is
@@ -84,183 +127,140 @@ function applyTaskGroup(
 // close without an open are dropped. Under the one publisher those rows cannot
 // arrive out of order, so nothing here compensates for a race; the shape is
 // the card's definition.
-function record(d: Draft, event: TranscriptEvent): void {
+function openToolCard(d: Draft, event: EventOf<'tool.start'>): void {
   const { ix } = d;
-  switch (event.type) {
-    case 'log':
-      recordLogRow(d, event);
-      return;
-
-    case 'stage.start': {
-      // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
-      // stream the previous turn may have opened is no longer this turn's
-      // to reuse. Tool-use turns are session stages containing several
-      // inner model/tool rounds.
-      if (event.kind === 'session') {
-        ix.pendingModelResponseId = undefined;
-      }
-      write(d, {
-        kind: 'stage',
-        base: open(
-          d,
-          event.id,
-          event.parentId ?? undefined,
-          MESSAGE_TYPES.DEFAULT,
-          true,
-        ),
-        label: event.label,
-        open: true,
-      });
-      applyTaskGroup(d, event);
-      return;
-    }
-
-    case 'stage.end': {
-      const slot = ix.slots.get(event.id);
-      if (slot?.kind === 'stage') {
-        slot.open = false;
-        write(d, slot);
-      }
-      applyTaskGroup(d, event);
-      return;
-    }
-
-    case 'tool.start': {
-      if (ix.closed) return;
-      ix.pendingModelResponseId = undefined;
-      // event.logId is the canonical id: SDK consumers correlate
-      // tool.start/end by it, and the row shares it.
-      const log = {
-        toolName: event.toolName,
-        input: event.input,
-        ...(event.card ? { card: event.card } : {}),
-        status: TOOL_CALL_STATUS.IN_PROGRESS,
-      } satisfies ToolUseLog;
-      const call = {
-        ...(event.phase !== undefined ? { phase: event.phase } : {}),
-        ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
-      };
-      const slot = ix.slots.get(event.logId);
-      if (slot) {
-        if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
-          slot.log = log;
-          slot.call = call;
-          write(d, slot);
-        }
-        return;
-      }
-      write(d, {
-        kind: 'tool',
-        base: open(
-          d,
-          event.logId,
-          event.stageId,
-          MESSAGE_TYPES.TOOL_USE,
-          false,
-        ),
-        log,
-        call,
-      });
-      ix.activeTools.add(event.logId);
-      return;
-    }
-
-    case 'tool.end': {
-      if (ix.closed) return;
-      const slot = ix.slots.get(event.logId);
-      if (slot?.kind !== 'tool') return;
-      const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
-      if (inProgress && !ix.activeTools.has(event.logId)) return;
-      // On a run with a run history, the card's output is projected from its
-      // `tool.result` and names no tool, input or card: those are the ones
-      // its `tool.start` opened.
-      const result: Record<PropertyKey, unknown> = Predicate.isObject(
-        event.result,
-      )
-        ? event.result
-        : {};
-      slot.log = decodeToolUseLog({
-        toolName: slot.log.toolName,
-        input: slot.log.input,
-        ...(slot.log.card ? { card: slot.log.card } : {}),
-        ...result,
-        status: event.status,
-      });
-      if (!inProgress) {
-        slot.base = settle(ix, slot.base);
-        ix.activeTools.delete(event.logId);
-      }
+  if (ix.closed) return;
+  ix.pendingModelResponseId = undefined;
+  // event.logId is the canonical id: SDK consumers correlate
+  // tool.start/end by it, and the row shares it.
+  const log = {
+    toolName: event.toolName,
+    input: event.input,
+    ...(event.card ? { card: event.card } : {}),
+    status: TOOL_CALL_STATUS.IN_PROGRESS,
+  } satisfies ToolUseLog;
+  const call = {
+    ...(event.phase !== undefined ? { phase: event.phase } : {}),
+    ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
+  };
+  const slot = ix.slots.get(event.logId);
+  if (slot) {
+    if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
+      slot.log = log;
+      slot.call = call;
       write(d, slot);
-      return;
     }
-
-    // Run facts, not transcript rows: they go to `RunView.context` and
-    // `RunView.usage`.
-    case 'context.state':
-    case 'usage':
-      return;
-
-    case 'stream.start': {
-      if (ix.closed) return;
-      const messageType = event.kind;
-      ix.streams.add(event.id);
-      if (messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
-        ix.pendingModelResponseId = event.id;
-      }
-      write(d, {
-        kind: 'text',
-        base: open(d, event.id, event.stageId, messageType, false),
-        rowKind: STREAMING_TEXT_ROW_KIND[messageType],
-        text: '',
-        running: true,
-      });
-      return;
-    }
-
-    case 'stream.end': {
-      const slot = ix.slots.get(event.id);
-      if (!ix.streams.has(event.id) || ix.closed || slot?.kind !== 'text') {
-        return;
-      }
-      closeText(d, slot, event.finalText);
-      ix.streams.delete(event.id);
-      return;
-    }
-
-    case 'response.finalized': {
-      if (ix.closed || !event.text) return;
-      // Upsert by id, not by text: if this round's own MODEL_RESPONSE stream
-      // already wrote a (possibly raw, pre-replacement) row, replace its text
-      // with the final one and close the stream, so no later stream.end or
-      // run boundary can replace that text; otherwise this round
-      // never streamed (e.g. a non-streaming provider call), so append it.
-      const correlatorId = ix.pendingModelResponseId;
-      ix.pendingModelResponseId = undefined;
-      if (correlatorId) {
-        ix.streams.delete(correlatorId);
-        const slot = ix.slots.get(correlatorId);
-        if (slot?.kind === 'text') closeText(d, slot, event.text);
-        return;
-      }
-      write(d, {
-        kind: 'text',
-        base: open(
-          d,
-          d.stampId,
-          event.stageId,
-          MESSAGE_TYPES.MODEL_RESPONSE,
-          true,
-        ),
-        rowKind: 'assistant',
-        text: event.text,
-        running: false,
-      });
-      return;
-    }
-    default:
-      event satisfies never;
+    return;
   }
+  write(d, {
+    kind: 'tool',
+    base: open(d, event.logId, event.stageId, MESSAGE_TYPES.TOOL_USE, false),
+    log,
+    call,
+  });
+  ix.activeTools.add(event.logId);
 }
+
+function closeToolCard(d: Draft, event: EventOf<'tool.end'>): void {
+  const { ix } = d;
+  if (ix.closed) return;
+  const slot = ix.slots.get(event.logId);
+  if (slot?.kind !== 'tool') return;
+  const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
+  if (inProgress && !ix.activeTools.has(event.logId)) return;
+  // On a run with a run history, the card's output is projected from its
+  // `tool.result` and names no tool, input or card: those are the ones
+  // its `tool.start` opened.
+  const result: Record<PropertyKey, unknown> = Predicate.isObject(event.result)
+    ? event.result
+    : {};
+  slot.log = decodeToolUseLog({
+    toolName: slot.log.toolName,
+    input: slot.log.input,
+    ...(slot.log.card ? { card: slot.log.card } : {}),
+    ...result,
+    status: event.status,
+  });
+  if (!inProgress) {
+    slot.base = settle(ix, slot.base);
+    ix.activeTools.delete(event.logId);
+  }
+  write(d, slot);
+}
+
+function openStream(d: Draft, event: EventOf<'stream.start'>): void {
+  const { ix } = d;
+  if (ix.closed) return;
+  const messageType = event.kind;
+  ix.streams.add(event.id);
+  if (messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
+    ix.pendingModelResponseId = event.id;
+  }
+  write(d, {
+    kind: 'text',
+    base: open(d, event.id, event.stageId, messageType, false),
+    rowKind: STREAMING_TEXT_ROW_KIND[messageType],
+    text: '',
+    running: true,
+  });
+}
+
+function closeStream(d: Draft, event: EventOf<'stream.end'>): void {
+  const { ix } = d;
+  const slot = ix.slots.get(event.id);
+  if (!ix.streams.has(event.id) || ix.closed || slot?.kind !== 'text') return;
+  closeText(d, slot, event.finalText);
+  ix.streams.delete(event.id);
+}
+
+function finalizeResponse(
+  d: Draft,
+  event: EventOf<'response.finalized'>,
+): void {
+  const { ix } = d;
+  if (ix.closed || !event.text) return;
+  // Upsert by id, not by text: if this round's own MODEL_RESPONSE stream
+  // already wrote a (possibly raw, pre-replacement) row, replace its text
+  // with the final one and close the stream, so no later stream.end or
+  // run boundary can replace that text; otherwise this round
+  // never streamed (e.g. a non-streaming provider call), so append it.
+  const correlatorId = ix.pendingModelResponseId;
+  ix.pendingModelResponseId = undefined;
+  if (correlatorId) {
+    ix.streams.delete(correlatorId);
+    const slot = ix.slots.get(correlatorId);
+    if (slot?.kind === 'text') closeText(d, slot, event.text);
+    return;
+  }
+  write(d, {
+    kind: 'text',
+    base: open(d, d.stampId, event.stageId, MESSAGE_TYPES.MODEL_RESPONSE, true),
+    rowKind: 'assistant',
+    text: event.text,
+    running: false,
+  });
+}
+
+/** One recorder per transcript event type: a type left out fails to
+ *  compile. */
+const RECORDERS: { readonly [K in TranscriptEvent['type']]: Recorder<K> } = {
+  log: recordLogRow,
+  'stage.start': openStage,
+  'stage.end': closeStage,
+  'tool.start': openToolCard,
+  'tool.end': closeToolCard,
+  // Run facts, not transcript rows: they go to `RunView.context` and
+  // `RunView.usage`.
+  'context.state': () => undefined,
+  usage: () => undefined,
+  'stream.start': openStream,
+  'stream.end': closeStream,
+  'response.finalized': finalizeResponse,
+};
+
+/** The recorder for `type`. */
+const recorderOf = <K extends TranscriptEvent['type']>(type: K): Recorder<K> =>
+  RECORDERS[type];
 
 /** Close a text row, now printable, with its final text when one is given. */
 function closeText(
@@ -332,7 +332,7 @@ export function applyTranscriptEvent(
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);
   else if (isTranscriptEvent(event)) {
-    record(d, event);
+    recorderOf(event.type)(d, event);
     // A transcript event writes at most one slot; its position is the row's
     // first appearance (a tool's first-seen one), so a tool that started
     // before a compaction and ended after it never interrupts it.

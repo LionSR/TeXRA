@@ -1,5 +1,5 @@
 /**
- * The one function for the rows that both the run state and the session
+ * The one module for the rows that both the run state and the session
  * view read.
  *
  * The run state (`runState.ts`) is what the loop continues from and the
@@ -9,7 +9,8 @@
  * `request.decided`) and the input it has not taken (`followup.queued`,
  * `followup.consumed`). `applyRunRow` handles each of them once, so a row
  * type cannot reach one reader and miss the other; each reader copies the
- * fields it returns into its own shape.
+ * fields it returns into its own shape. A reader that keeps only the
+ * position (`RunState`) applies the position rows (`applyPositionRow`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id. It returns a result
  * instead of throwing because the two readers treat a decision for an
@@ -42,6 +43,8 @@ const SHARED_RUN_ROW_TYPES = {
   'followup.consumed': true,
 } as const satisfies Partial<Record<SessionEvent['type'], true>>;
 
+/** A row both readers apply through this module: a run's position, its
+ *  requests, or its pending input. */
 export type SharedRunRow = Extract<
   SessionEvent,
   { type: keyof typeof SHARED_RUN_ROW_TYPES }
@@ -92,7 +95,7 @@ export const pendingMessages = (
 /**
  * What these rows say about one run's position: everything but its pending
  * input. `RunState` has every field of it, so the run state copies the
- * fields `applyRunRow` returns onto itself.
+ * fields `applyPositionRow` returns onto itself.
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
@@ -131,7 +134,7 @@ export type RunRows = RunPosition & {
 export function byId<T>(
   entries: Iterable<readonly [string, T]>,
 ): Record<string, T> {
-  const record = Object.create(null) as Record<string, T>;
+  const record: Record<string, T> = Object.create(null);
   for (const [key, value] of entries) record[key] = value;
   return record;
 }
@@ -151,6 +154,13 @@ export const copyById = <T>(
  */
 export type BatchCopies = WeakSet<object>;
 
+/** Whether this batch made `value`: a batch's set holds only containers the
+ *  batch created, each writable and of the type its `copy` returns. */
+const copiedBy = <T extends object, W extends T>(
+  copies: BatchCopies | undefined,
+  value: T,
+): value is W => copies?.has(value) === true;
+
 /** `value` itself when this batch already copied it, else a copy the batch
  *  now owns. Without `copies` every change copies, one row at a time. */
 export function ownCopy<T extends object, W extends T>(
@@ -158,8 +168,7 @@ export function ownCopy<T extends object, W extends T>(
   value: T,
   copy: (value: T) => W,
 ): W {
-  // Only `copy` put a value in the set, so an owned value is a `W`.
-  if (copies?.has(value) === true) return value as W;
+  if (copiedBy<T, W>(copies, value)) return value;
   const fresh = copy(value);
   copies?.add(fresh);
   return fresh;
@@ -181,6 +190,8 @@ export const freshRunRows = (): RunRows => ({
   followUpIds: new Set(),
 });
 
+/** What one shared row does to a reader's `RunRows`: the fields it changes,
+ *  or why it changes none. */
 export type RunRowVerdict =
   | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
   /** The row changes nothing: an id already recorded, or a row that needs
@@ -195,6 +206,7 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   kind: 'applied',
   rows,
 });
+const unchanged: RunRowVerdict = { kind: 'unchanged' };
 
 /** The shared rows that change a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
@@ -205,109 +217,103 @@ type FollowUpRow = Extract<
   SharedRunRow,
   { type: (typeof FOLLOW_UP_TYPES)[number] }
 >;
+/** The shared rows that change a run's position. */
+type PositionRow = Exclude<SharedRunRow, FollowUpRow>;
 
 const copySet = (ids: ReadonlySet<string>) => new Set(ids);
 
 /**
- * Apply one shared row. `current` is `null` for a reader that holds nothing
- * for the run yet: queued input and the loop's own position start it, while
- * a request or a consumption needs it and changes nothing without it. A
- * reader that keeps only the position (`RunState`) passes only the rows
- * that change it. A reader applying a batch passes its `copies`, and the
- * containers the result carries are then the batch's own, changed in place
- * by later rows of the batch.
+ * Apply one row that changes a run's position: everything `RunState` keeps
+ * of these rows. `current` is `null` for a reader that holds nothing for the
+ * run yet: the loop's own position starts it, while a request needs it and
+ * changes nothing without it. A reader applying a batch passes its
+ * `copies`, and the containers the result carries are then the batch's own,
+ * changed in place by later rows of the batch.
  */
-export function applyRunRow(
+export function applyPositionRow(
   current: RunPosition | null,
-  row: Exclude<SharedRunRow, FollowUpRow>,
+  row: PositionRow,
   copies?: BatchCopies,
-): RunRowVerdict;
+): RunRowVerdict {
+  if (row.type === 'run.position') {
+    const p = row.payload;
+    const rows = current ?? freshRunPosition();
+    if (p.turn != null && p.turn < rows.turn) {
+      return {
+        kind: 'contradiction',
+        detail: `turn ${p.turn} is below ${rows.turn}`,
+      };
+    }
+    return applied({
+      family: p.family,
+      at: p.at,
+      turn: p.turn ?? rows.turn,
+      outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
+    });
+  }
+  if (current === null) return unchanged;
+  if (row.type === 'request.opened') {
+    if (Object.hasOwn(current.requests, row.requestId)) {
+      return {
+        kind: 'contradiction',
+        detail: `request ${row.requestId} opened twice`,
+      };
+    }
+    const requests = ownCopy(copies, current.requests, copyById);
+    requests[row.requestId] = { payload: row.payload, decision: null };
+    return applied({ requests });
+  }
+  const request = current.requests[row.requestId];
+  if (request === undefined) {
+    return { kind: 'unresolved', requestId: row.requestId };
+  }
+  const requests = ownCopy(copies, current.requests, copyById);
+  requests[row.requestId] = { ...request, decision: row.decision };
+  return applied({ requests });
+}
+
+/**
+ * Apply one shared row to a reader that keeps a run's pending input as well
+ * as its position (`RunRows`): the follow-up rows here, the rest through
+ * {@link applyPositionRow}, with `current` and `copies` as there.
+ */
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
   copies?: BatchCopies,
-): RunRowVerdict;
-export function applyRunRow(
-  current: RunPosition | null,
-  row: SharedRunRow,
-  copies?: BatchCopies,
 ): RunRowVerdict {
-  // A follow-up row enters only through the `RunRows` overload.
-  const slice = current as RunRows | null;
-  switch (row.type) {
-    case 'run.position': {
-      const p = row.payload;
-      const rows = current ?? freshRunRows();
-      if (p.turn != null && p.turn < rows.turn) {
-        return {
-          kind: 'contradiction',
-          detail: `turn ${p.turn} is below ${rows.turn}`,
-        };
-      }
-      return applied({
-        family: p.family,
-        at: p.at,
-        turn: p.turn ?? rows.turn,
-        outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
-      });
-    }
-    case 'request.opened': {
-      if (current === null) return { kind: 'unchanged' };
-      if (Object.hasOwn(current.requests, row.requestId)) {
-        return {
-          kind: 'contradiction',
-          detail: `request ${row.requestId} opened twice`,
-        };
-      }
-      const requests = ownCopy(copies, current.requests, copyById);
-      requests[row.requestId] = { payload: row.payload, decision: null };
-      return applied({ requests });
-    }
-    case 'request.decided': {
-      if (current === null) return { kind: 'unchanged' };
-      const request = current.requests[row.requestId];
-      if (request === undefined) {
-        return { kind: 'unresolved', requestId: row.requestId };
-      }
-      const requests = ownCopy(copies, current.requests, copyById);
-      requests[row.requestId] = { ...request, decision: row.decision };
-      return applied({ requests });
-    }
-    case 'followup.queued': {
-      // Queued input may come before everything else a run writes, so it
-      // starts the reader's state; a replayed delivery id is queued once.
-      const rows = slice ?? freshRunRows();
-      if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
-      const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
-      followUps.push({
-        followUpId: row.followUpId,
-        content: row.content,
-        ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
-        ...(row.control ? { control: row.control } : {}),
-      });
-      const followUpIds = ownCopy(copies, rows.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ followUps, followUpIds });
-    }
-    case 'followup.consumed': {
-      // The consumer commits this with the message the follow-up became. An
-      // id this reader never queued (another writer queued it while the loop
-      // ran, or the read that delivered this row did not carry the queuing)
-      // consumes nothing, and is recorded so the queuing cannot land twice.
-      if (slice === null) return { kind: 'unchanged' };
-      const followUps = slice.followUps.filter(
-        (f) => f.followUpId !== row.followUpId,
-      );
-      const removed = followUps.length !== slice.followUps.length;
-      if (!removed && slice.followUpIds.has(row.followUpId)) {
-        return { kind: 'unchanged' };
-      }
-      if (removed) copies?.add(followUps);
-      const followUpIds = ownCopy(copies, slice.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ ...(removed ? { followUps } : {}), followUpIds });
-    }
+  if (row.type === 'followup.queued') {
+    // Queued input may come before everything else a run writes, so it
+    // starts the reader's state; a replayed delivery id is queued once.
+    const rows = current ?? freshRunRows();
+    if (rows.followUpIds.has(row.followUpId)) return unchanged;
+    const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
+    followUps.push({
+      followUpId: row.followUpId,
+      content: row.content,
+      ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
+      ...(row.control ? { control: row.control } : {}),
+    });
+    const followUpIds = ownCopy(copies, rows.followUpIds, copySet);
+    followUpIds.add(row.followUpId);
+    return applied({ followUps, followUpIds });
   }
+  if (row.type !== 'followup.consumed')
+    return applyPositionRow(current, row, copies);
+  // The consumer commits this with the message the follow-up became. An id
+  // this reader never queued (another writer queued it while the loop ran,
+  // or the read that delivered this row did not carry the queuing) consumes
+  // nothing, and is recorded so the queuing cannot land twice.
+  if (current === null) return unchanged;
+  const followUps = current.followUps.filter(
+    (f) => f.followUpId !== row.followUpId,
+  );
+  const removed = followUps.length !== current.followUps.length;
+  if (!removed && current.followUpIds.has(row.followUpId)) return unchanged;
+  if (removed) copies?.add(followUps);
+  const followUpIds = ownCopy(copies, current.followUpIds, copySet);
+  followUpIds.add(row.followUpId);
+  return applied({ ...(removed ? { followUps } : {}), followUpIds });
 }
 
 /**

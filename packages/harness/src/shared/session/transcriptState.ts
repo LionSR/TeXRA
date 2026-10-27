@@ -11,7 +11,6 @@ import {
   TOOL_CALL_STATUS,
   type LogLevel,
   type MessageType,
-  type TaskGroup,
   type ToolUseLog,
 } from '@shared/schemas';
 import {
@@ -92,8 +91,10 @@ export type Slot =
       readonly forkAt?: number;
     };
 
+/** A run's transcript working state: the positions, slots, open cards and
+ *  streams, and live text one event at a time reads and writes. */
 export interface TranscriptIndexes {
-  /** Row position by row id. */
+  /** Row position by row id; an entry is never removed. */
   readonly rowIndex: Map<string, number>;
   /** Task-group position by group id. */
   readonly taskGroupIndex: Map<string, number>;
@@ -162,11 +163,6 @@ export function emptyTranscript(): TranscriptView {
 export type TranscriptDraft = {
   -readonly [K in keyof TranscriptView]: TranscriptView[K];
 };
-/** The arrays of a draft this call owns, as it writes them. */
-type DraftArrays = {
-  readonly rows: TranscriptRow[];
-  readonly taskGroups: TaskGroup[];
-};
 
 // ---------------------------------------------------------------------------
 // Copy on first write
@@ -183,31 +179,22 @@ export interface TranscriptWork {
   readonly owned: WeakSet<object>;
 }
 
-/** `transcript[key]`, writable: copied into `transcript` unless this call
- *  created it. */
-export function writableArray<K extends keyof DraftArrays>(
+/** Whether `array` is one of this call's own copies (`writableArray`). */
+const isOwnedCopy = <T>(
   work: TranscriptWork,
-  transcript: TranscriptDraft,
-  key: K,
-): DraftArrays[K] {
-  const current = transcript[key];
-  // cast: an array in `owned` is the copy this function made for the current
-  // call, so writing it reaches no published transcript.
-  if (work.owned.has(current)) return current as DraftArrays[K];
-  // cast: a spread of `transcript[key]` is that key's array, writable.
-  const copy = [...current] as DraftArrays[K];
-  work.owned.add(copy);
-  Object.assign(transcript, { [key]: copy });
-  return copy;
-}
+  array: readonly T[],
+): array is T[] => work.owned.has(array);
 
-export function rowById(
-  transcript: TranscriptView,
-  ix: TranscriptIndexes,
-  id: string,
-): TranscriptRow | undefined {
-  const at = ix.rowIndex.get(id);
-  return at === undefined ? undefined : transcript.rows[at];
+/** `array` if this call created it, else a copy this call owns, which the
+ *  caller stores back on its draft. */
+export function writableArray<T>(
+  work: TranscriptWork,
+  array: readonly T[],
+): T[] {
+  if (isOwnedCopy(work, array)) return array;
+  const copy = [...array];
+  work.owned.add(copy);
+  return copy;
 }
 
 /** The one writer of `rows`: in place by id, else inserted in `seqNo` order. */
@@ -216,7 +203,8 @@ export function upsertRow(
   transcript: TranscriptDraft,
   row: TranscriptRow,
 ): void {
-  const rows = writableArray(work, transcript, 'rows');
+  const rows = writableArray(work, transcript.rows);
+  transcript.rows = rows;
   const { rowIndex } = work.ix;
   const at = rowIndex.get(row.id);
   if (at !== undefined) {
@@ -241,6 +229,7 @@ export function upsertRow(
   for (let i = position; i < rows.length; i += 1) rowIndex.set(rows[i].id, i);
 }
 
+/** Paint the compaction blocks at `changedIndices` as their rows. */
 export function upsertCompactionRows(
   work: TranscriptWork,
   transcript: TranscriptDraft,
@@ -257,6 +246,7 @@ type StreamingTextRowOf = Extract<
   { kind: StreamingTextRow['kind'] }
 >;
 
+/** Whether `row`'s text streams: an assistant reply, thinking or scratchpad. */
 export function isStreamingTextRow(
   row: TranscriptRow,
 ): row is StreamingTextRowOf {
@@ -306,12 +296,16 @@ export function open(
 }
 
 /** The envelope once the row became printable; settles once. */
-export function settle(ix: TranscriptIndexes, base: TranscriptRowBase) {
+export function settle(
+  ix: TranscriptIndexes,
+  base: TranscriptRowBase,
+): TranscriptRowBase {
   return base.settlementSeqNo === undefined
     ? { ...base, settlementSeqNo: (ix.settled += 1) }
     : base;
 }
 
+/** Record `slot` as its id's state; it paints once the event is applied. */
 export function write(d: Draft, slot: Slot): void {
   d.ix.slots.set(slot.base.id, slot);
   d.written.push(slot);
@@ -341,6 +335,24 @@ function rowOf(
   }
 }
 
+/** The live text a written slot holds: a stream's, a running card's, none. */
+function liveStateOf(slot: Slot): 'stream' | 'card' | 'final' {
+  if (slot.kind === 'text' && slot.running && slot.rowKind !== undefined)
+    return 'stream';
+  if (slot.kind === 'tool' && slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS)
+    return 'card';
+  return 'final';
+}
+
+/** Row `id` at `at` is the newest thinking row unless a later row is. */
+function noteThinkingRow(ix: TranscriptIndexes, id: string, at: number): void {
+  const newest =
+    ix.thinkingRowId === undefined
+      ? undefined
+      : ix.rowIndex.get(ix.thinkingRowId);
+  if (newest === undefined || newest <= at) ix.thinkingRowId = id;
+}
+
 /**
  * Paint one written slot. A streaming row joins its durable fields with its
  * live text, which may have arrived first; a finalizing row drops that text,
@@ -349,40 +361,40 @@ function rowOf(
 export function paint(d: Draft, slot: Slot): void {
   const { ix, next } = d;
   const id = slot.base.id;
-  const streamingText =
-    slot.kind === 'text' && slot.running && slot.rowKind !== undefined;
-  const runningTool =
-    slot.kind === 'tool' && slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
+  const state = liveStateOf(slot);
   // One holder of a row's live text, `live`, whichever arrives first: chunks
   // extend it, and a row applied before any chunk seeds it with the text it
   // carried, so the chunk re-delivering that text from offset zero ends
   // within the length held and is dropped.
-  if (streamingText && slot.text && !ix.live.has(id)) {
+  if (
+    state === 'stream' &&
+    slot.kind === 'text' &&
+    slot.text &&
+    !ix.live.has(id)
+  )
     ix.live.set(id, slot.text);
-  }
-  const live = streamingText || runningTool ? ix.live.get(id) : undefined;
+  const live = state === 'final' ? undefined : ix.live.get(id);
   const row = rowOf(slot, live, d.ctx);
   if (row) upsertRow(d, next, row);
-  const current = rowById(next, ix, id);
-  if (current?.kind === 'thinking') {
-    const newest = ix.thinkingRowId;
-    const at = ix.rowIndex.get(id)!;
-    if (newest === undefined || ix.rowIndex.get(newest)! <= at) {
-      ix.thinkingRowId = id;
-    }
-  }
-  if (streamingText) {
-    ix.cursors.set(
-      id,
-      current && isStreamingTextRow(current)
-        ? current.text
-        : transcriptText(live ?? ''),
-    );
-  } else if (runningTool) {
-    // A card's output paints from the held text, never a measured cursor.
-    ix.cursors.set(id, transcriptText(''));
-  } else {
-    ix.cursors.delete(id);
-    ix.live.delete(id);
+  const at = ix.rowIndex.get(id);
+  const current = at === undefined ? undefined : next.rows[at];
+  if (at !== undefined && current?.kind === 'thinking')
+    noteThinkingRow(ix, id, at);
+  switch (state) {
+    case 'stream':
+      ix.cursors.set(
+        id,
+        current && isStreamingTextRow(current)
+          ? current.text
+          : transcriptText(live ?? ''),
+      );
+      return;
+    case 'card':
+      // A card's output paints from the held text, never a measured cursor.
+      ix.cursors.set(id, transcriptText(''));
+      return;
+    case 'final':
+      ix.cursors.delete(id);
+      ix.live.delete(id);
   }
 }

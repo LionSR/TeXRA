@@ -869,44 +869,44 @@ export const databaseLayer = (
                     .map((row) => row.aggregateId);
                 }),
               ),
-        prepareRunRemoval: Effect.fn('Database.prepareRunRemoval')(
-          function* (id, mode, expectedStartCommit) {
-            const seen = yield* query(readDependents(id));
-            // Outside the transaction: each probe may spawn a process.
-            const verdicts = yield* Effect.forEach(
-              othersOf(seen),
-              (owner) =>
-                Effect.map(liveness(owner), (v) => [owner, v] as const),
-              { concurrency: 'unbounded' },
-            );
-            const removing = Effect.gen(function* () {
-              const observed = yield* readDependents(id);
-              const target = observed.find((row) => row.aggregateId === id);
-              if (target === undefined || observed.some((row) => row.closed))
-                return yield* Effect.fail(
-                  new Error(`Deletion target is missing or closed: ${id}`),
-                );
-              if (target.startCommit !== expectedStartCommit)
-                return yield* Effect.fail(
-                  new Error(`Deletion target changed since admission: ${id}`),
-                );
-              yield* claimAll(observed, mode);
-              return yield* appendRows(
-                [prepareEventDraft({ type: 'run.removed', aggregateId: id })],
-                yield* Clock.currentTimeMillis,
-              );
-            });
-            return Effect.flatMap(ProvenOwners, (proven) =>
-              transact(removing).pipe(
-                Effect.provideService(
-                  ProvenOwners,
-                  new Map([...verdicts, ...proven]),
-                ),
-              ),
-            );
-          },
-        ),
         deletions: {
+          prepare: Effect.fn('Database.prepareRunRemoval')(
+            function* (id, mode, expectedStartCommit) {
+              const seen = yield* query(readDependents(id));
+              // Outside the transaction: each probe may spawn a process.
+              const verdicts = yield* Effect.forEach(
+                othersOf(seen),
+                (owner) =>
+                  Effect.map(liveness(owner), (v) => [owner, v] as const),
+                { concurrency: 'unbounded' },
+              );
+              const removing = Effect.gen(function* () {
+                const observed = yield* readDependents(id);
+                const target = observed.find((row) => row.aggregateId === id);
+                if (target === undefined || observed.some((row) => row.closed))
+                  return yield* Effect.fail(
+                    new Error(`Deletion target is missing or closed: ${id}`),
+                  );
+                if (target.startCommit !== expectedStartCommit)
+                  return yield* Effect.fail(
+                    new Error(`Deletion target changed since admission: ${id}`),
+                  );
+                yield* claimAll(observed, mode);
+                return yield* appendRows(
+                  [prepareEventDraft({ type: 'run.removed', aggregateId: id })],
+                  yield* Clock.currentTimeMillis,
+                );
+              });
+              return Effect.flatMap(ProvenOwners, (proven) =>
+                transact(removing).pipe(
+                  Effect.provideService(
+                    ProvenOwners,
+                    new Map([...verdicts, ...proven]),
+                  ),
+                ),
+              );
+            },
+          ),
           pending: () => query(decodedRows(PENDING_DELETIONS, [])),
           collect: (tombstone, cleanup) =>
             Effect.gen(function* () {

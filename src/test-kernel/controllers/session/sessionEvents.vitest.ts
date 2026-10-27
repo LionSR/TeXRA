@@ -1568,7 +1568,7 @@ describe('the session event table and its one publisher', () => {
           expect(
             yield* Effect.flip(
               Effect.flatten(
-                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+                first.deletions.prepare(root, 'bulk', initial[0]!.commit),
               ),
             ),
           ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
@@ -1578,7 +1578,7 @@ describe('the session event table and its one publisher', () => {
         const committed = [
           ...(yield* first.appendAll([waiting])),
           ...(yield* Effect.flatten(
-            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+            first.deletions.prepare(root, 'bulk', initial[0]!.commit),
           )),
         ];
         expect(committed.at(-1)).toMatchObject({
@@ -1646,7 +1646,7 @@ describe('the session event table and its one publisher', () => {
         expect(
           (yield* Effect.flip(
             Effect.flatten(
-              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
+              first.deletions.prepare(root, 'single', initial[0]!.commit),
             ),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
@@ -1939,7 +1939,7 @@ describe('the session event table and its one publisher', () => {
             expect(
               yield* Effect.flip(
                 Effect.flatten(
-                  first.prepareRunRemoval(otherRoot, mode, otherStart),
+                  first.deletions.prepare(otherRoot, mode, otherStart),
                 ),
               ),
             ).toMatchObject({
@@ -1951,7 +1951,7 @@ describe('the session event table and its one publisher', () => {
             false,
           );
           yield* Effect.flatten(
-            first.prepareRunRemoval(otherRoot, 'single', otherStart),
+            first.deletions.prepare(otherRoot, 'single', otherStart),
           );
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             true,

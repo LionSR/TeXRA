@@ -15,7 +15,6 @@ import {
   Context,
   type Effect,
   type RcMap,
-  type Result,
   Schema,
   type Stream,
   type SubscriptionRef,
@@ -35,18 +34,21 @@ import type {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WithBlobs } from './historyTurns';
-import type { ValueFamily } from './valueFamily';
+import type { CurrentValues } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
 export const InputHistoryRecordSchema = Schema.Struct({
   at: Schema.Number,
   value: Schema.String,
 });
+/** One CLI input history row: when it was entered, and the text. */
 export type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
+/** How many input history rows a root keeps; an append drops the oldest. */
 export const INPUT_HISTORY_LIMIT = 1000;
 
-/** Only an explicit single-run deletion may replace an unprovable owner. */
 const DeletionModeSchema = Schema.Literals(['single', 'bulk', 'automatic']);
+/** How a run's deletion was asked for. Only an explicit single-run deletion
+ *  may replace an unprovable owner. */
 export type DeletionMode = typeof DeletionModeSchema.Type;
 
 /** The current claim and existence, independent of historical event writers. */
@@ -59,6 +61,7 @@ export const AggregateStateSchema = Schema.Struct({
   parentId: Schema.NullOr(AggregateIdSchema),
   startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
 });
+/** One aggregate's claim and existence as its state row holds them. */
 export type AggregateState = typeof AggregateStateSchema.Type;
 
 /**
@@ -71,15 +74,15 @@ export interface AggregateClaim {
   readonly liveness: OwnerLiveness | 'self' | null;
 }
 
-/**
- * Who holds a claim relative to this process: itself, an owner alive or not
- * proven dead, or nobody (a provably dead owner frees it). The one reading the
- * run listing, the run classification and the resume gate all share. */
 type ClaimStanding =
   | { readonly kind: 'self' }
   | { readonly kind: 'held'; readonly owner: OwnerId }
   | { readonly kind: 'free' };
 
+/**
+ * Who holds a claim relative to this process: itself, an owner alive or not
+ * proven dead, or nobody (a provably dead owner frees it). The one reading the
+ * run listing, the run classification and the resume gate all share. */
 export function claimStanding(claim: AggregateClaim): ClaimStanding {
   if (claim.liveness === 'self') return { kind: 'self' };
   if (claim.ownerId !== null && claim.liveness !== 'dead')
@@ -193,53 +196,6 @@ export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build; it can't be opened by this one.`;
 }
 
-/**
- * A root's current values (`current_value`): one row per family and key,
- * replaced in place, outside the event history, so an event-format bump
- * leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
- * a value decodes with its family's schema where it is read, and a row that
- * no longer decodes fails that read.
- */
-export interface CurrentValues {
-  readonly get: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
-    key: string,
-  ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
-  /**
-   * Change one value from the one read under the write lock: `change`
-   * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. Only a deletable
-   * family's change may answer `undefined`, which deletes the row.
-   */
-  readonly modify: <T, D extends boolean, A, E = never>(
-    family: ValueFamily<T, D>,
-    key: string,
-    change: (
-      current: T | undefined,
-    ) => Result.Result<
-      readonly [A] | readonly [A, D extends true ? T | undefined : T],
-      E
-    >,
-  ) => Effect.Effect<A, E | DatabaseWriteFailed>;
-  /** Every row of a family, latest write first. */
-  readonly list: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
-  ) => Effect.Effect<
-    readonly { readonly key: string; readonly value: T }[],
-    DatabaseReadFailed
-  >;
-  /**
-   * Emits as subscribed, then after each commit, by this process or
-   * another, that changed one of `keys`' values: the root's wake level
-   * narrowed inside the store to those rows. A read that fails is logged and
-   * retried, so no change is missed.
-   */
-  readonly changes: (
-    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
-    keys: readonly string[],
-  ) => Stream.Stream<void>;
-}
-
 /** A root's session is already open over the other store (persistent or
  *  in memory), which it keeps: an open asking for the other is refused. */
 export class SessionOptionsConflict extends Schema.TaggedError<SessionOptionsConflict>()(
@@ -258,6 +214,8 @@ export type EventsRead = Effect.Effect<
   DatabaseReadFailed
 >;
 
+/** One storage root's event store: its rows, claims, blobs, current values
+ *  and input history, read and written in SQLite transactions. */
 export class Database extends Context.Service<
   Database,
   {
@@ -346,20 +304,22 @@ export class Database extends Context.Service<
       readonly AggregateId[],
       DatabaseReadFailed | DatabaseClaimError
     >;
-    /** Prove the tree's owners off the publisher, then answer its job
-     *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
-    readonly prepareRunRemoval: (
-      id: AggregateId,
-      mode: DeletionMode,
-      expectedStartCommit: CommitOrdinal,
-    ) => Effect.Effect<
-      Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
-      DatabaseReadFailed | DatabaseWriteFailed
-    >;
-    /** The tombstones not collected yet, and one's collection: `cleanup`
-     *  removes its run directories, then its closed aggregate, dependents, rows
-     *  and orphaned blobs go; a failed cleanup keeps it for the next pass. */
+    /** A run's deletion, from its tombstone to its collection. */
     readonly deletions: {
+      /** Prove the tree's owners off the publisher, then answer its job
+       *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
+      readonly prepare: (
+        id: AggregateId,
+        mode: DeletionMode,
+        expectedStartCommit: CommitOrdinal,
+      ) => Effect.Effect<
+        Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
+        DatabaseReadFailed | DatabaseWriteFailed
+      >;
+      /** The tombstones not collected yet, and one's collection: `cleanup`
+       *  removes its run directories, then its closed aggregate, dependents,
+       *  rows and orphaned blobs go; a failed cleanup keeps it for the next
+       *  pass. */
       readonly pending: () => EventsRead;
       readonly collect: (
         tombstone: Extract<SessionEvent, { type: 'run.removed' }>,

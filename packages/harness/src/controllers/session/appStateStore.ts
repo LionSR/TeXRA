@@ -18,12 +18,12 @@ import {
   DatabaseWriteFailed,
   GlobalDatabase,
   ProjectDatabases,
-  type CurrentValues,
 } from '@shared/session/database';
 import {
   APP_STATE,
   REPO_STATE,
   WORKSPACE_STORES,
+  type CurrentValues,
 } from '@shared/session/valueFamily';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

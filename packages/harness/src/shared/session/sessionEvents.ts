@@ -224,4 +224,5 @@ export class SessionEvents extends Context.Service<
   }
 >()('@texra-ai/harness/session/SessionEvents') {}
 
+/** What a `SessionEvents` service provides: its publisher doors and reads. */
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;

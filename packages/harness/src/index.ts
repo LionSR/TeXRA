@@ -100,12 +100,8 @@ export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
 export { GlobalValues, StateStores } from '@platform/processRuntime';
-export type { ValueFamily } from '@shared/session/valueFamily';
-export {
-  DatabaseWriteFailed,
-  type CurrentValues,
-  type EventsRead,
-} from '@shared/session/database';
+export type { CurrentValues, ValueFamily } from '@shared/session/valueFamily';
+export { DatabaseWriteFailed, type EventsRead } from '@shared/session/database';
 export type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
 export type { AppStateStore } from '@platform/interfaces';
 export {

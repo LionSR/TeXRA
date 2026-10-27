@@ -31,10 +31,10 @@ import { writeLogEntry } from '@logger/logSink';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
-  type CurrentValues,
   type GlobalDatabase,
   type ProjectDatabases,
 } from '@shared/session/database';
+import type { CurrentValues } from '@shared/session/valueFamily';
 import type { UsageLog } from '@shared/usageLog';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';

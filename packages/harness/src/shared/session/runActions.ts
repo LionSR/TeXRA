@@ -40,35 +40,44 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * settled conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
-export function runActions(
-  run: Pick<
-    RunView,
-    | 'readOnly'
-    | 'group'
-    | 'status'
-    | 'substate'
-    | 'identity'
-    | 'recipe'
-    | 'forkPoint'
-  >,
-  stranded: boolean,
-): RunAction[] {
+export function runActions(run: ActionFacts, stranded: boolean): RunAction[] {
   if (stranded) return ['delete', ...inspectActions()];
   if (run.readOnly) return inspectActions();
-  if (isLiveRun(run)) {
-    const working = run.group === 'running' || run.group === 'waiting';
-    const agent = working && run.identity.kind === 'agent';
-    const compact =
-      agent && !run.recipe && run.substate !== RUN_SUBSTATE.STARTING;
-    return [
-      'stop',
-      ...(agent ? (['grant'] as const) : []),
-      ...(compact ? (['compact'] as const) : []),
-      'rename',
-      ...(forkable(run) ? (['fork'] as const) : []),
-      ...inspectActions(),
-    ];
-  }
+  return isLiveRun(run) ? liveRunActions(run) : inactiveRunActions(run);
+}
+
+/** The run fields the actions rule reads. */
+type ActionFacts = Pick<
+  RunView,
+  | 'readOnly'
+  | 'group'
+  | 'status'
+  | 'substate'
+  | 'identity'
+  | 'recipe'
+  | 'forkPoint'
+>;
+
+/** A live run this process can act on: stopped, renamed or forked, and while
+ *  it works granted and compacted; nothing rewrites its files or history. */
+function liveRunActions(run: ActionFacts): RunAction[] {
+  const working = run.group === 'running' || run.group === 'waiting';
+  const agent = working && run.identity.kind === 'agent';
+  const compact =
+    agent && !run.recipe && run.substate !== RUN_SUBSTATE.STARTING;
+  return [
+    'stop',
+    ...(agent ? (['grant'] as const) : []),
+    ...(compact ? (['compact'] as const) : []),
+    'rename',
+    ...(forkable(run) ? (['fork'] as const) : []),
+    ...inspectActions(),
+  ];
+}
+
+/** A run that is not live (interrupted, paused or ended): deleted, renamed,
+ *  its files worked on, and resumed or run again where that continues it. */
+function inactiveRunActions(run: ActionFacts): RunAction[] {
   const actions: RunAction[] = ['delete', 'rename', 'files'];
   const ended = isTerminalOutcomePhase(run.status);
   if (

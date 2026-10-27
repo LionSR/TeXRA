@@ -59,15 +59,6 @@ const SessionKeySchema = Schema.NonEmptyString;
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
-/**
- * A run's transcript slice: what hosts paint, and nothing else. The updater
- * keeps the run's working state (row and group positions, the compaction
- * projection's state, the live text per streaming row) beside the view,
- * never on it (`transcriptState.ts`), so a host can neither depend on nor
- * mutate it. The slice is replaced on every change and never written after
- * the update that produced it returns. Row and block elements are the shared
- * renderers' own TypeScript shapes, stated here rather than re-declared.
- */
 const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
@@ -78,6 +69,15 @@ const TranscriptViewSchema = Schema.Struct({
    *  applied: what an append-only scrollback may print. */
   settledRows: Count,
 });
+/**
+ * A run's transcript slice: what hosts paint, and nothing else. The updater
+ * keeps the run's working state (row and group positions, the compaction
+ * projection's state, the live text per streaming row) beside the view,
+ * never on it (`transcriptState.ts`), so a host can neither depend on nor
+ * mutate it. The slice is replaced on every change and never written after
+ * the update that produced it returns. Row and block elements are the shared
+ * renderers' own TypeScript shapes, stated here rather than re-declared.
+ */
 export type TranscriptView = typeof TranscriptViewSchema.Type;
 
 /** The section a run sorts into. Its labels and section order are one
@@ -215,6 +215,7 @@ const RunViewSchema = Schema.Struct({
   recipe: Schema.NullOr(Schema.String),
   plan: Schema.NullOr(PlanSchema),
 });
+/** One run as the session view holds it: its facts and derived fields. */
 export type RunView = typeof RunViewSchema.Type;
 
 /**
@@ -279,6 +280,8 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
   );
 }
 
+/** What `requestAnswerability` answers: `answerable`, or why not. */
+export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 /**
  * Whether this window can answer a pending request: the one rule the host's
  * attention badge and the request card both read, matching what
@@ -287,7 +290,6 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
  * answered by the fiber waiting on it, so only while its run waits here; an
  * interrupted run has to be resumed first. An inquiry, at any other time.
  */
-export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
   payload: Pick<PermissionPayload, 'kind'>,
@@ -312,8 +314,7 @@ const QueuedFollowUpsSchema = Schema.Array(
   Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
 );
 
-/** One session's view at one moment: its runs, requests and grants. */
-export const SessionViewSchema = Schema.Struct({
+const SessionViewSchema = Schema.Struct({
   key: SessionKeySchema,
   runs: Schema.ReadonlyMap(RunIdSchema, RunViewSchema),
   /** Top-level ids, `runOrdering` rule. */
@@ -341,6 +342,7 @@ export const SessionViewSchema = Schema.Struct({
   pluginFacts: Schema.Array(PluginFactDraftSchema),
   queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
+/** One session's view at one moment: its runs, requests and grants. */
 export type SessionView = typeof SessionViewSchema.Type;
 
 /** What wants this window: the requests it can answer, in view order (the
@@ -436,17 +438,15 @@ export function descendantRuns(
   { includeRoot }: { includeRoot: boolean },
 ): readonly RunId[] {
   if (rootRunId === undefined) return [];
-  const out: RunId[] = [];
-  // An index cursor, not `Array.shift()`, keeps a large fan-out's walk linear.
+  // `for...of` reaches the ids pushed onto `pending` as it walks, with no
+  // `Array.shift()`, so a large fan-out's walk stays linear.
   const pending = [rootRunId];
   const seen = new Set<RunId>();
-  for (let cursor = 0; cursor < pending.length; cursor++) {
-    const id = pending[cursor]!;
+  for (const id of pending) {
     const run = view.runs.get(id);
     if (!run || seen.has(id)) continue;
     seen.add(id);
-    if (includeRoot || id !== rootRunId) out.push(id);
     pending.push(...run.childIds);
   }
-  return out;
+  return [...seen].filter((id) => includeRoot || id !== rootRunId);
 }

@@ -106,7 +106,7 @@ const RUN_STATE_WRITERS = [
 
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
-const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
+const APPEND_CALL = /(?:\.appendAll|\.deletions\.prepare|\bappendRows)\s*\(/;
 
 /**
  * The files that still append without the publisher, each with the reason it

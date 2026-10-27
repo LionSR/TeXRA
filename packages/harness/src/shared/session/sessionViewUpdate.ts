@@ -24,7 +24,6 @@ import { Equal, type Types } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
-  MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RESTING_SUBSTATES,
@@ -58,7 +57,6 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
 import { runStatus } from '@shared/runs/runStatusDisplay';
-import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
   freshRunRows,
@@ -73,7 +71,7 @@ import {
   applyLiveText,
   clearLiveText,
   finishOpenCompactions,
-  transcriptActivity,
+  transcriptFacts,
 } from './transcriptReads';
 import {
   emptyTranscript,
@@ -84,7 +82,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
-import type { SessionView, RunView, TranscriptView } from './sessionView';
+import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
@@ -408,14 +406,17 @@ function ancestorsOf(view: SessionView, run: RunView): RunView['ancestors'] {
   return chain;
 }
 
-/** Recompute `ancestors` for a run and its descendants (a moved subtree).
- *  O(subtree), once per such change. */
-function refreshAncestors(u: Update, runId: RunId): void {
-  const run = u.view.runs.get(runId);
-  if (!run) return;
+/** Recompute `ancestors` for `run`, as the view holds it, and its
+ *  descendants (a moved subtree); returns the run as stored. O(subtree), once
+ *  per such change. */
+function refreshAncestors(u: Update, run: RunView): RunView {
   const next = withDerived(run, { ancestors: ancestorsOf(u.view, run) });
   if (next !== run) setRun(u, next);
-  for (const childId of run.childIds) refreshAncestors(u, childId);
+  for (const childId of run.childIds) {
+    const child = u.view.runs.get(childId);
+    if (child) refreshAncestors(u, child);
+  }
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -431,7 +432,61 @@ function refreshAncestors(u: Update, runId: RunId): void {
  * for the answer, and the request stays listed so a resume can ask again.
  */
 function withAggregates(u: Update, run: RunView): RunView {
-  const { view } = u;
+  const standing = standingOf(u, run);
+  const { heldBy, unreadable, interrupted, waiting } = standing;
+  const children = run.childIds.flatMap((id) => u.view.runs.get(id) ?? []);
+  let approval: RunView['approval'] = 'none';
+  if (waiting) approval = 'own';
+  else if (children.some((child) => child.approval !== 'none'))
+    approval = 'descendant';
+  const group = groupOf(run, standing);
+  const stranded = heldBy === null && unreadable !== undefined;
+  const readOnly = heldBy !== null || stranded;
+  return withDerived(run, {
+    group,
+    approval,
+    readOnly,
+    actions: runActions({ ...run, readOnly, group }, stranded),
+    ownedHere: standing.own,
+    forceExpanded:
+      waiting || interrupted || children.some((child) => child.forceExpanded),
+    durableOutcome: isTerminalOutcomePhase(run.status) ? run.status : null,
+    rollup: rollupOf(children),
+    treeUsage: sumUsageStats([
+      run.usage,
+      ...children.map((child) => child.treeUsage),
+    ]),
+    ...runStatus(run.status, {
+      substate: run.substate ?? undefined,
+      interrupted,
+      waiting,
+    }),
+    statusNotice: statusNoticeOf(run, standing),
+    resumeBlocked: standing.blocked?.reason ?? null,
+  });
+}
+
+/** How a run stands in this process, from the local snapshot and the view's
+ *  requests: what its derived fields are read from. */
+interface Standing {
+  /** This process holds the run's claim. */
+  readonly own: boolean;
+  /** Another process that is not known dead holds it. */
+  readonly heldBy: RunView['ownerId'];
+  /** Its substate rests it (paused). */
+  readonly paused: boolean;
+  /** Not ended, and nobody holds it or rests it. */
+  readonly interrupted: boolean;
+  /** A held run with a request that blocks its tool. */
+  readonly waiting: boolean;
+  /** Why its rows cannot be read here, if they cannot. */
+  readonly unreadable:
+    LocalRuntimeState['unreadable'][number]['reason'] | undefined;
+  /** What a resume of it waits for here, if anything. */
+  readonly blocked: LocalRuntimeState['resumeBlocked'][number] | undefined;
+}
+
+function standingOf(u: Update, run: RunView): Standing {
   const { local } = u.state;
   const owner = run.ownerId;
   const own = owner !== null && local.self.includes(owner);
@@ -441,67 +496,47 @@ function withAggregates(u: Update, run: RunView): RunView {
   const paused = RESTING_SUBSTATES.has(run.substate);
   // Only a request that blocks its tool is a wait: a dispatched inquiry left
   // its run working, listed for the panel but still Running.
-  const pendingOwn = view.requests.some(
+  const pendingOwn = u.view.requests.some(
     (r) => r.runId === run.id && requestParksItsCaller(r.payload),
   );
-  const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
-  const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
-  const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
-  const unreadable = local.unreadable.find(
-    (entry) => entry.runId === run.id,
-  )?.reason;
-  const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
-  const treeUsage = sumUsageStats([
-    run.usage,
-    ...children.map((child) => child.treeUsage),
-  ]);
-  const descendantWaiting = children.some((child) => child.approval !== 'none');
-  const descendantNeedsUser = children.some((child) => child.forceExpanded);
-  let group: RunView['group'] = 'recent';
-  if (interrupted) group = 'interrupted';
-  else if (waiting) group = 'waiting';
-  else if (isInFlightPhase(run.status) && !paused) group = 'running';
-  let approval: RunView['approval'] = 'none';
-  if (waiting) approval = 'own';
-  else if (descendantWaiting) approval = 'descendant';
-  const status = runStatus(run.status, {
-    substate: run.substate ?? undefined,
-    interrupted,
-    waiting,
-  });
-  const stranded = heldBy === null && unreadable !== undefined;
-  const readOnly = heldBy !== null || stranded;
-  const actions = runActions({ ...run, readOnly, group }, stranded);
-  const forceExpanded = waiting || interrupted || descendantNeedsUser;
-  const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
-  const resumeBlocked = blockedEntry?.reason ?? null;
-  let statusNotice: RunView['statusNotice'] = null;
-  if (unreadable !== undefined) statusNotice = { kind: unreadable };
-  else if (blockedEntry !== undefined)
-    statusNotice = {
+  const ended = isTerminalOutcomePhase(run.status);
+  return {
+    own,
+    heldBy,
+    paused,
+    interrupted: !ended && !held && !paused,
+    waiting: pendingOwn && held && !ended,
+    unreadable: local.unreadable.find((entry) => entry.runId === run.id)
+      ?.reason,
+    blocked: local.resumeBlocked.find((b) => b.runId === run.id),
+  };
+}
+
+/** The section a run sorts into. */
+function groupOf(run: RunView, standing: Standing): RunView['group'] {
+  if (standing.interrupted) return 'interrupted';
+  if (standing.waiting) return 'waiting';
+  return isInFlightPhase(run.status) && !standing.paused ? 'running' : 'recent';
+}
+
+/** The run's banner: the first that applies of unreadable, resume blocked,
+ *  interrupted, held elsewhere, and a lost result. */
+function statusNoticeOf(
+  run: RunView,
+  standing: Standing,
+): RunView['statusNotice'] {
+  const { unreadable, blocked, heldBy } = standing;
+  if (unreadable !== undefined) return { kind: unreadable };
+  if (blocked !== undefined)
+    return {
       kind: 'resumeBlocked',
-      reason: blockedEntry.reason,
-      retry: blockedEntry.retry,
+      reason: blocked.reason,
+      retry: blocked.retry,
     };
-  else if (interrupted) statusNotice = { kind: 'interrupted' };
-  else if (heldBy !== null)
-    statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
-  else if (run.lost !== null)
-    statusNotice = { kind: 'lost', message: run.lost };
-  return withDerived(run, {
-    group,
-    approval,
-    readOnly,
-    actions,
-    ownedHere: own,
-    forceExpanded,
-    durableOutcome,
-    rollup: rollupOf(children),
-    treeUsage,
-    ...status,
-    statusNotice,
-    resumeBlocked,
-  });
+  if (standing.interrupted) return { kind: 'interrupted' };
+  if (heldBy !== null) return { kind: 'held', pid: ownerPid(heldBy) };
+  if (run.lost !== null) return { kind: 'lost', message: run.lost };
+  return null;
 }
 
 /**
@@ -553,108 +588,19 @@ function withTurnFinished(
 // Run facts read from the transcript (here, never by a host)
 // ---------------------------------------------------------------------------
 
-function nonEmpty(text: string | undefined): string | undefined {
-  return text !== undefined && text.trim().length > 0 ? text : undefined;
-}
-
-/** A run's newest operational summary, for one with no reply to show (a
- *  script's run, a task's recipe): what its tool, card, error, or
- *  plain log row last said. */
-function operationalLatestLine(
-  rows: TranscriptView['rows'],
-): string | undefined {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const row = rows[index];
-    if (row.kind === 'tool') {
-      const line =
-        nonEmpty(row.toolUse.headerSummary) ?? nonEmpty(row.model.headerLabel);
-      if (line) return line;
-      continue;
-    }
-    if (
-      row.kind === 'error' ||
-      ((row.kind === 'assistant' || row.kind === 'log') &&
-        row.messageType === MESSAGE_TYPES.DEFAULT)
-    ) {
-      const line = nonEmpty(rowHeadline(row));
-      if (line) return line;
-    }
-  }
-  return undefined;
-}
-
-/** Any other run's newest user instruction or settled model reply. */
-function latestConversationLine(
-  rows: TranscriptView['rows'],
-  settledRows: number,
-): string | undefined {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const row = rows[index];
-    const headline = rowHeadline(row);
-    if (headline.trim().length === 0) continue;
-    if (row.kind === 'user') return headline;
-    const response =
-      (row.kind === 'assistant' || row.kind === 'log') &&
-      row.messageType === MESSAGE_TYPES.MODEL_RESPONSE;
-    if (
-      response &&
-      (index < settledRows || isSettledRow(row, index < rows.length - 1))
-    ) {
-      return headline;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Advance `settledRows`, the contiguous leading prefix of settled rows: an
- * append-only scrollback prints rows in order, so a row is settled for
- * printing only once every row before it is. Only the tail past the previous
- * frontier is walked. A finished run settles every open row except a
- * compaction block, which cleanup can still replace.
- */
-function advanceSettledRows(
-  rows: TranscriptView['rows'],
-  start: number,
-  runFinal: boolean,
-): number {
-  let index = Math.min(start, rows.length);
-  while (index < rows.length) {
-    const row = rows[index];
-    if (!isSettledRow(row, index < rows.length - 1)) {
-      // Bridge cleanup can still replace a planned/running compaction after
-      // a cancellation, so it settles only on its own typed terminal state,
-      // never on the final stream status.
-      if (row.kind === 'compactionActivity' || !runFinal) break;
-    }
-    index += 1;
-  }
-  return index;
-}
-
 /** The transcript-derived fields of a run, after its rows or its phase
  *  moved: `settledRows`, `thinkingActive`, `compactingActive`, and
  *  `latestLine`. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
   const { transcript } = run;
-  const runFinal = isTranscriptSettlementPhase(run.status);
-  const settledRows = advanceSettledRows(
-    transcript.rows,
-    transcript.settledRows,
-    runFinal,
-  );
-  const { thinkingActive, compactingActive } = transcriptActivity(
+  const { settledRows, latestLine, ...activity } = transcriptFacts(
     transcript,
     transcriptWork(u, run.id).ix,
+    isTranscriptSettlementPhase(run.status),
   );
-  const latestLine =
-    latestConversationLine(transcript.rows, settledRows) ??
-    operationalLatestLine(transcript.rows) ??
-    run.latestLine;
   const next = withDerived(run, {
-    thinkingActive,
-    compactingActive,
-    latestLine,
+    ...activity,
+    latestLine: latestLine ?? run.latestLine,
   });
   return settledRows === transcript.settledRows
     ? next
@@ -942,8 +888,13 @@ function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
  * file can carry one, and every reader walks the tree. Those are the only
  * ways to a cycle: a parent is set only on the run's creation, before
  * anything can name the run as its parent, and is only ever cleared after.
+ * `run` is the value the view holds; returns the one it holds after.
  */
-function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
+function relink(
+  u: Update,
+  run: RunView,
+  previousParentId: RunId | null,
+): RunView {
   const { view } = u;
   const previousParent =
     previousParentId === null ? undefined : view.runs.get(previousParentId);
@@ -957,7 +908,9 @@ function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
     run.parentId === null || run.parentId === run.id
       ? undefined
       : view.runs.get(run.parentId);
-  if (!parent && run.parentId !== null) setRun(u, { ...run, parentId: null });
+  const linked =
+    !parent && run.parentId !== null ? { ...run, parentId: null } : run;
+  if (linked !== run) setRun(u, linked);
   if (parent) {
     setRun(u, {
       ...parent,
@@ -969,7 +922,18 @@ function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
     view.order = insertOrdered(view, view.order, run.id);
   }
   if (parent && inOrder) view.order = withoutId(view.order, run.id);
-  refreshAncestors(u, run.id);
+  return refreshAncestors(u, linked);
+}
+
+/** The `latest` key of a listing fact newer than every one applied for its
+ *  aggregate and listing type, whatever the read delivered it; null for a row
+ *  that is no listing fact, or one an applied fact supersedes. */
+function newListingKey(u: Update, event: DisplaySessionEvent): string | null {
+  const listingType = listingKeyOf(event);
+  if (listingType === null) return null;
+  const listingKey = `${event.aggregateId}/${listingType}`;
+  const newest = u.state.latest.get(listingKey);
+  return newest !== undefined && event.commit <= newest ? null : listingKey;
 }
 
 /** Apply one durable event. Returns whether it changed anything. */
@@ -978,18 +942,10 @@ function applyEvent(
   event: DisplaySessionEvent,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
-  const transcriptChanged =
-    read !== 'listing' &&
-    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
-      ? applyTranscriptRow(u, event)
-      : false;
-  const listingType = listingKeyOf(event);
-  if (listingType === null) return transcriptChanged;
-  // Ordered by commit per (aggregate, listing type), whatever the read.
-  const listingKey = `${event.aggregateId}/${listingType}`;
+  const transcriptChanged = applyTranscriptRow(u, event, read);
+  const listingKey = newListingKey(u, event);
+  if (listingKey === null) return transcriptChanged;
   const { latest } = u.state;
-  const newest = latest.get(listingKey);
-  if (newest !== undefined && event.commit <= newest) return transcriptChanged;
 
   // The run the event names: its aggregate, unless that is a plugin's own.
   const runId = runIdOf(event.aggregateId);
@@ -1001,32 +957,13 @@ function applyEvent(
   const known = u.view.runs.get(runId);
   // Only `run.start` creates a run, once. A fact for a run without one
   // changes nothing and leaves no entry (its publisher logs it).
-  if (!known && event.type !== 'run.start') return false;
+  const before =
+    known ?? (event.type === 'run.start' ? createRun(u, event, runId) : null);
+  if (before === null) return false;
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return removeRun(u, runId);
-  const created = !known;
-  const before = known ?? createRun(u, event as RunStartEvent, runId);
-
-  // The rows the run loop's state is also built from are applied once, in
-  // `runRows.ts`; every other row is the view's own.
-  let own: RunView;
-  if (isSharedRunRow(event)) {
-    own = applyRowFacts(u, before, event);
-  } else if (event.type === 'usage') {
-    // The listing's row is the run's spend through its commit; every other
-    // read's row is one priced turn. `latest` above is the run's high-water
-    // commit, so a turn one read already counted never counts twice.
-    own = {
-      ...before,
-      usage:
-        read === 'listing'
-          ? event.usage
-          : sumUsageStats([before.usage, event.usage]),
-    };
-  } else {
-    applySessionFacts(u, runId, event);
-    own = applyRunEvent(u, before, event);
-  }
+  const created = known === undefined;
+  const own = applyToRun(u, before, event, read);
   if (event.type === 'run.end') {
     // A run can end with a row unfinalized: its end drops all live text.
     clearLiveText(transcriptWork(u, runId).ix);
@@ -1037,10 +974,9 @@ function applyEvent(
   setRun(u, next);
 
   if (created || next.parentId !== before.parentId) {
-    relink(u, next, created ? null : before.parentId);
+    next = relink(u, next, created ? null : before.parentId);
     if (!created) walkUp(u, before.parentId);
   }
-  next = u.view.runs.get(next.id)!;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved
     ? withAggregates(u, withTranscriptFacts(u, next))
@@ -1050,8 +986,37 @@ function applyEvent(
   return true;
 }
 
-/** One transcript or lifecycle row onto a subscribed run's transcript. */
-function applyTranscriptRow(u: Update, event: DisplaySessionEvent): boolean {
+/** What a durable event changes on its own run. The rows the run loop's
+ *  state is also built from are applied once, in `runRows.ts`; every other
+ *  row is the view's own. */
+function applyToRun(
+  u: Update,
+  run: RunView,
+  event: DisplaySessionEvent,
+  read: 'listing' | 'aggregate' | 'all',
+): RunView {
+  if (isSharedRunRow(event)) return applyRowFacts(u, run, event);
+  if (event.type !== 'usage') {
+    applySessionFacts(u, run.id, event);
+    return applyRunEvent(u, run, event);
+  }
+  // The listing's row is the run's spend through its commit; every other
+  // read's row is one priced turn. `latest` is the run's high-water commit,
+  // so a turn one read already counted never counts twice.
+  const usage =
+    read === 'listing' ? event.usage : sumUsageStats([run.usage, event.usage]);
+  return { ...run, usage };
+}
+
+/** One transcript or lifecycle row onto a subscribed run's transcript; a
+ *  listing read carries none. */
+function applyTranscriptRow(
+  u: Update,
+  event: DisplaySessionEvent,
+  read: 'listing' | 'aggregate' | 'all',
+): boolean {
+  if (read === 'listing') return false;
+  if (!isTranscriptEvent(event) && phaseMoveOf(event) === null) return false;
   const applied = u.view.transcriptSeq.get(event.aggregateId);
   if (applied === undefined || event.seq <= applied) return false;
   const runId = runIdOf(event.aggregateId);
@@ -1119,9 +1084,10 @@ function removeRun(u: Update, runId: RunId): boolean {
   for (const childId of run.childIds) {
     const child = view.runs.get(childId);
     if (!child) continue;
-    setRun(u, { ...child, parentId: null });
+    const orphan = { ...child, parentId: null };
+    setRun(u, orphan);
     view.order = insertOrdered(view, view.order, childId);
-    refreshAncestors(u, childId);
+    refreshAncestors(u, orphan);
   }
   return true;
 }

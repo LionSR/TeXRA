@@ -10,7 +10,6 @@
  * publishing it, so the writer checks only what a batch alone shows.
  */
 import { Result, Schema, Struct } from 'effect';
-
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
   addTurnUsage,
@@ -31,7 +30,7 @@ import {
 import { phaseAfter, type RunLoopPhase } from '@shared/runs/runStatus';
 import { NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
-  applyRunRow,
+  applyPositionRow,
   type BatchCopies,
   freshRunPosition,
   type FOLLOW_UP_TYPES,
@@ -72,6 +71,7 @@ type RunHistoryDraftType =
   | 'followup.consumed'
   | CardRowType;
 
+/** A row that cannot be applied to the run's state: corrupt history. */
 export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>()(
   'RunHistoryInconsistent',
   {
@@ -312,7 +312,7 @@ export type RowHandler<K extends RunStateRowType> = {
   ) => RowOutcome | null;
 };
 
-/** The rows `applyRunRow` handles for both readers, copied onto the state. */
+/** The position rows both readers apply, copied onto the state. */
 const applySharedRow = (
   state: RunState,
   row: RowOf<'run.position' | 'request.opened' | 'request.decided'>,
@@ -320,7 +320,7 @@ const applySharedRow = (
 ): RowOutcome | null => {
   // `unresolved` means corrupt history here: this reader has every row of
   // the run, so a decision always follows the request it answers.
-  const verdict = applyRunRow(state, row, copies);
+  const verdict = applyPositionRow(state, row, copies);
   if (verdict.kind === 'unchanged') return null;
   if (verdict.kind === 'unresolved')
     return outOfOrder(`decision names no request ${verdict.requestId}`);

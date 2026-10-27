@@ -314,7 +314,7 @@ export const sessionEventsLayer = Layer.effect(
       expectedStartCommit,
     ) =>
       Effect.flatMap(
-        log.prepareRunRemoval(id, mode, expectedStartCommit),
+        log.deletions.prepare(id, mode, expectedStartCommit),
         (removal) => transact(() => Effect.tap(removal, tracked)),
       );
     const detach: SessionEventsShape['detach'] = (job, options = {}) => {

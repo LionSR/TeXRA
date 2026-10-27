@@ -49,6 +49,8 @@ type StoredPayload<K> = Extract<
   { kind: K }
 >;
 
+/** A `model.message` row's payload in the loop's terms: each kind as stored,
+ *  with the turn, origin, operation and messages as `@texra-ai/llm` values. */
 export type ModelMessagePayload =
   | StoredPayload<'identified'>
   | StoredPayload<'failed'>

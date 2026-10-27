@@ -7,11 +7,12 @@
  * every other owner (a plugin, a host, the app) declares its family beside
  * the code that reads and writes it. A family names the schema its value
  * decodes with at the database boundary; a row that no longer decodes fails
- * the read.
+ * the read. `CurrentValues` is the store's interface over the families.
  */
-import { Schema } from 'effect';
+import { type Effect, type Result, Schema, type Stream } from 'effect';
 
 import { JsonValueSchema, type JsonValue } from '@shared/schemas';
+import type { DatabaseReadFailed, DatabaseWriteFailed } from './database';
 
 /**
  * One family of current values: its stored name, the schema its value
@@ -22,6 +23,48 @@ export interface ValueFamily<T, Deletable extends boolean = false> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
   readonly deletable: Deletable;
+}
+
+/** A root's current values, read and written by family and key. Every write
+ *  is one `BEGIN IMMEDIATE` with no aggregate claim. */
+export interface CurrentValues {
+  readonly get: <T, D extends boolean>(
+    family: ValueFamily<T, D>,
+    key: string,
+  ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
+  /**
+   * Change one value from the one read under the write lock: `change`
+   * answers with its result and the next value, with its result alone to
+   * write nothing, or refuses and nothing is written. Only a deletable
+   * family's change may answer `undefined`, which deletes the row.
+   */
+  readonly modify: <T, D extends boolean, A, E = never>(
+    family: ValueFamily<T, D>,
+    key: string,
+    change: (
+      current: T | undefined,
+    ) => Result.Result<
+      readonly [A] | readonly [A, D extends true ? T | undefined : T],
+      E
+    >,
+  ) => Effect.Effect<A, E | DatabaseWriteFailed>;
+  /** Every row of a family, latest write first. */
+  readonly list: <T, D extends boolean>(
+    family: ValueFamily<T, D>,
+  ) => Effect.Effect<
+    readonly { readonly key: string; readonly value: T }[],
+    DatabaseReadFailed
+  >;
+  /**
+   * Emits as subscribed, then after each commit, by this process or
+   * another, that changed one of `keys`' values: the root's wake level
+   * narrowed inside the store to those rows. A read that fails is logged and
+   * retried, so no change is missed.
+   */
+  readonly changes: (
+    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
+    keys: readonly string[],
+  ) => Stream.Stream<void>;
 }
 
 /** The process's settings store, keyed by the setting key. */

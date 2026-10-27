@@ -30,7 +30,8 @@ import {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
+import { GlobalDatabase } from '@shared/session/database';
+import type { CurrentValues } from '@shared/session/valueFamily';
 import { UsageLog } from '@shared/usageLog';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
