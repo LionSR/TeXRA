@@ -184,6 +184,19 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
+```mermaid
+flowchart LR
+  facts[RouteFacts, credentials<br>from the caller] --> route[models/<br>model selection, the route decision]
+  route --> bind["node.ts<br>bindModel: the protocol choice"]
+  bind --> responses[api/openaiResponses.ts]
+  bind --> messages[api/anthropicMessages.ts]
+  bind --> interactions[api/googleInteractions.ts]
+  responses --> assemble[api/assembleTurn.ts<br>one turn reducer over part events]
+  messages --> assemble
+  interactions --> assemble
+  assemble --> model[turn.ts<br>the Model contract: events, result, errors]
+```
+
 | File                              | What it owns                                                                                                                                                            |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |

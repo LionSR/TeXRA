@@ -371,6 +371,18 @@ files.
 | `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                  |
 | `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                            |
 
+The entries over the package, and what each reaches:
+
+```mermaid
+flowchart LR
+  node["@texra-ai/harness/node<br>nodePlatform"] --> root["@texra-ai/harness<br>Sessions, Session, Run, defineTool"]
+  plugins["@texra-ai/harness/plugins<br>harnessBuiltins, definePlugin"] --> root
+  root --> schemas["@texra-ai/harness/schemas<br>schemas, SessionView, approval policy"]
+  transcript["@texra-ai/harness/transcript<br>RemoteSessionView, transcript rows"] --> schemas
+  root --> llm["@texra-ai/llm<br>Model"]
+  root --> store[("texra.db<br>SQLite under the storage root")]
+```
+
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
 under [`docs/api/`](./docs/api/index.md), generated from the source. A runnable
