@@ -179,7 +179,7 @@ function findingKey(finding) {
   return `${normalized.file} ${normalized.category} ${normalized.kind} ${normalized.name}`;
 }
 
-export function compareFindings(a, b) {
+function compareFindings(a, b) {
   const normalizedA = normalizeFinding(a);
   const normalizedB = normalizeFinding(b);
   return (
