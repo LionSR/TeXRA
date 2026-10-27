@@ -312,7 +312,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       const finishAttempt = Effect.fn('ModelInvoker.finish')(function* (
         cell: RunCell,
         invocation: InvocationRef,
-        request: InvokeRequest,
         bound: BoundModel,
         trace: AttemptTrace,
         started: number,
@@ -503,7 +502,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         return yield* finishAttempt(
           cell,
           invocation,
-          request,
           bound,
           trace,
           started,
@@ -560,7 +558,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           return yield* finishAttempt(
             cell,
             invocation,
-            request,
             bound,
             trace,
             started,

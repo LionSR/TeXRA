@@ -180,7 +180,6 @@ export class RunRegistry implements RunsShape {
 
   // ---------------------------------------------------------------- entries
 
-  private readonly now = () => this.init.session().log.now();
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;

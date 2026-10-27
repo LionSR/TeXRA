@@ -104,7 +104,7 @@ const portOverPool = (
   // on.
 
   executeFileCommand: (command, filePath, runId) =>
-    pool.executeFileCommand(command, filePath, runId).pipe(
+    pool.executeFileCommand(filePath, runId).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterrupts(cause)
           ? Effect.fail(
