@@ -8,7 +8,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { readNormalizedFile } from './fsDurability';
-import { entryExists } from './fsEntryExists';
+import { absentReason } from './fsEntryExists';
 
 const CHANNEL = 'agentsMd';
 
@@ -41,15 +41,10 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
 
   for (const { root, source } of candidates) {
     const file = path.join(root, AGENTS_FILE);
-    // Absent, a dangling link included, is '' and falls through.
-    const content = yield* Effect.gen(function* () {
-      if (!(yield* entryExists(fs, file))) return '';
-      return yield* readNormalizedFile(fs, file);
-    }).pipe(
-      Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
-        () => Effect.succeed(''),
-      ),
+    // One read: absent (a dangling link or a non-directory parent
+    // included) is '' and falls through.
+    const content = yield* readNormalizedFile(fs, file).pipe(
+      Effect.catchIf(absentReason, () => Effect.succeed('')),
       Effect.mapError(
         (error) =>
           new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {

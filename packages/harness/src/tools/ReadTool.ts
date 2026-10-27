@@ -140,6 +140,10 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   // workspace file and one under a registered external root are the same
   // read here, through the process `FileSystem`.
   const fs = yield* FileSystem.FileSystem;
+  // The file's text with LF line ends; run by whichever branch reads it.
+  const readLf = fs
+    .readFileString(resolved.absolute)
+    .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
 
   if (hasExtension(input.path, '.eml')) {
     const stats = yield* fs.stat(resolved.absolute);
@@ -151,18 +155,11 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
         ),
       );
     }
-    const raw = yield* fs
-      .readFileString(resolved.absolute)
-      .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
-    const { text, images } = yield* parseEml(raw);
+    const { text, images } = yield* parseEml(yield* readLf);
     lines = splitContentLines(text);
     emlImages = images;
   } else {
-    lines = splitContentLines(
-      yield* fs
-        .readFileString(resolved.absolute)
-        .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n'))),
-    );
+    lines = splitContentLines(yield* readLf);
   }
 
   yield* recordToolFileRead(filePath);
