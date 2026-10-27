@@ -71,7 +71,7 @@ function childHeaderFor(
   return {
     label: child.label,
     modelLabel: child.modelLabel,
-    childKind: child.identity?.kind === 'script' ? 'script' : 'subagent',
+    childKind: child.identity.kind === 'script' ? 'script' : 'subagent',
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }
@@ -209,7 +209,7 @@ export function StaticConversationTranscript({
       waitingForChildIdentity:
         stream !== undefined &&
         stream.parentId !== null &&
-        stream.identity?.kind === 'agent' &&
+        stream.identity.kind === 'agent' &&
         stream.model === null,
       child: childHeaderFor(view, scrollbackRunId),
       hardReset:

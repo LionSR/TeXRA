@@ -61,7 +61,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
         'Model did not wrap response in <corrected_text> tags; using raw response',
       ).pipe(withLogChannel(CHANNEL));
     }
-    return (corrected ?? responseText).trim();
+    return (corrected || responseText).trim();
   }).pipe(
     Effect.catch((error) => {
       const message = getSdkErrorMessage(error);

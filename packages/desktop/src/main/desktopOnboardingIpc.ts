@@ -99,8 +99,8 @@ export function createDesktopOnboardingIpc(
     setFirstRunDone(state, true).pipe(Effect.flatMap(() => funnel.run()));
 
   // The guard keeps a double-click of "Run Setup" from launching a second
-  // concurrent run — the host's `handleExecute`/root launch has no in-flight
-  // dedup of its own.
+  // concurrent run — the host's root launch has no in-flight dedup of its
+  // own.
   const runSetup = (): OnboardingAction =>
     Effect.gen(function* () {
       if (!setupKickoffStarted) {

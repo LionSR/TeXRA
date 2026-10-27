@@ -1,6 +1,6 @@
 /**
  * Parser for `\criticize{message}{severity}{confidence}` annotations, built
- * on the shared brace-balanced macro scanner (`@utils/text/braceBalancedMacro`)
+ * on the shared brace-balanced macro scanner (`@texra/utils/text/braceBalancedMacro`)
  * also used by `stripCriticizeAnnotations` in `replacement/advanced.ts` to
  * remove these annotations from output. Both recognize the same macro shape;
  * this layer adds severity/confidence validation and source line/column

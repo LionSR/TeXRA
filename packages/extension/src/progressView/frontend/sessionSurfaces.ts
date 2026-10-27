@@ -430,7 +430,7 @@ export function createSessionSurfaces(options: {
     }
     // The form's approval went through: back to the run that asked, where
     // its child starts.
-    if (result.ok && fromForm && request.kind === 'request.decide') {
+    if (result.ok && fromForm) {
       act(entry, { kind: 'launch', patch: { instruction: '' } });
       act(entry, { kind: 'select', runId: request.runId });
     }

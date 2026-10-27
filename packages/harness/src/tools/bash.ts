@@ -442,7 +442,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   if (result.success) {
     const preview = previewLabel(command);
     return executed(
-      retainedStdout ?? '',
+      retainedStdout,
       `Executed: ${preview} (exit 0, ${duration})`,
     );
   }

@@ -90,7 +90,7 @@ function runLayerFor(
         callbacks: {
           onProgress: (update) => {
             // A UI-only signal, suppressed in the transcript fold: the session
-            // progress projector derives `updateConversationProgress` from it.
+            // view updater sets the run's `conversationProgress` from it.
             if (update.kind === 'overview') {
               ctx.logger.emit({
                 type: 'conversation.progress',
@@ -162,7 +162,7 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
   const inputName = primaryInput
     ? path.basename(primaryInput)
     : 'selected input';
-  const outputFiles = config.outputFiles ?? [];
+  const { outputFiles } = config;
   let outputInfo = '';
   if (outputFiles.length > 1) {
     outputInfo = `to ${outputFiles.length} files`;
@@ -280,7 +280,7 @@ export function executeAgent(
                 agent: config.agent,
                 model: config.model,
                 input: config.inputFiles[0] ?? '(none)',
-                outputs: config.outputFiles?.length ?? 0,
+                outputs: config.outputFiles.length,
               },
             }),
             withLogChannel(CHANNEL),

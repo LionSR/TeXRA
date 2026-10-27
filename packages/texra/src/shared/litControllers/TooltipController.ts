@@ -105,7 +105,7 @@ function handleOver(e: Event): void {
   if (!target || target === currentTarget) return;
 
   // Skip buttons with text content (they're self-explanatory)
-  if (target.textContent?.trim()) return;
+  if (target.textContent.trim()) return;
 
   hide();
   currentTarget = target;

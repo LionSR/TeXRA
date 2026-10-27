@@ -27,12 +27,11 @@ parity. A raw agent loop needs an installed process runtime, usable credentials,
 agent directories, a session, and a populated registry. When a run can open
 requests, something must also decide them (§3); presentation goes through the
 session's interactions attachment, and there is no separate presentation-host
-argument. The direct Lean language
-services the shipped Node hosts pass to `processLayer` are a
-shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
-layer there.
+argument. The Lean tools the shipped hosts compose (the `lean4` plugin in
+their plugin list) are a shipped-feature choice; the raw loop needs no Lean
+plugin at all.
 
-### Step 1 — `installProcessRuntime({ agentDirectories, … })`
+### Step 1 — `processLayer({ storageRoot, plugins, secrets, agentDirectories, … })`
 
 There is no `createNodePlatform` factory and no process-wide platform object
 any more: the `Platform` module was deleted (#13060). Every process fact has
@@ -41,38 +40,46 @@ one of two owners, and an embedder supplies each one there:
 - **Process services** (the `agentDirectories` port,
   the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
   application state, the resume port) are
-  Effect services provided once per process by `installProcessRuntime`
-  (`packages/harness/src/controllers/session/sessionLayer.ts`).
+  Effect services provided once per process by `processLayer`
+  (`packages/harness/src/effect/processLayer.ts`, options in
+  `packages/harness/src/controllers/session/sessionLayer.ts`), which also
+  serves the `Sessions` that open the process's sessions. A host builds a
+  `ManagedRuntime` over it and disposes that runtime on shutdown.
 - **Per-workspace services** (the workspace root, its storage paths, its
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
   can hold sessions rooted in several folders. Build one with
-  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:59-76`), which
-  canonicalizes the workspace path and picks the config provider.
+  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:65-82`), which
+  picks the config provider.
 
 `agentDirectories` is the port that names the three directories the registry
 scans. `new AgentDirectoryService({...})`
-(`packages/harness/src/agent/index/AgentDirectoryService.ts:58-60`) builds one over a
+(`packages/harness/src/agent/index/AgentDirectoryService.ts:62-68`) builds one over a
 packaged resources tree; its `builtIn()` reads that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
-Beside that install, a Node root calls `bootstrapHost`
-(`packages/texra/src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
-installs the model HTTP dispatcher, the process setting host, the account
-probes, the runtime skill sources, and the first-install disabled-tool seed.
+Beside that layer, a Node root calls `bootstrapHost`
+(`packages/texra/src/controllers/hostBootstrap.ts:61-77`) once, on its own process runtime: it
+registers the runtime skill sources and seeds the first-install disabled
+tools. The model HTTP dispatcher is installed by `processLayer` itself.
 An embedder that skips it gets a runtime without those, not a broken one.
 
-Only a composition root calls `installProcessRuntime`; ESLint pins the import
+Only a composition root imports `processLayer`; ESLint pins the import
 to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 
-### Feature-parity step — the `lean` layer of `installProcessRuntime`
+### Feature-parity step — the `lean4` plugin's process layer
 
-`packages/texra/src/tools/lean/direct/directLspAdapter.ts`. The Node hosts pass exactly one
-layer:
+TeXRA's Lean tools are the `lean4` plugin
+(`packages/texra/src/tools/integrationPlugins.ts`), and its process layer is
+the Lean language-server pool. By default that is the direct
+`lake env lean --server` pool (`directLeanLanguageServices`,
+`packages/texra/src/tools/lean/direct/directLspAdapter.ts`); a host passes its
+own services in its place through `texraPlugins({ lean })`, as the VS Code
+extension does with its Lean 4 extension bridge:
 
 ```ts
-installProcessRuntime({ /* … */, lean: directLeanLanguageServices() });
+processLayer({ /* … */, plugins: texraPlugins({ lean: myLeanServices }) });
 ```
 
 The two conditional tool injections — `memory` and the unified `plan` tool
@@ -84,8 +91,8 @@ table the process runtime provides.
 The pool the layer builds spawns nothing until a Lean tool is first used, and
 its servers stop when the process runtime is disposed.
 
-An embedder with its own Lean integration passes `LeanLanguageServices.layer`
-over it instead; the `memory` and `plan` injections are present either way.
+A composition without the `lean4` plugin offers no Lean tools; the `memory`
+and `plan` injections are present either way.
 
 ### Step 2 — credential resolution
 
@@ -111,35 +118,34 @@ const agentDirectories = new AgentDirectoryService({
   resourcesPath, // dir containing agents/, skills/
   state: { get: () => Effect.succeed(undefined) },
 });
-// Served as `AgentDirectories` by the Step 1 install:
-// installProcessRuntime({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
+// Served as `AgentDirectories` by the Step 1 layer:
+// processLayer({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
 ```
 
 `state.get()` reads the stored setting that names the user-configured
 custom agent directory; `undefined` means none. The three methods return Effects, not Promises
-(`packages/harness/src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
+(`packages/harness/src/agent/index/AgentDirectoryService.ts:70-86`); a failure to resolve a
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
 
-Alternatively, skip the packaged tree entirely and hand `installProcessRuntime` an
+Alternatively, skip the packaged tree entirely and hand `processLayer` an
 `AgentDirectoriesPort` of your own that points at your directory. See
 [§2](#2-agentdirectoriesport-is-two-directory-paths-not-agent-values).
 
-### Prerequisite A — a default or explicit session
+### Prerequisite A — a session
 
 A root launch runs on a session (`session.runs.launch`). The CLI bootstrap in
 `packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
 Effect; commands run `services.session` when they need a session. Utility commands
 that need no session leave the store unopened.
 
-- `initializeDefaultSession({})` returns an Effect that opens the process-default
-  session over the process roots. Run it at the host boundary and pass its handle
-  as `options.session`. A second initialization while the session is open fails.
-  The CLI and extension supply their `responseTextProcessing` policy here.
-- `openSessionEffect({ roots, ... })` opens an owner-held session for explicit
-  roots, returning the existing handle when that storage root is already open.
-  Launch on the handle (`session.runs.launch`); close it through the session owner when its
-  lifetime ends.
+- `Sessions.open(roots, options)` (`packages/harness/src/effect/processLayer.ts`)
+  opens the session of `roots`, returning the one already open when that
+  storage root is. `options.persistent` keeps its history in the root's SQLite
+  store; absent, the store is in memory and ends with the session.
+- `Sessions.close(roots)` settles and releases one session, and
+  `Sessions.closeAll` closes every open one at shutdown; the layer's release
+  closes whatever is still open.
 
 ### Prerequisite B — the `AgentCatalog` service
 
@@ -231,13 +237,13 @@ schemas reject fails it with `RunFailure` before admission too (`admitInput`,
 `InlinePersonaSchema.parse` and `AgentConfigSchema.parse`, so a typed
 `temperature: 2` is one); and a failure after admission fails `run.result`
 with `RunFailure`. A host inside this repository that already holds a
-`ValidatedExecutionRequest` launches through `session.runs.launch` on its
+`ValidatedRunRequest` launches through `session.runs.launch` on its
 `SessionHandle` instead, which needs the composition root's `SessionOwner`.
 `validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
 is the result-style helper that builds one: it returns either a
-`ValidatedExecutionRequest` or a validation message. A caller that prefers
+`ValidatedRunRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
-`ValidatedExecutionRequest` structurally, as production extension callers do
+`ValidatedRunRequest` structurally, as production extension callers do
 (`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`packages/harness/src/shared/schemas/agentConfig.ts`). A launch names no agent
@@ -368,17 +374,17 @@ field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteraction
 an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
-applies the session's approval policy to it (`withholdsApprovalTools`,
-`packages/harness/src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
+applies the session's approval policy to it (`liveToolGates`,
+`packages/harness/src/agent/runtime/requestPolicy.ts:185-208`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
 attached mid-run reaches the next step's offer, and a delegated child, which
 runs on its parent's session, and a run the session wakes on its own get the
-same answer. When the answer is to withhold, `resolveAgentTools` drops every
+same answer. When the answer is to withhold, `resolveStepTools` drops every
 catalog `requiresApproval` tool before the model sees it
-(`packages/harness/src/agent/runtime/agentToolResolution.ts:245-249`), so a run cannot open the
+(`packages/harness/src/agent/runtime/agentToolResolution.ts:194-198`), so a run cannot open the
 requests those tools would raise. Tools an embedder supplies in
 `RootLaunchOptions.tools` are not withheld: they are overlaid after the gates
-(`resolveStepTools`, `agentToolResolution.ts:356-365`) and the model is
+(`packages/harness/src/agent/runtime/agentToolResolution.ts:287-297`) and the model is
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
@@ -402,7 +408,8 @@ answers what its policy leaves open from a terminal prompt
 `packages/cli/src/runtime/approvalAdapter.ts`).
 
 The same holds for a plan, a delegation proposal and a question
-(`decideRequestOpening`, called by `SessionHandle.openRequest`).
+(`policyDecidedRows` in `packages/harness/src/agent/runtime/requestPolicy.ts`,
+whose rows `session.requests.ask` commits beside the `request.opened`).
 
 ### What ends a wait without a decision
 
@@ -465,7 +472,7 @@ does. Skipping it drops the Lean agents and nothing else.
 
 ## 5. Reading the CLI: obligations vs. product features
 
-`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:256-467`) is one
+`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:278-466`) is one
 Effect program that builds the process runtime, the process roots and the
 process session, and every `texra` command runs it. An embedder reading it cannot tell
 which steps are runtime requirements and which are `texra`-the-product. The
@@ -473,36 +480,36 @@ following classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-- **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:229`), which also
+- **`:295-303` — `installCliProcessRuntime(...)`:** Required. The one process
+  runtime, a `ManagedRuntime` over `processLayer`
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:238-242`), which also
   builds the agent-directories port
-  (`:218-229`). The direct Lean language-server layer
-  (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
-  another layer. The `memory` and `plan` injections are manifest data
+  (`:226-237`). The `lean4` plugin's direct Lean language-server pool
+  (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
+  leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
-- **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+- **`:349-358` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
-- **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
+- **`:392-398` — `bootstrapHost({ roots, skills })`:**
   The shared once-per-process install every host runs beside its runtime
-  (`packages/texra/src/controllers/hostBootstrap.ts:75-92`): the process
-  setting host, the account probes, the runtime skill sources, and the
-  first-install disabled-tool seed. (The model HTTP dispatcher is installed by
+  (`packages/texra/src/controllers/hostBootstrap.ts:61-77`): the runtime skill
+  sources and the first-install disabled-tool seed. (The model HTTP dispatcher is installed by
   `processLayer()` itself, the host path; `Sessions.layer` never sets it.) An embedder that skips it gets a runtime
   without those, not a broken one. The CLI runs it before publishing its roots
   so the fallible seed fails while they are still private.
 
 ### CLI initialization choices — not runtime obligations
 
-- **`openProjectStateStore(storage.getStoragePath())`:** The CLI's own on-disk
-  workspace state stores under its storage root. An embedder supplies its own
+- **`:337-343` — `StateStores.project(...)` and `StateStores.repo(...)`:** The
+  CLI's own on-disk workspace state stores under its storage root. An embedder supplies its own
   stores to `createNodeWorkspaceRoots`.
-- **`:340-363` — the memoized session open:** Opens the process session lazily,
-  with the LaTeX response-text connector as its `responseTextProcessing`, so a
-  command that needs no session never opens one. An embedder calls
-  `initializeDefaultSession` directly (§1, Prerequisite A).
+- **`:363-385` — the memoized session open:** Opens the process session lazily
+  (`Sessions.open(roots, { persistent: true, … })`), so a command that needs
+  no session never opens one. An embedder calls `Sessions.open` directly (§1,
+  Prerequisite A).
 - **The shutdown scope (`initCliPlatform`):** The process's shutdown is one
   scope's close. Its finalizers run in reverse of registration: every
-  session closes (`closeAllSessions`, which stops and settles its runs,
+  session closes (`Sessions.closeAll`, which stops and settles its runs,
   killing agent-spawned OS children with them, and flushes its artifacts),
   then the project scope with a final NDJSON flush, then the runtime.
   Recommended for any long-lived process that runs `bash` tools; an embedder
@@ -516,8 +523,8 @@ following classification makes that distinction.
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
 minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:164`, runs the same
-`bootstrapHost` at `:228`. Product policy is
+`packages/desktop/src/main/platform/index.ts:114-125`, runs the same
+`bootstrapHost` at `:176`. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per
 host.
@@ -534,8 +541,8 @@ host.
    (`packages/harness/src/tools/plugins.ts`;
    `packages/texra/src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **The process runtime is once-per-process.** The Lean layer is built with
-   it and closed with it; a host passes it exactly where it calls
-   `installProcessRuntime` (`packages/harness/src/controllers/session/sessionLayer.ts`).
+   it and closed with it; a host passes it in the plugin list it hands
+   `processLayer` (`packages/harness/src/effect/processLayer.ts`).
 3. **The agent catalog is process-wide**, not session-scoped (the process's
    `AgentCatalog` service, `packages/harness/src/agent/index/agentCatalog.ts`). There is no per-embedder agent
    namespace.

@@ -121,7 +121,7 @@ export function attachScriptPlainOutput(
               : [...view.runs.values()].filter(
                   (run) =>
                     rootedIds.has(run.id) &&
-                    (run.identity?.kind === 'script' || run.id === root),
+                    (run.identity.kind === 'script' || run.id === root),
                 );
           const key = scriptRuns.map((run) => run.id).join('\0');
           if (key !== subscribed) {

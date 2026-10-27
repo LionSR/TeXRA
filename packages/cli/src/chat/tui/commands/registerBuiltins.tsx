@@ -12,10 +12,7 @@ import {
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import type {
-  CliLogoutTarget,
-  LoginFormValue,
-} from '@cli/runtime/loginOptions';
+import type { LoginFormValue } from '@cli/runtime/loginOptions';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -74,7 +71,6 @@ import {
 } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 import {
-  type ApiKeySaveHandler,
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
@@ -129,9 +125,7 @@ export function registerBuiltinSlashCommands(options: {
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
-  onApiKeySave?: ApiKeySaveHandler;
   onLoginSelect?: FormActionHandler<LoginFormValue>;
-  onLogoutSelect?: FormActionHandler<CliLogoutTarget>;
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
@@ -489,9 +483,7 @@ export function registerBuiltinSlashCommands(options: {
       runtime,
       bindSelection,
       onModelAccessSelect: options.onModelAccessSelect,
-      onApiKeySave: options.onApiKeySave,
       onLoginSelect: options.onLoginSelect,
-      onLogoutSelect: options.onLogoutSelect,
       onAccountChanged: options.onAccountChanged,
       onError: options.onError,
     }),

@@ -11,9 +11,10 @@ concern they carry:
 
 What is **not** here, and where it lives instead:
 
-- The run snapshot and the run usage totals are schemas, not classes:
-  `runSnapshotState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
-  accumulator type in `core`.
+- The facts a run's rows carry and the run usage totals are schemas, not
+  classes: `runFacts.ts` and `usage.ts` in `@shared/schemas`. The state the
+  loop continues from is `RunState` (`@shared/session/runState`), rebuilt from
+  the rows. There is no usage accumulator type in `core`.
 - The run program is `@agent/runtime/loop/toolUse.ts` (a task's recipe, a
   plugin's script, runs as its one call), its
   per-run services `@agent/runtime/run/`, the model call

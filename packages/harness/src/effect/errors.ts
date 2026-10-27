@@ -11,7 +11,7 @@
  * the whole surface.
  *
  * Request failures are not defined here. A `session.request` answers with the
- * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
+ * runtime's own `RequestError` union (`@shared/session/runtimeRequest`), the
  * same values every host reads, so the package adds no second
  * vocabulary for them.
  */

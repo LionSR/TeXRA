@@ -90,11 +90,13 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
   OSC color, or notification sequences. No "assume a modern terminal" feature
   use. (Bracketed paste is deliberately unconditional.)
 
-- **Sync-teardown terminal restoration on every exit path.** `exitNow()` and
-  every signal handler does synchronous `writeSync` mode-disable (mouse, kitty,
-  bracketed paste, cursor) before any async drain, wired to
-  SIGINT/SIGTERM/SIGHUP. Implemented in `runChatTui.tsx`; route new mode toggles
-  through that same synchronous path.
+- **Sync-teardown terminal restoration on every exit path.** The TUI's hold on
+  the terminal (`acquireTuiTerminal` in `tui/terminalCleanup.ts`) restores the
+  title and disables the modes (mouse, kitty, bracketed paste, cursor) with
+  synchronous `writeSync` before any async drain; the exit controller
+  (`chat/tui/sessionExitController.ts`, SIGINT/SIGTERM/SIGHUP) releases it, and
+  its `exit` hook covers every other death. Route new mode toggles through that
+  same synchronous path.
 
 - **Defer non-terminal content to the host.** The TUI does not render PDFs,
   LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the

@@ -249,8 +249,8 @@ function set(
 
 /**
  * Reset a setting to its default by **deleting** the stored key, so the
- * schema's `.prefault()` reappears on the next read. Never writes the literal
- * default value.
+ * schema's decoding default reappears on the next read. Never writes the
+ * literal default value.
  */
 function reset(
   stores: SettingsStores,

@@ -18,7 +18,7 @@ import {
   ToolError,
 } from '@texra-ai/harness/plugins';
 import { type StateSettingEntry } from '@texra-ai/harness/schemas';
-import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
+import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 /**
@@ -104,7 +104,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
 ) {
   const entry = catalogEntry(input.key);
   const value = yield* Schema.decodeUnknownEffect(
-    settingSchemaWithoutPrefault(entry),
+    settingSchemaWithoutDefault(entry),
   )(input.value).pipe(
     Effect.mapError(
       (error) =>

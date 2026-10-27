@@ -53,7 +53,7 @@ export type FormActionHandler<T> = (
   output: SlashCommandOutput,
 ) => SlashCommandEffect;
 /** The key write as a program; the form that collects the key runs it. */
-export type ApiKeySaveHandler = (
+type ApiKeySaveHandler = (
   provider: ApiKeyProviderId,
   key: string,
 ) => Effect.Effect<string | void, Error>;
@@ -78,9 +78,7 @@ export function modelAccessContribution(deps: {
   readonly runtime: ProcessRuntime;
   readonly bindSelection: BindSelection;
   readonly onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
-  readonly onApiKeySave?: ApiKeySaveHandler;
   readonly onLoginSelect?: FormActionHandler<LoginFormValue>;
-  readonly onLogoutSelect?: FormActionHandler<CliLogoutTarget>;
   /** After a sign-in, sign-out, preference, or key save settles: the chat
    *  re-checks whether a model can answer now. */
   readonly onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
@@ -92,15 +90,13 @@ export function modelAccessContribution(deps: {
     deps.onModelAccessSelect ??
     ((selection, output) =>
       applyCliModelAccessSelection(stores, selection, undefined, output));
-  const onApiKeySave: ApiKeySaveHandler =
-    deps.onApiKeySave ??
-    ((provider, key) => applyCliProviderApiKey(secrets, stores, provider, key));
+  const onApiKeySave: ApiKeySaveHandler = (provider, key) =>
+    applyCliProviderApiKey(secrets, stores, provider, key);
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     deps.onLoginSelect ??
     ((value, output) => loginFromChat(value, stores, undefined, output));
-  const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
-    deps.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, stores, secrets, output));
+  const onLogoutSelect: FormActionHandler<CliLogoutTarget> = (value, output) =>
+    logoutFromChat(value, stores, secrets, output);
   const recheck = (): Effect.Effect<void, never, ProcessServices> =>
     deps.onAccountChanged?.() ?? Effect.void;
 

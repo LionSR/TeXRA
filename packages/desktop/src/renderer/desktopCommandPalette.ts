@@ -29,7 +29,6 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 interface CommandPaletteEntry {
   readonly id: string;
   readonly label: string;
-  readonly description?: string;
   readonly icon: IconName;
   readonly meta?: string;
   readonly category?: string;
@@ -70,7 +69,7 @@ function filterCommandPaletteEntries(
     // category-name match. Empty/undefined fields collapse to '' and don't
     // affect matching.
     const haystack =
-      `${entry.label} ${entry.description ?? ''} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
+      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
         .replaceAll('.', ' ')
         .toLowerCase();
     return queryParts.every((part) => haystack.includes(part));
@@ -263,14 +262,6 @@ export function createDesktopCommandPalette({
                             <span class="desktop-command-palette-label">
                               ${entry.label}
                             </span>
-                            ${
-                              entry.description
-                                ? html`<span
-                                    class="desktop-command-palette-description"
-                                    >${entry.description}</span
-                                  >`
-                                : nothing
-                            }
                           </span>
                         </span>
                         ${

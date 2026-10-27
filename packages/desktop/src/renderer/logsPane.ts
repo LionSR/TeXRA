@@ -41,15 +41,6 @@ interface LogViewerState {
   meta: string;
 }
 
-interface LogsPaneOptions {
-  readonly sendCommand?: (command: string) => void;
-  readonly scheduleRefresh?: (
-    callback: () => void,
-    intervalMs: number,
-  ) => number;
-  readonly refreshIntervalMs?: number;
-}
-
 interface LogsPaneController {
   /**
    * Root element, hosted by the Logs tab. Previously this lived inside a
@@ -132,20 +123,10 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
   });
 }
 
-export function createLogsPane(
-  options: LogsPaneOptions = {},
-): LogsPaneController {
+export function createLogsPane(): LogsPaneController {
   const container = document.createElement('div');
   container.setAttribute('data-desktop-view', 'logs');
   container.className = 'desktop-log-host';
-
-  const sendCommand = options.sendCommand ?? postMessage;
-  const scheduleRefresh =
-    options.scheduleRefresh ??
-    ((callback: () => void, intervalMs: number) =>
-      window.setInterval(callback, intervalMs));
-  const refreshIntervalMs =
-    options.refreshIntervalMs ?? LOG_AUTO_REFRESH_INTERVAL_MS;
 
   let state: LogViewerState = {
     entries: [],
@@ -156,7 +137,7 @@ export function createLogsPane(
   let refreshHandle: number | undefined;
 
   function requestSnapshot(): void {
-    sendCommand(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
+    postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
   }
 
   function entryTemplate(entry: DesktopLogEntry): TemplateResult {
@@ -225,13 +206,13 @@ export function createLogsPane(
           <div class="desktop-log-viewer-actions">
             ${action('rotate-right', 'Refresh', requestSnapshot)}
             ${action('copy', 'Copy', () =>
-              sendCommand(DESKTOP_LOG_COMMANDS.COPY_LOG),
+              postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
             )}
             ${action('download', 'Export', () =>
-              sendCommand(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
+              postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
             )}
             ${action('folder-open', 'Open Folder', () =>
-              sendCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
             )}
           </div>
         </header>
@@ -265,14 +246,14 @@ export function createLogsPane(
     }
 
     requestSnapshot();
-    refreshHandle = scheduleRefresh(() => {
+    refreshHandle = window.setInterval(() => {
       if (!active) return;
       if (!container.isConnected) {
         setActive(false);
         return;
       }
       requestSnapshot();
-    }, refreshIntervalMs);
+    }, LOG_AUTO_REFRESH_INTERVAL_MS);
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {

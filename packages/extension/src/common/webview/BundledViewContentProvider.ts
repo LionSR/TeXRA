@@ -22,7 +22,7 @@ class WebviewTemplateMissingBody extends Schema.TaggedError<WebviewTemplateMissi
  * Installs the host bridge at `HOST_BRIDGE_API_KEY` before the webview
  * bundle loads, mirroring `installElectronHostBridge` (desktop) and
  * `installTraceHostBridge` (trace viewer): every host pre-populates the
- * global itself, so `@shared/hostBridge` never needs to know a
+ * global itself, so `@texra/shared/hostBridge` never needs to know a
  * VS Code-specific API exists.
  */
 function buildHostBridgeBootstrapScript(nonce: string): string {

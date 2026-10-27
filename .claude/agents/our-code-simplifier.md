@@ -31,7 +31,7 @@ downstream compensations.
 
 **Use the native surface of what you already depend on.** Import the SDK's
 own exported types instead of hand-writing parallel interfaces of its
-responses (`z.infer` is the in-repo analog for schemas — derive, never
+responses (`typeof S.Type` is the in-repo analog for schemas — derive, never
 restate). Use the helper methods the installed packages already export —
 check `node_modules`/the package's type surface before writing a utility.
 Hand-rolled duplicates of a dependency's own helpers are deletable; a
@@ -207,7 +207,8 @@ the same POLICY implemented per host, the simplification is to hoist it:
 
 - **Policy belongs to the core; wiring belongs to the host.** Approval
   policy, queue semantics, run/session lifecycle, model-access resolution,
-  retry/classification rules: one owner in `src/` (host-agnostic), hosts
+  retry/classification rules: one owner in the host-agnostic harness or app (`packages/harness/src`,
+  `packages/texra/src`), hosts
   reach it through a typed port the process runtime serves. Three host copies of one policy
   are three future divergences.
 - **Host-prefixed names are a smell detector, not a verdict.**

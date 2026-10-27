@@ -392,7 +392,7 @@ export const runLatexdiff = (
       );
 
       if (!result.success || !result.diffPath) {
-        entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
+        entry.onError(result.message);
         return;
       }
 

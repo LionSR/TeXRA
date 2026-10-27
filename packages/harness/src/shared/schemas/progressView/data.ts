@@ -20,11 +20,7 @@ import { ScriptDeliverySummarySchema } from '../scriptDelivery';
 // Shared Field Schemas
 // ============================================================
 
-/**
- * Coarse media-attachment classification: `image` vs everything else. Matches
- * the `image-attachment` / `document-attachment` split that
- * `normalizeConversationForExport` turns into export attachment parts.
- */
+/** Coarse media-attachment classification: `image` vs everything else. */
 export const MediaAttachmentKindSchema = Schema.Literals(['image', 'document']);
 export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
 

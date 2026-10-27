@@ -7,7 +7,7 @@ import { Effect } from 'effect';
  * list rather than naming fields: the approval/safety, git-author, skills,
  * telemetry, agents, and LaTeX snapshots all come from here. Per-row defaults,
  * validation and storage slots already live on the
- * catalog row and are applied by `readSetting`, so a snapshot builder has
+ * catalog row and are applied by `Settings.get`, so a snapshot builder has
  * nothing left of its own to say.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

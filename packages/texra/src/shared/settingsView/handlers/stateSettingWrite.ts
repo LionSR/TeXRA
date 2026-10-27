@@ -5,8 +5,8 @@
 // The hosts share persistence through `Settings` and own only the
 // post-write side effects for each outbound snapshot.
 // `applyStateSettingUpdate` owns the subtle boundary rules once:
-//   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
-//     parsing `undefined` would silently write a default),
+//   - a value-less message is a no-op (the catalog schemas carry a decoding
+//     default, so parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.

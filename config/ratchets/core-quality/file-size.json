@@ -6,7 +6,7 @@
   "packages/harness/src/agent/runtime/loop/step.ts": 479,
   "packages/harness/src/agent/runtime/loop/toolUse.ts": 598,
   "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 1109,
-  "packages/harness/src/agent/runtime/ModelInvoker.ts": 820,
+  "packages/harness/src/agent/runtime/ModelInvoker.ts": 819,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 435,
   "packages/harness/src/agent/runtime/run/compaction.ts": 446,
   "packages/harness/src/agent/runtime/run/validationModel.ts": 546,
@@ -25,7 +25,7 @@
   "packages/harness/src/shared/session/sessionView.ts": 452,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1166,
   "packages/harness/src/tools/bash.ts": 542,
-  "packages/harness/src/tools/delegation/AgentTool.ts": 597,
+  "packages/harness/src/tools/delegation/AgentTool.ts": 595,
   "packages/harness/src/tools/ExecutionsTool.ts": 792,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 433,
   "packages/harness/src/tools/memory/MemoryTool.ts": 541,
@@ -34,6 +34,6 @@
   "packages/llm/src/api/googleInteractions.ts": 946,
   "packages/llm/src/api/openaiResponses.ts": 499,
   "packages/llm/src/api/openaiResponsesCodec.ts": 472,
-  "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 407,
+  "packages/llm/src/oauth/SubscriptionOAuthCoordinator.ts": 405,
   "packages/llm/src/turn.ts": 675
 }

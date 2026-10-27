@@ -75,7 +75,7 @@ export function parseWorkingDirectory(
  * admits (the skills it lists or its user activated; none outside a run).
  * A tool's `ToolContext.env` satisfies it structurally.
  * `workingDirectory` is already absolute or absent: the run decides it once
- * where it is launched (`assembleAgentLaunchContext`).
+ * where it is launched (`buildAgentLaunchContext`).
  */
 export interface ToolPathCall {
   readonly roots: { readonly workspace: string | undefined } & SettingsStores;

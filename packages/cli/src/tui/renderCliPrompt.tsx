@@ -19,12 +19,6 @@ interface CliPromptOptions {
    * `scrollback` also erases scrollback for prompts that must leave no trace.
    */
   readonly clear?: 'visible' | 'scrollback';
-  /**
-   * Force Ink's interactive rendering. Callers that reject non-TTY output
-   * themselves set this so a real PTY that also has `CI` set still renders,
-   * instead of Ink's CI heuristic disabling it.
-   */
-  readonly interactive?: boolean;
 }
 
 /**
@@ -53,7 +47,6 @@ export function renderCliPrompt<T>(
             resolved = value;
           }),
           {
-            interactive: options.interactive,
             stdout: tuiOutputStreamForColor(
               options.stdout,
               options.colorEnabled ?? true,

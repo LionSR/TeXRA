@@ -6,7 +6,6 @@
  *   - the inbound/outbound message schemas in packages/harness/src/shared/schemas/
  *   - the settings catalog rows the LaTeX settings page renders
  * so changing a default or range here propagates everywhere with no rot.
- * Split out of the old `@shared/constants/latex` dumping ground.
  */
 
 /** Numeric range for a setting (used by the setting schemas and UI inputs). */

@@ -177,7 +177,7 @@ export function encodeDraft(
   if (draft.type === 'context.blob') {
     const { digest, value } = draft.payload;
     const canonical = stableStringify(value);
-    if (canonical === undefined || sha256Hex(canonical) !== digest)
+    if (sha256Hex(canonical) !== digest)
       throw new Error(`The context blob ${digest} does not hash to its digest`);
     stored = { ...payload, payload: { digest, value: canonical } };
   }

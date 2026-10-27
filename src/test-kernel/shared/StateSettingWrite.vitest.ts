@@ -43,8 +43,8 @@ describe('applyStateSettingUpdate', () => {
         yield* isStored(fake.workspaceState, TexraStateKey.LATEX_FORMATTER),
       ).toBe(false);
 
-      // A value-less message is a no-op: the catalog schemas `.prefault()`, so
-      // parsing `undefined` would silently write a default.
+      // A value-less message is a no-op: the catalog schemas carry a decoding
+      // default, so parsing `undefined` would silently write a default.
       expect(
         yield* applyStateSettingUpdate(
           TexraStateKey.LATEX_FORMATTER,

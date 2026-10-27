@@ -143,13 +143,8 @@ export interface CliAmbientState {
  * answer "is color OK on *stderr*" — the gate `doctor` and the progress
  * renderer each need for their own destination.
  */
-function resolveStreamColor(
-  streamIsTty: boolean,
-  options: {
-    env?: Record<string, string | undefined>;
-  } = {},
-): boolean {
-  const env = options.env ?? process.env;
+function resolveStreamColor(streamIsTty: boolean): boolean {
+  const env = process.env;
   if (env.NO_COLOR != null || env.TERM === 'dumb') return false;
   const forceColor = parseForceColor(env.FORCE_COLOR);
   if (forceColor != null) return forceColor;

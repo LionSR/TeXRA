@@ -1,6 +1,6 @@
 /**
  * Each probed integration's availability checks: the `availability` of its
- * plugin value in `@tools/integrationPlugins`, built from the primitives in
+ * plugin value in `@texra/tools/integrationPlugins`, built from the primitives in
  * {@link @texra/tools/availabilityProbes}.
  */
 

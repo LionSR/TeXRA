@@ -30,7 +30,7 @@ const MAX_CACHE_ENTRIES = 2000;
 const MAX_CACHE_ENTRY_CHARS = 200_000;
 const MAX_CACHE_TOTAL_CHARS = 2_000_000;
 
-export interface LatexReferenceFormatter {
+interface LatexReferenceFormatter {
   /**
    * Render a `\ref{label}` / `\cref{label}` / `\eqref{label}` after the
    * markdown body has been rendered. Webview emits a clickable span; CLI

@@ -24,7 +24,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
-import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
+import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,
@@ -109,9 +109,7 @@ export type DerivedSettingsSnapshot =
  * `values` object carrying every catalog row tagged for that snapshot, keyed
  * by its canonical `texra.*` key and validated by the row's own schema.
  *
- * This is the `pickProjection` idiom (`progressView/projectionShape.ts`)
- * applied to settings: an arm reads the one declared shape instead of
- * restating its fields, so a row added to a snapshot reaches the wire, the
+ * An arm reads the one declared shape instead of restating its fields, so a row added to a snapshot reaches the wire, the
  * backend read, and the webview apply step together. Keying by catalog key
  * also matches the inbound generic `UPDATE_STATE_SETTING` `{key, value}`
  * boundary, so both directions address a setting the same way.
@@ -124,7 +122,7 @@ function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
       Object.fromEntries(
         TEXRA_SETTINGS.snapshotEntries(snapshot).map((entry) => [
           entry.key,
-          settingSchemaWithoutPrefault(entry),
+          settingSchemaWithoutDefault(entry),
         ]),
       ),
     ),
@@ -342,7 +340,7 @@ export type ToolDashboardItem = typeof ToolDashboardItemSchema.Type;
 
 /**
  * One row of the Plugins page and the TUI's `/plugins`: everything that adds
- * tools or agents, built once (`@controllers/settingsView/pluginRows`). A
+ * tools or agents, built once (`@texra/controllers/settingsView/pluginRows`). A
  * TeXRA plugin carries its dashboard card, an installed Claude Code or Codex
  * plugin its listing, and an MCP server from the user's `mcp.json` its name
  * and command. `usedBy` names the agents whose tool lists reach the row.

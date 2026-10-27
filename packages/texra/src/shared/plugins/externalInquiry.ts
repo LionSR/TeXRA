@@ -224,7 +224,6 @@ export class InquiryRecords extends Context.Service<
       /** `'run'` narrows to `runId`'s own threads; `'all'` spans every run. */
       scope: 'run' | 'all';
       runId?: RunId;
-      limit?: number;
     }) => Effect.Effect<InquiryThreadSummary[], Error>;
   }
 >()('@texra/InquiryRecords') {}

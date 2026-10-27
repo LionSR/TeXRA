@@ -1,5 +1,5 @@
 // `/plugins`: the one row list the settings view's Plugins page renders
-// (`@controllers/settingsView/pluginRows`). Enter switches a TeXRA plugin or
+// (`@texra/controllers/settingsView/pluginRows`). Enter switches a TeXRA plugin or
 // an installed plugin on or off; switching an untrusted plugin on shows what
 // it declares and asks first. MCP servers are listed read-only.
 

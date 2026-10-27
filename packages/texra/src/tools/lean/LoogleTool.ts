@@ -87,7 +87,7 @@ const LoogleErrorSchema = Schema.StructWithRest(
   [Schema.Record(Schema.String, Schema.Unknown)],
 );
 
-// Not a discriminatedUnion: success/error bodies share no tagged key. Try the
+// Not a tagged union: success/error bodies share no tagged key. Try the
 // error arm first so an `{ error }` body is never mis-read as an empty success.
 const LoogleResponseSchema = Schema.Union([
   LoogleErrorSchema,

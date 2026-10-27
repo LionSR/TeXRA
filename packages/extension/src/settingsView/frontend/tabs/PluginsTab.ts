@@ -1,6 +1,6 @@
 /**
  * Settings › Plugins: one row per thing that adds tools or agents, built once
- * by the host (`@controllers/settingsView/pluginRows`). TeXRA's plugins carry
+ * by the host (`@texra/controllers/settingsView/pluginRows`). TeXRA's plugins carry
  * their setup and the inline settings their manifest declares (Codex and
  * Claude Code today); installed plugins their trust and actions; MCP servers
  * are listed read-only, edited in the file "Open mcp.json" opens.

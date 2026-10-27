@@ -61,14 +61,13 @@ function sidebarAction(options: {
   icon: IconName;
   label: string;
   title?: string;
-  emphasized?: boolean;
   onClick: () => void;
 }): TemplateResult {
   return html`
     <wa-button
       type="button"
-      class="shell-sidebar-action ${options.emphasized ? 'btn-secondary' : 'btn-ghost'}"
-      appearance=${options.emphasized ? 'outlined' : 'plain'}
+      class="shell-sidebar-action btn-ghost"
+      appearance="plain"
       size="s"
       title=${options.title ?? nothing}
       @click=${options.onClick}

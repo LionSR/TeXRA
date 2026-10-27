@@ -360,7 +360,7 @@ const localRules = {
   rules: {
     // Imports only. `@typescript-eslint/no-unused-vars` ignores `Schema$`
     // names so it does not report a module-level schema kept for
-    // `z.infer<typeof X>`, and that pattern applies to imports too: this rule
+    // `typeof X.Type`, and that pattern applies to imports too: this rule
     // still catches an unused `FooSchema` import.
     'no-unused-imports': {
       meta: {
@@ -732,7 +732,7 @@ export default tseslint.config(
       'no-useless-escape': 'off',
       'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
-      // `Schema$`: a module-level schema kept only for `z.infer<typeof X>`
+      // `Schema$`: a module-level schema kept only for `typeof X.Type`
       // reads as "only used as a type", but it is the value the type comes
       // from, so the repo keeps it on purpose. Unused imports of any name
       // stay with `local/no-unused-imports`.

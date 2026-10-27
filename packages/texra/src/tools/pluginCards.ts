@@ -20,7 +20,6 @@ import {
 } from '@texra/tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 import { preferredInstallCommand } from '@texra/tools/availabilityProbes';
-import type { SettingHost } from '@texra-ai/harness';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
@@ -44,10 +43,8 @@ export interface PluginCard {
   readonly name: string;
   readonly category: ToolCategory;
   readonly description: string;
-  /** Product hosts whose dashboard does not list the plugin. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The plugin's catalog rows the card renders inline, in order; the
-   *  catalog itself takes them from TeXRA's rows (`@shared/settingsView/texraSettings`). */
+   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settingsView/texraSettings`). */
   readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */

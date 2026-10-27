@@ -47,28 +47,23 @@ interface LakeCommandOptions {
   workspaceRoot: string;
   lakeCommand: string;
   args: readonly string[];
-  /** When true, serialize this invocation against other commands on the same workspace. */
-  serialize?: boolean;
-  /** Override the default 10-minute timeout. */
-  timeoutMs?: number;
 }
 
 /**
- * Run a `lake` subcommand against a workspace root. Returns a result instead of
- * failing on non-zero exit so callers can decide how to format failures.
+ * Run a `lake` subcommand against a workspace root, one at a time per
+ * workspace. Returns a result instead of failing on non-zero exit so callers
+ * can decide how to format failures.
  */
 export const runLakeCommand = (
   options: LakeCommandOptions,
 ): Effect.Effect<LakeCommandResult, never, ChildProcessSpawner> =>
-  options.serialize
-    ? // `path.resolve` stays inside the suspend: a relative `workspaceRoot`
-      // resolves against the process cwd at run time, as it did before.
-      Effect.suspend(() =>
-        executeLake(options).pipe(
-          withPerKeyLane(workspaceLanes, path.resolve(options.workspaceRoot)),
-        ),
-      )
-    : executeLake(options);
+  // `path.resolve` stays inside the suspend: a relative `workspaceRoot`
+  // resolves against the process cwd at run time.
+  Effect.suspend(() =>
+    executeLake(options).pipe(
+      withPerKeyLane(workspaceLanes, path.resolve(options.workspaceRoot)),
+    ),
+  );
 
 function executeLake(
   options: LakeCommandOptions,
@@ -89,7 +84,7 @@ function executeLake(
   return executeCommand([options.lakeCommand, ...options.args], {
     cwd: options.workspaceRoot,
     settings: undefined,
-    timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
+    timeout: LAKE_RUN_TIMEOUT_MS,
     maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
     quiet: true,
   }).pipe(

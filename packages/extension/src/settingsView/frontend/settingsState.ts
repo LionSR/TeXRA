@@ -88,11 +88,12 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
  * signal on every later call.
  *
  * The row already owns the default (decoding `undefined` yields its
- * `.prefault()`), so a declaration here restates neither the default nor the
- * wire field name; it names the key and the value type the tabs render. Being
- * keyed is what lets {@link applySettingsSnapshot} apply a whole
- * catalog-derived snapshot without a per-setting `.set()` line in a slice, and
- * lets a tab render rows it only knows by key (a tool card's inline settings).
+ * `withDecodingDefault` value), so a declaration here restates neither the
+ * default nor the wire field name; it names the key and the value type the
+ * tabs render. Being keyed is what lets {@link applySettingsSnapshot} apply a
+ * whole catalog-derived snapshot without a per-setting `.set()` line in a
+ * slice, and lets a tab render rows it only knows by key (a tool card's
+ * inline settings).
  *
  * Throws on a key with no settings-view catalog row: a signal that no snapshot
  * can ever reach would silently render its default forever.

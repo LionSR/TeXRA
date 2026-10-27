@@ -42,14 +42,7 @@ import type {
 } from '../leanTypes';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
-const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-
-export interface DirectLspLeanAdapterOptions {
-  /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
-  lakeCommand?: string;
-  /** Stop a server after this much idle time. `0` disables idle eviction. */
-  idleTimeoutMs?: number;
-}
+const LEAN_IDLE_TIMEOUT = Duration.minutes(30);
 
 /**
  * The {@link LeanLanguageServices} port over `lake env lean --server`, for
@@ -60,25 +53,19 @@ export interface DirectLspLeanAdapterOptions {
  * own, so nothing happens at startup when no Lean tool is invoked, and its
  * servers stop when the process runtime that built it is disposed.
  */
-export function directLeanLanguageServices(
-  options: DirectLspLeanAdapterOptions = {},
-): Layer.Layer<
+export function directLeanLanguageServices(): Layer.Layer<
   LeanLanguageServices,
   never,
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
-  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
   return Layer.effect(
     LeanLanguageServices,
     Effect.map(LeanServerPool, portOverPool),
   ).pipe(
     Layer.provide(
       LeanServerPool.layer({
-        lakeCommand: options.lakeCommand ?? 'lake',
-        idleTimeToLive:
-          idleTimeoutMs > 0
-            ? Duration.millis(idleTimeoutMs)
-            : Duration.infinity,
+        lakeCommand: 'lake',
+        idleTimeToLive: LEAN_IDLE_TIMEOUT,
       }),
     ),
   );

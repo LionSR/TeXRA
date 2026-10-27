@@ -39,7 +39,7 @@ export function generateDiffFileName(
   return `${path.parse(editedFile).name}${suffix}.tex`;
 }
 
-/** Hash group sourced from `@utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
+/** Hash group sourced from `@texra/utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
 const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
   `^(.+)-diff(${COMMIT_HASH_HEX_RANGE})$`,
   'i',

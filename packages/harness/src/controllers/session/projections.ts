@@ -361,7 +361,7 @@ export function projectionUpkeep<E>(
             [JSON.stringify(PROJECTORS[name].projects)],
           );
         }
-        const through = own ? (state?.through ?? 0) : 0;
+        const through = own ? state.through : 0;
         const rows =
           through >= top
             ? []

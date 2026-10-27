@@ -10,18 +10,17 @@ TeXRA is an AI theorist that works with you. It proposes; you decide
 two halves:
 
 - **Capable.** Show the work: the diff, the derivation, the source. Do not
-  decorate it. Offer a concrete next step (starter prompts, one primary
-  action) instead of a blank box.
+  decorate it. Offer a concrete next step (one primary action) instead of
+  a blank box.
 - **Autonomous when asked.** One vocabulary, the approval policy's:
   Ask / Block / Auto-approve. The composer's Approval chip follows the policy
   by default, or auto-approves this task alone. That can only loosen Ask:
   Block still blocks. The run header shows the switch for as long as the run
   lives, and the user can turn it off mid-run. One state (the run's
   delegated-work bypass), not a second autonomy system with its own words.
-- **In the loop.** Nothing lands without the user seeing it. Starters fill
-  the composer and never send. Approvals are a visible choice
-  (Ask / Block / Auto-approve), not a buried setting. Every failure the user
-  must act on is shown where it happened.
+- **In the loop.** Nothing lands without the user seeing it. Approvals are a
+  visible choice (Ask / Block / Auto-approve), not a buried setting. Every
+  failure the user must act on is shown where it happened.
 
 ## Layers
 

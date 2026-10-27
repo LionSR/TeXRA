@@ -152,12 +152,6 @@ export interface RunChatInit {
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
   /**
-   * Display-only transcript notice shown at session start (never sent to the
-   * model). Used for the first-run setup-agent handoff, to explain that
-   * steering.
-   */
-  readonly startupNotice?: string;
-  /**
    * Startup resume from `texra resume <id>`, with the run's persisted config.
    * A resumed team run carries its team identity and delegation
    * scope in that config; those are the only fields below still sourced here,
@@ -295,9 +289,9 @@ export async function runChat(
         return { exitCode: CliExitCode.Usage };
       }
       const modelSelection = modelSelectionExit.value;
-      // Both persisted team fields are `.nullish()` on the wire, so a resumed
-      // run that never carried a preset lands `null` where `SessionMeta` wants
-      // absent.
+      // Both persisted team fields are optional and nullable on the wire, so a
+      // resumed run that never carried a preset lands `null` where
+      // `SessionMeta` wants absent.
       const initialPresetId = initialResume?.config.cli?.teamId ?? undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
@@ -319,11 +313,6 @@ export async function runChat(
         version: context.version,
       });
       if (modelSelection.notice) startupNotices.push(modelSelection.notice);
-      // First-run handoff explanation: when the setup agent owns this session
-      // (decided here for both the bare-`texra` and `texra chat` entries), say
-      // so - display-only, so the agent waits for the user's first message.
-      const startupNotice = init.startupNotice;
-      if (startupNotice) startupNotices.push(startupNotice);
       const { history: inputHistory, readFailure } = yield* loadInputHistory;
       if (readFailure !== null)
         startupNotices.push(
@@ -657,9 +646,8 @@ export async function runChat(
         slashCommandContext(),
         output,
       ),
-    // `onApiKeySave` and `onLogoutSelect` are deliberately absent: the
-    // registry's own defaults are exactly these handlers. Only `/login` needs
-    // an override, to carry this session's CliContext.
+    // `/key` and sign-out use the registry's own handlers. Only `/login`
+    // needs an override, to carry this session's CliContext.
     onLoginSelect: (value, output) =>
       loginFromChat(value, services, context, output),
     onMemorySelect: (storagePath) =>

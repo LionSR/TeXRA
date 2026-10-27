@@ -45,11 +45,9 @@ interface SlashPaletteWindow {
 function slashPaletteWindow({
   highlight,
   itemCount,
-  maxVisibleCommands = MAX_VISIBLE_COMMANDS,
 }: {
   readonly highlight: number;
   readonly itemCount: number;
-  readonly maxVisibleCommands?: number;
 }): SlashPaletteWindow {
   if (itemCount <= 0) {
     return { start: 0, end: 0, hiddenBefore: 0, hiddenAfter: 0 };
@@ -57,7 +55,7 @@ function slashPaletteWindow({
 
   const visibleAtEdge = Num.clamp(itemCount, {
     minimum: 1,
-    maximum: Math.max(1, maxVisibleCommands),
+    maximum: MAX_VISIBLE_COMMANDS,
   });
   if (itemCount <= visibleAtEdge) {
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };

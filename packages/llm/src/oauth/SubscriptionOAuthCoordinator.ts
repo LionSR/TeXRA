@@ -1,7 +1,7 @@
 /**
  * Host-neutral coordinator for a subscription OAuth session (ChatGPT, Grok, …).
  *
- * Pure state machine over injected secret storage + network client. Provider
+ * Pure state machine over injected secret storage. Provider
  * differences (authorize URL, claim extraction) live in the
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
@@ -44,7 +44,7 @@ export interface SubscriptionSessionStorage {
 }
 
 /** Token grants compose in the calling fiber, including request cancellation. */
-export interface SubscriptionOAuthClient {
+interface SubscriptionOAuthClient {
   exchangeAuthorizationCode(params: {
     code: string;
     verifier: string;
@@ -67,7 +67,7 @@ export interface SubscriptionOAuthClient {
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** The persisted session bundle's schema. */
   readonly sessionSchema: Schema.Codec<S, unknown>;
-  /** Form token endpoint the default client grants against. */
+  /** Form token endpoint the token grants go to. */
   readonly tokenEndpoint: OAuthFormEndpoint;
   readonly notSignedInMessage: string;
   readonly sessionChangedMessage: string;
@@ -92,8 +92,6 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
 interface SubscriptionOAuthCoordinatorInit<S extends SubscriptionSession> {
   storage: SubscriptionSessionStorage;
   policy: SubscriptionOAuthPolicy<S>;
-  /** Token grants; defaults to the policy's form endpoint. */
-  client?: SubscriptionOAuthClient;
 }
 
 type MachineFailure = SubscriptionOAuthError | SecretsFailed;
@@ -148,7 +146,7 @@ export class SubscriptionOAuthCoordinator<
   constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
     this.storage = init.storage;
     this.policy = init.policy;
-    this.client = init.client ?? formGrantClient(init.policy.tokenEndpoint);
+    this.client = formGrantClient(init.policy.tokenEndpoint);
   }
 
   /**

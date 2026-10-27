@@ -126,7 +126,6 @@ export interface SettingsNumberRowOptions {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
-  readonly disabled?: boolean;
   /** Optional unit text rendered beside the input. */
   readonly unit?: string;
   /**
@@ -221,7 +220,6 @@ export function renderSettingsNumberRow(
           min=${options.min ?? nothing}
           max=${options.max ?? nothing}
           step=${options.step ?? nothing}
-          ?disabled=${options.disabled}
           @change=${handleChange}
         ></wa-input>
         ${

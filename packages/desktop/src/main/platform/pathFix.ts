@@ -10,26 +10,11 @@ const MACOS_PATH_ENTRIES = [
   '/sbin',
 ] as const;
 
-interface LaunchPathRepairOptions {
-  env?: Pick<NodeJS.ProcessEnv, 'PATH'>;
-  platform?: NodeJS.Platform;
-}
-
-export function repairLaunchPath(
-  options: LaunchPathRepairOptions = {},
-): string {
-  const env = options.env ?? process.env;
-  const platform = options.platform ?? process.platform;
-  if (platform === 'darwin') {
-    // Only the real process environment goes through fix-path; injected
-    // environments get the deterministic prepend below only.
-    if (env === process.env) fixPath();
-    // ':' is the POSIX PATH separator; this branch only runs on darwin.
-    const parts = (env.PATH ?? '').split(':').filter(Boolean);
-    const missing = MACOS_PATH_ENTRIES.filter(
-      (entry) => !parts.includes(entry),
-    );
-    env.PATH = [...missing, ...parts].join(':');
-  }
-  return env.PATH ?? '';
+export function repairLaunchPath(): void {
+  if (process.platform !== 'darwin') return;
+  fixPath();
+  // ':' is the POSIX PATH separator; this only runs on darwin.
+  const parts = (process.env.PATH ?? '').split(':').filter(Boolean);
+  const missing = MACOS_PATH_ENTRIES.filter((entry) => !parts.includes(entry));
+  process.env.PATH = [...missing, ...parts].join(':');
 }

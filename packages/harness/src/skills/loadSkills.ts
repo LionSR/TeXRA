@@ -163,7 +163,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   for (const entry of entries) {
     if (entry.issue !== undefined) errors.push(entry.issue);
     const { loaded, realSkillPath } = entry;
-    if (loaded === undefined || realSkillPath === undefined) continue;
+    if (loaded === undefined) continue;
     if (seenRealPaths.has(realSkillPath)) {
       errors.push(dupRealpathIssue(realSkillPath, entry.skillPath));
       continue;

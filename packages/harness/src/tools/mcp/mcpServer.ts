@@ -151,7 +151,7 @@ const serverEnv = (config: McpServerConfig) =>
     }
     for (const [name, value] of Object.entries(config.env))
       env[isPathName(name) ? 'PATH' : name] = value;
-    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH ?? '' };
+    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH };
   });
 
 const decode = <T>(

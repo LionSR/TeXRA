@@ -41,6 +41,6 @@ export function shouldSkipWait(
   return (
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
-    live?.parent != null
+    live.parent != null
   );
 }

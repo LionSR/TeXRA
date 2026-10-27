@@ -23,9 +23,7 @@ export const readRunTranscript = (
       Effect.map((events) =>
         buildRunTranscript(
           events,
-          session.roots.config
-            ? Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY)
-            : false,
+          Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY),
         ),
       ),
     );

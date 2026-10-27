@@ -12,7 +12,7 @@ export type ReplacementValue = string | ReplacementFunction;
 /**
  * A rule set carries patterns only. Its category name is the key it sits
  * under in the engine's rule table, which is typed over
- * `@shared/constants/replacementCategories` — so a rule set cannot name
+ * `@texra/shared/constants/replacementCategories` — so a rule set cannot name
  * itself something the config does not accept, and the name is not restated
  * beside the rules.
  */

@@ -60,48 +60,44 @@ describe('runLakeCommand mutex', () => {
   });
 
   // Two lake builds in one workspace at once race on its `.lake` directory.
-  it.live(
-    'serializes calls against the same workspace when `serialize: true`',
-    () =>
-      Effect.gen(function* () {
-        const gateA = path.join(workspace, 'gate-a');
-        const readyA = path.join(workspace, 'ready-a');
-        const gateB = path.join(workspace, 'gate-b');
-        const readyB = path.join(workspace, 'ready-b');
+  it.live('serializes calls against the same workspace', () =>
+    Effect.gen(function* () {
+      const gateA = path.join(workspace, 'gate-a');
+      const readyA = path.join(workspace, 'ready-a');
+      const gateB = path.join(workspace, 'gate-b');
+      const readyB = path.join(workspace, 'ready-b');
 
-        const first = yield* Effect.forkChild(
-          runLakeCommand({
-            workspaceRoot: workspace,
-            lakeCommand: NODE,
-            args: nodeGateCommand(readyA, gateA),
-            serialize: true,
-          }),
-          { startImmediately: true },
-        );
-        const second = yield* Effect.forkChild(
-          runLakeCommand({
-            workspaceRoot: workspace,
-            lakeCommand: NODE,
-            args: nodeGateCommand(readyB, gateB),
-            serialize: true,
-          }),
-          { startImmediately: true },
-        );
+      const first = yield* Effect.forkChild(
+        runLakeCommand({
+          workspaceRoot: workspace,
+          lakeCommand: NODE,
+          args: nodeGateCommand(readyA, gateA),
+        }),
+        { startImmediately: true },
+      );
+      const second = yield* Effect.forkChild(
+        runLakeCommand({
+          workspaceRoot: workspace,
+          lakeCommand: NODE,
+          args: nodeGateCommand(readyB, gateB),
+        }),
+        { startImmediately: true },
+      );
 
-        // The first child holds the workspace mutex: it starts and blocks on
-        // its gate. While that gate holds, the second call's child cannot
-        // have spawned — if the mutex were broken, the second child would
-        // announce itself during the first waitFor poll window.
-        yield* Effect.promise(() => waitForFile(readyA));
-        expect(existsSync(readyB)).toBe(false);
+      // The first child holds the workspace mutex: it starts and blocks on
+      // its gate. While that gate holds, the second call's child cannot
+      // have spawned — if the mutex were broken, the second child would
+      // announce itself during the first waitFor poll window.
+      yield* Effect.promise(() => waitForFile(readyA));
+      expect(existsSync(readyB)).toBe(false);
 
-        // Only releasing the first call lets the second child start.
-        writeFileSync(gateA, 'go');
-        yield* Effect.promise(() => waitForFile(readyB));
-        writeFileSync(gateB, 'go');
+      // Only releasing the first call lets the second child start.
+      writeFileSync(gateA, 'go');
+      yield* Effect.promise(() => waitForFile(readyB));
+      writeFileSync(gateB, 'go');
 
-        expect(yield* Fiber.join(first)).toMatchObject({ exitCode: 0 });
-        expect(yield* Fiber.join(second)).toMatchObject({ exitCode: 0 });
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
+      expect(yield* Fiber.join(first)).toMatchObject({ exitCode: 0 });
+      expect(yield* Fiber.join(second)).toMatchObject({ exitCode: 0 });
+    }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });

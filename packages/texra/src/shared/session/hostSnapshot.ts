@@ -86,7 +86,7 @@ export function projectDisplayOf(
     .split(/[\s._-]+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
+    .map((word) => word[0].toUpperCase())
     .join('');
   return {
     key,

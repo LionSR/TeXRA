@@ -25,7 +25,7 @@ share one copy of the package.
 `effect` is a peer dependency of both packages, and the harness also takes
 `@effect/platform-node` and `@effect/sql-sqlite-node` as peers so the host
 process resolves a single copy of `effect` and `@effect/*` (duplicate copies
-break `ServiceMap.Service`, `FiberRef`, and `Stream` identity). Install them in
+break `Context.Service`, `Context.Reference`, and `Stream` identity). Install them in
 the host package with matching caret ranges; do not pin `effect` to an exact
 patch while `@effect/*` packages float.
 

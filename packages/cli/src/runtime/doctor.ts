@@ -6,10 +6,7 @@ import { satisfies as semverSatisfies } from 'semver';
 // Local imports
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import {
-  probeLatexToolchain,
-  type LatexToolchainProbe,
-} from '@latex/latexToolchain';
+import { probeLatexToolchain } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
@@ -60,33 +57,18 @@ class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
 const probeFailure = (cause: unknown): DoctorProbeFailed =>
   new DoctorProbeFailed({ cause });
 
-/** The two probes a test overrides; both default to the real ones. */
-interface DoctorEnvironment {
-  readonly nodeVersion?: string;
-  readonly latexToolchain?: Effect.Effect<
-    LatexToolchainProbe,
-    DoctorProbeFailed,
-    ChildProcessSpawner
-  >;
-}
-
 /**
  * The probes only the CLI root can build: platform init either failed
  * (`degraded`, which skips the checks that need it) or produced the stores
  * and runtime they read (`ready`).
  */
-type DoctorInput = DoctorEnvironment &
-  (
-    | { readonly kind: 'degraded'; readonly initError: Error }
-    | {
-        readonly kind: 'ready';
-        readonly modelAccessList: Effect.Effect<
-          readonly CliModelAccess[],
-          Error
-        >;
-        readonly usageLoggingOptOut: Effect.Effect<UsageLoggingOptOut>;
-      }
-  );
+type DoctorInput =
+  | { readonly kind: 'degraded'; readonly initError: Error }
+  | {
+      readonly kind: 'ready';
+      readonly modelAccessList: Effect.Effect<readonly CliModelAccess[], Error>;
+      readonly usageLoggingOptOut: Effect.Effect<UsageLoggingOptOut>;
+    };
 
 type ReadyDoctorInput = Extract<DoctorInput, { kind: 'ready' }>;
 
@@ -252,10 +234,12 @@ function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   );
 }
 
-function checkLatex(
-  latexToolchain: NonNullable<DoctorEnvironment['latexToolchain']>,
-): Effect.Effect<DoctorCheck[], never, ChildProcessSpawner> {
-  return latexToolchain.pipe(
+function checkLatex(): Effect.Effect<
+  DoctorCheck[],
+  never,
+  ChildProcessSpawner
+> {
+  return probeLatexToolchain().pipe(
     Effect.map((probe) => {
       const checks: DoctorCheck[] = [];
       if (!probe.hasCompiler) {
@@ -288,16 +272,6 @@ function checkLatex(
       );
       return checks;
     }),
-    Effect.catch((failure: DoctorProbeFailed) =>
-      Effect.succeed([
-        failFromError(
-          'latex',
-          'LaTeX toolchain',
-          'Could not probe the LaTeX toolchain.',
-          failure.cause,
-        ),
-      ]),
-    ),
   );
 }
 
@@ -424,13 +398,13 @@ export function buildDoctorReport(
                   input.initError,
                 ),
               ]),
-          checkLatex(input.latexToolchain ?? probeLatexToolchain()),
+          checkLatex(),
           checkConfig(context),
         ],
         { concurrency: 'unbounded' },
       );
     const checks: DoctorCheck[] = [
-      checkNode(input.nodeVersion ?? process.versions.node),
+      checkNode(process.versions.node),
       workspace,
       resources,
       ...sessionDependentChecks,

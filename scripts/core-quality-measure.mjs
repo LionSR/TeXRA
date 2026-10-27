@@ -746,9 +746,7 @@ function isDeclarative(node, schemas) {
     // Schema callbacks define validation data, not a module's implementation.
     if (
       ts.isPropertyAccessExpression(node.expression) &&
-      /^(?:safeParse|parse|decode|encode)(?:Async)?$/.test(
-        node.expression.name.text,
-      )
+      /^(?:parse|decode|encode)$/.test(node.expression.name.text)
     )
       return false;
     let target = node.expression;

@@ -11,7 +11,7 @@ import type { ToolCard } from './progressView/data';
  * type safety.
  *
  * Keeps unknown keys so future runtime fields do not break validation when
- * tools flow through `AgentSettingSchema`.
+ * tools flow through an agent persona's `tools` (`PersonaSchema` in `agent.ts`).
  */
 export const ToolDefinitionSchema = Schema.StructWithRest(
   Schema.Struct({

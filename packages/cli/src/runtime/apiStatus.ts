@@ -24,10 +24,6 @@ import {
 import { readCliModelAccessStatus } from './modelAccessSelection';
 import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
-/** The one method this module needs, derived from the service that owns it —
- *  the same narrowing the desktop credential controller uses. */
-type SubscriptionUsageReader = Pick<SubscriptionUsageService, 'getUsage'>;
-
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
   return `signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
@@ -92,14 +88,7 @@ function formatModelPreferenceLine(
 /** Render each detailed account/access fact on its owning route. */
 export const loadCliDetailedAccountStatusLines = Effect.fn(
   'apiStatus.loadCliDetailedAccountStatusLines',
-)(function* (
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-  options: {
-    readonly subscriptionUsage?: SubscriptionUsageReader;
-    readonly now?: number;
-  } = {},
-) {
+)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
   const [access, keyStatuses] = yield* Effect.all(
     [
       readCliModelAccessStatus(stores, secrets),
@@ -111,9 +100,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   // path. Ordinary chat startup and the status bar never call this service, and
   // every read below forces a refresh, so the service is built over the caller's
   // secret store here rather than held as a module singleton.
-  const usageReader =
-    options.subscriptionUsage ??
-    new SubscriptionUsageService({ secrets, stores });
+  const usageReader = new SubscriptionUsageService({ secrets, stores });
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
       access.subscriptions.chatgpt.signedIn
@@ -144,7 +131,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     snapshot: SubscriptionUsageSnapshot | undefined,
   ): string => {
     if (!snapshot) return line;
-    const summary = formatSubscriptionUsageSummary(snapshot, options.now);
+    const summary = formatSubscriptionUsageSummary(snapshot);
     return summary ? `${line} · ${summary}` : line;
   };
 

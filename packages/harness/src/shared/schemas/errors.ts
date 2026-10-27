@@ -52,10 +52,11 @@ const ProviderErrorObjectSchema = Schema.Struct({
   provider: Schema.optional(Schema.String),
   /** True when the user should be offered a retry button. This gates the
    *  manual retry UI — it does NOT mean the retry loop will auto-retry. The
-   *  auto-retry decision is made separately by `shouldAutoRetry`, which
-   *  excludes credentialExhausted/auth errors even when `userRetryable` is
-   *  true (because they need user action — a key swap or new API key —
-   *  before any retry makes sense). */
+   *  automatic resend is decided separately, from the model error's own
+   *  `retryable` (`failedNext` in `agent/runtime/run/invocation.ts`), which is
+   *  false for authentication and quota errors even when `userRetryable` is
+   *  true (they need user action — a key swap or new API key — before any
+   *  retry makes sense). */
   userRetryable: Schema.Boolean,
   /** The provider failure's one canonical classification. Absent for ordinary
    *  provider, transport, abort, and local-I/O failures. */

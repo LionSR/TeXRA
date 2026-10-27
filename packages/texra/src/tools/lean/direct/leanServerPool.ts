@@ -399,7 +399,6 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
                 workspaceRoot: root,
                 lakeCommand,
                 args,
-                serialize: true,
               }).pipe(
                 Effect.provideService(
                   ChildProcessSpawner.ChildProcessSpawner,

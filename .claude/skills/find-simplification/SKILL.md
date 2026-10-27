@@ -69,7 +69,7 @@ A genuinely _new_ dependency can still be the right answer, but the proposal mus
 
 For every symbol or behavior, classify consumers before writing:
 
-- Production corpus: `src/`, `packages/*/src`, `packages/extension/resources/`, `supabase/functions/`, and loader/config paths (`package.json` contributions, settings schema, command registration).
+- Production corpus: `packages/*/src`, `packages/extension/resources/`, `supabase/functions/`, and loader/config paths (`package.json` contributions, settings schema, command registration).
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 

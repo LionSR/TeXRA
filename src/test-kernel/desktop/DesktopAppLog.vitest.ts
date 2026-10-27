@@ -18,10 +18,11 @@ import {
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 interface DesktopAppLogModule {
-  readDesktopLogSnapshot(options: {
-    workspacePath?: string | undefined;
-    maxBytes?: number | undefined;
-  }): { path: string; text: string; truncated: boolean };
+  readDesktopLogSnapshot(options: { workspacePath?: string | undefined }): {
+    path: string;
+    text: string;
+    truncated: boolean;
+  };
 }
 
 async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {

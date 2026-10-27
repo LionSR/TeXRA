@@ -108,8 +108,8 @@ export class LogList extends LitElement {
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {
-          activeEl?.setSticky(true);
-          activeEl?.scrollToBottom();
+          activeEl.setSticky(true);
+          activeEl.scrollToBottom();
         });
       });
     } else {

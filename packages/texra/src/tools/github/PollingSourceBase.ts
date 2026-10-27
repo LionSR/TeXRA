@@ -551,7 +551,7 @@ export abstract class PollingSourceBase<
       yield* this.afterTick(entries, now).pipe(
         Effect.catchCause((cause) => {
           const reason = cause.reasons[0];
-          if (cause.reasons.length !== 1 || reason?._tag !== 'Fail') {
+          if (cause.reasons.length !== 1 || reason._tag !== 'Fail') {
             return Effect.failCause(cause);
           }
           return this.logWarning('Post-poll hook failed', reason.error.cause);
@@ -593,7 +593,7 @@ export abstract class PollingSourceBase<
         ),
         Effect.catchCause((cause) => {
           const reason = cause.reasons[0];
-          if (cause.reasons.length !== 1 || reason?._tag !== 'Fail') {
+          if (cause.reasons.length !== 1 || reason._tag !== 'Fail') {
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
@@ -607,7 +607,7 @@ export abstract class PollingSourceBase<
         }),
         Effect.catchCause((cause) => {
           const reason = cause.reasons[0];
-          if (cause.reasons.length !== 1 || reason?._tag !== 'Die') {
+          if (cause.reasons.length !== 1 || reason._tag !== 'Die') {
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>

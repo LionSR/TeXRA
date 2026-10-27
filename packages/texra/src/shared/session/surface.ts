@@ -210,10 +210,10 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
 
 /**
  * The persisted form: interaction state only, per view and session. A
- * missing field takes its default before validation (`prefault`); a corrupt
- * field fails the parse loudly rather than becoming a silent default —
- * `PersistedState` warns with the failing key and resets that session's
- * whole record to these defaults.
+ * missing field takes its default before validation (`withDecodingDefault`);
+ * a corrupt field fails the parse loudly rather than becoming a silent
+ * default — `PersistedState` warns with the failing key and resets that
+ * session's whole record to these defaults.
  */
 export const PersistedSurfaceSchema = Schema.Struct({
   selected: Schema.NullOr(RunIdSchema).pipe(

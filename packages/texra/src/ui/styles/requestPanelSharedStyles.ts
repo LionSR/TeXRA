@@ -12,7 +12,6 @@ export const sp = {
   tiny: unsafeCSS('var(--wa-space-3xs)'),
   small: unsafeCSS('var(--wa-space-2xs)'),
   medium: unsafeCSS('var(--wa-space-xs)'),
-  large: unsafeCSS('var(--wa-space-s)'),
 } as const;
 
 export const requestPanelSharedStyles: CSSResult = css`

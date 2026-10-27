@@ -75,9 +75,7 @@ function buildUserPrompt(
 export function getDisplayedInstruction(
   config: Pick<AgentConfig, 'displayInstruction' | 'instruction'>,
 ): string {
-  return (
-    (config.displayInstruction?.trim() || config.instruction?.trim()) ?? ''
-  );
+  return config.displayInstruction?.trim() || config.instruction.trim();
 }
 
 /** How long a run's end may wait on its optional description. */

@@ -9,17 +9,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
 
 /**
- * Architecture guard: `@tools/registry` imports every registered tool, so any
+ * Architecture guard: `@texra/tools/registry` imports every registered tool, so any
  * module that reaches it drags the LaTeX, Lean, arxiv and Zotero tool set — and
  * their `packages/texra/src/latex/` dependencies — into its own module closure.
  *
  * A tool module reaching the registry is a cycle, not a dependency: the
- * registry already imports the tool. That cycle used to run
- * `bash -> @agent/storage -> @agent/index/agentRegistry -> remoteAgentMeta ->
- * RemoteAgentLoader -> @tools/registry`, and it put an identical 630-file
- * closure on 19 of the 50 `defineTool()` modules. Splitting the remote-agent
- * client (since deleted with hosted agents) into a registry-free listing half
- * and a config-loading half severed it.
+ * registry already imports the tool, and every tool module on the cycle
+ * carries the registry's whole closure.
  *
  * Measurement matches the closure census in the issue: an esbuild bundle per
  * `defineTool()` module with dependencies external, counting non-`node_modules`

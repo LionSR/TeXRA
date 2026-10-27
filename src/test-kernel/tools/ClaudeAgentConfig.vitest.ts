@@ -26,9 +26,7 @@ const fakeSecrets: PlatformSecrets = {
   listStoredKeys: () => Effect.sync(() => [...secretStore.keys()]),
 };
 
-function buildEnv(
-  options?: Parameters<typeof buildClaudeAgentEnv>[0],
-): Promise<NodeJS.ProcessEnv> {
+function buildEnv(): Promise<NodeJS.ProcessEnv> {
   const spawner = scriptedSpawnerLayer((command) => ({
     exitCode:
       keychainAccount !== undefined && command.args.includes(keychainAccount)
@@ -36,7 +34,7 @@ function buildEnv(
         : 1,
   }));
   return Effect.runPromise(
-    buildClaudeAgentEnv(options).pipe(
+    buildClaudeAgentEnv().pipe(
       Effect.provide(Secrets.layer(fakeSecrets)),
       // The live env provider, so the suite's `vi.stubEnv` still governs the
       // API-key fallback read through `envVar`.

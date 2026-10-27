@@ -37,7 +37,7 @@ anonymous data goes to its own table.
   gives anonymous data no account link, deletes by `install_id`, and lets the
   legacy tables drop whole later.
 - The client sends one entry per model call (`reportUsage` in
-  `src/agent/runtime/run/modelCall.ts`, called once per call with that call's
+  `packages/harness/src/agent/runtime/run/modelCall.ts`, called once per call with that call's
   usage): deltas, never cumulative snapshots. So the table is an event log:
   one row per entry, `UNIQUE (install_id, batch_id, entry_index)` makes a retry
   a no-op (`INSERT ... ON CONFLICT DO NOTHING`), and the function does a plain
@@ -95,7 +95,7 @@ header) keeps working for every client.
    expects 200 `accepted: 1`; repeat for `deduplicated`; no header and a
    malformed ID each expect 401. Then delete the test rows
    (`DELETE FROM public.install_usage_logs WHERE install_id = '00000000-0000-4000-8000-000000000001'`).
-3. Ship the client pointing at `log-usage-v2` (`src/telemetry/UsageLogService.ts`).
+3. Ship the client pointing at `log-usage-v2` (`packages/texra/src/telemetry/UsageLogService.ts`).
 4. Only after a released client version uses v2 (the owner decides when), in
    this order:
    1. Redeploy `log-usage` JWT-only from this tree with the same flags

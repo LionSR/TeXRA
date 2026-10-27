@@ -27,10 +27,7 @@ import {
   buildStatusBadge,
   triStateStatusIcon,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import {
-  TOOL_CODE_LANGUAGES,
-  getLanguageFromPath,
-} from '@progressView/frontend/formatters/constants';
+import { getLanguageFromPath } from '@progressView/frontend/formatters/constants';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildToolSection } from './helpers';
@@ -47,15 +44,11 @@ const TEXT_SECTION_SCROLL_LINES = 20;
 /**
  * Resolve the highlight language for a code section. `file` and `shell` are
  * the model's two deferred hints: the first means "whatever this file is",
- * the second "this tool's shell dialect".
+ * the second a shell command, highlighted as bash.
  */
-function codeLanguage(
-  language: string,
-  toolName: string,
-  filePath: string,
-): string {
+function codeLanguage(language: string, filePath: string): string {
   if (language === 'file') return getLanguageFromPath(filePath);
-  if (language === 'shell') return TOOL_CODE_LANGUAGES.get(toolName) ?? 'bash';
+  if (language === 'shell') return 'bash';
   return language;
 }
 
@@ -143,7 +136,7 @@ function renderToolSection(
     case 'code':
       return buildToolSection(section.label, section.text.full, {
         toolName,
-        language: codeLanguage(section.language, toolName, filePath),
+        language: codeLanguage(section.language, filePath),
         ...(isCommandInput(section.language)
           ? { extraClass: 'tool-command-input' }
           : {}),

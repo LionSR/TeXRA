@@ -87,35 +87,12 @@ const modelOptions = [
   },
 ];
 
-const agentOptions = {
-  workflow: [
-    {
-      label: 'Correct',
-      value: 'correct',
-      description: 'Fix LaTeX errors and preserve mathematical notation.',
-    },
-    {
-      label: 'Polish',
-      value: 'polish',
-      description: 'Tighten exposition while keeping the proof structure.',
-    },
-  ],
-  toolUse: [
-    {
-      label: 'orchestrator',
-      value: 'orchestrator',
-      isToolUse: true,
-      isOrchestrator: true,
-      description: 'Plan work and delegate to specialized agents.',
-    },
-    {
-      label: 'research',
-      value: 'research',
-      isToolUse: true,
-      description: 'Inspect files, search references, and answer questions.',
-    },
-  ],
-};
+const agentOptions = [
+  { label: 'Correct', value: 'correct', rounds: 1 },
+  { label: 'Polish', value: 'polish', rounds: 1 },
+  { label: 'orchestrator', value: 'orchestrator', isOrchestrator: true },
+  { label: 'research', value: 'research' },
+];
 
 const host = {
   ...emptyHostSnapshot({
@@ -135,7 +112,6 @@ const host = {
   onboarding: 'done',
 };
 const launch = {
-  sessionType: 'workflow',
   model: 'google/gemini-3.1-pro-preview',
   inputFiles: ['main.tex', 'sections/introduction.tex', 'appendix.tex'],
   contextFiles: [

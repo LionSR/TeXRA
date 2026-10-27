@@ -47,8 +47,8 @@ function markdownContinuationPrefix(line: string):
   const plain = stripAnsi(line);
   const list = plain.match(/^((?:│ )*)( {2,}(?:•|\d+[.)]) )/);
   if (list) {
-    const quote = list[1] ?? '';
-    const marker = list[2] ?? '';
+    const quote = list[1];
+    const marker = list[2];
     const first = splitRawAtVisiblePrefix(line, quote.length + marker.length);
     const quotePrefix =
       quote.length > 0
@@ -64,7 +64,7 @@ function markdownContinuationPrefix(line: string):
 
   const quote = plain.match(/^((?:│ )+)/);
   if (quote) {
-    const prefixWidth = quote[1]?.length ?? 0;
+    const prefixWidth = quote[1].length;
     const first = splitRawAtVisiblePrefix(line, prefixWidth);
     return {
       firstPrefix: first.prefix,

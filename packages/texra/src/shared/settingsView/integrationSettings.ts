@@ -1,7 +1,7 @@
 /**
  * The setting rows of the two external coding-agent plugins, `codex` and
  * `claude-agent`: TeXRA's catalog lists them (`./texraSettings`) and their
- * dashboard cards render them inline (`@tools/pluginCards`). They live here,
+ * dashboard cards render them inline (`@texra/tools/pluginCards`). They live here,
  * in a browser-safe module, because the settings view's webview renders them.
  */
 
