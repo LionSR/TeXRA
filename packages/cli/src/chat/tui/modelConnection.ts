@@ -115,7 +115,9 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
   const ready = yield* hasUsableSetupCredential(stores, secrets);
-  if (!ready) return;
+  // Checked again after the read: a recheck forked by an earlier form may
+  // have connected meanwhile, and only one may send the held message.
+  if (!ready || !modelConnectionNeeded.get()) return;
   modelConnectionNeeded.set(false);
   const selection = yield* Effect.exit(
     selectCliRunnableModel(

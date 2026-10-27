@@ -175,24 +175,27 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   /**
    * Roots whose server is live or still starting, dropping closed and
-   * never-started ones. The prune removes exactly the roots this scan saw
-   * closed: writing the snapshot back would erase a root another fiber leased
-   * while the scan yielded, whose run would then never own its server.
+   * never-started ones. The prune removes exactly the entries this scan saw
+   * closed, unchanged since: a root another fiber leased while the scan
+   * yielded holds a new entry, and erasing it would lose that lease and owner.
    */
   const liveEntries = Effect.gen(function* () {
     const live = new Map<string, RootEntry>();
-    const closedRoots = new Set<string>();
+    const closed = new Map<string, RootEntry>();
     for (const [root, entry] of yield* Ref.get(entries)) {
       const gone = entry.server
         ? yield* Deferred.isDone(entry.server.closed)
         : entry.leases === 0;
-      if (gone) closedRoots.add(root);
+      if (gone) closed.set(root, entry);
       else live.set(root, entry);
     }
-    if (closedRoots.size > 0) {
+    if (closed.size > 0) {
       yield* Ref.update(
         entries,
-        (map) => new Map([...map].filter(([root]) => !closedRoots.has(root))),
+        (map) =>
+          new Map(
+            [...map].filter(([root, entry]) => closed.get(root) !== entry),
+          ),
       );
     }
     return live;

@@ -358,10 +358,12 @@ export function openDesktopProjectRegistry(
       current().projects.find(
         (project) => project.key === current().activeKey,
       ) ?? fallback;
+    // On the selection lane, as every other write of `recent`: a read taken
+    // before another's write must not land after it.
     const syncRecent = Effect.gen(function* () {
       const recent = yield* records.readRecent;
       yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
-    });
+    }).pipe(withPerKeyLane(lanes, selection));
     const activate = (root: string | undefined) =>
       Effect.gen(function* () {
         const next = root === undefined ? undefined : byRoot(root);
