@@ -19,8 +19,6 @@ import {
   generateRunId,
   type RunEndResult,
   isLiveRun,
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -37,7 +35,6 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
   AgentError,
   isUserAbort,
-  Settings,
 } from '@texra-ai/harness';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -63,6 +60,7 @@ import {
   CliUsageError,
   launchApproval,
   launchApprovalNotice,
+  projectApprovalPolicy,
   type CliContext,
 } from './cliContext';
 import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
@@ -235,10 +233,7 @@ export function executeCliConfig(
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      Settings.getConfig<ApprovalPolicy>(
-        session.roots.config,
-        APPROVAL_POLICY_CONFIG_KEY,
-      ),
+      projectApprovalPolicy(session.roots.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
     const presentationHost = createCliRuntimeHost(runContext);

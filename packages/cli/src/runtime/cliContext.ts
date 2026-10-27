@@ -449,7 +449,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           ));
     const approvalPolicy = effectiveApprovalPolicy(
       requestedApprovalPolicy,
-      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY),
+      projectApprovalPolicy(config),
     );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
@@ -513,6 +513,12 @@ export function launchApproval(requested: ApprovalPolicy | undefined): {
     ...(requested !== undefined && { approvalPolicy: requested }),
     approveDelegatedWork: requested === 'yolo',
   };
+}
+
+/** The project's persisted approval policy, as the session reads it at each
+ *  decision. */
+export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
+  return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
 }
 
 /** The policy a launch runs under: the project's, narrowed by what the

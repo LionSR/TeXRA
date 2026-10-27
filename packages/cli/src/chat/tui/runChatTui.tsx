@@ -17,12 +17,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import {
-  type ConfigProvider,
-  AgentCatalog,
-  SESSION_CLOSE_DEADLINE_MS,
-  Settings,
-} from '@texra-ai/harness';
+import { AgentCatalog, SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness';
 import {
   type RuntimeRequest,
   qualifyAggregateId,
@@ -30,7 +25,6 @@ import {
   type AgentConfig,
   RUN_PHASE,
   isLiveRun,
-  APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
   isActivePhase,
   isTranscriptSettlementPhase,
@@ -40,6 +34,7 @@ import {
   CliUsageError,
   effectiveApprovalPolicy,
   launchApprovalNotice,
+  projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/cliContext';
 import {
@@ -140,12 +135,6 @@ interface ChatResult {
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 
-/** The project's persisted approval policy, as the session reads it. */
-const projectApprovalPolicy = (roots: {
-  readonly config: ConfigProvider;
-}): ApprovalPolicy =>
-  Settings.getConfig<ApprovalPolicy>(roots.config, APPROVAL_POLICY_CONFIG_KEY);
-
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
   readonly agentOverride?: string;
@@ -217,7 +206,7 @@ export async function runChat(
       // each launch (`launchApproval`).
       const refused = launchApprovalNotice(
         context.requestedApprovalPolicy,
-        projectApprovalPolicy(runtimeSession.roots),
+        projectApprovalPolicy(runtimeSession.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
       // A store this process moved aside at open is said in the transcript,
@@ -301,7 +290,7 @@ export async function runChat(
         cwd: context.cwd,
         approvalPolicy: effectiveApprovalPolicy(
           context.requestedApprovalPolicy,
-          projectApprovalPolicy(runtimeSession.roots),
+          projectApprovalPolicy(runtimeSession.roots.config),
         ),
         teamName: yield* readCliTeamName(
           runtimeSession.roots.repoState,
@@ -349,7 +338,7 @@ export async function runChat(
   const getApprovalPolicy = (): ApprovalPolicy =>
     effectiveApprovalPolicy(
       chatPolicy,
-      projectApprovalPolicy(runtimeSession.roots),
+      projectApprovalPolicy(runtimeSession.roots.config),
     );
   const currentSessionContext = (): CliContext => ({
     ...context,
