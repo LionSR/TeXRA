@@ -145,8 +145,10 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   if (!trimmed) return [];
 
   const normalizeMatches = (matches: string[]) =>
-    Effect.forEach(matches.toSorted(), (match) =>
-      normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+    Effect.forEach(
+      matches.toSorted(),
+      (match) => normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+      { concurrency: 8 },
     );
 
   const absolutePath = path.resolve(cwd, trimmed);

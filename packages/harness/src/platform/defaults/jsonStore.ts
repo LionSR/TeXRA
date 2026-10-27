@@ -11,14 +11,17 @@ import {
   type PlatformError,
   Predicate,
 } from 'effect';
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { NodePath } from '@effect/platform-node';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { writeFileAtomic } from '@utils/files/fsDurability';
+import {
+  nodeFileSystemLayer,
+  writeFileAtomic,
+} from '@utils/files/fsDurability';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -29,7 +32,7 @@ type JsonRecord = Record<string, unknown>;
  * requirement-free port carries `FileSystem | Path` in its type.
  */
 export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
-  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+  Layer.mergeAll(nodeFileSystemLayer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {

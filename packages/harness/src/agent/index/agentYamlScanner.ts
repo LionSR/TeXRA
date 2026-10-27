@@ -97,7 +97,7 @@ export function scanDirectory(
     // Each file with the root it was found under; a path two roots share
     // keeps the first.
     const rootOf = new Map<string, string>();
-    // The roots are listed together, then taken in order.
+    // The roots are listed concurrently, then merged in `dirs` order.
     const listings = yield* Effect.forEach(
       dirs,
       (root) =>
@@ -116,7 +116,7 @@ export function scanDirectory(
           ),
           (listed) => ({ root, listed }),
         ),
-      { concurrency: 'unbounded' },
+      { concurrency: 8 },
     );
     for (const { root, listed } of listings) {
       if (Result.isFailure(listed)) {

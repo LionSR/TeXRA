@@ -25,7 +25,7 @@
   "packages/harness/src/shared/session/sessionView.ts": 452,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1166,
   "packages/harness/src/tools/bash.ts": 542,
-  "packages/harness/src/tools/delegation/AgentTool.ts": 600,
+  "packages/harness/src/tools/delegation/AgentTool.ts": 597,
   "packages/harness/src/tools/ExecutionsTool.ts": 792,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 433,
   "packages/harness/src/tools/memory/MemoryTool.ts": 541,

@@ -15,7 +15,6 @@ import {
   FileSystem,
   Option,
   type PlatformError,
-  Semaphore,
 } from 'effect';
 import { LRUCache } from 'lru-cache';
 import stableStringify from 'safe-stable-stringify';
@@ -59,53 +58,50 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
   const fs = yield* FileSystem.FileSystem;
   const hashes = yield* ContentHashes;
   const files: [string, string][] = [];
-  // Entries are read concurrently (the list is sorted at the end); the
-  // permits bound the file system calls in flight across the whole tree.
-  const io = (yield* Semaphore.make(16)).withPermits(1);
   const walk = (
     dir: string,
   ): Effect.Effect<void, PlatformError.PlatformError> =>
+    Effect.flatMap(fs.readDirectory(dir), (names) =>
+      Effect.forEach(names, (name) => entry(dir, name), {
+        concurrency: 8,
+        discard: true,
+      }),
+    );
+  // One directory entry: a link, a subdirectory, or a file. A directory's
+  // entries are read at once; the list is sorted after the walk.
+  const entry = (
+    dir: string,
+    name: string,
+  ): Effect.Effect<void, PlatformError.PlatformError> =>
     Effect.gen(function* () {
-      const names = yield* io(fs.readDirectory(dir));
-      yield* Effect.forEach(
-        names,
-        (name) =>
-          Effect.gen(function* () {
-            const full = path.join(dir, name);
-            const relative = path.relative(root, full);
-            // `readLink` answers lstat's half (`FileSystem` has no lstat): a
-            // path it reads is a link, digested as its target text.
-            const link = yield* io(fs.readLink(full)).pipe(
-              Effect.orElseSucceed(() => undefined),
-            );
-            if (link !== undefined) {
-              files.push([relative, `-> ${link}`]);
-              return;
-            }
-            const info = yield* io(fs.stat(full));
-            if (info.type === 'Directory') {
-              if (name !== '.git') yield* walk(full);
-            } else if (info.type === 'File') {
-              const mtime = Option.getOrUndefined(info.mtime)?.getTime();
-              // git's racy rule: a file modified within RACY_MS of now may be
-              // written again under the same (rounded) mtime and size, so it
-              // is hashed fresh and not cached; nor is one with no mtime.
-              const cacheable =
-                mtime !== undefined &&
-                (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
-              const key = cacheable
-                ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
-                : undefined;
-              let hash = key === undefined ? undefined : hashes.get(key);
-              if (hash === undefined) {
-                hash = sha256Hex(yield* io(fs.readFile(full)));
-                if (key !== undefined) hashes.set(key, hash);
-              }
-              files.push([relative, hash]);
-            }
-          }),
-        { concurrency: 'unbounded', discard: true },
-      );
+      const full = path.join(dir, name);
+      const relative = path.relative(root, full);
+      // One `lstat` per entry: a link is digested as its target text.
+      const info = yield* fs.lstat(full);
+      if (info.type === 'SymbolicLink') {
+        files.push([relative, `-> ${yield* fs.readLink(full)}`]);
+        return;
+      }
+      if (info.type === 'Directory') {
+        if (name !== '.git') yield* walk(full);
+      } else if (info.type === 'File') {
+        const mtime = Option.getOrUndefined(info.mtime)?.getTime();
+        // git's racy rule: a file modified within RACY_MS of now may be
+        // written again under the same (rounded) mtime and size, so it is
+        // hashed fresh and not cached; nor is one with no mtime.
+        const cacheable =
+          mtime !== undefined &&
+          (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
+        const key = cacheable
+          ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
+          : undefined;
+        let hash = key === undefined ? undefined : hashes.get(key);
+        if (hash === undefined) {
+          hash = sha256Hex(yield* fs.readFile(full));
+          if (key !== undefined) hashes.set(key, hash);
+        }
+        files.push([relative, hash]);
+      }
     });
   yield* walk(root).pipe(
     Effect.mapError(
@@ -148,28 +144,29 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
       ...(command === null ? [] : [['command', command] as const]),
       ...server.args.map((arg) => ['file', path.resolve(root, arg)] as const),
     ];
-    // A server names a handful of candidates; each is looked up at once.
+    // Each candidate resolves at once; the found files keep their order.
     const found = yield* Effect.forEach(
       candidates,
-      Effect.fnUntraced(function* ([role, candidate]) {
-        // An argument that names nothing is not a file; any other failure is.
-        const real = yield* fs
-          .realPath(candidate)
-          .pipe(Effect.catchIf(absentReason, () => Effect.void));
-        if (real === undefined || isPathWithin(realRoot, real)) return [];
-        const info = yield* fs.stat(real);
-        return info.type === 'File'
-          ? [
-              {
-                role,
-                path: real,
-                size: Number(info.size),
-                mtimeMs: Option.getOrUndefined(info.mtime)?.getTime() ?? null,
-              } satisfies ExternalFile,
-            ]
-          : [];
-      }),
-      { concurrency: 'unbounded' },
+      ([role, candidate]) =>
+        Effect.gen(function* () {
+          // An argument that names nothing is not a file; any other failure is.
+          const real = yield* fs
+            .realPath(candidate)
+            .pipe(Effect.catchIf(absentReason, () => Effect.void));
+          if (real === undefined || isPathWithin(realRoot, real)) return [];
+          const info = yield* fs.stat(real);
+          return info.type === 'File'
+            ? [
+                {
+                  role,
+                  path: real,
+                  size: Number(info.size),
+                  mtimeMs: Option.getOrUndefined(info.mtime)?.getTime() ?? null,
+                } satisfies ExternalFile,
+              ]
+            : [];
+        }),
+      { concurrency: 8 },
     );
     return found.flat();
   },
@@ -193,8 +190,8 @@ export const pluginDigest = Effect.fn('pluginDigest')(function* (
   plugin: ResolvedPlugin,
   key: string,
 ) {
-  // The three parts read independent files, so they are read at once.
-  const parts = yield* Effect.all(
+  // The three reads are independent, so they run at once.
+  const { files, servers, hooks } = yield* Effect.all(
     {
       files: pluginFiles(root),
       servers: Effect.forEach(
@@ -224,5 +221,5 @@ export const pluginDigest = Effect.fn('pluginDigest')(function* (
     },
     { concurrency: 'unbounded' },
   );
-  return sha256Hex(stableStringify(parts) ?? '');
+  return sha256Hex(stableStringify({ files, servers, hooks }) ?? '');
 });

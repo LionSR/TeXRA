@@ -174,18 +174,16 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
     const missing: string[] = [];
     const unreadable: { readonly root: string; readonly reason: string }[] = [];
     const kept: string[] = [];
+    // Dedupe first, stat the roots at once, then sort the results in the
+    // remembered order.
     const unique = [...new Set(candidates.map(canonicalizeWorkspacePath))];
-    // Stat every folder at once; the results are classified in list order.
     const stats = yield* Effect.forEach(
       unique,
-      (root) =>
-        fs.stat(root).pipe(
-          Effect.result,
-          Effect.map((stat) => ({ root, stat })),
-        ),
+      (root) => fs.stat(root).pipe(Effect.result),
       { concurrency: 8 },
     );
-    for (const { root, stat } of stats) {
+    for (const [index, root] of unique.entries()) {
+      const stat = stats[index];
       if (Result.isSuccess(stat)) {
         if (stat.success.type === 'Directory') {
           roots.push(root);
@@ -235,8 +233,14 @@ export const readRememberedDesktopProjects = Effect.fn(
   'desktopProjects.readRemembered',
 )(function* () {
   const records = yield* DesktopProjectRecords;
-  const remembered = yield* partitionFolders(yield* records.read);
-  const recent = yield* partitionFolders(yield* records.readRecent);
+  // The two lists are independent, so they are read and checked at once.
+  const [remembered, recent] = yield* Effect.all(
+    [
+      Effect.flatMap(records.read, partitionFolders),
+      Effect.flatMap(records.readRecent, partitionFolders),
+    ],
+    { concurrency: 'unbounded' },
+  );
   yield* records.replace(remembered.kept);
   yield* records.replaceRecent(
     recent.kept.filter((root) => !remembered.kept.includes(root)),

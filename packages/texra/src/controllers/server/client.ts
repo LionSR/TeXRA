@@ -8,6 +8,7 @@
  */
 import { spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
+import { join } from 'node:path';
 
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
 import {
@@ -216,6 +217,10 @@ export function spawnService(
               ([name]) => name === 'HOME' || name.startsWith('TEXRA_'),
             ),
           ),
+          // Node's on-disk compile cache, in the private run directory: a
+          // start after the first skips most of compiling the 12 MB bundle
+          // (~250 ms). A runtime without the cache ignores the variable.
+          NODE_COMPILE_CACHE: join(paths.runDirectory, 'compile-cache'),
           ...env,
         },
       });

@@ -43,31 +43,33 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
     config: Pick<AgentConfig, 'workingDirectory'> | null,
     filePaths: readonly string[],
   ) {
-    const resolved = new Map<string, string>();
+    const resolvedByPath = new Map<
+      string,
+      { readonly absolutePath: string; readonly path: string }
+    >();
     for (const filePath of filePaths) {
-      const target = resolveRunWorkspaceFilePath(config, filePath);
-      if (target && !resolved.has(target.path))
-        resolved.set(target.path, target.absolutePath);
+      const resolved = resolveRunWorkspaceFilePath(config, filePath);
+      if (resolved && !resolvedByPath.has(resolved.path))
+        resolvedByPath.set(resolved.path, resolved);
     }
-    const files = yield* Effect.forEach(
-      resolved,
-      ([relative, absolutePath]) =>
-        // A path recorded for the run that is no longer there — or whose
-        // parent is not a directory any more — is simply not listed; every
-        // other failure propagates, so an unreadable entry is never reported
-        // as a missing one.
-        entryMetadataAt(absolutePath).pipe(
-          Effect.map((entry): RunWorkspaceFile[] => [
-            {
-              path: relative,
-              size: entry.size,
-              isDirectory: entry.type === 'Directory',
-            },
-          ]),
-          Effect.catchIf(absentReason, () => Effect.succeed([])),
+
+    // A path recorded for the run that is no longer there — or whose parent
+    // is not a directory any more — is simply not listed; every other failure
+    // propagates, so an unreadable entry is never reported as a missing one.
+    const entries = yield* Effect.forEach(
+      resolvedByPath.values(),
+      (resolved) =>
+        entryMetadataAt(resolved.absolutePath).pipe(
+          Effect.map((entry): RunWorkspaceFile => ({
+            path: resolved.path,
+            size: entry.size,
+            isDirectory: entry.type === 'Directory',
+          })),
+          Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
         ),
       { concurrency: 8 },
     );
-    return files.flat().sort((a, b) => a.path.localeCompare(b.path));
+    const files = entries.filter((entry) => entry !== undefined);
+    return files.sort((a, b) => a.path.localeCompare(b.path));
   },
 );

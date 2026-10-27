@@ -360,6 +360,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
           : resolveInvocationFileList(session, parentRunId, label, list),
       ),
+      { concurrency: 'unbounded' },
     ),
   );
   if (Exit.isFailure(resolved))
@@ -378,14 +379,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now.
-  const fileBytes =
-    awaited && script !== undefined
-      ? yield* fingerprint(
-          [inputs, contexts, media].map((group) =>
-            group.map(({ absolutePath }) => absolutePath),
-          ),
-        )
-      : null;
   const key =
     awaited && script !== undefined
       ? sha256({
@@ -401,7 +394,11 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
-          files: fileBytes,
+          files: yield* fingerprint(
+            [inputs, contexts, media].map((group) =>
+              group.map(({ absolutePath }) => absolutePath),
+            ),
+          ),
         })
       : undefined;
   if (key !== undefined && script !== undefined) {

@@ -203,6 +203,14 @@ type RunToolOptions = {
 } & Omit<ExecuteCommandBaseOptions, 'signal'>;
 
 /**
+ * Tools a `runToolWithCheck` probe found installed in this process, so each
+ * later run skips the `--version` spawn. Only hits are kept: a tool installed
+ * mid-session is found on the next run. `checkToolInstalled` itself never reads
+ * this, so the dashboard and setup probes always spawn.
+ */
+const toolsFoundInstalled = new Set<string>();
+
+/**
  * Run a tool after verifying it is installed, answering `false` when the tool
  * is missing.
  *
@@ -216,8 +224,11 @@ export const runToolWithCheck = Effect.fn('toolChecks.runToolWithCheck')(
     options: RunToolOptions,
   ): Effect.fn.Return<ExecResult | false, never, ChildProcessSpawner> {
     const { showError = true, ...execOptions } = options;
-    if (!(yield* checkToolInstalled(toolName, showError))) {
-      return false;
+    if (!toolsFoundInstalled.has(toolName)) {
+      if (!(yield* checkToolInstalled(toolName, showError))) {
+        return false;
+      }
+      toolsFoundInstalled.add(toolName);
     }
     return yield* executeCommand([toolName, ...args], execOptions);
   },

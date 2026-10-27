@@ -167,18 +167,19 @@ export const scanPluginAgents = Effect.gen(function* () {
   });
   const entries: AgentEntry[] = [];
   const issues: AgentScanIssue[] = [];
-  // The files are read together; their entries and warnings follow in
-  // declaration order.
-  const reads = yield* Effect.all(
+  // The files are read concurrently, then recorded in their listed order.
+  const reads = yield* Effect.forEach(
     loadable.flatMap(({ record, plugin }) =>
-      plugin.agents.map((relative) => {
-        const file = path.join(record.path, relative);
-        return Effect.map(
-          Effect.result(readPluginAgent(file, record.name)),
-          (read) => ({ file, read }),
-        );
-      }),
+      plugin.agents.map((relative) => ({
+        file: path.join(record.path, relative),
+        pluginName: record.name,
+      })),
     ),
+    ({ file, pluginName }) =>
+      Effect.map(Effect.result(readPluginAgent(file, pluginName)), (read) => ({
+        file,
+        read,
+      })),
     { concurrency: 8 },
   );
   for (const { file, read } of reads) {

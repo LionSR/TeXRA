@@ -98,18 +98,33 @@ export const DocumentReviewTool = defineTool({
       );
     const missing = missingEvidence(round, revision);
     if (missing) parts.push(missing);
+    // Each output's diff is computed concurrently; the budget below is
+    // spent in output order.
+    const diffs = yield* Effect.forEach(
+      round?.outputs ?? [],
+      Effect.fnUntraced(function* (output) {
+        // The base its extraction recorded; an output with none is new: all
+        // of it is the change. A base that is gone reads as empty.
+        const base = getEffectiveDiffBase(output.lineage);
+        const before =
+          base === null
+            ? ''
+            : yield* fs.readFileString(base.absolutePath).pipe(
+                Effect.catchIf(
+                  (error) => error.reason._tag === 'NotFound',
+                  () => Effect.succeed(''),
+                ),
+              );
+        const after = yield* fs.readFileString(output.location.absolutePath);
+        return {
+          path: fileLocationDisplayPath(output.location),
+          text: yield* unifiedDiffOf(before, after),
+        };
+      }),
+      { concurrency: 8 },
+    );
     let left = MAX_DIFF_CHARS;
-    for (const output of round?.outputs ?? []) {
-      const path = fileLocationDisplayPath(output.location);
-      // The base its extraction recorded; an output with none is new: all
-      // of it is the change.
-      const base = getEffectiveDiffBase(output.lineage);
-      const before =
-        base !== null && (yield* fs.exists(base.absolutePath))
-          ? yield* fs.readFileString(base.absolutePath)
-          : '';
-      const after = yield* fs.readFileString(output.location.absolutePath);
-      const text = yield* unifiedDiffOf(before, after);
+    for (const { path, text } of diffs) {
       const shown = text === undefined ? '(unchanged)' : bounded(text, left);
       left -= shown.length;
       parts.push(`<diff path="${path}">\n${shown}\n</diff>`);

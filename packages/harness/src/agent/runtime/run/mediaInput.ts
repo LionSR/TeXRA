@@ -147,14 +147,16 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   Error,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
-  const parts: InputPart[] = [];
-  const kinds: MediaAttachmentKind[] = [];
-  for (const location of locations) {
-    const loaded = yield* partsForFile(location, capabilities, logger, config);
-    parts.push(...loaded.parts);
-    kinds.push(...loaded.kinds);
-  }
-  return { parts, kinds };
+  // Files load at once; the parts keep the attachment order.
+  const loaded = yield* Effect.forEach(
+    locations,
+    (location) => partsForFile(location, capabilities, logger, config),
+    { concurrency: 4 },
+  );
+  return {
+    parts: loaded.flatMap((file) => file.parts),
+    kinds: loaded.flatMap((file) => file.kinds),
+  };
 });
 
 /**

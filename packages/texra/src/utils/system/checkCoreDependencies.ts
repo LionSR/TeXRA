@@ -37,9 +37,21 @@ export const checkCoreDependencies = Effect.fn(
 )(function* (
   showError: boolean = true,
 ): Effect.fn.Return<MissingTool[], never, ChildProcessSpawner> {
-  const probes = yield* Effect.all(
-    // The catalog's core set, not a second list beside it.
-    CORE_DEPENDENCY_TOOLS.map((tool) => checkToolInstalled(tool, showError)),
+  // Both groups probe at once: the catalog's core set (not a second list
+  // beside it) and the image tools.
+  const [probes, imageTools] = yield* Effect.all(
+    [
+      Effect.all(
+        CORE_DEPENDENCY_TOOLS.map((tool) =>
+          checkToolInstalled(tool, showError),
+        ),
+        { concurrency: 'unbounded' },
+      ),
+      Effect.all(
+        IMAGE_LATEX_TOOLS.map((tool) => checkToolInstalled(tool, false)),
+        { concurrency: 'unbounded' },
+      ),
+    ],
     { concurrency: 'unbounded' },
   );
   const missing: MissingTool[] = CORE_DEPENDENCY_TOOLS.filter(
@@ -47,10 +59,6 @@ export const checkCoreDependencies = Effect.fn(
   ).map((id) => missingTool(id, false));
 
   // Report both image tools as interchangeable only if neither is installed.
-  const imageTools = yield* Effect.all(
-    IMAGE_LATEX_TOOLS.map((tool) => checkToolInstalled(tool, false)),
-    { concurrency: 'unbounded' },
-  );
   if (!imageTools.some(Boolean)) {
     missing.push(...IMAGE_LATEX_TOOLS.map((id) => missingTool(id, true)));
     if (showError) yield* reportMissingImageTools();

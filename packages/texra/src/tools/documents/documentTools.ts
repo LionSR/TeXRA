@@ -103,22 +103,32 @@ const openTask = Effect.fn('documents.openTask')(function* (
   const { fileService } = docs.deps;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
-  // not, though it exists. Why it did not read is kept for the refusal.
+  // not, though it exists. Why it did not read is kept for the refusal. The
+  // probe checks the type and the permission; the bytes are read later.
   const located = (files: readonly string[]) =>
-    Effect.forEach(files.filter(Boolean), (file) => {
-      const absolutePath = fileService.locateSource(file).absolutePath;
-      return fs.readFile(absolutePath).pipe(
-        Effect.match({
-          onSuccess: () => ({ path: file, absolutePath, error: null }),
-          onFailure: (error) => ({
-            path: file,
-            absolutePath,
-            error: toErrorMessage(error),
+    Effect.forEach(
+      files.filter(Boolean),
+      (file) => {
+        const absolutePath = fileService.locateSource(file).absolutePath;
+        return fs.stat(absolutePath).pipe(
+          Effect.flatMap((info) =>
+            info.type === 'File'
+              ? fs.access(absolutePath, { readable: true })
+              : Effect.fail(new Error(`not a file (${info.type})`)),
+          ),
+          Effect.match({
+            onSuccess: () => ({ path: file, absolutePath, error: null }),
+            onFailure: (error) => ({
+              path: file,
+              absolutePath,
+              error: toErrorMessage(error),
+            }),
           }),
-        }),
-        Effect.map((read) => ({ ...read, ok: read.error === null })),
-      );
-    });
+          Effect.map((read) => ({ ...read, ok: read.error === null })),
+        );
+      },
+      { concurrency: 8 },
+    );
   const inputs = yield* located([...config.inputFiles, ...config.mediaFiles]);
   const unreadable = inputs.filter((input) => !input.ok);
   if (inputs.length === 0 || unreadable.length > 0)

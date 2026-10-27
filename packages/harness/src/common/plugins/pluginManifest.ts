@@ -177,7 +177,7 @@ export function containedPath(root: string, declared: string) {
     const fs = yield* FileSystem.FileSystem;
     const [realRoot, realResolved] = yield* Effect.all(
       [fs.realPath(root), fs.realPath(resolved)],
-      { concurrency: 'unbounded' },
+      { concurrency: 2 },
     ).pipe(Effect.mapError(ioError));
     if (!isPathWithin(realRoot, realResolved)) {
       return yield* failPlugin(
@@ -225,22 +225,12 @@ export interface ResolvedPlugin {
   readonly warnings: readonly string[];
 }
 
-/**
- * Run read-only `effects` at once and answer their values in order; when
- * some fail, the failure is the first in order, as a sequential read would
- * report.
- */
-const allInOrder = <A, E, R>(effects: readonly Effect.Effect<A, E, R>[]) =>
-  Effect.all(effects, { concurrency: 8, mode: 'result' }).pipe(
-    Effect.flatMap((results) => Effect.forEach(results, Effect.fromResult)),
-  );
-
 /** The plugin manifests present in `dir`, Claude Code's first. */
 export function readPluginManifests(dir: string) {
-  return allInOrder(
-    PLUGIN_MANIFEST_FILES.map((file) =>
-      readJsonFile(path.join(dir, file), PluginManifestSchema),
-    ),
+  return Effect.forEach(
+    PLUGIN_MANIFEST_FILES,
+    (file) => readJsonFile(path.join(dir, file), PluginManifestSchema),
+    { concurrency: 'unbounded' },
   ).pipe(
     Effect.map((found) =>
       found.filter((manifest): manifest is PluginManifest => !!manifest),
@@ -260,37 +250,28 @@ function markdownFiles(
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const found = yield* allInOrder(
-      [conventional, ...declared].map((candidate, index) =>
-        Effect.gen(function* () {
-          const resolved = yield* containedPath(dir, candidate);
-          if (resolved === undefined) {
-            if (index === 0) return [];
-            return yield* failPlugin(
-              `The plugin at ${dir} declares "${candidate}", which does not exist.`,
-            );
-          }
-          const stat = yield* fs.stat(resolved).pipe(Effect.mapError(ioError));
-          const entries =
-            stat.type === 'Directory'
-              ? (yield* fs
-                  .readDirectory(resolved)
-                  .pipe(Effect.mapError(ioError)))
-                  .filter((name) => name.endsWith('.md'))
-                  .toSorted()
-                  .map((name) => path.join(resolved, name))
-              : [resolved];
-          return yield* allInOrder(
-            entries.map((entry) =>
-              containedPath(dir, path.relative(dir, entry)),
-            ),
-          );
-        }),
-      ),
-    );
     const files = new Set<string>();
-    for (const file of found.flat())
-      if (file !== undefined) files.add(path.relative(dir, file));
+    for (const [index, candidate] of [conventional, ...declared].entries()) {
+      const resolved = yield* containedPath(dir, candidate);
+      if (resolved === undefined) {
+        if (index === 0) continue;
+        return yield* failPlugin(
+          `The plugin at ${dir} declares "${candidate}", which does not exist.`,
+        );
+      }
+      const stat = yield* fs.stat(resolved).pipe(Effect.mapError(ioError));
+      const entries =
+        stat.type === 'Directory'
+          ? (yield* fs.readDirectory(resolved).pipe(Effect.mapError(ioError)))
+              .filter((name) => name.endsWith('.md'))
+              .toSorted()
+              .map((name) => path.join(resolved, name))
+          : [resolved];
+      for (const entry of entries) {
+        const file = yield* containedPath(dir, path.relative(dir, entry));
+        if (file !== undefined) files.add(path.relative(dir, file));
+      }
+    }
     return [...files];
   });
 }
@@ -501,24 +482,24 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
       'skills',
       ...manifests.flatMap((source) => toList(source.skills)),
     ];
-    const skillRoots = allInOrder(
-      declared.map((candidate, index) =>
-        Effect.flatMap(containedPath(dir, candidate), (resolved) =>
-          resolved !== undefined || index === 0
-            ? Effect.succeed(resolved)
-            : // The conventional directory is optional; a declared one is not.
-              failPlugin(
-                `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
-              ),
-        ),
-      ),
-    );
     // The components are read at once and taken in order, so the failure
     // reported is the first a sequential read would meet. Hooks, which
     // warn, are read only once the parts before them have succeeded.
     const parts = yield* Effect.all(
       {
-        skills: skillRoots,
+        skills: Effect.all(
+          declared.map((candidate, index) =>
+            Effect.flatMap(containedPath(dir, candidate), (resolved) =>
+              resolved !== undefined || index === 0
+                ? Effect.succeed(resolved)
+                : // The conventional directory is optional; a declared one is not.
+                  failPlugin(
+                    `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
+                  ),
+            ),
+          ),
+          { concurrency: 'unbounded', mode: 'result' },
+        ),
         mcp: mcpServersOf(dir, name.success, found),
         commands: markdownFiles(
           dir,
@@ -536,9 +517,11 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
       { concurrency: 'unbounded', mode: 'result' },
     );
     const skills = new Set<string>();
-    for (const resolved of yield* Effect.fromResult(parts.skills))
-      if (resolved !== undefined)
-        skills.add(path.relative(dir, resolved) || '.');
+    for (const root of yield* Effect.forEach(
+      yield* Effect.fromResult(parts.skills),
+      Effect.fromResult,
+    ))
+      if (root !== undefined) skills.add(path.relative(dir, root) || '.');
     const mcp = yield* Effect.fromResult(parts.mcp);
     return {
       name: name.success,
@@ -565,7 +548,7 @@ export function countSkills(root: string) {
       Effect.forEach(
         names,
         (name) => exists(path.join(root, name, 'SKILL.md')),
-        { concurrency: 16 },
+        { concurrency: 8 },
       ),
     ),
     Effect.map((found) => found.filter(Boolean).length),

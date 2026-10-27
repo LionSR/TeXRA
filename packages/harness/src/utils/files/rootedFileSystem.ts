@@ -279,7 +279,7 @@ export function rootedFileSystem(
       yield* Effect.forEach(
         matches,
         (match) => at('glob', path.resolve(resolvedRoot, match)),
-        { discard: true },
+        { concurrency: 8, discard: true },
       );
       return matches;
     }),

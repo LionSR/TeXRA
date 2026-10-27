@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
 import { isNotADirectoryError } from '@common/errors/errorPredicates';
@@ -49,9 +49,10 @@ export interface SkillSource {
 }
 
 /**
- * One precedence tier of sources. A `source` tier scans its roots one after
- * another; a `name` tier pools its roots and orders their skills by directory
- * name, the order one root holding all of them would give.
+ * One precedence tier of sources. A `source` tier takes its roots' skills
+ * in root order (the roots are read at once); a `name` tier pools its roots
+ * and orders their skills by directory name, the order one root holding all
+ * of them would give.
  */
 export interface SkillSourceTier {
   readonly order: 'source' | 'name';
@@ -121,46 +122,53 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  // Every entry is resolved and read at once, then taken in name order: a
-  // duplicate costs one extra read, and the issues keep their order.
+  // Each entry resolves and loads in one concurrent pass; duplicates and
+  // issues are decided afterwards in name order (a duplicate's load, which
+  // has no side effects, is dropped).
   const entries = yield* Effect.forEach(
     names.toSorted((a, b) => a.localeCompare(b)),
-    Effect.fnUntraced(function* (name) {
-      const skillDir = path.join(root, name);
-      const skillPath = path.join(skillDir, 'SKILL.md');
-      const real = yield* fs.realPath(skillPath).pipe(Effect.result);
-      return {
-        name,
-        skillPath,
-        real,
-        loaded: Result.isSuccess(real)
-          ? yield* loadSkillDirectory(skillDir, name)
-          : undefined,
-      };
-    }),
-    { concurrency: 8 },
+    (name) => {
+      const skillPath = path.join(root, name, 'SKILL.md');
+      return fs.realPath(skillPath).pipe(
+        Effect.flatMap((realSkillPath) =>
+          Effect.map(
+            loadSkillDirectory(path.join(root, name), name),
+            (loaded) => ({
+              name,
+              skillPath,
+              realSkillPath,
+              loaded,
+              issue: undefined,
+            }),
+          ),
+        ),
+        Effect.catch((error) =>
+          Effect.succeed({
+            name,
+            skillPath,
+            realSkillPath: undefined,
+            loaded: undefined,
+            issue: absentReason(error)
+              ? undefined
+              : issue('warning', 'read_error', error.message, {
+                  path: skillPath,
+                }),
+          }),
+        ),
+      );
+    },
+    { concurrency: 16 },
   );
 
-  for (const { name, skillPath, real, loaded } of entries) {
-    if (Result.isFailure(real)) {
-      if (!absentReason(real.failure)) {
-        errors.push(
-          issue('warning', 'read_error', real.failure.message, {
-            path: skillPath,
-          }),
-        );
-      }
-      continue;
-    }
-    const realSkillPath = real.success;
-
+  for (const entry of entries) {
+    if (entry.issue !== undefined) errors.push(entry.issue);
+    const { loaded, realSkillPath } = entry;
+    if (loaded === undefined || realSkillPath === undefined) continue;
     if (seenRealPaths.has(realSkillPath)) {
-      errors.push(dupRealpathIssue(realSkillPath, skillPath));
+      errors.push(dupRealpathIssue(realSkillPath, entry.skillPath));
       continue;
     }
     seenRealPaths.add(realSkillPath);
-
-    if (loaded === undefined) continue;
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
@@ -173,7 +181,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     skills.push({
       skill: loaded.skill,
       realPath: realSkillPath,
-      entryName: name,
+      entryName: entry.name,
     });
   }
 
@@ -279,31 +287,34 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
       }
     };
 
-    // Every source is scanned at once; tiers and sources are then accepted
-    // in precedence order.
-    const scans = yield* Effect.forEach(
-      tiers.flatMap((tier) => tier.sources.map((source) => ({ tier, source }))),
-      Effect.fnUntraced(function* ({ tier, source }) {
-        const sourceError =
-          source.required === true
-            ? yield* validateRequiredSource(source)
-            : undefined;
-        if (sourceError) return { tier, source, sourceError };
-        const scanned = source.command
-          ? yield* scanCommandFile(source.path)
-          : yield* scanSkillRoot(source.path);
-        return { tier, source, scanned };
-      }),
-      { concurrency: 8 },
+    // Scan every source concurrently; accept results in precedence order.
+    const scannedTiers = yield* Effect.forEach(
+      tiers,
+      (tier) =>
+        Effect.forEach(
+          tier.sources,
+          Effect.fnUntraced(function* (source) {
+            if (source.required === true) {
+              const sourceError = yield* validateRequiredSource(source);
+              if (sourceError)
+                return { source, sourceError, scanned: undefined };
+            }
+            const scanned = source.command
+              ? yield* scanCommandFile(source.path)
+              : yield* scanSkillRoot(source.path);
+            return { source, sourceError: undefined, scanned };
+          }),
+          { concurrency: 8 },
+        ).pipe(Effect.map((sources) => ({ order: tier.order, sources }))),
+      { concurrency: 'unbounded' },
     );
-    for (const tier of tiers) {
+
+    for (const tier of scannedTiers) {
       // A name-ordered tier accepts once, after every root is scanned.
       const pooled: (DiscoveredSkill & { source: SkillSource })[] = [];
-      for (const { source, sourceError, scanned } of scans.filter(
-        (scan) => scan.tier === tier,
-      )) {
+      for (const { source, sourceError, scanned } of tier.sources) {
         if (scanned === undefined) {
-          if (sourceError) errors.push(sourceError);
+          errors.push(sourceError);
           continue;
         }
         const result =

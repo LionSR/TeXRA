@@ -85,15 +85,15 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           asides.push(...(yield* asideCopies(database)));
           return;
         }
-        let bytes = 0;
-        yield* Effect.forEach(
+        const sizes = yield* Effect.forEach(
           yield* fs.readDirectory(directory, { recursive: true }),
           (name) =>
-            Effect.map(fs.stat(path.join(directory, name)), (info) => {
-              if (info.type === 'File') bytes += Number(info.size);
-            }),
-          { concurrency: 16, discard: true },
+            Effect.map(fs.stat(path.join(directory, name)), (info) =>
+              info.type === 'File' ? Number(info.size) : 0,
+            ),
+          { concurrency: 8 },
         );
+        const bytes = sizes.reduce((sum, size) => sum + size, 0);
         // A store whose database is not SQLite is still an orphan.
         const unreadable =
           (yield* fs.exists(database)) &&
@@ -168,6 +168,7 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
         ...inventory.asides.map(({ path: aside }) => remove(aside, false)),
       ],
       (removal) => removal,
+      { concurrency: 8 },
     );
   },
 );

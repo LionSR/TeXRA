@@ -383,13 +383,21 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
       return count < SKILL_CATALOG_MAX_SKILLS;
     });
     const named = new Set(run.named);
+    // A skill in both lists is canonicalized once.
+    const built = new Map<SourcedSkill, SkillCatalogEntry>();
+    const entryOf = (entry: SourcedSkill) => {
+      const known = built.get(entry);
+      return known === undefined
+        ? catalogEntry(run.roots.workspace, entry).pipe(
+            Effect.tap((made) => Effect.sync(() => built.set(entry, made))),
+          )
+        : Effect.succeed(known);
+    };
     return {
-      catalog: yield* Effect.forEach(catalog, (entry) =>
-        catalogEntry(run.roots.workspace, entry),
-      ),
+      catalog: yield* Effect.forEach(catalog, entryOf),
       named: yield* Effect.forEach(
         result.skills.filter(({ skill }) => named.has(skill.name)),
-        (entry) => catalogEntry(run.roots.workspace, entry),
+        entryOf,
       ),
       issues: result.errors,
     };
