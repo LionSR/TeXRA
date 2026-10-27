@@ -167,6 +167,7 @@ export function prepareEventDraft(input: WithBlobs<SessionEventDraft>): {
   return { draft, row: encodeDraft(draft, blobs) };
 }
 
+/** The row `Database` inserts for a validated draft, blob digests checked. */
 export function encodeDraft(
   draft: SessionEventDraft,
   brought: readonly DraftBlob[] = [],

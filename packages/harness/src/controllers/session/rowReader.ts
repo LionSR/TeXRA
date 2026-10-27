@@ -149,14 +149,20 @@ const factHeader = (data: unknown) => {
   return Result.isSuccess(header) ? header.success : undefined;
 };
 
-/** A statement runner over the reader's connection. */
-type Exec<E> = (
+/** A statement runner over the store's connection: one statement's rows,
+ *  untyped until the caller decodes them. */
+export type Exec<E> = (
   statement: string,
-  params: readonly unknown[],
+  params?: readonly unknown[],
 ) => Effect.Effect<readonly SqlRow[], E>;
 
 /** A selected row's reader, and the runs it found it cannot open. */
 export interface RowReader<E> {
+  /** The strings stored under `digests`, inflated and verified; a digest
+   *  the store lacks fails the read. */
+  readonly blobs: (
+    digests: readonly string[],
+  ) => Effect.Effect<ReadonlyMap<string, string>, E>;
   /** The events of `rows`. A newer row fails the read; one that does not
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
@@ -164,11 +170,6 @@ export interface RowReader<E> {
    *  never costs the session. An absent plugin's kind is left out, warned.
    *  A strict read of a run an earlier build wrote fails as that build's,
    *  whichever of its rows it selected. */
-  /** The strings stored under `digests`, inflated and verified; a digest
-   *  the store lacks fails the read. */
-  readonly blobs: (
-    digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, E>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,

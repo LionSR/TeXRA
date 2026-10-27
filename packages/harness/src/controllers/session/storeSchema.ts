@@ -16,6 +16,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
   cannotOpen,
+  cleanup,
   freeName,
   isDamaged,
   pragmaValue,
@@ -262,7 +263,7 @@ const prepareStore = Effect.fnUntraced(function* (
           yield* run(sql, statement);
         yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
         yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }).pipe(Effect.onError(() => run(sql, 'ROLLBACK').pipe(Effect.ignore)));
+      }).pipe(Effect.onError(() => run(sql, 'ROLLBACK').pipe(cleanup)));
       yield* run(sql, 'COMMIT');
       continue;
     }
@@ -278,8 +279,10 @@ const prepareStore = Effect.fnUntraced(function* (
         yield* run(sql, 'PRAGMA user_version = 0');
       }),
     ).pipe(
-      Effect.ensuring(run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore)),
+      Effect.onError(() => run(sql, 'PRAGMA foreign_keys = ON').pipe(cleanup)),
     );
+    // Collection is the keys' cascade: a store left without them fails.
+    yield* run(sql, 'PRAGMA foreign_keys = ON');
     if (aside === null) continue;
     yield* incrementalVacuum(sql);
     yield* Effect.logWarning(
@@ -288,9 +291,8 @@ const prepareStore = Effect.fnUntraced(function* (
     movedAside = { path, aside, reason: 'pre-1.0' };
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
-  if (mode === 'persistent') {
+  if (mode === 'persistent')
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
-  }
   yield* run(sql, 'PRAGMA busy_timeout = 25');
   return movedAside;
 });
@@ -308,7 +310,7 @@ const RECLAIM_PAGES = 256;
  * closes first would leave the pages. A step that fails ends it, and the
  * next collection reclaims the rest.
  */
-export const reclaimFreePages = (sql: Sql, path: string) =>
+export const reclaimFreePages = (sql: Sql, path: string): Effect.Effect<void> =>
   Effect.gen(function* () {
     const free = () =>
       pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
@@ -369,16 +371,16 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     Effect.catchCause((cause) => Effect.succeed({ cause })),
   );
   if ('sql' in attempt) return attempt;
-  if (mode !== 'persistent' || !isDamaged(attempt.cause)) {
+  if (mode !== 'persistent' || !isDamaged(attempt.cause))
     return yield* Effect.failCause(attempt.cause);
-  }
   yield* Scope.close(first, Exit.void);
   // Another process may have seen the same damage and already put a fresh
   // store here: move the file only while it is the one that still fails a
   // read, by the same identity (inode, size, mtime) up to the rename.
   const identity = fs.stat(filename).pipe(
     Effect.map((info) => `${info.ino}/${info.size}/${info.mtime}`),
-    Effect.orElseSucceed(() => null),
+    // Gone: another process moved it first. Any other failure fails the open.
+    Effect.catchReason('PlatformError', 'NotFound', () => Effect.succeed(null)),
   );
   const seen = yield* identity;
   const stillDamaged = yield* Effect.scoped(
@@ -403,8 +405,5 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   ).pipe(withLogChannel(CHANNEL));
   const sql = yield* connect;
   yield* prepareStore(sql, mode, path, filename);
-  return {
-    sql,
-    movedAside: { path, aside, reason: 'corrupt' as const },
-  };
+  return { sql, movedAside: { path, aside, reason: 'corrupt' as const } };
 });

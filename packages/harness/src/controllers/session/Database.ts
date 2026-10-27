@@ -1,8 +1,8 @@
 /**
- * The persistence substrate: the connection, its transactions and busy
- * retry, the run history's one write path, claims, the aggregate lifecycle,
- * deletion and collection, and the reads. One database
- * per session root (`WorkspaceRoots`), never a process singleton; an ephemeral
+ * The persistence substrate: the connection (its transaction wrapper and
+ * retries are `storeAside.ts`'s), the run history's one write path, claims,
+ * the aggregate lifecycle, deletion and collection, and the reads. One
+ * database per session root (`WorkspaceRoots`), never a process singleton; an ephemeral
  * session runs the same schema in SQLite memory, and a failed file open is an
  * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
  * sequence; `rowCodec.ts` every stored shape, by the arms the process's
@@ -15,15 +15,12 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
-import * as SqlClient from 'effect/sql/SqlClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
-import { isSqlError } from 'effect/sql/SqlError';
+import { isSqlError, type SqlError } from 'effect/sql/SqlError';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   Clock,
-  Context,
   Effect,
-  Exit,
   FileSystem,
   Layer,
   Option,
@@ -41,8 +38,10 @@ import {
   isDisplaySessionEvent,
   RunIdSchema,
   ownerIdentity,
+  PluginFactDraftSchema,
   aggregateTarget,
   referencedAggregates,
+  type AggregateEdges,
   type AggregateId,
   type RunParent,
   type SessionEvent,
@@ -91,15 +90,20 @@ import {
   READ_RUN_RECORDS,
   rowReader,
   settleCards,
+  type Exec,
 } from './rowReader';
 import {
+  commitFromRows,
+  HIGH_WATER,
   isBusy,
   isDamaged,
-  OwnersUnproven,
+  mapDatabaseFailure,
   ProvenOwners,
   provingOwners,
   reclaimable,
   retryBusy,
+  storeTransactions,
+  TxMode,
 } from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
@@ -107,12 +111,20 @@ const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/** The open transaction's mode, null outside one; `derive` (projection
- *  catch-up) takes the write lock and wakes no reader. */
-const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
-  '@texra-ai/harness/session/TxMode',
-  { defaultValue: () => null },
-);
+/** The run-lifecycle rule a draft at `seq` of its aggregate breaks, if any:
+ *  a run begins with exactly one `run.start`, nothing else lands at its
+ *  seq 1, and only a run starts or is removed. */
+function lifecycleRefusal(
+  draft: SessionEventDraft,
+  onRun: boolean,
+  seq: number,
+): string | undefined {
+  if (onRun && (seq === 1) !== (draft.type === 'run.start'))
+    return `A run must begin with exactly one run.start: ${draft.aggregateId}`;
+  if ((draft.type === 'run.start' || draft.type === 'run.removed') && !onRun)
+    return `Run lifecycle event has a non-run target: ${draft.aggregateId}`;
+  return undefined;
+}
 /** First append claims the aggregate and mints its uid; later need the claim. */
 const NEXT_SEQ = `
 INSERT INTO event_sequence (kind, logical_id, uid, seq, owner_id)
@@ -155,8 +167,6 @@ WHERE s.id IN (${AGGREGATE_LIST})
 const DISPLAY_PAGE_ROWS = 2000;
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
-/** The `event` table's autoincrement sequence: a non-negative integer. */
-const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /** Where a display page after a commit ends: 2,000 stored rows on, run to
  *  the end of the batch the last one is in, as a card's `tool.end` and the
  *  settlement it projects from share one batch (`settleCards`) and a batch's
@@ -181,6 +191,94 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
+/** One `READ_STATE` row as the aggregate state it is. */
+const stateOf = (row: SqlRow): AggregateState =>
+  Schema.decodeUnknownSync(AggregateStateSchema)({
+    ...row,
+    aggregateId: aggregateOf(row.kind, row.logicalId),
+    parentId:
+      row.parentKind === null
+        ? null
+        : aggregateOf(row.parentKind, row.parentLogicalId),
+  });
+/** Moves on every other connection's commit: the change poll's signal. */
+const DATA_VERSION = 'PRAGMA data_version';
+/** An aggregate and every aggregate under it, by the parent edges. */
+const DEPENDENTS = `WITH RECURSIVE dependents(id) AS (
+  SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
+  UNION ALL
+  SELECT child.id FROM event_sequence child
+  JOIN dependents parent ON child.parent_id = parent.id
+)`;
+const DEPENDENT_KEYS = `${DEPENDENTS}
+  SELECT kind, logical_id AS logicalId FROM event_sequence
+  WHERE id IN (SELECT id FROM dependents) ORDER BY kind, logical_id`;
+const UNOWNED_DEPENDENT = `${DEPENDENTS}
+  SELECT kind, logical_id AS logicalId FROM event_sequence
+  WHERE id IN (SELECT id FROM dependents)
+    AND closed_by IS NULL AND owner_id IS NOT ?
+  LIMIT 1`;
+const DELETION_RUNS = `${DEPENDENTS}
+  SELECT logical_id AS runId FROM event_sequence
+  WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
+  ORDER BY runId`;
+const CLOSE_DEPENDENTS = `${DEPENDENTS}
+  UPDATE event_sequence SET closed_by = ?
+  WHERE id IN (SELECT id FROM dependents)`;
+const DEPENDENT_BLOBS = `${DEPENDENTS} SELECT DISTINCT r.digest FROM event_blob r
+  JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
+/** Blob collection is by reachability: a digest no row references. */
+const COLLECT_BLOBS = `DELETE FROM blob
+  WHERE digest IN (SELECT value FROM json_each(?))
+    AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
+/** The display types in a commit range, plus projected rows. */
+const READ_DISPLAY = displayUnion('"commit" > ? AND "commit" <= ?', '"commit"');
+const READ_AGGREGATE = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+  WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+  ORDER BY e.seq`;
+/** Named: for an `IN` list the planner walks the aggregate's seq index. */
+const READ_TYPED_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
+  INDEXED BY event_aggregate_type ${EVENT_JOINS}
+  WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+    AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
+/** A tombstone closes its run and stays its last row until collected. */
+const PENDING_DELETIONS = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+  WHERE e.type = 'run.removed' ORDER BY e."commit"`;
+/** One aggregate's display rows, its projected rows among them. */
+const READ_DISPLAY_AGGREGATE = displayUnion(
+  'kind = ? AND logicalId = ? AND seq >= ?',
+  'seq',
+);
+/** The listing's tail, plus every row of the resident aggregates. */
+const READ_INPUT_ROWS = displayUnion(
+  '"commit" > ? AND "commit" <= ?',
+  '"commit"',
+  `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+    WHERE e.aggregate IN (${AGGREGATE_LIST})
+      AND e.type NOT IN (SELECT value FROM json_each(?))`,
+);
+const CLAIM = `UPDATE event_sequence SET owner_id = ?
+  WHERE kind = ? AND logical_id = ? AND owner_id IS ?
+    AND closed_by IS NULL RETURNING id`;
+const RELEASE = `UPDATE event_sequence SET owner_id = NULL
+  WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
+const REPARENT = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
+  WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
+/** A closed aggregate's sequence row, collected with its dependents and
+ *  rows by the foreign keys' cascade. */
+const CLOSED_BY = `SELECT id FROM event_sequence
+  WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
+const COLLECT_CLOSED = `DELETE FROM event_sequence
+  WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
+/** An aggregate's plugin rows, for its arms' transition rules. */
+const PLUGIN_ROWS = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+  WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
+
+/**
+ * The session database of the root in context: `persistent` opens or
+ * creates its `texra.db`, `existing` opens one only if it is there, and
+ * `ephemeral` runs the same schema in SQLite memory.
+ */
 export const databaseLayer = (
   mode: 'persistent' | 'ephemeral' | 'existing',
 ): Layer.Layer<
@@ -230,15 +328,13 @@ export const databaseLayer = (
       ).pipe(mapDatabaseFailure(openFailed));
       const level = yield* SubscriptionRef.make(0);
       const observedCommit = yield* SubscriptionRef.make(0);
-      /** Commits only move forward: a poll that read the high-water mark
-       *  before a local commit never sets it back. */
-      const observe = (commit: number) =>
-        SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
-      const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
-      const commitFromRows = ([row]: readonly SqlRow[]) =>
-        row === undefined
-          ? 0
-          : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
+      /** A commit seen, written here or found by the poll: the observed
+       *  mark moves, only forward (a poll that read the high-water mark
+       *  before a local commit never sets it back), and every reader wakes. */
+      const published = (commit: number) =>
+        SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit)).pipe(
+          Effect.andThen(SubscriptionRef.update(level, (wake) => wake + 1)),
+        );
       const writeFailed = (cause: unknown): DatabaseWriteFailed =>
         new DatabaseWriteFailed({ path, cause });
       const readFailed = (cause: unknown): DatabaseReadFailed =>
@@ -248,8 +344,7 @@ export const databaseLayer = (
       ): Effect.Effect<A, DatabaseReadFailed> =>
         read.pipe(retryBusy, mapDatabaseFailure(readFailed));
       /** One statement's rows, untyped until the caller parses them. */
-      const exec = (statement: string, params?: readonly unknown[]) =>
-        sql.unsafe<Record<string, unknown>>(statement, params);
+      const exec: Exec<SqlError> = sql.unsafe;
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
@@ -266,7 +361,7 @@ export const databaseLayer = (
           Effect.flatMap((rows) => reader.read(rows, whole)),
           Effect.map(settleCards),
         );
-      const currentCommit = exec(highWater, []).pipe(
+      const currentCommit = exec(HIGH_WATER, []).pipe(
         Effect.map(commitFromRows),
       );
       yield* SubscriptionRef.set(
@@ -274,67 +369,7 @@ export const databaseLayer = (
         yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
       yield* gate.pipe(mapDatabaseFailure(openFailed));
-      const dependents = `WITH RECURSIVE dependents(id) AS (
-        SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
-        UNION ALL
-        SELECT child.id FROM event_sequence child
-        JOIN dependents parent ON child.parent_id = parent.id
-      )`;
-      const dependentKeys = `${dependents}
-        SELECT kind, logical_id AS logicalId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents) ORDER BY kind, logical_id`;
-      const unownedDependent = `${dependents}
-        SELECT kind, logical_id AS logicalId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents)
-          AND closed_by IS NULL AND owner_id IS NOT ?
-        LIMIT 1
-      `;
-      const deletionRuns = `${dependents}
-        SELECT logical_id AS runId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
-        ORDER BY runId
-      `;
-      const closeDependents = `${dependents}
-        UPDATE event_sequence SET closed_by = ?
-        WHERE id IN (SELECT id FROM dependents)
-      `;
-      const dependentBlobs = `${dependents} SELECT DISTINCT r.digest FROM event_blob r
-        JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
-      /** Blob collection is by reachability: a digest no row references. */
-      const collectBlobs = `DELETE FROM blob
-        WHERE digest IN (SELECT value FROM json_each(?))
-          AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      // The display types in a commit range, plus projected rows.
-      const display = displayUnion(
-        '"commit" > ? AND "commit" <= ?',
-        '"commit"',
-      );
-      const aggregate = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
-        ORDER BY e.seq`;
-      // Named: for an `IN` list the planner walks the aggregate's seq index.
-      const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
-        INDEXED BY event_aggregate_type ${EVENT_JOINS}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
-          AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
-      // A tombstone closes its run and stays its last row until collected.
-      const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE e.type = 'run.removed' ORDER BY e."commit"`;
-      // One aggregate's display rows, its projected rows among them.
-      const displayAggregate = displayUnion(
-        'kind = ? AND logicalId = ? AND seq >= ?',
-        'seq',
-      );
-      // The listing's tail, plus every row of the resident aggregates.
-      const inputRows = displayUnion(
-        '"commit" > ? AND "commit" <= ?',
-        '"commit"',
-        `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-          WHERE e.aggregate IN (${AGGREGATE_LIST})
-            AND e.type NOT IN (SELECT value FROM json_each(?))`,
-      );
-      const dataVersion = 'PRAGMA data_version';
-      let version = (yield* execOne(dataVersion, []).pipe(
+      let version = (yield* execOne(DATA_VERSION, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
       // A failed read logs and retries; `version` moves once its commit is read.
@@ -342,13 +377,12 @@ export const databaseLayer = (
         Stream.tick('250 millis').pipe(
           Stream.runForEach(() =>
             Effect.gen(function* () {
-              const next = (yield* query(execOne(dataVersion, [])))
+              const next = (yield* query(execOne(DATA_VERSION, [])))
                 ?.data_version;
               if (next !== version) {
                 const commit = yield* query(currentCommit);
                 version = next;
-                yield* observe(commit);
-                yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                yield* published(commit);
               }
             }).pipe(
               Effect.tapError((error) =>
@@ -365,68 +399,7 @@ export const databaseLayer = (
           ),
         ),
       );
-      // One transaction wrapper, so a nested call of any mode finds the
-      // savepoint semaphore its outermost opened; that one's mode is `TxMode`.
-      const withTransaction = SqlClient.makeWithTransaction({
-        transactionService: sql.transactionService,
-        spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: Effect.fn('Database.acquireConnection')(
-          function* (restore) {
-            const mode = yield* TxMode;
-            const connection = yield* restore(sql.reserve);
-            // Runs before the release (added after it): a COMMIT is published
-            // before the connection goes, even with an interrupt pending.
-            yield* Effect.addFinalizer((exit) =>
-              mode === 'write' && Exit.isSuccess(exit)
-                ? Effect.gen(function* () {
-                    yield* observe(
-                      commitFromRows(
-                        yield* connection.executeUnprepared(
-                          highWater,
-                          [],
-                          undefined,
-                        ),
-                      ),
-                    );
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                  }).pipe(Effect.orDie)
-                : Effect.void,
-            );
-            return connection;
-          },
-        ),
-        begin: (connection) =>
-          Effect.flatMap(TxMode, (mode) =>
-            connection.executeUnprepared(
-              mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE',
-              [],
-              undefined,
-            ),
-          ),
-        commit: (connection) =>
-          connection.executeUnprepared('COMMIT', [], undefined).pipe(
-            Effect.orDie,
-            Effect.onError(() =>
-              connection
-                .executeUnprepared('ROLLBACK', [], undefined)
-                .pipe(Effect.orDie),
-            ),
-          ),
-        rollback: (connection) =>
-          connection.executeUnprepared('ROLLBACK', [], undefined),
-        savepoint: (connection, id) =>
-          connection.executeUnprepared(
-            `SAVEPOINT effect_sql_${id}`,
-            [],
-            undefined,
-          ),
-        rollbackSavepoint: (connection, id) =>
-          connection.executeUnprepared(
-            `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
-            [],
-            undefined,
-          ),
-      });
+      const withTransaction = storeTransactions(sql, published);
       // Every body is database-only, so a busy one runs again whole. The
       // store gate runs inside every outermost write and derive: a store
       // holding a kind this build does not read takes no write from it, bar
@@ -462,39 +435,14 @@ export const databaseLayer = (
               (cause as Extract<E, DatabaseNotOwner | DatabaseClaimRefused>)
             : writeFailed(cause),
         );
-      const claim = `UPDATE event_sequence SET owner_id = ?
-        WHERE kind = ? AND logical_id = ? AND owner_id IS ?
-          AND closed_by IS NULL RETURNING id`;
-      const release = `UPDATE event_sequence SET owner_id = NULL
-        WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
-      const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
-        WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
-      // A closed aggregate's sequence row, collected with its dependents
-      // and rows by the foreign keys' cascade.
-      const closedBy = `SELECT id FROM event_sequence
-        WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      const collectClosed = `DELETE FROM event_sequence
-        WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      // An aggregate's plugin rows, for its arms' transition rules.
-      const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
         Effect.gen(function* () {
-          return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
-            Schema.decodeUnknownSync(AggregateStateSchema)({
-              ...row,
-              aggregateId: aggregateOf(row.kind, row.logicalId),
-              parentId:
-                row.parentKind === null
-                  ? null
-                  : aggregateOf(row.parentKind, row.parentLogicalId),
-            }),
-          );
+          return (yield* exec(READ_STATE, aggregateLists(ids))).map(stateOf);
         });
       const readDependents = (id: AggregateId) =>
         Effect.gen(function* () {
           return yield* readState(
-            (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
+            (yield* exec(DEPENDENT_KEYS, aggregateColumns(id))).map((row) =>
               aggregateOf(row.kind, row.logicalId),
             ),
           );
@@ -587,121 +535,70 @@ export const databaseLayer = (
           yield* upkeep.follow(committed, before);
           return committed;
         });
-      const appendRow = (
-        draft: SessionEventDraft,
-        row: EncodedRow,
+      /** A plugin aggregate's new parent run must be open and held here. */
+      const checkReparent = (id: AggregateId, reparent: AggregateId) =>
+        Effect.gen(function* () {
+          if ((yield* readState([id]))[0]?.parentId === reparent) return;
+          const parent = (yield* readState([reparent]))[0];
+          if (!parent || parent.closed || parent.ownerId !== identity.ownerId)
+            return yield* invariant(
+              `A plugin aggregate's new parent must be open and owned here: ${reparent}`,
+            );
+        });
+      /** Why the fact's arm refuses it after the aggregate's last fact of
+       *  that kind, if it does. Never over a corrupt row of the aggregate: it
+       *  fails whole. */
+      const pluginRefusal = (
+        draft: typeof PluginFactDraftSchema.Type,
+        onRun: boolean,
+        aggregate: number,
+      ) =>
+        Effect.gen(function* () {
+          const name = `${draft.plugin}/${draft.kind}`;
+          const last = (yield* reader.read(
+            yield* exec(PLUGIN_ROWS, [aggregate]),
+            true,
+          )).findLast(
+            (row) =>
+              row.type === 'plugin.fact' &&
+              `${row.plugin}/${row.kind}` === name,
+          );
+          return onRun && draft.parent !== null
+            ? `A run's own plugin fact names no parent: ${name}`
+            : arms[name]?.admits?.(
+                last?.type === 'plugin.fact' ? last : undefined,
+                draft,
+              );
+        });
+      /** The declared parent's incarnation, stamped in this transaction: a
+       *  reused logical id must not redirect the child to a later one. */
+      const parentOf = (draft: SessionEventDraft, parentId: AggregateId) =>
+        Effect.gen(function* () {
+          const state = (yield* readState([parentId]))[0];
+          if (!state || state.closed || state.startCommit === null)
+            return yield* invariant(
+              `Child creation requires an open parent: ${parentId}`,
+            );
+          const parent: RunParent = {
+            id: runIdOf(aggregateTarget(parentId).id),
+            uid: state.uid,
+            callId:
+              draft.type === 'run.start'
+                ? (draft.parent?.callId ?? null)
+                : null,
+          };
+          return parent;
+        });
+      /** Insert one encoded row at `seq` of `aggregate` with its blobs and
+       *  references, answering the commit SQLite assigned it. */
+      const insertRow = (
+        id: AggregateId,
+        aggregate: number,
+        seq: number,
+        encoded: EncodedRow,
         at: number,
       ) =>
         Effect.gen(function* () {
-          const edges = edgesOf(draft);
-          const target = aggregateTarget(draft.aggregateId);
-          const columns = aggregateColumns(draft.aggregateId);
-          if (edges.borrowsClaim) {
-            // A plugin's own aggregate borrows its claim for this transaction only.
-            yield* exec(claim, [identity.ownerId, ...columns, null]);
-          }
-          if (edges.reparent != null) {
-            // A new parent run must be open and held by this writer.
-            const current = (yield* readState([draft.aggregateId]))[0];
-            if (current?.parentId !== edges.reparent) {
-              const parent = (yield* readState([edges.reparent]))[0];
-              if (
-                !parent ||
-                parent.closed ||
-                parent.ownerId !== identity.ownerId
-              ) {
-                return yield* invariant(
-                  `A plugin aggregate's new parent must be open and owned here: ${edges.reparent}`,
-                );
-              }
-            }
-          }
-          const next = yield* execOne(NEXT_SEQ, [
-            ...columns,
-            randomUUID(),
-            identity.ownerId,
-          ]);
-          const seq = next?.seq;
-          const aggregate = next?.id;
-          if (typeof seq !== 'number' || typeof aggregate !== 'number') {
-            return yield* refuseWriter(
-              draft.aggregateId,
-              'Sequence refused for an absent aggregate',
-            );
-          }
-          if (draft.type === 'plugin.fact') {
-            const name = `${draft.plugin}/${draft.kind}`;
-            // Never over a corrupt row of the aggregate: it fails whole.
-            const last = (yield* reader.read(
-              yield* exec(pluginRows, [aggregate]),
-              true,
-            )).findLast(
-              (row) =>
-                row.type === 'plugin.fact' &&
-                `${row.plugin}/${row.kind}` === name,
-            );
-            const refused =
-              target.kind === 'run' && draft.parent !== null
-                ? `A run's own plugin fact names no parent: ${name}`
-                : arms[name]?.admits?.(
-                    last?.type === 'plugin.fact' ? last : undefined,
-                    draft,
-                  );
-            if (refused) return yield* invariant(refused);
-          }
-          // The seq-1 rule (decision 9): a run aggregate begins with exactly
-          // one `run.start`, and nothing else ever lands at seq 1.
-          if (
-            target.kind === 'run' &&
-            (seq === 1) !== (draft.type === 'run.start')
-          ) {
-            return yield* invariant(
-              `A run must begin with exactly one run.start: ${draft.aggregateId}`,
-            );
-          }
-          if (
-            (draft.type === 'run.start' || draft.type === 'run.removed') &&
-            target.kind !== 'run'
-          ) {
-            return yield* invariant(
-              `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
-            );
-          }
-          // Stamp the declared parent's incarnation in this transaction: a
-          // reused logical id must not redirect the child to a later one.
-          let parent: RunParent | null = null;
-          if (edges.parent !== null) {
-            const parentState = (yield* readState([edges.parent]))[0];
-            if (
-              !parentState ||
-              parentState.closed ||
-              parentState.startCommit === null
-            ) {
-              return yield* invariant(
-                `Child creation requires an open parent: ${edges.parent}`,
-              );
-            }
-            parent = {
-              id: runIdOf(aggregateTarget(edges.parent).id),
-              uid: parentState.uid,
-              callId:
-                draft.type === 'run.start'
-                  ? (draft.parent?.callId ?? null)
-                  : null,
-            };
-          }
-          // A tombstone names only run directories this lifecycle owns,
-          // derived under the closure's permit and transaction, not a caller.
-          const committedDraft = yield* Effect.gen(function* () {
-            if (draft.type === 'run.removed') {
-              const owned = yield* exec(deletionRuns, columns);
-              return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
-            }
-            if (draft.type === 'run.start') return { ...draft, parent };
-            return draft;
-          });
-          const encoded =
-            committedDraft === draft ? row : encodeDraft(committedDraft);
           const commit = (yield* execOne(INSERT_EVENT, [
             aggregate,
             seq,
@@ -712,9 +609,7 @@ export const databaseLayer = (
             encoded.data,
           ]))?.commit;
           if (typeof commit !== 'number')
-            return yield* invariant(
-              `No commit assigned for aggregate ${draft.aggregateId}`,
-            );
+            return yield* invariant(`No commit assigned for aggregate ${id}`);
           for (const { digest, value } of encoded.blobs) {
             yield* exec(INSERT_BLOB, [digest, value]);
             yield* exec(INSERT_REF, [commit, digest]);
@@ -722,6 +617,19 @@ export const databaseLayer = (
           // Linked, not written: the foreign key refuses a blob that is gone.
           for (const digest of encoded.references)
             yield* exec(INSERT_REF, [commit, digest]);
+          return commit;
+        });
+      /** The aggregate-graph edges a committed row moves: the run's start
+       *  commit, a plugin aggregate's parent, its borrowed claim given back,
+       *  and the dependents a tombstone closes. */
+      const moveEdges = (
+        edges: AggregateEdges,
+        columns: readonly unknown[],
+        aggregate: number,
+        seq: number,
+        commit: number,
+      ) =>
+        Effect.gen(function* () {
           if (seq === 1) {
             yield* exec(
               'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
@@ -735,7 +643,7 @@ export const databaseLayer = (
               edges.reparent === null
                 ? [null, null]
                 : aggregateColumns(edges.reparent);
-            yield* exec(reparent, [
+            yield* exec(REPARENT, [
               ...parentColumns,
               aggregate,
               identity.ownerId,
@@ -750,7 +658,7 @@ export const databaseLayer = (
           if (edges.closes) {
             // Closing an aggregate requires every open dependent claim, held
             // in the tombstone's transaction, so no claimant can change between.
-            const unowned = yield* execOne(unownedDependent, [
+            const unowned = yield* execOne(UNOWNED_DEPENDENT, [
               ...columns,
               identity.ownerId,
             ]);
@@ -758,8 +666,67 @@ export const databaseLayer = (
               return yield* invariant(
                 `Deletion requires the dependent claim: ${aggregateOf(unowned.kind, unowned.logicalId)}`,
               );
-            yield* exec(closeDependents, [...columns, commit]);
+            yield* exec(CLOSE_DEPENDENTS, [...columns, commit]);
           }
+        });
+      const appendRow = (
+        draft: SessionEventDraft,
+        row: EncodedRow,
+        at: number,
+      ) =>
+        Effect.gen(function* () {
+          const edges = edgesOf(draft);
+          const target = aggregateTarget(draft.aggregateId);
+          const columns = aggregateColumns(draft.aggregateId);
+          if (edges.borrowsClaim) {
+            // A plugin's own aggregate borrows its claim for this transaction only.
+            yield* exec(CLAIM, [identity.ownerId, ...columns, null]);
+          }
+          if (edges.reparent != null)
+            yield* checkReparent(draft.aggregateId, edges.reparent);
+          const next = yield* execOne(NEXT_SEQ, [
+            ...columns,
+            randomUUID(),
+            identity.ownerId,
+          ]);
+          const seq = next?.seq;
+          const aggregate = next?.id;
+          if (typeof seq !== 'number' || typeof aggregate !== 'number') {
+            return yield* refuseWriter(
+              draft.aggregateId,
+              'Sequence refused for an absent aggregate',
+            );
+          }
+          if (draft.type === 'plugin.fact') {
+            const refused = yield* pluginRefusal(
+              draft,
+              target.kind === 'run',
+              aggregate,
+            );
+            if (refused) return yield* invariant(refused);
+          }
+          const broken = lifecycleRefusal(draft, target.kind === 'run', seq);
+          if (broken !== undefined) return yield* invariant(broken);
+          const parent =
+            edges.parent === null ? null : yield* parentOf(draft, edges.parent);
+          // A tombstone names only run directories this lifecycle owns,
+          // derived under the closure's permit and transaction, not a caller.
+          const committedDraft = yield* Effect.gen(function* () {
+            if (draft.type === 'run.removed') {
+              const owned = yield* exec(DELETION_RUNS, columns);
+              return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
+            }
+            if (draft.type === 'run.start') return { ...draft, parent };
+            return draft;
+          });
+          const commit = yield* insertRow(
+            draft.aggregateId,
+            aggregate,
+            seq,
+            committedDraft === draft ? row : encodeDraft(committedDraft),
+            at,
+          );
+          yield* moveEdges(edges, columns, aggregate, seq, commit);
           return {
             ...committedDraft,
             seq,
@@ -784,13 +751,13 @@ export const databaseLayer = (
                   ? execOne(DISPLAY_PAGE_END, [from])
                   : Effect.undefined;
                 const through = Math.min(top, Number(end?.through ?? top));
-                const rows = yield* decodedRows(display, [
+                const rows = yield* decodedRows(READ_DISPLAY, [
                   DISPLAY_READ_TYPES,
                   from,
                   through,
                 ]);
                 if (through < top)
-                  for (const row of yield* decodedRows(pendingDeletions, []))
+                  for (const row of yield* decodedRows(PENDING_DELETIONS, []))
                     tombstones.set(row.commit, row);
                 const read = new Set(rows.map((row) => row.commit));
                 const kept = [...tombstones.values()].filter(
@@ -824,16 +791,20 @@ export const databaseLayer = (
         readAggregate: (id, fromSeq, types) =>
           query(
             types === undefined
-              ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq], true)
+              ? decodedRows(
+                  READ_AGGREGATE,
+                  [...aggregateColumns(id), fromSeq],
+                  true,
+                )
               : decodedRows(
-                  typedRows,
+                  READ_TYPED_ROWS,
                   [...aggregateColumns(id), fromSeq, JSON.stringify(types)],
                   true,
                 ),
           ),
         readDisplayAggregate: (id, fromSeq) =>
           projected(
-            decodedRows(displayAggregate, [
+            decodedRows(READ_DISPLAY_AGGREGATE, [
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
@@ -858,7 +829,7 @@ export const databaseLayer = (
           projected(
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
-              const events = yield* decodedRows(inputRows, [
+              const events = yield* decodedRows(READ_INPUT_ROWS, [
                 LISTED_TYPES,
                 ...aggregateLists(ids),
                 LISTED_TYPES,
@@ -936,14 +907,14 @@ export const databaseLayer = (
           },
         ),
         deletions: {
-          pending: () => query(decodedRows(pendingDeletions, [])),
+          pending: () => query(decodedRows(PENDING_DELETIONS, [])),
           collect: (tombstone, cleanup) =>
             Effect.gen(function* () {
               const columns = aggregateColumns(tombstone.aggregateId);
               // Already collected (by this pass before, or another process).
               if (
                 (yield* query(
-                  execOne(closedBy, [...columns, tombstone.commit]),
+                  execOne(CLOSED_BY, [...columns, tombstone.commit]),
                 )) === undefined
               )
                 return;
@@ -954,12 +925,12 @@ export const databaseLayer = (
               yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
               yield* transact(
                 Effect.gen(function* () {
-                  const digests = (yield* exec(dependentBlobs, columns)).map(
+                  const digests = (yield* exec(DEPENDENT_BLOBS, columns)).map(
                     (row) => row.digest,
                   );
-                  yield* exec(collectClosed, [...columns, tombstone.commit]);
+                  yield* exec(COLLECT_CLOSED, [...columns, tombstone.commit]);
                   if (digests.length > 0)
-                    yield* exec(collectBlobs, [JSON.stringify(digests)]);
+                    yield* exec(COLLECT_BLOBS, [JSON.stringify(digests)]);
                 }),
               );
               yield* reclaimFreePages(sql, path);
@@ -970,7 +941,7 @@ export const databaseLayer = (
             ? Effect.void
             : transaction(
                 'write',
-                exec(release, [...aggregateLists(ids), identity.ownerId]),
+                exec(RELEASE, [...aggregateLists(ids), identity.ownerId]),
                 writeFailed,
                 false,
               ),
@@ -1005,7 +976,9 @@ export const databaseLayer = (
 
 /** Whether another process has the store open (its exclusive lock is
  *  refused), or the file is no SQLite store at all (NOTADB, CORRUPT). */
-export const storeOpenElsewhere = (filename: string) =>
+export const storeOpenElsewhere = (
+  filename: string,
+): Effect.Effect<'free' | 'open' | 'unreadable', SqlError> =>
   Effect.scoped(
     Effect.flatMap(
       SqliteClient.make({ filename, disableWAL: true, busyTimeout: 0 }),
@@ -1046,19 +1019,3 @@ export const globalDatabaseLayer = (
       ),
     ),
   );
-
-/** Interruption stays; a failure or a driver defect becomes `failed`'s. An
- *  attempt's unproven claim owners stay a defect for the outermost transaction. */
-function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
-  return <A, EOp, R>(
-    operation: Effect.Effect<A, EOp, R>,
-  ): Effect.Effect<A, E, R> =>
-    operation.pipe(
-      Effect.catchDefect((defect) =>
-        defect instanceof OwnersUnproven
-          ? Effect.die(defect)
-          : Effect.fail(defect),
-      ),
-      Effect.mapError(failed),
-    );
-}

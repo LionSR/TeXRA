@@ -1,6 +1,6 @@
 /**
- * The three non-durable fold inputs of a session (PRD one-fold-three-renderers,
- * 7.2), each a level in a `SubscriptionRef`: a snapshot read beside a
+ * The three non-durable fold inputs of a session, each a level in a
+ * `SubscriptionRef`: a snapshot read beside a
  * separately armed delta stream loses whatever lands between the two, and a
  * `SubscriptionRef` replays its current value on subscribe.
  *
@@ -27,6 +27,8 @@ import type {
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
+/** What this process knows about a session that its events cannot say: its
+ *  own owner id, the owners it may not touch, the runs it cannot read. */
 export class LocalRuntimeSource extends Context.Service<
   LocalRuntimeSource,
   {
@@ -58,6 +60,7 @@ export interface InflightTextChunk {
 /** The `${runId}/${rowId}` key of one streaming row's current chunk tail. */
 export type InflightText = ReadonlyMap<string, InflightTextChunk>;
 
+/** The in-flight text of each streaming row, keyed `${runId}/${rowId}`. */
 export class TextChunkSource extends Context.Service<
   TextChunkSource,
   {
@@ -72,10 +75,12 @@ export class TextChunkSource extends Context.Service<
   );
 }
 
+/** The aggregates some surface holds a transcript subscription on: one set
+ *  per port, published as their union. */
 export class TranscriptSubscriptions extends Context.Service<
   TranscriptSubscriptions,
   {
-    /** The union of every port's set: a fold input (PRD 7.2). */
+    /** The union of every port's set: a fold input. */
     readonly ref: SubscriptionRef.SubscriptionRef<
       readonly TranscriptSubscription[]
     >;

@@ -209,7 +209,7 @@ describe('the golden 1.0 store', () => {
       );
       return Effect.gen(function* () {
         // The fixture's own connection runs the reader's earlier-build scan.
-        const exec = (statement: string, params: readonly unknown[]) =>
+        const exec = (statement: string, params: readonly unknown[] = []) =>
           Effect.sync(() =>
             raw(storage, (db) =>
               db.prepare(statement).all(...(params as (string | number)[])),

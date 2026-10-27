@@ -32,6 +32,7 @@ import {
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
 import { CURRENT_VALUE_KIND, type SqlRow } from './rowCodec';
+import type { Exec } from './rowReader';
 import type { SqlError } from 'effect/sql/SqlError';
 
 /** Replace one current value in place. */
@@ -74,11 +75,10 @@ function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
   );
 }
 
+/** The `values` and `inputHistory` facets of `Database`, over the statements,
+ *  write transaction and wake level the store hands in. */
 export function currentValues(store: {
-  readonly exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], SqlError>;
+  readonly exec: Exec<SqlError>;
   readonly execOne: (
     statement: string,
     params?: readonly unknown[],

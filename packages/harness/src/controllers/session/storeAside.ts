@@ -1,10 +1,11 @@
 /**
- * The session store's aside copies: the files a store open moved beside it
- * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
- * at a name no earlier copy holds and kept until a storage prune deletes
- * them; the outermost transaction's
- * two retries (a busy lock, claim owners proven off the lock); and the test
- * of whether a failed open is SQLite reporting the file damaged.
+ * The session store's machinery beside `Database`. Its aside copies: the
+ * files a store open moved beside it (a pre-1.0 store to `.pre1`, a damaged
+ * file to `.corrupt-<stamp>`), each at a name no earlier copy holds and kept
+ * until a storage prune deletes them, and the test of whether a failed open
+ * is SQLite reporting the file damaged. Its transactions: the one wrapper
+ * and its modes, the outermost transaction's two retries (a busy lock, claim
+ * owners proven off the lock), and how a failure inside one is reported.
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
@@ -13,20 +14,40 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Predicate,
   Schedule,
+  Schema,
 } from 'effect';
-import { isSqlError } from 'effect/sql/SqlError';
+import * as SqlClient from 'effect/sql/SqlClient';
+import { isSqlError, type SqlError } from 'effect/sql/SqlError';
 import type { OwnerId, OwnerLiveness } from '@shared/schemas';
 import { DatabaseClaimRefused } from '@shared/session/database';
-import type * as SqlClient from 'effect/sql/SqlClient';
+import type { Row } from 'effect/sql/SqlConnection';
 
+/** The SQLite client a store open works through, before `Database` wraps it. */
 export type Sql = SqlClient.SqlClient;
 
-export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
+/** Run one statement that takes no parameters, for its effect. */
+export const run = (
+  sql: Sql,
+  statement: string,
+): Effect.Effect<readonly Row[], SqlError> => sql.unsafe(statement, []);
 
-export const pragmaValue = (sql: Sql, pragma: string) =>
+/** A cleanup step after a failure, which leaves as itself: the step's own
+ *  failure is logged at warn, never raised over it. */
+export const cleanup = Effect.ignore({
+  log: 'Warn',
+  message: 'Session store cleanup failed',
+});
+
+/** The value a `PRAGMA` reads back: its first row's column of that name,
+ *  undefined when it returns no row. */
+export const pragmaValue = (
+  sql: Sql,
+  pragma: string,
+): Effect.Effect<unknown, SqlError> =>
   sql
     .unsafe<Record<string, unknown>>(`PRAGMA ${pragma}`, [])
     .pipe(Effect.map((rows) => rows[0]?.[pragma]));
@@ -44,7 +65,12 @@ const BUSY_RETRY = Schedule.exponential('5 millis').pipe(
 /** `SQLITE_BUSY` or `SQLITE_LOCKED`: another connection holds the lock. */
 export const isBusy = (error: unknown): boolean =>
   isSqlError(error) && error.reason._tag === 'LockTimeoutError';
-export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+/** Run `effect` again on the busy schedule above while it fails with a
+ *  busy lock ({@link isBusy}); any other failure, and a lock still busy
+ *  after 5 s, leaves as it is. */
+export const retryBusy = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
 /** The claim owners' liveness verdicts an attempt of the outermost
@@ -165,8 +191,8 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   }).pipe(
     Effect.onError(() =>
       Effect.all([
-        run(sql, 'ROLLBACK').pipe(Effect.ignore),
-        fs.remove(staged, { force: true }).pipe(Effect.ignore),
+        run(sql, 'ROLLBACK').pipe(cleanup),
+        fs.remove(staged, { force: true }).pipe(cleanup),
       ]),
     ),
   );
@@ -235,4 +261,104 @@ export function isDamaged(cause: Cause.Cause<unknown>): boolean {
  *  (`SQLITE_CANTOPEN`, 14): for a read-only probe, no store there yet. */
 export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
   return hasSqliteCode(cause, [14]);
+}
+
+/** The open transaction's mode, null outside one; `derive` (projection
+ *  catch-up) takes the write lock and wakes no reader. */
+export const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
+  '@texra-ai/harness/session/TxMode',
+  { defaultValue: () => null },
+);
+/** The `event` table's autoincrement sequence: a non-negative integer. */
+const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+/** The `event` table's high-water mark: the last commit assigned. */
+export const HIGH_WATER =
+  "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
+/** The commit a {@link HIGH_WATER} read names: 0 before the first. */
+export const commitFromRows = ([row]: readonly Row[]): number =>
+  row === undefined ? 0 : Schema.decodeUnknownSync(EventSeqSchema)(row.seq);
+
+/** Interruption stays; a failure or a driver defect becomes `failed`'s. An
+ *  attempt's unproven claim owners stay a defect for the outermost transaction. */
+export function mapDatabaseFailure<E>(
+  failed: (cause: unknown) => E,
+): <A, EOp, R>(operation: Effect.Effect<A, EOp, R>) => Effect.Effect<A, E, R> {
+  return <A, EOp, R>(
+    operation: Effect.Effect<A, EOp, R>,
+  ): Effect.Effect<A, E, R> =>
+    operation.pipe(
+      Effect.catchDefect((defect) =>
+        defect instanceof OwnersUnproven
+          ? Effect.die(defect)
+          : Effect.fail(defect),
+      ),
+      Effect.mapError(failed),
+    );
+}
+
+/**
+ * The store's one transaction wrapper, so a nested call of any mode finds
+ * the savepoint semaphore its outermost opened; that one's mode is `TxMode`:
+ * a read begins deferred, a write or derive immediate. A committed write
+ * hands its high-water mark to `published` before its connection goes.
+ */
+export function storeTransactions(
+  sql: Sql,
+  published: (commit: number) => Effect.Effect<void>,
+): Sql['withTransaction'] {
+  return SqlClient.makeWithTransaction({
+    transactionService: sql.transactionService,
+    spanAttributes: [['db.system.name', 'sqlite']],
+    acquireConnection: Effect.fn('Database.acquireConnection')(
+      function* (restore) {
+        const mode = yield* TxMode;
+        const connection = yield* restore(sql.reserve);
+        // Runs before the release (added after it): a COMMIT is published
+        // before the connection goes, even with an interrupt pending.
+        yield* Effect.addFinalizer((exit) =>
+          mode === 'write' && Exit.isSuccess(exit)
+            ? Effect.gen(function* () {
+                yield* published(
+                  commitFromRows(
+                    yield* connection.executeUnprepared(
+                      HIGH_WATER,
+                      [],
+                      undefined,
+                    ),
+                  ),
+                );
+              }).pipe(Effect.orDie)
+            : Effect.void,
+        );
+        return connection;
+      },
+    ),
+    begin: (connection) =>
+      Effect.flatMap(TxMode, (mode) =>
+        connection.executeUnprepared(
+          mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE',
+          [],
+          undefined,
+        ),
+      ),
+    commit: (connection) =>
+      connection.executeUnprepared('COMMIT', [], undefined).pipe(
+        Effect.orDie,
+        Effect.onError(() =>
+          connection
+            .executeUnprepared('ROLLBACK', [], undefined)
+            .pipe(Effect.orDie),
+        ),
+      ),
+    rollback: (connection) =>
+      connection.executeUnprepared('ROLLBACK', [], undefined),
+    savepoint: (connection, id) =>
+      connection.executeUnprepared(`SAVEPOINT effect_sql_${id}`, [], undefined),
+    rollbackSavepoint: (connection, id) =>
+      connection.executeUnprepared(
+        `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
+        [],
+        undefined,
+      ),
+  });
 }

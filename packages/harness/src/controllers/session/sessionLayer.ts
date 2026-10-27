@@ -134,10 +134,11 @@ const logFailure =
  * and nothing store-bound is injected past that.
  */
 class SessionKey implements Equal.Equal {
-  constructor(readonly open: SessionHandleInit) {}
-
-  get storage(): string {
-    return this.open.roots.storage;
+  readonly open: SessionHandleInit;
+  readonly storage: string;
+  constructor(open: SessionHandleInit) {
+    this.open = open;
+    this.storage = open.roots.storage;
   }
 
   [Equal.symbol](that: Equal.Equal): boolean {
@@ -301,8 +302,7 @@ const sessionHandleLayer = (key: SessionKey) =>
     }),
   );
 
-/** The runtime graph of one root (PRD 7.3): the root-scoped services the
- *  handle is built over. */
+/** One root's runtime graph: the root-scoped services its handle builds on. */
 const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
     Database,

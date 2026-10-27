@@ -1,11 +1,10 @@
 /**
- * The store's projections:
- * the display and listing tables no row stores, each maintained by a pure
- * projector over decoded events. Their upkeep runs the projectors in
- * `Database`'s append transaction, making the writes they return; before a
- * read it rebuilds a projection whose stored version is not this build's and
- * catches up one that is behind (`projection_state`). Projections are never
- * migrated: a new version rebuilds from the rows.
+ * The store's projections: the display and listing tables no row stores,
+ * each maintained by a pure projector over decoded events. Their upkeep runs
+ * the projectors in `Database`'s append transaction, making the writes they
+ * return; before a read it rebuilds a projection whose stored version is not
+ * this build's and catches up one that is behind (`projection_state`).
+ * Projections are never migrated: a new version rebuilds from the rows.
  *
  * - `listing`: per aggregate and listing key (`listingKeyOf`), the row a cold
  *   listing delivers; an open request and a queued follow-up are keys of
@@ -18,7 +17,7 @@
  *
  * This module reads decoded events only, never `event.data`.
  */
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Struct } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
   listingKeyOf,
@@ -32,14 +31,8 @@ import {
   type SessionEvent,
   type TokenUsageStats,
 } from '@shared/schemas';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  aggregateColumns,
-  type SqlRow,
-} from './rowCodec';
-import { AGGREGATE } from './rowReader';
-import type { RowReader } from './rowReader';
+import { EVENT_COLUMNS, EVENT_FROM, aggregateColumns } from './rowCodec';
+import { AGGREGATE, type Exec, type RowReader } from './rowReader';
 
 /** One write a projector asks its upkeep to make. */
 type ProjectionOp =
@@ -201,7 +194,7 @@ const PROJECTORS = {
 } as const satisfies Record<string, Projector>;
 
 type ProjectionName = keyof typeof PROJECTORS;
-const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
+const PROJECTION_NAMES = Struct.keys(PROJECTORS);
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
@@ -217,7 +210,11 @@ const ProjectionStateSchema = Schema.Struct({
   version: Schema.Int,
   through: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-
+const decodeStates = Schema.decodeUnknownSync(
+  Schema.Array(ProjectionStateSchema),
+);
+const READ_STATES =
+  'SELECT name, version, through_commit AS through FROM projection_state';
 /** A projection this build owns (its version) and that has read every row
  *  through `top`; one with no state yet is current only on a store that
  *  never held a row, so a fresh store's first read writes nothing. */
@@ -274,26 +271,30 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
   }
 }
 
+/** A catch-up's failure: one of its statements', or its read's of a row. */
+type CatchUpError<E> = Effect.Error<ReturnType<RowReader<E>['read']>>;
 /** The upkeep of the store at `path`'s projections, in the caller's
  *  transaction: `exec` runs a statement, `read` decodes selected rows. */
 export function projectionUpkeep<E>(
-  exec: (
-    statement: string,
-    params?: readonly unknown[],
-  ) => Effect.Effect<readonly SqlRow[], E>,
+  exec: Exec<E>,
   read: RowReader<E>['read'],
   path: string,
-) {
+): {
+  /** Whether every projection is current through `top`. */
+  readonly current: (top: number) => Effect.Effect<boolean, E>;
+  /** One catch-up step, whether every projection reached `top`: one another
+   *  build versioned is emptied and rebuilt, one behind reads 1,000 rows on. */
+  readonly catchUp: (top: number) => Effect.Effect<boolean, CatchUpError<E>>;
+  /** A batch committed after `before`: a projection current through
+   *  `before` follows it; any other catches up on its owner's next read. */
+  readonly follow: (
+    events: readonly SessionEvent[],
+    before: number,
+  ) => Effect.Effect<void, E>;
+} {
   const states = Effect.map(
-    exec(
-      'SELECT name, version, through_commit AS through FROM projection_state',
-    ),
-    (rows) =>
-      new Map(
-        Schema.decodeUnknownSync(Schema.Array(ProjectionStateSchema))(rows).map(
-          (s) => [s.name, s],
-        ),
-      ),
+    exec(READ_STATES),
+    (rows) => new Map(decodeStates(rows).map((s) => [s.name, s])),
   );
   const setState = (name: ProjectionName, through: number) =>
     exec(
@@ -333,16 +334,12 @@ export function projectionUpkeep<E>(
       ),
     );
   return {
-    /** Whether every projection is current through `top`. */
     current: (top: number) =>
       Effect.map(states, (current) =>
         PROJECTION_NAMES.every((name) =>
           isCurrent(name, current.get(name), top),
         ),
       ),
-    /** One catch-up step: a projection another build versioned is emptied
-     *  and rebuilt; one behind `top` reads up to 1,000 rows on. Whether
-     *  every projection reached `top`. */
     catchUp: Effect.fn('projections.catchUp')(function* (top: number) {
       const current = yield* states;
       let all = true;
@@ -382,8 +379,6 @@ export function projectionUpkeep<E>(
       }
       return all;
     }),
-    /** A batch committed after `before`: a projection current through
-     *  `before` follows it; any other catches up on its owner's next read. */
     follow: Effect.fn('projections.follow')(function* (
       events: readonly SessionEvent[],
       before: number,

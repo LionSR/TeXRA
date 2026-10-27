@@ -45,6 +45,8 @@ import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
+/** The session's one in-process view, kept by the update fiber the layer
+ *  forks: its current value and its change stream. */
 export class SessionViewService extends Context.Service<
   SessionViewService,
   {

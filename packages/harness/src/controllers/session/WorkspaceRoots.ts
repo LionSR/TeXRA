@@ -1,21 +1,20 @@
+import { Context } from 'effect';
+
+import type { ConfigProvider } from '@platform/interfaces';
+
 /**
- * The workspace a session graph works on (PRD one-fold-three-renderers,
- * 7.3): the storage root of `@platform/workspaceRoots`, provided per session
- * by `sessionLayer.ts` from the session's own roots and per remote view by
- * `RemoteSessionView.layer` from the session key on the wire.
- * `SessionView.key` is `storage`, the same value that keys both layer maps,
- * so no fold arm carries a session key. Effect code reads roots from
- * context, which is why the process ever had an async-local carrier to retire:
- * Effect's scheduler drains many fibers' continuations in one turn,
+ * The workspace a session graph works on: the storage root of
+ * `@platform/workspaceRoots`, provided per session by `sessionLayer.ts` from
+ * the session's own roots and per remote view by `RemoteSessionView.layer`
+ * from the session key on the wire. `SessionView.key` is `storage`, the same
+ * value that keys both layer maps, so no fold arm carries a session key.
+ * Effect code reads roots from context rather than from ambient process
+ * state: Effect's scheduler drains many fibers' continuations in one turn,
  * so ambient state bleeds across fibers. The storage root is the one fact
  * every graph has; the config provider rides along for the process reader's
  * replay-time transcript-verbosity input. A webview has no config provider;
  * the process reader carries that input through the replay wire.
  */
-import { Context } from 'effect';
-
-import type { ConfigProvider } from '@platform/interfaces';
-
 export class WorkspaceRoots extends Context.Service<
   WorkspaceRoots,
   /** The storage root of `@platform/workspaceRoots`, as a plain string: a
