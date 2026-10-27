@@ -58,7 +58,7 @@ const GOAL_AUTO_APPROVALS: Record<
 };
 
 const PlanToolInputSchema = Schema.Struct({
-  objective: Schema.String.check(Schema.isMinLength(1)).annotate({
+  objective: Schema.NonEmptyString.annotate({
     description:
       'The plan document: what to achieve, the intended approach, and a ' +
       'verifiable stopping condition. Plain prose or markdown - no ' +

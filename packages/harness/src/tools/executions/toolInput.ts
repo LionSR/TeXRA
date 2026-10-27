@@ -126,7 +126,7 @@ const SendActionSchema = Schema.Struct({
     description:
       "Put a message on another run's input (use on /executions/{id}). It is read when that run finishes its current turn; a one-shot run takes none. A reply, if any, arrives as your own follow-up.",
   }),
-  message: Schema.String.check(Schema.isMinLength(1)).annotate({
+  message: Schema.NonEmptyString.annotate({
     description: 'The message for the run.',
   }),
 });
@@ -140,7 +140,7 @@ const QueryActionSchema = Schema.Struct({
     description:
       'Run one read-only SQL statement over the run-history views listed in the description (use on /executions).',
   }),
-  sql: Schema.String.check(Schema.isMinLength(1)).annotate({
+  sql: Schema.NonEmptyString.annotate({
     description:
       'One SELECT, WITH, EXPLAIN or VALUES statement; bind values as ?.',
   }),

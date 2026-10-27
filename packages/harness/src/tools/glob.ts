@@ -28,7 +28,7 @@ import { pluralize } from '@utils/text/stringUtils';
 import { defineTool } from './core/definition';
 
 const GlobInputSchema = Schema.Struct({
-  pattern: Schema.String.check(Schema.isMinLength(1)).annotate({
+  pattern: Schema.NonEmptyString.annotate({
     description: 'Glob pattern to match, such as "**/*.tex" or "src/**/*.ts".',
   }),
   path: Schema.optional(Schema.NullOr(Schema.String)).annotate({

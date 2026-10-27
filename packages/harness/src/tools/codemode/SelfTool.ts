@@ -38,7 +38,7 @@ import { outputJsonSchemaOf } from '@tools/delegation/inputFields';
 import { subagentProgressSink } from '@tools/delegation/subagentRun';
 
 const SelfInputSchema = Schema.Struct({
-  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+  prompt: Schema.NonEmptyString.annotate({
     description: 'What this run of you works on.',
   }),
   fork: nullishWithDefault(

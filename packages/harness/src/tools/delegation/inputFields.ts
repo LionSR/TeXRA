@@ -184,11 +184,11 @@ export function withToolUseSubagentHandoffInstruction(
 export const personaField = Schema.optional(
   Schema.NullOr(
     Schema.Struct({
-      prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+      prompt: Schema.NonEmptyString.annotate({
         description: 'Its system prompt: who it is and how it works.',
       }),
       tools: Schema.optional(
-        Schema.NullOr(Schema.Array(Schema.String.check(Schema.isMinLength(1)))),
+        Schema.NullOr(Schema.Array(Schema.NonEmptyString)),
       ).annotate({
         description:
           'The tools it gets, by name; omitted, none. It gets only those you have.',

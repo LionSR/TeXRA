@@ -22,7 +22,7 @@ const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 type OutputMode = (typeof OUTPUT_MODES)[number];
 
 const GrepInputSchema = Schema.Struct({
-  pattern: Schema.String.check(Schema.isMinLength(1)).annotate({
+  pattern: Schema.NonEmptyString.annotate({
     description: 'Regex pattern.',
   }),
   path: Schema.optional(Schema.NullOr(Schema.String)).annotate({

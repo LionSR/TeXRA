@@ -374,7 +374,7 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:119-129`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:382-408`,
-  `:660-684`, `:1107-1111`).
+  `:660-684`, `:1105-1109`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:250`, `:279-281`, `:448`, `:502-513`;
@@ -427,7 +427,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:713-718`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1107-1111`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1105-1109`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 

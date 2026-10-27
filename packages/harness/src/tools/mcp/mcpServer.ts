@@ -75,7 +75,7 @@ const InitializeResultSchema = Schema.Struct({
 const ListToolsResultSchema = Schema.Struct({
   tools: Schema.Array(
     Schema.Struct({
-      name: Schema.String.check(Schema.isMinLength(1)),
+      name: Schema.NonEmptyString,
       description: Schema.optional(Schema.NullOr(Schema.String)),
       inputSchema: Schema.Record(Schema.String, Schema.Unknown),
       /** MCP `ToolAnnotations`: hints only, each `false` when absent. */
