@@ -37,7 +37,7 @@ catalogs:
       specifier: ^3.0.0
       version: 3.0.0
     diff:
-      specifier: ^9.0.0
+      specifier: 9.0.0
       version: 9.0.0
     diff-match-patch:
       specifier: ^1.0.5
@@ -49,91 +49,91 @@ catalogs:
       specifier: ^0.28.2
       version: 0.28.2
     escape-string-regexp:
-      specifier: ^5.0.0
+      specifier: 5.0.0
       version: 5.0.0
     glob:
-      specifier: ^13.0.6
+      specifier: 13.0.6
       version: 13.0.6
     http-status-codes:
-      specifier: ^2.3.0
+      specifier: 2.3.0
       version: 2.3.0
     identifiers-arxiv:
       specifier: ^0.1.1
       version: 0.1.1
     ignore:
-      specifier: ^7.0.13
+      specifier: 7.0.13
       version: 7.0.13
     image-size:
-      specifier: ^2.0.4
+      specifier: 2.0.4
       version: 2.0.4
     ipaddr.js:
-      specifier: ^2.5.0
+      specifier: 2.5.0
       version: 2.5.0
     is-wsl:
-      specifier: ^3.1.1
+      specifier: 3.1.1
       version: 3.1.1
     llm-zoo:
-      specifier: ^4.1.0
+      specifier: 4.1.0
       version: 4.1.0
     lru-cache:
-      specifier: ^11.5.3
+      specifier: 11.5.3
       version: 11.5.3
     mime-types:
-      specifier: ^3.0.1
+      specifier: 3.0.2
       version: 3.0.2
     nanoid:
-      specifier: ^6.0.2
+      specifier: 6.0.2
       version: 6.0.2
     nunjucks:
-      specifier: ^3.2.4
+      specifier: 3.2.4
       version: 3.2.4
     openai:
       specifier: ^7.20.0
       version: 7.20.0
     pathe:
-      specifier: ^2.0.3
+      specifier: 2.0.3
       version: 2.0.3
     postal-mime:
-      specifier: ^4.1.4
+      specifier: 4.1.4
       version: 4.1.4
     pretty-bytes:
       specifier: 7.2.0
       version: 7.2.0
     pretty-ms:
-      specifier: ^10.0.0
+      specifier: 10.0.0
       version: 10.0.0
     quickjs-emscripten-core:
       specifier: 0.32.0
       version: 0.32.0
     safe-stable-stringify:
-      specifier: ^3.0.0
+      specifier: 3.0.0
       version: 3.0.0
     shell-quote:
-      specifier: ^1.12.0
+      specifier: 1.12.0
       version: 1.12.0
     tar:
       specifier: ^7.5.22
       version: 7.5.22
     turndown:
-      specifier: ^7.2.4
+      specifier: 7.2.4
       version: 7.2.4
     turndown-plugin-gfm:
-      specifier: ^1.0.2
+      specifier: 1.0.2
       version: 1.0.2
     typescript:
       specifier: npm:@typescript/typescript6@^6.0.2
       version: 6.0.2
     undici:
-      specifier: ^8.12.3
+      specifier: 8.12.3
       version: 8.12.3
     which:
-      specifier: ^5.0.0
+      specifier: 5.0.0
       version: 5.0.0
     write-file-atomic:
-      specifier: ^7.0.1
+      specifier: 7.0.1
       version: 7.0.1
     yaml:
-      specifier: ^2.9.1
+      specifier: 2.9.1
       version: 2.9.1
 
 patchedDependencies:

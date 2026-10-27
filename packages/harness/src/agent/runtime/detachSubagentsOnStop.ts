@@ -24,7 +24,7 @@ import type { SettingsStores } from '@shared/config/settings';
  * - Bare Escape in the CLI TUI is a focus-scoped gesture — "stop only the
  *   focused stream" — so `stopRun` always detaches descendants instead of
  *   cascading into runs the user never focused
- *   (`packages/cli/src/chat/chatSessionController.ts`, #9009).
+ *   (`packages/cli/src/chat/chatSessionController.ts`).
  * - Headless CLI shutdown always cascades: a detached child cannot outlive the
  *   exiting process, so honoring the toggle there would strand children
  *   without finalization (`packages/cli/src/runtime/executeCli.ts`).

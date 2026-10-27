@@ -424,7 +424,7 @@ const progressNotify =
   };
 
 /**
- * Accept the next turn: its `child.turn accepted` row (#9531), the fact the
+ * Accept the next turn: its `child.turn accepted` row, the fact the
  * report/result slots are attributed from, with the `resumed` row that ends
  * the wait. Not best-effort: a refused append is the turn's failure, and
  * `not-owner` stops the loop rather than run under a lost claim.
@@ -817,7 +817,7 @@ const endChildLoop = <TTurn, R>(
         )
           loop.interrupt();
       }
-      // Debug-only driver diagnostic (#9531): how the loop ended.
+      // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,
         stopped,

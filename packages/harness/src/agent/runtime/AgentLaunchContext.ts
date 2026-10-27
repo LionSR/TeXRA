@@ -98,7 +98,7 @@ interface AgentLaunchInput {
 /**
  * Present a launch error through its targeted host notice (replayed if no
  * host is attached) and fail with it claimed, so no generic toast repeats
- * it; a host that throws on the notice shows that toast instead (#10398).
+ * it; a host that throws on the notice shows that toast instead.
  */
 function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,

@@ -151,7 +151,7 @@ export function codexBackendModelId(
   // The canonical registry `id`, not the caller's. A bound config may
   // already carry the harness's short-name rewrite (`ModelAccess.ts`), which
   // overwrites `id` with `shortName` when "Prefer short model names" is on — reinstating the exact
-  // `gpt-5.6` this function exists to never send (#12873). `ref` is the
+  // `gpt-5.6` this function exists to never send. `ref` is the
   // registry key and is not rewritten anywhere on this path, so it is the one
   // field that still identifies the model. A config the registry does not
   // know (a runtime-discovered entry) has no canonical entry to read, so its

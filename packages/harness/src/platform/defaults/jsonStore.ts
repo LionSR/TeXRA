@@ -223,8 +223,7 @@ export class JsonStore {
   /**
    * Opening is read-only: a missing file reads as an empty store, and the
    * containing directory is not created here — that happens in
-   * {@link flush}, so pure reads work on read-only or unowned storage
-   * (#8220).
+   * {@link flush}, so pure reads work on read-only or unowned storage.
    */
   static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,

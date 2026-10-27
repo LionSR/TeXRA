@@ -58,7 +58,7 @@ export interface BindPlan {
 /**
  * How a turn on a binding is delivered: as background work when the binding
  * can, the turn is text-only and its provider's toggle is on. The toggles are
- * read live each turn, so a flip mid-run applies to the next one (#12710).
+ * read live each turn, so a flip mid-run applies to the next one.
  */
 function backgroundOn(
   toggles: BackgroundToggles,

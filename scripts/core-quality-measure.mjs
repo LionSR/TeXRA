@@ -120,14 +120,8 @@ export const RULES = {
   'durable-invariants':
     'The harness README must number its durable invariants (`**I1**`), and a conformance test must cite each (`invariant I1`).',
   'decision-codes':
-    'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path. Measured only, pending an owner ruling.',
+    'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path.',
 };
-
-/**
- * Rules the report counts but the gate does not hold: rule 10 of the study
- * waits on the owner's ruling about which codes stay as links.
- */
-export const MEASURED_ONLY = new Set(['decision-codes']);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
@@ -356,6 +350,9 @@ function undocumentedExports(sourceFile) {
 
 /** The decision-code shapes of the study's rule 10: `D6`, `HQ4b`, `#1234`. */
 const DECISION_CODE = /\b[A-Z]{1,2}\d{1,2}[a-z]?\b|#\d{3,6}\b/g;
+
+/** Technical names of the same shape that are not decision codes. */
+const NOT_DECISION_CODES = new Set(['BM25']);
 
 /** Public members an exported record may carry (study rule 11). */
 const WIDE_RECORD_MEMBERS = 20;
@@ -1037,7 +1034,9 @@ function measureAst(rootDir, files, byRule) {
       );
     };
     for (const comment of text.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
-      const codes = comment[0].match(DECISION_CODE) ?? [];
+      const codes = (comment[0].match(DECISION_CODE) ?? []).filter(
+        (code) => !NOT_DECISION_CODES.has(code),
+      );
       if (codes.length === 0) continue;
       const line = text.slice(0, comment.index).split('\n').length;
       for (const code of codes) {

@@ -5,8 +5,8 @@
  * `RemoteSessionView.layer` from the session key on the wire.
  * `SessionView.key` is `storage`, the same value that keys both layer maps,
  * so no fold arm carries a session key. Effect code reads roots from
- * context, which is why the process ever had an async-local carrier to retire
- * (#12421): Effect's scheduler drains many fibers' continuations in one turn,
+ * context, which is why the process ever had an async-local carrier to retire:
+ * Effect's scheduler drains many fibers' continuations in one turn,
  * so ambient state bleeds across fibers. The storage root is the one fact
  * every graph has; the config provider rides along for the process reader's
  * replay-time transcript-verbosity input. A webview has no config provider;

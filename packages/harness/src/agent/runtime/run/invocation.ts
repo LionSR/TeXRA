@@ -176,7 +176,7 @@ const credentialRenewal = <R>(
 
 /** Rebind before sending `ref` on a person's retry answer, or when the
  *  binding in force is the Responses WebSocket the last attempt `failedOn`
- *  (it died with it, #13407). A failed rebind is `ref`'s failure, recorded
+ *  (it died with it). A failed rebind is `ref`'s failure, recorded
  *  unsent, so nothing goes out on the binding it meant to leave: false. */
 const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   driver: InvocationDriver<A, E, R>,

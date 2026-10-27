@@ -20,7 +20,7 @@ const CHANNEL = 'ExecutionsTool';
  * stored value that fails the row's schema — a hand-edited `'false'` or `1` —
  * denies the kill and says why, in the host log and in the tool result: it
  * may be the corruption of a deliberate denial, and a permission gate must not
- * re-permit on corrupt state (#11797). The stored value is left untouched; the
+ * re-permit on corrupt state. The stored value is left untouched; the
  * user resets it by setting the toggle again.
  */
 export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
