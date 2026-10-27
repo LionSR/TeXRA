@@ -10,7 +10,6 @@ import {
   isLiveRun,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
@@ -18,6 +17,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
+import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type {
   ProcessServices,
   Session,

@@ -6,10 +6,10 @@ import {
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
+import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */

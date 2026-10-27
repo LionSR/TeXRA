@@ -55,11 +55,6 @@ export type StoredSetting<T = unknown> =
   | { readonly kind: 'value'; readonly value: T }
   | { readonly kind: 'invalid'; readonly cause: string };
 
-/** A boolean state key that is off until something sets it. */
-export const StateFlagSchema = Schema.Boolean.pipe(
-  Schema.withDecodingDefault(Effect.succeed(false)),
-);
-
 function entryOf(config: ConfigProvider, key: string): StateSettingEntry {
   const entry = config.catalog.byKey(key);
   if (!entry) {

@@ -2,7 +2,7 @@ import { agentName } from '@texra-ai/harness/schemas';
 import {
   PREFERRED_TOOL_USE_AGENTS,
   implicitDefaultToolUseAgents,
-} from '@texra-ai/harness';
+} from '@texra/shared/constants/agents';
 
 const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
