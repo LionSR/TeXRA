@@ -10,8 +10,11 @@
 // baseline with a site, fails. A count that fell is stale headroom and fails
 // too, because a later PR could regrow into it unnoticed; `--update` lowers
 // counts and drops zeroed files but never raises one or adds a file. The one
-// exception is file-size, whose value is a line count: a shorter file passes,
-// and `--update` lowers its cap. A rule listed in ZERO_RULES
+// exception is file-size, whose value is a cap on a file's line count: a
+// shorter file passes, and `--update` lowers a cap only to the file's length
+// rounded up to a multiple of FILE_SIZE_STEP, and only when that is below the
+// cap, so an edit that trims a few lines leaves file-size.json as it was.
+// A rule listed in ZERO_RULES
 // (ratchet-zero-rules.mjs) has no baseline file: any site fails.
 // shallow-modules budgets interface elements while a module is shallow, so
 // reducing its public surface lowers the row and deepening it removes it.
@@ -52,6 +55,8 @@ const rootDir = path.resolve(
 );
 const baselineDir = path.join(rootDir, 'config', 'ratchets', 'core-quality');
 const SITES_SHOWN = 8;
+/** The line step file-size caps are lowered in. */
+const FILE_SIZE_STEP = 25;
 
 const baselinePath = (rule) => path.join(baselineDir, `${rule}.json`);
 const heldAtZero = (rule) =>
@@ -122,7 +127,13 @@ function lowered(rule, baseline, actual) {
       widened.push(
         `${rule}: ${file} has ${entry.value}, above its baseline ${allowed}; --update never widens a baseline. ${RULES[rule]}`,
       );
-    next[file] = entry.value;
+    next[file] =
+      rule === 'file-size'
+        ? Math.min(
+            allowed,
+            Math.ceil(entry.value / FILE_SIZE_STEP) * FILE_SIZE_STEP,
+          )
+        : entry.value;
   }
   return { next, widened };
 }

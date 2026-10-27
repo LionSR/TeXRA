@@ -67,7 +67,9 @@ evidence cites the id, says what changed, and deletes or rewrites the entry.
 - `config/ratchets/core-quality/` holds shrink-only per-rule baselines,
   `file-size.json` among them (`npm run check:core-quality`, in
   `gate:invariants`). A file over its budget fails, and a shorter file
-  passes.
+  passes. `--update` lowers a file's cap only to its length rounded up to
+  a multiple of 25 lines, and only when that is below the cap, so trimming
+  a few lines leaves `file-size.json` as it was.
 - A rule held at zero has no baseline file: it is a lint error (`any`,
   `new Promise`, `.then(` and `Effect.run*` over the core, in
   `eslint.config.mjs`) or a hard-coded zero in its checker. `ZERO_RULES`
