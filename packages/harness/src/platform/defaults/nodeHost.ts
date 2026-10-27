@@ -81,6 +81,9 @@ export function createNodeWorkspaceRoots(
   };
 }
 
+/** What {@link initializeNodeRuntimeSkills} needs from its host: the
+ *  packaged resources root the bundled skills ship under, and the CLI's
+ *  optional extra skill sources. */
 export interface NodeRuntimeSkillOptions {
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;

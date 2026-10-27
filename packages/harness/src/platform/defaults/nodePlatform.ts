@@ -213,7 +213,11 @@ const supervisedSpawner = Layer.effect(
         } catch (error) {
           // ESRCH: already gone. Anything else means this child survives the
           // parent, and an exit listener can only write synchronously.
-          const code = (error as NodeJS.ErrnoException).code;
+          const code =
+            Predicate.hasProperty(error, 'code') &&
+            Predicate.isString(error.code)
+              ? error.code
+              : undefined;
           if (code !== 'ESRCH') {
             writeSync(
               2,
@@ -316,6 +320,11 @@ const supervisedSpawner = Layer.effect(
   }),
 );
 
+/**
+ * The Node filesystem, path and supervised child-process spawner, as one
+ * layer; `processLayer` serves it to every root, and a caller outside a
+ * runtime provides it per call.
+ */
 export const nodePlatformServices: Layer.Layer<
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > = supervisedSpawner.pipe(

@@ -64,15 +64,17 @@ export const undiciFetchThrough = (
   dispatcher: Dispatcher,
   input: Parameters<typeof fetch>[0],
   init?: RequestInit,
-): Promise<Response> =>
-  undiciFetch(
+): Promise<Response> => {
+  const undiciInit = { ...init, dispatcher };
+  // cast: undici's `Response` is the DOM's by another name, not assignable.
+  return undiciFetch(
     // cast: undici's input type is the DOM's `Request` by another name.
     input as Parameters<typeof undiciFetch>[0],
-    {
-      ...init,
-      dispatcher,
-    } as Parameters<typeof undiciFetch>[1],
+    // The two `RequestInit`s declare `body` differently for the same values.
+    // cast: undici's `RequestInit` is the DOM's plus `dispatcher`.
+    undiciInit as Parameters<typeof undiciFetch>[1],
   ) as unknown as Promise<Response>;
+};
 
 /**
  * The fetch every model factory is constructed with. It is undici's own
@@ -92,23 +94,21 @@ export const undiciFetchThrough = (
 const fetchThrough =
   (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
   (input, init) => {
-    const request =
-      typeof input === 'string' || input instanceof URL ? undefined : input;
-    const response = undiciFetchThrough(
-      dispatch(),
-      request?.url ?? (input as string | URL),
-      {
-        ...(request && {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          signal: request.signal,
-          redirect: request.redirect,
-          ...(request.body !== null && { duplex: 'half' }),
-        }),
-        ...init,
-      },
-    );
+    const [url, request] =
+      typeof input === 'string' || input instanceof URL
+        ? [input, undefined]
+        : [input.url, input];
+    const response = undiciFetchThrough(dispatch(), url, {
+      ...(request && {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        signal: request.signal,
+        redirect: request.redirect,
+        ...(request.body !== null && { duplex: 'half' }),
+      }),
+      ...init,
+    });
     return request === undefined ? response : response.finally(() => request);
   };
 

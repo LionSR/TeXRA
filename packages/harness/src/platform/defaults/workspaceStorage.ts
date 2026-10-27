@@ -2,6 +2,8 @@
 import { realpathSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
+import { Predicate } from 'effect';
+
 import { truncatedHexId } from '@utils/core/idHash';
 
 const STORAGE_LAYOUT = {
@@ -32,9 +34,11 @@ function storageIdentity(workspacePath: string): string {
   try {
     return realpathSync.native(workspacePath);
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(code ?? ''))
-      throw error;
+    const code =
+      Predicate.hasProperty(error, 'code') && Predicate.isString(error.code)
+        ? error.code
+        : '';
+    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(code)) throw error;
     return workspacePath;
   }
 }

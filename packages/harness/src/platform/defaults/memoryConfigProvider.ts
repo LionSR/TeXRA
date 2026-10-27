@@ -5,24 +5,21 @@ import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { JsonConfigProvider, type ConfigStore } from './jsonConfigProvider';
 
 /** Process-local {@link ConfigStore}, the in-memory twin of a `JsonStore`. */
-class MemoryConfigStore implements ConfigStore {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string): T | undefined {
-    return this.values.get(key) as T | undefined;
-  }
-
-  set(key: string, value: unknown): Effect.Effect<void, Error> {
-    return Effect.sync(() => {
-      // `JsonStore` treats `undefined` as a delete; match it so a cleared
-      // key reads the same across backings.
-      if (value === undefined) {
-        this.values.delete(key);
-      } else {
-        this.values.set(key, value);
-      }
-    });
-  }
+function memoryConfigStore(): ConfigStore {
+  const values = new Map<string, unknown>();
+  return {
+    get: values.get.bind(values),
+    set: (key, value) =>
+      Effect.sync(() => {
+        // `JsonStore` treats `undefined` as a delete; match it so a cleared
+        // key reads the same across backings.
+        if (value === undefined) {
+          values.delete(key);
+        } else {
+          values.set(key, value);
+        }
+      }),
+  };
 }
 
 /**
@@ -35,9 +32,9 @@ class MemoryConfigStore implements ConfigStore {
 export class MemoryConfigProvider extends JsonConfigProvider {
   constructor(catalog: SettingsCatalog) {
     super({
-      workspace: new MemoryConfigStore(),
-      global: new MemoryConfigStore(),
-      local: new MemoryConfigStore(),
+      workspace: memoryConfigStore(),
+      global: memoryConfigStore(),
+      local: memoryConfigStore(),
       catalog,
     });
   }

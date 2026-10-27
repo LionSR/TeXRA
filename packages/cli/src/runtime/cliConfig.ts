@@ -224,7 +224,7 @@ function configFileWarnings(
         }
         continue;
       }
-      const value = store.get<unknown>(key);
+      const value = store.get(key);
       const entry = TEXRA_SETTINGS.byKey(key);
       if (
         entry &&
@@ -280,8 +280,8 @@ export function loadCliStartupConfig(
       // next tier, as that warning says, instead of each reader warning about
       // the same value again. Writes still land in the file itself.
       const withoutInvalid = (store: JsonStore): ConfigStore => ({
-        get: <T>(key: string): T | undefined => {
-          const value = store.get<T>(key);
+        get: (key) => {
+          const value = store.get(key);
           const entry = TEXRA_SETTINGS.byKey(key);
           return value !== undefined &&
             entry &&

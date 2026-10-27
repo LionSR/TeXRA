@@ -22,10 +22,13 @@ import {
  * the effect itself, so this port's members compose into any caller's program.
  */
 export interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  /** The stored value, unchecked; `undefined` when the key is absent. */
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 
+/** The three stores a {@link JsonConfigProvider} layers, one per
+ *  {@link ConfigTarget}, and the catalog their keys resolve against. */
 export interface JsonConfigProviderOptions {
   workspace: ConfigStore;
   global: ConfigStore;
@@ -79,7 +82,16 @@ export class JsonConfigProvider implements ConfigProvider {
 
   get<T>(key: string, defaultValue?: T): T {
     const storedKey = canonicalConfigKey(key);
-    const projectValue = this.workspaceStore.get<T>(storedKey);
+    const value = this.resolve(storedKey);
+    // `Settings.get` is the reader that decodes against the catalog row.
+    // cast: `ConfigProvider.get` is documented as an unchecked read.
+    return (value === undefined ? defaultValue : value) as T;
+  }
+
+  /** The value `key` resolves to across the stores and the catalog
+   *  default, before the caller's `defaultValue`. */
+  private resolve(storedKey: string): unknown {
+    const projectValue = this.workspaceStore.get(storedKey);
     if (
       projectValue !== undefined &&
       !projectValueIgnored(this.catalog, storedKey, projectValue)
@@ -91,12 +103,10 @@ export class JsonConfigProvider implements ConfigProvider {
         ? [this.localStore, this.globalStore]
         : [this.globalStore];
     for (const store of layers) {
-      const value = store.get<T>(storedKey);
+      const value = store.get(storedKey);
       if (value !== undefined) return value;
     }
-    const schemaDefault = this.catalog.configDefault(storedKey) as
-      T | undefined;
-    return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
+    return this.catalog.configDefault(storedKey);
   }
 
   update<T>(
@@ -126,9 +136,11 @@ export class JsonConfigProvider implements ConfigProvider {
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
     const storedKey = canonicalConfigKey(key);
-    return {
-      globalValue: this.globalStore.get<T>(storedKey),
-      workspaceValue: this.workspaceStore.get<T>(storedKey),
+    const inspection: ConfigInspection = {
+      globalValue: this.globalStore.get(storedKey),
+      workspaceValue: this.workspaceStore.get(storedKey),
     };
+    // cast: unchecked like `get`; the caller names the type it stored.
+    return inspection as ConfigInspection<T>;
   }
 }

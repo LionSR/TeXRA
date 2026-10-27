@@ -102,8 +102,9 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   );
   if (content === undefined) return { ...missingFallback };
   const parsed = yield* Effect.try({
-    try: () => JSON.parse(content) as unknown,
-    catch: (cause) => cause as SyntaxError,
+    try: (): unknown => JSON.parse(content),
+    // `JSON.parse` throws only a `SyntaxError`, which passes through as is.
+    catch: ensureError,
   });
   if (Predicate.isObject(parsed)) return parsed;
   return yield* Effect.fail(
@@ -175,16 +176,16 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * this store serves deliberate configuration files.
  */
 export class JsonStore {
+  /** The file this store reads and writes; warnings name it. */
+  readonly filePath: string;
+  private data: JsonRecord;
   /** The file version `data` was read from, when the store follows it. */
   private version: string | undefined;
   private readonly follow: boolean;
 
-  private constructor(
-    /** The file this store reads and writes; warnings name it. */
-    readonly filePath: string,
-    private data: JsonRecord,
-    follow: boolean,
-  ) {
+  private constructor(filePath: string, data: JsonRecord, follow: boolean) {
+    this.filePath = filePath;
+    this.data = data;
     this.follow = follow;
   }
 
@@ -245,8 +246,9 @@ export class JsonStore {
     return new JsonStore(storePath, data, options.follow === true);
   });
 
-  get<T>(key: string): T | undefined {
-    return this.current()[key] as T | undefined;
+  /** The stored value, unchecked; `undefined` when the key is absent. */
+  get(key: string): unknown {
+    return this.current()[key];
   }
 
   /**
