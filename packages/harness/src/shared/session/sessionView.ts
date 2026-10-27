@@ -1,12 +1,9 @@
 /**
  * The one session state every renderer reads (`sessionViewUpdate.ts`), never
  * persisted, never parsed: a field lands here first and every host reads it.
- *
  * `SessionView` holds `Map`s because it never crosses a bridge; only events,
- * chunks, and `local` do, and those are arrays and records.
- *
- * Interaction state (selection, drafts, recording, expansion, focus, scroll)
- * is never here.
+ * chunks, and `local` do, and those are arrays and records. Interaction state
+ * (selection, drafts, recording, expansion, focus, scroll) is never here.
  */
 // `sessionPresentationBoundary.vitest.ts` pins the interaction-state names.
 import { Schema } from 'effect';
@@ -314,7 +311,8 @@ const QueuedFollowUpsSchema = Schema.Array(
   Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
 );
 
-const SessionViewSchema = Schema.Struct({
+/** One session's view at one moment: its runs, requests and grants. */
+export const SessionViewSchema = Schema.Struct({
   key: SessionKeySchema,
   runs: Schema.ReadonlyMap(RunIdSchema, RunViewSchema),
   /** Top-level ids, `runOrdering` rule. */
@@ -342,7 +340,7 @@ const SessionViewSchema = Schema.Struct({
   pluginFacts: Schema.Array(PluginFactDraftSchema),
   queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
-/** One session's view at one moment: its runs, requests and grants. */
+/** The decoded shape of {@link SessionViewSchema}. */
 export type SessionView = typeof SessionViewSchema.Type;
 
 /** What wants this window: the requests it can answer, in view order (the
