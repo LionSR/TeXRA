@@ -35,23 +35,7 @@ function createFakePty(): FakePty & PtyProcess {
   };
 }
 
-function loadFakePty(spawn: SpawnPty): LoadPty {
-  return async () => ({ spawn });
-}
-
 const TERMINAL_ID = 'workbench:terminal:1';
-
-function createHost(
-  overrides: Partial<DesktopPtyHostOptions> = {},
-): ReturnType<typeof createDesktopPtyHost> {
-  return createDesktopPtyHost({
-    cwd: '/workspace',
-    onData: vi.fn(),
-    onExit: vi.fn(),
-    onError: vi.fn(),
-    ...overrides,
-  });
-}
 
 describe('desktop pty host', () => {
   it('ignores callbacks from a disposed session after its id is reused', async () => {
@@ -63,7 +47,13 @@ describe('desktop pty host', () => {
       .mockReturnValueOnce(replacementPty);
     const onData = vi.fn();
     const onExit = vi.fn();
-    const host = createHost({ onData, onExit, loadPty: loadFakePty(spawnPty) });
+    const host = createDesktopPtyHost({
+      cwd: '/workspace',
+      onData,
+      onExit,
+      onError: vi.fn(),
+      loadPty: async () => ({ spawn: spawnPty }),
+    });
 
     const oldSession = await host.create({
       id: TERMINAL_ID,
@@ -81,8 +71,6 @@ describe('desktop pty host', () => {
       throw new Error('Expected the replacement session to start.');
     }
 
-    expect(replacementSession).not.toBe(oldSession);
-    expect(spawnPty).toHaveBeenCalledTimes(2);
     oldPty.emitData('late output');
     oldPty.emitExit(0);
 

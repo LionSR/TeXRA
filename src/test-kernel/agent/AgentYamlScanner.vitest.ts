@@ -18,31 +18,6 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
 
-/** Create a temp agent directory holding the given YAML files, given as lines. */
-async function createAgentDir(
-  files: Record<string, readonly string[]>,
-): Promise<string> {
-  const agentDir = await makeTempDir('texra-agent-scan-', tempDirs);
-  for (const [fileName, lines] of Object.entries(files)) {
-    await writeFile(resolve(agentDir, fileName), `${lines.join('\n')}\n`);
-  }
-  return agentDir;
-}
-
-/** The temp directory as an Effect, so the scan reads real files on disk. */
-const agentDir = (files: Record<string, readonly string[]>) =>
-  Effect.promise(() => createAgentDir(files));
-
-/** The scan on the process filesystem it now reads its YAML through. */
-const scanCustom = (dir: string) =>
-  scanDirectory([dir], 'custom').pipe(
-    Effect.provide(Layer.merge(nodePlatformLayer, storePluginsLayer)),
-  );
-
-function toolUseAgent(name: string, systemPrompt: string): string[] {
-  return [`name: ${name}`, `prompt: ${systemPrompt}`];
-}
-
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
 
@@ -50,7 +25,7 @@ describe('agent YAML scanner', () => {
   // silently vanishes from the list is a bug nobody reports.
   it.live('reports skipped custom YAML files as scan issues', () =>
     Effect.gen(function* () {
-      const dir = yield* agentDir({
+      const files: Record<string, readonly string[]> = {
         'broken.yaml': ['name: "unterminated'],
         // The nested format has no reader.
         'nested.yaml': [
@@ -64,25 +39,25 @@ describe('agent YAML scanner', () => {
           'task:',
           '  requests: [Revise.]',
         ],
-        'valid.yaml': toolUseAgent('valid', 'hi'),
+        'valid.yaml': ['name: valid', 'prompt: hi'],
+      };
+      const dir = yield* Effect.promise(async () => {
+        const agentDir = await makeTempDir('texra-agent-scan-', tempDirs);
+        for (const [fileName, lines] of Object.entries(files)) {
+          await writeFile(resolve(agentDir, fileName), `${lines.join('\n')}\n`);
+        }
+        return agentDir;
       });
 
-      const { entries, issues } = yield* scanCustom(dir);
+      const { entries, issues } = yield* scanDirectory([dir], 'custom').pipe(
+        Effect.provide(Layer.merge(nodePlatformLayer, storePluginsLayer)),
+      );
 
       expect(entries.map((entry) => entry.name)).toEqual(['valid']);
-      expect(issues).toEqual([
-        expect.objectContaining({
-          path: 'broken.yaml',
-          message: expect.stringMatching(/unterminated|Nested mappings|YAML/iu),
-        }),
-        expect.objectContaining({
-          path: 'nested.yaml',
-          message: expect.stringContaining('settings'),
-        }),
-        expect.objectContaining({
-          path: 'tools-and-task.yaml',
-          message: expect.stringContaining('text-only'),
-        }),
+      expect(issues.map((issue) => issue.path)).toEqual([
+        'broken.yaml',
+        'nested.yaml',
+        'tools-and-task.yaml',
       ]);
     }),
   );

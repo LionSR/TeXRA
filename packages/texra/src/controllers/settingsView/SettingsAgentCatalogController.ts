@@ -17,9 +17,9 @@ import {
 } from '@texra-ai/harness';
 import { planTeamRun } from '@texra-ai/harness';
 import { findTeamPreset, type TeamPreset } from '@texra-ai/harness';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra-ai/harness';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 import type { AgentModePreset } from '@texra-ai/harness/schemas';
 
 interface SettingsAgentCatalogEntry {
@@ -112,6 +112,7 @@ export class SettingsAgentCatalogController {
       return planTeamRun(preset, {
         resolveAgent: (identifier) =>
           this.deps.workspaceAgents.resolveAgent(identifier),
+        rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
       }).rootAgent?.name;
     });
   }
@@ -158,34 +159,18 @@ export class SettingsAgentCatalogController {
   }
 
   /**
-   * Enable or disable every agent from one source.
-   *
-   * The identical-list short-circuit is load-bearing: without it every
-   * "enable all" click writes the same agent list back and republishes the
-   * catalog for no change.
+   * Enable or disable every agent from one source, in the workspace agents'
+   * write lane, so a single toggle landing meanwhile is not lost. Nothing is
+   * written when the list would not change.
    */
   setAllAgentsEnabled(input: { source: AgentSource; enabled: boolean }) {
-    return Effect.gen({ self: this }, function* () {
-      const allAgents = this.deps.getAgents();
-      const targetKeys = new Set(
-        allAgents
-          .filter((entry) => entry.source === input.source)
-          .map((entry) => agentKeyOf(entry)),
-      );
-
-      const current = yield* this.enabledKeys();
-
-      const updated = input.enabled
-        ? [...new Set([...current, ...targetKeys])]
-        : current.filter((key) => !targetKeys.has(key));
-
-      if (
-        updated.length === current.length &&
-        updated.every((key, index) => key === current[index])
-      ) {
-        return;
-      }
-      return yield* this.deps.workspaceAgents.setEnabledAgentKeys(updated);
+    return this.deps.workspaceAgents.setAgentEnabled({
+      source: input.source,
+      name: this.deps
+        .getAgents()
+        .filter((entry) => entry.source === input.source)
+        .map((entry) => entry.name),
+      enabled: input.enabled,
     });
   }
 

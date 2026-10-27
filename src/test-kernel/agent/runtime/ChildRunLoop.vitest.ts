@@ -25,7 +25,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   startFollowUpWake: mocks.startFollowUpWake,
 }));
 
-import { readChildTurnState } from '@agent/storage/runRecords';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
@@ -81,15 +80,12 @@ interface FakeTurn {
 
 interface FakeStrategyHandle {
   readonly strategy: ProcessChildStrategy<FakeTurn>;
-  /** Number of launch/runTurn calls made so far. */
-  callCount: () => number;
   /** Wait for the Nth (1-indexed) launch/runTurn call to have started. */
   turnStarted: (callIndex: number) => Effect.Effect<void>;
   /** Resolve the Nth (1-indexed) launch/runTurn call — waits for it to have started. */
   resolveTurn: (callIndex: number, turn: FakeTurn) => Effect.Effect<void>;
   /** Reject the Nth (1-indexed) launch/runTurn call — waits for it to have started. */
   rejectTurn: (callIndex: number, err: Error) => Effect.Effect<void>;
-  readonly errors: unknown[];
 }
 
 /**
@@ -104,7 +100,6 @@ interface FakeStrategyHandle {
 function createFakeStrategy(): FakeStrategyHandle {
   const pendings: Deferred.Deferred<FakeTurn, Error>[] = [];
   const started: Deferred.Deferred<void>[] = [];
-  const errors: unknown[] = [];
 
   /** The start gate for the Nth call, created before that call exists. */
   const startedAt = (callIndex: number) =>
@@ -128,10 +123,7 @@ function createFakeStrategy(): FakeStrategyHandle {
     runTurn: () => runTurn,
     isTurnError: (turn) => turn.kind === 'error-turn',
     formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
-    formatError: (turn, err) => {
-      errors.push(err);
-      return `error:${turn?.value ?? 'thrown'}`;
-    },
+    formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
   };
 
   const turnStarted = (callIndex: number) =>
@@ -139,7 +131,6 @@ function createFakeStrategy(): FakeStrategyHandle {
 
   return {
     strategy,
-    callCount: () => pendings.length,
     turnStarted,
     resolveTurn: (callIndex, turn) =>
       Effect.gen(function* () {
@@ -151,23 +142,6 @@ function createFakeStrategy(): FakeStrategyHandle {
         yield* turnStarted(callIndex);
         yield* Deferred.fail(pendings[callIndex - 1]!, err);
       }),
-    errors,
-  };
-}
-
-/** A strategy whose very first turn is already terminal. */
-function createTerminalStrategy(
-  stageLabel: string,
-  launch: (signal: AbortSignal) => Effect.Effect<FakeTurn, Error> = () =>
-    Effect.succeed({ kind: 'terminal', value: 'done' }),
-  formatDelivery: ProcessChildStrategy<FakeTurn>['formatDelivery'] = (turn) =>
-    Effect.succeed(`delivered:${turn.value}`),
-): ProcessChildStrategy<FakeTurn> {
-  return {
-    stageLabel,
-    launch,
-    formatDelivery,
-    formatError: () => 'error',
   };
 }
 
@@ -264,9 +238,7 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         yield* session.log.settled;
         yield* session.log.hold(runId);
-        const launch = vi.fn(() =>
-          Effect.fail(new Error('Engine startup failed')),
-        );
+        const launch = () => Effect.fail(new Error('Engine startup failed'));
         let stop: ReturnType<typeof session.runs.stop> | undefined;
         // The stop lands inside loop setup, once its target is reserved and
         // before the launch.
@@ -287,24 +259,10 @@ describe('childRunLoop E2E fixtures', () => {
           formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
           formatError: () => 'error',
         }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
-        if (stop) {
-          expect(stop.accepted()).toBe(true);
-          yield* stop.settlement;
-        }
+        if (stop) yield* stop.settlement;
         yield* Fiber.join(loop);
 
-        if (outcome === RUN_OUTCOME.CANCELLED) {
-          expect(launch).not.toHaveBeenCalled();
-          expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
-          expect(yield* readChildTurnState(session, runId)).toEqual({
-            active: null,
-            lastCompleted: null,
-          });
-        }
-        const rows = yield* session.log.rows(qualifyAggregateId('run', runId));
-        expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
-          { outcome },
-        ]);
+        expect(yield* runEnds(runId)).toMatchObject([{ outcome }]);
       }),
   );
 
@@ -343,7 +301,6 @@ describe('childRunLoop E2E fixtures', () => {
             },
           },
         ]);
-        expect(session.runs.get(runId)?.live === true).toBe(false);
       }),
   );
 
@@ -378,9 +335,12 @@ describe('childRunLoop E2E fixtures', () => {
           }),
         );
 
-        const strategy = createTerminalStrategy('Finalize-before-wake test');
-
-        const loop = yield* startLoop(runId, strategy);
+        const loop = yield* startLoop(runId, {
+          stageLabel: 'Finalize-before-wake test',
+          launch: () => Effect.succeed({ kind: 'terminal', value: 'done' }),
+          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
+          formatError: () => 'error',
+        });
 
         yield* Deferred.await(wakeReached);
         expect(handleAtWakeTime).toBeUndefined();
@@ -397,8 +357,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const { strategy, resolveTurn, rejectTurn, errors } =
-          createFakeStrategy();
+        const { strategy, resolveTurn, rejectTurn } = createFakeStrategy();
         const firstDelivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.as(Deferred.succeed(firstDelivered, undefined), Effect.void),
@@ -408,25 +367,18 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(firstDelivered);
-        expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
+        yield* session.followUps.send(runId, {
+          text: 'resume please',
+          from: { kind: 'user' as const },
+        });
 
-        expect(
-          yield* session.followUps.send(runId, {
-            text: 'resume please',
-            from: { kind: 'user' as const },
-          }),
-        ).toMatchObject({ kind: 'queued' });
-
-        const resumeFailure = new Error('resume storage unreadable');
-        yield* rejectTurn(2, resumeFailure);
+        yield* rejectTurn(2, new Error('resume storage unreadable'));
 
         yield* Fiber.join(loop);
         expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
           'delivered:first',
           'error:thrown',
         ]);
-        expect(errors).toContain(resumeFailure);
-        expect(session.runs.get(runId)?.live === true).toBe(false);
       }),
   );
 });

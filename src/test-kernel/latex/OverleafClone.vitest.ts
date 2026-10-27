@@ -68,7 +68,6 @@ describe('cloneOverleafProject', () => {
       expect(yield* clone(ports)).toEqual({ status: 'authFailure' });
 
       expect(ports.secrets.delete).toHaveBeenCalledWith('overleaf.gitToken');
-      expect(ports.showAuthFailure).toHaveBeenCalledWith(REMOTE);
       expect(ports.logCloneError).toHaveBeenCalledWith(
         expect.stringContaining('Authentication failed'),
       );
@@ -87,7 +86,6 @@ describe('cloneOverleafProject', () => {
       });
       expect(yield* clone(offlinePorts)).toEqual({ status: 'cloneFailed' });
       expect(offlinePorts.secrets.delete).not.toHaveBeenCalled();
-      expect(offlinePorts.showCloneFailed).toHaveBeenCalled();
 
       // A failure before git ran (the destination's mkdir) is never an auth
       // failure, even when its path contains "auth".

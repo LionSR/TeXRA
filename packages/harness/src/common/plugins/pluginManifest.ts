@@ -175,10 +175,10 @@ export function containedPath(root: string, declared: string) {
     }
     if (!(yield* exists(resolved))) return undefined;
     const fs = yield* FileSystem.FileSystem;
-    const [realRoot, realResolved] = yield* Effect.all([
-      fs.realPath(root),
-      fs.realPath(resolved),
-    ]).pipe(Effect.mapError(ioError));
+    const [realRoot, realResolved] = yield* Effect.all(
+      [fs.realPath(root), fs.realPath(resolved)],
+      { concurrency: 2 },
+    ).pipe(Effect.mapError(ioError));
     if (!isPathWithin(realRoot, realResolved)) {
       return yield* failPlugin(
         `Plugin path "${declared}" resolves through a symlink to ${realResolved}, outside the plugin directory ${root}.`,
@@ -267,8 +267,15 @@ function markdownFiles(
               .toSorted()
               .map((name) => path.join(resolved, name))
           : [resolved];
-      for (const entry of entries) {
-        const file = yield* containedPath(dir, path.relative(dir, entry));
+      // Every entry is checked together; the first failure in listing order
+      // is the one reported.
+      const checked = yield* Effect.forEach(
+        entries,
+        (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
+        { concurrency: 16 },
+      );
+      for (const result of checked) {
+        const file = yield* Effect.fromResult(result);
         if (file !== undefined) files.add(path.relative(dir, file));
       }
     }
@@ -482,38 +489,58 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
       'skills',
       ...manifests.flatMap((source) => toList(source.skills)),
     ];
+    // The components are read at once and taken in order, so the failure
+    // reported is the first a sequential read would meet. Hooks, which
+    // warn, are read only once the parts before them have succeeded.
+    const parts = yield* Effect.all(
+      {
+        skills: Effect.all(
+          declared.map((candidate, index) =>
+            Effect.flatMap(containedPath(dir, candidate), (resolved) =>
+              resolved !== undefined || index === 0
+                ? Effect.succeed(resolved)
+                : // The conventional directory is optional; a declared one is not.
+                  failPlugin(
+                    `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
+                  ),
+            ),
+          ),
+          { concurrency: 'unbounded', mode: 'result' },
+        ),
+        mcp: mcpServersOf(dir, name.success, found),
+        commands: markdownFiles(
+          dir,
+          'commands',
+          found.flatMap((manifest) => toList(manifest.commands)),
+        ),
+        agents: markdownFiles(
+          dir,
+          'agents',
+          found.flatMap((manifest) => toList(manifest.agents)),
+        ),
+        code: presentComponents(dir, found, CODE_COMPONENTS),
+        ignored: presentComponents(dir, found, IGNORED_COMPONENTS),
+      },
+      { concurrency: 'unbounded', mode: 'result' },
+    );
     const skills = new Set<string>();
-    for (const [index, candidate] of declared.entries()) {
-      const resolved = yield* containedPath(dir, candidate);
-      if (resolved === undefined) {
-        // The conventional directory is optional; a declared one is not.
-        if (index === 0) continue;
-        return yield* failPlugin(
-          `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
-        );
-      }
-      skills.add(path.relative(dir, resolved) || '.');
-    }
-    const mcp = yield* mcpServersOf(dir, name.success, found);
+    for (const root of yield* Effect.forEach(
+      yield* Effect.fromResult(parts.skills),
+      Effect.fromResult,
+    ))
+      if (root !== undefined) skills.add(path.relative(dir, root) || '.');
+    const mcp = yield* Effect.fromResult(parts.mcp);
     return {
       name: name.success,
       version: primary.version,
       description: primary.description,
       skills: [...skills],
-      commands: yield* markdownFiles(
-        dir,
-        'commands',
-        found.flatMap((manifest) => toList(manifest.commands)),
-      ),
-      agents: yield* markdownFiles(
-        dir,
-        'agents',
-        found.flatMap((manifest) => toList(manifest.agents)),
-      ),
+      commands: yield* Effect.fromResult(parts.commands),
+      agents: yield* Effect.fromResult(parts.agents),
       mcpServers: mcp.servers,
       hooks: yield* hooksOf(dir, name.success, found),
-      code: yield* presentComponents(dir, found, CODE_COMPONENTS),
-      ignored: yield* presentComponents(dir, found, IGNORED_COMPONENTS),
+      code: yield* Effect.fromResult(parts.code),
+      ignored: yield* Effect.fromResult(parts.ignored),
       warnings: mcp.warnings,
     } satisfies ResolvedPlugin;
   });

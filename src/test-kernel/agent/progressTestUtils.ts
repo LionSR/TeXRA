@@ -202,27 +202,16 @@ async function ensureRunStart(
   await Effect.runPromise(session.log.settled);
 }
 
-/**
- * Fold a run to its running phase from the rows that carry it (one run model,
- * 3.3): a first activation is starting, a second is the resume
- * `RunView.substate` reports (ruling A9-1).
- */
+/** Fold a run to its running phase from the activation row that carries it. */
 export async function seedActiveRun(
   session: SessionHandle,
   runId: RunId,
-  options: { readonly resuming?: boolean } = {},
 ): Promise<void> {
   await ensureRunStart(session, runId);
-  const activations = options.resuming === true ? 2 : 1;
-  for (let index = 0; index < activations; index += 1) {
-    publishTestRows(session, [
-      {
-        type: 'run.activate',
-        aggregateId: qualifyAggregateId('run', runId),
-      },
-    ]);
-    await Effect.runPromise(session.log.settled);
-  }
+  publishTestRows(session, [
+    { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
+  ]);
+  await Effect.runPromise(session.log.settled);
 }
 
 /**

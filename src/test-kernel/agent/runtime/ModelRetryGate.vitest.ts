@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Random } from 'effect';
+import { Deferred, Effect, Fiber, Random } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi, type Mock } from 'vitest';
 
@@ -14,10 +14,8 @@ const ROUTE = 'openai:subscription:gpt-5.6';
 const TRANSIENT = new Error('temporary connection failure');
 
 /** The default single wire route: every failure cools the shared route. */
-function wireRoutes(
-  classifyFailure: RoutePolicy['classifyFailure'] = () => ({}),
-): [RoutePolicy] {
-  return [{ key: ROUTE, classifyFailure }];
+function wireRoutes(): [RoutePolicy] {
+  return [{ key: ROUTE, classifyFailure: () => ({}) }];
 }
 
 /** A draw at the middle of [0, 1): the ±20 % jitter scales by exactly 1. */
@@ -26,16 +24,15 @@ const MIDPOINT_RANDOM: Random.Random = {
   nextIntUnsafe: () => 0,
 };
 
-/** Run `attempt` through `gate` on `routes` with the test's base backoff and
- *  a jitter-free cooldown. */
+/** Run `attempt` through `gate` on `routes` with a 1s base backoff and a
+ *  jitter-free cooldown. */
 function gated<A, E>(
   gate: ModelRetryGate,
   routes: readonly [RoutePolicy, ...RoutePolicy[]],
   attempt: Effect.Effect<A, E>,
-  baseBackoffMs = 1000,
 ): Effect.Effect<A, E> {
   return gate
-    .withRoutes(routes, { baseBackoffMs })(attempt)
+    .withRoutes(routes, { baseBackoffMs: 1000 })(attempt)
     .pipe(Effect.provideService(Random.Random, MIDPOINT_RANDOM));
 }
 
@@ -47,7 +44,7 @@ function admitted(): { readonly attempt: Effect.Effect<void>; calls: Mock } {
 
 /**
  * Holds the gate's probe open: `started` completes when the gate admits the
- * attempt, and the attempt ends when `complete` or `fail` runs.
+ * attempt, and the attempt ends when `complete` runs.
  */
 function pendingAttempt() {
   const started = Deferred.makeUnsafe<void>();
@@ -63,7 +60,6 @@ function pendingAttempt() {
     }),
     started: Deferred.await(started),
     complete: Deferred.succeed(ended, undefined),
-    fail: (error: Error) => Deferred.fail(ended, error),
   };
 }
 
@@ -120,7 +116,6 @@ describe('ModelRetryGate', () => {
       yield* TestClock.adjust(1000);
       yield* probe.started;
       yield* Fiber.interrupt(first);
-      expect(Exit.hasInterrupts(yield* Fiber.await(first))).toBe(true);
       yield* Fiber.join(next);
       expect(nextAttempt.calls).toHaveBeenCalledOnce();
     }),

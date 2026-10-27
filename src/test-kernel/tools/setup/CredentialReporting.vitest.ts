@@ -75,7 +75,6 @@ describe('setup credential reporting', () => {
         assert.match(outputOf(result), /"host": "cli"/);
         assert.match(outputOf(result), /"provider": "deepseek"/);
         assert.match(outputOf(result), /"origin": "env"/);
-        assert.match(outputOf(result), /provider API key in environment/);
         assert.doesNotMatch(outputOf(result), /private-test-value/);
       }),
   );

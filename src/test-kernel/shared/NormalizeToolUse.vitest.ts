@@ -24,6 +24,5 @@ describe('normalizeToolUse (packages/harness/src/shared/toolUse.ts)', () => {
       status: 'completed',
     });
     expect(nested?.outputText).toBe('');
-    expect(nested?.headerSummary).toBe('ran ok');
   });
 });

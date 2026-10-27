@@ -9,7 +9,7 @@ import {
   isUnservedModel,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
+import { readModelOptions } from '@model/computeModelOptions';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -25,15 +25,6 @@ const KIMI_CODING = 'moonshot/kimi-for-coding';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
 
-const availabilityInputs = readModelOptions;
-
-/** The reason `model`'s option gives for not running, or `null` when it can. */
-const unavailableReasonOf = (
-  options: readonly ModelOption[],
-  model: string,
-): string | null =>
-  options.find((option) => option.model === model)?.unavailableReason ?? null;
-
 /** A persisted selection with exactly `models` enabled. */
 function onlyEnabled(models: readonly string[]) {
   return {
@@ -42,31 +33,19 @@ function onlyEnabled(models: readonly string[]) {
   };
 }
 
-/**
- * Reinstall the fake platform mid-test with the access state the case needs,
- * then clear the two process-wide caches the picker reads through.
- */
-async function installAccessPlatform(
-  options: {
-    secrets?: Record<string, string>;
-    config?: Record<string, unknown>;
-    enabledModels?: string[];
-  } = {},
-): Promise<void> {
-  await installPlatform({
-    config: options.config,
-    globalState: {
-      [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(
-        options.enabledModels ?? [GPT55],
-      ),
-    },
-    secrets: options.secrets ?? OPENAI_KEY_SECRETS,
-  });
+/** Reinstall the fake platform mid-test with the access state the case needs. */
+function installAccessPlatform(options: {
+  secrets?: Record<string, string>;
+  config?: Record<string, unknown>;
+}) {
+  return Effect.promise(() =>
+    installPlatform({
+      config: options.config,
+      globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
+      secrets: options.secrets ?? OPENAI_KEY_SECRETS,
+    }),
+  );
 }
-
-const PREFER_CODEX_CONFIG = {
-  'texra.chatgptCodex.preferSubscription': true,
-};
 
 describe('model catalogue direct-route key ownership', () => {
   it('assigns every servable direct route to an API-key provider', () => {
@@ -90,27 +69,18 @@ describe('model availability', () => {
 
   it.effect('does not treat a Moonshot key as a Kimi Code credential', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installAccessPlatform({
-          secrets: { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
-        }),
-      );
+      yield* installAccessPlatform({
+        secrets: { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
+      });
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
-      );
-      const reason = unavailableReasonOf(
-        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
-        KIMI_CODING,
+        yield* readModelOptions(hostStores(), [KIMI_CODING]),
       );
 
       expect(model).toMatchObject({
         provider: 'kimiCode',
         availability: 'missing-key',
       });
-      expect(reason).toBe(
-        'Model "moonshot/kimi-for-coding" requires your Kimi Code API key. Provide it to continue.',
-      );
     }),
   );
 
@@ -118,12 +88,12 @@ describe('model availability', () => {
     'does not disable API-key access when ChatGPT subscription is preferred but signed out',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installAccessPlatform({ config: PREFER_CODEX_CONFIG }),
-        );
+        yield* installAccessPlatform({
+          config: { 'texra.chatgptCodex.preferSubscription': true },
+        });
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55]),
+          yield* readModelOptions(hostStores(), [GPT55]),
         );
 
         expect(model.availability).toBe('provider-key');

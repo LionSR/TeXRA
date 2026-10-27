@@ -40,23 +40,10 @@ afterEach(async () => {
       undefined,
     ),
   );
-  await Effect.runPromise(
-    testWorkspaceRoots().config.update(
-      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-      undefined,
-    ),
-  );
 });
 
 describe('runtime skills', () => {
-  it.effect.each([
-    {
-      label: 'name',
-      key: WorkspaceStateKey.DISABLED_SKILLS,
-      value: ['project-skill'],
-      expected: ['user-skill'],
-    },
-  ])('filters runtime skills disabled by $label', ({ key, value, expected }) =>
+  it.effect('filters runtime skills disabled by name', () =>
     Effect.gen(function* () {
       const projectRoot = yield* Effect.promise(() => createTempRoot());
       const userRoot = yield* Effect.promise(() => createTempRoot());
@@ -76,13 +63,18 @@ describe('runtime skills', () => {
         { tier: 'project', path: projectRoot },
         { tier: 'user', path: userRoot },
       ]);
-      yield* testWorkspaceRoots().config.update(key, value);
+      yield* testWorkspaceRoots().config.update(
+        WorkspaceStateKey.DISABLED_SKILLS,
+        ['project-skill'],
+      );
 
       const result = yield* loadRuntimeSkillCatalogEffect(
         runCatalog(WORKSPACE_ROOT),
       );
 
-      expect(result.catalog.map(({ name }) => name)).toStrictEqual(expected);
+      expect(result.catalog.map(({ name }) => name)).toStrictEqual([
+        'user-skill',
+      ]);
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 

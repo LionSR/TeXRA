@@ -19,11 +19,13 @@ import {
 
 interface WorkspaceFileListingOptions {
   root: string;
-  config: FileFilterConfig;
+  configs: readonly FileFilterConfig[];
 }
 
 /**
- * The workspace-relative paths under `root` the filters admit, sorted.
+ * For each config, the workspace-relative paths under `root` its filters
+ * admit, sorted. One walk serves every config: a directory is entered when
+ * any config still visits it, and only those configs judge what is below.
  * Each entry's type comes with the directory listing (`readdir` dirents,
  * read from Node directly: `FileSystem` has no typed listing), so only a
  * symlink costs a `stat`, through the `FileSystem` service, which follows
@@ -36,8 +38,8 @@ export const listWorkspaceFiles = Effect.fn(
   'workspaceFileListing.listWorkspaceFiles',
 )(function* (options: WorkspaceFileListingOptions) {
   const fs = yield* FileSystem.FileSystem;
-  const filters = prepareFileFilters(options.config);
-  const results: string[] = [];
+  const filters = options.configs.map(prepareFileFilters);
+  const results = filters.map((): string[] => []);
 
   // A link's target type, or undefined when it does not resolve. Absent
   // (`absentReason`: NotFound / ENOTDIR), the rest of BadResource (`ELOOP`),
@@ -55,9 +57,11 @@ export const listWorkspaceFiles = Effect.fn(
       ),
     );
 
+  // `active` holds the indexes of the configs that visit `directory`.
   function visit(
     directory: string,
     relativeDirectory: string,
+    active: readonly number[],
   ): Effect.Effect<void, PlatformError.PlatformError, Path.Path> {
     return Effect.gen(function* () {
       const entries = yield* readDirectoryTypedTolerant(directory);
@@ -77,16 +81,18 @@ export const listWorkspaceFiles = Effect.fn(
                 : entryType;
 
             if (type === 'Directory') {
-              if (shouldVisitDirectory(relativePath, filters)) {
-                yield* visit(absolutePath, relativePath).pipe(
+              const visiting = active.filter((i) =>
+                shouldVisitDirectory(relativePath, filters[i]),
+              );
+              if (visiting.length > 0) {
+                yield* visit(absolutePath, relativePath, visiting).pipe(
                   Effect.catchIf(absentReason, () => Effect.void),
                 );
               }
-            } else if (
-              type === 'File' &&
-              passesFileFilters(relativePath, filters)
-            ) {
-              results.push(relativePath);
+            } else if (type === 'File') {
+              for (const i of active)
+                if (passesFileFilters(relativePath, filters[i]))
+                  results[i].push(relativePath);
             }
           }),
         { concurrency: 8, discard: true },
@@ -94,6 +100,10 @@ export const listWorkspaceFiles = Effect.fn(
     });
   }
 
-  yield* visit(options.root, '');
-  return results.sort((a, b) => a.localeCompare(b));
+  yield* visit(
+    options.root,
+    '',
+    filters.map((_, i) => i),
+  );
+  return results.map((paths) => paths.sort((a, b) => a.localeCompare(b)));
 });

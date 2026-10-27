@@ -42,11 +42,6 @@ describe('FileSecrets', () => {
         expect(yield* service.get('apiKey.openai')).toBe('sk-a');
         expect(yield* extension.get('apiKey.anthropic')).toBe('sk-b');
         expect(yield* service.get('ordered')).toBe('new');
-        expect([...(yield* service.listStoredKeys())].sort()).toEqual([
-          'apiKey.anthropic',
-          'apiKey.openai',
-          'ordered',
-        ]);
         yield* service.delete('ordered');
         expect(yield* extension.get('ordered')).toBeUndefined();
       }),

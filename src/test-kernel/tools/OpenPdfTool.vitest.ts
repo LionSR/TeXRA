@@ -35,14 +35,9 @@ const editors = makeEditorHost();
 describe('OpenPdfTool', () => {
   setupPlatform({
     workspacePath: fakePath('workspace'),
-    storagePath: fakePath('storage'),
-    files: {
-      '/workspace/paper.pdf': '%PDF-1.4\n',
-      '/workspace/figures/result.pdf': '%PDF-1.4\n',
-      '/run/paper.pdf': '%PDF-1.4\n',
-      '/storage/executions/run-1/output.pdf': '%PDF-1.4\n',
-      '/workspace/paper.tex': '\\documentclass{article}',
-    },
+    // A real PDF outside the working directory, so only the path rule
+    // refuses it.
+    files: { '/run/paper.pdf': '%PDF-1.4\n' },
   });
 
   let sessionRoot: string | undefined;
@@ -78,19 +73,13 @@ describe('OpenPdfTool', () => {
     return openPdf;
   });
 
-  function expectOpenError(result: unknown, fragment: string): void {
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(fragment),
-    });
-  }
-
   it.effect('rejects arbitrary absolute paths outside the allowed roots', () =>
     Effect.gen(function* () {
       const openPdf = yield* installOpener;
-      const tool = OpenPdfTool;
 
-      const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
+      const result = yield* OpenPdfTool.call({
+        path: fakePath('run/paper.pdf'),
+      }).pipe(
         Effect.provideService(EditorHost, editors),
         Effect.provide(
           nativeToolTestLayer({
@@ -104,19 +93,13 @@ describe('OpenPdfTool', () => {
         ),
       );
 
-      expectOpenError(result, 'Path must stay within the working directory');
+      expect(result).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining(
+          'Path must stay within the working directory',
+        ),
+      });
       expect(openPdf).not.toHaveBeenCalled();
-    }).pipe(
-      Effect.provideService(EditorHost, editors),
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
+    }),
   );
 });

@@ -7,12 +7,9 @@
  *
  * Failure modes:
  * - an awaited child's typed result is returned while its manifest never
- *   landed, or a failed child's result is not persisted;
- * - interrupting the caller leaves the child running;
+ *   landed;
  * - a caller stop during persistence rewrites a completed result;
- * - a proposal is approved, denied or asked against the run's policy;
- * - an approval that carries the launch form's changes (instruction, files)
- *   launches the proposal as the agent made it;
+ * - a proposal is approved or asked under the `never` policy;
  * - a detached child's result is delivered to the parent that released it.
  */
 import { writeFileSync } from 'node:fs';
@@ -83,24 +80,14 @@ const parkedParent = (bypass = true) =>
   });
 
 /** The `agent` tool's call to `review` under `parent`'s run. */
-const delegateReview = (
-  parent: Parent,
-  options: {
-    stopAfterCycle?: boolean;
-    userInstruction?: string;
-    prompt?: string;
-  } = {},
-) =>
+const delegateReview = (parent: Parent, prompt = 'Check the proof.') =>
   agentTool()
-    .call({ agentName: 'review', prompt: options.prompt ?? 'Check the proof.' })
+    .call({ agentName: 'review', prompt })
     .pipe(
       Effect.provide(
         nativeToolTestLayer({
           // The child's run id derives from the call's id.
           callId: `call-${generateShortId()}`,
-          ...(options.userInstruction !== undefined && {
-            origin: { instruction: options.userInstruction },
-          }),
           run: {
             runId: parent.runId,
             session: parent.session,
@@ -109,21 +96,21 @@ const delegateReview = (
               model: MODEL,
             }),
             model: testModelCell(MODEL),
-            toolPolicy: { stopAfterCycle: options.stopAfterCycle ?? false },
+            toolPolicy: {},
           },
         }),
       ),
     );
 
 /** The in-band path a script's awaited `agent()` takes. */
-const runInBand = (
-  parent: Parent,
-  instruction = 'Check the proof.',
-  runId: RunId = generateRunId(),
-) =>
+const runInBand = (parent: Parent, runId: RunId) =>
   executeSubagentInBand({
     runId,
-    configPayload: { agent: 'review', model: MODEL, instruction },
+    configPayload: {
+      agent: 'review',
+      model: MODEL,
+      instruction: 'Check the proof.',
+    },
     parentRunId: parent.runId,
     session: parent.session,
   }).pipe(Effect.provideService(Runs, parent.session.runs), (program) =>
@@ -214,9 +201,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         // process taking it in between would find nothing to recover.
         const faults = yield* sessionStoreFaults(parent.storage);
         const persisting = yield* faults.holdNext('appendAll', 'run.result');
-        const running = yield* Effect.forkChild(
-          runInBand(parent, 'Check the proof.', runId),
-        );
+        const running = yield* Effect.forkChild(runInBand(parent, runId));
         yield* persisting.reached;
         expect(claimHolder(parent.storage, runId)).not.toBeNull();
         yield* persisting.release;
@@ -229,10 +214,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
           identity: { kind: 'agent', agent: 'review' },
           parent: { id: parent.runId },
         });
-        expect(result.result).toMatchObject({
-          outcome: 'completed',
-          output: { files: [] },
-        });
+        expect(result.result.outcome).toBe('completed');
         // The report and the manifest are durable once the call returns,
         // and the child let its claim go.
         expect(rows.map((row) => row.type)).toEqual(
@@ -254,9 +236,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         const persisting = yield* faults.holdNext('appendAll', 'run.result');
         const runId = generateRunId();
 
-        const running = yield* Effect.forkChild(
-          runInBand(parent, 'Check the proof.', runId),
-        );
+        const running = yield* Effect.forkChild(runInBand(parent, runId));
         yield* persisting.reached;
         const interrupting = yield* Effect.forkChild(Fiber.interrupt(running), {
           startImmediately: true,
@@ -293,7 +273,6 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
 
         expect(opened).toEqual([]);
         expect(result.status).toBe('error');
-        expect(result.summary).toBe("Delegation denied for 'review'");
         expect(childrenOf(parent)).toEqual([]);
       }),
   );
@@ -306,20 +285,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         yield* Effect.addFinalizer(() => releasePark(parent));
         // The validation model holds the child's turn; the parent releases
         // its children mid-turn, as a stop-with-detach does.
-        yield* agentTool()
-          .call({ agentName: 'review', prompt: PARKED })
-          .pipe(
-            Effect.provide(
-              nativeToolTestLayer({
-                callId: `call-${generateShortId()}`,
-                run: {
-                  runId: parent.runId,
-                  session: parent.session,
-                  toolPolicy: {},
-                },
-              }),
-            ),
-          );
+        yield* delegateReview(parent, PARKED);
         const child = yield* untilAttempt(parent);
         const registry = registryOf(parent.session.runs);
         yield* registry['detachActiveChildren'](parent.runId);

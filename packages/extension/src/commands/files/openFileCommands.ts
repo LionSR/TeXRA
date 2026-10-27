@@ -65,10 +65,10 @@ export const openLabel = Effect.fn('openFileCommands.openLabel')(function* (
   roots: WorkspaceRoots,
   label: string,
 ) {
-  const [inputs, contexts] = yield* Effect.all([
-    listWorkspaceFilesOfType('input', roots.workspace),
-    listWorkspaceFilesOfType('context', roots.workspace),
-  ]);
+  const [inputs, contexts] = yield* listWorkspaceFilesOfType(
+    ['input', 'context'],
+    roots.workspace,
+  );
   // The candidates are workspace-relative listings, read through the
   // session's workspace view.
   const workspaceFs = yield* WorkspaceFs;

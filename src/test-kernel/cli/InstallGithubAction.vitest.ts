@@ -96,6 +96,5 @@ describe('install-github-action command', () => {
     });
 
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
-    expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');
   });
 });

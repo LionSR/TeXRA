@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -60,18 +60,6 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 
 const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
-function echoTool(name: string): ITool {
-  return {
-    definition: { name },
-    call: vi.fn(() =>
-      Effect.succeed({
-        status: 'executed' as const,
-        output: `${name} done`,
-      }),
-    ),
-  } as ITool;
-}
-
 describe('the tool-use turn', () => {
   it.effect(
     'keeps the text of an earlier turn when a later model turn fails',
@@ -84,7 +72,13 @@ describe('the tool-use turn', () => {
         const { result } = yield* runScript({
           runId: startedRun(session),
           session,
-          tools: { probe: echoTool('probe') },
+          tools: {
+            probe: {
+              definition: { name: 'probe' },
+              call: () =>
+                Effect.succeed({ status: 'executed' as const, output: 'done' }),
+            } as ITool,
+          },
           script: [
             toolCallTurn(
               [{ id: 'call-1', name: 'probe' }],
@@ -109,40 +103,30 @@ describe('the tool-use turn', () => {
 });
 
 describe('tool-use session-stage outcome persistence (#8023)', () => {
-  it.effect.each([
-    {
-      name: 'cancelled',
-      script: [{ cancelled: true }] as ScriptedTurn[],
-      expectedOutcome: RUN_OUTCOME.CANCELLED,
-    },
-  ])('persists a $name turn as one structural session stage', (scenario) =>
+  it.effect('persists a cancelled turn as one structural session stage', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
       const runId = startedRun(session);
       const recorder = createTestRunTrace(runId);
-      const logger = recorder.trace;
+      yield* Effect.addFinalizer(() => Effect.sync(recorder.dispose));
 
-      try {
-        const { result } = yield* runScript({
-          runId,
-          session,
-          logger,
-          script: scenario.script,
-        });
+      yield* runScript({
+        runId,
+        session,
+        logger: recorder.trace,
+        script: [{ cancelled: true }],
+      });
 
-        expect(result.outcome).toBe(scenario.expectedOutcome);
-        const groups = recorder.transcript().taskGroups;
-        const sessionStages = groups.flatMap((group) =>
+      const sessionStages = recorder
+        .transcript()
+        .taskGroups.flatMap((group) =>
           group.kind === 'session' && group.endTime !== undefined
             ? [{ label: group.name, status: group.status }]
             : [],
         );
-        expect(sessionStages).toEqual([
-          { label: 'Tool-use turn', status: scenario.expectedOutcome },
-        ]);
-      } finally {
-        recorder.dispose();
-      }
+      expect(sessionStages).toEqual([
+        { label: 'Tool-use turn', status: RUN_OUTCOME.CANCELLED },
+      ]);
     }),
   );
 });

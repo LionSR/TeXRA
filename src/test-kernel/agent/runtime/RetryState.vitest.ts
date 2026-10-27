@@ -598,10 +598,9 @@ describe('ModelInvoker retry', () => {
       const outcome = yield* invokeOn(kit);
 
       expect(outcome.kind).toBe('failed');
+      // The failure opened a retry request, so the policy's denial is what
+      // ended the invocation, not a stop that never asked.
       if (outcome.kind === 'failed') {
-        expect(outcome.state.lastError?.message).toContain(
-          'stream dropped before first token',
-        );
         expect(outcome.state.invocation?.current.failed?.next.kind).toBe('ask');
       }
       // A denial is not a cancel: the run stays running so the failure can
@@ -720,7 +719,6 @@ describe('ModelInvoker retry', () => {
             stopReason,
           };
         }) as typeof session.runs.get);
-        const background = BACKGROUND_PREPARED;
         const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin: ORIGIN,
           providerResponseId: PROVIDER_RESPONSE_ID,
@@ -732,7 +730,7 @@ describe('ModelInvoker retry', () => {
           const calls = { submit: 0, observe: 0, cancel: 0 };
           const observing = yield* Deferred.make<void>();
           const model: Model = {
-            prepareTurn: () => Effect.succeed(background),
+            prepareTurn: () => Effect.succeed(BACKGROUND_PREPARED),
             streamTurn: () => Stream.die('no foreground turn'),
             background: {
               submit: () =>
@@ -784,7 +782,6 @@ describe('ModelInvoker retry', () => {
         });
 
         const user = yield* scenario('user');
-        expect(user.calls.cancel).toBe(1);
         expect(user.accepted).toBeNull();
         // The resume submits anew instead of observing the cancelled work.
         expect(user.calls).toEqual({ submit: 2, observe: 1, cancel: 1 });

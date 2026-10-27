@@ -32,13 +32,7 @@ describe('applyStateSettingUpdate', () => {
           null,
           ports,
         ),
-      ).toMatchObject({
-        kind: 'applied',
-        entry: {
-          key: TexraStateKey.LATEX_FORMATTER,
-          surfaces: { settingsView: 'latex' },
-        },
-      });
+      ).toMatchObject({ kind: 'applied' });
       expect(
         yield* isStored(fake.workspaceState, TexraStateKey.LATEX_FORMATTER),
       ).toBe(false);

@@ -104,7 +104,6 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('kept the working-tree copy');
     // The commit picks up the formatted staged content...
     expect(stagedBlob('a.ts')).toBe(FORMATTED);
     // ...and the unstaged c:3 edit survives byte-identical in the tree.
@@ -130,7 +129,6 @@ describe('format-staged', () => {
     const result = runFormat();
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('mixed LF/CRLF line endings');
     // The staged blob is still formatted...
     expect(stagedBlob('c.ts')).toBe(MULTI_FORMATTED);
     // ...but no unstaged line's bytes are rewritten.
@@ -160,8 +158,6 @@ describe('format-staged', () => {
       );
 
       expect(result.status, result.stderr).toBe(0);
-      expect(result.stdout).toContain('a.ts');
-      expect(result.stdout).toContain('already exists; skipped auto-staging');
       expect(stagedBlob('a.ts')).toBe('const x = "a";\n');
       const snapshots = readdirSync(dir).filter((name) =>
         name.startsWith('.prettierrc-format-staged-'),

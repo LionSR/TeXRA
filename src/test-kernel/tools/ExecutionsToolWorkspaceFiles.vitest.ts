@@ -29,37 +29,6 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 const tempDirs = useTempDirs();
 
-const config = {
-  agent: 'chat',
-  model: 'deepseek/deepseek-v4-flash',
-  instruction: 'Check the proof.',
-  inputFiles: [],
-  outputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  editedFile: null,
-  memories: [],
-} as AgentConfig;
-
-/** A stored run of `config` in the default session, run in `workspace`,
- *  whose settled calls edited `edited`. */
-function seedEditingRun(
-  runId: RunId,
-  workspace: string,
-  edited: readonly string[],
-) {
-  return Effect.gen(function* () {
-    const session = testDefaultSession();
-    publishTestRunStart(session, runId);
-    yield* session.log.settled;
-    yield* seedRunRecord(session, runId, {
-      ...config,
-      workingDirectory: workspace,
-    });
-    yield* seedEditedFiles(session, runId, edited);
-  });
-}
-
 describe('ExecutionsTool', () => {
   setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
@@ -100,7 +69,18 @@ describe('ExecutionsTool', () => {
           yield* Effect.promise(() =>
             writeFile(path.join(workspace, 'secret.md'), 'secret'),
           );
-          yield* seedEditingRun('abc123' as RunId, workspace, ['review.md']);
+          // A stored run in this workspace whose settled calls edited
+          // only `review.md`.
+          const runId = 'abc123' as RunId;
+          const session = testDefaultSession();
+          publishTestRunStart(session, runId);
+          yield* session.log.settled;
+          yield* seedRunRecord(session, runId, {
+            agent: 'chat',
+            model: 'deepseek/deepseek-v4-flash',
+            workingDirectory: workspace,
+          } as AgentConfig);
+          yield* seedEditedFiles(session, runId, ['review.md']);
 
           const result = yield* ExecutionsTool.call({
             path: '/executions/abc123/workspace-files/secret.md',

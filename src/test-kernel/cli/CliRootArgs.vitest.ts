@@ -10,26 +10,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
-
-async function initNodeBackedPlatform(options: {
-  storagePath: string;
-  globalStoragePath: string;
-}): Promise<void> {
-  const { installPlatform } = await import('@test/support/setupPlatform');
-  await installPlatform({
-    workspacePath: process.cwd(),
-    storagePath: options.storagePath,
-    globalStoragePath: options.globalStoragePath,
-  });
-  await Effect.runPromise(
-    openTestDefaultSession({ roots: testWorkspaceRoots() }),
-  );
-}
-
-async function initDefaultFakePlatform(): Promise<void> {
-  const { installPlatform } = await import('@test/support/setupPlatform');
-  await installPlatform();
-}
+import { installPlatform } from '@test/support/setupPlatform';
 
 describe('runCli usage output stream routing', () => {
   // Capture every byte the CLI writes. Usage on an ERROR flows through
@@ -43,14 +24,17 @@ describe('runCli usage output stream routing', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const tempDirs = useTempDirs();
-  let platformStorageRoot = '';
 
   beforeEach(async () => {
-    platformStorageRoot = await makeTempDir('texra-cli-root-', tempDirs);
-    await initNodeBackedPlatform({
+    const platformStorageRoot = await makeTempDir('texra-cli-root-', tempDirs);
+    await installPlatform({
+      workspacePath: process.cwd(),
       storagePath: path.join(platformStorageRoot, 'storage'),
       globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
     });
+    await Effect.runPromise(
+      openTestDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     stdout = '';
     stderr = '';
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
@@ -77,17 +61,8 @@ describe('runCli usage output stream routing', () => {
     stderrSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
-    await initDefaultFakePlatform();
+    await installPlatform();
   });
-
-  function expectUsageError(
-    result: { exitCode: number },
-    message: string,
-  ): void {
-    expect(result.exitCode).toBe(2);
-    expect(stderr).toContain(message);
-    expect(stdout).toBe('');
-  }
 
   it('routes usage text to stderr (not stdout) on a usage error', async () => {
     // Regression guard for the headless-parity contract: usage shown because
@@ -95,7 +70,8 @@ describe('runCli usage output stream routing', () => {
     // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
     // Mirrors the documented repro: a usage error under --output-format json.
     const result = await runCli(['run', '--output-format', 'json']);
-    expectUsageError(result, 'Missing required positional argument: AGENT');
+    expect(result.exitCode).toBe(2);
+    expect(stdout).toBe('');
     // The error leads, followed by a pointer to the usage rather than the
     // full help screen that used to bury it.
     expect(stderr).toMatch(

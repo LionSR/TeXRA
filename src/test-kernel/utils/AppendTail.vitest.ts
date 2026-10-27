@@ -8,9 +8,6 @@ describe('appendTail', () => {
     // *low* surrogate of the pair. Without the surrogate-aware fix the slice
     // would yield a lone low surrogate ("\uDF48Y"); with the fix the cut
     // advances past it and we drop the whole codepoint.
-    const out = appendTail('', '𐍈Y', 2);
-    expect(out).toBe('Y');
-    // Defense against accidental re-introduction of the dangling low surrogate.
-    expect(out.charCodeAt(0)).toBeLessThan(0xd800);
+    expect(appendTail('', '𐍈Y', 2)).toBe('Y');
   });
 });

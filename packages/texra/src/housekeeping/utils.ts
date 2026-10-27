@@ -125,16 +125,21 @@ export const collectFilesFromPatterns = Effect.fn(
       );
 
   const files = new Set<string>();
-  const listings = new Map<string, ReadonlyArray<string>>();
-  const namesIn = Effect.fnUntraced(function* (dir: string) {
-    const cached = listings.get(dir);
-    if (cached !== undefined) return cached;
-    const names = yield* fs
-      .readDirectory(dir)
-      .pipe(absentAs<ReadonlyArray<string>>([]));
-    listings.set(dir, names);
-    return names;
-  });
+  // Each directory is listed once, up front, when a prefix extension needs
+  // the listing.
+  const listings = new Map(
+    extensions.some((ext) => ext.endsWith('*'))
+      ? yield* Effect.forEach(
+          searchDirs,
+          (dir) =>
+            fs.readDirectory(dir).pipe(
+              absentAs<ReadonlyArray<string>>([]),
+              Effect.map((names) => [dir, names] as const),
+            ),
+          { concurrency: 'unbounded' },
+        )
+      : [],
+  );
   // A name removed between the listing and this stat is gone, not an error.
   const isFile = (match: string) =>
     fs.stat(match).pipe(
@@ -151,29 +156,36 @@ export const collectFilesFromPatterns = Effect.fn(
     files.add(relativePath);
   });
 
-  for (const pattern of patterns) {
-    for (const ext of extensions) {
-      if (!ext.endsWith('*')) {
-        // Exact extensions prefer the input directory; `build/` is only the
-        // fallback when the corresponding root-level artifact is absent.
-        for (const dir of searchDirs) {
-          const match = path.join(dir, pattern + ext);
-          if (yield* isFile(match)) {
-            yield* record(match);
-            break;
+  // Every pattern and extension is probed together; the matches are
+  // recorded in pattern, extension, then listing order.
+  const matches = yield* Effect.forEach(
+    patterns.flatMap((pattern) =>
+      extensions.map((ext) => [pattern, ext] as const),
+    ),
+    ([pattern, ext]) =>
+      Effect.gen(function* () {
+        if (!ext.endsWith('*')) {
+          // Exact extensions prefer the input directory; `build/` is only the
+          // fallback when the corresponding root-level artifact is absent.
+          for (const dir of searchDirs) {
+            const match = path.join(dir, pattern + ext);
+            if (yield* isFile(match)) return [match];
           }
+          return [];
         }
-        continue;
-      }
-      const wanted = foldCase(pattern + ext.slice(0, -1));
-      for (const dir of searchDirs) {
-        for (const name of yield* namesIn(dir)) {
-          if (!foldCase(name).startsWith(wanted)) continue;
-          const match = path.join(dir, name);
-          if (yield* isFile(match)) yield* record(match);
-        }
-      }
-    }
-  }
+        const wanted = foldCase(pattern + ext.slice(0, -1));
+        const candidates = searchDirs.flatMap((dir) =>
+          (listings.get(dir) ?? [])
+            .filter((name) => foldCase(name).startsWith(wanted))
+            .map((name) => path.join(dir, name)),
+        );
+        const found = yield* Effect.forEach(candidates, isFile, {
+          concurrency: 16,
+        });
+        return candidates.filter((_, i) => found[i]);
+      }),
+    { concurrency: 8 },
+  );
+  for (const match of matches.flat()) yield* record(match);
   return files;
 });

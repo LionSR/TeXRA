@@ -10,7 +10,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
-  type ResultMeta,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -72,11 +71,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   ];
 }
 
-const completedWorkflowResult: ResultMeta = {
-  producer: 'subagent',
-  output: { response: '', files: [] },
-};
-
 /** The filesystem, and the documents plugin's block, whose result names a
  *  completed task's files. */
 const resolveLayer = Layer.merge(
@@ -129,7 +123,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       {
         type: 'run.result',
         aggregateId: qualifyAggregateId('run', childRunId),
-        result: completedWorkflowResult,
+        result: { producer: 'subagent', output: { response: '', files: [] } },
       },
     ]);
     // How the child ended, and what it declared, is its `run.end` row's.

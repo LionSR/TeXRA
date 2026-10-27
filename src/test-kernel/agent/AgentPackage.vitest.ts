@@ -96,12 +96,6 @@ class FakeSession {
   }
 }
 
-const PLATFORM = {
-  globalState: { get: () => undefined, update: async () => undefined },
-  roots: { storage: '/storage', globalState: new MemoryStateStore() },
-  storage: { getGlobalStoragePath: () => '/global-storage' },
-} as unknown as AgentPlatform;
-
 describe('agent package sessions', () => {
   beforeEach(async () => {
     // Every named agent resolves to a custom `assistant` in the kernel
@@ -135,7 +129,10 @@ describe('agent package sessions', () => {
           yield* testRuntime().contextEffect,
           yield* Effect.scope,
         );
-        const session = yield* sessions.open(PLATFORM.roots);
+        const session = yield* sessions.open({
+          storage: '/storage',
+          globalState: new MemoryStateStore(),
+        } as unknown as AgentPlatform['roots']);
         const run = yield* session.start({
           agent: 'assistant',
           instruction: 'Test instruction',
@@ -145,19 +142,14 @@ describe('agent package sessions', () => {
         yield* pull;
         yield* Deferred.fail(foldDeath, new Error('fold died'));
 
-        const viewExit = yield* Effect.exit(pull);
-        expect(Exit.isFailure(viewExit)).toBe(true);
-        if (Exit.isFailure(viewExit)) {
-          const failure = Cause.squash(viewExit.cause);
-          expect(failure).toBeInstanceOf(Error);
-          expect((failure as Error).message).toBe('fold died');
-        }
-        const resultExit = yield* Effect.exit(run.result);
-        expect(Exit.isFailure(resultExit)).toBe(true);
-        if (Exit.isFailure(resultExit)) {
-          const failure = Cause.squash(resultExit.cause);
-          expect(failure).toBeInstanceOf(Error);
-          expect((failure as Error).message).toBe('fold died');
+        const exits: Exit.Exit<unknown, unknown>[] = [
+          yield* Effect.exit(pull),
+          yield* Effect.exit(run.result),
+        ];
+        for (const exit of exits) {
+          expect(
+            Exit.isFailure(exit) && Cause.squash(exit.cause),
+          ).toMatchObject({ message: 'fold died' });
         }
       }).pipe(Effect.scoped),
   );

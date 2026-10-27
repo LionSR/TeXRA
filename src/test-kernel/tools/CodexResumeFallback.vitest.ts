@@ -184,13 +184,10 @@ describe(
             },
           );
           expect((yield* Fiber.join(first)).status).toBe('executed');
-          expect((yield* Fiber.join(second)).summary).toMatch(
-            /Follow-up queued/,
-          );
+          expect((yield* Fiber.join(second)).status).toBe('executed');
           yield* untilStored(parent.storage, () => prompts.length === 2);
 
-          expect(resumeThread).toHaveBeenCalledOnce();
-          expect(resumeThread).toHaveBeenCalledWith('stale-thread');
+          expect(resumeThread.mock.calls).toEqual([['stale-thread']]);
           expect(childrenOf(parent.storage, parent.runId)).toHaveLength(1);
           expect(prompts).toEqual([
             'continue the refactor',

@@ -88,7 +88,6 @@ describe('PRPollingSource annotation pagination', () => {
 
       expect(annotations).toHaveLength(101);
       expect(annotations.at(-1)?.annotation_level).toBe('failure');
-      expect(mocks.ghGet).toHaveBeenCalledTimes(2);
       expect(mocks.ghGet.mock.calls.map((call) => call[0])).toEqual([
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',

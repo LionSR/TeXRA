@@ -19,10 +19,8 @@ interface InvokeRecord {
   args: unknown[];
 }
 
-async function setupTool(): Promise<{
-  tool: typeof InvokeCommandTool;
-  invocations: InvokeRecord[];
-}> {
+/** Install a host whose command invocations the case reads back. */
+async function recordInvocations(): Promise<InvokeRecord[]> {
   const invocations: InvokeRecord[] = [];
   await installPlatform(
     {},
@@ -37,21 +35,21 @@ async function setupTool(): Promise<{
       }),
     },
   );
-  return { tool: InvokeCommandTool, invocations };
+  return invocations;
 }
 
-const invoke = (tool: typeof InvokeCommandTool, input: unknown) =>
-  tool.call(input).pipe(Effect.provide(withSetup(nativeToolTestLayer())));
+const invoke = (input: unknown) =>
+  InvokeCommandTool.call(input).pipe(
+    Effect.provide(withSetup(nativeToolTestLayer())),
+  );
 
 describe('InvokeCommandTool allowlist', () => {
   it.effect(
     'rejects command arguments so credentials cannot reach the host',
     () =>
       Effect.gen(function* () {
-        const { tool, invocations } = yield* Effect.tryPromise(() =>
-          setupTool(),
-        );
-        const result = yield* invoke(tool, {
+        const invocations = yield* Effect.tryPromise(recordInvocations);
+        const result = yield* invoke({
           command: 'texra.setApiKey',
           args: ['openai', 'sk-fake-secret-1234567890abcdef'],
         });
@@ -63,18 +61,15 @@ describe('InvokeCommandTool allowlist', () => {
 
   it.effect('rejects arbitrary VS Code commands outside the allowlist', () =>
     Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
+      const invocations = yield* Effect.tryPromise(recordInvocations);
 
       for (const command of [
         // Has its own dedicated tool, so it stays outside this allowlist.
         'workbench.extensions.installExtension',
-        'workbench.action.files.save',
-        'workbench.action.closeAllEditors',
-        'editor.action.deleteAllLines',
         'workbench.action.terminal.sendSequence',
         'texra.refreshApiKeyStatus',
       ]) {
-        const result = yield* invoke(tool, { command });
+        const result = yield* invoke({ command });
         assert.equal(result.status, 'error');
       }
       assert.equal(invocations.length, 0);

@@ -1,7 +1,7 @@
 /**
  * The launcher's file catalogs of one workspace (PRD one-fold-three-renderers,
  * 8.1, `HostSnapshot.fileOptions`): the base candidates from the input rules
- * and the edited candidates from the edited rules, listed by the one shared
+ * and the edited candidates from the edited rules, listed by one shared
  * walk (`listWorkspaceFiles`), so both hosts list the same files for the same
  * folder.
  */
@@ -15,22 +15,23 @@ import {
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 /**
- * List the workspace files of one listable type under the product's
- * file-listing rules. Empty when no workspace is open.
+ * List the workspace files of each listable type under the product's
+ * file-listing rules, in one walk: one list per type, in the order given.
+ * Empty lists when no workspace is open.
  */
 export const listWorkspaceFilesOfType = Effect.fn(
   'workspaceFileOptions.listWorkspaceFilesOfType',
 )(function* (
-  fileType: ListableFileType,
+  fileTypes: readonly ListableFileType[],
   // Not a default parameter: callers inject a getter that returns undefined
   // to mean "no workspace", and a default would discard that and re-read
   // the process-wide workspace instead.
   workspacePath: string | undefined,
 ) {
-  if (!workspacePath) return [];
+  if (!workspacePath) return fileTypes.map((): string[] => []);
   return yield* listWorkspaceFiles({
     root: workspacePath,
-    config: getFileListConfig(fileType),
+    configs: fileTypes.map(getFileListConfig),
   });
 });
 
@@ -43,15 +44,9 @@ export const workspaceFileOptions = Effect.fn(
   if (!workspacePath) {
     return { baseFile: [], editedFile: [], commit: ['HEAD'] };
   }
-  const [baseFile, editedFile] = yield* Effect.all(
-    [
-      listWorkspaceFilesOfType('input', workspacePath),
-      listWorkspaceFiles({
-        root: workspacePath,
-        config: getEditedFileListConfig(),
-      }),
-    ],
-    { concurrency: 'unbounded' },
-  );
+  const [baseFile, editedFile] = yield* listWorkspaceFiles({
+    root: workspacePath,
+    configs: [getFileListConfig('input'), getEditedFileListConfig()],
+  });
   return { baseFile, editedFile, commit: ['HEAD'] };
 });

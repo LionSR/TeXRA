@@ -27,7 +27,7 @@ import type { LocalSession, Sessions } from '@texra-ai/harness';
 
 /** The harness's runtime: a host's, with the internal session owner a root
  *  launch the suites drive directly asks for. */
-export type TestProcessRuntime = ManagedRuntime.ManagedRuntime<
+type TestProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices | Sessions | SessionOwner,
   never
 >;

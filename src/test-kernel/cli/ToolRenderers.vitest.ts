@@ -42,23 +42,16 @@ function toolUse(
   };
 }
 
-function bashOutput(
-  command: string,
-  outputText: string,
-  overrides: Partial<NormalizedToolUse> = {},
-): ToolRow {
-  return toolUse(
-    'bash',
-    { command },
-    { headerSummary: command, outputText, ...overrides },
-  );
-}
-
 describe('CLI tool display lines', () => {
   it('paints producer text terminal-safe: no escapes, tabs expanded', () => {
-    const entry = bashOutput(
-      `echo \u001b]0;title\u0007done`,
-      `\u001b[2Jcleared\tcol\rsplit\nkey`,
+    const command = `echo \u001b]0;title\u0007done`;
+    const entry = toolUse(
+      'bash',
+      { command },
+      {
+        headerSummary: command,
+        outputText: `\u001b[2Jcleared\tcol\rsplit\nkey`,
+      },
     );
 
     const lines = toolUseDisplayLines(entry, { width: 80 });

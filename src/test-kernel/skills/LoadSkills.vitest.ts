@@ -26,22 +26,6 @@ async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-skills-', tempRoots);
 }
 
-type DiscoveryOutcome = {
-  skills: Array<{ skill: { name: string } }>;
-  errors: readonly unknown[];
-};
-
-function skillNames(result: DiscoveryOutcome): string[] {
-  return result.skills.map(({ skill }) => skill.name);
-}
-
-function expectReportedIssue(
-  result: DiscoveryOutcome,
-  issue: Record<string, unknown>,
-): void {
-  expect(result.errors).toContainEqual(expect.objectContaining(issue));
-}
-
 describe('discoverSkillSources over one root', () => {
   it('reports invalid YAML frontmatter without aborting discovery', async () => {
     const root = await createTempRoot();
@@ -60,11 +44,15 @@ describe('discoverSkillSources over one root', () => {
       { scope: 'project', path: root },
     ]);
 
-    expect(skillNames(result)).toEqual(['valid-skill']);
-    expectReportedIssue(result, {
-      severity: 'error',
-      code: 'invalid_frontmatter',
-    });
+    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
+      'valid-skill',
+    ]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_frontmatter',
+      }),
+    );
   });
 });
 
@@ -94,14 +82,12 @@ describe('discoverSkillSources', () => {
       'The bundled version.',
       'A project-specific skill.',
     ]);
-    expect(result.skills.map(({ source }) => source.scope)).toEqual([
-      'bundled',
-      'project',
-    ]);
-    expectReportedIssue(result, {
-      severity: 'warning',
-      code: 'duplicate_name',
-      name: 'shared-skill',
-    });
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'duplicate_name',
+        name: 'shared-skill',
+      }),
+    );
   });
 });

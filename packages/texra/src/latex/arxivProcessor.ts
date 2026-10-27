@@ -749,13 +749,16 @@ class ArxivSourceProcessor {
         const placed = (entry: string) => path.join(paperDirFull, entry);
         yield* this.extractTarFile(downloadedPath, extractedDir);
         const entries = yield* permanentFs(fs.readDirectory(extractedDir));
-        const collisions = yield* Effect.filter(entries, (entry) =>
-          permanentFs(
-            Effect.map(
-              entryTypeIn(fs, placed(entry)),
-              (type) => type !== undefined,
+        const collisions = yield* Effect.filter(
+          entries,
+          (entry) =>
+            permanentFs(
+              Effect.map(
+                entryTypeIn(fs, placed(entry)),
+                (type) => type !== undefined,
+              ),
             ),
-          ),
+          { concurrency: 16 },
         );
         if (collisions.length > 0) {
           const message = `Target already exists: ${collisions.map(placed).join(', ')}`;

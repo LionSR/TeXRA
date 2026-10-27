@@ -210,10 +210,7 @@ export function createDesktopHostRequests(
     Effect.suspend(() => {
       const workspacePath = project.root;
       if (!workspacePath) return Effect.succeed([]);
-      return Effect.all([
-        listWorkspaceFilesOfType('input', workspacePath),
-        listWorkspaceFilesOfType('context', workspacePath),
-      ]).pipe(
+      return listWorkspaceFilesOfType(['input', 'context'], workspacePath).pipe(
         Effect.map((files) =>
           files.flat().map((file) => path.resolve(workspacePath, file)),
         ),

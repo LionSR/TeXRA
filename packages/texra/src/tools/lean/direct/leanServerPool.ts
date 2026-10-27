@@ -173,24 +173,27 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   /**
    * Roots whose server is live or still starting, dropping closed and
-   * never-started ones. The prune removes exactly the roots this scan saw
-   * closed: writing the snapshot back would erase a root another fiber leased
-   * while the scan yielded, whose run would then never own its server.
+   * never-started ones. The prune removes exactly the entries this scan saw
+   * closed, unchanged since: a root another fiber leased while the scan
+   * yielded holds a new entry, and erasing it would lose that lease and owner.
    */
   const liveEntries = Effect.gen(function* () {
     const live = new Map<string, RootEntry>();
-    const closedRoots = new Set<string>();
+    const closed = new Map<string, RootEntry>();
     for (const [root, entry] of yield* Ref.get(entries)) {
       const gone = entry.server
         ? yield* Deferred.isDone(entry.server.closed)
         : entry.leases === 0;
-      if (gone) closedRoots.add(root);
+      if (gone) closed.set(root, entry);
       else live.set(root, entry);
     }
-    if (closedRoots.size > 0) {
+    if (closed.size > 0) {
       yield* Ref.update(
         entries,
-        (map) => new Map([...map].filter(([root]) => !closedRoots.has(root))),
+        (map) =>
+          new Map(
+            [...map].filter(([root, entry]) => closed.get(root) !== entry),
+          ),
       );
     }
     return live;
@@ -603,12 +606,18 @@ const resolveWorkspaceRoot = Effect.fn('LeanServerPool.resolveWorkspaceRoot')(
     let dir = path.dirname(path.resolve(filePath));
     const root = path.parse(dir).root;
     for (;;) {
-      if (
-        (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
-        (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
-      ) {
+      // Both lakefiles are probed at once; the answer is read as the
+      // sequential `lean || toml` would, so a failed `.toml` probe counts
+      // only when there is no `lakefile.lean`.
+      const [lean, toml] = yield* Effect.all(
+        [
+          pathExists(fs, path.join(dir, 'lakefile.lean')),
+          pathExists(fs, path.join(dir, 'lakefile.toml')),
+        ],
+        { concurrency: 2, mode: 'result' },
+      );
+      if ((yield* Effect.fromResult(lean)) || (yield* Effect.fromResult(toml)))
         return dir;
-      }
       if (dir === root) return null;
       dir = path.dirname(dir);
     }

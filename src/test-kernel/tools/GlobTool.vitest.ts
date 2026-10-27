@@ -1,4 +1,4 @@
-import { mkdir, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, FileSystem, PlatformError } from 'effect';
@@ -22,7 +22,6 @@ import { GlobTool } from '@tools/glob';
 const globWithFailedStat = (
   targetPath: string,
   tag: PlatformError.SystemErrorTag,
-  description: string,
   input: { readonly pattern: string },
 ) =>
   Effect.gen(function* () {
@@ -32,7 +31,7 @@ const globWithFailedStat = (
       module: 'FileSystem',
       method: 'stat',
       pathOrDescriptor: targetPath,
-      description,
+      description: 'match is gone',
     });
     return yield* GlobTool.call(input).pipe(
       Effect.provideService(FileSystem.FileSystem, {
@@ -46,39 +45,28 @@ const globWithFailedStat = (
 function withGlobWorkspace(
   run: (workspacePath: string) => Effect.Effect<void, unknown, ToolServices>,
 ) {
-  return Effect.gen(function* () {
-    yield* withTempDirEffect('texra-glob-tool-', (workspacePath) =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => installPlatform({ workspacePath }));
-        try {
-          yield* Effect.promise(() =>
-            Promise.all(
-              [
-                'new.tex',
-                'old.tex',
-                'vanished.tex',
-                'blocked.tex',
-                'unreadable.tex',
-              ].map((name) => writeFile(path.join(workspacePath, name), name)),
-            ),
-          );
-          yield* Effect.promise(() =>
-            writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n'),
-          );
-          yield* Effect.promise(() =>
-            utimes(path.join(workspacePath, 'old.tex'), 1, 1),
-          );
-          yield* Effect.promise(() =>
-            utimes(path.join(workspacePath, 'new.tex'), 2, 2),
-          );
-          yield* run(workspacePath).pipe(Effect.provide(nativeToolTestLayer()));
-        } finally {
+  return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(async () => {
+        await installPlatform({ workspacePath });
+        await Promise.all(
+          ['vanished.tex', 'blocked.tex'].map((name) =>
+            writeFile(path.join(workspacePath, name), name),
+          ),
+        );
+        // An ignored `dist/` an external search must not be matched against.
+        await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
+      });
+      yield* run(workspacePath).pipe(Effect.provide(nativeToolTestLayer()));
+    }).pipe(
+      Effect.ensuring(
+        Effect.promise(() => {
           vi.restoreAllMocks();
-          yield* Effect.promise(() => installPlatform());
-        }
-      }),
-    );
-  });
+          return installPlatform();
+        }),
+      ),
+    ),
+  );
 }
 
 describe('GlobTool match metadata', () => {
@@ -94,7 +82,6 @@ describe('GlobTool match metadata', () => {
             const result = yield* globWithFailedStat(
               path.join(workspacePath, fileName),
               tag,
-              'match is gone',
               { pattern: fileName },
             );
 

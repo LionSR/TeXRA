@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
 import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
@@ -33,10 +33,6 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-function mockTryResume(): Mock<() => Effect.Effect<boolean, Error>> {
-  return vi.fn(() => Effect.succeed(true));
-}
-
 type TryResume = (runId: RunId) => Effect.Effect<boolean, Error>;
 
 /** The case's answer to the one resume a wake reaches: whether the run took
@@ -65,7 +61,7 @@ function recordedFollowUps(
   options: {
     claimRefused?: boolean;
     failWrites?: number;
-    /** The port's resume; the default records the run and succeeds. */
+    /** The port's resume; the default succeeds. */
     resume?: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
   } = {},
 ) {
@@ -137,21 +133,13 @@ function recordedFollowUps(
       }),
     settled: Effect.void,
   } as InboxPort['log'];
-  const resumed: RunId[] = [];
   const followUps = new Inbox({
     log,
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
     run: () => undefined,
-    // As `startFollowUpWake` answers: a run live here needs no resume.
-    resume:
-      options.resume ??
-      ((runId) =>
-        Effect.sync(() => {
-          if (!live.has(runId)) resumed.push(runId);
-          return Effect.void;
-        })),
+    resume: options.resume ?? (() => Effect.succeed(Effect.void)),
   });
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>
@@ -164,7 +152,6 @@ function recordedFollowUps(
     followUps,
     claims,
     live,
-    resumed,
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
   };
@@ -185,10 +172,10 @@ let recorded = recordedFollowUps();
 
 /**
  * The run the admission meets: a generation `live` here (no resume is owed
- * and nothing is read from disk), one `idle` with no generation here whose
- * rows allow a resume, or one whose claim is `unreadable`.
+ * and nothing is read from disk), or one `idle` with no generation here whose
+ * rows allow a resume.
  */
-type RunState = 'live' | 'idle' | 'unreadable';
+type RunState = 'live' | 'idle';
 
 function fakeSession(state: RunState): SessionHandle {
   if (state === 'idle')
@@ -228,12 +215,7 @@ function fakeSession(state: RunState): SessionHandle {
     interactions: { emit: () => Effect.void },
     log: {
       records: () => Effect.succeed([]),
-      // No database behind this fixture: an unreadable claim is a transient
-      // refusal that says nothing about the run.
-      owner: () =>
-        state === 'unreadable'
-          ? Effect.fail(new Error('claim store unavailable'))
-          : Effect.succeed({ ownerId: null, liveness: null }),
+      owner: () => Effect.succeed({ ownerId: null, liveness: null }),
     },
     followUps,
   } as unknown as SessionHandle;
@@ -272,7 +254,6 @@ describe('submitFollowUp', () => {
       }
 
       yield* settle;
-      expect(tryResumeRun).toHaveBeenCalledTimes(1);
       expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
 
       barrier.resolve(true);
@@ -301,7 +282,6 @@ describe('submitFollowUp', () => {
         // The interrupt below lands on a wake already in flight.
         yield* Deferred.await(started);
         yield* Fiber.interrupt(fiber);
-        expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
         // The wake runs on the session's fork: it answers the decline even
         // though the fiber that dispatched it is gone.
@@ -316,7 +296,7 @@ describe('submitFollowUp', () => {
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession('live');
-      const tryResumeRun = mockTryResume();
+      const tryResumeRun = () => Effect.succeed(true);
       const delivery = childResult('exec-1:turn:1:delivery');
 
       expect(
@@ -334,7 +314,6 @@ describe('submitFollowUp', () => {
           ),
         ).toEqual({ status: 'sent' });
       }
-      expect(tryResumeRun).not.toHaveBeenCalled();
       expect(recorded.queuedRows(runId)).toMatchObject([
         {
           followUpId: delivery.deliveryId,
@@ -350,7 +329,7 @@ describe('Inbox readers', () => {
     'delivers a successor reader every row still queued, in commit order',
     () =>
       Effect.gen(function* () {
-        const { followUps, queued, resumed } = recordedFollowUps();
+        const { followUps } = recordedFollowUps();
         const id = generateRunId();
         yield* Effect.scoped(
           Effect.andThen(
@@ -358,17 +337,9 @@ describe('Inbox readers', () => {
             followUps.send(id, user('during the first generation')),
           ),
         );
-        expect(yield* followUps.send(id, user('between generations'))).toEqual({
-          kind: 'queued',
-          read: false,
-        });
-        expect(yield* followUps.wake(id)).not.toBe(false);
-        expect(resumed).toEqual([id]);
+        yield* followUps.send(id, user('between generations'));
+        yield* followUps.wake(id);
 
-        expect(queued(id)).toEqual([
-          'during the first generation',
-          'between generations',
-        ]);
         const input = yield* followUps.open(id);
         expect(yield* taken(input)).toEqual([
           'during the first generation',

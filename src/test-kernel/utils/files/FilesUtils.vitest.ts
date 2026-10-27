@@ -64,7 +64,6 @@ describe('rootedFileSystem confinement', () => {
       const exit = yield* Effect.exit(
         operate(rootedFileSystem(root, fs, path)),
       );
-      expect(Exit.isFailure(exit)).toBe(true);
       expect(
         Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined,
       ).toMatchObject({ reason: { _tag: 'BadArgument' } });

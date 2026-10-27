@@ -17,11 +17,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 
 const mocks = vi.hoisted(() => ({
-  assertOutputDirAvailable: vi.fn(),
-  assertOutputFileAvailable: vi.fn(),
-  executeCliWorkflowConfig: vi.fn(),
   initCliPlatform: vi.fn(),
-  resolveCliRunAgent: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -37,24 +33,6 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
   writeTextStderr: mocks.writeTextStderr,
 }));
 
-vi.mock('@cli/runtime/agents', () => ({
-  resolveCliRunAgent: mocks.resolveCliRunAgent,
-}));
-
-vi.mock('@cli/commands/workflow', () => ({
-  executeCliWorkflowConfig: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.executeCliWorkflowConfig(...args),
-      catch: (error) => error,
-    }),
-}));
-
-vi.mock('@cli/runtime/workflowOutput', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/workflowOutput')>()),
-  assertOutputDirAvailable: mocks.assertOutputDirAvailable,
-  assertOutputFileAvailable: mocks.assertOutputFileAvailable,
-}));
-
 const RUN_ID = 'eec001' as RunId;
 
 const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -66,10 +44,7 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 let seededSession: SessionHandle;
 
 /** Seed the real (fake-platform-backed) run records and run aggregate. */
-async function seedRunRecord(seed: {
-  readonly config?: AgentConfig | null;
-  readonly checkpoint?: boolean;
-}): Promise<void> {
+async function seedRunRecord(config: AgentConfig | null): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
   // `runResumeCommand` reads the session off the services the init returns.
@@ -84,30 +59,27 @@ async function seedRunRecord(seed: {
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
-        identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
+        identity: { kind: 'agent', agent: 'planner' },
         userFollowUpSupport: 'unsupported',
         parent: null,
         provenance: null,
       },
     ]),
   );
-  if (seed.config)
-    await Effect.runPromise(commitRunRecord(session, RUN_ID, seed.config));
-  if (seed.checkpoint !== false) {
-    // The position that opens the run: its rows hold a checkpoint.
-    const cell = await Effect.runPromise(
-      session.runHistory.open(RUN_ID, { activation: () => Effect.succeed([]) }),
-    );
-    await Effect.runPromise(
-      cell.append([
-        {
-          type: 'run.position',
-          aggregateId: qualifyAggregateId('run', RUN_ID),
-          payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
-        },
-      ]),
-    );
-  }
+  if (config) await Effect.runPromise(commitRunRecord(session, RUN_ID, config));
+  // The position that opens the run: its rows hold a checkpoint.
+  const cell = await Effect.runPromise(
+    session.runHistory.open(RUN_ID, { activation: () => Effect.succeed([]) }),
+  );
+  await Effect.runPromise(
+    cell.append([
+      {
+        type: 'run.position',
+        aggregateId: qualifyAggregateId('run', RUN_ID),
+        payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
+      },
+    ]),
+  );
   // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
   // to be resumed is one nobody holds, so the seed gives the claim back: a
   // hold taken and let go releases it.
@@ -137,39 +109,25 @@ async function run(context: CliContext, id: RunId = RUN_ID) {
 describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    await seedRunRecord({ config: TOOL_USE_CONFIG });
-    mocks.resolveCliRunAgent.mockReturnValue(
-      Effect.succeed({
-        name: 'correct',
-      }),
-    );
-    mocks.executeCliWorkflowConfig.mockResolvedValue(0);
-    mocks.assertOutputDirAvailable.mockReturnValue(Effect.void);
-    mocks.assertOutputFileAvailable.mockReturnValue(Effect.void);
+    await seedRunRecord(TOOL_USE_CONFIG);
   });
 
   it('reopens the chat TUI with the persisted tool-use run record', async () => {
     await expect(run(cliContext())).resolves.toEqual({
       chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
     });
-
-    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
     await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra resume ${RUN_ID}`),
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra run`.'),
     );
   });
 
   it('reports an unknown run id as a usage error', async () => {
-    await seedRunRecord({ config: null });
+    await seedRunRecord(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
 

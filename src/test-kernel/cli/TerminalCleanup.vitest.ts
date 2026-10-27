@@ -15,15 +15,12 @@ import {
 import { Effect } from 'effect';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
-import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
+import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
 import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
-import { type RunPhase, type RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
-  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
@@ -38,31 +35,9 @@ const NO_TERMINAL_CAPABILITIES = {
   oscColorReports: false,
 };
 
-/** The fold's output the title reads: one root, every later run its
- *  child, and the session's pending requests. */
-const phases = new Map<RunId, RunPhase>();
-let requests: SessionView['requests'] = [];
-function syncView(): void {
-  const ids = [...phases.keys()];
-  const rootId = ids[0];
-  const runs = [...phases].map(([id, status], index) =>
-    makeRunView({
-      id,
-      status,
-      ...(index > 0 && rootId !== undefined
-        ? { parentId: rootId, ancestors: [{ id: rootId, label: rootId }] }
-        : {}),
-    }),
-  );
-  if (rootId !== undefined) rootRunId.set(rootId);
-  seedView(viewWith(runs, { requests }));
-}
+// The title reads the fold's output: here, no runs and no requests.
 beforeAll(bindTestSessionView);
-beforeEach(() => {
-  phases.clear();
-  requests = [];
-  syncView();
-});
+beforeEach(() => seedView(viewWith([])));
 afterEach(() => {
   resetCliState();
   vi.useRealTimers();
@@ -77,50 +52,39 @@ afterEach(() => {
 });
 
 describe('installTerminalTitleUpdates', () => {
-  const enableOscTitles = (): void => {
-    terminalCapabilities.set({
-      ...NO_TERMINAL_CAPABILITIES,
-      oscColorReports: true,
-    });
-  };
-  const flushTitleUpdate = async (): Promise<void> => {
-    await Promise.resolve();
-  };
-  const expectLastTitle = (title: string): void => {
-    expect(writeSync).toHaveBeenLastCalledWith(1, `\x1b]0;${title}\x07`);
-  };
   it('keeps sanitization and the OSC capability gate across live transitions', async () => {
     const updates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
     );
     const session = new TuiSession();
     session.markRunPending(Effect.never);
-    await flushTitleUpdate();
+    await Promise.resolve();
     updates.dispose();
     expect(writeSync).not.toHaveBeenCalled();
 
-    enableOscTitles();
+    terminalCapabilities.set({
+      ...NO_TERMINAL_CAPABILITIES,
+      oscColorReports: true,
+    });
     const capableUpdates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
     );
     session.clearRunState();
-    await flushTitleUpdate();
-    expectLastTitle('{T}·evil]0;pwned');
+    await Promise.resolve();
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
+      '\x1b]0;{T}·evil]0;pwned\x07',
+    );
     capableUpdates.dispose();
   });
 });
 
 describe('acquireTuiTerminal resume', () => {
-  const resumeWith = (kittyKeyboard: boolean): void => {
+  it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
     const title = { suspend: vi.fn(), resume: vi.fn(), dispose: vi.fn() };
-    const terminal = acquireTuiTerminal({ kittyKeyboard, title });
+    const terminal = acquireTuiTerminal({ kittyKeyboard: true, title });
     terminal.resume();
     terminal.release();
-    expect(title.resume).toHaveBeenCalledOnce();
-  };
-
-  it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-    resumeWith(true);
 
     expect(writeSync).toHaveBeenCalledWith(1, '\x1b[>1u\x1b[?2004h\x1b[?25l');
   });

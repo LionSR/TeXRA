@@ -108,13 +108,17 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   const fold = (
     payload: Parameters<typeof invocationAfter>[1],
   ): Effect.Effect<void> =>
-    Ref.get(held).pipe(
-      Effect.flatMap((invocation) => {
-        const next = invocationAfter(invocation, payload);
-        return typeof next === 'string'
-          ? Effect.die(new Error(`A ${call.purpose} call's attempt: ${next}`))
-          : Ref.set(held, next);
-      }),
+    Ref.modify(held, (invocation) => {
+      const next = invocationAfter(invocation, payload);
+      return typeof next === 'string' ? [next, invocation] : [null, next];
+    }).pipe(
+      Effect.flatMap((refused) =>
+        refused === null
+          ? Effect.void
+          : Effect.die(
+              new Error(`A ${call.purpose} call's attempt: ${refused}`),
+            ),
+      ),
     );
   const ended = yield* runInvocation<CallResult, Error, R | UsageLog>({
     read: Effect.map(Ref.get(held), (invocation) => ({

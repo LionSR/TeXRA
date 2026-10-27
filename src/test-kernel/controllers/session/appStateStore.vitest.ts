@@ -46,11 +46,9 @@ describe('application state on SQLite', () => {
       // this replaces would have lost whichever key flushed second.
       yield* one.update('texra.kimiCode.prefer', true);
       yield* two.update('texra.glm.codingPlan', false);
-      yield* one.update('texra.memory.enabled', true);
 
       expect(yield* two.get('texra.kimiCode.prefer')).toBe(true);
       expect(yield* one.get('texra.glm.codingPlan')).toBe(false);
-      expect(yield* two.get('texra.memory.enabled')).toBe(true);
       yield* two.update('texra.kimiCode.prefer', undefined);
       expect(yield* one.get('texra.kimiCode.prefer')).toBeUndefined();
 

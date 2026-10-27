@@ -13,7 +13,6 @@ import {
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
 import { type ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import type { ModelOptionData } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -29,14 +28,6 @@ import {
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
 
-import type { ModelOptionStores } from '@texra-ai/harness';
-
-const readModelOptions = vi.hoisted(() =>
-  vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
-    Effect.succeed(models.map((model) => ({ value: model, label: model }))),
-  ),
-);
-
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for
 // the Tools page.
@@ -50,17 +41,6 @@ vi.mock(
       Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),
   }),
 );
-
-vi.mock('@model/computeModelOptions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
-  readModelOptions,
-  // The mocked read resolves the rows this fixture wants; the pure finisher
-  // hands them back.
-}));
-// The availability read is stubbed to rows already.
-vi.mock('@texra/model/modelOptions', () => ({
-  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
-}));
 
 type DesktopSettingsIpcModule =
   typeof import('@desktop/main/desktopSettingsIpc');
@@ -173,7 +153,6 @@ describe('desktop settings IPC', () => {
   afterEach(() => {
     for (const scope of liveScopes.splice(0))
       testRuntime().runFork(Scope.close(scope, Exit.void));
-    vi.clearAllMocks();
   });
 
   it('writes the bash-approval toggle to the local config scope, not global or the project file', async () => {

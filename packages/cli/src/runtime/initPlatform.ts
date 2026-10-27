@@ -24,6 +24,7 @@ import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 // Local file imports
@@ -372,6 +373,7 @@ export function initCliPlatform(
               }),
               (session) => Effect.asVoid(sessions.close(session.roots)),
             ).pipe(
+              Effect.tap(recordFirstCompletedRun),
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {

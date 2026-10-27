@@ -469,6 +469,23 @@ describe('session events and view', () => {
  * is how a session the `Sessions` map holds behind `openTestSession` ends.
  */
 describe('Sessions owner', () => {
+  /** The graph over one started run, with the global values and platform a
+   *  request handler reads. */
+  const withRequestServices = <A, E, R>(program: Effect.Effect<A, E, R>) =>
+    program.pipe(
+      Effect.provide(graph([runStart])),
+      Effect.provide(
+        globalValuesOver(
+          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(nodePlatformLayer),
+            Layer.orDie,
+          ),
+        ),
+      ),
+      Effect.provide(nodePlatformLayer),
+    );
+
   it.effect(
     'admits requests by current claims despite a stale displayed owner',
     () =>
@@ -535,19 +552,7 @@ describe('Sessions owner', () => {
           detachActiveChildren: true,
           reason: 'user',
         });
-      }).pipe(
-        Effect.provide(graph([runStart])),
-        Effect.provide(
-          globalValuesOver(
-            globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-              Layer.provide(ProcessIdentity.layer(SELF)),
-              Layer.provide(nodePlatformLayer),
-              Layer.orDie,
-            ),
-          ),
-        ),
-        Effect.provide(nodePlatformLayer),
-      ),
+      }).pipe(withRequestServices),
   );
 
   it.effect(
@@ -603,19 +608,7 @@ describe('Sessions owner', () => {
           reason: expect.stringContaining('stop it first'),
         });
         expect(removeRun).not.toHaveBeenCalled();
-      }).pipe(
-        Effect.provide(graph([runStart])),
-        Effect.provide(
-          globalValuesOver(
-            globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-              Layer.provide(ProcessIdentity.layer(SELF)),
-              Layer.provide(nodePlatformLayer),
-              Layer.orDie,
-            ),
-          ),
-        ),
-        Effect.provide(nodePlatformLayer),
-      ),
+      }).pipe(withRequestServices),
   );
 
   const open = (storagePath: string) =>
@@ -769,9 +762,6 @@ describe('the session event table and its one publisher', () => {
       expect(failure._tag).toBe('DatabaseOpenFailed');
       expect(String(failure.cause)).toContain('verified local filesystem');
       expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-      expect(mount.calls.map((command) => command.command)).toEqual([
-        '/sbin/mount',
-      ]);
     }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 

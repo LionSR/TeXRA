@@ -13,32 +13,6 @@ import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oau
 /** The callback path ChatGPT's OAuth registration pins. */
 const CALLBACK_PATH = '/auth/callback';
 
-function testSession(): CodexSession {
-  return {
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    expiresAtMs: Date.now() + 60_000,
-  };
-}
-
-function loopbackRequest(port: number): SubscriptionAuthorizeRequest {
-  return {
-    url: 'https://auth.example.test/oauth/authorize',
-    verifier: 'verifier',
-    state: 'state',
-    redirectUri: `http://127.0.0.1:${port}${CALLBACK_PATH}`,
-  };
-}
-
-function coordinatorStub(
-  overrides: Record<string, unknown> = {},
-): SubscriptionOAuthCoordinator<CodexSession> {
-  return {
-    buildAuthorizeRequest: loopbackRequest,
-    ...overrides,
-  } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
-}
-
 /** The login program with the HTTP client a host provides. */
 const login = (options: Parameters<typeof loginWithLoopback>[0]) =>
   loginWithLoopback(options).pipe(Effect.provide(FetchHttpClient.layer));
@@ -53,10 +27,14 @@ describe('Codex loopback login', () => {
       Effect.gen(function* () {
         const state = 'expected-state';
         const verifier = 'verifier';
-        const expectedSession = testSession();
+        const expectedSession: CodexSession = {
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          expiresAtMs: Date.now() + 60_000,
+        };
         let request!: SubscriptionAuthorizeRequest;
         const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
-        const coordinator = coordinatorStub({
+        const coordinator = {
           buildAuthorizeRequest: (
             port: number,
           ): SubscriptionAuthorizeRequest => {
@@ -73,7 +51,7 @@ describe('Codex loopback login', () => {
             return request;
           },
           loginWithCode,
-        });
+        } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
 
         const session = yield* login({
           coordinator,

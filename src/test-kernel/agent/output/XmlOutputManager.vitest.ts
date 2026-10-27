@@ -49,29 +49,21 @@ function createXmlManager(
   );
 }
 
-/**
- * The real-filesystem calls these cases seed their run directory with. The
- * fake host roots every path in a real temp directory, so the cases that use
- * them run as `it.live`.
- */
-const fsEffect = {
-  write: (target: string, content: string) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      yield* fs.writeFileString(target, content);
-    }),
-};
+/** Seed the run directory: the fake host roots every path in a real temp
+ *  directory, so the cases run as `it.live`. */
+const write = (target: string, content: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.writeFileString(target, content);
+  });
 
 /** Write a response and unpack it through the extraction pipeline. */
 const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
-  output: string | readonly string[],
+  output: readonly string[],
   inputFiles: string[] = ['paper.tex'],
   options: XmlManagerOptions = {},
 ) {
-  yield* fsEffect.write(
-    fakePath('tmp/run/output.xml'),
-    typeof output === 'string' ? output : output.join('\n'),
-  );
+  yield* write(fakePath('tmp/run/output.xml'), output.join('\n'));
   return yield* createXmlManager(
     inputFiles,
     options,
@@ -84,13 +76,6 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   );
 });
 
-function expectSources(
-  outputs: readonly { source: string }[],
-  expected: readonly string[],
-): void {
-  expect(outputs.map((output) => output.source)).toEqual(expected);
-}
-
 const expectWritten = Effect.fn('expectWritten')(function* (
   path: string,
   content: string,
@@ -100,47 +85,16 @@ const expectWritten = Effect.fn('expectWritten')(function* (
   expect(written).toBe(content);
 });
 
-const expectAbsent = Effect.fn('expectAbsent')(function* (path: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const exists = yield* fs.exists(fakePath('tmp/run', path));
-  expect(exists).toBe(false);
-});
-
-const assertRecoveredDocuments = Effect.fn('assertRecoveredDocuments')(
-  function* (
-    outputs: readonly { source: string }[],
-    files: Record<string, string>,
-    absent: readonly string[] = [],
-  ) {
-    expectSources(outputs, Object.keys(files));
-    for (const [source, content] of Object.entries(files)) {
-      yield* expectWritten(source, content);
-    }
-    for (const path of absent) {
-      yield* expectAbsent(path);
-    }
-  },
-);
-
 /**
- * A recovery scenario against the default single `paper.tex` input: the raw
- * output lines, the files that must be written (keyed by run-relative path,
- * in expected source order), and any paths that must not be written.
+ * A recovery scenario: the raw output lines, the input files (the default
+ * single `paper.tex` when null), and the files that must be written, keyed
+ * by run-relative path in expected source order.
  */
 type RecoveryCase = [
   name: string,
   output: string[],
+  inputFiles: string[] | null,
   files: Record<string, string>,
-  absent?: string[],
-];
-
-/** Same as RecoveryCase but with explicit input files. */
-type LabeledRecoveryCase = [
-  name: string,
-  output: string[],
-  inputFiles: string[],
-  files: Record<string, string>,
-  absent?: string[],
 ];
 
 const RECOVERY_CASES: readonly RecoveryCase[] = [
@@ -153,6 +107,7 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
       '% sections/appendix.tex',
       'Appendix text.',
     ],
+    null,
     {
       'main.tex': '\\section{Recovered}\n',
       'sections/appendix.tex': 'Appendix text.\n',
@@ -170,6 +125,7 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
       '% appendix.tex',
       'Appendix text.',
     ],
+    null,
     {
       'main.tex': [
         '\\documentclass{article}',
@@ -192,15 +148,13 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
       '% chunk.tex',
       'Second duplicate.',
     ],
+    null,
     {
       'chunk.tex': 'First.\n',
       'chunk-2.tex': 'Explicit suffix.\n',
       'chunk-3.tex': 'Second duplicate.\n',
     },
   ],
-];
-
-const LABELED_RECOVERY_CASES: readonly LabeledRecoveryCase[] = [
   [
     'recovers documents from bare filename labels with no % prefix',
     [
@@ -257,32 +211,17 @@ describe('XmlOutputManager', () => {
     });
   });
 
-  for (const [name, output, files, absent = []] of RECOVERY_CASES) {
+  for (const [name, output, inputFiles, files] of RECOVERY_CASES) {
     it.live(name, () =>
       Effect.gen(function* () {
-        yield* assertRecoveredDocuments(
-          yield* writeAndSplitDocuments(output),
-          files,
-          absent,
+        const outputs = yield* writeAndSplitDocuments(
+          output,
+          inputFiles ?? undefined,
         );
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
-
-  for (const [
-    name,
-    output,
-    inputFiles,
-    files,
-    absent = [],
-  ] of LABELED_RECOVERY_CASES) {
-    it.live(name, () =>
-      Effect.gen(function* () {
-        yield* assertRecoveredDocuments(
-          yield* writeAndSplitDocuments(output, [...inputFiles]),
-          files,
-          absent,
-        );
+        expect(outputs.map((o) => o.source)).toEqual(Object.keys(files));
+        for (const [source, content] of Object.entries(files)) {
+          yield* expectWritten(source, content);
+        }
       }).pipe(Effect.provide(nodePlatformLayer)),
     );
   }
@@ -291,11 +230,11 @@ describe('XmlOutputManager', () => {
     'falls back to content-similarity matching for unlabeled fenced blocks against the original inputs',
     () =>
       Effect.gen(function* () {
-        yield* fsEffect.write(
+        yield* write(
           fakePath('tmp/run/appendices.tex'),
           '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
         );
-        yield* fsEffect.write(
+        yield* write(
           fakePath('tmp/run/cost_section.tex'),
           '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
         );
@@ -342,53 +281,45 @@ describe('XmlOutputManager', () => {
   // accepting several attached input files. The document tools then build
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
-  const singleArtifactOptions: XmlManagerOptions = {
-    outputFiles: ['ocr_result.tex'],
-    baseFiles: ['ocr_result.tex'],
-  };
-  const singleArtifactInputs = ['page1.png', 'page2.png'];
-
-  for (const [name, output] of [
-    [
-      'concatenates multiple unlabeled fences under the sole declared output',
-      [
-        'page1.png:',
-        '```latex',
-        'Page one transcription.',
-        '```',
-        '',
-        'page2.png:',
-        '```latex',
-        'Page two transcription.',
-        '```',
-      ],
-    ],
-  ] satisfies readonly (readonly [string, readonly string[]])[]) {
-    it.live(name, () =>
+  it.live(
+    'concatenates multiple unlabeled fences under the sole declared output',
+    () =>
       Effect.gen(function* () {
         const outputs = yield* writeAndSplitDocuments(
-          output,
-          singleArtifactInputs,
-          singleArtifactOptions,
+          [
+            'page1.png:',
+            '```latex',
+            'Page one transcription.',
+            '```',
+            '',
+            'page2.png:',
+            '```latex',
+            'Page two transcription.',
+            '```',
+          ],
+          ['page1.png', 'page2.png'],
+          { outputFiles: ['ocr_result.tex'], baseFiles: ['ocr_result.tex'] },
         );
 
-        expectSources(outputs, ['ocr_result.tex']);
+        expect(outputs.map((o) => o.source)).toEqual(['ocr_result.tex']);
         yield* expectWritten(
           'ocr_result.tex',
           'Page one transcription.\n\nPage two transcription.\n',
         );
-        yield* expectAbsent('ocr_result-2.tex');
+        const fs = yield* FileSystem.FileSystem;
+        expect(yield* fs.exists(fakePath('tmp/run/ocr_result-2.tex'))).toBe(
+          false,
+        );
       }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
+  );
 
   it.live(
     'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
     () =>
       Effect.gen(function* () {
         const stub = '\\section{Stub}\nShared template content.\n';
-        yield* fsEffect.write(fakePath('tmp/run/a.tex'), stub);
-        yield* fsEffect.write(fakePath('tmp/run/b.tex'), stub);
+        yield* write(fakePath('tmp/run/a.tex'), stub);
+        yield* write(fakePath('tmp/run/b.tex'), stub);
 
         const outputs = yield* writeAndSplitDocuments(
           [
