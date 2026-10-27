@@ -21,7 +21,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, SynchronizedRef } from 'effect';
 import which from 'which';
 
 import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness';
@@ -211,7 +211,9 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
 /**
  * Wrap a per-session cache around {@link resolveBinary}. The returned program
  * caches a resolved path for the process lifetime but always retries misses
- * (so a mid-session `npm install -g` is picked up).
+ * (so a mid-session `npm install -g` is picked up). Probes run one at a
+ * time, so callers racing on a miss share the first probe's answer instead of
+ * each spawning `npm prefix -g`.
  *
  * `buildConfig` returns the {@link ResolveBinaryConfig} for the current
  * platform, or `undefined` when the platform is unsupported — in which case the
@@ -224,18 +226,14 @@ export function createCachedBinaryResolver(
   Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
-  let cached: string | undefined;
+  const cached = SynchronizedRef.makeUnsafe<string | undefined>(undefined);
   return () =>
-    Effect.suspend(() => {
-      if (cached !== undefined) return Effect.succeed(cached);
+    SynchronizedRef.modifyEffect(cached, (found) => {
+      if (found) return Effect.succeed([found, found] as const);
       const config = buildConfig();
-      if (!config) return Effect.succeed(undefined);
+      if (!config) return Effect.succeed([undefined, undefined] as const);
       return resolveBinary(config).pipe(
-        Effect.tap((result) =>
-          Effect.sync(() => {
-            if (result) cached = result;
-          }),
-        ),
+        Effect.map((result) => [result, result] as const),
       );
     }).pipe(
       // The probe steps are plain synchronous calls (Node module resolution,

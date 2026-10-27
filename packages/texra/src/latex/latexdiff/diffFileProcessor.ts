@@ -74,13 +74,15 @@ export class DiffFileProcessor {
   ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      const content = yield* readNormalizedFile(
-        fs,
-        diffFileLocation.absolutePath,
+      const [content, editedContent] = yield* Effect.all(
+        [
+          readNormalizedFile(fs, diffFileLocation.absolutePath),
+          editedFileLocation
+            ? readNormalizedFile(fs, editedFileLocation.absolutePath)
+            : Effect.succeed(undefined),
+        ],
+        { concurrency: 2 },
       );
-      const editedContent = editedFileLocation
-        ? yield* readNormalizedFile(fs, editedFileLocation.absolutePath)
-        : undefined;
       let processedContent = this.restoreFlattenedBibliography(
         content,
         editedContent,

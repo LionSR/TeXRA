@@ -11,7 +11,7 @@ import {
   categories as arxivCategories,
   type Category,
 } from 'arxiv-client/dist/defines/categories.js';
-import { Clock, Duration, Effect, Schema, Semaphore } from 'effect';
+import { Clock, Duration, Effect, Schema, SynchronizedRef } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -65,15 +65,12 @@ const TIMEOUT_MS = 30_000;
  * own and no limit at all. One permit, so waiters take their slot in arrival
  * order, and an interrupted waiter gives its place back.
  */
-const arxivGate = Semaphore.makeUnsafe(1);
-let nextRequestAt = 0;
-const awaitArxivSlot = Semaphore.withPermit(arxivGate)(
+const nextRequestAt = SynchronizedRef.makeUnsafe(0);
+const awaitArxivSlot = SynchronizedRef.updateEffect(nextRequestAt, (at) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    if (now < nextRequestAt) {
-      yield* Effect.sleep(Duration.millis(nextRequestAt - now));
-    }
-    nextRequestAt = (yield* Clock.currentTimeMillis) + RATE_LIMIT_DELAY_MS;
+    if (now < at) yield* Effect.sleep(Duration.millis(at - now));
+    return (yield* Clock.currentTimeMillis) + RATE_LIMIT_DELAY_MS;
   }),
 );
 

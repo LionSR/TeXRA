@@ -241,7 +241,9 @@ export function sessionReads(
         readRunEnd: stored.readRunEnd,
         readResult: stored.readResult,
         readWorkspaceFiles: () =>
-          Effect.all([stored.readConfig(), stored.readWorkspaceFiles()]).pipe(
+          Effect.all([stored.readConfig(), stored.readWorkspaceFiles()], {
+            concurrency: 2,
+          }).pipe(
             Effect.flatMap(([config, paths]) =>
               listRunWorkspaceFiles(config, paths),
             ),

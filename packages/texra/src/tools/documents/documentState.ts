@@ -233,14 +233,16 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   }
   const prefix = (yield* renderPrompt(task.prefix, inputs)).trim();
   if (prefix) parts.push(prefix);
-  for (let earlier = 0; earlier < revision; earlier++) {
+  const replies = yield* Effect.forEach(
+    Array.from({ length: revision }, (_, earlier) => earlier),
+    (earlier) => fs.readFileString(replyLocation(docs, earlier).absolutePath),
+    { concurrency: 8 },
+  );
+  for (const [earlier, reply] of replies.entries()) {
     const request = (yield* renderPrompt(
       task.requests[earlier] ?? '',
       inputs,
     )).trim();
-    const reply = yield* fs.readFileString(
-      replyLocation(docs, earlier).absolutePath,
-    );
     parts.push(
       request,
       `<your_reply revision="${earlier + 1}">\n${reply.trim()}\n</your_reply>`,

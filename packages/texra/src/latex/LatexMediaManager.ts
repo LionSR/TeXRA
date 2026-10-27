@@ -407,6 +407,10 @@ export class LatexMediaManager {
     files: readonly FileLocation[],
   ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = this.roots.workspace;
+      // Each file's extraction, base directory and existence probes run
+      // together; the results come back in file order for the logs below.
       const figureResults = yield* Effect.forEach(
         files,
         (file) =>
@@ -422,7 +426,37 @@ export class LatexMediaManager {
                 return [];
               }),
             ),
-            Effect.map((figures) => ({ file, figures })),
+            Effect.flatMap((figures) =>
+              Effect.gen(function* () {
+                if (figures.length === 0)
+                  return { file, figures, baseDir: '', probed: [] };
+                // Match the resolution in extractFigurePathsFromLatex so the
+                // returned figure paths (relative to the real latexDir) map
+                // back to workspace files when the .tex is symlinked into run
+                // storage.
+                const baseDir = yield* resolveLatexDir(file.absolutePath);
+                // A figure that no longer exists cannot be compiled into the
+                // PDF or attached to vision context, so it must not enter
+                // media. The resolution above re-derives baseDir (unlike
+                // extractFigurePathsFromLatex, whose paths were checked
+                // against the original latexDir), so this filter is a real
+                // gate, not a re-check of already-known data.
+                const probed = yield* Effect.forEach(
+                  figures,
+                  (relativePath) => {
+                    const loc = pathToLocationIn(
+                      workspace,
+                      path.normalize(path.join(baseDir, relativePath)),
+                    );
+                    return fs
+                      .exists(loc.absolutePath)
+                      .pipe(Effect.map((exists) => ({ loc, exists })));
+                  },
+                  { concurrency: LATEX_CONCURRENCY },
+                );
+                return { file, figures, baseDir, probed };
+              }),
+            ),
           ),
         { concurrency: LATEX_CONCURRENCY },
       );
@@ -430,7 +464,7 @@ export class LatexMediaManager {
       const media: FileLocation[] = [];
       const mirrors: Effect.Effect<void, never, FileSystem.FileSystem>[] = [];
 
-      for (const { file, figures } of figureResults) {
+      for (const { file, figures, baseDir, probed } of figureResults) {
         if (figures.length === 0) {
           continue;
         }
@@ -439,32 +473,6 @@ export class LatexMediaManager {
           data: { count: figures.length, from: file.absolutePath },
         });
 
-        // Match the resolution in extractFigurePathsFromLatex so the returned
-        // figure paths (relative to the real latexDir) map back to workspace
-        // files when the .tex is symlinked into run storage.
-        const baseDir = yield* resolveLatexDir(file.absolutePath);
-        const fileLocations = figures.map((relativePath) =>
-          pathToLocationIn(
-            this.roots.workspace,
-            path.normalize(path.join(baseDir, relativePath)),
-          ),
-        );
-
-        // A figure that no longer exists cannot be compiled into the PDF or
-        // attached to vision context, so it must not enter media. The
-        // resolution above re-derives baseDir (unlike
-        // extractFigurePathsFromLatex, whose paths were checked against the
-        // original latexDir), so this filter is a real gate, not a re-check of
-        // already-known data.
-        const fs = yield* FileSystem.FileSystem;
-        const probed = yield* Effect.forEach(
-          fileLocations,
-          (loc) =>
-            fs
-              .exists(loc.absolutePath)
-              .pipe(Effect.map((exists) => ({ loc, exists }))),
-          { concurrency: LATEX_CONCURRENCY },
-        );
         const existingLocations: FileLocation[] = [];
         for (const { loc, exists } of probed) {
           if (!exists) {

@@ -63,14 +63,22 @@ export const failureContextFromLogs = Effect.fn('failureContextFromLogs')(
     logger: Pick<AgentTrace, 'warn'>,
   ): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
+    // The logs are read together, then taken in order: the first unreadable
+    // one is the one named.
+    const reads = yield* Effect.forEach(
+      failures,
+      (failure) =>
+        // A check that errored before writing a log records the output as it.
+        Effect.result(
+          failure.log.absolutePath === failure.output.absolutePath
+            ? Effect.fail(new Error('the check errored before writing a log'))
+            : fs.readFileString(failure.log.absolutePath),
+        ),
+      { concurrency: 8 },
+    );
     const excerpts: string[] = [];
-    for (const failure of failures) {
-      // A check that errored before writing a log records the output as it.
-      const read = yield* Effect.result(
-        failure.log.absolutePath === failure.output.absolutePath
-          ? Effect.fail(new Error('the check errored before writing a log'))
-          : fs.readFileString(failure.log.absolutePath),
-      );
+    for (const [i, failure] of failures.entries()) {
+      const read = reads[i];
       if (read._tag === 'Failure') {
         logger.warn(
           `Compile log ${failure.logRelativePath} could not be read, so the next round is not told why round ${failure.round + 1} was rejected: ${toErrorMessage(read.failure)}`,

@@ -2832,18 +2832,14 @@ class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
 ## seedDisabledToolDefaults
 
 Seed the disabled-tool list for first-time users only, on every host and
-in the agent package.
-
-Every plugin of `plugins` whose switch starts `off` is seeded as disabled
-on a fresh install. Callers pass
-the global state store they already hold. DISABLED_TOOLS is its own
-fresh-install signal, because this seed is the only thing that writes it
-before the user does: an absent value means neither the seed nor the user
-has ever set the list, and a present one (an empty list included) means the
-user's choices are already recorded, so re-seeding would silently disable
-tools they had enabled. A recorded id that names no plugin of `plugins` is
-kept: one composition's list is not every list that shares the store, and
-an id no plugin has switches nothing.
+in the agent package: every plugin of `plugins` whose switch starts `off`.
+DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
+before the user does, so an absent value means the list was never set, and
+a present one (an empty list included) holds the user's choices, which a
+re-seed would silently undo. The read and the seed are one `modify`, so a
+switch another process records between them is kept. A recorded id that
+names no plugin of `plugins` is kept: one composition's list is not every
+list that shares the store, and an id no plugin has switches nothing.
 
 ```ts
 const seedDisabledToolDefaults: (state: StateStore, plugins: readonly Plugin[]) => Effect<void, StateReadFailed | StateWriteFailed, never>
