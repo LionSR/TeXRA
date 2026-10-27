@@ -8,15 +8,15 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
 describe('listRunGeneratedFiles', () => {
-  // The run directory's own probe: a storage failure there is a fault, not
+  // The run directory's own read: a storage failure there is a fault, not
   // "this run produced nothing", so it reaches the caller's handler.
-  it.effect('propagates a storage failure from the run-directory probe', () =>
+  it.effect('propagates a storage failure from the run-directory read', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const failure = PlatformError.systemError({
         _tag: 'PermissionDenied',
         module: 'FileSystem',
-        method: 'access',
+        method: 'readDirectory',
         pathOrDescriptor: fakePath('storage'),
       });
 
@@ -28,7 +28,7 @@ describe('listRunGeneratedFiles', () => {
           ).pipe(
             Effect.provideService(FileSystem.FileSystem, {
               ...fs,
-              exists: () => Effect.fail(failure),
+              readDirectory: () => Effect.fail(failure),
             }),
           ),
         ),

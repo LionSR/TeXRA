@@ -54,10 +54,12 @@ export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
     PlatformError.PlatformError,
     FileSystem.FileSystem
   > {
-    const fs = yield* FileSystem.FileSystem;
-    const runDir = runDirUnder(storage, runId);
-    if (!(yield* fs.exists(runDir))) return [];
-    const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
+    // A missing run directory reads as empty in the walk itself.
+    const files = yield* walkRunStorage(
+      runDirUnder(storage, runId),
+      '',
+      RUN_FILE_SCAN_DEPTH,
+    );
     return files.sort((a, b) => a.path.localeCompare(b.path));
   },
 );

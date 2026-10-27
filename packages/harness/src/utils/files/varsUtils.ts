@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { ensureError } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
@@ -52,7 +52,7 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
   }
 
   const fs = yield* FileSystem.FileSystem;
-  const reads = yield* Effect.forEach(
+  const [readable, skipped] = yield* Effect.partition(
     files,
     (file) =>
       // Resolved inside the Effect: with no workspace root open a relative
@@ -64,21 +64,12 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
         catch: ensureError,
       }).pipe(
         Effect.flatMap((absolute) => readNormalizedFile(fs, absolute)),
-        Effect.map((content) => ({
-          document: { file, content },
-          skipped: null,
-        })),
-        Effect.orElseSucceed((err) => ({
-          document: null,
-          skipped: { file, reason: String(err) },
-        })),
+        Effect.map((content) => ({ file, content })),
+        Effect.mapError((err) => ({ file, reason: String(err) })),
       ),
     { concurrency: 'unbounded' },
   );
 
-  const readable = reads
-    .map((read) => read.document)
-    .filter(Predicate.isNotNull);
   return {
     xml:
       readable.length > 0
@@ -90,6 +81,6 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
             .join('\n')
         : null,
     readable,
-    skipped: reads.map((read) => read.skipped).filter(Predicate.isNotNull),
+    skipped,
   };
 });

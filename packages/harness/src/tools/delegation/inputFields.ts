@@ -208,16 +208,15 @@ const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
         .filter((file) => file.trim() !== '')
         .map((path) => ({ label, path })),
     );
-    const inspected = yield* Effect.forEach(
+    const [missing] = yield* Effect.filter(
       entries,
       (entry) =>
         absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
           Effect.flatMap((absolute) => entryExists(fs, absolute)),
-          Effect.map((exists) => ({ ...entry, exists })),
+          Effect.map((exists) => !exists),
         ),
       { concurrency: 'unbounded' },
     );
-    const missing = inspected.find((entry) => !entry.exists);
     if (missing) {
       return yield* Effect.fail(
         new Error(`${missing.label} not found: ${missing.path}`),

@@ -173,21 +173,21 @@ const deleteRuns =
         yield* Effect.logWarning(
           `The run listing holds a run.start on a non-run aggregate: ${strays.map((row) => row.aggregateId).join(', ')}`,
         ).pipe(withLogChannel(CHANNEL));
-      const deleted: RunId[] = [];
-      const active: RunId[] = [];
-      const failed: { runId: RunId; error: RequestError }[] = [];
-      for (const { runId, commit } of listed) {
-        const removal = yield* Effect.result(
-          handle.requests.removeRun(
-            runId,
-            target === 'all' ? 'bulk' : 'single',
-            commit,
-          ),
-        );
-        if (removal._tag === 'Success') deleted.push(runId);
-        else if (removal.failure._tag === 'NotOwner') active.push(runId);
-        else failed.push({ runId, error: removal.failure });
-      }
+      // One at a time, as before; each list keeps the listing's order.
+      const [deleted, refused] = yield* Effect.partition(
+        listed,
+        ({ runId, commit }) =>
+          handle.requests
+            .removeRun(runId, target === 'all' ? 'bulk' : 'single', commit)
+            .pipe(
+              Effect.as(runId),
+              Effect.mapError((error) => ({ runId, error })),
+            ),
+      );
+      const active = refused
+        .filter(({ error }) => error._tag === 'NotOwner')
+        .map(({ runId }) => runId);
+      const failed = refused.filter(({ error }) => error._tag !== 'NotOwner');
       return { listed: listed.length, deleted, active, failed };
     });
 

@@ -356,7 +356,7 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
     if (memoryPaths.length === 0) return { xml: null, misses: [] };
 
     const fs = yield* FileSystem.FileSystem;
-    const results = yield* Effect.forEach(
+    const [parts, misses] = yield* Effect.partition(
       memoryPaths,
       (displayPath) =>
         // `displayToStoragePath` rejects a path outside /memories, which is a
@@ -366,28 +366,21 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
           Effect.flatMap((storagePath) =>
             readNormalizedFile(fs, path.join(storageRoot, storagePath)),
           ),
+          // Only the user-visible content, without its frontmatter; an empty
+          // memory adds no part.
           Effect.map((raw) => {
-            // Strip frontmatter metadata — only inject the user-visible content
             const trimmed = parseFrontmatter(raw).content.trim();
-            return {
-              xml: trimmed
-                ? `<memory name="${displayPath}">\n${trimmed}\n</memory>`
-                : null,
-              miss: null,
-            };
+            return trimmed
+              ? [`<memory name="${displayPath}">\n${trimmed}\n</memory>`]
+              : [];
           }),
-          Effect.catch((error) =>
-            Effect.succeed({
-              xml: null,
-              miss: { path: displayPath, reason: toErrorMessage(error) },
-            }),
-          ),
+          Effect.mapError((error) => ({
+            path: displayPath,
+            reason: toErrorMessage(error),
+          })),
         ),
       { concurrency: 'unbounded' },
-    );
-
-    const parts = results.flatMap((result) => result.xml ?? []);
-    const misses = results.flatMap((result) => result.miss ?? []);
+    ).pipe(Effect.map(([found, missed]) => [found.flat(), missed] as const));
     return {
       xml:
         parts.length > 0

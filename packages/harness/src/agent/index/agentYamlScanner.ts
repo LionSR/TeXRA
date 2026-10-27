@@ -97,72 +97,52 @@ export function scanDirectory(
     // Each file with the root it was found under; a path two roots share
     // keeps the first.
     const rootOf = new Map<string, string>();
-    // The roots are listed concurrently, then merged in `dirs` order.
-    const listings = yield* Effect.forEach(
+    // The roots are listed concurrently; both sides keep `dirs` order.
+    const [listings, unlisted] = yield* Effect.partition(
       dirs,
       (root) =>
-        Effect.map(
-          Effect.result(
-            Effect.tryPromise({
-              try: () =>
-                glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
-              catch: (cause) =>
-                new AgentScanError({
-                  path: root,
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
+        Effect.tryPromise({
+          try: () =>
+            glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
+          catch: (cause) =>
+            new AgentScanError({
+              path: root,
+              message: toErrorMessage(cause),
+              cause,
             }),
-          ),
-          (listed) => ({ root, listed }),
-        ),
+        }).pipe(Effect.map((yamlPaths) => ({ root, yamlPaths }))),
       { concurrency: 8 },
     );
-    for (const { root, listed } of listings) {
-      if (Result.isFailure(listed)) {
-        const { message } = listed.failure;
-        yield* Effect.logError(`Failed to scan ${root}: ${message}`).pipe(
-          withLogChannel(CHANNEL),
-        );
-        issues.push({ path: root, message });
-        continue;
-      }
-      for (const yamlPath of listed.success) {
-        if (!rootOf.has(yamlPath)) rootOf.set(yamlPath, root);
-      }
+    for (const { path: root, message } of unlisted) {
+      yield* Effect.logError(`Failed to scan ${root}: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      issues.push({ path: root, message });
     }
-    const parsed: ParsedAgentYaml[] = [];
-    for (const result of yield* Effect.forEach(
+    for (const { root, yamlPaths } of listings)
+      for (const yamlPath of yamlPaths)
+        if (!rootOf.has(yamlPath)) rootOf.set(yamlPath, root);
+    const [parsed, unparsed] = yield* Effect.partition(
       // Code-unit order, which the default sort gave one directory's paths.
       [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
       ([yamlPath, root]) =>
-        Effect.result(
-          readYamlDefinition(yamlPath, root, fileSchema, [...blocks.keys()]),
-        ),
+        readYamlDefinition(yamlPath, root, fileSchema, [...blocks.keys()]),
       { concurrency: 8 },
-    )) {
-      if (Result.isSuccess(result)) parsed.push(result.success);
-      else {
-        issues.push({
-          path: result.failure.path,
-          message: result.failure.message,
-        });
-      }
-    }
-    const entries: AgentEntry[] = [];
-    for (const entry of yield* entriesWithUniqueNames(parsed, issues)) {
-      const scanned = yield* Effect.result(scanYaml(entry, source));
-      if (Result.isSuccess(scanned)) {
-        entries.push(scanned.success);
-        continue;
-      }
-      yield* Effect.logWarning(
-        `Failed to scan ${entry.path}: ${scanned.failure.message}`,
-      ).pipe(withLogChannel(CHANNEL));
-      issues.push({
-        path: path.relative(entry.root, entry.path),
-        message: scanned.failure.message,
-      });
+    );
+    for (const { path: file, message } of unparsed)
+      issues.push({ path: file, message });
+    const [entries, unscanned] = yield* Effect.partition(
+      yield* entriesWithUniqueNames(parsed, issues),
+      (entry) =>
+        scanYaml(entry, source).pipe(
+          Effect.mapError(({ message }) => ({ entry, message })),
+        ),
+    );
+    for (const { entry, message } of unscanned) {
+      yield* Effect.logWarning(`Failed to scan ${entry.path}: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      issues.push({ path: path.relative(entry.root, entry.path), message });
     }
 
     yield* Effect.logDebug(
