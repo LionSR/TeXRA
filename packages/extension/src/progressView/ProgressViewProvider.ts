@@ -336,9 +336,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session: runSession,
     });
     this.runtime.runSync(
-      Effect.forkIn(this.attention.follow(runSession), this.scope),
+      Effect.gen({ self: this }, function* () {
+        yield* Effect.forkIn(this.attention.follow(runSession), this.scope);
+        yield* Effect.forkIn(this.chimeOnDocuments(), this.scope);
+      }),
     );
-    this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
     const presentation = createAgentPresentationHost(
       this,
       globalState,
@@ -374,7 +376,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.own(hostRequests);
+    this.runtime.runSync(
+      Scope.addFinalizer(
+        this.scope,
+        Effect.sync(() => hostRequests.dispose()),
+      ),
+    );
     this.runValidated = hostRequests.runValidated;
 
     // Attached for the window's life, before the first run of this window
@@ -420,14 +427,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.runtime.runSync(
         this.editors
           .attach(roots.storage, editor)
-          .pipe(Scope.provide(this.scope)),
-      );
-      this.runtime.runSync(
-        attachSessionHost(
-          windowSession.session,
-          this.toolEditApprovals,
-          presentation,
-        ).pipe(Scope.provide(this.scope)),
+          .pipe(
+            Effect.andThen(
+              attachSessionHost(
+                windowSession.session,
+                this.toolEditApprovals,
+                presentation,
+              ),
+            ),
+            Scope.provide(this.scope),
+          ),
       );
     }
     const { service } = windowSession;
@@ -596,21 +605,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   // --- The host snapshot's producers ---
 
   private watchWorkspace(): void {
-    // Only a non-first workspace folder can be added or removed here: VS
-    // Code restarts the extension host for a first-folder change, so the
-    // storage root never moves under a live window (#11432).
-    this.own(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.runtime.runSync(
-          Effect.forkIn(
-            this.snapshot
-              .refreshWorkspaceRoots()
-              .pipe(Effect.andThen(this.snapshot.refreshFiles)),
-            this.scope,
-          ),
-        );
-      }),
-    );
     // Watch exactly the categories the launcher file lists are built from
     // (fileListingRules), including user-configured extension overrides, so
     // the watched set cannot drift from what the lists display.
@@ -635,42 +629,50 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
     );
     this.runtime.runSync(
-      Effect.forkIn(
-        filesChanged.pipe(
-          Stream.debounce('300 millis'),
-          Stream.runForEach(() => this.snapshot.refreshFiles),
-        ),
-        this.scope,
-      ),
-    );
-    // The catalog reloads itself on every change to its sources
-    // (`agentCatalogFollower`); this launcher repaints what it lists, at most
-    // once per 300ms burst of changes.
-    this.runtime.runSync(
-      Effect.forkIn(
-        appSignalStream('workspaceAgentsChanged').pipe(
-          Stream.debounce('300 millis'),
-          Stream.runForEach(() =>
-            this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
-              Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
-        this.scope,
-      ),
-    );
-  }
-
-  /** VS Code disposables as finalizers of the provider's scope. */
-  private own(...disposables: vscode.Disposable[]): void {
-    for (const disposable of disposables)
-      this.runtime.runSync(
-        Scope.addFinalizer(
+      Effect.gen({ self: this }, function* () {
+        // Only a non-first workspace folder can be added or removed here: VS
+        // Code restarts the extension host for a first-folder change, so the
+        // storage root never moves under a live window (#11432).
+        const foldersChanged = vscode.workspace.onDidChangeWorkspaceFolders(
+          () => {
+            this.runtime.runSync(
+              Effect.forkIn(
+                this.snapshot
+                  .refreshWorkspaceRoots()
+                  .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+                this.scope,
+              ),
+            );
+          },
+        );
+        yield* Scope.addFinalizer(
           this.scope,
-          Effect.sync(() => disposable.dispose()),
-        ),
-      );
+          Effect.sync(() => foldersChanged.dispose()),
+        );
+        yield* Effect.forkIn(
+          filesChanged.pipe(
+            Stream.debounce('300 millis'),
+            Stream.runForEach(() => this.snapshot.refreshFiles),
+          ),
+          this.scope,
+        );
+        // The catalog reloads itself on every change to its sources
+        // (`agentCatalogFollower`); this launcher repaints what it lists, at
+        // most once per 300ms burst of changes.
+        yield* Effect.forkIn(
+          appSignalStream('workspaceAgentsChanged').pipe(
+            Stream.debounce('300 millis'),
+            Stream.runForEach(() =>
+              this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
+                Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
+              ),
+            ),
+            withLogChannel(CHANNEL),
+          ),
+          this.scope,
+        );
+      }),
+    );
   }
 
   /** The agent, team, and model catalogs. */
