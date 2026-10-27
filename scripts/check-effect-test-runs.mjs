@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Effect-native test bodies — src/test-kernel/AGENTS.md, "Test fixtures and fakes": a test body
-// that executes an Effect program uses `it.effect` with `Effect.gen` +
+// Effect-native test bodies — src/test-kernel/AGENTS.md, "Test fixtures and
+// fakes": a test body that executes an Effect program uses `it.effect` with `Effect.gen` +
 // `yield*`, never `await Effect.runPromise(...)`. `Effect.runPromise` stays
 // legitimate in hooks (`beforeEach` and friends) and in non-test helpers, so
 // this gate counts only the sites whose innermost enclosing boundary is a
