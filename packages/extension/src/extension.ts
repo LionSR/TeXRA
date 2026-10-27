@@ -95,6 +95,7 @@ import {
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
@@ -507,6 +508,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       persistent: true,
       host: { interruptedTasks: 'offer' },
     });
+    yield* recordFirstCompletedRun(session);
     windowSession = { session };
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));

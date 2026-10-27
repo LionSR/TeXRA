@@ -133,13 +133,12 @@ const ResponsesControlsSchema = Schema.Struct({
   serviceTier: Schema.NullOr(Schema.Literal('fast')),
   promptCacheKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
 });
+// API version 2026-10-21 refuses sampling parameters on every model, and the
+// current models refuse a forced tool, so neither is representable here.
 const AnthropicControlsSchema = Schema.Struct({
   maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
-  temperature: Schema.NullOr(
-    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
-  ),
   parallelToolCalls: Schema.Boolean,
-  toolChoice: ToolChoiceSchema,
+  toolChoice: Schema.Literal('auto'),
   thinking: AnthropicThinkingSchema,
   effort: EffortSchema,
   cache: CacheSchema,
@@ -249,13 +248,11 @@ const ModelConfigurationSchema = Schema.Union([
   BindingSchema.mapFields(
     Struct.assign({
       protocol: Schema.Literal('anthropic-messages'),
-      supportsTemperature: Schema.Boolean,
-      supportsForcedToolChoice: Schema.Boolean,
       /** The model takes mid-conversation `role: "system"` messages. */
       supportsSystemMessages: Schema.Boolean,
       defaults: AnthropicControlsSchema.mapFields(Struct.omit(['toolChoice'])),
     }),
-  ).check(Schema.makeFilter(validateTemperatureDefault)),
+  ),
 ]);
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
 /** The configuration a binding was built with; a mismatch is a programming defect. */

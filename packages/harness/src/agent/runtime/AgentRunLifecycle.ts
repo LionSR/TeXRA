@@ -10,7 +10,6 @@ import { AgentError } from '@common/errors/agentErrors';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import { AppState } from '@platform/interfaces';
 import type {
   RetryErrorInfo,
   RunEndOutput,
@@ -18,14 +17,10 @@ import type {
   RunOutcome,
 } from '@shared/schemas';
 import {
-  agentName as baseAgentName,
   emptyRunEndOutput,
   RUN_OUTCOME,
   toRetryErrorInfo,
 } from '@shared/schemas';
-import { Settings, StateFlagSchema } from '@shared/config/settings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle } from './RunHandle';
 import { registryOf, type AgentRunServices, Runs } from './runRegistry';
@@ -240,7 +235,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   ctx: AgentLaunchContext,
   runner: (handle: RunHandle) => Effect.Effect<RunEndResult, Error, R>,
   options?: RunLifecycleOptions,
-): Effect.fn.Return<RunEndResult, Error, R | AppState | AgentRunServices> {
+): Effect.fn.Return<RunEndResult, Error, R | AgentRunServices> {
   const { runId, session } = ctx;
   const runs = registryOf(yield* Runs);
   const agentIdentifier = ctx.config.agent;
@@ -463,29 +458,6 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       return yield* terminal(yield* Effect.exit(restore(run)));
     }),
   );
-
-  // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
-  // real run completes. The setup conversation itself doesn't count, but the
-  // demo it delegates does (subagent runs land here too). Best-effort: a
-  // state write failure must never affect the run, whose terminal fact is
-  // already persisted.
-  if (
-    resolved.outcome === RUN_OUTCOME.COMPLETED &&
-    baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
-  ) {
-    const globalState = yield* AppState;
-    // Best-effort by contract: the flag is a funnel input, so a refused
-    // write is logged and the run still completes.
-    const firstRunDone = GlobalStateKey.ONBOARDING_FIRST_RUN_DONE;
-    yield* Settings.state(globalState, firstRunDone, StateFlagSchema).pipe(
-      Effect.flatMap((done) =>
-        done ? Effect.void : globalState.update(firstRunDone, true),
-      ),
-      Effect.catch((error) =>
-        logLifecycleWarning('Failed to record the first completed run', error),
-      ),
-    );
-  }
 
   yield* Effect.logDebug(
     `Task completed with outcome: ${resolved.outcome}`,

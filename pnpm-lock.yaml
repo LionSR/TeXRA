@@ -73,8 +73,8 @@ catalogs:
       specifier: ^3.1.1
       version: 3.1.1
     llm-zoo:
-      specifier: ^4.0.0
-      version: 4.0.0
+      specifier: ^4.2.0
+      version: 4.2.0
     lru-cache:
       specifier: ^11.5.3
       version: 11.5.3
@@ -224,7 +224,7 @@ importers:
         version: 6.42.1
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.2.0(effect@4.0.6)
       openai:
         specifier: 'catalog:'
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.6.5)
@@ -320,7 +320,7 @@ importers:
         version: 7.1.1(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.3.0)(react@19.3.1)
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: ^11.5.3
         version: 11.5.3
@@ -525,7 +525,7 @@ importers:
         version: 3.1.1
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -615,14 +615,14 @@ importers:
   packages/llm:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: 0.137.0
-        version: 0.137.0(zod@4.6.5)
+        specifier: 1.3.0
+        version: 1.3.0(zod@4.6.5)
       '@google/genai':
         specifier: 2.31.0
         version: 2.31.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.2.0(effect@4.0.6)
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -653,7 +653,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 'catalog:'
-        version: 0.3.309(@anthropic-ai/sdk@0.137.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.309(@anthropic-ai/sdk@1.3.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)
       '@awesome.me/webawesome':
         specifier: ^3.14.0
         version: 3.14.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.3.0)
@@ -716,7 +716,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: 'catalog:'
-        version: 4.0.0(effect@4.0.6)
+        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -858,8 +858,8 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.137.0':
-    resolution: {integrity: sha512-YpEnbPz8kWF1BWthwUCnRhci7OvDLSUO8NFKoevoPkjNkK9CJeibZITgxr9vhqOP8Le61e5tNDHFTxw1dc6Png==}
+  '@anthropic-ai/sdk@1.3.0':
+    resolution: {integrity: sha512-k7z9BlLLPxfZH+ov7dS6EnaN/wiZeV8YNT1LZfrpAHIy7oY7pHr4UzirF9f2OlHtFEnRBOX+AZQ91Y5fK+TPTw==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -4189,8 +4189,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@4.0.0:
-    resolution: {integrity: sha512-9JpNFzaPZMuF5ojRkrCnvHFuDIxcQo0oqsvurM8M9G6dDvbGdYf04TCc2S+GF3kVoPyBZ22+JrVB+7EiuVfyrQ==}
+  llm-zoo@4.2.0:
+    resolution: {integrity: sha512-oUuJArFAXmXuOXhd2jcAz9w9iOWpOj5ZIhE8+n6+7L6jUZ8uOBVOqkvArtxIspzwzupBjJuMRakUZPqtMpN+hg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.0.0
@@ -5673,9 +5673,9 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.309':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.309(@anthropic-ai/sdk@0.137.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.309(@anthropic-ai/sdk@1.3.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@anthropic-ai/sdk': 0.137.0(zod@4.6.5)
+      '@anthropic-ai/sdk': 1.3.0(zod@4.6.5)
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@10.2.2)(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
@@ -5688,7 +5688,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.309
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.309
 
-  '@anthropic-ai/sdk@0.137.0(zod@4.6.5)':
+  '@anthropic-ai/sdk@1.3.0(zod@4.6.5)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       json-schema-to-ts: 3.1.1
@@ -9044,7 +9044,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@4.0.0(effect@4.0.6):
+  llm-zoo@4.2.0(effect@4.0.6):
     optionalDependencies:
       effect: 4.0.6
 

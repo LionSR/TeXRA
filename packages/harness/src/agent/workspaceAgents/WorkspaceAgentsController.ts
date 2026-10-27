@@ -1,6 +1,6 @@
 import { Effect, Schema } from 'effect';
 
-import { planTeamRun } from '@common/teams/TeamPlan';
+import { planTeamRun, type TeamRunPlan } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import type {
   StateStore,
@@ -274,20 +274,20 @@ export class WorkspaceAgentsController<
    * Store the team `presetId` names and report how its members resolve now.
    * Only the team reference is stored and `preset.agents` re-resolves on read,
    * so a member missing today activates once it appears; `resolution` is
-   * evidence for the caller's message.
+   * evidence for the caller's message. A launch picks the team's root, so
+   * none is planned here.
    */
   applyTeam(presetId: string) {
     return Effect.gen({ self: this }, function* () {
       const preset = findTeamPreset(yield* this.allPresets(), presetId);
       if (!preset) return { status: 'unknown' as const };
       yield* this.setSelection({ kind: 'team', teamId: preset.id });
-      return {
-        status: 'applied' as const,
-        preset,
-        resolution: planTeamRun(preset, {
+      const resolution: Pick<TeamRunPlan, 'agentKeys' | 'missingAgents'> =
+        planTeamRun(preset, {
           resolveAgent: (identifier) => this.deps.resolveAgent(identifier),
-        }),
-      };
+          rootAgentNames: [],
+        });
+      return { status: 'applied' as const, preset, resolution };
     });
   }
 

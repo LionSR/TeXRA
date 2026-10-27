@@ -44,6 +44,7 @@ import {
   type OwnerId,
 } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@eventBus/AppSignals';
+import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { EditorHostShape } from '@texra/tools/editorHost';
@@ -178,6 +179,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
             persistent: true,
             host: { interruptedTasks: 'offer' },
           });
+          yield* recordFirstCompletedRun(session).pipe(
+            Scope.provide(projectScope),
+          );
           // A store moved aside at open (pre-1.0 or corrupt) is said once,
           // in the service's log and to the project's first window: the
           // windows open no store of their own to notice it.

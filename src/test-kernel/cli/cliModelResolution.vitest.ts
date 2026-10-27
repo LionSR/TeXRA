@@ -75,17 +75,17 @@ describe('selectCliRunModel precedence', () => {
     selectCliRunnableModelMock.mockReturnValueOnce(
       Effect.fail(
         new Error(
-          'Model "anthropic/claude-opus-4-8" is not available (missing key). Available models: deepseek/deepseek-v4-flash.',
+          'Model "anthropic/claude-opus-5-5" is not available (missing key). Available models: deepseek/deepseek-v4-flash.',
         ),
       ),
     );
 
     await expect(
-      runSelect(context, 'anthropic/claude-opus-4-8', 'run', stores),
+      runSelect(context, 'anthropic/claude-opus-5-5', 'run', stores),
     ).rejects.toThrow(CliUsageError);
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
-        { model: 'anthropic/claude-opus-4-8', reason: 'explicit-override' },
+        { model: 'anthropic/claude-opus-5-5', reason: 'explicit-override' },
       ]),
       { stores },
     );

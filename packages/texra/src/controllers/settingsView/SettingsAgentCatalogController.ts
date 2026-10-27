@@ -17,9 +17,9 @@ import {
 } from '@texra-ai/harness';
 import { planTeamRun } from '@texra-ai/harness';
 import { findTeamPreset, type TeamPreset } from '@texra-ai/harness';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra-ai/harness';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 import type { AgentModePreset } from '@texra-ai/harness/schemas';
 
 interface SettingsAgentCatalogEntry {
@@ -112,6 +112,7 @@ export class SettingsAgentCatalogController {
       return planTeamRun(preset, {
         resolveAgent: (identifier) =>
           this.deps.workspaceAgents.resolveAgent(identifier),
+        rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
       }).rootAgent?.name;
     });
   }

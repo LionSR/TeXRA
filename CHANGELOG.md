@@ -6,6 +6,26 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Claude requests use API version 2026-10-21 (`@anthropic-ai/sdk` 1.3.0).**
+  Requests to Anthropic no longer send a temperature: an agent's
+  `temperature` still applies to other providers, and Claude samples at its
+  default. TeXRA no longer forces Claude to call a run's final tool, because
+  Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 refuse a forced tool; the run
+  asks for it instead. The API key now goes out as
+  `Authorization: Bearer` instead of `X-Api-Key`: if your Anthropic endpoint
+  points at a gateway or proxy that reads only `X-Api-Key`, update the
+  gateway. For SDK users, `AnthropicMessagesConfiguration` loses
+  `supportsTemperature`, `supportsForcedToolChoice` and
+  `defaults.temperature`.
+- **Model names are `provider/id[@effort][+pro]` only (llm-zoo 4.1.0).** The
+  old short keys (`sonnet46T`, `gpt56`, `gpt4t`, …) are no longer read, by
+  `--model`, `TEXRA_MODEL` or a stored setting; use the model reference,
+  e.g. `anthropic/claude-sonnet-5-5@high`. A request can no longer ask for
+  thinking off with an effort level; `@none` turns thinking off. On Claude
+  Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5 and the other models that take
+  them, mid-run instructions go out as native system messages. OpenAI's o1,
+  o1-pro, o3-mini, o4-mini, GPT-4 Turbo and GPT-4.1 nano, shut down on
+  2026-10-23, show as retired.
 - **SDK: schemas are Effect Schema; Zod is gone.** `@texra-ai/harness` and
   `@texra-ai/llm` no longer depend on Zod. A plugin's tool input
   (`defineTool({ schema })`), agent block and plugin row take an Effect

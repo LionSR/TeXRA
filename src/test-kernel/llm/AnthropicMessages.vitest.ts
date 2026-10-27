@@ -16,12 +16,9 @@ const CONFIG: AnthropicMessagesConfiguration = {
     endpoint: 'https://synthetic.invalid',
     credentialScope: 'account-a',
   },
-  supportsTemperature: true,
-  supportsForcedToolChoice: true,
   supportsSystemMessages: false,
   defaults: {
     maxOutputTokens: 8192,
-    temperature: 1,
     parallelToolCalls: false,
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
@@ -255,10 +252,7 @@ describe('canonical Anthropic Messages protocol', () => {
         vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ambient-bearer');
         vi.stubEnv('ANTHROPIC_BASE_URL', 'https://ambient.invalid');
         const configured = model();
-        const prepared = yield* configured.prepareTurn({
-          ...REQUEST,
-          toolChoice: { name: 'search' },
-        });
+        const prepared = yield* configured.prepareTurn(REQUEST);
         assert(prepared.mode === 'foreground');
         expect(fetchModel).not.toHaveBeenCalled();
         const events = yield* Stream.runCollect(
@@ -347,8 +341,9 @@ describe('canonical Anthropic Messages protocol', () => {
         expect(String(fetchModel.mock.calls[0][0])).toBe(
           'https://synthetic.invalid/v1/messages',
         );
-        expect(headers.get('x-api-key')).toBe('selected-key');
-        expect(headers.has('authorization')).toBe(false);
+        expect(headers.get('authorization')).toBe('Bearer selected-key');
+        expect(headers.has('x-api-key')).toBe(false);
+        expect(first).not.toHaveProperty('temperature');
         expect(first).toMatchObject({
           model: 'selected-claude',
           system: [
@@ -359,13 +354,11 @@ describe('canonical Anthropic Messages protocol', () => {
             },
           ],
           stream: true,
-          temperature: 1,
           thinking: { type: 'adaptive', display: 'summarized' },
           output_config: { effort: 'high' },
           cache_control: { type: 'ephemeral', ttl: '5m' },
           tool_choice: {
-            type: 'tool',
-            name: 'search',
+            type: 'auto',
             disable_parallel_tool_use: true,
           },
         });

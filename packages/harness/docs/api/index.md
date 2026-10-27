@@ -554,15 +554,6 @@ names the cause, and the caller that owns the edit reports it through
 function buildDiffHunks(oldText: string, newText: string): DiffHunks
 ```
 
-## BUILTIN_TEAM_ROOT_AGENT_NAMES
-
-Bundled orchestrator roots that delegate to a team. They ship with every
-host and need no sign-in; UIs surface them first.
-
-```ts
-const BUILTIN_TEAM_ROOT_AGENT_NAMES: readonly ["orchestrator", "leanOrchestrator", "engineer"]
-```
-
 ## BUNDLED_AGENTS_DIRECTORY
 
 The one bundled agent directory under a host's packaged resources.
@@ -1309,16 +1300,6 @@ interface HostRequestFailure extends Error {
 }
 ```
 
-## implicitDefaultToolUseAgents
-
-The subset of `agents` eligible to be the implicit default.
-
-```ts
-function implicitDefaultToolUseAgents<
-  T extends { readonly name: string },
->(agents: readonly T[]): T[]
-```
-
 ## InstalledPlugin
 
 ```ts
@@ -1364,14 +1345,6 @@ Check if an error represents a file-not-found condition.
 
 ```ts
 function isFileNotFoundError(err: unknown): boolean
-```
-
-## isImplicitDefaultEligible
-
-Whether `agent` may be chosen as the implicit default agent.
-
-```ts
-function isImplicitDefaultEligible(agent: string): boolean
 ```
 
 ## isModuleNotFoundError
@@ -1552,10 +1525,11 @@ const listRunGeneratedFiles: (runId: string & Brand<"RunId">, storage: string) =
 ## loadTeamOptions
 
 ```ts
-function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
-  customPresetsRaw: unknown;
-  resolveAgent: TeamAgentResolver<T>;
-}): TeamOptionData[]
+function loadTeamOptions<T extends TeamCatalogAgent>(
+  ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
+    customPresetsRaw: unknown;
+  },
+): TeamOptionData[]
 ```
 
 ## LocalSession
@@ -2116,15 +2090,6 @@ interface PluginUpdate {
 }
 ```
 
-## PREFERRED_TOOL_USE_AGENTS
-
-Preferred agents for dropdown fallback and sorting.
-Orchestrators come first, then general and task-flavored fallbacks.
-
-```ts
-const PREFERRED_TOOL_USE_AGENTS: readonly ["orchestrator", "leanOrchestrator", "engineer", "assistant", "research", "review"]
-```
-
 ## PresentationEventHandlers
 
 One handler per {@link RuntimePresentationEventPayloads} key, each typed to
@@ -2448,11 +2413,12 @@ type RequestRefusal = Cancelled | Unavailable | Rejected;
 ## resolveTeamLaunch
 
 ```ts
-function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
-  teamId: string;
-  customPresetsRaw: unknown;
-  resolveAgent: TeamAgentResolver<T>;
-}): TeamLaunchResolution
+function resolveTeamLaunch<T extends TeamCatalogAgent>(
+  args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
+    teamId: string;
+    customPresetsRaw: unknown;
+  },
+): TeamLaunchResolution
 ```
 
 ## ResumeInput
@@ -3134,14 +3100,6 @@ interface SettingsStores {
 }
 ```
 
-## SETUP_AGENT_NAME
-
-Bundled agent that runs the agent-led setup conversation.
-
-```ts
-const SETUP_AGENT_NAME: "setup"
-```
-
 ## SkillIssueCode
 
 ```ts
@@ -3511,6 +3469,13 @@ function teamPresets(customRaw: unknown): TeamPreset[]
 ```ts
 interface TeamRunOptions<T extends TeamCatalogAgent> {
   readonly resolveAgent: TeamAgentResolver<T>;
+  /**
+   * The agents a built-in team runs as its root, in preference order: the
+   * first one among the team's delegating members leads it, and a built-in
+   * team with none of them has no root. A custom team is led by its first
+   * delegating member. The app owns these names.
+   */
+  readonly rootAgentNames: readonly string[];
   readonly agentOverride?: string;
 }
 ```

@@ -206,7 +206,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-5-5',
       instruction: 'review the draft',
       agent: 'review',
     }),
@@ -240,7 +240,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-5-5',
       instruction: 'search',
     }),
   });
@@ -374,7 +374,7 @@ export function buildScenario({ proposal = false } = {}) {
           runId: ROOT,
           task: true,
           agent: 'review',
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-5-5',
           instruction: 'Review the draft.',
           memories: [],
           inputFiles: ['draft.tex'],
