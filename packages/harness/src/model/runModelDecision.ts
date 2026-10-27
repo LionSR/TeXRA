@@ -9,10 +9,9 @@ const RUN_MODEL_PRECEDENCE = {
   'user-config': 5,
   history: 6,
   'parent-run': 7,
-  'router-config': 8,
-  credential: 9,
-  'builtin-default': 10,
-  'access-list-default': 11,
+  credential: 8,
+  'builtin-default': 9,
+  'access-list-default': 10,
 } as const;
 
 export type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE;

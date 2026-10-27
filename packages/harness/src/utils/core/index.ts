@@ -137,10 +137,10 @@ export function generateRunId(): RunId {
 
 /**
  * Generate a short unique ID for non-schema-constrained uses (temp
- * filenames, log entry IDs). Defaults to nanoid's standard 21-char
- * URL-safe alphabet; pass `size` for a shorter ID. A run id, which its
- * schema constrains to lowercase hex, is `generateRunId`'s.
+ * filenames, log entry IDs): nanoid's standard 21-char URL-safe alphabet.
+ * A run id, which its schema constrains to lowercase hex, is
+ * `generateRunId`'s.
  */
-export function generateShortId(size?: number): string {
-  return nanoid(size);
+export function generateShortId(): string {
+  return nanoid();
 }

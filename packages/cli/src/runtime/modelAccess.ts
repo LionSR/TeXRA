@@ -60,7 +60,6 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'user-config': 'notice',
   history: 'notice',
   'parent-run': 'notice',
-  'router-config': 'reject',
   credential: 'reject',
   'builtin-default': 'silent',
   'access-list-default': 'silent',
