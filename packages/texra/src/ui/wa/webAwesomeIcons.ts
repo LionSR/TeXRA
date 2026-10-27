@@ -76,7 +76,6 @@ import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyin
 import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlassChart';
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
-import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
@@ -211,7 +210,6 @@ const icons = {
   'magnifying-glass-chart': faMagnifyingGlassChart,
   microphone: faMicrophone,
   minus: faMinus,
-  'note-sticky': faNoteSticky,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   play: faPlay,

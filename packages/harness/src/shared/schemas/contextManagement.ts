@@ -17,7 +17,6 @@ const ContextManagementDataBaseSchema = Schema.Struct({
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   details: Schema.optional(Schema.String),
-  summary: Schema.optional(Schema.String),
 });
 
 const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.mapFields(

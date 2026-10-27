@@ -126,7 +126,6 @@ export type {
   ModelAvailabilityKind,
   ModelBackend,
   NormalizedToolUse,
-  OfferedTool,
   OwnerId,
   OwnerLiveness,
   PermissionPayload,
@@ -158,7 +157,6 @@ export type {
   ToolFact,
   ToolUseLog,
   UsageRoute,
-  UserFollowUpSupport,
   WorkspaceFileLocation,
 } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
@@ -203,7 +201,6 @@ export {
 export {
   Cancelled,
   formatHunkLines,
-  Internal,
   Invalid,
   NotOwner,
   OutcomeSchema,
@@ -211,7 +208,6 @@ export {
   RequestErrorSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
-  Unavailable,
   type RequestError,
   type RuntimeRequest,
   type ToolEditContent,
@@ -384,7 +380,6 @@ export {
   type TokenUsageStats,
   TOOL_CALL_STATUS,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  ToolCardSchema,
   ToolEditPermissionSchema,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,

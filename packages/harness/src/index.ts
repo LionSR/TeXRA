@@ -313,7 +313,7 @@ export {
 } from '@common/plugins/pluginManifest';
 export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
 export type { ConfiguredHook } from '@common/plugins/hookConfig';
-export type { InstalledPlugin, PluginTrust } from '@shared/schemas';
+export type { InstalledPlugin } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {

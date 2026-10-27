@@ -17,7 +17,6 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
-  apiKeySecretName,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -89,11 +88,7 @@ import {
   makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import {
-  fakeHostSecrets,
-  setupPlatform,
-  type FakeHost,
-} from '@test/support/setupPlatform';
+import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
@@ -109,7 +104,6 @@ const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
 const OUTER_RUN_ID = '0a95310a9531' as RunId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
-const WORKFLOW_CHILD_AGENT = 'workflow_child_9531';
 const PARENT_MODEL = 'openai/gpt-5.4-2026-03-05';
 const CHILD_MODEL = 'openai/gpt-5.5-2026-04-23';
 
@@ -302,10 +296,6 @@ async function integrationPlatform(): Promise<FakeHost> {
       path.join(agentsDir, `${CHILD_AGENT}.yaml`),
       agentYaml(CHILD_AGENT, ['grep']),
     ),
-    writeFile(
-      path.join(agentsDir, `${WORKFLOW_CHILD_AGENT}.yaml`),
-      workflowAgentYaml(WORKFLOW_CHILD_AGENT),
-    ),
   ]);
   return {
     ...host,
@@ -326,22 +316,6 @@ function agentYaml(name: string, tools: readonly string[] = []): string {
     `description: Integration fixture ${name}.`,
     `prompt: You are ${name}.`,
     ...(tools.length > 0 ? [`tools: [${tools.join(', ')}]`] : []),
-    '',
-  ].join('\n');
-}
-
-/** A one-round workflow agent: its round rewrites the input documents. */
-function workflowAgentYaml(name: string): string {
-  return [
-    `name: ${name}`,
-    `description: Integration fixture ${name}.`,
-    `prompt: You are ${name}.`,
-    'task:',
-    '  prefix: |',
-    '    <documents>',
-    '    {{ ALL_INPUTS }}',
-    '    </documents>',
-    "  requests: ['{{ INSTRUCTION }}']",
     '',
   ].join('\n');
 }
@@ -584,10 +558,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       return resume(runId, ...rest);
     });
     parentFiber = undefined;
-    // A document task's revisions delegate on a model a key makes available.
-    await Effect.runPromise(
-      fakeHostSecrets.set(apiKeySecretName('openai'), 'test-fake-key'),
-    );
   });
 
   afterEach(async () => {

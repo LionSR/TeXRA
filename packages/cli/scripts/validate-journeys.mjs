@@ -53,9 +53,8 @@ const fixtureRoot = path.join(
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 
 /**
- * The cheap models the journeys fund (the llm-zoo 1.x `gemini38f` and
- * `deepseek41T`, spelled as the selections they stand for), and the env var
- * each is served through.
+ * The cheap models the journeys fund, and the env var each is served
+ * through.
  */
 const MODEL_KEYS = {
   'google/gemini-3.8-flash@medium': 'GOOGLE_API_KEY',

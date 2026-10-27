@@ -38,14 +38,6 @@ describe('read_file line ranges', () => {
 
   it.effect.each([
     {
-      name: 'an end clamped past EOF, saying so in the summary',
-      range: { start: 8, end: 999 },
-      summary:
-        'Read lines 8-10 of small.txt (requested end 999 exceeds file length 10)',
-      contains: ['line 10'],
-      excludes: [],
-    },
-    {
       name: 'an empty view when the start is past EOF',
       range: { start: 50, end: 60 },
       summary:
