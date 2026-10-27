@@ -21,7 +21,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Semaphore } from 'effect';
 import which from 'which';
 
 import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness';
@@ -211,7 +211,9 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
 /**
  * Wrap a per-session cache around {@link resolveBinary}. The returned program
  * caches a resolved path for the process lifetime but always retries misses
- * (so a mid-session `npm install -g` is picked up).
+ * (so a mid-session `npm install -g` is picked up). Probes run one at a
+ * time, so callers racing on a miss share the first probe's answer instead of
+ * each spawning `npm prefix -g`.
  *
  * `buildConfig` returns the {@link ResolveBinaryConfig} for the current
  * platform, or `undefined` when the platform is unsupported — in which case the
@@ -225,18 +227,23 @@ export function createCachedBinaryResolver(
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   let cached: string | undefined;
+  const probeLane = Semaphore.makeUnsafe(1);
   return () =>
     Effect.suspend(() => {
       if (cached !== undefined) return Effect.succeed(cached);
       const config = buildConfig();
       if (!config) return Effect.succeed(undefined);
-      return resolveBinary(config).pipe(
-        Effect.tap((result) =>
-          Effect.sync(() => {
-            if (result) cached = result;
-          }),
-        ),
-      );
+      return Effect.suspend(() =>
+        cached !== undefined
+          ? Effect.succeed(cached)
+          : resolveBinary(config).pipe(
+              Effect.tap((result) =>
+                Effect.sync(() => {
+                  if (result) cached = result;
+                }),
+              ),
+            ),
+      ).pipe(probeLane.withPermits(1));
     }).pipe(
       // The probe steps are plain synchronous calls (Node module resolution,
       // the PATH extension, `which.sync`); one that throws is a
