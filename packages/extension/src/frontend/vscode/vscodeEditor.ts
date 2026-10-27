@@ -15,7 +15,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
  * back. The three are separate answers because only the first says anything
  * about the file itself, and only the last leaves content unsaved.
  */
-export class EditorOpenFailed extends Schema.TaggedError<EditorOpenFailed>()(
+class EditorOpenFailed extends Schema.TaggedError<EditorOpenFailed>()(
   'EditorOpenFailed',
   {
     reason: Schema.Literals([

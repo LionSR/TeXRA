@@ -23,7 +23,7 @@ class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>(
   },
 ) {}
 
-export interface DesktopLogIpcOptions {
+interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;
   copyLog(text: string): void;
   showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;

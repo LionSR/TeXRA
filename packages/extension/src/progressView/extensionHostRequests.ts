@@ -186,25 +186,20 @@ interface ExtensionHostRequests {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
-const logCommandFailure =
-  (command: string) =>
-  <A, E, R>(self: Effect.Effect<A, E, R>) => {
-    const log = (failure: unknown) =>
-      Effect.logError(
-        `Command ${command} failed: ${toErrorMessage(failure)}`,
-      ).pipe(withLogChannel(CHANNEL));
-    return self.pipe(Effect.tapError(log), Effect.tapDefect(log));
-  };
-
 /** One of this extension's own command handlers, or a VS Code command, run
  *  in the arm's fiber: a typed failure or a defect is named and logged. */
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+  const log = (failure: unknown) =>
+    Effect.logError(
+      `Command ${command} failed: ${toErrorMessage(failure)}`,
+    ).pipe(withLogChannel(CHANNEL));
   return handler.pipe(
     Effect.mapError((cause) => hostFailure(command, cause)),
-    logCommandFailure(command),
+    Effect.tapError(log),
+    Effect.tapDefect(log),
   );
 }
 

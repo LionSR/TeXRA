@@ -54,10 +54,7 @@ import {
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
-import type {
-  DownMessage,
-  SurfaceActionMessage,
-} from '@texra/shared/session/sessionFrames';
+import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
@@ -114,7 +111,7 @@ type ProgressRunRevealResult = 'revealed' | 'missing';
  * attaching to a bridge that has closed. Tagged because these reach the
  * request channel, whose failures are tags without exception.
  */
-export class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
+class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
   'SurfacePlacementFailed',
   {
     member: Schema.String,
@@ -138,9 +135,9 @@ export type WindowSession =
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
 
-  public readonly bridge: SessionBridge;
-  public readonly snapshot: HostSnapshotSource;
-  public readonly toolEditApprovals: ToolEditApprovalController;
+  private readonly bridge: SessionBridge;
+  private readonly snapshot: HostSnapshotSource;
+  private readonly toolEditApprovals: ToolEditApprovalController;
 
   /** Everything the provider holds ends when {@link dispose} closes this,
    *  last-in first-out: the ports, attached later, close before the host. */
@@ -176,7 +173,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     isViewVisible: () => this.isViewVisible(),
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
-      this.surfaceAction({ kind: 'showSessions', runId }),
+      this.bridge.surfaceAction({ kind: 'showSessions', runId }),
   });
 
   /**
@@ -232,7 +229,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             AgentCatalog,
           );
           const entry = catalog.get('setup');
-          this.surfaceAction({
+          this.bridge.surfaceAction({
             kind: 'launch',
             patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
           });
@@ -370,7 +367,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       snapshot: this.snapshot,
       draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
-      surfaceAction: (action) => this.surfaceAction(action),
+      surfaceAction: (action) => this.bridge.surfaceAction(action),
       presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
@@ -692,7 +689,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(
         Effect.sync(() => {
           const agent = options.selectedAgent;
-          if (agent) this.surfaceAction({ kind: 'launch', patch: { agent } });
+          if (agent)
+            this.bridge.surfaceAction({ kind: 'launch', patch: { agent } });
         }),
       ),
     );
@@ -821,11 +819,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.sidebarPort = undefined;
   }
 
-  /** The host acting on the surfaces' shared state (PRD 8.5). */
-  public surfaceAction(action: SurfaceActionMessage['action']): void {
-    this.bridge.surfaceAction(action);
-  }
-
   /**
    * The one rule for which surface a host action lands on: the one the user
    * is looking at, the editor tab first while it is the active panel, then a
@@ -906,7 +899,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public showLauncher() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
-      this.surfaceAction({ kind: 'selectNew' });
+      this.bridge.surfaceAction({ kind: 'selectNew' });
     });
   }
 
@@ -921,7 +914,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // state opens the newest session, one showing a session keeps it.
       const newest = this.runSession.view.current().order.at(0);
       if (newest !== undefined)
-        this.surfaceAction({ kind: 'showSessions', runId: newest });
+        this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
     });
   }
 
@@ -929,7 +922,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  `onAdmitted` hook): the launching surface selects it, and a
    *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
-    this.surfaceAction({ kind: 'select', runId });
+    this.bridge.surfaceAction({ kind: 'select', runId });
     this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
   }
 
@@ -940,7 +933,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
-      this.surfaceAction({ kind: 'select', runId });
+      this.bridge.surfaceAction({ kind: 'select', runId });
       return 'revealed' as const;
     });
   }

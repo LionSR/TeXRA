@@ -34,7 +34,7 @@ interface CommandPaletteEntry {
   readonly category?: string;
 }
 
-export interface CommandPaletteController {
+interface CommandPaletteController {
   element: HTMLElement;
   open(): void;
 }

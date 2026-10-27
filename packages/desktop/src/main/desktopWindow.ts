@@ -80,7 +80,7 @@ import type {
   DesktopProjectsState,
 } from './desktopProjects.js';
 
-export interface DesktopWindowOptions {
+interface DesktopWindowOptions {
   readonly projects: DesktopProjectRegistry;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;

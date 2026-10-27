@@ -126,9 +126,8 @@ function pickApiProvider(
 }
 
 /**
- * Set an API key. Migrated to the shared command registry in
- * #3781 batch 4. The registry forwards a single typed argument so the
- * optional `provider` is parsed at the dispatch boundary.
+ * Set an API key. The command registry forwards a single typed argument, so
+ * the optional `provider` is parsed at the dispatch boundary.
  */
 export function setApiKey(
   stores: SettingsStores,
@@ -160,10 +159,7 @@ export function setApiKey(
   });
 }
 
-/**
- * Remove an API key after a confirmation prompt. Migrated to the shared
- * command registry in #3781 batch 4.
- */
+/** Remove an API key after a confirmation prompt. */
 export function removeApiKey(stores: SettingsStores, secrets: PlatformSecrets) {
   return Effect.gen(function* () {
     const provider = yield* pickApiProvider(
