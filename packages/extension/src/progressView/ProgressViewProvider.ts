@@ -111,7 +111,7 @@ type ProgressRunRevealResult = 'revealed' | 'missing';
  * attaching to a bridge that has closed. Tagged because these reach the
  * request channel, whose failures are tags without exception.
  */
-export class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
+class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
   'SurfacePlacementFailed',
   {
     member: Schema.String,

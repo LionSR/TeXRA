@@ -76,7 +76,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
-  getInlineCommentProvider,
+  inlineCommentProvider,
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
@@ -175,7 +175,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // The Comments UI behind the `inline_comment` tool. The provider reads
           // the controller this host registers at activation, so it is a value
           // from module load; nothing about it waits on that registration.
-          inlineComments: getInlineCommentProvider(),
+          inlineComments: inlineCommentProvider,
           // Lean through the Lean 4 extension, not a direct `lake` pool.
           lean: Layer.effect(
             LeanLanguageServices,

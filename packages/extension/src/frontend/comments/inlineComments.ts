@@ -91,7 +91,8 @@ function toView(
   };
 }
 
-const provider: InlineCommentProvider = {
+/** The provider injected into the `inline_comment` tool. */
+export const inlineCommentProvider: InlineCommentProvider = {
   add: ({ absolutePath, line, endLine, body }) => {
     if (!controller) return null;
     const uri = vscode.Uri.file(absolutePath);
@@ -136,7 +137,8 @@ const provider: InlineCommentProvider = {
   },
 };
 
-function enable(context: vscode.ExtensionContext): void {
+/** Register the comment controller and reply/resolve commands at activation. */
+export function registerInlineComments(context: vscode.ExtensionContext): void {
   if (controller) return;
   controller = vscode.comments.createCommentController(
     CONTROLLER_ID,
@@ -164,6 +166,7 @@ function enable(context: vscode.ExtensionContext): void {
         setThreadResolved(thread, false);
       },
     ),
+    { dispose: disable },
   );
 }
 
@@ -172,15 +175,4 @@ function disable(): void {
   threads.clear();
   controller?.dispose();
   controller = undefined;
-}
-
-/** Register the comment controller and reply/resolve commands at activation. */
-export function registerInlineComments(context: vscode.ExtensionContext): void {
-  enable(context);
-  context.subscriptions.push({ dispose: disable });
-}
-
-/** The provider injected into the `inline_comment` tool. */
-export function getInlineCommentProvider(): InlineCommentProvider {
-  return provider;
 }
