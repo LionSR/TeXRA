@@ -89,9 +89,8 @@ interface LogViewerState {
 
 interface LogsPaneController {
   /**
-   * Root element, hosted by the Logs tab. Previously this lived inside a
-   * `wa-drawer`; logs are now a tab so they can stay open next to a running
-   * stream instead of covering it.
+   * Root element, hosted by the Logs tab, so the log can stay open next to a
+   * running stream instead of covering it.
    */
   readonly element: HTMLElement;
   applySnapshot(message: DesktopSetLogMessage): void;
