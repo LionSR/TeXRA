@@ -5,7 +5,7 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row.
 
-import { metaChordLabel } from '@cli/runtime/shortcutLabels';
+import { focusChordLabel } from '@cli/runtime/shortcutLabels';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';
@@ -51,7 +51,7 @@ function commandSections(commands: readonly SlashCommand[]): string[] {
 
 function keyboardSection(options: SlashCommandHelpOptions): string {
   const modifier = options.shortcutModifierLabel ?? 'Alt';
-  const focusChord = metaChordLabel(modifier, '1..9');
+  const focusChord = focusChordLabel(modifier);
   const newline =
     options.shiftEnterNewline === true
       ? '`Shift-Enter` or `Ctrl-J` insert a newline'

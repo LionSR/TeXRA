@@ -55,12 +55,9 @@ export function traceDisplayName(trace: TraceDocument): string {
  * frame is the only one it ever gets.
  */
 function traceHost(trace: TraceDocument): HostSnapshot {
-  const name = traceDisplayName(trace);
   return emptyHostSnapshot({
     key: trace.runId,
-    name,
-    initials: name.slice(0, 2).toUpperCase(),
-    subtitle: 'Exported trace',
+    name: traceDisplayName(trace),
   });
 }
 

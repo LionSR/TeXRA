@@ -207,7 +207,7 @@ function getConfig<T>(config: ConfigProvider, key: string): T {
   if (stored.kind === 'value') return stored.value as T;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
-  writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry.key, stored.cause));
+  writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   // cast: the row's schema produced its own default.
   return Schema.decodeUnknownSync(entry.schema)(undefined) as T;
 }

@@ -79,8 +79,9 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     ): DesktopSettingsIpcOptions['bindings'] => {
       const documentBinding = bindings.get(project.key);
       const { dialogs, previewHost } = host;
-      const postForActiveProject = (message: unknown) =>
-        surfaceScope === owner && host.post(message);
+      const postForActiveProject = (message: unknown): void => {
+        if (surfaceScope === owner) host.post(message);
+      };
       /** Open the agent definition at `filePath` as a document, or, when
        *  the catalog holds none there, run `otherwise`. */
       const openAgentDocument = <E, R>(

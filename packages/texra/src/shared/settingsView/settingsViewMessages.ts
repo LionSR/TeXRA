@@ -29,10 +29,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
-import {
-  ToolCategorySchema,
-  ToolDependencyStatusSchema,
-} from '@texra/shared/tools/toolPlugin';
+import { ToolDependencyStatusSchema } from '@texra/shared/tools/toolPlugin';
 import {
   createDispatcher,
   type HandlerRegistry,
@@ -320,7 +317,6 @@ export type ToolInstallAction = typeof ToolInstallActionSchema.Type;
 const ToolDashboardItemSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  category: ToolCategorySchema,
   description: Schema.String,
   tools: Schema.Array(ToolInfoSchema),
   status: ToolDependencyStatusSchema,
@@ -365,12 +361,11 @@ const PluginRowSchema = Schema.Union([
 ]);
 export type PluginRow = typeof PluginRowSchema.Type;
 
-/** Outbound: the Plugins page's rows, the MCP config file they read, and
- *  what that file's invalid entries raise. */
+/** Outbound: the Plugins page's rows and what the MCP config file's
+ *  invalid entries raise. */
 const UpdatePluginsMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
   rows: Schema.Array(PluginRowSchema),
-  mcpConfigPath: Schema.String,
   mcpWarnings: Schema.Array(Schema.String),
 });
 
@@ -572,7 +567,6 @@ const SetAllAgentsEnabledMessageSchema = Schema.Struct({
 });
 const OpenAgentFolderMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
-  folderType: Schema.Literal('custom'),
 });
 const CreateAgentMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),

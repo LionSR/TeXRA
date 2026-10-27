@@ -442,10 +442,8 @@ function formatDoctorText(
     .join('\n');
 }
 
-function doctorNdjsonRecords(
-  report: DoctorReport,
-  ts = new Date().toISOString(),
-): readonly CliNdjsonRecord[] {
+function doctorNdjsonRecords(report: DoctorReport): readonly CliNdjsonRecord[] {
+  const ts = new Date().toISOString();
   return [
     ...report.checks.map((check): CliNdjsonRecord => ({
       kind: 'doctor-check',

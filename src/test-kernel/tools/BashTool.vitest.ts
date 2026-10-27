@@ -31,7 +31,6 @@ import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
-import { recordSessionEvents } from '../agent/progressTestUtils';
 
 type ExecuteCommandOptions = NonNullable<
   Parameters<typeof execUtils.executeCommand>[1]
@@ -87,10 +86,7 @@ function holdCommand(): (result: ExecResult) => void {
 }
 
 /** Shared teardown for background-launch cases. */
-function detachBackgroundRun(
-  recorded: ReturnType<typeof recordSessionEvents>,
-  parentRunId: RunId,
-): void {
+function detachBackgroundRun(parentRunId: RunId): void {
   // A teardown that runs in `finally`, so the close runs on its own.
   Effect.runFork(testDefaultSession().followUps.closeInput(parentRunId));
 }
@@ -247,8 +243,6 @@ describe('BashTool', () => {
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
-        const recorded = recordSessionEvents(testDefaultSession());
-
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
           assert.equal(launchResult.status, 'executed');
@@ -267,7 +261,7 @@ describe('BashTool', () => {
           assert.equal(handleAtResumeTime, undefined);
           assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
         } finally {
-          detachBackgroundRun(recorded, parentRunId);
+          detachBackgroundRun(parentRunId);
         }
       }).pipe(
         Effect.provide(
@@ -289,7 +283,6 @@ describe('BashTool', () => {
         const resolveCommand = holdCommand();
         yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
         const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(testDefaultSession());
 
         const launchResult = yield* launchBackgroundBash(parentRunId);
         const { output, runId } = launchedIds(launchResult);
@@ -319,7 +312,7 @@ describe('BashTool', () => {
           }),
           Effect.timeout('1 second'),
         );
-        detachBackgroundRun(recorded, parentRunId);
+        detachBackgroundRun(parentRunId);
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

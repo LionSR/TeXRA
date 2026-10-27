@@ -142,11 +142,7 @@ class DocumentTaskRefused extends Schema.TaggedError<DocumentTaskRefused>()(
  */
 export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
   C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
->(
-  config: C,
-  stores: WorkspaceAgentsStores,
-  options: Partial<DocumentTaskOptions> = {},
-) {
+>(config: C, stores: WorkspaceAgentsStores) {
   const entry = yield* (yield* AgentCatalog)
     .forLaunch(stores, config.agent, config.agentSource)
     .pipe(
@@ -162,7 +158,8 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
       outputFiles: config.outputFiles ?? [],
     },
     entry,
-    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(options),
+    // The options' defaults: this launch names none.
+    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
   );
   if (patch === null)
     return yield* new DocumentTaskRefused({

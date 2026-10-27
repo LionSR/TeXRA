@@ -245,13 +245,10 @@ export function generateArrowRelationShortcuts(
  * Generate patterns for differential spacing
  * Examples: \dd x -> \dd x~, \int d\ -> \int \dd\
  */
-export function generateDifferentialSpacing(
-  variables: string[],
-  spaceChar: string = '~',
-): PatternDict {
+export function generateDifferentialSpacing(variables: string[]): PatternDict {
   return createPatterns(variables, (variable) => [
-    [` d\\${variable} `, ` d\\${variable}${spaceChar}`],
-    [`\\dd\\${variable}\\,`, `\\dd\\${variable}${spaceChar}`],
+    [` d\\${variable} `, ` d\\${variable}~`],
+    [`\\dd\\${variable}\\,`, `\\dd\\${variable}~`],
     [`{d\\${variable}}`, `{\\dd\\${variable}}`],
   ]);
 }

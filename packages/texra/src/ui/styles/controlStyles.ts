@@ -446,10 +446,6 @@ export const iconSurfaceStyles: CSSResult = css`
     font-size: var(--font-size-icon-sm);
   }
 
-  .icon-surface.is-size-s {
-    --icon-surface-size: var(--control-size-s);
-  }
-
   .icon-surface.is-size-m {
     --icon-surface-size: var(--control-size-m);
   }

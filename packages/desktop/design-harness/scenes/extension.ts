@@ -53,8 +53,6 @@ import {
 const PROJECT = {
   key: '/paper',
   name: 'LDT-Lean-Paper',
-  initials: 'LP',
-  subtitle: '~/papers/ldt-lean',
 };
 
 function host(): HostSnapshot {

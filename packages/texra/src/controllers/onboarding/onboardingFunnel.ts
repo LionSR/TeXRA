@@ -47,11 +47,11 @@ export function getFirstRunDone(state: StateStore) {
   );
 }
 
+/** Record that a real run completed or the user skipped setup. */
 export function setFirstRunDone(
   state: StateStore,
-  done: boolean,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
+  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
 }
 
 interface OnboardingFunnelInputs {

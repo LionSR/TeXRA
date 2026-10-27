@@ -31,9 +31,9 @@ type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 let logFilePath: string | undefined;
 let consoleInstalled = false;
 
-export function installDesktopAppLog(): string | undefined {
+export function installDesktopAppLog(): void {
   logFilePath = initializeDesktopLogFile();
-  if (logFilePath == null) return undefined;
+  if (logFilePath == null) return;
 
   rotateDesktopLogFile(logFilePath);
   // Core diagnostics reach the file as the structured entries they were
@@ -43,7 +43,6 @@ export function installDesktopAppLog(): string | undefined {
   setLogSink({ write: appendDesktopLogEntry });
   appendDesktopLogLine('info', '--- TeXRA desktop session started ---');
   installConsoleMirror();
-  return logFilePath;
 }
 
 export function getDesktopLogDirectory(): string {

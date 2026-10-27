@@ -42,9 +42,9 @@ export async function copyWithFeedback(
   button: HTMLElement,
   text: string,
   options: CopyFeedbackOptions = {},
-): Promise<boolean> {
+): Promise<void> {
   if (!text.trim()) {
-    return false;
+    return;
   }
 
   const defaultTitle =
@@ -67,7 +67,7 @@ export async function copyWithFeedback(
 
   const copied = await copyTextToClipboard(text);
   if (!copied) {
-    return false;
+    return;
   }
 
   setButtonState(successTitle, true);
@@ -80,6 +80,4 @@ export async function copyWithFeedback(
   button.dataset.copyResetTimeoutId = String(timeoutId);
   button.dataset.defaultTitle = defaultTitle;
   button.dataset.successTitle = successTitle;
-
-  return true;
 }

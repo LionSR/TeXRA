@@ -129,7 +129,6 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       .map(({ card, plugin }) => ({
         id: card.id,
         name: card.name,
-        category: card.category,
         description: card.description,
         tools: Object.keys(plugin.tools ?? {}).map((name) => ({ name })),
         status: 'available' as const,
@@ -165,7 +164,6 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       externalItems.push({
         id: card.id,
         name: card.name,
-        category: card.category,
         description: card.description,
         tools: tools.map((name) => ({ name })),
         status,

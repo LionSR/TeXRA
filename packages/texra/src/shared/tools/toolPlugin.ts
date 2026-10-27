@@ -1,7 +1,7 @@
 /**
- * A tool plugin's dashboard category and the availability of its external
- * dependency, as the plugin values (`@tools/plugins`), the availability
- * probes and every Tools dashboard read them.
+ * The availability of a tool plugin's external dependency, as the plugin
+ * values (`@tools/plugins`), the availability probes and every Tools
+ * dashboard read it.
  */
 import { Schema } from 'effect';
 
@@ -12,16 +12,3 @@ export const ToolDependencyStatusSchema = Schema.Literals([
   'unknown',
 ]);
 export type ToolDependencyStatus = typeof ToolDependencyStatusSchema.Type;
-
-export const ToolCategorySchema = Schema.Literals([
-  'file',
-  'latex',
-  'academic',
-  'web',
-  'computation',
-  'lean',
-  'workflow',
-  'system',
-  'ai-agents',
-]);
-export type ToolCategory = typeof ToolCategorySchema.Type;

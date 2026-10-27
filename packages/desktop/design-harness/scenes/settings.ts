@@ -14,7 +14,6 @@ const ROWS: PluginRow[] = [
     item: {
       id: 'lean4',
       name: 'Lean 4 Proof Assistant',
-      category: 'lean',
       description:
         'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files.',
       tools: [
@@ -34,7 +33,6 @@ const ROWS: PluginRow[] = [
     item: {
       id: 'zotero',
       name: 'Zotero Integration',
-      category: 'ai-agents',
       description:
         'Search, add items to, and export citations from your Zotero library.',
       tools: [
@@ -93,7 +91,6 @@ function settingsAt(tab: SettingsTarget): TemplateResult {
       {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
         rows: ROWS,
-        mcpConfigPath: '/Users/mara/.texra/mcp.json',
         mcpWarnings: [],
       },
       '*',

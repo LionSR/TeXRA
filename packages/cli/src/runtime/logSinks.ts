@@ -96,18 +96,18 @@ function writeRaw(key: StreamKey, text: string): void {
 // shutdown sequence's final flush, which runs after the process runtime has
 // been disposed — so it never needs that runtime. The stream's write callback
 // is the foreign edge, wrapped exactly once here.
-function writeRawAndWait(key: StreamKey, text: string): Effect.Effect<void> {
+function writeRawStderrAndWait(text: string): Effect.Effect<void> {
   return Effect.callback<void>((resume) => {
-    const stream = openStream(key);
+    const stream = openStream('stderr');
     if (!stream) return resume(Effect.void);
     bestEffortStreamWrite(
       () =>
         stream.write(text, (error) => {
-          if (error) closed[key] = true;
+          if (error) closed.stderr = true;
           resume(Effect.void);
         }),
       () => {
-        closed[key] = true;
+        closed.stderr = true;
         resume(Effect.void);
       },
     );
@@ -141,12 +141,12 @@ export function writeTextStderr(text: string): void {
 }
 
 export function writeTextStderrAndWait(text: string): Effect.Effect<void> {
-  return writeRawAndWait('stderr', `${text}\n`);
+  return writeRawStderrAndWait(`${text}\n`);
 }
 
 /** Wait until every stderr write queued before this call has completed. */
 export function flushTextStderr(): Effect.Effect<void> {
-  return writeRawAndWait('stderr', '');
+  return writeRawStderrAndWait('');
 }
 
 /**

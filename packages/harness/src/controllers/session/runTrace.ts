@@ -94,7 +94,6 @@ export function makeRunTrace({
     if (!reportedLateWrite) {
       reportedLateWrite = true;
       writeLogLine(
-        'WARN',
         'runTrace',
         `Session ${storage} is closed; a run still running published into it and nothing was written`,
       );

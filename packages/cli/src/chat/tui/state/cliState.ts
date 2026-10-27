@@ -446,9 +446,8 @@ export function bumpCodexPreferenceVersion(): void {
 
 const RESET_HOOKS = new Set<() => void>();
 
-export function registerCliStateResetHook(resetHook: () => void): () => void {
+export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
-  return () => RESET_HOOKS.delete(resetHook);
 }
 
 /** Submit-side state for the one active slash form. */

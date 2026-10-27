@@ -140,23 +140,20 @@ export class SettingsAgentCatalogController {
 
   deleteCustomPreset(presetId: string) {
     return Effect.gen({ self: this }, function* () {
-      const target = yield* this.getCustomPreset(presetId);
-      if (!target) return null;
+      if (!(yield* this.getCustomPreset(presetId))) return;
 
-      return yield* this.deps.workspaceAgents
-        .removeTeamPreset(presetId, () =>
-          this.deps.repoState
-            .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
-              Result.map(presetRecords(stored), (records) =>
-                records.filter(
-                  (record) =>
-                    !Predicate.isObject(record) || record.id !== presetId,
-                ),
+      yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
+        this.deps.repoState
+          .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
+            Result.map(presetRecords(stored), (records) =>
+              records.filter(
+                (record) =>
+                  !Predicate.isObject(record) || record.id !== presetId,
               ),
-            )
-            .pipe(Effect.asVoid),
-        )
-        .pipe(Effect.as(target));
+            ),
+          )
+          .pipe(Effect.asVoid),
+      );
     });
   }
 

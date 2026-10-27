@@ -210,7 +210,6 @@ export class JsonStore {
       // alike, so the report goes straight to the sink.
       if (this.version !== failed) {
         writeLogLine(
-          'WARN',
           'jsonStore',
           `${this.filePath} changed but could not be read; the settings read before stay in effect until it is fixed: ${ensureError(error).message}`,
         );

@@ -144,7 +144,6 @@ export const HostRequestSchema = Schema.Union([
     kind: Schema.Literal('savePastedImage'),
     fileName: Schema.String.check(Schema.isMinLength(1)),
     base64: Schema.String.check(Schema.isMinLength(1)),
-    mediaType: Schema.String.check(Schema.isMinLength(1)),
   }),
   /** The desktop editor pane's file I/O on the session's workspace: a
    *  directory's entries, a file's contents, or a write. */

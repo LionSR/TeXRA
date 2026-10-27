@@ -102,14 +102,10 @@ export interface SessionViewUpdater {
   ) => SessionView;
 }
 
-/** An updater over session `key`'s empty view at `cursor`, with transcript
- *  verbosity `debug`. */
-export function makeSessionViewUpdater(
-  key: string,
-  cursor = 0,
-  debug = false,
-): SessionViewUpdater {
-  let view = emptySessionView(key, cursor, debug);
+/** An updater over session `key`'s empty, quiet view; a `debug` input
+ *  changes its transcript verbosity. */
+export function makeSessionViewUpdater(key: string): SessionViewUpdater {
+  let view = emptySessionView(key);
   let state = emptySessionState();
   return {
     current: () => view,
@@ -120,7 +116,7 @@ export function makeSessionViewUpdater(
         if (each._tag === 'debug') {
           // A new verbosity rebuilds the view from the replay that follows.
           if (next.debug === each.enabled) continue;
-          next = emptySessionView(next.key, 0, each.enabled);
+          next = emptySessionView(next.key, each.enabled);
           state = emptySessionState();
           continue;
         }

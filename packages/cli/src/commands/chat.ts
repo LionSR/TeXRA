@@ -4,7 +4,7 @@ import { CliUsageError } from '../runtime/cliContext';
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {
   defaultShortcutModifierLabel,
-  metaChordLabel,
+  focusChordLabel,
 } from '../runtime/shortcutLabels';
 import {
   formatInteractiveTerminalFailure,
@@ -23,11 +23,8 @@ import {
 const shortcutModifierLabel = defaultShortcutModifierLabel();
 const alternateShortcutModifierLabel =
   shortcutModifierLabel === 'Esc' ? 'Alt' : 'Esc';
-const focusShortcut = metaChordLabel(shortcutModifierLabel, '1..9');
-const alternateFocusShortcut = metaChordLabel(
-  alternateShortcutModifierLabel,
-  '1..9',
-);
+const focusShortcut = focusChordLabel(shortcutModifierLabel);
+const alternateFocusShortcut = focusChordLabel(alternateShortcutModifierLabel);
 
 export const chatCommand = withUsageSections(
   defineCliCommand({

@@ -117,9 +117,7 @@ export class AgentsTab extends LitElement {
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
 
   private handleOpenFolder(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
-      folderType: 'custom',
-    });
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER);
   }
 
   private handleCreateAgent(task: boolean): void {

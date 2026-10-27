@@ -402,19 +402,15 @@ export function sessionActivity(view: ReadSessionView): SessionTitleState {
 
 /**
  * The empty view an updater starts from: keyed by its session, its cursor at
- * the layer's tail anchor, and its initial verbosity flag. A replay's
- * `debug` input replaces it when the verbosity changes.
+ * zero, and its verbosity flag. A replay's `debug` input replaces it when the
+ * verbosity changes.
  */
-export function emptySessionView(
-  key: string,
-  cursor = 0,
-  debug = false,
-): SessionView {
+export function emptySessionView(key: string, debug = false): SessionView {
   return {
     key,
     runs: new Map(),
     order: [],
-    cursor,
+    cursor: 0,
     debug,
     transcriptSeq: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },

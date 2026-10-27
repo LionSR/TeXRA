@@ -54,7 +54,7 @@ function heldUntilListening() {
 
 export function installElectronHostBridge(
   options: ElectronHostBridgeInstallOptions,
-): HostBridgeApi {
+): void {
   let state: unknown;
   const bridge: HostBridgeApi = {
     postMessage: (message) =>
@@ -78,5 +78,4 @@ export function installElectronHostBridge(
     onMessage: sessionPushes.listen,
   } satisfies SessionWireApi);
   options.onHostMessage(ELECTRON_SESSION_PUSH_CHANNEL, sessionPushes.push);
-  return bridge;
 }

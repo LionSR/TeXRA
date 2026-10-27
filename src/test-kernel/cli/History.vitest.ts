@@ -258,10 +258,9 @@ describe('CLI history runtime', () => {
       outcomes.map(
         ([id]) =>
           (
-            cliHistoryNdjsonRecords(
-              [byId(id)!],
-              '2026-05-18T09:00:00.000Z',
-            )[0] as { entry: { status: string } }
+            cliHistoryNdjsonRecords([byId(id)!])[0] as {
+              entry: { status: string };
+            }
           ).entry.status,
       ),
     ).toEqual(['interrupted', 'error', 'completed', 'resumable']);

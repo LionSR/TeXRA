@@ -325,7 +325,7 @@ or `session.request({ kind: 'request.decide', ... })`.
 
 A run that needs a person commits a `request.opened` row carrying what a
 surface shows (a diff, a command, a question) and waits. The row is answered
-by a `request.decided` row (`packages/harness/src/shared/schemas/sessionEvent.ts:381-396`).
+by a `request.decided` row (`packages/harness/src/shared/schemas/sessionEvent.ts:379-394`).
 An opened request with no decision is listed in the session view's `requests`
 (`packages/harness/src/shared/session/sessionView.ts:256`;
 `projectRequests` in `packages/harness/src/shared/session/sessionViewUpdate.ts`), which a host reads through

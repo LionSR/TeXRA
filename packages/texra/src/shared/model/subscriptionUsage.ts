@@ -35,7 +35,6 @@ export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
 
 const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
-  provider: SubscriptionUsageProviderSchema,
   providerName: Schema.String.check(Schema.isMinLength(1)),
   planName: Schema.String.check(Schema.isMinLength(1)),
   fetchedAt: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),

@@ -243,13 +243,12 @@ export function selectWorkflowRunDetailLines(
   const addWithLifecycle = (
     group: WorkflowRunDetailGroup,
     index: number,
-  ): boolean => {
+  ): void => {
     const required = hasLine(group, 0) ? 1 : 2;
     // Alert text carries its rN identity, so the alert remains meaningful
     // alone when only one physical row is available.
-    if (remaining < required) return addLine(group, index);
-    addLine(group, 0);
-    return addLine(group, index);
+    if (remaining >= required) addLine(group, 0);
+    addLine(group, index);
   };
 
   // First preserve actionable errors, then warnings, together with their

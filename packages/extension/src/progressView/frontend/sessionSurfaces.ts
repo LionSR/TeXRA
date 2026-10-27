@@ -151,7 +151,7 @@ export function createSessionSurfaces(options: {
     setSurface(entry, applySurfaceAction(entry.surface$.get(), action));
   }
 
-  function open(key: string): Held {
+  function open(key: string): void {
     const session = transport.open(key);
     const persisted = new PersistedState(
       options.storage,
@@ -192,7 +192,6 @@ export function createSessionSurfaces(options: {
     );
     held.set(key, entry);
     subscribeTranscript(entry);
-    return entry;
   }
 
   /** An asynchronous operation keeps the draft that started it, even if

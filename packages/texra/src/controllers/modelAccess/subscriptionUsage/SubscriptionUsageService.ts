@@ -296,7 +296,6 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'unavailable',
-      provider,
       providerName: PROVIDER_NAMES[provider],
       planName: DEFAULT_PLAN_NAMES[provider],
       windows: [],
@@ -311,7 +310,6 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
-      provider,
       providerName: PROVIDER_NAMES[provider],
       planName: parsed.planName ?? DEFAULT_PLAN_NAMES[provider],
       windows: [...parsed.windows],

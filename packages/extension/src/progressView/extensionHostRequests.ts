@@ -208,11 +208,14 @@ function runHandler<A, E, R>(
   );
 }
 
-/** A VS Code command as a verb of the shared binding table: named, and
- *  with the command's own result discarded. */
-function commandVerb(command: string, ...args: unknown[]) {
+/** Reveal `fsPath` in the OS file manager, with the command's own result
+ *  discarded. */
+function revealFileInOS(fsPath: string) {
   return Effect.asVoid(
-    runHandler(command, executeVscodeCommand(command, ...args)),
+    runHandler(
+      'revealFileInOS',
+      executeVscodeCommand('revealFileInOS', vscode.Uri.file(fsPath)),
+    ),
   );
 }
 
@@ -307,8 +310,7 @@ export function createExtensionHostRequests(
           'latexdiff',
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
-      openDirectory: (directory) =>
-        commandVerb('revealFileInOS', vscode.Uri.file(directory)),
+      openDirectory: (directory) => revealFileInOS(directory),
       // An accepted-edit backup names an absolute workspace path the
       // controller already resolved, so this reads through the process
       // filesystem rather than a rooted view that would refuse a path the
@@ -611,7 +613,7 @@ export function createExtensionHostRequests(
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
-      if (dir) yield* commandVerb('revealFileInOS', vscode.Uri.file(dir));
+      if (dir) yield* revealFileInOS(dir);
     }),
     openAgentDocs: runHandler('openDoc', openGuidePage('custom-agents')),
     recheckDependencies: Effect.gen(function* () {
@@ -655,7 +657,7 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
       // The provider's `firstRunDone` follower refreshes the funnel.
-      skipSetup: setFirstRunDone(globalState, true),
+      skipSetup: setFirstRunDone(globalState),
       openGettingStarted: runHandler(
         'openGettingStarted',
         openGettingStarted(options.extensionId),

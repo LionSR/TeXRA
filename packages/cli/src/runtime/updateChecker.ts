@@ -61,10 +61,10 @@ type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
  * brew formula install; broader `homebrew` / `linuxbrew` prefixes also contain
  * npm globals when Node itself was installed by Homebrew.
  */
-function detectInstallMethod(
-  modulePath: string = currentModulePath(),
-): InstallMethod | undefined {
-  const segments = modulePath.toLowerCase().split(/[\\/]+/);
+function detectInstallMethod(): InstallMethod | undefined {
+  const segments = currentModulePath()
+    .toLowerCase()
+    .split(/[\\/]+/);
   if (segments.includes('cellar')) return 'brew';
   if (!segments.includes('node_modules')) return undefined;
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
@@ -128,10 +128,8 @@ function fetchLatestCliVersion(): Effect.Effect<
   });
 }
 
-const readCommandStdout = (
-  command: string,
+const readBrewStdout = (
   args: readonly string[],
-  timeoutMs: number,
   cwd: string,
 ): Effect.Effect<string | undefined, Error, ChildProcessSpawner> =>
   Effect.gen(function* () {
@@ -139,8 +137,8 @@ const readCommandStdout = (
     // explicit cwd — the wrapper's workspace-root default would throw — no
     // setting slots, since none are open yet, and quiet: true so wrapper debug
     // lines can't leak to the console sink.
-    const result = yield* executeCommand([command, ...args], {
-      timeout: timeoutMs,
+    const result = yield* executeCommand(['brew', ...args], {
+      timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
       cwd,
       settings: undefined,
       quiet: true,
@@ -201,16 +199,9 @@ function fetchLatestHomebrewFormulaVersion(
   cwd: string,
 ): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
   return Effect.gen(function* () {
-    const refreshStdout = yield* readCommandStdout(
-      'brew',
-      ['update', '--quiet'],
-      HOMEBREW_COMMAND_TIMEOUT_MS,
-      cwd,
-    );
-    const stdout = yield* readCommandStdout(
-      'brew',
+    const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
+    const stdout = yield* readBrewStdout(
       ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
-      HOMEBREW_COMMAND_TIMEOUT_MS,
       cwd,
     );
     return {
