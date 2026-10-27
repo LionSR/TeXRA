@@ -159,7 +159,6 @@ interface ContextManagementRow extends TranscriptRowBase {
   /** `Compacted`, `Cleared tool uses`, … */
   readonly label: string;
   readonly items: readonly StatItem[];
-  readonly summary?: TranscriptText;
 }
 ```
 

@@ -55,9 +55,6 @@ export class ContextManagement extends LitElement {
   /** Statistics items to display */
   @property({ attribute: false }) items: StatItem[] = [];
 
-  /** Optional summary text for compaction events */
-  @property({ attribute: false }) summary = '';
-
   override render(): TemplateResult | typeof nothing {
     if (this.items.length === 0) {
       return nothing;
@@ -87,18 +84,6 @@ export class ContextManagement extends LitElement {
               <wa-tooltip for="context-stat-${index}">${item.label}</wa-tooltip>
             `,
           )}
-          ${
-            this.summary
-              ? html`
-                  <div class="summary-block">
-                    <div class="summary-title">
-                      ${waIcon('note-sticky')} Compaction summary
-                    </div>
-                    <pre class="summary-text" dir="auto">${this.summary}</pre>
-                  </div>
-                `
-              : nothing
-          }
         </div>
       </wa-details>
     `;
